@@ -1,6 +1,8 @@
 package io.questdb.desktop.ui;
 
 import io.questdb.desktop.GTk;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.awt.Component;
 
@@ -10,12 +12,12 @@ import javax.swing.table.DefaultTableCellRenderer;
 
 
 public class CellRenderer extends DefaultTableCellRenderer {
-    private static final Border EMPTY_BORDER = BorderFactory.createEmptyBorder();
+    private static final @NotNull Border EMPTY_BORDER = BorderFactory.createEmptyBorder();
 
     @Override
-    public Component getTableCellRendererComponent(
-            JTable table,
-            Object value,
+    public @NotNull Component getTableCellRendererComponent(
+            final @NotNull JTable table,
+            final @Nullable Object value,
             boolean isSelected,
             boolean hasFocus,
             int rowIdx,

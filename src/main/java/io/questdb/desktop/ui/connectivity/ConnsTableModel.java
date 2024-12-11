@@ -20,6 +20,8 @@ import io.questdb.desktop.GTk;
 import io.questdb.desktop.model.DbConn;
 import io.questdb.desktop.model.DbConnProperties;
 import io.questdb.desktop.ui.CellRenderer;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 
 class ConnsTableModel extends AbstractTableModel implements Closeable {
@@ -30,9 +32,9 @@ class ConnsTableModel extends AbstractTableModel implements Closeable {
     private static final int USERNAME_COL_IDX = 4;
     private static final int PASSWORD_COL_IDX = 5;
     private static final int CONNECTED_COL_IDX = 6;
-    private static final String NAME_COL = "name";
-    private static final String CONNECTED_COL = "connected";
-    private static final String[] COL_NAMES = {
+    private static final @NotNull  String NAME_COL = "name";
+    private static final @NotNull  String CONNECTED_COL = "connected";
+    private static final @NotNull  String @NotNull[] COL_NAMES = {
             NAME_COL,
             DbConnProperties.AttrName.host.name(),
             DbConnProperties.AttrName.port.name(),
@@ -42,18 +44,18 @@ class ConnsTableModel extends AbstractTableModel implements Closeable {
             CONNECTED_COL
     };
     private static final int ROW_HEIGHT = 22;
-    private static final int[] COL_WIDTHS = {
+    private static final int@NotNull[] COL_WIDTHS = {
             200, 400, 100, 200, 200, 200, 200
     };
-    private final List<DbConn> conns;
-    private final Set<String> existingNames;
+    private final @NotNull  List<DbConn> conns;
+    private final @NotNull  Set<String> existingNames;
 
     private ConnsTableModel() {
         conns = new ArrayList<>();
         existingNames = new TreeSet<>();
     }
 
-    static JTable createTable(TableModelListener onTableModelEvent, ListSelectionListener selectionListener) {
+    static JTable createTable(final @NotNull TableModelListener onTableModelEvent, final @NotNull ListSelectionListener selectionListener) {
         ConnsTableModel tableModel = new ConnsTableModel();
         tableModel.addTableModelListener(tableModel::onTableModelEvent);
         tableModel.addTableModelListener(onTableModelEvent);
@@ -87,7 +89,7 @@ class ConnsTableModel extends AbstractTableModel implements Closeable {
         return conns;
     }
 
-    void setConns(List<DbConn> newConns) {
+    void setConns(final @NotNull List<DbConn> newConns) {
         conns.clear();
         existingNames.clear();
         if (newConns != null) {
@@ -99,15 +101,15 @@ class ConnsTableModel extends AbstractTableModel implements Closeable {
         }
     }
 
-    boolean containsName(String name) {
+    boolean containsName(final @Nullable String name) {
         return name != null && existingNames.contains(name);
     }
 
-    boolean containsConn(DbConn conn) {
+    boolean containsConn(final @Nullable DbConn conn) {
         return conn != null && -1 != getRowIdx(conn.getUniqueId());
     }
 
-    int addConn(DbConn conn) {
+    int addConn(final @Nullable DbConn conn) {
         if (conn == null) {
             return -1;
         }
@@ -125,7 +127,7 @@ class ConnsTableModel extends AbstractTableModel implements Closeable {
         return conn;
     }
 
-    int getRowIdx(String connKey) {
+    int getRowIdx(final @Nullable String connKey) {
         if (connKey == null) {
             return -1;
         }
@@ -154,7 +156,7 @@ class ConnsTableModel extends AbstractTableModel implements Closeable {
     }
 
     @Override
-    public void setValueAt(Object value, int rowIdx, int colIdx) {
+    public void setValueAt(final @NotNull Object value, int rowIdx, int colIdx) {
         String attrName = COL_NAMES[colIdx];
         if (!NAME_COL.equals(attrName)) {
             DbConn conn = conns.get(rowIdx);
@@ -197,7 +199,7 @@ class ConnsTableModel extends AbstractTableModel implements Closeable {
         existingNames.clear();
     }
 
-    private void onTableModelEvent(TableModelEvent event) {
+    private void onTableModelEvent(final @NotNull TableModelEvent event) {
         if (event.getType() == TableModelEvent.UPDATE) {
             int ri = event.getFirstRow();
             int ci = event.getColumn();
@@ -215,8 +217,8 @@ class ConnsTableModel extends AbstractTableModel implements Closeable {
 
         @Override
         public Component getTableCellRendererComponent(
-                JTable table,
-                Object value,
+                final @NotNull JTable table,
+                final @Nullable Object value,
                 boolean isSelected,
                 boolean hasFocus,
                 int rowIdx,

@@ -1,5 +1,8 @@
 package io.questdb.desktop.ui;
 
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
 /**
  * Implementors consume events produced by {@link EventProducer}s. An event can be
  * conceptually thought of as a triplet:
@@ -22,5 +25,5 @@ public interface EventConsumer<EventProducerType extends EventProducer<?>, Event
      * @param eventType enum declared by the source (kind of event being consumed)
      * @param eventData carries the event data
      */
-    void onSourceEvent(EventProducerType source, Enum<?> eventType, EventDataType eventData);
+    void onSourceEvent(final @NotNull EventProducerType source, final @NotNull Enum<?> eventType, final @Nullable EventDataType eventData);
 }

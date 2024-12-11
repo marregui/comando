@@ -1,5 +1,7 @@
 package io.questdb.desktop.ui;
 
+import org.jetbrains.annotations.NotNull;
+
 /**
  * Implementors produce events defined by the functional signature declared by {@link EventConsumer}.
  * An event can be conceptually thought of as a triplet:
@@ -13,7 +15,7 @@ package io.questdb.desktop.ui;
 public interface EventProducer<EventType extends Enum<?>> {
 
     @SuppressWarnings("unchecked")
-    static <EventType extends Enum<?>> EventType eventType(Enum<?> event) {
+    static <EventType extends Enum<?>> EventType eventType(final @NotNull Enum<?> event) {
         return (EventType) EventType.valueOf(event.getClass(), event.name());
     }
 }

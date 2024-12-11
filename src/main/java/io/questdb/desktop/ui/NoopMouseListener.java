@@ -1,9 +1,10 @@
 package io.questdb.desktop.ui;
 
+import org.jetbrains.annotations.NotNull;
+
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
-
 
 /**
  * Extends {@link MouseListener} and {@link MouseMotionListener} overriding all
@@ -12,37 +13,37 @@ import java.awt.event.MouseMotionListener;
 public interface NoopMouseListener extends MouseListener, MouseMotionListener {
 
     @Override
-    default void mouseClicked(MouseEvent e) {
+    default void mouseClicked(final @NotNull MouseEvent e) {
         // nothing
     }
 
     @Override
-    default void mousePressed(MouseEvent e) {
+    default void mousePressed(final @NotNull MouseEvent e) {
         // nothing
     }
 
     @Override
-    default void mouseReleased(MouseEvent e) {
+    default void mouseReleased(final @NotNull MouseEvent e) {
         // nothing
     }
 
     @Override
-    default void mouseEntered(MouseEvent e) {
+    default void mouseEntered(final @NotNull MouseEvent e) {
         // nothing
     }
 
     @Override
-    default void mouseExited(MouseEvent e) {
+    default void mouseExited(final @NotNull MouseEvent e) {
         // nothing
     }
 
     @Override
-    default void mouseDragged(MouseEvent e) {
+    default void mouseDragged(final @NotNull MouseEvent e) {
         // nothing
     }
 
     @Override
-    default void mouseMoved(MouseEvent e) {
+    default void mouseMoved(final @NotNull MouseEvent e) {
         // nothing
     }
 }
