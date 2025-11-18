@@ -1,18 +1,20 @@
 package io.questdb.desktop.model;
 
-import java.util.Properties;
-
 import io.questdb.desktop.GTk;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.Properties;
 
 
 public class DbConnProperties extends StoreEntry {
 
-    private static final String JDBC_DRIVER_URL_FORMAT = "jdbc:postgresql://%s:%s/%s";
-    private static final String DEFAULT_HOST = "localhost";
-    private static final String DEFAULT_PORT = "8812";
-    private static final String DEFAULT_DATABASE = "main";
-    private static final String DEFAULT_USERNAME = "admin";
-    private static final String DEFAULT_PASSWORD = "quest";
+    private static final @NotNull  String JDBC_DRIVER_URL_FORMAT = "jdbc:postgresql://%s:%s/%s";
+    private static final @NotNull  String DEFAULT_HOST = "localhost";
+    private static final @NotNull  String DEFAULT_PORT = "8812";
+    private static final @NotNull  String DEFAULT_DATABASE = "main";
+    private static final @NotNull  String DEFAULT_USERNAME = "admin";
+    private static final @NotNull  String DEFAULT_PASSWORD = "quest";
 
     /**
      * Shallow copy constructor, used by the store, attributes are a reference to
@@ -20,11 +22,11 @@ public class DbConnProperties extends StoreEntry {
      *
      * @param other original store item
      */
-    public DbConnProperties(StoreEntry other) {
+    public DbConnProperties(final @NotNull StoreEntry other) {
         super(other);
     }
 
-    public DbConnProperties(String name) {
+    public DbConnProperties(final @NotNull String name) {
         super(name);
         setAttr(AttrName.host, AttrName.host.getDefaultValue());
         setAttr(AttrName.port, AttrName.port.getDefaultValue());
@@ -34,7 +36,13 @@ public class DbConnProperties extends StoreEntry {
         setAttr(AttrName.isDefault, AttrName.isDefault.getDefaultValue());
     }
 
-    protected DbConnProperties(String name, String host, String port, String database, String username, String password) {
+    protected DbConnProperties(
+            final @NotNull String name,
+            final @NotNull String host,
+            final @NotNull String port,
+            final @NotNull String database,
+            final @NotNull String username,
+            final @NotNull String password) {
         super(name);
         setAttr(AttrName.host, host);
         setAttr(AttrName.port, port);
@@ -45,7 +53,7 @@ public class DbConnProperties extends StoreEntry {
     }
 
     @Override
-    public final String getUniqueId() {
+    public final @NotNull String getUniqueId() {
         return String.format("%s %s@%s:%s/%s",
                 getName(),
                 getAttr(AttrName.username),
@@ -54,11 +62,11 @@ public class DbConnProperties extends StoreEntry {
                 getAttr(AttrName.database));
     }
 
-    public String getUri() {
+    public @NotNull String getUri() {
         return String.format(JDBC_DRIVER_URL_FORMAT, getHost(), getPort(), getDatabase());
     }
 
-    public Properties createLoginProperties() {
+    public @NotNull Properties createLoginProperties() {
         // https://jdbc.postgresql.org/documentation/head/connect.html
         Properties props = new Properties();
         props.put("user", getUsername());
@@ -144,43 +152,43 @@ public class DbConnProperties extends StoreEntry {
         return props;
     }
 
-    public String getHost() {
+    public @Nullable String getHost() {
         return getAttr(AttrName.host);
     }
 
-    public void setHost(String host) {
+    public void setHost(final @NotNull String host) {
         setAttr(AttrName.host, host, AttrName.host.getDefaultValue());
     }
 
-    public String getPort() {
+    public @Nullable String getPort() {
         return getAttr(AttrName.port);
     }
 
-    public void setPort(String port) {
+    public void setPort(final @NotNull String port) {
         setAttr(AttrName.port, port, AttrName.port.getDefaultValue());
     }
 
-    public String getDatabase() {
+    public @Nullable String getDatabase() {
         return getAttr(AttrName.database);
     }
 
-    public void setDatabase(String database) {
+    public void setDatabase(final @NotNull String database) {
         setAttr(AttrName.database, database, AttrName.database.getDefaultValue());
     }
 
-    public String getUsername() {
+    public @Nullable String getUsername() {
         return getAttr(AttrName.username);
     }
 
-    public void setUsername(String username) {
+    public void setUsername(final @NotNull String username) {
         setAttr(AttrName.username, username, AttrName.username.getDefaultValue());
     }
 
-    public String getPassword() {
+    public @Nullable String getPassword() {
         return getAttr(AttrName.password);
     }
 
-    public void setPassword(String password) {
+    public void setPassword(final @NotNull String password) {
         setAttr(AttrName.password, password, AttrName.password.getDefaultValue());
     }
 
@@ -200,18 +208,18 @@ public class DbConnProperties extends StoreEntry {
         password(DEFAULT_PASSWORD),
         isDefault(String.valueOf(false));
 
-        private final String defaultValue;
+        private final @NotNull String defaultValue;
 
-        AttrName(String defaultValue) {
+        AttrName(final @NotNull String defaultValue) {
             this.defaultValue = defaultValue;
         }
 
         @Override
-        public String getUniqueId() {
+        public @NotNull String getUniqueId() {
             return name();
         }
 
-        public String getDefaultValue() {
+        public @NotNull String getDefaultValue() {
             return defaultValue;
         }
     }

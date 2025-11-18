@@ -19,6 +19,8 @@ import io.questdb.desktop.ui.EventConsumer;
 import io.questdb.desktop.ui.EventProducer;
 import io.questdb.log.Log;
 import io.questdb.log.LogFactory;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 
 public class Conns extends JDialog implements EventProducer<Conns.EventType>, Closeable {
@@ -45,7 +47,7 @@ public class Conns extends JDialog implements EventProducer<Conns.EventType>, Cl
         this.eventConsumer = eventConsumer;
         store = new Store<>(STORE_FILE_NAME, DbConn.class) {
             @Override
-            public DbConn[] defaultStoreEntries() {
+            public @Nullable DbConn @NotNull [] defaultStoreEntries() {
                 return new DbConn[]{
                         new DbConn("QuestDB"),
                         new DbConn("Postgres",

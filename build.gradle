@@ -24,6 +24,7 @@ dependencies {
     implementation 'org.questdb:questdb:8.2.1'
     implementation 'org.postgresql:postgresql:42.7.4'
     implementation 'com.google.code.gson:gson:2.11.0'
+    implementation 'org.rocksdb:rocksdbjni:9.7.3'
     implementation 'org.realityforge.org.jetbrains.annotations:org.jetbrains.annotations:1.7.0'
 
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.3'

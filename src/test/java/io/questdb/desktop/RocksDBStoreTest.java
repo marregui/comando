@@ -24,22 +24,20 @@
 
 package io.questdb.desktop;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.is;
-
-import java.io.File;
-
 import io.questdb.desktop.model.DbConnProperties;
 import io.questdb.desktop.model.Store;
 import io.questdb.desktop.model.StoreEntry;
 import io.questdb.desktop.ui.editor.Content;
 import org.hamcrest.MatcherAssert;
 import org.hamcrest.Matchers;
-import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import org.junit.jupiter.api.Test;
 
-public class StoreTest {
+import java.io.File;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
+
+public class RocksDBStoreTest {
 
     private static String deleteIfExists(String fileName) {
         if (fileName != null) {
@@ -143,7 +141,7 @@ public class StoreTest {
         }
 
         @Override
-        public @Nullable T @NotNull [] defaultStoreEntries() {
+        public T[] defaultStoreEntries() {
             return null;
         }
     }

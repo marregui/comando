@@ -20,6 +20,8 @@ import io.questdb.desktop.model.Store;
 import io.questdb.desktop.ui.EventConsumer;
 import io.questdb.desktop.ui.EventProducer;
 import io.questdb.desktop.ui.connectivity.Conns;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import static io.questdb.desktop.GTk.Icon;
 import static io.questdb.desktop.GTk.menu;
@@ -194,7 +196,7 @@ public class MainEditor extends Editor implements EventProducer<MainEditor.Event
     private void loadStoreEntries(String fileName) {
         store = new Store<>(fileName, Content.class) {
             @Override
-            public Content[] defaultStoreEntries() {
+            public @Nullable Content @NotNull [] defaultStoreEntries() {
                 Content keyboardShortcuts = new Content("keyboard shortcuts");
                 keyboardShortcuts.setContent(GTk.KEYBOARD_SHORTCUTS);
                 return new Content[]{new Content(), keyboardShortcuts,};

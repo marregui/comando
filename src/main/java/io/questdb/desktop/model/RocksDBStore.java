@@ -7,7 +7,7 @@ import io.questdb.desktop.GTk;
 import io.questdb.log.Log;
 import io.questdb.log.LogFactory;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
+import org.rocksdb.RocksDB;
 
 import javax.swing.*;
 import java.io.*;
@@ -17,21 +17,30 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 
-public abstract class Store<T extends StoreEntry> implements Closeable, Iterable<T> {
+public abstract class RocksDBStore<T extends StoreEntry> implements Closeable, Iterable<T> {
 
-    public static final @NotNull File ROOT_PATH;
-    private static final @NotNull Log LOG = LogFactory.getLog(Store.class);
-    private static final @NotNull Class<?> @NotNull [] ITEM_CONSTRUCTOR_SIGNATURE = {StoreEntry.class};
-    private static final @NotNull Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    private static final @NotNull Type STORE_TYPE = new TypeToken<ArrayList<StoreEntry>>() {
+    private static final @NotNull AtomicBoolean initialized = new AtomicBoolean();
+
+    static {
+        if (initialized.compareAndSet(false, true)) {
+              RocksDB.loadLibrary();
+        }
+    }
+
+    public static final File ROOT_PATH;
+    private static final Log LOG = LogFactory.getLog(RocksDBStore.class);
+    private static final Class<?>[] ITEM_CONSTRUCTOR_SIGNATURE = {StoreEntry.class};
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Type STORE_TYPE = new TypeToken<ArrayList<StoreEntry>>() {
         /* type */
     }.getType();
 
     static {
-        synchronized (Store.class) {
+        synchronized (RocksDBStore.class) {
             String userHome = System.getProperty("user.home");
             ROOT_PATH = new File(userHome != null ? userHome : ".", "QUESTS").getAbsoluteFile();
             if (!ROOT_PATH.exists()) {
@@ -47,12 +56,12 @@ public abstract class Store<T extends StoreEntry> implements Closeable, Iterable
         }
     }
 
-    private final @NotNull String fileName;
-    private final @NotNull Class<? extends StoreEntry> entryClass;
-    private final @NotNull List<T> entries;
-    private final @NotNull ExecutorService asyncPersist;
+    private final String fileName;
+    private final Class<? extends StoreEntry> entryClass;
+    private final List<T> entries;
+    private final ExecutorService asyncPersist;
 
-    public Store(final @NotNull String fileName, final @NotNull Class<? extends StoreEntry> entryClass) {
+    public RocksDBStore(String fileName, Class<? extends StoreEntry> entryClass) {
         this.fileName = fileName;
         this.entryClass = entryClass;
         entries = new ArrayList<>();
@@ -64,7 +73,7 @@ public abstract class Store<T extends StoreEntry> implements Closeable, Iterable
         });
     }
 
-    private static @Nullable List<StoreEntry> loadFromFile(final @NotNull File file) {
+    private static List<StoreEntry> loadFromFile(File file) {
         List<StoreEntry> entries = null;
         try (BufferedReader in = new BufferedReader(new FileReader(file, StandardCharsets.UTF_8))) {
             entries = GSON.fromJson(in, STORE_TYPE);
@@ -82,40 +91,40 @@ public abstract class Store<T extends StoreEntry> implements Closeable, Iterable
         GTk.shutdownExecutor(asyncPersist);
     }
 
-    public abstract @Nullable T @NotNull[] defaultStoreEntries();
+    public abstract T[] defaultStoreEntries();
 
 
-    public synchronized void addEntry(final @Nullable T entry) {
+    public synchronized void addEntry(T entry) {
         if (entry != null) {
             entries.add(entry);
         }
         asyncSaveToFile();
     }
 
-    public synchronized @NotNull T getEntry(final int idx, final @Nullable Supplier<T> constructor) {
+    public synchronized T getEntry(int idx, Supplier<T> constructor) {
         if (constructor != null && entries.size() == idx) {
             entries.add(idx, constructor.get());
         }
         return entries.get(idx);
     }
 
-    public synchronized void removeEntry(final @Nullable T entry) {
+    public synchronized void removeEntry(T entry) {
         if (entry != null) {
             entries.remove(entry);
             asyncSaveToFile();
         }
     }
 
-    public synchronized void removeEntry(final int idx) {
+    public synchronized void removeEntry(int idx) {
         entries.remove(idx);
         asyncSaveToFile();
     }
 
-    public synchronized @NotNull List<T> entries() {
+    public synchronized List<T> entries() {
         return Collections.unmodifiableList(entries);
     }
 
-    public synchronized @NotNull String @NotNull[] entryNames() {
+    public synchronized String[] entryNames() {
         return entries.stream().map(StoreEntry::getName).toArray(String[]::new);
     }
 
@@ -126,7 +135,7 @@ public abstract class Store<T extends StoreEntry> implements Closeable, Iterable
     @Override
     public @NotNull Iterator<T> iterator() {
         return new Iterator<>() {
-            private final @NotNull List<T> values = entries();
+            private final List<T> values = entries();
             private int idx = 0;
 
             @Override
@@ -135,7 +144,7 @@ public abstract class Store<T extends StoreEntry> implements Closeable, Iterable
             }
 
             @Override
-            public @NotNull T next() {
+            public T next() {
                 if (idx >= values.size()) {
                     throw new NoSuchElementException();
                 }
@@ -148,8 +157,8 @@ public abstract class Store<T extends StoreEntry> implements Closeable, Iterable
         asyncPersist.submit(() -> saveToFile());
     }
 
-    public void saveToFile(final @NotNull File file) {
-        try (final FileWriter out = new FileWriter(file, StandardCharsets.UTF_8, false)) {
+    public void saveToFile(File file) {
+        try (FileWriter out = new FileWriter(file, StandardCharsets.UTF_8, false)) {
             GSON.toJson(entries, STORE_TYPE, out);
             LOG.info().$("Saved [path=").$(file.getAbsolutePath()).I$();
         } catch (IOException e) {
@@ -160,7 +169,7 @@ public abstract class Store<T extends StoreEntry> implements Closeable, Iterable
     }
 
     public void loadFromFile() {
-        final File file = getFile();
+        File file = getFile();
         if (!file.exists()) {
             for (T entry : defaultStoreEntries()) {
                 if (entry != null) {
@@ -171,13 +180,14 @@ public abstract class Store<T extends StoreEntry> implements Closeable, Iterable
             return;
         }
 
-        final List<StoreEntry> content = loadFromFile(file);
+        List<StoreEntry> content = loadFromFile(file);
         if (content != null) {
             try {
                 // This constructor is T's decorator constructor to StoreEntry(StoreEntry other).
                 // We do not need to instantiate yet another attribute's map when we can recycle
                 // the instance provided by GSON.
-                @SuppressWarnings("unchecked") final Constructor<T> entryFactory = (Constructor<T>) entryClass.getConstructor(ITEM_CONSTRUCTOR_SIGNATURE);
+                @SuppressWarnings("unchecked")
+                Constructor<T> entryFactory = (Constructor<T>) entryClass.getConstructor(ITEM_CONSTRUCTOR_SIGNATURE);
                 entries.clear();
                 for (StoreEntry i : content) {
                     entries.add(entryFactory.newInstance(i));
@@ -192,7 +202,7 @@ public abstract class Store<T extends StoreEntry> implements Closeable, Iterable
         saveToFile(getFile());
     }
 
-    private void saveToFile(final @Nullable Runnable whenDoneTask) {
+    private void saveToFile(Runnable whenDoneTask) {
         try {
             saveToFile(getFile());
         } finally {
@@ -202,7 +212,7 @@ public abstract class Store<T extends StoreEntry> implements Closeable, Iterable
         }
     }
 
-    private @NotNull File getFile() {
+    private File getFile() {
         return new File(ROOT_PATH, fileName);
     }
 }

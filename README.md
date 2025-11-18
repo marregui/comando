@@ -1,4 +1,4 @@
-# Desktop QuestDB Client
+# Comando
 
 This is a desktop user interface to common `postgress wire protocol`-compatible databases such as:
 
@@ -21,6 +21,6 @@ This is a desktop user interface to common `postgress wire protocol`-compatible 
 After the **build** command completes, you will find a zip file in `build/distributions/`:
 
 - `cd build/distributions`
-- `unzip desktop-questdb-client-*.zip`
-- `cd desktop-questdb-client-<version>`
+- `unzip comando-*.zip`
+- `cd comando-<version>`
 - `bin/start-client` (or `bin\start-client.bat` in windows)
