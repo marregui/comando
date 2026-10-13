@@ -25,6 +25,16 @@ public final class SidePane {
         return tabs;
     }
 
+    /** The view whose tab holds {@code c}, or -1. */
+    public long viewHolding(java.awt.Component c) {
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            if (javax.swing.SwingUtilities.isDescendingFrom(c, tabs.getComponentAt(i))) {
+                return views.viewAt(i);
+            }
+        }
+        return -1;
+    }
+
     /** Returns true when the pane holds views. */
     public boolean render(AppState s) {
         boolean changed = views.render(s.views());

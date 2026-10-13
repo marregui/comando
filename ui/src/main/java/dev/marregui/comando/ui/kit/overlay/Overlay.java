@@ -21,11 +21,14 @@ public final class Overlay extends JPanel {
 
     private static final String CONTENT = "content";
     private static final String MESSAGE = "message";
+    private static final String ERROR = "error";
 
     private final CardLayout cards = new CardLayout();
     private final JLabel message = new JLabel("", SwingConstants.CENTER);
     private final JProgressBar progress = new JProgressBar();
+    private final javax.swing.JTextArea error = new javax.swing.JTextArea();
     private String showing = CONTENT;
+    private String messageText = "";
 
     public Overlay(JComponent content) {
         setLayout(cards);
@@ -41,8 +44,25 @@ public final class Overlay extends JPanel {
         JPanel centered = new JPanel(new GridBagLayout());
         centered.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
         centered.add(inner);
+        // an error is text to read, select and copy: a read-only area, not a label
+        error.setEditable(false);
+        error.setLineWrap(true);
+        error.setWrapStyleWord(true);
+        error.setFont(Theme.mono());
+        error.setForeground(Theme.DANGER);
+        error.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
+        error.getAccessibleContext().setAccessibleName("Error");
+        JLabel errorIcon = new JLabel(Icons.get("error"));
+        errorIcon.setVerticalAlignment(SwingConstants.TOP);
+        errorIcon.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, 0, 0));
+        JPanel errorPanel = new JPanel(new BorderLayout());
+        errorPanel.add(errorIcon, BorderLayout.WEST);
+        javax.swing.JScrollPane errorScroll = new javax.swing.JScrollPane(error);
+        errorScroll.setBorder(null);
+        errorPanel.add(errorScroll, BorderLayout.CENTER);
         add(content, CONTENT);
         add(centered, MESSAGE);
+        add(errorPanel, ERROR);
         cards.show(this, CONTENT);
     }
 
@@ -61,11 +81,28 @@ public final class Overlay extends JPanel {
         show(text, null, true, Theme.MUTED);
     }
 
+    /** The error as selectable text, scrolled to its start. */
     public void showError(String text) {
-        show(text, "error", false, Theme.DANGER);
+        if (!error.getText().equals(text)) {
+            error.setText(text);
+            error.setCaretPosition(0);
+        }
+        showing = ERROR;
+        cards.show(this, ERROR);
+    }
+
+    /** The error text shown, or empty; for copying and tests. */
+    public String errorText() {
+        return showing.equals(ERROR) ? error.getText() : "";
+    }
+
+    /** The empty or loading message shown, or empty; for tests. */
+    public String messageText() {
+        return showing.equals(MESSAGE) ? messageText : "";
     }
 
     private void show(String text, String icon, boolean loading, java.awt.Color color) {
+        messageText = text;
         message.setText("<html><div style='text-align:center;width:420px'>" + escape(text) + "</div></html>");
         message.setIcon(icon == null ? null : Icons.get(icon));
         message.setForeground(color);

@@ -162,7 +162,7 @@
   },
   {
     "name": "ui_set_editor",
-    "description": "Replaces the text of an editor panel. Without panel, uses the user's focused panel when it is bound to this session, else this session's first panel; a session bound to no panel must pass panel.",
+    "description": "Replaces the whole text of an editor panel; the user's own text in it is gone (they can undo). Prefer ui_insert unless the user asked for a replacement. Without panel, uses the user's focused panel when it is bound to this session, else this session's first panel; a session bound to no panel must pass panel. A panel bound to another session is refused unless force is true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -172,6 +172,10 @@
         "panel": {
           "type": "string",
           "description": "Panel title or id."
+        },
+        "force": {
+          "type": "boolean",
+          "description": "Write into a panel bound to another session; only when the user asked for it."
         }
       },
       "required": [
@@ -181,7 +185,7 @@
   },
   {
     "name": "ui_insert",
-    "description": "Inserts text in an editor panel at the caret, or appends it as a new paragraph.",
+    "description": "Adds text to an editor panel as a block of its own; the user's caret, selection and text are never touched, and one undo by the user takes it back. append (the default) adds it at the end, after a blank line. insert places it right after the block the user ran last from that panel (the prompt that asked), or at the end when nothing ran: use it to answer next to the question. Without panel, uses the user's focused panel when it is bound to this session, else this session's first panel; a panel bound to another session is refused unless force is true.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -189,15 +193,20 @@
           "type": "string"
         },
         "panel": {
-          "type": "string"
+          "type": "string",
+          "description": "Panel title or id."
         },
         "mode": {
           "type": "string",
           "enum": [
-            "insert",
-            "append"
+            "append",
+            "insert"
           ],
-          "default": "insert"
+          "default": "append"
+        },
+        "force": {
+          "type": "boolean",
+          "description": "Write into a panel bound to another session; only when the user asked for it."
         }
       },
       "required": [
@@ -258,7 +267,7 @@
   },
   {
     "name": "ui_set_layout",
-    "description": "Arranges comando's window. Every argument is optional: panel focuses an editor panel by id or title; lower_tab selects results, session, approvals, terminal, or a view in the lower panel by id or title; sidebar and side_pane show (true) or hide (false) those panes; lower_share sets the lower panel's share of the window height, 0.05 to 0.95.",
+    "description": "Arranges comando's window. Every argument is optional: panel focuses an editor panel by id or title; lower_tab selects results, session, approvals, terminal, or a view in the lower panel by id or title; sidebar and side_pane show (true) or hide (false) those panes; lower_share sets the lower panel's share of the window height, 0.05 to 0.95. The window is the user's: panel must be one bound to this session; lower_tab is selected only while the user looks at a panel of this session; a panel to focus (with its lower_tab) and pane changes wait until the user pauses typing, and the user can undo pane changes. Use it when the user asks, not to follow your own work.",
     "inputSchema": {
       "type": "object",
       "properties": {

@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.widgets.approval;
 
-import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.core.model.PermissionRules;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,61 +16,138 @@ import dev.marregui.comando.ui.kit.text.DiffPane;
 import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
+import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 import javax.swing.AbstractAction;
+import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.ButtonGroup;
+import javax.swing.InputMap;
 import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
+import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.Scrollable;
+import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+import javax.swing.border.Border;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.text.JTextComponent;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.GraphicsEnvironment;
+import java.awt.KeyboardFocusManager;
 import java.awt.Rectangle;
+import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import java.util.function.LongSupplier;
 
 /**
- * Every pending approval of every session as a card. Keys on a focused card: Enter or A allows once,
- * S allows for the session, L always allows, D or Escape denies (with the note, if typed). Questions show
- * their options; a plan shows rendered; an edit shows its diff.
+ * Every pending approval of every session as a card. The keys act while the focus is anywhere in a card: Enter or
+ * A gives the primary answer, S allows for the session, L twice always allows (only where the rule may be saved;
+ * edits and MCP tools are allowed for the session only), D or Escape denies (with the note, if typed), Up and Down
+ * move between cards. In a text field of the card the letters type; Enter in the note denies with the note when it
+ * holds text and gives the primary answer when it is empty, Enter in another field gives the primary answer, the
+ * menu key with Enter denies with the note, Escape returns to the card. Questions show their options with
+ * descriptions; a plan shows rendered; an edit shows its diff.
+ *
+ * <p>When the card that holds the keyboard leaves because the user answered it here, the keyboard moves to the
+ * card that took its place. When it leaves for any other reason (withdrawn by Claude Code, its session ended), the
+ * keyboard goes to the inbox itself, which has no answer keys: what the user was typing answers nothing.</p>
  */
 public final class ApprovalInbox implements Widget<List<Approval>> {
 
+    /** How long a first L waits for the second. */
+    static final long CONFIRM_MILLIS = 3_000;
+    private static final int AGE_TICK_MILLIS = 30_000;
     private static final ObjectMapper JSON = new ObjectMapper();
+    private static final int MENU = GraphicsEnvironment.isHeadless() ? InputEvent.META_DOWN_MASK : Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+    private static final String EMPTY = "No approvals waiting. Permission requests from every session arrive here.";
+
+    /** Where the keyboard focus is and how to move it: the window's focus manager, or a fake in tests. */
+    interface Focus {
+        Component owner();
+
+        void request(Component c);
+
+        Focus WINDOW = new Focus() {
+            @Override
+            public Component owner() {
+                return KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+            }
+
+            @Override
+            public void request(Component c) {
+                c.requestFocusInWindow();
+            }
+        };
+    }
 
     private final WidgetContext context;
+    private final LongSupplier clock;
+    private final Focus focus;
+    private final BiFunction<String, Function<String, String>, PermissionRules.Rules> ruleSource;
     private final JPanel list = new ListPanel();
     private final JScrollPane scroll = new JScrollPane(list);
     private final Overlay overlay = new Overlay(scroll);
     private final Map<Long, Card> cards = new LinkedHashMap<>();
+    /** The approvals the user answered in this inbox whose cards are still shown. */
+    private final Set<Long> answered = new HashSet<>();
+    private final Timer ages = new Timer(AGE_TICK_MILLIS, e -> tick());
 
     public ApprovalInbox(WidgetContext context) {
+        this(context, System::currentTimeMillis, Focus.WINDOW);
+    }
+
+    ApprovalInbox(WidgetContext context, LongSupplier clock, Focus focus) {
+        this(context, clock, focus, PermissionRules::rules);
+    }
+
+    ApprovalInbox(WidgetContext context, LongSupplier clock, Focus focus,
+                  BiFunction<String, Function<String, String>, PermissionRules.Rules> ruleSource) {
         this.context = context;
+        this.clock = clock;
+        this.focus = focus;
+        this.ruleSource = ruleSource;
+        list.setName("inbox");
+        // where the keyboard goes when the card holding it is withdrawn: no answer keys here
+        list.setFocusable(true);
         list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
         list.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
         scroll.setBorder(null);
         scroll.getVerticalScrollBar().setUnitIncrement(24);
-        overlay.showEmpty("No approvals waiting. Permission requests from every session arrive here.");
+        overlay.showEmpty(EMPTY);
     }
 
     @Override
@@ -79,7 +157,10 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
 
     @Override
     public void render(List<Approval> approvals) {
-        List<Long> ids = new ArrayList<>();
+        List<Card> before = new ArrayList<>(cards.values());
+        Set<Long> answeredHere = new HashSet<>(answered);
+        Card holding = cardOf(focus.owner());
+        Set<Long> ids = new HashSet<>();
         for (Approval a : approvals) {
             ids.add(a.id());
             if (!cards.containsKey(a.id())) {
@@ -89,11 +170,10 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 list.add(Box.createVerticalStrut(Theme.GAP));
             }
         }
-        boolean removed = cards.keySet().removeIf(id -> {
-            if (ids.contains(id)) {
+        cards.values().removeIf(c -> {
+            if (ids.contains(c.approval.id())) {
                 return false;
             }
-            Card c = cards.get(id);
             int i = indexOf(c);
             list.remove(c);
             if (i >= 0 && i < list.getComponentCount()) {
@@ -101,22 +181,90 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             }
             return true;
         });
+        answered.retainAll(ids);
         if (cards.isEmpty()) {
-            overlay.showEmpty("No approvals waiting. Permission requests from every session arrive here.");
+            overlay.showEmpty(EMPTY);
+            ages.stop();
         } else {
             overlay.showContent();
+            if (!ages.isRunning()) {
+                ages.start();
+            }
         }
         list.revalidate();
         list.repaint();
-        if (removed && !cards.isEmpty()) {
-            cards.values().iterator().next().requestFocusInWindow();
+        if (holding != null && !cards.containsValue(holding)) {
+            if (answeredHere.contains(holding.approval.id())) {
+                Card next = successor(before, holding);
+                if (next != null) {
+                    focus.request(next);
+                }
+            } else {
+                // withdrawn while the user worked in it: the next key must not answer a card the user never looked at
+                focus.request(list);
+            }
         }
+    }
+
+    @Override
+    public void unmount() {
+        ages.stop();
     }
 
     /** Moves the keyboard focus to the oldest card. */
     public void focusFirst() {
         if (!cards.isEmpty()) {
-            cards.values().iterator().next().requestFocusInWindow();
+            focus.request(cards.values().iterator().next());
+        }
+    }
+
+    /** Whether the keyboard focus is inside a card, where the card's keys take precedence over window-wide ones. */
+    public boolean holdsFocus() {
+        return cardOf(focus.owner()) != null;
+    }
+
+    /** Refreshes each card's age. */
+    void tick() {
+        long now = clock.getAsLong();
+        for (Card c : cards.values()) {
+            c.age.setText(age(c.approval.createdMillis(), now));
+        }
+    }
+
+    boolean ticking() {
+        return ages.isRunning();
+    }
+
+    /** The card that took the place of {@code gone} in view order: the next remaining one, else the previous one. */
+    private Card successor(List<Card> before, Card gone) {
+        int at = before.indexOf(gone);
+        for (int i = at + 1; i < before.size(); i++) {
+            if (cards.containsValue(before.get(i))) {
+                return before.get(i);
+            }
+        }
+        for (int i = at - 1; i >= 0; i--) {
+            if (cards.containsValue(before.get(i))) {
+                return before.get(i);
+            }
+        }
+        return null;
+    }
+
+    private Card cardOf(Component c) {
+        for (Component x = c; x != null; x = x.getParent()) {
+            if (x instanceof Card card && cards.containsValue(card)) {
+                return card;
+            }
+        }
+        return null;
+    }
+
+    private void neighbour(Card from, int step) {
+        List<Card> order = new ArrayList<>(cards.values());
+        int i = order.indexOf(from) + step;
+        if (i >= 0 && i < order.size()) {
+            focus.request(order.get(i));
         }
     }
 
@@ -130,56 +278,70 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     }
 
     private void answer(Approval a, ApprovalDecision d) {
+        answered.add(a.id());
         context.intents().dispatch(new Intent.ApprovalAnswered(a.id(), d));
+    }
+
+    static String age(long createdMillis, long now) {
+        String ago = Labels.ago(createdMillis, now);
+        return ago.isEmpty() || ago.equals("now") ? ago : ago + " ago";
     }
 
     /** One approval. */
     private final class Card extends JPanel {
         private final Approval approval;
         private final JTextField note = new JTextField(28);
+        private final JLabel age = Plain.only(new JLabel());
         /** Each question's option buttons: radio buttons in a group, or check boxes when it allows several. */
-        private final Map<String, java.util.List<javax.swing.AbstractButton>> questions = new LinkedHashMap<>();
+        private final Map<String, List<AbstractButton>> questions = new LinkedHashMap<>();
         private final Map<String, JTextField> other = new LinkedHashMap<>();
+        /** The rules "For session" and "Always" add; null for anything but a tool call. */
+        private final PermissionRules.Rules rules;
+        private final JPanel confirm = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
+        private final JLabel confirmText = Plain.only(new JLabel());
+        private final JLabel choose = Plain.only(new JLabel("Choose an answer"));
+        private JButton primaryButton;
+        /** When a first L asked for the second, or -1; a click on Always arms without a deadline. */
+        private long armedAt = -1;
+        private boolean armedByClick;
+        private Timer disarm;
 
         Card(Approval a) {
             this.approval = a;
+            JsonNode in = parse(a.inputJson());
+            this.rules = a.kind() == ApprovalKind.TOOL ? ruleSource.apply(a.toolName(), k -> in.path(k).asText("")) : null;
             setLayout(new BorderLayout(0, Theme.GAP));
-            setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.CARD_BORDER, 1, true),
-                    BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD)));
+            setBorder(border(Theme.CARD_BORDER));
             setBackground(Theme.CARD);
             setFocusable(true);
             setAlignmentX(Component.LEFT_ALIGNMENT);
-            JLabel head = new JLabel("<html><b>" + MarkdownHtml.escape(a.session()) + "</b>&nbsp;&nbsp;" + MarkdownHtml.escape(title(a))
-                    + "&nbsp;&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>" + Labels.ago(a.createdMillis(), System.currentTimeMillis())
-                    + "</span></html>");
+            add(header(a), BorderLayout.NORTH);
+            add(body(a, in), BorderLayout.CENTER);
+            add(footer(a), BorderLayout.SOUTH);
+            keys();
+            wire(this);
+            updateReady();
+        }
+
+        private JComponent header(Approval a) {
+            JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            p.setOpaque(false);
+            JLabel head = new JLabel("<html><b>" + MarkdownHtml.escape(a.session()) + "</b>&nbsp;&nbsp;" + MarkdownHtml.escape(title(a)) + "&nbsp;&nbsp;</html>");
             head.setIcon(Icons.get(switch (a.kind()) {
                 case QUESTION -> "question";
                 case PLAN -> "plan";
                 case SQL_WRITE -> "database";
                 case TOOL -> "warning";
             }));
-            add(head, BorderLayout.NORTH);
-            add(body(a), BorderLayout.CENTER);
-            add(buttons(a), BorderLayout.SOUTH);
-            keys();
-            addFocusListener(new FocusAdapter() {
-                @Override
-                public void focusGained(FocusEvent e) {
-                    setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.ACCENT, 1, true),
-                            BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD)));
-                    scrollRectToVisible(new Rectangle(0, 0, getWidth(), getHeight()));
-                }
-
-                @Override
-                public void focusLost(FocusEvent e) {
-                    setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.CARD_BORDER, 1, true),
-                            BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD)));
-                }
-            });
+            age.setName("age");
+            age.setForeground(Theme.MUTED);
+            age.setText(ApprovalInbox.age(a.createdMillis(), clock.getAsLong()));
+            p.add(head);
+            p.add(age);
+            return p;
         }
 
-        private JComponent body(Approval a) {
-            JsonNode in = parse(a.inputJson());
+        private JComponent body(Approval a, JsonNode in) {
             return switch (a.kind()) {
                 case QUESTION -> questionsPanel(in);
                 case PLAN -> {
@@ -215,61 +377,124 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 p.add(label);
                 boolean multi = q.path("multiSelect").asBoolean(false);
                 ButtonGroup group = new ButtonGroup();
-                java.util.List<javax.swing.AbstractButton> buttons = new java.util.ArrayList<>();
-                JPanel options = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 2));
-                options.setOpaque(false);
-                options.setAlignmentX(Component.LEFT_ALIGNMENT);
-                boolean first = true;
+                List<AbstractButton> buttons = new ArrayList<>();
                 for (JsonNode o : q.path("options")) {
                     String option = o.path("label").asText("");
                     // option labels and descriptions come from Claude: shown as text, never as HTML
-                    javax.swing.AbstractButton b = Plain.only(multi ? new javax.swing.JCheckBox() : new JRadioButton());
+                    AbstractButton b = Plain.only(multi ? new JCheckBox() : new JRadioButton());
                     b.setText(option); // after the guard: Swing decides on HTML when the text is set
                     b.setActionCommand(option);
-                    b.setToolTipText(Plain.text(o.path("description").asText(null)));
+                    b.setOpaque(false);
+                    b.setAlignmentX(Component.LEFT_ALIGNMENT);
+                    b.addItemListener(e -> updateReady());
                     if (!multi) {
-                        b.setSelected(first);
                         group.add(b);
                     }
-                    first = false;
                     buttons.add(b);
-                    options.add(b);
+                    p.add(b);
+                    String description = o.path("description").asText("");
+                    if (!description.isBlank()) {
+                        JTextArea d = muted(description);
+                        d.setName("description");
+                        // indented under the option's text, past the radio or check mark
+                        d.setBorder(BorderFactory.createEmptyBorder(0, 24, 2, 0));
+                        p.add(d);
+                    }
                 }
                 JTextField free = new JTextField(16);
                 free.putClientProperty("JTextField.placeholderText", "Other answer");
-                options.add(free);
+                free.getDocument().addDocumentListener(new DocumentListener() {
+                    @Override
+                    public void insertUpdate(DocumentEvent e) {
+                        updateReady();
+                    }
+
+                    @Override
+                    public void removeUpdate(DocumentEvent e) {
+                        updateReady();
+                    }
+
+                    @Override
+                    public void changedUpdate(DocumentEvent e) {
+                        updateReady();
+                    }
+                });
+                JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 2));
+                row.setOpaque(false);
+                row.setAlignmentX(Component.LEFT_ALIGNMENT);
+                row.add(free);
+                p.add(row);
                 questions.put(question, buttons);
                 other.put(question, free);
-                p.add(options);
             }
             return p;
         }
 
-        private JComponent buttons(Approval a) {
-            JPanel p = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
+        private JComponent footer(Approval a) {
+            JPanel p = new JPanel();
             p.setOpaque(false);
+            p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
+            JPanel buttons = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
+            buttons.setOpaque(false);
+            buttons.setAlignmentX(Component.LEFT_ALIGNMENT);
             switch (a.kind()) {
                 case QUESTION -> {
-                    p.add(button("Answer  ⏎", "check", this::answerQuestions, true));
-                    p.add(button("Skip", "deny", () -> answer(a, new ApprovalDecision.Deny(noteOr("The user skipped the questions."))), false));
+                    primaryButton = button("Answer  ⏎", "check", this::answerQuestions, true);
+                    buttons.add(primaryButton);
+                    buttons.add(button("Skip", "deny", this::deny, false));
                 }
                 case PLAN -> {
-                    p.add(button("Approve plan  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
-                    p.add(button("Keep planning", "deny", () -> answer(a, new ApprovalDecision.Deny(noteOr("Keep planning."))), false));
+                    buttons.add(button("Approve plan  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
+                    JButton edits = button("Approve, auto-accept edits", "check", () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)), false);
+                    edits.setToolTipText("Approves the plan and accepts file edits without asking for the rest of this session");
+                    buttons.add(edits);
+                    buttons.add(button("Keep planning", "deny", this::deny, false));
                 }
                 case SQL_WRITE -> {
-                    p.add(button("Run  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
-                    p.add(button("Deny  D", "deny", () -> answer(a, new ApprovalDecision.Deny(noteOr(""))), false));
+                    buttons.add(button("Run  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
+                    buttons.add(button("Deny  D", "deny", this::deny, false));
                 }
                 case TOOL -> {
-                    p.add(button("Allow once  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
-                    p.add(button("For session  S", null, () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)), false));
-                    p.add(button("Always  L", null, () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)), false));
-                    p.add(button("Deny  D", "deny", () -> answer(a, new ApprovalDecision.Deny(noteOr(""))), false));
+                    buttons.add(button("Allow once  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
+                    JButton session = button("For session  S", null, () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)), false);
+                    session.setName("session");
+                    session.setToolTipText(Plain.text("Adds " + rules.text() + " for the rest of this session"));
+                    buttons.add(session);
+                    if (rules.persistable()) {
+                        JButton always = button("Always  L", null, this::alwaysClicked, false);
+                        always.setName("always");
+                        always.setToolTipText(Plain.text("Adds " + rules.text() + " to this project's .claude/settings.local.json"));
+                        buttons.add(always);
+                    }
+                    buttons.add(button("Deny  D", "deny", this::deny, false));
                 }
             }
-            note.putClientProperty("JTextField.placeholderText", "Note for Claude (sent with a denial)");
-            p.add(note);
+            note.setName("note");
+            note.putClientProperty("JTextField.placeholderText", "Note for Claude: ⏎ denies with it");
+            buttons.add(note);
+            p.add(buttons);
+            confirm.setVisible(false); // shown by a first L or a click on Always; Escape reads it
+            if (a.kind() == ApprovalKind.TOOL) {
+                JTextArea scope = muted((rules.persistable() ? "Always: " : "For session: ") + rules.text());
+                scope.setName("rule");
+                p.add(scope);
+            }
+            if (a.kind() == ApprovalKind.TOOL && rules.persistable()) {
+                confirmText.setName("confirm");
+                confirm.setOpaque(false);
+                confirm.setAlignmentX(Component.LEFT_ALIGNMENT);
+                confirm.add(confirmText);
+                JButton yes = button("Always allow", "check", () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)), false);
+                yes.setName("confirm-always");
+                confirm.add(yes);
+                confirm.add(button("Cancel", null, this::disarm, false));
+                p.add(confirm);
+            }
+            if (a.kind() == ApprovalKind.QUESTION) {
+                choose.setName("choose");
+                choose.setForeground(Theme.WARN);
+                p.add(choose);
+            }
             return p;
         }
 
@@ -278,7 +503,35 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             return n.isEmpty() ? fallback : n;
         }
 
+        /** Whether every question has a chosen option or an answer of its own. */
+        private boolean ready() {
+            for (var e : questions.entrySet()) {
+                boolean chosen = !other.get(e.getKey()).getText().isBlank();
+                for (AbstractButton b : e.getValue()) {
+                    chosen |= b.isSelected();
+                }
+                if (!chosen) {
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        private void updateReady() {
+            if (approval.kind() != ApprovalKind.QUESTION) {
+                return;
+            }
+            boolean ready = ready();
+            choose.setVisible(!ready);
+            if (primaryButton != null) {
+                primaryButton.setEnabled(ready);
+            }
+        }
+
         private void answerQuestions() {
+            if (!ready()) {
+                return;
+            }
             Map<String, String> answers = new LinkedHashMap<>();
             for (var e : questions.entrySet()) {
                 String free = other.get(e.getKey()).getText().strip();
@@ -286,8 +539,8 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                     answers.put(e.getKey(), free);
                 } else {
                     // several chosen options of a multi-select question go back as one comma-separated answer
-                    String chosen = String.join(", ", e.getValue().stream().filter(javax.swing.AbstractButton::isSelected)
-                            .map(javax.swing.AbstractButton::getActionCommand).toList());
+                    String chosen = String.join(", ", e.getValue().stream().filter(AbstractButton::isSelected)
+                            .map(AbstractButton::getActionCommand).toList());
                     if (!chosen.isEmpty()) {
                         answers.put(e.getKey(), chosen);
                     }
@@ -296,17 +549,65 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             answer(approval, new ApprovalDecision.Answer(answers));
         }
 
+        /** The first L asks for a second within {@link #CONFIRM_MILLIS}; a rule in the local settings outlives the session. */
+        private void alwaysKey() {
+            long now = clock.getAsLong();
+            if (armedByClick || (armedAt >= 0 && now - armedAt <= CONFIRM_MILLIS)) {
+                answer(approval, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS));
+                return;
+            }
+            armedAt = now;
+            showConfirm("Press L again to always allow " + rules.text());
+            if (disarm != null) {
+                disarm.stop();
+            }
+            disarm = new Timer((int) CONFIRM_MILLIS, e -> {
+                if (!armedByClick) {
+                    disarm();
+                }
+            });
+            disarm.setRepeats(false);
+            disarm.start();
+        }
+
+        private void alwaysClicked() {
+            armedByClick = true;
+            showConfirm("Always allow " + rules.text() + " in this project?");
+        }
+
+        private void showConfirm(String text) {
+            confirmText.setText(text);
+            confirm.setVisible(true);
+            revalidate();
+            repaint();
+        }
+
+        private void disarm() {
+            armedAt = -1;
+            armedByClick = false;
+            confirm.setVisible(false);
+            revalidate();
+            repaint();
+        }
+
         private void keys() {
             bind(KeyEvent.VK_ENTER, () -> primary().run());
             bind(KeyEvent.VK_A, () -> primary().run());
-            bind(KeyEvent.VK_ESCAPE, this::deny);
+            bind(KeyEvent.VK_ESCAPE, () -> {
+                if (confirm.isVisible()) {
+                    disarm();
+                } else {
+                    deny();
+                }
+            });
             bind(KeyEvent.VK_D, this::deny);
             if (approval.kind() == ApprovalKind.TOOL) {
                 bind(KeyEvent.VK_S, () -> answer(approval, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)));
-                bind(KeyEvent.VK_L, () -> answer(approval, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)));
+                // a rule that may not be saved has no Always: L does nothing, and reaches nothing else
+                bind(KeyEvent.VK_L, rules.persistable() ? this::alwaysKey : () -> { });
             }
-            bind(KeyEvent.VK_DOWN, () -> transferFocus());
-            bind(KeyEvent.VK_UP, () -> transferFocusBackward());
+            bind(KeyEvent.VK_DOWN, () -> neighbour(this, 1));
+            bind(KeyEvent.VK_UP, () -> neighbour(this, -1));
         }
 
         private Runnable primary() {
@@ -325,21 +626,123 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             answer(approval, new ApprovalDecision.Deny(noteOr(fallback)));
         }
 
+        /** A key of the card, wherever in the card the focus is. */
         private void bind(int key, Runnable r) {
             String id = "approval-" + key;
-            getInputMap(JComponent.WHEN_FOCUSED).put(KeyStroke.getKeyStroke(key, 0), id);
-            getActionMap().put(id, new AbstractAction() {
+            getInputMap(JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT).put(KeyStroke.getKeyStroke(key, 0), id);
+            getActionMap().put(id, keyAction(r));
+        }
+
+        /**
+         * Gives each part of the card its share of the keys and the mouse: a text field types its letters and
+         * answers on Enter; a read-only viewer passes Enter and Escape to the card; a press on anything that is not
+         * a control focuses the card; the border shows the focus anywhere inside.
+         */
+        private void wire(Container root) {
+            FocusAdapter border = new FocusAdapter() {
                 @Override
-                public void actionPerformed(ActionEvent e) {
-                    r.run();
+                public void focusGained(FocusEvent e) {
+                    setBorder(border(Theme.ACCENT));
+                    if (e.getComponent() == Card.this) {
+                        scrollRectToVisible(new Rectangle(0, 0, getWidth(), getHeight()));
+                    }
                 }
-            });
+
+                @Override
+                public void focusLost(FocusEvent e) {
+                    Component to = e.getOppositeComponent();
+                    if (to == null || !SwingUtilities.isDescendingFrom(to, Card.this)) {
+                        setBorder(border(Theme.CARD_BORDER));
+                    }
+                }
+            };
+            MouseAdapter press = new MouseAdapter() {
+                @Override
+                public void mousePressed(MouseEvent e) {
+                    focus.request(Card.this);
+                }
+            };
+            List<Component> all = new ArrayList<>();
+            collect(root, all);
+            for (Component c : all) {
+                if (c.isFocusable() && (c == this || c instanceof JTextComponent || c instanceof AbstractButton)) {
+                    c.addFocusListener(border);
+                }
+                if (c instanceof JTextComponent t && t.isEditable() && t.isFocusable()) {
+                    fieldKeys(t);
+                } else if (c instanceof JTextComponent t && t.isFocusable()) {
+                    InputMap m = t.getInputMap(JComponent.WHEN_FOCUSED);
+                    m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "none");
+                    m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "none");
+                } else if (!(c instanceof AbstractButton) && !(c instanceof JScrollBar)) {
+                    c.addMouseListener(press);
+                }
+            }
+        }
+
+        private void fieldKeys(JTextComponent field) {
+            InputMap m = field.getInputMap(JComponent.WHEN_FOCUSED);
+            field.getActionMap().put("approval-type", keyAction(() -> { }));
+            for (int letter : new int[] {KeyEvent.VK_A, KeyEvent.VK_S, KeyEvent.VK_L, KeyEvent.VK_D}) {
+                // the press stops here, so the card's letter does not fire; the typed character still reaches the field
+                m.put(KeyStroke.getKeyStroke(letter, 0), "approval-type");
+            }
+            m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "approval-enter");
+            field.getActionMap().put("approval-enter", keyAction(() -> {
+                if (field == note && !note.getText().isBlank()) {
+                    deny(); // a typed note is an objection: it never goes with a call that runs
+                } else {
+                    primary().run();
+                }
+            }));
+            m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, MENU), "approval-deny");
+            field.getActionMap().put("approval-deny", keyAction(this::deny));
+            m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "approval-card");
+            field.getActionMap().put("approval-card", keyAction(() -> focus.request(this)));
         }
 
         @Override
         public Dimension getMaximumSize() {
             return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
         }
+    }
+
+    private static void collect(Component c, List<Component> out) {
+        out.add(c);
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                collect(child, out);
+            }
+        }
+    }
+
+    private static AbstractAction keyAction(Runnable r) {
+        return new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                r.run();
+            }
+        };
+    }
+
+    private static Border border(java.awt.Color line) {
+        return BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(line, 1, true),
+                BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
+    }
+
+    /** Muted, wrapped, read-only text; a text area never renders HTML, so text from Claude stays text. */
+    private static JTextArea muted(String text) {
+        JTextArea t = new JTextArea(text);
+        t.setEditable(false);
+        t.setFocusable(false);
+        t.setOpaque(false);
+        t.setLineWrap(true);
+        t.setWrapStyleWord(true);
+        t.setForeground(Theme.MUTED);
+        t.setFont(new JLabel().getFont());
+        t.setBorder(BorderFactory.createEmptyBorder());
+        t.setAlignmentX(Component.LEFT_ALIGNMENT);
+        return t;
     }
 
     private static String title(Approval a) {

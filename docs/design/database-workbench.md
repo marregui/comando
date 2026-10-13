@@ -40,16 +40,16 @@ The Results tab shows the focused panel's last run: the grid, the row count, and
 | Key | Command | Result |
 |---|---|---|
 | ⌘J | Plot last result | a plot view: x is the first time column, else the first numeric column; up to eight other numeric columns become series; at most 2 000 000 points |
-| ⌘⇧J | Plot last result, refreshing… | asks for a period (default 5 s); the panel's query runs again each period when it is not running, and each finished run replaces the plot without moving the lower panel's tab; running another statement in the panel, closing the plot's tab, or "Stop refreshing plots" stops it |
+| ⌘⇧J | Plot last result, refreshing… | asks for a period (default 5 s); the panel's query runs again each period when it is not running, and each finished run replaces the plot without moving the lower panel's tab; running another statement in the panel, closing the plot's tab, "Stop refreshing plots", or its connection failing stops it, with a notice. A refresh posts no notice of its own; a refresh that fails posts a warning ("Live plot in <panel> failed: …"), never a desktop notification |
 | ⌘⇧R | Keep the result in a tab | a table view of the rows, at most 100 000, that the next run does not replace |
 | ⌘⇧I | Attach the result | the selected rows, else the first 50, else the error, as a block in the editor ([Command dispatch](command-dispatch.md#6-attaching-results)) |
-| ⌘S | Export | the grid as CSV, in the order shown; the file is written off the EDT from a snapshot |
+| ⌘⇧S | Export | the grid as CSV, in the order shown; the file is written off the EDT from a snapshot; the save dialog opens in the last export directory and the status bar names the file written |
 
 **Plans.** A finished `EXPLAIN` whose result has one column shows as a tree by default: each line becomes a node under the nearest line above it with less indentation, and PostgreSQL's `->` markers are dropped. A toggle switches between the tree and the rows.
 
 ## 4. Schema
 
-When a connection opens, its schema loads in the background, without a view: tables and columns from `information_schema.columns` (system schemas excluded); when that fails, as on QuestDB, from `tables()` and a description of each table. At most 50 000 rows are read.
+When a connection opens, its schema loads in the background, without a view: first from QuestDB's own catalogue, `tables()` and a description of each table, so columns carry QuestDB's type names (`SYMBOL`, `TIMESTAMP`); when that fails, as on PostgreSQL, from `information_schema.columns` (system schemas excluded). At most 50 000 rows are read. QuestDB's catalogue is read table by table up to 50 tables; above that the single `information_schema` query is used, with PostgreSQL's type names. A statement that changes the schema (`CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `RENAME`), anywhere in a block, from the editor or from Claude's `db_run_sql`, reloads it when it completes (or when a block of several statements fails), so completion knows the new table, and an open "schema · <connection>" explorer shows it.
 
 | Use | Detail |
 |---|---|

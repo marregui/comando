@@ -50,6 +50,9 @@ class IntentLogTest {
             new Intent.ShowView("", "c", ViewSpec.Console.running(4L, "gradle build"), Placement.LOWER),
             new Intent.SelectLowerTab(LowerTab.view(7L)),
             new Intent.Arrange(new Layout(Layout.Toggle.HIDE, Layout.Toggle.KEEP, 0.4)),
+            new Intent.Arrange(new Layout(Layout.Toggle.KEEP, Layout.Toggle.KEEP, Double.NaN, new PanelId("p1"))),
+            new Intent.SchemaChanged("lab"),
+            new Intent.RefreshSql(new PanelId("p1"), "SELECT 1"),
             new Intent.EditPanel(null, "text", EditMode.APPEND),
             new Intent.CommandFinished(4L, 1, 10L, false, ViewSpec.TreeNode.NONE, Map.of("A.b", "boom")),
             new Intent.Notify(Notice.Level.WARN, "careful", true));

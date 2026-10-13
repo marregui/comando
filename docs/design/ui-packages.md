@@ -4,28 +4,29 @@
 
 ```
 dev.marregui.comando.ui
-├── kit/            foundation: theme, icons, commands, overlays, EDT helpers, text, trees, desktop
+├── kit/            foundation: theme, icons, commands, overlays, EDT helpers, text, trees, desktop (file choosers, links)
 ├── widget/         the contract: Widget, WidgetContext, WidgetRegistry
 │   └── capability/ Searchable, Copyable, Exportable, Zoomable, FindBar, Capabilities
 ├── widgets/        one package per widget
-│   ├── approval/   ApprovalInbox
+│   ├── approval/   ApprovalInbox (rules from core's PermissionRules)
 │   ├── console/    ConsoleWidget
 │   ├── diff/       DiffWidget
 │   ├── editor/     CommandEditor, PromptBar, SqlCompletion
 │   ├── markdown/   MarkdownWidget
 │   ├── plot/       PlotWidget, PlotCanvas
 │   ├── table/      TableViewWidget, GridTable, TableSource
-│   ├── terminal/   TerminalWidget, Pty
+│   ├── terminal/   TerminalWidget, Pty, InputGate
 │   ├── text/       TextWidget
-│   ├── transcript/ TranscriptWidget, TranscriptView, ToolText; doc/ (Markdown to paragraphs), render/ (layout, paint)
+│   ├── transcript/ TranscriptWidget, TranscriptView, ToolText; doc/ (Markdown to paragraphs), render/ (layout, paint, Fold)
 │   └── tree/       TreeWidget
 ├── panels/         the window's regions: Workspace, EditorPanel, LowerPanel, ResultsView, PlanTree,
 │                   SessionsSidebar, SidePane, StatusBar, TerminalTabs, ViewTabs
 ├── dialogs/
 │   ├── resource/   ResourceDialog<S>, the one dialog for connections and sessions
 │   └── sessions/   ImportSessionsDialog
-├── shell/          ComandoUi (the frame and the UI port), LivePlots, ResultViews, Notifier, ServerToggle
-└── PanelTexts      editor text between runs, written by the store
+├── shell/          ComandoUi (the frame and the UI port), Keys, LivePlots, ResultViews, Notifier, ServerToggle
+├── PanelTexts      editor text between runs, written by the store
+└── PromptHistory   each session's prompts between runs, written by the store
 ```
 
 | Layer | May use |

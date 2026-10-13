@@ -7,12 +7,14 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.PersistencePort;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.ui.PanelTexts;
+import dev.marregui.comando.ui.PromptHistory;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -26,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * bindings and text). Every write runs on one thread from an immutable snapshot, so a save never races an
  * edit; panel text is saved after 800 ms without changes.
  */
-final class Store implements PersistencePort, PanelTexts, AutoCloseable {
+final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(Store.class.getName());
     static final long PANEL_DELAY_MILLIS = 800;
@@ -42,6 +44,11 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     private final JsonFile<List<ConnectionSpec>> connections;
     private final JsonFile<List<SessionSpec>> sessions;
     private final JsonFile<List<StoredPanel>> panels;
+    private final JsonFile<Map<String, List<String>>> prompts;
+    /** Prompts sent, by session, oldest first; read once at start, written after a quiet period. */
+    private final ConcurrentHashMap<String, List<String>> promptHistory = new ConcurrentHashMap<>();
+    private final AtomicBoolean promptsPending = new AtomicBoolean();
+    static final int PROMPTS_KEPT = 200;
     private final ScheduledExecutorService writer =
             Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("store").daemon(false).unstarted(r));
     /**
@@ -72,6 +79,59 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         });
         panels = new JsonFile<>(home.resolve("panels.json"), new TypeReference<>() {
         });
+        prompts = new JsonFile<>(home.resolve("prompts.json"), new TypeReference<>() {
+        });
+        try {
+            Map<String, List<String>> read = prompts.read();
+            if (read != null) {
+                read.forEach((k, v) -> promptHistory.put(k, new ArrayList<>(v == null ? List.of() : v)));
+            }
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot read the prompt history: " + e.getMessage());
+        }
+    }
+
+    // ---- PromptHistory
+
+    @Override
+    public List<String> load(String session) {
+        List<String> h = promptHistory.get(session);
+        if (h == null) {
+            return List.of();
+        }
+        synchronized (h) {
+            return List.copyOf(h);
+        }
+    }
+
+    @Override
+    public void add(String session, String prompt) {
+        List<String> h = promptHistory.computeIfAbsent(session, k -> new ArrayList<>());
+        synchronized (h) {
+            h.remove(prompt);
+            h.add(prompt);
+            while (h.size() > PROMPTS_KEPT) {
+                h.removeFirst();
+            }
+        }
+        if (promptsPending.compareAndSet(false, true)) {
+            try {
+                writer.schedule(this::writePrompts, PANEL_DELAY_MILLIS, TimeUnit.MILLISECONDS);
+            } catch (java.util.concurrent.RejectedExecutionException e) {
+                promptsPending.set(false);
+            }
+        }
+    }
+
+    private void writePrompts() {
+        promptsPending.set(false);
+        Map<String, List<String>> out = new java.util.TreeMap<>();
+        promptHistory.forEach((k, v) -> {
+            synchronized (v) {
+                out.put(k, List.copyOf(v));
+            }
+        });
+        write(prompts, out);
     }
 
     /** Reads the files; a fresh data root is seeded from {@code legacy} (the old ~/QUESTS) or defaults. */
@@ -218,6 +278,34 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         schedulePanels();
     }
 
+    @Override
+    public java.util.concurrent.CompletableFuture<String> saveNow() {
+        java.util.concurrent.CompletableFuture<String> done = new java.util.concurrent.CompletableFuture<>();
+        if (closed) {
+            done.complete("comando is closing");
+            return done;
+        }
+        try {
+            writer.execute(() -> {
+                panelsPending.set(false);
+                List<StoredPanel> out = new ArrayList<>();
+                for (PanelState p : panelMeta) {
+                    out.add(new StoredPanel(p.id().value(), p.title(), p.connection(), p.session(), texts.getOrDefault(p.id().value(), "")));
+                }
+                try {
+                    panels.write(out);
+                    done.complete(null);
+                } catch (IOException | RuntimeException e) {
+                    LOG.log(System.Logger.Level.ERROR, "cannot save [file=" + panels.path() + "]: " + e.getMessage(), e);
+                    done.complete(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
+                }
+            });
+        } catch (java.util.concurrent.RejectedExecutionException e) {
+            done.complete("comando is closing");
+        }
+        return done;
+    }
+
     // ---- writing
 
     private void schedulePanels() {
@@ -274,6 +362,9 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         }
         closed = true;
         writer.execute(this::writePanels);
+        if (promptsPending.get()) {
+            writer.execute(this::writePrompts);
+        }
         writer.shutdown();
         secretsWriter.shutdown();
         try {

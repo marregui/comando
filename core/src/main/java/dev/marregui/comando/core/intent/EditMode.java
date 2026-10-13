@@ -1,11 +1,13 @@
 package dev.marregui.comando.core.intent;
 
-/** How text from Claude enters a panel's editor. */
+/** How text enters a panel's editor. */
 public enum EditMode {
-    /** Replace the whole document. */
+    /** A session replaces the whole document, as one undo step. */
     REPLACE,
-    /** Insert at the caret. */
+    /** A session inserts a block of its own after the block that ran last, else at the end; the caret stays. */
     INSERT,
-    /** Append at the end, on a new paragraph. */
-    APPEND
+    /** A session appends a block at the end; the caret stays. */
+    APPEND,
+    /** The user's own insert, from the schema explorer: at the caret, replacing the selection, as typing would. */
+    CARET
 }

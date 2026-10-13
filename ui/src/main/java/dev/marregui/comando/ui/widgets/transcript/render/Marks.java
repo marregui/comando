@@ -3,7 +3,7 @@ package dev.marregui.comando.ui.widgets.transcript.render;
 import java.awt.Component;
 import java.util.List;
 
-/** What painting needs besides the graphics: the selection and find ranges of each box, and a component for icons. */
+/** What painting needs besides the graphics: the selection and find ranges of each box, a component for icons, and the time. */
 interface Marks {
 
     /** {@code [start, end)} of the selection inside {@code box}; start equals end when none. */
@@ -16,4 +16,7 @@ interface Marks {
     int currentFind(TextBox box);
 
     Component component();
+
+    /** The canvas clock, for the elapsed time of running tool calls. */
+    long nowMillis();
 }

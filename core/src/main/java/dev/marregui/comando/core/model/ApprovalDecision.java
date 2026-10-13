@@ -6,7 +6,11 @@ import java.util.Objects;
 /** The user's answer to an approval card. */
 public sealed interface ApprovalDecision {
 
-    /** Scope of an allow: this call only, the rest of the session, or a rule saved in local settings. */
+    /**
+     * Scope of an allow: this call only, the rest of the session, or a rule saved in local settings; the rule is the
+     * one {@link PermissionRules} derives. On {@code ExitPlanMode}, SESSION or ALWAYS means "approve the plan and
+     * switch the session to accept edits".
+     */
     enum Scope { ONCE, SESSION, ALWAYS }
 
     record Allow(Scope scope) implements ApprovalDecision {

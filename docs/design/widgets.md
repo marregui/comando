@@ -44,14 +44,14 @@ Widgets outside the registry are built by panels: the command editor and prompt 
 
 ## 3. Capabilities
 
-A widget declares what it can do by implementing capability interfaces and marking its root component with `Capabilities.mark`. The shell binds each capability's key once; the key acts on the capability owner nearest the focused component.
+A widget declares what it can do by implementing capability interfaces and marking its root component with `Capabilities.mark`. The shell binds each capability's key once; the key acts on the capability owner nearest the focused component, else on the one in the lower tab in front, so ⌘F, ⌘⇧C and zoom reach the results or the transcript while the editor has the keyboard. With neither, the command is disabled and the key goes to the focused component.
 
 | Capability | Methods | Key | Implemented by |
 |---|---|---|---|
-| `Searchable` | `find(text, forward)` returns the match count, `clearFind()` | ⌘F opens the shared find bar; Enter next, ⇧Enter previous, Esc closes | transcript, text, diff, grid, console, editor |
-| `Copyable` | `copyText()`; the grid copies tab-separated text | ⌘⇧C | transcript, text, markdown, diff, tree, grid, console |
-| `Exportable` | `exportName()`, `prepare()` on the EDT returns the writer that runs off it | ⌘S opens a save dialog | grid (CSV), plot (PNG), markdown (`.md`), diff |
-| `Zoomable` | `zoom(steps)`, `resetZoom()` | ⌘= in, ⌘- out, ⌘0 reset | transcript, text, editor, plot |
+| `Searchable` | `find(text, forward)` returns the match count, `clearFind()` | ⌘F opens the shared find bar, which finds as you type (250 ms after the last key); Enter or ⌘G next, ⇧Enter or ⌘⇧G previous, Esc closes | transcript, text, diff, grid, console, editor, terminal |
+| `Copyable` | `copyText()`; the grid copies tab-separated text | ⌘⇧C | transcript, text, markdown, diff, tree, grid, console, the Results tab (the error of a failed run, else the grid) |
+| `Exportable` | `exportName()`, `prepare()` on the EDT returns the writer that runs off it | ⌘⇧S opens the save dialog (the native one on macOS) in the last export directory; the status bar names the file written, or the error | grid (CSV), plot (PNG), markdown (`.md`), diff |
+| `Zoomable` | `zoom(steps)`, `resetZoom()` | ⌘= in, ⌘- out, ⌘0 reset | transcript, text, editor, plot, terminal (8–40 pt, not kept across restarts) |
 
 There is one find bar per window (`FindBar`); it attaches to the `Searchable` that had focus when ⌘F was pressed.
 
@@ -59,8 +59,8 @@ There is one find bar per window (`FindBar`); it attaches to the `Searchable` th
 
 | Widget | Shows | Notes |
 |---|---|---|
-| `CommandEditor` | SQL and prompts in one document | RSyntaxTextArea; gutter icons per block ([Command dispatch](command-dispatch.md)); SQL completion from the bound connection's schema |
-| `PromptBar` | one line to the panel's session | Enter sends, ↑ ↓ history |
+| `CommandEditor` | SQL and prompts in one document | RSyntaxTextArea; gutter icons per block ([Command dispatch](command-dispatch.md)); SQL completion from the bound connection's schema, opening by itself only in a SQL block or a block that starts like a statement being typed: a statement keyword in lower or upper case, no prose word, and the words that must follow it (`TABLE` after `CREATE`, `ALTER`, `DROP`, `TRUNCATE`; `INTO` after `INSERT`; `FROM` after `DELETE`; `SET` after `UPDATE` and its table) (⌃Space or ⌥⎋ opens it anywhere in the editor); a session's write is one undo step of its own and never moves the user's caret or selection |
+| `PromptBar` | a prompt to the panel's session | a text area growing with its wrapped text to six rows; ⏎ sends, ⇧⏎ or ⌥⏎ a new line, ↑ ↓ the session's history (kept across restarts), Esc back to the editor; a refused prompt stays, outlined in red ([Command dispatch](command-dispatch.md#5-the-prompt-bar)) |
 | `GridTable` | a SQL result or a placed table | JTable paints visible rows only; cells format into one reused buffer; sorting keeps a permutation of row indices, offered up to 1 000 000 rows and computed on the EDT; a growing result appends rows without rebuilding columns and drops a sort made before it grew; ⌘⇧I and copy map selected rows through the sort |
 | `TranscriptWidget` | a session's transcript | painted, virtualised ([Transcript renderer](transcript-renderer.md)) |
 | `PlotWidget` | series over shared axes | each pixel column reduced to min and max of the visible points; points without a finite x or y are skipped; time axes tick on clock steps; a click focuses it; drag to zoom, double-click resets; an empty state when there are no points |

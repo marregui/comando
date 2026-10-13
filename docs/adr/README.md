@@ -29,3 +29,4 @@ A decision is changed by a new record that names the one it replaces; the old re
 | [21](0021-painted-transcript.md) | Painted transcript | Claude |
 | [22](0022-no-parquet-export.md) | No Parquet export | Claude |
 | [23](0023-sql-from-claude-lexical-policy-production-refused.md) | SQL from Claude: lexical policy, production refused | Claude |
+| [24](0024-the-window-belongs-to-the-user.md) | The window belongs to the user | Claude |

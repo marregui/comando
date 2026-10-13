@@ -23,6 +23,8 @@ public final class Theme {
     public static final Color WARN = new Color(0xEDA200);
     public static final Color DANGER = new Color(0xDB5860);
     public static final Color MUTED = new Color(0x8C8C8C);
+    /** Secondary text on list and card backgrounds, where MUTED falls short of 4.5:1 contrast. */
+    public static final Color MUTED_STRONG = new Color(0xA8A8A8);
     public static final Color THINKING = new Color(0xB99BF8);
     public static final Color DIFF_ADDED = new Color(0x2C4A33);
     public static final Color DIFF_REMOVED = new Color(0x5A2E2E);
@@ -47,7 +49,6 @@ public final class Theme {
     /** Installs the look and feel; call once on the EDT before any component exists. */
     public static void install() {
         System.setProperty("apple.laf.useScreenMenuBar", "true");
-        System.setProperty("apple.awt.application.appearance", "system");
         UIManager.put("Component.arc", RADIUS);
         UIManager.put("Button.arc", RADIUS);
         UIManager.put("TextComponent.arc", RADIUS);

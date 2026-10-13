@@ -18,7 +18,10 @@ import java.awt.Rectangle;
 import java.awt.Shape;
 import java.awt.font.TextLayout;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 
 /** The item for each block kind. */
 final class Items {
@@ -55,6 +58,18 @@ final class Items {
             }
         }
         return s;
+    }
+
+    /** {@code body} in a fenced code block whose fence is longer than any backtick run inside it. */
+    static String fence(String language, String body) {
+        int longest = 0;
+        int run = 0;
+        for (int i = 0; i < body.length(); i++) {
+            run = body.charAt(i) == '`' ? run + 1 : 0;
+            longest = Math.max(longest, run);
+        }
+        String f = "`".repeat(Math.max(3, longest + 1));
+        return f + language + "\n" + body + (body.endsWith("\n") ? "" : "\n") + f;
     }
 
     static void fillRound(Graphics2D g, Color c, int x, int y, int w, int h) {
@@ -188,13 +203,23 @@ final class Items {
     // ---- thinking
 
     static final class ThinkingItem extends Item {
+        private final Fold fold;
         private TextBox header;
-        private TextBox body;
+        /** One box per line of the text: while it streams, only the growing last line is laid out again. */
+        private List<TextBox> body = List.of();
+        private List<String> bodyLines = List.of();
+        private int[] bodyTops = new int[0];
         private Style built;
-        private boolean open;
+        private boolean stale = true;
 
         ThinkingItem(Block.Thinking b) {
             super(b);
+            fold = new Fold(live(b));
+        }
+
+        /** Open while it streams, so the reasoning can be followed; closed once the final block arrives. */
+        private static boolean live(Block.Thinking t) {
+            return t.streaming() && !t.text().isEmpty();
         }
 
         private Block.Thinking thinking() {
@@ -203,39 +228,83 @@ final class Items {
 
         @Override
         void changed(Block previous, Block next) {
-            built = null;
+            stale = true;
+            fold.follow(live((Block.Thinking) next));
+        }
+
+        @Override
+        Fold fold() {
+            return fold;
+        }
+
+        @Override
+        void foldChanged() {
+            stale = true;
+            invalidate();
+        }
+
+        boolean isOpen() {
+            return fold.isOpen();
         }
 
         @Override
         int doLayout(int w, Style s) {
-            if (built != s) {
-                built = s;
+            if (built != s || stale) {
                 Block.Thinking t = thinking();
                 String tokens = t.tokens() > 0 ? " · " + Labels.tokens(t.tokens()) + " tokens" : "";
-                String arrow = t.text().isEmpty() ? "" : open ? "  ▾" : "  ▸";
+                String arrow = t.text().isEmpty() ? "" : fold.isOpen() ? "  ▾" : "  ▸";
                 header = new TextBox(new Rich(s.body, Theme.THINKING).append((t.streaming() ? "Thinking…" : "Thought") + tokens + arrow));
-                body = new TextBox(new Rich(s.italic, s.muted).append(t.text()));
+                List<String> lines = List.of(t.text().split("\n", -1));
+                List<TextBox> boxes = new ArrayList<>(lines.size());
+                for (int i = 0; i < lines.size(); i++) {
+                    boolean same = built == s && i < bodyLines.size() && bodyLines.get(i).equals(lines.get(i));
+                    boxes.add(same ? body.get(i) : new TextBox(new Rich(s.italic, s.muted).append(lines.get(i))));
+                }
+                body = boxes;
+                bodyLines = lines;
+                built = s;
+                stale = false;
             }
-            int h = 2 + header.layout(Math.max(40, w - 22), s) + 2;
-            if (open) {
-                h += body.layout(Math.max(40, w - 22), s) + 4;
+            int inner = Math.max(40, w - 22);
+            int h = 2 + header.layout(inner, s) + 2;
+            if (shown()) {
+                bodyTops = new int[body.size()];
+                for (int i = 0; i < body.size(); i++) {
+                    bodyTops[i] = h;
+                    h += body.get(i).layout(inner, s);
+                }
+                h += 4;
             }
             return h;
+        }
+
+        private boolean shown() {
+            return fold.isOpen() && !thinking().text().isEmpty();
         }
 
         @Override
         void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
             Icons.get("thinking").paintIcon(marks.component(), g, x, y + 3);
             Paras.paintBox(g, header, x + 22, y + 2, clip, marks);
-            if (open) {
-                Paras.paintBox(g, body, x + 22, y + 4 + header.height(), clip, marks);
+            if (!shown()) {
+                return;
+            }
+            for (int i = 0; i < body.size() && i < bodyTops.length; i++) {
+                TextBox box = body.get(i);
+                int top = y + bodyTops[i];
+                if (top + box.height() >= clip.y && top <= clip.y + clip.height) {
+                    Paras.paintBox(g, box, x + 22, top, clip, marks);
+                }
             }
         }
 
         @Override
         void collect(int x, int y, List<Placed> out) {
-            if (open) {
-                out.add(new Placed(body, x + 22, y + 4 + header.height(), this));
+            if (!shown()) {
+                return;
+            }
+            for (int i = 0; i < body.size() && i < bodyTops.length; i++) {
+                out.add(new Placed(body.get(i), x + 22, y + bodyTops[i], this));
             }
         }
 
@@ -249,9 +318,8 @@ final class Items {
             if (thinking().text().isEmpty()) {
                 return false;
             }
-            open = !open;
-            built = null;
-            invalidate();
+            fold.toggle();
+            foldChanged();
             return true;
         }
 
@@ -269,30 +337,46 @@ final class Items {
     // ---- tool call
 
     static final class ToolItem extends Item {
+        static final String WAITING = "waiting for your approval · ⌃3";
         private static final int IN_X = 8;
         private static final int IN_Y = 5;
         private static final int CHILD_INDENT = 12;
         private final List<Item> children = new ArrayList<>();
+        private final Fold fold = new Fold(false);
+        private final long order;
         private Style built;
         private TextBox title;
         private TextBox input;
         private TextBox result;
-        private TextLayout status;
         private Icon statusIcon;
-        private boolean open;
-        private boolean userToggled;
         private int headerHeight;
         private int inputTop;
         private int resultTop;
         private int[] childTops = new int[0];
+        /** When the canvas first saw the call running; negative while it has not. */
+        private long runningSince = -1;
+        private boolean waiting;
+        private String statusText = "";
+        private Style statusStyle;
+        private TextLayout status;
 
         ToolItem(Block.ToolCall b) {
+            this(b, 0);
+        }
+
+        ToolItem(Block.ToolCall b, long order) {
             super(b);
+            this.order = order;
             autoOpen();
         }
 
         Block.ToolCall call() {
             return (Block.ToolCall) block;
+        }
+
+        /** The card's position among the cards appended to the canvas; later cards have larger values. */
+        long order() {
+            return order;
         }
 
         void addChild(Item child) {
@@ -306,22 +390,63 @@ final class Items {
         }
 
         boolean isOpen() {
-            return open;
+            return fold.isOpen();
         }
 
-        /** Opens edits, errors and running subagents unless the user chose otherwise. */
-        private void autoOpen() {
-            if (!userToggled) {
-                Block.ToolCall c = call();
-                boolean edits = c.name().equals("Edit") || c.name().equals("MultiEdit") || c.name().equals("Write");
-                open = edits || c.status() == Block.ToolStatus.ERROR || (c.isSubagent() && c.status() == Block.ToolStatus.RUNNING);
+        boolean isRunning() {
+            return call().status() == Block.ToolStatus.RUNNING;
+        }
+
+        /** Starts the elapsed time of a running call at {@code nowMillis}, the first time the canvas sees it running. */
+        void seen(long nowMillis) {
+            if (isRunning() && runningSince < 0) {
+                runningSince = nowMillis;
             }
+        }
+
+        /** Marks the running call as held up by an approval card; true when that changed. */
+        boolean setWaiting(boolean w) {
+            if (waiting == w) {
+                return false;
+            }
+            waiting = w;
+            return true;
+        }
+
+        /** The status beside the title while the call runs: the wait for an approval, or the time it has run; empty once done. */
+        String statusText(long nowMillis) {
+            if (!isRunning()) {
+                return "";
+            }
+            if (waiting) {
+                return WAITING;
+            }
+            long elapsed = runningSince < 0 ? 0 : nowMillis - runningSince;
+            return elapsed < 1000 ? "running" : "running · " + Labels.elapsed(elapsed);
+        }
+
+        /**
+         * Opens edits, errors and running subagents unless the user chose otherwise. It only ever opens: a card
+         * that finishes keeps the state it had, so the blocks the user is reading stay where they are.
+         */
+        private void autoOpen() {
+            Block.ToolCall c = call();
+            fold.openIf(isEdit(c.name()) || c.status() == Block.ToolStatus.ERROR || (c.isSubagent() && c.status() == Block.ToolStatus.RUNNING));
+        }
+
+        private static boolean isEdit(String name) {
+            return name.equals("Edit") || name.equals("MultiEdit") || name.equals("Write");
         }
 
         @Override
         void changed(Block previous, Block next) {
             built = null;
             autoOpen();
+        }
+
+        @Override
+        Fold fold() {
+            return fold;
         }
 
         @Override
@@ -338,7 +463,6 @@ final class Items {
                 title = new TextBox(t).noWrap();
                 input = new TextBox(inputRich(c, in, s));
                 result = new TextBox(resultRich(c, s));
-                status = c.status() == Block.ToolStatus.RUNNING ? new TextLayout("running", s.small, Style.FRC) : null;
                 statusIcon = switch (c.status()) {
                     case RUNNING -> null;
                     case DONE -> Icons.get("check");
@@ -349,7 +473,7 @@ final class Items {
             int titleWidth = Math.max(40, inner - 22 - 70);
             headerHeight = Math.max(18, title.layout(titleWidth, s));
             int y = IN_Y + headerHeight;
-            if (open) {
+            if (fold.isOpen()) {
                 y += 6;
                 inputTop = y;
                 if (input.length() > 0) {
@@ -371,10 +495,10 @@ final class Items {
             return 3 + y + IN_Y + 3;
         }
 
-        private static Rich inputRich(Block.ToolCall c, JsonNode in, Style s) {
+        /** The unified diff an edit makes, null for a tool that edits nothing. */
+        private static List<String> editDiff(Block.ToolCall c, JsonNode in) {
             return switch (c.name()) {
-                case "Bash" -> new Rich(s.monoSmall, s.accent).append("$ " + in.path("command").asText(""));
-                case "Edit" -> diff(in.path("file_path").asText(""), in.path("old_string").asText(""), in.path("new_string").asText(""), s);
+                case "Edit" -> Diffs.unified(in.path("file_path").asText(""), in.path("old_string").asText(""), in.path("new_string").asText(""));
                 case "MultiEdit" -> {
                     StringBuilder before = new StringBuilder();
                     StringBuilder after = new StringBuilder();
@@ -382,9 +506,20 @@ final class Items {
                         before.append(e.path("old_string").asText("")).append("\n…\n");
                         after.append(e.path("new_string").asText("")).append("\n…\n");
                     }
-                    yield diff(in.path("file_path").asText(""), before.toString(), after.toString(), s);
+                    yield Diffs.unified(in.path("file_path").asText(""), before.toString(), after.toString());
                 }
-                case "Write" -> diff(in.path("file_path").asText(""), "", clipLines(in.path("content").asText(""), MAX_INPUT_LINES), s);
+                case "Write" -> Diffs.unified(in.path("file_path").asText(""), "", clipLines(in.path("content").asText(""), MAX_INPUT_LINES));
+                default -> null;
+            };
+        }
+
+        private static Rich inputRich(Block.ToolCall c, JsonNode in, Style s) {
+            List<String> diff = editDiff(c, in);
+            if (diff != null) {
+                return diff(diff, s);
+            }
+            return switch (c.name()) {
+                case "Bash" -> new Rich(s.monoSmall, s.accent).append("$ " + in.path("command").asText(""));
                 case "Agent", "Task" -> new Rich(s.monoSmall, s.text).append(in.path("prompt").asText(""));
                 default -> in.isObject() && !in.isEmpty()
                         ? new Rich(s.monoSmall, s.text).append(clipLines(ToolText.pretty(in), MAX_INPUT_LINES))
@@ -392,8 +527,8 @@ final class Items {
             };
         }
 
-        private static Rich diff(String path, String before, String after, Style s) {
-            List<String> lines = Diffs.unified(path, before, after).stream().map(Rich::detab).toList();
+        private static Rich diff(List<String> unified, Style s) {
+            List<String> lines = unified.stream().map(Rich::detab).toList();
             StringBuilder text = new StringBuilder();
             List<Color> backgrounds = new ArrayList<>();
             int shown = Math.min(lines.size(), MAX_INPUT_LINES);
@@ -430,6 +565,16 @@ final class Items {
                     .append(clipLines(c.resultText(), MAX_RESULT_LINES));
         }
 
+        /** The status layout for {@code text}, rebuilt only when the text or the style changed. */
+        private TextLayout status(String text, Style s) {
+            if (!text.equals(statusText) || statusStyle != s) {
+                statusText = text;
+                statusStyle = s;
+                status = new TextLayout(text, s.small, Style.FRC);
+            }
+            return status;
+        }
+
         @Override
         void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
             Style s = style();
@@ -438,24 +583,28 @@ final class Items {
             fillRound(g, Theme.CARD, x, cy, width(), ch);
             Icon icon = Icons.get(call().isSubagent() ? "session" : "tool");
             icon.paintIcon(marks.component(), g, x + IN_X, cy + IN_Y + 1);
-            Shape old = g.getClip();
-            int titleRight = x + width() - IN_X - 70;
-            g.clipRect(x + IN_X + 22, cy, Math.max(0, titleRight - x - IN_X - 22), headerHeight + IN_Y);
-            Paras.paintBox(g, title, x + IN_X + 22, cy + IN_Y, clip, marks);
-            g.setClip(old);
             int right = x + width() - IN_X;
-            if (!children.isEmpty() && !open) {
+            String text = statusText(marks.nowMillis());
+            TextLayout st = text.isEmpty() ? null : status(text, s);
+            int used = st != null ? Math.round(st.getAdvance()) : statusIcon != null ? 16 : 0;
+            if (!children.isEmpty() && !fold.isOpen()) {
                 TextLayout steps = new TextLayout(children.size() + " steps", s.small, Style.FRC);
                 g.setColor(s.muted);
-                steps.draw(g, right - 22 - steps.getAdvance(), cy + IN_Y + steps.getAscent() + 1);
+                steps.draw(g, right - used - 6 - steps.getAdvance(), cy + IN_Y + steps.getAscent() + 1);
+                used += 6 + Math.round(steps.getAdvance());
             }
-            if (status != null) {
+            if (st != null) {
                 g.setColor(Theme.WARN);
-                status.draw(g, right - status.getAdvance(), cy + IN_Y + status.getAscent() + 1);
+                st.draw(g, right - st.getAdvance(), cy + IN_Y + st.getAscent() + 1);
             } else if (statusIcon != null) {
                 statusIcon.paintIcon(marks.component(), g, right - 16, cy + IN_Y + 1);
             }
-            if (!open) {
+            Shape old = g.getClip();
+            int titleRight = right - Math.max(70, used + 8);
+            g.clipRect(x + IN_X + 22, cy, Math.max(0, titleRight - x - IN_X - 22), headerHeight + IN_Y);
+            Paras.paintBox(g, title, x + IN_X + 22, cy + IN_Y, clip, marks);
+            g.setClip(old);
+            if (!fold.isOpen()) {
                 return;
             }
             int bx = x + IN_X;
@@ -478,7 +627,7 @@ final class Items {
 
         @Override
         void collect(int x, int y, List<Placed> out) {
-            if (!open) {
+            if (!fold.isOpen()) {
                 return;
             }
             int cy = y + 3;
@@ -499,7 +648,7 @@ final class Items {
             if (py < 3 + IN_Y + headerHeight) {
                 return this;
             }
-            if (open) {
+            if (fold.isOpen()) {
                 for (int i = 0; i < children.size() && i < childTops.length; i++) {
                     Item child = children.get(i);
                     int top = 3 + childTops[i];
@@ -513,19 +662,9 @@ final class Items {
 
         @Override
         boolean toggle() {
-            userToggled = true;
-            open = !open;
+            fold.toggle();
             invalidate();
             return true;
-        }
-
-        /** Opens the card, for a find match inside it. */
-        void open() {
-            if (!open) {
-                userToggled = true;
-                open = true;
-                invalidate();
-            }
         }
 
         @Override
@@ -535,25 +674,121 @@ final class Items {
             return c.name() + '\n' + ToolText.values(ToolText.parse(c.inputJson())) + c.resultText();
         }
 
+        /** The summary line, the input fenced (a shell command, a diff, or JSON) and the result fenced and clipped. */
         @Override
         String markdown() {
             Block.ToolCall c = call();
-            return "`" + c.name() + "` " + c.inputJson();
+            JsonNode in = ToolText.parse(c.inputJson());
+            StringBuilder sb = new StringBuilder("**").append(ToolText.displayName(c.name())).append("**");
+            String summary = ToolText.summary(c.name(), in);
+            if (!summary.isEmpty()) {
+                sb.append(" · ").append(summary);
+            }
+            switch (c.status()) {
+                case RUNNING -> sb.append(" · running");
+                case ERROR -> sb.append(" · failed");
+                case DONE -> {
+                }
+            }
+            List<String> diff = editDiff(c, in);
+            if (diff != null) {
+                List<String> shown = diff.size() > MAX_INPUT_LINES ? diff.subList(0, MAX_INPUT_LINES) : diff;
+                String more = diff.size() > MAX_INPUT_LINES ? "\n… " + (diff.size() - MAX_INPUT_LINES) + " more lines" : "";
+                sb.append("\n\n").append(fence("diff", diff.isEmpty() ? "(no changes)" : String.join("\n", shown) + more));
+            } else if (c.name().equals("Bash")) {
+                sb.append("\n\n").append(fence("bash", in.path("command").asText("")));
+            } else if (in.isObject() && !in.isEmpty()) {
+                sb.append("\n\n").append(fence("json", clipLines(ToolText.pretty(in), MAX_INPUT_LINES)));
+            }
+            if (!c.resultText().isEmpty()) {
+                sb.append("\n\n").append(fence("", clipLines(c.resultText(), MAX_RESULT_LINES)));
+            }
+            return sb.toString();
         }
     }
 
     // ---- notes and turn ends
 
     static final class NoteItem extends Item {
-        private TextBox text;
+        private static final int TEXT_X = 18;
+        private static final int ARROW = 16;
+        /** A hook inside a group shows its whole text and has no fold of its own. */
+        private final boolean member;
+        private final Fold fold;
+        private TextBox line;
+        private TextBox full;
+        private TextLayout arrowOpen;
+        private TextLayout arrowClosed;
+        private float lineWidth;
+        private boolean more;
+        private boolean expandable;
         private Style built;
 
         NoteItem(Block.Note b) {
+            this(b, false);
+        }
+
+        NoteItem(Block.Note b, boolean member) {
             super(b);
+            this.member = member;
+            fold = new Fold(member || b.kind() == Block.NoteKind.ERROR);
         }
 
         private Block.Note note() {
             return (Block.Note) block;
+        }
+
+        /** A hook's output, shown inside a hook group. */
+        boolean isHook() {
+            return member;
+        }
+
+        /** The hook's name as the stream gave it ({@code SessionStart:startup}); empty for other notes. */
+        String hookName() {
+            String t = note().text();
+            int sep = t.indexOf(": ");
+            return note().kind() != Block.NoteKind.HOOK || sep < 0 ? "" : t.substring(0, sep);
+        }
+
+        /** The hook event: the hook's name without its matcher. */
+        String hookEvent() {
+            String name = hookName();
+            int colon = name.indexOf(':');
+            return colon < 0 ? name : name.substring(0, colon);
+        }
+
+        /** The text as shown, found and copied: a hook's JSON reply reads as the context it adds. */
+        String shown() {
+            Block.Note n = note();
+            if (n.kind() != Block.NoteKind.HOOK) {
+                return n.text();
+            }
+            String name = hookName();
+            String out = name.isEmpty() ? n.text() : n.text().substring(name.length() + 2);
+            String context = additionalContext(out);
+            return context == null ? n.text() : name + ": " + context;
+        }
+
+        /**
+         * The {@code hookSpecificOutput.additionalContext} of a hook's JSON reply when that is all the reply
+         * says; null otherwise, so a reply with anything more is shown whole.
+         */
+        static String additionalContext(String out) {
+            String t = out.strip();
+            if (!t.startsWith("{")) {
+                return null;
+            }
+            JsonNode root = ToolText.parse(t);
+            JsonNode specific = root.path("hookSpecificOutput");
+            if (root.size() != 1 || !specific.isObject() || !specific.path("additionalContext").isTextual()) {
+                return null;
+            }
+            for (var field : specific.properties()) {
+                if (!field.getKey().equals("additionalContext") && !field.getKey().equals("hookEventName")) {
+                    return null;
+                }
+            }
+            return specific.path("additionalContext").asText();
         }
 
         @Override
@@ -562,14 +797,49 @@ final class Items {
         }
 
         @Override
+        Fold fold() {
+            return member ? null : fold;
+        }
+
+        boolean isOpen() {
+            return fold.isOpen();
+        }
+
+        @Override
         int doLayout(int w, Style s) {
             if (built != s) {
                 built = s;
                 Block.Note n = note();
-                String t = n.text().length() > MAX_NOTE_CHARS ? n.text().substring(0, MAX_NOTE_CHARS) + "…" : n.text();
-                text = new TextBox(new Rich(s.small, n.kind() == Block.NoteKind.ERROR ? Theme.DANGER : s.muted).append(t));
+                Color color = n.kind() == Block.NoteKind.ERROR ? Theme.DANGER : s.muted;
+                String t = shown();
+                int eol = t.indexOf('\n');
+                more = eol >= 0;
+                line = new TextBox(new Rich(s.small, color).append(more ? t.substring(0, eol) : t)).noWrap();
+                full = new TextBox(new Rich(s.small, color).append(clipLines(t, MAX_RESULT_LINES)));
+                lineWidth = line.naturalWidth();
+                arrowOpen = new TextLayout("▾", s.small, Style.FRC);
+                arrowClosed = new TextLayout("▸", s.small, Style.FRC);
             }
-            return 2 + Math.max(14, text.layout(Math.max(40, w - 18), s)) + 2;
+            int avail = textWidth(w);
+            expandable = !member && (more || lineWidth > avail);
+            int h = line.layout(avail, s);
+            if (fold.isOpen()) {
+                h = full.layout(avail, s);
+            }
+            return 2 + Math.max(14, h) + 2;
+        }
+
+        /** A hook inside a group sits under the group's icon and draws none of its own. */
+        private int textX() {
+            return member ? 0 : TEXT_X;
+        }
+
+        private int textWidth(int w) {
+            return Math.max(40, w - textX() - (member ? 0 : ARROW));
+        }
+
+        private int arrowX() {
+            return textX() + Math.round(Math.min(lineWidth, textWidth(width()))) + 4;
         }
 
         @Override
@@ -582,68 +852,242 @@ final class Items {
                 case HOOK -> "settings";
                 default -> "info";
             };
-            Icons.get(icon, 12).paintIcon(marks.component(), g, x, y + 3);
-            Paras.paintBox(g, text, x + 18, y + 2, clip, marks);
+            if (!member) {
+                Icons.get(icon, 12).paintIcon(marks.component(), g, x, y + 3);
+            }
+            if (fold.isOpen()) {
+                Paras.paintBox(g, full, x + textX(), y + 2, clip, marks);
+            } else {
+                Shape old = g.getClip();
+                g.clipRect(x + textX(), y, textWidth(width()), height);
+                Paras.paintBox(g, line, x + textX(), y + 2, clip, marks);
+                g.setClip(old);
+            }
+            if (expandable) {
+                TextLayout arrow = fold.isOpen() ? arrowOpen : arrowClosed;
+                g.setColor(style().muted);
+                arrow.draw(g, x + arrowX(), y + 2 + arrow.getAscent());
+            }
         }
 
         @Override
         void collect(int x, int y, List<Placed> out) {
-            out.add(new Placed(text, x + 18, y + 2, this));
+            out.add(new Placed(fold.isOpen() ? full : line, x + textX(), y + 2, this));
+        }
+
+        /** Closed, the whole line opens it; open, the icon and the arrow close it and the text stays selectable. */
+        @Override
+        Item toggleAt(int px, int py) {
+            if (!expandable || py >= 2 + line.height() + 2) {
+                return null;
+            }
+            return !fold.isOpen() || px < textX() || px >= arrowX() ? this : null;
+        }
+
+        @Override
+        boolean toggle() {
+            if (!expandable) {
+                return false;
+            }
+            fold.toggle();
+            invalidate();
+            return true;
         }
 
         @Override
         String text() {
-            return note().text();
+            return shown();
         }
 
         @Override
         String markdown() {
-            return "_" + note().text() + "_";
+            String t = shown();
+            return t.indexOf('\n') < 0 ? "_" + t + "_" : fence("", t);
+        }
+    }
+
+    /**
+     * Hook notes that arrived one after another, as one closed line naming their events; open, each hook's text.
+     * Hooks run on every prompt, so their output stays out of the way until asked for.
+     */
+    static final class HookGroupItem extends Item {
+        private static final int TEXT_X = 18;
+        private final List<NoteItem> hooks = new ArrayList<>();
+        private final Fold fold = new Fold(false);
+        private TextBox header;
+        private int[] tops = new int[0];
+
+        HookGroupItem(NoteItem first) {
+            super(first.block);
+            hooks.add(first);
+        }
+
+        void add(NoteItem hook) {
+            hooks.add(hook);
+            invalidate();
+        }
+
+        int size() {
+            return hooks.size();
+        }
+
+        boolean isOpen() {
+            return fold.isOpen();
+        }
+
+        @Override
+        Fold fold() {
+            return fold;
+        }
+
+        @Override
+        List<Item> children() {
+            return Collections.unmodifiableList(hooks);
+        }
+
+        /** {@code hook · SessionStart}, or {@code hooks · UserPromptSubmit, SessionStart (3)}: the events in order of arrival, and the count. */
+        String title() {
+            Set<String> events = new LinkedHashSet<>();
+            for (NoteItem h : hooks) {
+                events.add(h.hookEvent().isEmpty() ? "hook" : h.hookEvent());
+            }
+            String names = String.join(", ", events);
+            return hooks.size() == 1 ? "hook · " + names : "hooks · " + names + " (" + hooks.size() + ")";
+        }
+
+        @Override
+        int doLayout(int w, Style s) {
+            header = new TextBox(new Rich(s.small, s.muted).append(title() + (fold.isOpen() ? "  ▾" : "  ▸"))).noWrap();
+            int inner = Math.max(40, w - TEXT_X);
+            int h = 2 + Math.max(14, header.layout(inner, s)) + 2;
+            if (fold.isOpen()) {
+                tops = new int[hooks.size()];
+                for (int i = 0; i < hooks.size(); i++) {
+                    tops[i] = h;
+                    h += hooks.get(i).layout(inner, s);
+                }
+            }
+            return h;
+        }
+
+        @Override
+        void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
+            Icons.get("settings", 12).paintIcon(marks.component(), g, x, y + 3);
+            Paras.paintBox(g, header, x + TEXT_X, y + 2, clip, marks);
+            if (!fold.isOpen()) {
+                return;
+            }
+            for (int i = 0; i < hooks.size() && i < tops.length; i++) {
+                NoteItem hook = hooks.get(i);
+                int top = y + tops[i];
+                if (top + hook.height >= clip.y && top <= clip.y + clip.height) {
+                    hook.paint(g, x + TEXT_X, top, clip, marks);
+                }
+            }
+        }
+
+        @Override
+        void collect(int x, int y, List<Placed> out) {
+            if (!fold.isOpen()) {
+                return;
+            }
+            for (int i = 0; i < hooks.size() && i < tops.length; i++) {
+                hooks.get(i).collect(x + TEXT_X, y + tops[i], out);
+            }
+        }
+
+        @Override
+        Item toggleAt(int px, int py) {
+            return py < 4 + header.height() ? this : null;
+        }
+
+        @Override
+        boolean toggle() {
+            fold.toggle();
+            invalidate();
+            return true;
+        }
+
+        @Override
+        String text() {
+            return title();
+        }
+
+        @Override
+        String markdown() {
+            StringBuilder sb = new StringBuilder();
+            for (NoteItem h : hooks) {
+                sb.append(sb.isEmpty() ? "" : "\n\n").append(h.markdown());
+            }
+            return sb.toString();
         }
     }
 
     static final class TurnItem extends Item {
-        private TextLayout label;
+        private TextBox label;
+        private float labelWidth;
 
         TurnItem(Block.TurnEnd b) {
             super(b);
         }
 
-        @Override
-        int doLayout(int w, Style s) {
-            Block.TurnEnd t = (Block.TurnEnd) block;
+        private Block.TurnEnd turn() {
+            return (Block.TurnEnd) block;
+        }
+
+        /** The user stopped the turn: not a failure, so it reads in the muted colour. */
+        boolean interrupted() {
+            return turn().error() && turn().text().equals("interrupted");
+        }
+
+        /** {@code 12.4 s · $0.120 total}, after the error text when the turn failed or was interrupted. */
+        String summary() {
+            Block.TurnEnd t = turn();
             StringBuilder sb = new StringBuilder();
             if (t.error()) {
                 sb.append(t.text()).append(" · ");
             }
             Formats.appendMillis(sb, t.durationMillis());
             sb.append(" · ").append(Labels.usd(t.costUsd())).append(" total");
-            label = new TextLayout(sb.toString(), s.small, Style.FRC);
-            return 6 + Math.round(label.getAscent() + label.getDescent()) + 8;
+            return sb.toString();
+        }
+
+        Color color(Style s) {
+            return turn().error() && !interrupted() ? Theme.DANGER : s.muted;
+        }
+
+        @Override
+        int doLayout(int w, Style s) {
+            label = new TextBox(new Rich(s.small, color(s)).append(summary())).noWrap();
+            labelWidth = label.naturalWidth();
+            label.layout(Math.max(1, (int) Math.ceil(labelWidth)), s);
+            return 6 + label.height() + 8;
+        }
+
+        private int labelX(int x) {
+            return x + width() - Math.round(labelWidth);
         }
 
         @Override
         void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
-            Block.TurnEnd t = (Block.TurnEnd) block;
-            g.setColor(t.error() ? Theme.DANGER : style().muted);
-            label.draw(g, x + width() - label.getAdvance(), y + 6 + label.getAscent());
+            Paras.paintBox(g, label, labelX(x), y + 6, clip, marks);
             g.setColor(Theme.CARD_BORDER);
             g.fillRect(x, y + height - 1, width(), 1);
         }
 
         @Override
         void collect(int x, int y, List<Placed> out) {
-            // the turn summary is not selectable
+            out.add(new Placed(label, labelX(x), y + 6, this));
         }
 
         @Override
         String text() {
-            return "";
+            return summary();
         }
 
         @Override
         String markdown() {
-            return "";
+            return "_" + summary() + "_";
         }
     }
 }

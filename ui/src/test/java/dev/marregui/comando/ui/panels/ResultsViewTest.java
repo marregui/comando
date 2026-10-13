@@ -1,0 +1,117 @@
+package dev.marregui.comando.ui.panels;
+
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.result.ResultRegistry;
+import dev.marregui.comando.core.state.SqlRun;
+import dev.marregui.comando.ui.kit.overlay.Overlay;
+import dev.marregui.comando.ui.widget.capability.Capabilities;
+import dev.marregui.comando.ui.widget.capability.Copyable;
+import org.junit.jupiter.api.Test;
+
+import java.awt.Component;
+import java.awt.Container;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class ResultsViewTest {
+
+    private static final String EMPTY = "Run SQL from the editor: select it, or put the caret in its block, and press ⌘⏎.";
+
+    /** A panel without a run never shows another panel's running statement on the tick. */
+    @Test
+    void theTickDoesNotPaintARunThePanelDoesNotHave() {
+        onEdt(() -> {
+            ResultsView rv = new ResultsView(new ResultRegistry());
+            SqlRun running = SqlRun.queued(7, PanelId.random(), "tutorial", "select 1").started(System.currentTimeMillis() - 42_000);
+            rv.render(Optional.of(running));
+            assertThat(overlay(rv).messageText()).startsWith("Running on tutorial");
+            rv.render(Optional.empty());
+            assertThat(overlay(rv).messageText()).isEqualTo(EMPTY);
+            rv.tick();
+            assertThat(overlay(rv).messageText()).isEqualTo(EMPTY);
+        });
+    }
+
+    /** The error is shown as the database gave it; the overlay claims no underline it cannot see. */
+    @Test
+    void aFailedRunShowsTheErrorWithoutAClaimAboutTheEditor() {
+        onEdt(() -> {
+            ResultsView rv = new ResultsView(new ResultRegistry());
+            String error = "ERROR: table does not exist [table=nope]\n  Position: 16";
+            SqlRun failed = SqlRun.queued(8, PanelId.random(), "tutorial", "insert into t1 values (99); select * From nope")
+                    .started(System.currentTimeMillis()).failed(error, 5);
+            rv.render(Optional.of(failed));
+            assertThat(overlay(rv).errorText()).isEqualTo(error);
+        });
+    }
+
+    /** The Results tab copies as a whole: the error of a failed run, else the grid's text. */
+    @Test
+    void theResultsTabCopiesTheErrorOfAFailedRun() {
+        onEdt(() -> {
+            ResultsView rv = new ResultsView(new ResultRegistry());
+            Copyable copy = Capabilities.at(rv.component(), Copyable.class);
+            assertThat(copy).isNotNull();
+            String error = "ERROR: table does not exist [table=nope]";
+            SqlRun run = SqlRun.queued(9, PanelId.random(), "tutorial", "select * From nope").started(System.currentTimeMillis());
+            rv.render(Optional.of(run.failed(error, 5)));
+            assertThat(copy.copyText()).isEqualTo(error);
+            rv.render(Optional.of(run.completed(0, 0, false, 1, 1, 2)));
+            assertThat(copy.copyText()).isEqualTo(rv.grid().copyText());
+            assertThat(Capabilities.at(rv.grid().component(), Copyable.class)).as("the grid keeps its own owner").isSameAs(rv.grid());
+        });
+    }
+
+    /** With no run, or a run without rows yet, there is nothing to copy, and ⌘⇧C is disabled rather than claim a copy. */
+    @Test
+    void anEmptyResultsTabHasNothingToCopy() {
+        onEdt(() -> {
+            ResultsView rv = new ResultsView(new ResultRegistry());
+            Copyable copy = Capabilities.at(rv.component(), Copyable.class);
+            rv.render(Optional.empty());
+            assertThat(copy.canCopy()).isFalse();
+            SqlRun run = SqlRun.queued(3, PanelId.random(), "tutorial", "select 1").started(System.currentTimeMillis());
+            rv.render(Optional.of(run));
+            assertThat(copy.canCopy()).as("running, no rows yet").isFalse();
+            rv.render(Optional.of(run.failed("ERROR: boom", 5)));
+            assertThat(copy.canCopy()).isTrue();
+        });
+    }
+
+    private static Overlay overlay(ResultsView rv) {
+        return find(rv.component(), Overlay.class);
+    }
+
+    private static <T> T find(Component root, Class<T> type) {
+        if (type.isInstance(root)) {
+            return type.cast(root);
+        }
+        if (root instanceof Container k) {
+            for (Component x : k.getComponents()) {
+                T t = find(x, type);
+                if (t != null) {
+                    return t;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static void onEdt(Runnable r) {
+        try {
+            javax.swing.SwingUtilities.invokeAndWait(r);
+        } catch (java.lang.reflect.InvocationTargetException e) {
+            if (e.getCause() instanceof RuntimeException x) {
+                throw x;
+            }
+            if (e.getCause() instanceof Error x) {
+                throw x;
+            }
+            throw new IllegalStateException(e.getCause());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+    }
+}

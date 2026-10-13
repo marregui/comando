@@ -6,19 +6,19 @@
 
 | Package | Classes | Purpose |
 |---|---|---|
-| `theme` | `Theme` | FlatLaf dark (`FlatMacDarkLaf` on macOS); design tokens: accent, Claude, ok, warn, danger, muted, thinking, diff added and removed, card, card border, user bubble, the plot series palette; spacing `GAP` 6, `PAD` 10, `RADIUS` 8; the monospaced font (JetBrains Mono when installed, else the platform's) |
-| `icon` | `Icons` | one SVG icon set under `/icons`, scaled for HiDPI and recoloured by the theme |
-| `action` | `Command`, `ActionRegistry`, `CommandPalette` | every user action is a `Command` (id, label, icon, key, menu group, action, enablement); menus, key bindings and the palette are built from the registry |
+| `theme` | `Theme` | FlatLaf dark (`FlatMacDarkLaf` on macOS); design tokens: accent, Claude, ok, warn, danger, muted, muted strong (secondary text on lists, for contrast), thinking, diff added and removed, card, card border, user bubble, the plot series palette; spacing `GAP` 6, `PAD` 10, `RADIUS` 8; the monospaced font (JetBrains Mono when installed, else the platform's) |
+| `icon` | `Icons` | one SVG icon set under `/icons`, scaled for HiDPI, drawn in the colours of the SVG files (no theme filter) |
+| `action` | `Command`, `ActionRegistry`, `CommandPalette`, `KeyPriority` | every user action is a `Command` (id, label, icon, key, menu group, action, enablement); menus, key bindings and the palette are built from the registry |
 | `overlay` | `Overlay` | the empty, loading and error states; a widget wraps its content once and switches state |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` | thread hand-off and paint pacing (§3) |
 | `format` | `Labels` | short labels: time since, dollars, token counts, counts, shortened paths |
 | `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `SourceLinks` | text areas and text rendering (§4) |
 | `tree` | `TreeView` | the one tree over `ViewSpec.TreeNode` |
-| `desktop` | `ExternalEditor` | opens a file at a line in IntelliJ IDEA, else in the system's default application, on a virtual thread |
+| `desktop` | `ExternalEditor`, `FileChoosers` | opens a file at a line in IntelliJ IDEA, else in the system's default application, on a virtual thread; folder, open and save choosers, the native `FileDialog` on macOS |
 
 ## 2. Commands
 
-A command appears in at most one menu (its group) and carries at most one key stroke. The palette (⌘⇧P) lists every enabled command whose label matches what the user types, with its key and menu. A command in a menu gets its key as the menu item's accelerator, not as a second binding, so it runs once per key press. In the main window a command's key is claimed before the focused component sees it (`KeyPriority`), because Swing offers a key to the focused component's own bindings first: RSyntaxTextArea binds ⌘⏎, ⌘J and ⌘⇧K, and the terminal consumes every key. A disabled command leaves its key to the component. Registering an id twice throws. The shell registers every command today; `WidgetContext.actions()` lets a widget register its own, and none does yet.
+A command appears in at most one menu (its group) and carries at most one key stroke. Two commands may share a key when at most one is enabled at a time: ⌘W closes the view holding the keyboard, else the panel. Every state-dependent command has an enablement, except where a disabled command would hand its key to a component action the user does not mean: ⌘J (plot) stays claimed, because the editor binds it to joining lines, and says "no result" instead. Run keys (⌘⏎, ⌘⇧⏎, ⌥⏎, ⌃⏎) act only while the keyboard is in the focused panel's editor or prompt bar. ⌘/ is left to the editor (toggle comment); the key table is ⌘⇧/. On macOS ⌘Q belongs to the application menu, which calls the quit handler; the registry binds it only elsewhere. menu items grey out (the registry refreshes them when the focus or the state changes, because the macOS menu bar answers a key from the state it last saw), and the palette lists only what can run. The palette (⌘⇧P) snapshots what can run as it opens, then ranks the commands whose label matches what the user types: prefix first, then a word start, then any substring, then a loose subsequence; keys print as the Mac writes them (⌃⌥⇧⌘, ⏎, ⇥). The menus are Edit, Run, Panels, View, Sessions, Connections, Tools and Help. The Edit commands (undo, redo, cut, copy, paste, select all) run the focused component's own binding for the key, so a component without one, the terminal, keeps the key. A command in a menu gets its key as the menu item's accelerator, not as a second binding, so it runs once per key press. In the main window a command's key is claimed before the focused component sees it (`KeyPriority`), because Swing offers a key to the focused component's own bindings first: RSyntaxTextArea binds ⌘⏎ (complete word), ⌘J (join lines), ⌘K and ⌘⇧K (next and previous occurrence), ⌘D (delete line) and ⌘/ (toggle comment), and the terminal consumes every key. A disabled command leaves its key to the component. Registering an id twice throws. The shell registers every command today; `WidgetContext.actions()` lets a widget register its own, and none does yet.
 
 ## 3. Threads in the UI
 
@@ -54,6 +54,6 @@ A command appears in at most one menu (its group) and carries at most one key st
 
 | Plan | Built | Reason |
 |---|---|---|
-| light and dark themes | dark only | one palette to maintain; the transcript and plot colours are tuned to it |
+| light and dark themes | dark only | one palette to maintain; the transcript and plot colours are tuned to it; the macOS appearance is set to dark too, by a JVM option (`apple.awt.application.appearance`) in the launcher and the disk image, because AppKit reads it once at start; title bars, menus and file dialogs are then dark whatever the system setting is |
 | a find bar in `kit.text` | `FindBar` in `widget.capability` | it is the user side of `Searchable` |
 | formatting into reused buffers | `Labels` returns strings; the grid formats cells into one reused buffer | labels are produced a few times per render; the grid is the hot path |

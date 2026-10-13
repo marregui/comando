@@ -1,7 +1,12 @@
 package dev.marregui.comando.core.resource;
 
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.ConnectionState;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.PanelState;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -20,7 +25,7 @@ public final class ConnectionKind implements ResourceKind<ConnectionSpec> {
             Attribute.of("password", "Password", Attribute.Kind.SECRET, false, ""),
             Attribute.of("prod", "Production", Attribute.Kind.BOOLEAN, false, "Claude may not write; shown in red"),
             Attribute.choice("sslMode", "TLS", ConnectionSpec.SSL_MODES,
-                    "prefer falls back to plain; require encrypts; verify-full also checks the certificate (~/.postgresql/root.crt)"));
+                    "prefer falls back to plain; verify-full checks ~/.postgresql/root.crt"));
 
     private ConnectionKind() {
     }
@@ -81,5 +86,33 @@ public final class ConnectionKind implements ResourceKind<ConnectionSpec> {
     @Override
     public ConnectionSpec template(String name) {
         return ConnectionSpec.questDbDefaults(name);
+    }
+
+    @Override
+    public String noticeSubject(String name) {
+        return Notice.connection(name);
+    }
+
+    @Override
+    public String removalQuestion(AppState s, String name) {
+        List<String> parts = new ArrayList<>();
+        ConnectionState c = s.connection(name).orElse(null);
+        if (c != null && c.status().isUsable()) {
+            parts.add("closes it");
+        }
+        int panels = 0;
+        for (PanelState p : s.panels()) {
+            if (p.connection().equals(name)) {
+                panels++;
+            }
+        }
+        if (panels > 0) {
+            parts.add("unbinds " + ResourceKind.count(panels, "panel"));
+        }
+        if (c != null && !c.spec().password().isEmpty()) {
+            parts.add("deletes its saved password");
+        }
+        String question = "Remove connection " + name + "?";
+        return parts.isEmpty() ? question : question + " This " + ResourceKind.sentence(parts) + ".";
     }
 }

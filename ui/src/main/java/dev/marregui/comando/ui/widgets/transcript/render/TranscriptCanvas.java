@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
+import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -23,24 +24,28 @@ import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
+import java.awt.event.HierarchyEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
 
 /**
  * The transcript painted directly: one {@link Item} per block, laid out once per width and style and
  * again only when its block changes; painting visits only the items that intersect the clip. Text can
- * be selected across blocks with the mouse and copied; links open through a callback; tool cards open
- * and close with a click on their header.
+ * be selected across blocks with the mouse and copied; links open through a callback; tool cards, thinking,
+ * notes and hook groups open and close with a click on their header.
  */
 public final class TranscriptCanvas extends JComponent implements Scrollable, Marks {
 
@@ -51,7 +56,14 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private final List<Item> items = new ArrayList<>();
     private final Map<Integer, Item> byIndex = new HashMap<>();
     private final Map<String, Items.ToolItem> cards = new HashMap<>();
-    private final Map<Item, Items.ToolItem> parentOf = new IdentityHashMap<>();
+    /** The card or hook group each nested item sits in. */
+    private final Map<Item, Item> parentOf = new IdentityHashMap<>();
+    private final Set<Items.ToolItem> running = Collections.newSetFromMap(new IdentityHashMap<>());
+    private Set<Items.ToolItem> waitingCards = Collections.newSetFromMap(new IdentityHashMap<>());
+    private List<Approval> waitingFor = List.of();
+    /** Repaints running cards' elapsed time once a second while one runs and the canvas is on screen. */
+    private final Timer ticker = new Timer(1000, e -> tick());
+    private LongSupplier clock = System::currentTimeMillis;
     private final Consumer<String> links;
     private int[] tops = new int[0];
     /** Heights used for positions: exact, or estimated while {@link #estimated}. */
@@ -76,6 +88,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private Map<TextBox, List<int[]>> matchesByBox = new IdentityHashMap<>();
     private int currentMatch = -1;
     private String findText = "";
+    /** Items the current find opened; clearing the find closes them again. */
+    private final List<Item> revealed = new ArrayList<>();
     private Item flashing;
 
     public TranscriptCanvas(Consumer<String> links) {
@@ -105,6 +119,11 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         };
         addMouseListener(mouse);
         addMouseMotionListener(mouse);
+        addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0) {
+                updateTicker();
+            }
+        });
         int menu = GraphicsEnvironment.isHeadless() ? InputEvent.META_DOWN_MASK : Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
         getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_C, menu), "copy-selection");
         getActionMap().put("copy-selection", new AbstractAction() {
@@ -134,27 +153,56 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         byIndex.clear();
         cards.clear();
         parentOf.clear();
+        running.clear();
+        waitingCards.clear();
+        revealed.clear();
+        updateTicker();
         clearSelection();
         clearMatches();
         structureChanged = true;
         changed();
     }
 
-    /** Adds the block at transcript index {@code index}; a subagent's block goes inside its call's card. */
+    /**
+     * Adds the block at transcript index {@code index}; a subagent's block goes inside its call's card, and a hook
+     * note right after another joins its group.
+     */
     public void append(int index, Block b) {
-        Item item = Items.of(b);
+        Item item = switch (b) {
+            case Block.ToolCall call -> new Items.ToolItem(call, index);
+            case Block.Note n when n.kind() == Block.NoteKind.HOOK -> new Items.NoteItem(n, true);
+            default -> Items.of(b);
+        };
         byIndex.put(index, item);
-        if (b instanceof Block.ToolCall call) {
-            Items.ToolItem card = (Items.ToolItem) item;
-            cards.put(call.toolUseId(), card);
+        if (item instanceof Items.ToolItem card) {
+            cards.put(card.call().toolUseId(), card);
+            track(card);
         }
         Items.ToolItem parent = b.parent().isEmpty() ? null : cards.get(b.parent());
+        List<Item> siblings = parent != null ? parent.children() : items;
+        Item shown = item;
+        if (item instanceof Items.NoteItem hook && hook.isHook()) {
+            if (!siblings.isEmpty() && siblings.getLast() instanceof Items.HookGroupItem group) {
+                group.add(hook);
+                parentOf.put(hook, group);
+                invalidateAncestors(parentOf.get(group));
+                structureChanged = true;
+                changed();
+                return;
+            }
+            Items.HookGroupItem group = new Items.HookGroupItem(hook);
+            parentOf.put(hook, group);
+            shown = group;
+        }
         if (parent != null) {
-            parent.addChild(item);
-            parentOf.put(item, parent);
+            parent.addChild(shown);
+            parentOf.put(shown, parent);
             invalidateAncestors(parent);
         } else {
-            items.add(item);
+            items.add(shown);
+        }
+        if (!waitingFor.isEmpty()) {
+            resolveWaiting();
         }
         structureChanged = true;
         changed();
@@ -168,8 +216,25 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         }
         item.update(b);
         invalidateAncestors(parentOf.get(item));
+        if (item instanceof Items.ToolItem card) {
+            track(card);
+            if (!waitingFor.isEmpty() || !waitingCards.isEmpty()) {
+                resolveWaiting();
+            }
+        }
         structureChanged = true;
         changed();
+    }
+
+    /** Keeps the set of running cards, which drives the elapsed-time repaint. */
+    private void track(Items.ToolItem card) {
+        card.seen(nowMillis());
+        if (card.isRunning()) {
+            running.add(card);
+        } else {
+            running.remove(card);
+        }
+        updateTicker();
     }
 
     public Block blockAt(int index) {
@@ -181,7 +246,106 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         return byIndex.size();
     }
 
-    private void invalidateAncestors(Items.ToolItem p) {
+    /** The item of the block at {@code index}; for tests. */
+    Item itemAt(int index) {
+        return byIndex.get(index);
+    }
+
+    /** The top-level items in order; for tests. */
+    List<Item> topLevel() {
+        return Collections.unmodifiableList(items);
+    }
+
+    /** For tests: whether the elapsed-time repaint runs. */
+    boolean ticking() {
+        return ticker.isRunning();
+    }
+
+    // ---- running cards and approvals
+
+    /**
+     * The approval cards that hold up this session's tool calls. A card whose {@code toolUseId} names a running
+     * call marks that call; one without an id marks the last running call of its tool, by plain name or as an
+     * MCP tool ({@code mcp__server__name}).
+     */
+    public void setWaiting(List<Approval> approvals) {
+        waitingFor = List.copyOf(approvals);
+        resolveWaiting();
+    }
+
+    private void resolveWaiting() {
+        Set<Items.ToolItem> now = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (Approval a : waitingFor) {
+            Items.ToolItem card = null;
+            if (!a.toolUseId().isEmpty()) {
+                card = cards.get(a.toolUseId());
+            } else {
+                for (Items.ToolItem c : running) {
+                    if (isTool(c.call().name(), a.toolName()) && (card == null || c.order() > card.order())) {
+                        card = c;
+                    }
+                }
+            }
+            if (card != null && card.isRunning()) {
+                now.add(card);
+            }
+        }
+        if (now.equals(waitingCards)) {
+            return;
+        }
+        for (Items.ToolItem c : waitingCards) {
+            c.setWaiting(now.contains(c));
+        }
+        for (Items.ToolItem c : now) {
+            c.setWaiting(true);
+        }
+        waitingCards = now;
+        repaint();
+    }
+
+    private static boolean isTool(String callName, String toolName) {
+        return !toolName.isEmpty() && (callName.equals(toolName) || callName.endsWith("__" + toolName));
+    }
+
+    /** The status a card shows beside its title ({@code running · 12 s}, the wait for an approval); empty when done or unknown. */
+    public String cardStatus(String toolUseId) {
+        Items.ToolItem card = cards.get(toolUseId);
+        return card == null ? "" : card.statusText(nowMillis());
+    }
+
+    /** Whether some card runs, so the elapsed-time repaint has work while the canvas is on screen. */
+    public boolean hasRunningCards() {
+        return !running.isEmpty();
+    }
+
+    /** For tests: the clock running cards are timed by. */
+    void clock(LongSupplier millis) {
+        clock = millis;
+    }
+
+    @Override
+    public long nowMillis() {
+        return clock.getAsLong();
+    }
+
+    private void updateTicker() {
+        boolean want = !running.isEmpty() && isShowing();
+        if (want && !ticker.isRunning()) {
+            ticker.start();
+        } else if (!want && ticker.isRunning()) {
+            ticker.stop();
+        }
+    }
+
+    private void tick() {
+        if (running.isEmpty() || !isShowing()) {
+            ticker.stop();
+            return;
+        }
+        repaint();
+    }
+
+    private void invalidateAncestors(Item p) {
         for (; p != null; p = parentOf.get(p)) {
             p.invalidate();
         }
@@ -667,13 +831,17 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     // ---- find
 
-    /** Finds {@code text}, opening closed cards that hold it; returns the number of matches. */
+    /**
+     * Finds {@code text}, opening the closed items that hold it; returns the number of matches. A new text first
+     * closes what the previous one opened.
+     */
     public int find(String text, boolean forward) {
         if (!text.equals(findText)) {
             findText = text;
             currentMatch = -1;
+            concealRevealed(Set.of());
             if (!text.isEmpty()) {
-                openCardsContaining(items, text.toLowerCase(Locale.ROOT));
+                revealContaining(items, text.toLowerCase(Locale.ROOT));
             }
             layoutFully(getWidth() > 0 ? getWidth() : viewportWidth());
             placed = null;
@@ -696,10 +864,46 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         return matches.size();
     }
 
+    /**
+     * Ends the find: the items it opened close again, except those the user toggled since and the item holding the
+     * current match, with the cards around it.
+     */
     public void clearFind() {
+        Set<Item> keep = Collections.newSetFromMap(new IdentityHashMap<>());
+        if (!findText.isEmpty() && !revealed.isEmpty()) {
+            ensureExact();
+            ensurePlaced();
+            if (currentMatch >= 0 && currentMatch < matches.size()) {
+                for (Item i = placed.get(matches.get(currentMatch)[0]).item(); i != null; i = parentOf.get(i)) {
+                    keep.add(i);
+                }
+            }
+        }
         findText = "";
         clearMatches();
-        repaint();
+        if (concealRevealed(keep)) {
+            structureChanged = true;
+            changed();
+        } else {
+            repaint();
+        }
+    }
+
+    /** Closes what the find opened, except {@code keep}; true when something closed. */
+    private boolean concealRevealed(Set<Item> keep) {
+        boolean closed = false;
+        for (Item item : revealed) {
+            if (item.fold().conceal(keep.contains(item))) {
+                item.foldChanged();
+                invalidateAncestors(parentOf.get(item));
+                closed = true;
+            }
+        }
+        revealed.clear();
+        if (closed) {
+            structureChanged = true;
+        }
+        return closed;
     }
 
     private void clearMatches() {
@@ -728,16 +932,19 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         currentMatch = keep < matches.size() ? keep : -1;
     }
 
-    private void openCardsContaining(List<Item> list, String needle) {
+    private void revealContaining(List<Item> list, String needle) {
         for (Item item : list) {
-            if (item instanceof Items.ToolItem card) {
-                if (!card.isOpen() && subtreeContains(card, needle)) {
-                    card.open();
-                    invalidateAncestors(parentOf.get(card));
-                    structureChanged = true;
-                }
-                openCardsContaining(card.children(), needle);
+            Fold fold = item.fold();
+            if ((fold == null && item.children().isEmpty()) || !subtreeContains(item, needle)) {
+                continue;
             }
+            if (fold != null && fold.reveal()) {
+                item.foldChanged();
+                invalidateAncestors(parentOf.get(item));
+                revealed.add(item);
+                structureChanged = true;
+            }
+            revealContaining(item.children(), needle);
         }
     }
 
@@ -746,11 +953,9 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         if (item.text().toLowerCase(Locale.ROOT).contains(needle)) {
             return true;
         }
-        if (item instanceof Items.ToolItem card) {
-            for (Item c : card.children()) {
-                if (subtreeContains(c, needle)) {
-                    return true;
-                }
+        for (Item c : item.children()) {
+            if (subtreeContains(c, needle)) {
+                return true;
             }
         }
         return false;
@@ -783,7 +988,10 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         t.start();
     }
 
-    /** All blocks as Markdown, in order: prompts quoted, text as written, tool calls as one line. */
+    /**
+     * All blocks as Markdown, in order: prompts quoted, text as written, a tool call as its summary line with its
+     * input and result fenced, notes in italics, each turn's duration and cost as an italic footer; thinking stays out.
+     */
     public String markdown() {
         StringBuilder sb = new StringBuilder();
         for (Item item : items) {

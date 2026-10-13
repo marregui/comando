@@ -94,6 +94,16 @@ abstract class Item {
         return false;
     }
 
+    /** How the item opens and closes; null for an item always shown whole. */
+    Fold fold() {
+        return null;
+    }
+
+    /** Something other than a click opened or closed the item; the next layout shows the new state. */
+    void foldChanged() {
+        invalidate();
+    }
+
     /** Items nested in this one, for find over closed cards. */
     List<Item> children() {
         return List.of();

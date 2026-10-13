@@ -95,6 +95,26 @@ final class StreamMapper {
         transcript.append(new Block.Note(kind, text, ""));
     }
 
+    /** The result a tool call gets when its process ended, or its stored conversation stopped, before it returned. */
+    static final String NO_RESULT = "no result: the session ended before the tool returned";
+
+    /**
+     * Ends every tool call still running with an error result: the process that ran it is gone (or a stored
+     * conversation stopped there), so no result will come and the call must not read "running" for ever.
+     *
+     * @return how many calls it ended
+     */
+    int endRunningTools() {
+        int ended = 0;
+        for (int i = 0; i < transcript.size(); i++) {
+            if (transcript.get(i) instanceof Block.ToolCall call && call.status() == Block.ToolStatus.RUNNING) {
+                transcript.replace(i, call.withResult(NO_RESULT, true));
+                ended++;
+            }
+        }
+        return ended;
+    }
+
     /** Clears the per-process maps after a restart; the transcript keeps its blocks. */
     void resetStreams() {
         streamIndex.clear();

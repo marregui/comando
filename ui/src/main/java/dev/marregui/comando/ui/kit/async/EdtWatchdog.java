@@ -38,6 +38,8 @@ public final class EdtWatchdog implements AutoCloseable {
 
     private final Thread thread;
     private final BiConsumer<Long, String> report;
+    /** Receives the whole blocked time once a stall that was reported has ended. */
+    private final java.util.function.LongConsumer ended;
     private volatile Thread edt;
     private volatile long posted;
     private volatile long answered;
@@ -45,7 +47,16 @@ public final class EdtWatchdog implements AutoCloseable {
 
     /** Starts watching; {@code report} receives the blocked time and the EDT's stack, on the watchdog thread. */
     public EdtWatchdog(BiConsumer<Long, String> report) {
+        this(report, millis -> { });
+    }
+
+    /**
+     * Starts watching; {@code report} receives the blocked time at the threshold and the EDT's stack, and
+     * {@code ended} the whole blocked time when that stall ends; both on the watchdog thread.
+     */
+    public EdtWatchdog(BiConsumer<Long, String> report, java.util.function.LongConsumer ended) {
         this.report = report;
+        this.ended = ended;
         this.thread = Thread.ofPlatform().daemon(true).name("edt-watchdog").start(this::watch);
     }
 
@@ -77,6 +88,7 @@ public final class EdtWatchdog implements AutoCloseable {
                 }
             }
             if (stack != null) {
+                ended.accept((System.nanoTime() - blockedSince) / 1_000_000);
                 EdtBlockedEvent e = new EdtBlockedEvent();
                 if (e.shouldCommit()) {
                     e.blockedMillis = (System.nanoTime() - blockedSince) / 1_000_000;

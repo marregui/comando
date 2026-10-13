@@ -107,6 +107,11 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
     }
 
     @Override
+    public void rewindFind() {
+        search.rewind();
+    }
+
+    @Override
     public String copyText() {
         String s = area.getSelectedText();
         return s != null ? s : area.getText();

@@ -1,18 +1,19 @@
 package dev.marregui.comando.ui.widget.capability;
 
+import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.JComponent;
-import javax.swing.JFileChooser;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.KeyboardFocusManager;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.Optional;
+import java.util.function.BiConsumer;
 
 /**
  * The one implementation of each capability's user side: the shell wires the same keys and menu items for
@@ -28,7 +29,11 @@ public final class Capabilities {
 
     /** The nearest capability owner of type {@code type} at or above the focused component. */
     public static <T> T focused(Class<T> type) {
-        Component c = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        return at(KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner(), type);
+    }
+
+    /** The nearest capability owner of type {@code type} at or above {@code c}; null when there is none or c is null. */
+    public static <T> T at(Component c, Class<T> type) {
         for (; c != null; c = c.getParent()) {
             if (c instanceof JComponent jc && type.isInstance(jc.getClientProperty(OWNER))) {
                 return type.cast(jc.getClientProperty(OWNER));
@@ -37,33 +42,85 @@ public final class Capabilities {
         return null;
     }
 
-    public static void mark(JComponent root, Object owner) {
-        root.putClientProperty(OWNER, owner);
+    /**
+     * The first capability owner of type {@code type} at or below {@code root}, breadth first, among the
+     * showing components; null when there is none. Lets a key act on the view in front when the focus is elsewhere.
+     */
+    public static <T> T within(Component root, Class<T> type) {
+        java.util.ArrayDeque<Component> queue = new java.util.ArrayDeque<>();
+        if (root != null) {
+            queue.add(root);
+        }
+        while (!queue.isEmpty()) {
+            Component c = queue.poll();
+            if (!c.isShowing()) {
+                continue;
+            }
+            if (c instanceof JComponent jc && type.isInstance(jc.getClientProperty(OWNER))) {
+                return type.cast(jc.getClientProperty(OWNER));
+            }
+            if (c instanceof java.awt.Container k) {
+                queue.addAll(java.util.Arrays.asList(k.getComponents()));
+            }
+        }
+        return null;
     }
 
-    public static void copy(Copyable c) {
+    /** The root each owner marked, weakly, so the find bar can tell when the view it searches is gone. */
+    private static final java.util.Map<Object, java.lang.ref.WeakReference<JComponent>> ROOTS =
+            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+
+    public static void mark(JComponent root, Object owner) {
+        root.putClientProperty(OWNER, owner);
+        ROOTS.put(owner, new java.lang.ref.WeakReference<>(root));
+    }
+
+    /** The component {@code owner} marked, or null. */
+    public static JComponent rootOf(Object owner) {
+        java.lang.ref.WeakReference<JComponent> r = ROOTS.get(owner);
+        return r == null ? null : r.get();
+    }
+
+    /** Copies the owner's text; false when there was none, so nothing was copied. */
+    public static boolean copy(Copyable c) {
         String text = c.copyText();
         if (text != null && !text.isEmpty()) {
             Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
+            return true;
         }
+        return false;
     }
 
-    /** Asks for a file on the EDT, takes the widget's snapshot there, and writes it on a virtual thread. */
+    /** Asks for a file and exports to it; failures show in a dialog. */
     public static void export(Component parent, Exportable e) {
-        JFileChooser chooser = new JFileChooser();
-        chooser.setSelectedFile(new File(System.getProperty("user.home"), e.exportName()));
-        if (chooser.showSaveDialog(SwingUtilities.getWindowAncestor(parent)) != JFileChooser.APPROVE_OPTION) {
+        export(parent, e, Path.of(System.getProperty("user.home")), (file, error) -> {
+            if (error != null) {
+                JOptionPane.showMessageDialog(parent, "Cannot save " + file + ": " + error, "Export", JOptionPane.ERROR_MESSAGE);
+            }
+        });
+    }
+
+    /**
+     * Asks for a file, starting in {@code dir}, takes the widget's snapshot on the EDT, and writes it on a virtual
+     * thread; {@code outcome} then gets the file and null, or the file and the error, on the EDT. Nothing happens when
+     * the user cancels.
+     */
+    public static void export(Component parent, Exportable e, Path dir, BiConsumer<Path, String> outcome) {
+        Optional<Path> chosen = FileChoosers.save(parent, "Export", dir, e.exportName());
+        if (chosen.isEmpty()) {
             return;
         }
-        Path file = chooser.getSelectedFile().toPath();
+        Path file = chosen.get();
         Exportable.Export export = e.prepare();
         Thread.ofVirtual().name("export").start(() -> {
+            String error = null;
             try {
                 export.writeTo(file);
             } catch (IOException | RuntimeException ex) {
-                SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(parent, "Cannot save " + file + ": " + ex.getMessage(),
-                        "Export", JOptionPane.ERROR_MESSAGE));
+                error = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
             }
+            String failed = error;
+            SwingUtilities.invokeLater(() -> outcome.accept(file, failed));
         });
     }
 

@@ -5,6 +5,8 @@ import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SqlRun;
+import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.ui.kit.icon.Icons;
@@ -20,6 +22,7 @@ import javax.swing.JTabbedPane;
 /**
  * The lower panel: Results, Session (the focused panel's transcript), Approvals (every session), Terminal
  * (the focused panel's shell), then one tab per view placed below. The selected tab follows the state, and selecting a tab updates the state.
+ * Results and Session carry a dot when something new arrived while another tab was in front.
  */
 public final class LowerPanel {
 
@@ -38,6 +41,10 @@ public final class LowerPanel {
     private final TerminalTabs terminals = new TerminalTabs();
     private boolean rendering;
     private String transcriptSession = "";
+    /** The transcript version the user last saw on the Session tab, by session. */
+    private final java.util.Map<String, Long> seenTranscript = new java.util.HashMap<>();
+    /** The run the user last saw on the Results tab, by panel: request id and status. */
+    private final java.util.Map<dev.marregui.comando.core.model.PanelId, String> seenRun = new java.util.HashMap<>();
 
     public LowerPanel(WidgetContext context, ResultRegistry results, TranscriptRegistry transcripts, WidgetRegistry registry) {
         this.context = context;
@@ -93,6 +100,35 @@ public final class LowerPanel {
         return transcript;
     }
 
+    /** The component of the tab in front: a fixed tab's view or a placed view. */
+    public java.awt.Component selected() {
+        return tabs.getSelectedComponent();
+    }
+
+    /** The placed view in front, or -1 when a fixed tab (Results, Session, Approvals, Terminal) is in front. */
+    public long selectedView() {
+        int i = tabs.getSelectedIndex();
+        return i < TERMINAL + 1 ? -1 : views.viewAt(i);
+    }
+
+    /** The placed view whose tab holds {@code c}, or -1. */
+    public long viewHolding(java.awt.Component c) {
+        for (int i = TERMINAL + 1; i < tabs.getTabCount(); i++) {
+            if (javax.swing.SwingUtilities.isDescendingFrom(c, tabs.getComponentAt(i))) {
+                return views.viewAt(i);
+            }
+        }
+        return -1;
+    }
+
+    /** Selects the tab {@code delta} places from the one in front, wrapping around. */
+    public void selectRelative(int delta) {
+        int n = tabs.getTabCount();
+        if (n > 0) {
+            tabs.setSelectedIndex(Math.floorMod(tabs.getSelectedIndex() + delta, n));
+        }
+    }
+
     /** The session whose transcript the Session tab shows. */
     public String transcriptSession() {
         return transcriptSession;
@@ -104,6 +140,8 @@ public final class LowerPanel {
             PanelState focused = s.focusedPanel();
             results.render(s.runOf(focused.id()));
             renderTranscript(focused.session());
+            String shown = focused.session();
+            transcript.setWaiting(s.approvals().stream().filter(a -> a.session().equals(shown)).toList());
             inbox.render(s.approvals());
             int pending = s.approvals().size();
             tabs.setTitleAt(APPROVALS, pending == 0 ? "Approvals" : "Approvals (" + pending + ")");
@@ -120,8 +158,45 @@ public final class LowerPanel {
                 tabs.setSelectedIndex(want);
             }
             terminals.render(s, s.lowerTab().kind() == LowerTab.Kind.TERMINAL);
+            markResults(s);
+            markSession();
         } finally {
             rendering = false;
+        }
+    }
+
+    /** A run of the focused panel that ended while Results was not in front gets a dot until Results is shown. */
+    private void markResults(AppState s) {
+        SqlRun run = s.runOf(s.focused()).orElse(null);
+        boolean showing = tabs.getSelectedIndex() == RESULTS;
+        String now = run == null ? "" : run.requestId() + ":" + run.status();
+        if (showing || run == null) {
+            seenRun.put(s.focused(), now);
+        } else {
+            seenRun.putIfAbsent(s.focused(), now); // a panel seen for the first time has nothing new
+        }
+        boolean unseen = run != null && !run.status().isActive() && !now.equals(seenRun.get(s.focused()));
+        title(RESULTS, "Results", unseen);
+    }
+
+    /** New transcript content while Session is not in front gets a dot until Session is shown. */
+    private void markSession() {
+        Transcript t = transcriptSession.isEmpty() ? null : transcripts.of(transcriptSession);
+        long version = t == null ? 0 : t.version();
+        boolean showing = tabs.getSelectedIndex() == SESSION;
+        Long seen = seenTranscript.get(transcriptSession);
+        if (showing || seen == null) {
+            seenTranscript.put(transcriptSession, version);
+        }
+        boolean unseen = !showing && seen != null && version > seen;
+        title(SESSION, "Session", unseen);
+    }
+
+    private void title(int index, String name, boolean marked) {
+        String title = marked ? name + " ●" : name;
+        if (!tabs.getTitleAt(index).equals(title)) {
+            tabs.setTitleAt(index, title);
+            tabs.setForegroundAt(index, marked ? dev.marregui.comando.ui.kit.theme.Theme.ACCENT : null);
         }
     }
 
@@ -129,6 +204,7 @@ public final class LowerPanel {
     public void renderTranscript(String session) {
         transcriptSession = session;
         transcript.render(session.isEmpty() ? null : new TranscriptView(session, transcripts.of(session)));
+        markSession();
     }
 
     private static JTabbedPane named(JTabbedPane tabs, String name) {

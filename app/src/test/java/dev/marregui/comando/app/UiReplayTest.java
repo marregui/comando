@@ -72,7 +72,8 @@ class UiReplayTest {
         Deferred effects = new Deferred();
         try (StateLoop loop = new StateLoop(replay.initial(), new Reducer(Clock.SYSTEM), effects)) {
             ComandoUi ui = new ComandoUi(new ComandoUi.Dependencies(loop, loop::state, loop, new TranscriptRegistry(), new ResultRegistry(),
-                    new ConsoleRegistry(), new SchemaRegistry(), new Texts(), List::of, null, "replay", () -> { }));
+                    new ConsoleRegistry(), new SchemaRegistry(), new Texts(), dev.marregui.comando.ui.PromptHistory.NONE, List::of, null,
+                    "replay", null, null, () -> { }));
             effects.target = new EffectRouter(ports, ports, ports, ui, ports, ports);
             try (ui) {
                 loop.start();

@@ -226,6 +226,11 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
     }
 
     @Override
+    public void rewindFind() {
+        search.rewind();
+    }
+
+    @Override
     public String copyText() {
         String s = area.getSelectedText();
         return s != null ? s : area.getText();

@@ -24,7 +24,12 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /** A search box over every command: type, arrow, Enter. Every action is one keystroke away. */
 public final class CommandPalette {
@@ -36,6 +41,8 @@ public final class CommandPalette {
     }
 
     public void show(Window owner) {
+        // judged now, with the window's focus: once the palette has the keyboard, "the editor has focus" is false
+        Set<Command> runnable = registry.all().stream().filter(c -> c.enabled().getAsBoolean()).collect(Collectors.toSet());
         JDialog dialog = new JDialog(owner);
         dialog.setUndecorated(true);
         dialog.setModal(false);
@@ -67,11 +74,14 @@ public final class CommandPalette {
         Runnable filter = () -> {
             String q = search.getText().strip().toLowerCase(Locale.ROOT);
             model.clear();
+            List<Command> found = new ArrayList<>();
             for (Command c : registry.all()) {
-                if ((q.isEmpty() || matches(c.label().toLowerCase(Locale.ROOT), q)) && c.enabled().getAsBoolean()) {
-                    model.addElement(c);
+                if ((q.isEmpty() || matches(c.label().toLowerCase(Locale.ROOT), q)) && runnable.contains(c)) {
+                    found.add(c);
                 }
             }
+            found.sort(Comparator.comparingInt(c -> rank(c.label().toLowerCase(Locale.ROOT), q)));
+            found.forEach(model::addElement);
             if (!model.isEmpty()) {
                 list.setSelectedIndex(0);
             }
@@ -142,6 +152,20 @@ public final class CommandPalette {
         search.requestFocusInWindow();
     }
 
+    /**
+     * How well {@code label} matches: 0 when it starts with the query, 1 when a word does, 2 when it contains it,
+     * 3 for a loose subsequence ("rsq" finds "Run as SQL"); the list shows the best first, in registration order.
+     */
+    static int rank(String label, String query) {
+        if (query.isEmpty() || label.startsWith(query)) {
+            return 0;
+        }
+        if (label.contains(" " + query)) {
+            return 1;
+        }
+        return label.contains(query) ? 2 : 3;
+    }
+
     /** Subsequence match, so "rsq" finds "Run as SQL". */
     static boolean matches(String label, String query) {
         int i = 0;
@@ -153,10 +177,39 @@ public final class CommandPalette {
         return i == query.length();
     }
 
+    /** A key as the Mac writes it: modifiers ⌃⌥⇧⌘ in that order, then the key ("⌘⇧⏎", "⌃1"). */
     public static String keyText(KeyStroke k) {
-        String mods = java.awt.event.InputEvent.getModifiersExText(k.getModifiers());
-        String key = KeyEvent.getKeyText(k.getKeyCode());
-        return mods.isEmpty() ? key : mods + "+" + key;
+        int m = k.getModifiers();
+        StringBuilder sb = new StringBuilder();
+        if ((m & java.awt.event.InputEvent.CTRL_DOWN_MASK) != 0) {
+            sb.append('⌃');
+        }
+        if ((m & java.awt.event.InputEvent.ALT_DOWN_MASK) != 0) {
+            sb.append('⌥');
+        }
+        if ((m & java.awt.event.InputEvent.SHIFT_DOWN_MASK) != 0) {
+            sb.append('⇧');
+        }
+        if ((m & java.awt.event.InputEvent.META_DOWN_MASK) != 0) {
+            sb.append('⌘');
+        }
+        return sb.append(switch (k.getKeyCode()) {
+            case KeyEvent.VK_ENTER -> "⏎";
+            case KeyEvent.VK_PERIOD -> ".";
+            case KeyEvent.VK_BACK_SLASH -> "\\";
+            case KeyEvent.VK_EQUALS -> "=";
+            case KeyEvent.VK_MINUS -> "-";
+            case KeyEvent.VK_OPEN_BRACKET -> "[";
+            case KeyEvent.VK_CLOSE_BRACKET -> "]";
+            case KeyEvent.VK_TAB -> "⇥";
+            case KeyEvent.VK_ESCAPE -> "⎋";
+            case KeyEvent.VK_SPACE -> "Space";
+            case KeyEvent.VK_LEFT -> "←";
+            case KeyEvent.VK_RIGHT -> "→";
+            case KeyEvent.VK_UP -> "↑";
+            case KeyEvent.VK_DOWN -> "↓";
+            default -> KeyEvent.getKeyText(k.getKeyCode());
+        }).toString();
     }
 
     private static String escape(String s) {

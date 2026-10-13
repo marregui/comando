@@ -11,7 +11,9 @@ The tools cover the work around a Claude session that otherwise needs another wi
 | Environment | `TERM=xterm-256color`, `COLORTERM=truecolor`, `TERM_PROGRAM=comando`, `LANG` when unset |
 | Instances | one per editor panel; the Terminal tab shows the focused panel's |
 | Start | the first time the panel's terminal is shown, in the working directory of the panel's session, else the home directory |
-| Exit | a bar offers a restart; "Restart the panel's shell" in the palette does the same |
+| Exit | a bar offers a restart, naming the directory of the panel's session as it is when the bar shows; Restart, and "Restart the panel's shell" in the palette, start there |
+| Input | text sent to a starting shell (⌃⏎) waits for its first output and 200 ms of quiet, at most 3 s; text still waiting when the shell closes is dropped |
+| Closing | closing the panel asks when the shell runs a job in front, when the shell was replaced by a program (`exec ssh …`), or when comando cannot check (`ps` failed); with job control off a job cannot be seen |
 
 | Key | Action |
 |---|---|
@@ -22,7 +24,7 @@ The terminal is for what Claude does not do: interactive logins, git by hand, ss
 
 ## 2. Gradle runs
 
-⌘⇧G asks for tasks and options (default `build`, then the last ones used) and runs them in the build of the focused panel's session: the nearest directory at or above the session's working directory that holds an executable `gradlew`.
+⌥⌘G (Tools ▸ Run Gradle tasks…, enabled when the panel has a session) asks for tasks and options, naming the directory they run in (default `build`, then the last ones used, kept across restarts with the last recording and jfrq arguments), and runs them in the build of the focused panel's session: the nearest directory at or above the session's working directory that holds an executable `gradlew`.
 
 | Step | Detail |
 |---|---|

@@ -44,12 +44,12 @@ Subagent blocks carry `parent_tool_use_id`; the transcript nests them inside the
 
 A prompt sent while a turn runs is not rejected: Claude Code folds it into the running turn and reports what is still queued in the `result`'s `queued_turn_count`. comando counts pending turns per session (one per prompt sent) and sets the count to the reported queue length at each turn end; the session is busy while the count is above zero. Several panels may share a session; they feed the same queue, and each prompt block in the transcript names the panel it came from.
 
-When a turn ends and nothing is queued, a desktop notification says so.
+When a turn ends and nothing is queued, a desktop notification says so, while the window is not active. An interrupted turn is its own outcome: the transcript's turn end reads muted "interrupted", the status bar says "<session>: interrupted", and no "Turn failed" notification is sent. Any ERROR notice also goes to the desktop notification centre while the window is behind.
 
 ## 4. Interrupt and stop
 
-- **Interrupt** writes `{"type":"control_request","request_id":…,"request":{"subtype":"interrupt"}}`. The turn ends with a `result` marked interrupted; the session stays open.
-- **Stop** interrupts, closes stdin, sends SIGTERM after 3 s if the process is still alive and SIGKILL 2 s later. A process that exits on its own is reported with its exit code and the stderr tail. A prompt sent while a session is stopping is refused with a notice, because the old process would take it after its input ended; it is sent again once the session has stopped.
+- **Interrupt** writes `{"type":"control_request","request_id":…,"request":{"subtype":"interrupt"}}`. The session's activity reads "interrupting" at once; the turn ends with a `result` marked interrupted; the session stays open.
+- **Stop** interrupts, closes stdin, sends SIGTERM after 3 s if the process is still alive and SIGKILL 2 s later. A process that exits on its own is reported with its exit code and the stderr tail. A prompt sent while a session is stopping is refused with a notice, because the old process would take it after its input ended; the prompt bar keeps the text, to send again once the session has stopped. A process that cannot start at all is reported once, "Session X could not start: …"; a prompt sent to it adds no second error. The message names `COMANDO_CLAUDE` when starting the executable fails, and the directory when the run directory cannot be written. A tool call left running when the process ends, or at the end of a stored conversation, ends as "no result: the session ended before the tool returned", so its card stops counting.
 - **comando's exit** sends SIGTERM to every process, SIGKILL to any still alive 2 s later, and deletes every MCP configuration file.
 - **Slash commands** (`/compact`, `/model x`, `/effort x`) are sent as prompts; `/compact` works under `-p` and produces a compaction boundary and a local-command result.
 

@@ -14,6 +14,7 @@ import java.util.Objects;
  * @param contextWindow  the model's context window reported with the last turn, 0 when unknown
  * @param activity       what the session is doing now ("requesting", "compacting", a tool name), empty when idle
  * @param branch         git branch of the working directory, empty when unknown
+ * @param turnStartedMillis when the running turn began (the first prompt of a busy stretch), 0 when idle
  */
 public record SessionState(
         SessionSpec spec,
@@ -26,7 +27,8 @@ public record SessionState(
         long contextWindow,
         long lastActivityMillis,
         String activity,
-        String branch) {
+        String branch,
+        long turnStartedMillis) {
 
     public SessionState {
         Objects.requireNonNull(spec, "spec");
@@ -41,7 +43,7 @@ public record SessionState(
     }
 
     public static SessionState closed(SessionSpec spec) {
-        return new SessionState(spec, Status.CLOSED, "", SessionInfo.NONE, 0, 0.0, 0L, 0L, 0L, "", "");
+        return new SessionState(spec, Status.CLOSED, "", SessionInfo.NONE, 0, 0.0, 0L, 0L, 0L, "", "", 0L);
     }
 
     public String name() {
@@ -53,30 +55,32 @@ public record SessionState(
     }
 
     public SessionState withSpec(SessionSpec newSpec) {
-        return new SessionState(newSpec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch);
+        return new SessionState(newSpec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch, turnStartedMillis);
     }
 
     public SessionState withStatus(Status newStatus, String newError) {
-        return new SessionState(spec, newStatus, newError, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch);
+        return new SessionState(spec, newStatus, newError, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch, turnStartedMillis);
     }
 
     public SessionState withInfo(SessionInfo newInfo, long at) {
-        return new SessionState(spec, status, error, newInfo, pendingTurns, costUsd, contextTokens, contextWindow, at, activity, branch);
+        return new SessionState(spec, status, error, newInfo, pendingTurns, costUsd, contextTokens, contextWindow, at, activity, branch, turnStartedMillis);
     }
 
+    /** The pending turn count; a busy stretch starts its clock when it begins and stops it when it ends. */
     public SessionState withTurns(int pending, long at) {
-        return new SessionState(spec, status, error, info, pending, costUsd, contextTokens, contextWindow, at, activity, branch);
+        long started = pending == 0 ? 0L : pendingTurns == 0 ? at : turnStartedMillis;
+        return new SessionState(spec, status, error, info, pending, costUsd, contextTokens, contextWindow, at, activity, branch, started);
     }
 
     public SessionState withUsage(double cost, long tokens, long window, long at) {
-        return new SessionState(spec, status, error, info, pendingTurns, cost, tokens, window, at, activity, branch);
+        return new SessionState(spec, status, error, info, pendingTurns, cost, tokens, window, at, activity, branch, turnStartedMillis);
     }
 
     public SessionState withActivity(String newActivity, long at) {
-        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, at, newActivity, branch);
+        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, at, newActivity, branch, turnStartedMillis);
     }
 
     public SessionState withBranch(String newBranch) {
-        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, newBranch);
+        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, newBranch, turnStartedMillis);
     }
 }

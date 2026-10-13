@@ -40,6 +40,21 @@ class PtyTest {
     }
 
     @Test
+    void readingOutputRecordsWhenTheShellLastWrote(@TempDir Path dir) throws Exception {
+        Pty pty = Pty.start(List.of("/bin/sh", "-c", "echo ready; sleep 1"), dir, 80, 24);
+        try {
+            assertThat(pty.lastOutputNanos()).isEqualTo(InputGate.NO_OUTPUT);
+            long before = System.nanoTime();
+            char[] buf = new char[256];
+            int n = pty.read(buf, 0, buf.length);
+            assertThat(n).isPositive();
+            assertThat(pty.lastOutputNanos()).isGreaterThanOrEqualTo(before);
+        } finally {
+            pty.process().destroy();
+        }
+    }
+
+    @Test
     void loginShellIsExecutable() {
         assertThat(Pty.loginShell()).hasSize(2).last().isEqualTo("-l");
         assertThat(Path.of(Pty.loginShell().getFirst())).isExecutable();

@@ -78,7 +78,7 @@ class TranscriptCanvasTest {
         load(SyntheticSession.steps(10_000));
         canvas.ensureLayout(1000);
         // 8 turns of prompt, thinking, text, 5 calls, text, turn end, plus the subagent's call; its prompt and text nest
-        assertThat(canvas.markdown()).contains("`Agent`").doesNotContain("> List the classes.");
+        assertThat(canvas.markdown()).contains("**Agent** · survey the module").doesNotContain("> List the classes.");
     }
 
     @Test

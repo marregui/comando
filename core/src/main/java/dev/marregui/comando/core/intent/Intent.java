@@ -34,6 +34,10 @@ public sealed interface Intent {
     record RenamePanel(PanelId panel, String title) implements Intent {
     }
 
+    /** Opens a closed panel again with its title and bindings; its text is already back in the panel store. */
+    record ReopenPanel(PanelId panel, String title, String connection, String session) implements Intent {
+    }
+
     record FocusPanel(PanelId panel) implements Intent {
     }
 
@@ -80,6 +84,10 @@ public sealed interface Intent {
     record SqlCancelled(long requestId) implements Intent {
     }
 
+    /** The block held more statements than the one shown: how many ran, or that a later one failed. */
+    record SqlWarning(long requestId, boolean failed, String text) implements Intent {
+    }
+
     // ---- connections
 
     /** Adds a connection, or replaces the one called {@code previousName} (empty for a new one). */
@@ -109,6 +117,13 @@ public sealed interface Intent {
 
     /** Reads the connection's tables and columns and shows them as a tree. */
     record ExploreSchema(String connection) implements Intent {
+    }
+
+    /**
+     * A statement that changes the schema ran outside a panel (a session's {@code db_run_sql}): the schema behind
+     * completion reloads, and an open explorer of the connection shows it again.
+     */
+    record SchemaChanged(String connection) implements Intent {
     }
 
     /** The health check found an open connection no longer valid. */
@@ -209,10 +224,35 @@ public sealed interface Intent {
     record Arrange(Layout layout) implements Intent {
     }
 
+    /**
+     * A session arranges the window: it may focus a panel bound to itself, select a lower tab while the user
+     * looks at its panel, and show or hide panes. Null and {@link Layout#KEEP} parts change nothing.
+     */
+    record SessionLayout(String session, PanelId panel, LowerTab tab, Layout layout) implements Intent {
+    }
+
+    /**
+     * A session's focus request applied once the user paused typing: focuses {@code panel} and selects {@code tab}
+     * (null keeps it) only if the panel is still bound to {@code session}.
+     */
+    record SessionFocus(String session, PanelId panel, LowerTab tab) implements Intent {
+    }
+
     // ---- editor content from Claude
 
-    /** Puts text in a panel's editor; a null panel means the focused one. */
-    record EditPanel(PanelId panel, String text, EditMode mode) implements Intent {
+    /**
+     * Puts text in a panel's editor; a null panel means the focused one.
+     *
+     * @param session the session that wrote it, empty for the user's own command; a session's write is announced
+     */
+    record EditPanel(PanelId panel, String text, EditMode mode, String session) implements Intent {
+        public EditPanel {
+            session = session == null ? "" : session;
+        }
+
+        public EditPanel(PanelId panel, String text, EditMode mode) {
+            this(panel, text, mode, "");
+        }
     }
 
     /** Shows a file read-only in the side pane; a relative path resolves against the session's working directory. */
@@ -254,6 +294,18 @@ public sealed interface Intent {
 
     // ---- notices
 
-    record Notify(Notice.Level level, String text, boolean desktop) implements Intent {
+    /** A notice; {@code subject} is one of {@link Notice}'s subjects, or empty. */
+    record Notify(Notice.Level level, String text, boolean desktop, String subject) implements Intent {
+        public Notify {
+            subject = subject == null ? "" : subject;
+        }
+
+        public Notify(Notice.Level level, String text, boolean desktop) {
+            this(level, text, desktop, "");
+        }
+    }
+
+    /** The user dismissed the status bar's notice. */
+    record DismissNotice() implements Intent {
     }
 }

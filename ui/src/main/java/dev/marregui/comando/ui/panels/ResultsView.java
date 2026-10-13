@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.panels;
 
+import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.result.Formats;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.result.ResultView;
@@ -10,6 +11,8 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.tree.TreeView;
+import dev.marregui.comando.ui.widget.capability.Capabilities;
+import dev.marregui.comando.ui.widget.capability.Copyable;
 import dev.marregui.comando.ui.widgets.table.GridTable;
 import dev.marregui.comando.ui.widgets.table.TableSource;
 
@@ -24,7 +27,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/** The Results tab: the focused panel's last SQL run, its rows and its timings. */
+/**
+ * The Results tab: the focused panel's last SQL run, its rows and its timings. The tab copies as a whole: the
+ * error when the run failed, else the rows; the grid copies its own selection while it has the keyboard.
+ */
 public final class ResultsView {
 
     private final ResultRegistry results;
@@ -39,6 +45,7 @@ public final class ResultsView {
     private long shownRequest = -1;
     private ResultView shownResult;
     private long planOf = -1;
+    private SqlRun shownRun;
 
     public ResultsView(ResultRegistry results) {
         this.results = results;
@@ -56,6 +63,23 @@ public final class ResultsView {
         root.add(center, BorderLayout.CENTER);
         root.add(south, BorderLayout.SOUTH);
         overlay.showEmpty("Run SQL from the editor: select it, or put the caret in its block, and press ⌘⏎.");
+        Capabilities.mark(root, new Copyable() {
+            @Override
+            public String copyText() {
+                return ResultsView.this.copyText();
+            }
+
+            @Override
+            public boolean canCopy() {
+                return !overlay.errorText().isEmpty() || shownResult != null && shownResult.rowCount() > 0;
+            }
+        });
+    }
+
+    /** The error when the run on show failed, else the grid's copy text. */
+    String copyText() {
+        String error = overlay.errorText();
+        return error.isEmpty() ? grid.copyText() : error;
     }
 
     public JComponent component() {
@@ -74,6 +98,7 @@ public final class ResultsView {
     public void render(Optional<SqlRun> maybeRun) {
         if (maybeRun.isEmpty()) {
             showPlan(null, null);
+            shownRun = null; // the tick must not paint another panel's run here
             shownRequest = -1;
             shownResult = null;
             grid.setSource(null, "result.csv");
@@ -82,6 +107,7 @@ public final class ResultsView {
             return;
         }
         SqlRun run = maybeRun.get();
+        shownRun = run;
         ResultView r = results.get(run.requestId());
         if (run.requestId() != shownRequest || r != shownResult) {
             shownRequest = run.requestId();
@@ -92,19 +118,19 @@ public final class ResultsView {
         }
         showPlan(run, r);
         status.setText(statusLine(run));
-        status.setForeground(run.status() == RunStatus.FAILED ? Theme.DANGER : Theme.MUTED);
+        status.setForeground(run.status() == RunStatus.FAILED || run.noteFailed() ? Theme.DANGER : Theme.MUTED);
         switch (run.status()) {
             case QUEUED -> overlay.showLoading("Queued on " + run.connection());
             case RUNNING -> {
                 if (r == null) {
-                    overlay.showLoading("Running on " + run.connection());
+                    overlay.showLoading(runningText(run, System.currentTimeMillis()));
                 } else {
                     overlay.showContent();
                 }
             }
             case DONE -> {
                 if (r == null) {
-                    overlay.showEmpty(run.updateCount() >= 0 ? Labels.count(run.updateCount()) + " rows changed" : "Done; the statement returns no rows.");
+                    overlay.showEmpty(doneText(run));
                 } else if (r.rowCount() == 0) {
                     overlay.showEmpty("No rows.");
                 } else {
@@ -120,6 +146,26 @@ public final class ResultsView {
                 }
             }
         }
+    }
+
+    /** Once a second while a statement runs without rows yet: the elapsed time on the overlay. */
+    public void tick() {
+        SqlRun run = shownRun;
+        if (run != null && run.status() == RunStatus.RUNNING && shownResult == null) {
+            overlay.showLoading(runningText(run, System.currentTimeMillis()));
+        }
+    }
+
+    static String runningText(SqlRun run, long nowMillis) {
+        return "Running on " + run.connection() + (run.startedMillis() > 0 ? " · " + Labels.elapsed(nowMillis - run.startedMillis()) : "");
+    }
+
+    /** What a statement without rows did: rows changed for DML; "Done" for DDL, which changes no rows. */
+    static String doneText(SqlRun run) {
+        if (run.updateCount() > 0 || (run.updateCount() == 0 && !Classifier.isDdl(run.sql()))) {
+            return Labels.count(run.updateCount()) + (run.updateCount() == 1 ? " row changed" : " rows changed");
+        }
+        return "Done.";
     }
 
     /** A finished EXPLAIN with one column shows as a plan tree by default; anything else as rows. */
@@ -149,7 +195,13 @@ public final class ResultsView {
     static String statusLine(SqlRun r) {
         StringBuilder sb = new StringBuilder();
         sb.append(r.connection()).append(" · ").append(r.status().name().toLowerCase());
-        if (r.rowCount() > 0 || r.status() == RunStatus.DONE) {
+        if (r.status() == RunStatus.DONE && r.rowCount() == 0 && r.updateCount() >= 0) {
+            // a statement without rows: the same words as the overlay, not "0 rows"
+            String done = doneText(r);
+            if (!done.equals("Done.")) {
+                sb.append(" · ").append(done);
+            }
+        } else if (r.rowCount() > 0 || r.status() == RunStatus.DONE) {
             sb.append(" · ").append(Labels.count(r.rowCount())).append(r.rowCount() == 1 ? " row" : " rows");
         }
         if (r.truncated()) {
@@ -162,6 +214,9 @@ public final class ResultsView {
             Formats.appendMillis(sb, r.fetchMillis());
             sb.append(" · total ");
             Formats.appendMillis(sb, r.totalMillis());
+        }
+        if (!r.note().isEmpty()) {
+            sb.append(" · ").append(r.note());
         }
         return sb.toString();
     }

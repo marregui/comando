@@ -18,6 +18,8 @@ import java.util.Map;
 final class Pty extends ProcessTtyConnector {
 
     private final PtyProcess process;
+    /** When the shell last wrote, from {@link System#nanoTime()}; {@link InputGate#NO_OUTPUT} before its first output. */
+    private volatile long lastOutputNanos = InputGate.NO_OUTPUT;
 
     private Pty(PtyProcess process, List<String> command) {
         super(process, StandardCharsets.UTF_8, command);
@@ -64,6 +66,20 @@ final class Pty extends ProcessTtyConnector {
                 .setRedirectErrorStream(true)
                 .start();
         return new Pty(p, command);
+    }
+
+    /** Read by the emulator's thread; records when output arrives, so input can wait for the shell to settle. */
+    @Override
+    public int read(char[] buf, int offset, int length) throws IOException {
+        int n = super.read(buf, offset, length);
+        if (n > 0) {
+            lastOutputNanos = System.nanoTime();
+        }
+        return n;
+    }
+
+    long lastOutputNanos() {
+        return lastOutputNanos;
     }
 
     @Override

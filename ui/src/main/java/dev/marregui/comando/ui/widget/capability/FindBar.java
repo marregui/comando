@@ -19,13 +19,45 @@ public final class FindBar extends JPanel {
     private final JTextField text = new JTextField(24);
     private final JLabel count = new JLabel();
     private Searchable target;
+    private final javax.swing.Timer typing = new javax.swing.Timer(250, e -> {
+        if (target != null) {
+            // a longer search text starts where the current match begins, so the match under the cursor is not skipped
+            target.rewindFind();
+            if (text.getText().isEmpty()) {
+                count.setText("");
+            } else {
+                find(true);
+            }
+        }
+    });
 
     public FindBar() {
         super(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 2));
         setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.CARD_BORDER));
         text.putClientProperty("JTextField.leadingIcon", Icons.get("search"));
         text.putClientProperty("JTextField.placeholderText", "Find");
-        text.addActionListener(e -> find(true));
+        text.addActionListener(e -> {
+            typing.stop();
+            find(true);
+        });
+        // find as you type, once typing pauses; ⏎ and ⇧⏎ then step through the matches
+        typing.setRepeats(false);
+        text.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            @Override
+            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+                typing.restart();
+            }
+
+            @Override
+            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+                typing.restart();
+            }
+
+            @Override
+            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+                // attributes only
+            }
+        });
         text.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "previous");
         text.getActionMap().put("previous", new javax.swing.AbstractAction() {
             @Override
@@ -41,6 +73,9 @@ public final class FindBar extends JPanel {
             }
         });
         JButton close = new JButton(Icons.get("close"));
+        close.setToolTipText("Close (Esc)");
+        close.getAccessibleContext().setAccessibleName("Close the find bar");
+        text.getAccessibleContext().setAccessibleName("Find");
         close.putClientProperty("JButton.buttonType", "toolBarButton");
         close.addActionListener(e -> close());
         count.setForeground(Theme.MUTED);
@@ -62,6 +97,22 @@ public final class FindBar extends JPanel {
         revalidateParent();
     }
 
+    /** Whether the view the bar searches is still in the window; true when it cannot tell. */
+    public boolean targetShowing() {
+        JComponent root = target == null ? null : Capabilities.rootOf(target);
+        return root == null || root.isDisplayable();
+    }
+
+    /** Whether the bar is open on a view. */
+    public boolean isOpen() {
+        return target != null;
+    }
+
+    /** Finds the next or previous match of the bar's text, as ⌘G and ⌘⇧G do; does nothing when the bar is closed. */
+    public void next(boolean forward) {
+        find(forward);
+    }
+
     private void find(boolean forward) {
         if (target != null && !text.getText().isEmpty()) {
             int n = target.find(text.getText(), forward);
@@ -70,6 +121,7 @@ public final class FindBar extends JPanel {
     }
 
     public void close() {
+        typing.stop();
         if (target != null) {
             target.clearFind();
         }

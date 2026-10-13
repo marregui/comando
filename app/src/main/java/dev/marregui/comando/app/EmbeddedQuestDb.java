@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * A QuestDB server comando starts in its data root, on QuestDB's default ports (PG wire 8812, web console 9000,
@@ -35,7 +36,10 @@ final class EmbeddedQuestDb implements ServerToggle, AutoCloseable {
     private final Path root;
     private final IntentSink intents;
     private final Map<String, String> overrides;
-    private ServerMain server; // guarded by this
+    /** Written under the monitor; read without it, so the EDT never waits for a start or stop. */
+    private volatile ServerMain server;
+    /** A start or stop is under way; a toggle meanwhile does nothing but say so. */
+    private final AtomicBoolean busy = new AtomicBoolean();
 
     EmbeddedQuestDb(Path root, IntentSink intents) {
         this(root, intents, LOOPBACK);
@@ -52,30 +56,45 @@ final class EmbeddedQuestDb implements ServerToggle, AutoCloseable {
         return "QuestDB";
     }
 
+    /** Returns at once, also while a start or stop holds the monitor: the window asks every second. */
     @Override
-    public synchronized boolean isRunning() {
+    public boolean isRunning() {
         return server != null;
     }
 
+    /**
+     * Starts a stopped server or stops a running one on a virtual thread. While one start or stop is under way, a
+     * second toggle (a second click, or Start pressed during a stop) changes nothing and says what is happening.
+     */
     @Override
     public void toggle() {
+        if (!busy.compareAndSet(false, true)) {
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO, server == null ? "QuestDB is starting" : "QuestDB is stopping", false));
+            return;
+        }
         Thread.ofVirtual().name("questdb-toggle").start(() -> {
-            synchronized (this) {
-                if (server == null) {
-                    try {
-                        server = start();
-                        LOG.log(System.Logger.Level.INFO, "QuestDB started [root=" + root + "]");
-                        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is up: PG wire on 8812, console on http://localhost:9000", false));
-                    } catch (RuntimeException e) {
-                        LOG.log(System.Logger.Level.ERROR, "cannot start QuestDB [root=" + root + "]", e);
-                        intents.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot start QuestDB: " + e.getMessage(), false));
-                    }
-                } else {
-                    stop();
-                    intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is down", false));
-                }
+            try {
+                flip();
+            } finally {
+                busy.set(false);
             }
         });
+    }
+
+    private synchronized void flip() {
+        if (server == null) {
+            try {
+                server = start();
+                LOG.log(System.Logger.Level.INFO, "QuestDB started [root=" + root + "]");
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is up: PG wire on 8812, console on http://localhost:9000", false));
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.ERROR, "cannot start QuestDB [root=" + root + "]", e);
+                intents.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot start QuestDB: " + e.getMessage(), false));
+            }
+        } else {
+            stop();
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is down", false));
+        }
     }
 
     /** Starts the server, creating its root on first use; a server that fails to start is closed again. */

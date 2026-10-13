@@ -26,6 +26,21 @@ class EdtWatchdogTest {
         assertThat(stacks.getFirst()).contains("EdtWatchdogTest").contains("sleep");
     }
 
+    /** The stall notice needs the whole length: the threshold report comes at about 200 ms, the end one after it. */
+    @Test
+    void theEndOfAReportedStallCarriesItsWholeLength() throws Exception {
+        List<Long> ended = new CopyOnWriteArrayList<>();
+        EdtWatchdog w = new EdtWatchdog((millis, stack) -> { }, ended::add);
+        try {
+            Thread.sleep(300);
+            SwingUtilities.invokeAndWait(() -> sleep(1_300));
+            Thread.sleep(300);
+        } finally {
+            w.close();
+        }
+        assertThat(ended).singleElement().satisfies(m -> assertThat(m).isGreaterThanOrEqualTo(1_000L));
+    }
+
     @Test
     void aWaitBelowTheThresholdIsNotReported() throws Exception {
         // the EDT is busy for 130 ms when the first probe is posted: it answers between the watchdog's

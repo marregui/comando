@@ -134,6 +134,7 @@ final class ViewTabs {
         JButton b = new JButton(Icons.get(icon, 12));
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setToolTipText(tip);
+        b.getAccessibleContext().setAccessibleName(tip);
         b.setFocusable(false);
         return b;
     }

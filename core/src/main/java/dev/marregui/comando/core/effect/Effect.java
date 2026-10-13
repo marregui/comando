@@ -35,6 +35,11 @@ public sealed interface Effect {
     }
 
     record LoadSchema(ConnectionSpec spec, boolean show) implements Effect {
+
+        /** The title of the explorer view that shows a connection's schema. */
+        public static String viewTitle(String connection) {
+            return "schema · " + connection;
+        }
     }
 
     /** The run was superseded; its rows can be freed. */

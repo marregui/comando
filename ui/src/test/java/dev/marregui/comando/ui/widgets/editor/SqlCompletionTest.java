@@ -40,4 +40,27 @@ class SqlCompletionTest {
         editor.dispose();
         assertThat(javax.swing.UIManager.getPropertyChangeListeners().length).isEqualTo(before);
     }
+
+    @Test
+    void completionOpensOnAStatementBeingTypedNotOnAPrompt() {
+        assertThat(SqlCompletion.startsAStatement("update tr")).isTrue();
+        assertThat(SqlCompletion.startsAStatement("UPDATE tr")).isTrue();
+        assertThat(SqlCompletion.startsAStatement("sel")).isTrue();
+        assertThat(SqlCompletion.startsAStatement("Show")).isFalse();
+        assertThat(SqlCompletion.startsAStatement("create a unit test for Lane")).isFalse();
+        assertThat(SqlCompletion.startsAStatement("delete stale rows in trades")).isFalse();
+        assertThat(SqlCompletion.startsAStatement("update dependencies and rerun tests")).isFalse();
+        assertThat(SqlCompletion.startsAStatement("select * From trades t where t.")).isTrue();
+        assertThat(SqlCompletion.startsAStatement("select sym from trad")).isTrue();
+        // lower-case prose with a mark of SQL in it: the word after the keyword is not the one its grammar requires
+        for (String prose : new String[]{"drop old rows from trades", "delete rows from trades older than a week",
+                "update dependencies, rerun tests", "create 3 tests for Lane", "update readme.md and commit", "update tests for ENG-1234"}) {
+            assertThat(SqlCompletion.startsAStatement(prose)).as(prose).isFalse();
+        }
+        for (String sql : new String[]{"create table t", "create ta", "drop table trades", "drop all tables", "truncate table x",
+                "insert into trades", "insert int", "delete from trades where", "update trades set price = 1", "update trades t set",
+                "update trades s", "create materialized view v", "alter table trades add column"}) {
+            assertThat(SqlCompletion.startsAStatement(sql)).as(sql).isTrue();
+        }
+    }
 }

@@ -24,7 +24,9 @@ tasks.jar {
 application {
     mainClass = "dev.marregui.comando.app.Main"
     applicationName = "comando"
-    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Xms256m", "-Xmx4g", "-Dfile.encoding=UTF-8", "-Dapple.awt.application.name=comando")
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Xms256m", "-Xmx4g", "-Dfile.encoding=UTF-8", "-Dapple.awt.application.name=comando",
+        // AppKit reads the appearance when it starts, before any Java code of ours: comando's palette is dark only
+        "-Dapple.awt.application.appearance=NSAppearanceNameDarkAqua")
 }
 
 // Paints the window to PNG files while driving the app with intents: ./gradlew :app:snapshot -Pout=<dir> [-Plive=true] [-Phistory=<conversation id>] [-Ptools=true]
@@ -92,6 +94,7 @@ tasks.register<Exec>("dmg") {
         "--java-options", "-Xmx4g",
         "--java-options", "-Dfile.encoding=UTF-8",
         "--java-options", "-Dapple.awt.application.name=comando",
+        "--java-options", "-Dapple.awt.application.appearance=NSAppearanceNameDarkAqua",
         "--dest", out.get().asFile.absolutePath
     )
 }

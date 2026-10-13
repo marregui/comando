@@ -9,7 +9,9 @@ import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.ui.PromptHistory;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -45,12 +47,17 @@ public final class EditorPanel extends JPanel {
     private PanelState panel;
     private AppState state;
 
-    public EditorPanel(PanelState panel, IntentSink intents, SchemaRegistry schemas) {
+    public EditorPanel(PanelState panel, IntentSink intents, SchemaRegistry schemas, PromptHistory history) {
         super(new BorderLayout(0, 0));
         this.panel = panel;
         this.intents = intents;
         this.schemas = schemas;
-        this.prompt = new PromptBar(text -> intents.dispatch(new Intent.RunText(this.panel.id(), text, Target.CLAUDE)));
+        this.prompt = new PromptBar(this::sendPrompt, history);
+        prompt.onEscape(editor::requestFocus);
+        run.getAccessibleContext().setAccessibleName("Run");
+        stop.getAccessibleContext().setAccessibleName("Stop");
+        connectionToggle.getAccessibleContext().setAccessibleName("Connect or disconnect");
+        sessionToggle.getAccessibleContext().setAccessibleName("Start or stop the session");
         JPanel header = new JPanel(new BorderLayout());
         header.setBorder(BorderFactory.createEmptyBorder(4, Theme.GAP, 4, Theme.GAP));
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
@@ -93,8 +100,24 @@ public final class EditorPanel extends JPanel {
         return prompt;
     }
 
+    /** The failed run whose error position is underlined, so a re-render does not mark it again. */
+    private long errorMarked = -1;
+
     public PanelState panel() {
         return panel;
+    }
+
+    /**
+     * Sends a prompt from the bar. The reducer explains a refusal in the status bar; the bar keeps the text when
+     * the prompt cannot go (no session, or one that is stopping), so nothing typed is lost.
+     */
+    private boolean sendPrompt(String text) {
+        intents.dispatch(new Intent.RunText(panel.id(), text, Target.CLAUDE));
+        if (state == null || panel.session().isEmpty()) {
+            return false;
+        }
+        Optional<SessionState> x = state.session(panel.session());
+        return x.isPresent() && x.get().status() != Status.CLOSING;
     }
 
     public void runSelection(Target target) {
@@ -131,7 +154,7 @@ public final class EditorPanel extends JPanel {
             SessionState ss = x.get();
             String branch = ss.branch().isEmpty() ? "" : "  ⎇ " + ss.branch();
             session.setIcon(Icons.get("claude"));
-            session.setText(ss.name() + branch + "  " + dot(ss.status()) + (ss.isBusy() ? "  working" : ""));
+            session.setText(ss.name() + branch + "  " + dot(ss.status()) + busyText(ss));
             session.setToolTipText(Labels.shortPath(ss.spec().workDir()) + " · " + ss.status()
                     + (ss.error().isEmpty() ? "" : " · " + ss.error()));
             sessionToggle.setVisible(true);
@@ -148,6 +171,50 @@ public final class EditorPanel extends JPanel {
         editor.setSchema(p.connection().isEmpty() ? Schema.EMPTY : schemas.of(p.connection()));
         boolean running = s.runOf(p.id()).map(r -> r.status().isActive()).orElse(false) || x.map(SessionState::isBusy).orElse(false);
         stop.setEnabled(running);
+        s.runOf(p.id()).filter(r -> r.status() == RunStatus.FAILED && r.requestId() != errorMarked).ifPresent(r -> {
+            errorMarked = r.requestId();
+            int position = errorPosition(r.error());
+            if (position > 0) {
+                editor.markError(r.sql(), position);
+            }
+        });
+    }
+
+    private static final java.util.regex.Pattern POSITION = java.util.regex.Pattern.compile("Position: (\\d+)");
+
+    /** The 1-based position a database error names ("Position: 38"), or 0. */
+    static int errorPosition(String error) {
+        java.util.regex.Matcher m = POSITION.matcher(error == null ? "" : error);
+        if (!m.find()) {
+            return 0;
+        }
+        try {
+            return Integer.parseInt(m.group(1));
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /** "working · 12 s" while a turn runs; the shell's one-second tick refreshes it. */
+    static String busyText(SessionState ss) {
+        if (!ss.isBusy()) {
+            return "";
+        }
+        String what = ss.activity().isEmpty() ? "working" : ss.activity();
+        long since = ss.turnStartedMillis();
+        int queued = ss.pendingTurns() - 1;
+        return "  " + what + (since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "")
+                + (queued > 0 ? " · " + queued + " queued" : "");
+    }
+
+    /** Refreshes what changes with time alone: the session chip's elapsed time. */
+    public void tick() {
+        if (state != null) {
+            state.session(panel.session()).filter(SessionState::isBusy).ifPresent(ss -> {
+                String branch = ss.branch().isEmpty() ? "" : "  ⎇ " + ss.branch();
+                session.setText(ss.name() + branch + "  " + dot(ss.status()) + busyText(ss));
+            });
+        }
     }
 
     private void toggleConnection() {

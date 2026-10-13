@@ -20,6 +20,8 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -67,6 +69,26 @@ class EmbeddedQuestDbTest {
         } finally {
             db.close();
         }
+    }
+
+    @Test
+    void isRunningAnswersAtOnceWhileAStartHoldsTheServerAndASecondToggleWaits(@TempDir Path dir) throws Exception {
+        // a root that is a file: the start fails quickly, once the test lets it run
+        Path root = Files.writeString(dir.resolve("not-a-directory"), "x");
+        RecordingSink sink = new RecordingSink();
+        EmbeddedQuestDb db = new EmbeddedQuestDb(root, sink);
+        synchronized (db) {
+            db.toggle(); // its thread now waits for the monitor, as behind a start in progress
+            assertThat(CompletableFuture.supplyAsync(db::isRunning).get(2, TimeUnit.SECONDS)).isFalse();
+
+            db.toggle();
+            Intent.Notify busy = sink.await(Intent.Notify.class, Duration.ofSeconds(5));
+            assertThat(busy.text()).isEqualTo("QuestDB is starting");
+        }
+        Intent.Notify failed = sink.await(Intent.Notify.class, n -> n.text().startsWith("Cannot start"), Duration.ofSeconds(10));
+        assertThat(failed.level()).isEqualTo(Notice.Level.ERROR);
+        assertThat(sink.of(Intent.Notify.class)).hasSize(2);
+        assertThat(db.isRunning()).isFalse();
     }
 
     private static int freePort() throws IOException {

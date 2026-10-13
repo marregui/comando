@@ -73,4 +73,19 @@ class ClassifierTest {
         assertThat(Classifier.hasProseWord("SELECT * FROM t -- the comment\nWHERE x = 1")).isFalse();
         assertThat(Classifier.hasProseWord("SELECT the best")).isTrue();
     }
+
+    @Test
+    void aBlockOfCommentsHasNothingToRunAndIsNoPrompt() {
+        assertThat(Classifier.isCommentOnly("-- one\n/* two */\n-- three")).isTrue();
+        assertThat(Classifier.isCommentOnly("-- one\nSELECT 1")).isFalse();
+        assertThat(Classifier.classify("-- Welcome to comando.\n-- A block is a run of lines.").target()).isEqualTo(Target.SQL);
+    }
+
+    @Test
+    void ddlIsTheStatementsThatChangeTheSchema() {
+        assertThat(Classifier.isDdl("-- make it\ncreate table t (x int)")).isTrue();
+        assertThat(Classifier.isDdl("ALTER TABLE t ADD COLUMN y INT")).isTrue();
+        assertThat(Classifier.isDdl("INSERT INTO t VALUES (1)")).isFalse();
+        assertThat(Classifier.isDdl("created_at")).isFalse();
+    }
 }

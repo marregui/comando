@@ -76,7 +76,8 @@ class ReducerTest {
         apply(new Intent.SqlFailed(1L, "canceling statement due to user request", 3));
         assertThat(run(P1).requestId()).isEqualTo(2L);
         assertThat(run(P1).status()).isEqualTo(RunStatus.QUEUED);
-        assertThat(state.notice()).isEqualTo(Notice.NONE);
+        // the late failure of the superseded run reaches no notice; the re-run's own notice stands
+        assertThat(state.notice().text()).startsWith("Stopped the statement");
     }
 
     @Test
@@ -139,7 +140,7 @@ class ReducerTest {
     void sqlWithoutAConnectionIsRefused() {
         apply(new Intent.BindConnection(P1, ""));
         apply(new Intent.RunText(P1, "SELECT 1", Target.AUTO));
-        assertThat(effects).isEmpty();
+        assertThat(effects).noneMatch(e -> e instanceof Effect.ExecuteSql || e instanceof Effect.OpenDb);
         assertThat(state.notice().text()).contains("has no connection");
     }
 
@@ -233,7 +234,8 @@ class ReducerTest {
 
         assertThat(state.session("work").orElseThrow().status()).isEqualTo(Status.FAILED);
         assertThat(state.approvals()).isEmpty();
-        assertThat(effects).containsExactly(new Effect.ResolveApproval(a, new ApprovalDecision.Deny("session ended")));
+        assertThat(effects).containsExactly(new Effect.ResolveApproval(a, new ApprovalDecision.Deny("session ended")),
+                new Effect.DesktopNotify("comando", "Session work exited [code=1] boom"));
     }
 
     @Test

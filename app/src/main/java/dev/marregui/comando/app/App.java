@@ -88,14 +88,16 @@ public final class App implements AutoCloseable {
             ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings.defaults()));
             EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
             SessionCatalogue catalogue = new SessionCatalogue(config.claudeProjects());
-            ui = own(new ComandoUi(new ComandoUi.Dependencies(
-                    loop, loop::state, loop, transcripts, results, consoles, schemas, store,
+            ui = new ComandoUi(new ComandoUi.Dependencies(
+                    loop, loop::state, loop, transcripts, results, consoles, schemas, store, store,
                     () -> catalogue.scan(500).stream().map(e -> new StoredConversation(e.sessionId(), e.cwd(), e.branch(), e.title(),
                             e.lastPrompt(), e.modifiedMillis(), e.sizeBytes())).toList(),
-                    questDb, version, onQuit)));
+                    questDb, version, config.home(), config.logDir(), onQuit));
             effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
             // the embedded QuestDB stops last: it may still serve the connections closed above
             owned.addLast(questDb);
+            // the window closes last: it stays, greyed and titled "closing…", until everything behind it has closed
+            owned.addLast(ui);
             LOG.log(System.Logger.Level.INFO, "comando " + version + " ready [home=" + config.home() + ", mcp=" + mcp.url()
                     + ", claude=" + config.claudeExecutable() + ']');
         } catch (RuntimeException | Error e) {

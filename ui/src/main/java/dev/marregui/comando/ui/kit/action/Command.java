@@ -23,4 +23,9 @@ public record Command(String id, String label, String icon, KeyStroke key, Strin
     public static Command of(String id, String label, String icon, KeyStroke key, String group, Runnable run) {
         return new Command(id, label, icon, key, group, run, () -> true);
     }
+
+    /** A command that can run only while {@code enabled} holds; its key then goes on to the focused component. */
+    public static Command of(String id, String label, String icon, KeyStroke key, String group, Runnable run, BooleanSupplier enabled) {
+        return new Command(id, label, icon, key, group, run, enabled);
+    }
 }

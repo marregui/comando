@@ -7,20 +7,38 @@ package dev.marregui.comando.core.view;
  * @param sidebar    show or hide the sessions sidebar
  * @param sidePane   show or hide the side pane
  * @param lowerShare the lower panel's share of the window height, in (0, 1); {@code NaN} keeps it
+ * @param focus      a panel to focus once the user pauses typing, or null; set for a session's request only
+ * @param tab        a lower tab to select with that focus, or null
+ * @param session    the session that asked for the focus, checked again when the focus is applied; empty otherwise
  */
-public record Layout(Toggle sidebar, Toggle sidePane, double lowerShare) {
+public record Layout(Toggle sidebar, Toggle sidePane, double lowerShare, dev.marregui.comando.core.model.PanelId focus,
+                     dev.marregui.comando.core.state.LowerTab tab, String session) {
 
     public enum Toggle { KEEP, SHOW, HIDE }
 
     public static final Layout KEEP = new Layout(Toggle.KEEP, Toggle.KEEP, Double.NaN);
 
+    public Layout(Toggle sidebar, Toggle sidePane, double lowerShare) {
+        this(sidebar, sidePane, lowerShare, null, null, "");
+    }
+
+    public Layout(Toggle sidebar, Toggle sidePane, double lowerShare, dev.marregui.comando.core.model.PanelId focus) {
+        this(sidebar, sidePane, lowerShare, focus, null, "");
+    }
+
+    public Layout(Toggle sidebar, Toggle sidePane, double lowerShare, dev.marregui.comando.core.model.PanelId focus,
+                  dev.marregui.comando.core.state.LowerTab tab) {
+        this(sidebar, sidePane, lowerShare, focus, tab, "");
+    }
+
     public Layout {
         if (!Double.isNaN(lowerShare) && (lowerShare < 0.05 || lowerShare > 0.95)) {
             throw new IllegalArgumentException("lower_share must be between 0.05 and 0.95, was " + lowerShare);
         }
+        session = session == null ? "" : session;
     }
 
     public boolean changesNothing() {
-        return sidebar == Toggle.KEEP && sidePane == Toggle.KEEP && Double.isNaN(lowerShare);
+        return sidebar == Toggle.KEEP && sidePane == Toggle.KEEP && Double.isNaN(lowerShare) && focus == null && tab == null;
     }
 }

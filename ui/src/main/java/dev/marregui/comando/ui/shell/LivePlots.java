@@ -88,6 +88,17 @@ final class LivePlots {
             intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Live plot " + l.title + " stopped: the panel ran another statement", false));
             return;
         }
+        // a connection that failed stays failed until the user reconnects: refreshing would reopen it and raise
+        // the same error every period
+        String connection = s == null ? "" : s.panel(l.panel).map(p -> p.connection()).orElse("");
+        boolean failed = s != null && s.connection(connection).map(c -> c.status() == dev.marregui.comando.core.model.Status.FAILED)
+                .orElse(false);
+        if (failed) {
+            stop(l.panel);
+            intents.dispatch(new Intent.Notify(Notice.Level.WARN, "Live plot " + l.title + " stopped: connection " + connection
+                    + " is down; run the query again once it is back, then ⌘⇧J", false, Notice.connection(connection)));
+            return;
+        }
         if (run == null || !run.status().isActive()) {
             intents.dispatch(new Intent.RefreshSql(l.panel, l.sql));
         }
@@ -103,6 +114,13 @@ final class LivePlots {
                 continue;
             }
             SqlRun run = s.runOf(l.panel).orElse(null);
+            if (run != null && run.status() == RunStatus.FAILED && run.sql().equals(l.sql)) {
+                // a query that failed once fails every period: stop rather than repeat the error
+                stop(l.panel);
+                intents.dispatch(new Intent.Notify(Notice.Level.WARN, "Live plot " + l.title + " stopped: its query failed; the error is in Results",
+                        false, Notice.panel(l.panel.value())));
+                continue;
+            }
             if (run == null || run.requestId() == l.plotted || run.status() != RunStatus.DONE || !run.sql().equals(l.sql)) {
                 continue;
             }

@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
  * <p>Rules, in order: (a) a first line {@code -- @sql} or {@code -- @claude} wins and is removed;
  * (b) a leading {@code /} is a Claude command; (c) a leading SQL keyword followed by the shape that
  * keyword takes, with no English function word outside quotes and no closing {@code ?} or {@code .},
- * is SQL; (d) anything else is a prompt. Rule (c) is deliberately strict: "update the README" and
+ * is SQL; (d) a block of comments only goes nowhere (empty text); (e) anything else is a prompt. Rule (c) is deliberately strict: "update the README" and
  * "show me the log" are prompts. A statement the classifier misses is forced with the SQL key.</p>
  */
 public final class Classifier {
@@ -73,8 +73,37 @@ public final class Classifier {
         if (text.length() > 1 && text.charAt(0) == '/' && Character.isLetter(text.charAt(1))) {
             return new Classification(Target.CLAUDE, text);
         }
+        if (isCommentOnly(text)) {
+            return new Classification(Target.SQL, "");
+        }
         return new Classification(isSql(text) ? Target.SQL : Target.CLAUDE, text);
     }
+
+    /** True for a block of {@code --} and {@code /* *\/} comments only, or blank: there is nothing to run. */
+    public static boolean isCommentOnly(String raw) {
+        return stripLeadingComments(raw).isEmpty();
+    }
+
+    /**
+     * True for a statement that changes the schema rather than rows: CREATE, ALTER, DROP, TRUNCATE, RENAME, after any
+     * leading comments. Such a statement reports no row count worth showing, and makes the cached schema stale.
+     */
+    public static boolean isDdl(String sql) {
+        String head = stripLeadingComments(sql == null ? "" : sql).toUpperCase(Locale.ROOT);
+        for (String k : DDL) {
+            if (head.startsWith(k) && (head.length() == k.length() || !Character.isLetterOrDigit(head.charAt(k.length())))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True when any statement of the block changes the schema; see {@link #isDdl}. */
+    public static boolean anyDdl(String sql) {
+        return Statements.split(sql).stream().anyMatch(Classifier::isDdl);
+    }
+
+    private static final java.util.List<String> DDL = java.util.List.of("CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME");
 
     /** Removes a marker first line, if any, for text whose target is forced by a key. */
     public static String stripMarker(String raw) {

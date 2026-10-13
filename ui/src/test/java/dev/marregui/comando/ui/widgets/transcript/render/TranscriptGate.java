@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
+import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.testkit.SyntheticSession;
 
 import javax.swing.JViewport;
@@ -14,7 +15,8 @@ import java.util.Locale;
 /**
  * The renderer's frame-time gate (plan 4a.4): replays the synthetic session one stream delta per frame,
  * each frame applying the change, laying out and painting a 1200 x 800 viewport at the end, as the widget
- * does while following a live turn. Prints percentiles; exits 1 when p99 exceeds 16 ms.
+ * does while following a live turn. Then streams a long thinking block, which stays open while it streams.
+ * Prints percentiles; exits 1 when either p99 exceeds 16 ms.
  */
 public final class TranscriptGate {
 
@@ -56,6 +58,9 @@ public final class TranscriptGate {
         paintTop(canvas, width - 600, height, img, canvas.contentHeight() / 2);
         long scrollPaint = System.nanoTime() - t1;
 
+        thinking(delta, width, height, img);
+        long[] thinkingFrames = thinking(delta, width, height, img);
+
         long[] sorted = frames.clone();
         Arrays.sort(sorted);
         double p50 = ms(sorted[sorted.length / 2]);
@@ -67,7 +72,12 @@ public final class TranscriptGate {
         System.out.printf(Locale.ROOT, "width change: visible part laid out and painted %.2f ms, idle pass %.2f ms in 8 ms slices%n",
                 ms(resize), ms(idle));
         System.out.printf(Locale.ROOT, "full exact relayout %.2f ms, paint after a scroll %.2f ms%n", ms(full), ms(scrollPaint));
-        if (p99 > 16.0) {
+        long[] thinkingSorted = thinkingFrames.clone();
+        Arrays.sort(thinkingSorted);
+        double thinkingP99 = ms(thinkingSorted[(int) (thinkingSorted.length * 0.99)]);
+        System.out.printf(Locale.ROOT, "open thinking streamed (%d frames): p50 %.2f ms, p99 %.2f ms, max %.2f ms%n", thinkingSorted.length,
+                ms(thinkingSorted[thinkingSorted.length / 2]), thinkingP99, ms(thinkingSorted[thinkingSorted.length - 1]));
+        if (p99 > 16.0 || thinkingP99 > 16.0) {
             System.out.println("GATE FAILED: p99 above 16 ms");
             System.exit(1);
         }
@@ -93,6 +103,26 @@ public final class TranscriptGate {
             }
         }
         return canvas;
+    }
+
+    /** Streams about 9 000 characters of thinking, 40 words a line, one delta per frame, painting the end. */
+    private static long[] thinking(int delta, int width, int height, BufferedImage img) {
+        StringBuilder text = new StringBuilder();
+        for (int i = 0; i < 1500; i++) {
+            text.append("word").append(i % 7).append(i % 40 == 39 ? '\n' : ' ');
+        }
+        TranscriptCanvas canvas = new TranscriptCanvas(href -> { });
+        canvas.setSize(width, height);
+        canvas.append(0, new Block.Thinking("t", 0, text.substring(0, delta), 1, true, ""));
+        long[] frames = new long[text.length() / delta];
+        for (int i = 0; i < frames.length; i++) {
+            long t = System.nanoTime();
+            canvas.update(0, new Block.Thinking("t", 0, text.substring(0, (i + 1) * delta), i, true, ""));
+            canvas.ensureLayout(width);
+            paintTop(canvas, width, height, img, Math.max(0, canvas.contentHeight() - height));
+            frames[i] = System.nanoTime() - t;
+        }
+        return frames;
     }
 
     private static void paintTop(TranscriptCanvas canvas, int width, int height, BufferedImage img, int top) {

@@ -3,6 +3,8 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.resource.ConnectionKind;
+import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.SessionState;
@@ -19,6 +21,7 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenuItem;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
@@ -45,14 +48,19 @@ public final class SessionsSidebar {
         void importSessions();
 
         void connections(String select);
+
+        /** Shows the connection's schema explorer, as Connections ▸ Explore the schema does. */
+        void exploreSchema(String connection);
     }
 
     private final IntentSink intents;
     private final Dialogs dialogs;
     private final DefaultListModel<SessionState> sessionModel = new DefaultListModel<>();
     private final DefaultListModel<ConnectionState> connectionModel = new DefaultListModel<>();
-    private final JList<SessionState> sessions = new JList<>(sessionModel);
-    private final JList<ConnectionState> connections = new JList<>(connectionModel);
+    private final JList<SessionState> sessions = emptyText(new JList<>(sessionModel),
+            "No sessions yet. + creates one (⌘⇧K); the import button brings in stored Claude Code conversations.");
+    private final JList<ConnectionState> connections = emptyText(new JList<>(connectionModel),
+            "No connections yet. + adds one (⌘⇧O).");
     private final JSplitPane root;
     private AppState state;
     private long now = System.currentTimeMillis();
@@ -60,6 +68,8 @@ public final class SessionsSidebar {
     public SessionsSidebar(IntentSink intents, Dialogs dialogs) {
         this.intents = intents;
         this.dialogs = dialogs;
+        sessions.getAccessibleContext().setAccessibleName("Sessions");
+        connections.getAccessibleContext().setAccessibleName("Connections");
         sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         connections.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         sessions.setCellRenderer(new DefaultListCellRenderer() {
@@ -200,9 +210,13 @@ public final class SessionsSidebar {
         String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.WARN) + "'>⚑" + approvals + "</span>";
         String activity = s.isBusy() ? (s.activity().isEmpty() ? "working" : MarkdownHtml.escape(clip(s.activity(), 30))) : Labels.ago(s.lastActivityMillis(), now);
         String branch = s.branch().isEmpty() ? "" : " ⎇ " + MarkdownHtml.escape(s.branch());
-        return "<html>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(s.name()) + "</b>" + badge
+        String bound = boundText(s);
+        String where = bound.isEmpty() ? "" : "&nbsp;<span style='color:" + Theme.hex(bound.equals("this panel") ? Theme.ACCENT : Theme.MUTED_STRONG)
+                + "'>· " + MarkdownHtml.escape(clip(bound, 24)) + "</span>";
+        return "<html>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(s.name()) + "</b>" + where + badge
                 + "&nbsp;&nbsp;<span style='color:" + muted + "'>" + (s.costUsd() > 0 ? Labels.usd(s.costUsd()) + " · " : "") + activity + "</span>"
-                + "<br><span style='color:" + muted + "'>" + MarkdownHtml.escape(clip(Labels.shortPath(s.spec().workDir()), 34)) + branch + "</span></html>";
+                + "<br><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>" + MarkdownHtml.escape(clip(Labels.shortPath(s.spec().workDir()), 34))
+                + branch + "</span></html>";
     }
 
     private String connectionHtml(ConnectionState c) {
@@ -210,7 +224,7 @@ public final class SessionsSidebar {
         String dot = "<span style='color:" + Theme.hex(EditorPanel.color(c.status())) + "'>" + EditorPanel.dot(c.status()) + "</span>";
         String prod = c.spec().prod() ? "&nbsp;<span style='color:" + Theme.hex(Theme.DANGER) + "'>prod</span>" : "";
         return "<html>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(c.name()) + "</b>" + prod
-                + "<br><span style='color:" + muted + "'>" + MarkdownHtml.escape(clip(c.spec().label(), 36)) + "</span></html>";
+                + "<br><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>" + MarkdownHtml.escape(clip(c.spec().label(), 36)) + "</span></html>";
     }
 
     private JPopupMenu sessionMenu(SessionState s) {
@@ -227,7 +241,11 @@ public final class SessionsSidebar {
         }
         m.addSeparator();
         m.add(item("Edit…", "edit", () -> dialogs.sessions(s.name())));
-        m.add(item("Remove", "close", () -> intents.dispatch(new Intent.RemoveSession(s.name()))));
+        m.add(item("Remove…", "close", () -> {
+            if (confirmRemove(s.name(), SessionKind.INSTANCE.removalQuestion(state, s.name()))) {
+                intents.dispatch(new Intent.RemoveSession(s.name()));
+            }
+        }));
         return m;
     }
 
@@ -241,11 +259,63 @@ public final class SessionsSidebar {
             m.add(item("Connect", "plug", () -> intents.dispatch(new Intent.OpenConnection(c.name()))));
         }
         m.add(item("Test", "check", () -> intents.dispatch(new Intent.TestConnection(c.spec()))));
-        m.add(item("Explore the schema", "tree", () -> intents.dispatch(new Intent.ExploreSchema(c.name()))));
+        m.add(item("Explore the schema", "tree", () -> dialogs.exploreSchema(c.name())));
         m.addSeparator();
         m.add(item("Edit…", "edit", () -> dialogs.connections(c.name())));
-        m.add(item("Remove", "close", () -> intents.dispatch(new Intent.RemoveConnection(c.name()))));
+        m.add(item("Remove…", "close", () -> {
+            if (confirmRemove(c.name(), ConnectionKind.INSTANCE.removalQuestion(state, c.name()))) {
+                intents.dispatch(new Intent.RemoveConnection(c.name()));
+            }
+        }));
         return m;
+    }
+
+    /** Remove asks first, naming what it does; Cancel is the default. */
+    private boolean confirmRemove(String name, String question) {
+        Object[] options = {"Remove", "Cancel"};
+        return JOptionPane.showOptionDialog(root, Plain.text(question), "Remove " + Plain.text(name), JOptionPane.DEFAULT_OPTION,
+                JOptionPane.WARNING_MESSAGE, null, options, options[1]) == 0;
+    }
+
+    /** A list that says what to do while it is empty. */
+    private static <T> JList<T> emptyText(JList<T> list, String text) {
+        JLabel hint = new JLabel("<html><div style='width:180px'>" + MarkdownHtml.escape(text) + "</div></html>");
+        hint.setForeground(Theme.MUTED_STRONG);
+        hint.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
+        JPanel overlay = new JPanel(new BorderLayout());
+        overlay.setOpaque(false);
+        overlay.add(hint, BorderLayout.NORTH);
+        list.setLayout(new BorderLayout());
+        list.add(overlay, BorderLayout.CENTER);
+        list.getModel().addListDataListener(new javax.swing.event.ListDataListener() {
+            @Override
+            public void intervalAdded(javax.swing.event.ListDataEvent e) {
+                overlay.setVisible(list.getModel().getSize() == 0);
+            }
+
+            @Override
+            public void intervalRemoved(javax.swing.event.ListDataEvent e) {
+                overlay.setVisible(list.getModel().getSize() == 0);
+            }
+
+            @Override
+            public void contentsChanged(javax.swing.event.ListDataEvent e) {
+                overlay.setVisible(list.getModel().getSize() == 0);
+            }
+        });
+        return list;
+    }
+
+    /** Where a session is bound: "this panel" for the focused one, else the panels' titles; empty when unbound. */
+    private String boundText(SessionState s) {
+        if (state == null) {
+            return "";
+        }
+        if (state.focusedPanel().session().equals(s.name())) {
+            return "this panel";
+        }
+        List<String> titles = state.panels().stream().filter(p -> p.session().equals(s.name())).map(p -> p.title()).toList();
+        return titles.isEmpty() ? "" : String.join(", ", titles);
     }
 
     private String selectedSession() {
@@ -286,6 +356,7 @@ public final class SessionsSidebar {
     private static JButton button(String icon, String tip, Runnable r) {
         JButton b = new JButton(Icons.get(icon));
         b.setToolTipText(tip);
+        b.getAccessibleContext().setAccessibleName(tip);
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setFocusable(false);
         b.addActionListener(e -> r.run());

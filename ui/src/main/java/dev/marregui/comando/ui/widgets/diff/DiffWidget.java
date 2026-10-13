@@ -45,6 +45,11 @@ public final class DiffWidget implements Widget<ViewSpec.Diff>, Searchable, Copy
     }
 
     @Override
+    public void rewindFind() {
+        search.rewind();
+    }
+
+    @Override
     public String copyText() {
         String s = pane.area().getSelectedText();
         return s != null ? s : pane.area().getText();

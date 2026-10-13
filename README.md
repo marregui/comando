@@ -10,11 +10,11 @@ A macOS desktop workbench where SQL and Claude Code sessions share one editor. A
 |---|---|
 | Editor | SQL and prompts in one document; ⌘⏎ classifies the block, ⌘⇧⏎ forces a prompt, ⌥⏎ forces SQL; SQL completion from the live schema |
 | Claude Code | one `claude -p` process per session; start, resume, fork, interrupt, stop; sessions imported from `~/.claude/projects`; a painted transcript with tool cards and nested subagents |
-| Approvals | permission prompts, questions and plans as cards with keys; allow once, for the session, or always |
+| Approvals | permission prompts, questions and plans as cards with keys; allow once, for the session, or always, with the rule shown before it is saved |
 | Window tools for Claude | an MCP server in the app: show a table, a plot, a diff, a file; set the layout; run SQL and describe tables; read the window's state |
 | Databases | PostgreSQL and QuestDB over the PostgreSQL wire protocol; one lane per connection with fast cancel; results stored by column, millions of rows; plots, live plots, `EXPLAIN` trees, a schema explorer; production connections framed in red and refused to Claude for writes |
 | Development | a terminal per panel; Gradle runs with test results as a tree and failures sent to Claude; JFR recordings as tables and plots; jfrq; the scratchpad browser |
-| Persistence | panels, bindings and text survive restarts; passwords in the macOS keychain; atomic store files |
+| Persistence | panels, bindings, text, prompt history and the window layout survive restarts; closed panels reopen with ⌘⇧T; passwords in the macOS keychain; atomic store files |
 
 ## Quick start
 

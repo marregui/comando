@@ -5,7 +5,7 @@ import java.util.Locale;
 
 /**
  * Desktop notifications for work that finished while the user looked elsewhere: shown only when the
- * window is not active, through the platform's notification centre.
+ * window is not active: Notification Center on macOS, a tray balloon where the desktop has a tray.
  */
 final class Notifier {
 
@@ -19,7 +19,11 @@ final class Notifier {
     }
 
     void notify(String title, String text) {
-        if (window.isActive() || !MAC) {
+        if (window.isActive()) {
+            return;
+        }
+        if (!MAC) {
+            tray(title, text);
             return;
         }
         String script = "display notification \"" + escape(text) + "\" with title \"comando\" subtitle \"" + escape(title) + "\"";
@@ -30,6 +34,27 @@ final class Notifier {
                 LOG.log(System.Logger.Level.DEBUG, "notification failed: " + e.getMessage());
             }
         });
+    }
+
+    private java.awt.TrayIcon trayIcon;
+
+    /** Elsewhere: a tray balloon, where the desktop has a tray; nothing otherwise. */
+    private void tray(String title, String text) {
+        if (!java.awt.SystemTray.isSupported()) {
+            return;
+        }
+        try {
+            if (trayIcon == null) {
+                java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+                trayIcon = new java.awt.TrayIcon(image, "comando");
+                trayIcon.setImageAutoSize(true);
+                java.awt.SystemTray.getSystemTray().add(trayIcon);
+            }
+            String clipped = text.length() > 200 ? text.substring(0, 200) + "…" : text;
+            trayIcon.displayMessage(title, clipped, java.awt.TrayIcon.MessageType.INFO);
+        } catch (java.awt.AWTException | RuntimeException e) {
+            LOG.log(System.Logger.Level.DEBUG, "notification failed: " + e.getMessage());
+        }
     }
 
     static String escape(String s) {

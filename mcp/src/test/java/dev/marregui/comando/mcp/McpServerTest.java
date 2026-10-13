@@ -150,7 +150,7 @@ class McpServerTest {
     // ---- approvals
 
     @Test
-    void bashApprovalForTheSessionAddsARuleForThatCommand() throws Exception {
+    void bashApprovalForTheSessionAddsARuleForThatCommandPrefix() throws Exception {
         CompletableFuture<JsonNode> call = CompletableFuture.supplyAsync(() -> {
             try {
                 return tool("approve", "{\"tool_name\":\"Bash\",\"input\":{\"command\":\"git status\"},\"tool_use_id\":\"t1\"}");
@@ -169,7 +169,7 @@ class McpServerTest {
         assertThat(result.path("updatedInput").path("command").asText()).isEqualTo("git status");
         JsonNode update = result.path("updatedPermissions").path(0);
         assertThat(update.path("destination").asText()).isEqualTo("session");
-        assertThat(update.path("rules").path(0).path("ruleContent").asText()).isEqualTo("git status");
+        assertThat(update.path("rules").path(0).path("ruleContent").asText()).isEqualTo("git status:*");
     }
 
     @Test
@@ -322,8 +322,7 @@ class McpServerTest {
     @Test
     void aRefusedLayoutChangesNothing() throws Exception {
         assertThat(text(tool("ui_set_layout", "{\"panel\":\"two\",\"lower_tab\":\"results\",\"lower_share\":2}"))).contains("between 0.05 and 0.95");
-        assertThat(sink.of(Intent.FocusPanel.class)).isEmpty();
-        assertThat(sink.of(Intent.SelectLowerTab.class)).isEmpty();
+        assertThat(sink.of(Intent.SessionLayout.class)).isEmpty();
     }
 
     @Test
@@ -338,11 +337,14 @@ class McpServerTest {
     void layoutFocusesSelectsAndArranges() throws Exception {
         JsonNode r = tool("ui_set_layout", "{\"panel\":\"two\",\"lower_tab\":\"approvals\",\"sidebar\":false,\"lower_share\":0.5}");
         assertThat(r.path("isError").asBoolean(false)).isFalse();
-        assertThat(sink.await(Intent.FocusPanel.class, WAIT).panel()).isEqualTo(States.P2);
-        assertThat(sink.await(Intent.SelectLowerTab.class, WAIT).tab()).isEqualTo(LowerTab.APPROVALS);
-        assertThat(sink.await(Intent.Arrange.class, WAIT).layout())
-                .isEqualTo(new Layout(Layout.Toggle.HIDE, Layout.Toggle.KEEP, 0.5));
+        // one intent naming the session: the reducer decides what the user's window allows
+        assertThat(sink.await(Intent.SessionLayout.class, WAIT)).isEqualTo(new Intent.SessionLayout("work", States.P2, LowerTab.APPROVALS,
+                new Layout(Layout.Toggle.HIDE, Layout.Toggle.KEEP, 0.5)));
 
+        assertThat(text(tool("ui_set_layout", "{\"panel\":\"two\"}"))).contains("will focus panel two once the user pauses typing");
+        // the focused panel needs no focus: the reply says so rather than promise a pending one
+        assertThat(text(tool("ui_set_layout", "{\"panel\":\"one\",\"lower_tab\":\"session\"}")))
+                .isEqualTo("panel one already has the focus; selected lower tab session");
         assertThat(text(tool("ui_set_layout", "{\"lower_tab\":\"nope\"}"))).contains("no view 'nope'");
         assertThat(text(tool("ui_set_layout", "{\"lower_share\":2}"))).contains("between 0.05 and 0.95");
         assertThat(text(tool("ui_set_layout", "{}"))).contains("nothing to change");

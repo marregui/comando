@@ -10,11 +10,12 @@
 | `focused` | the panel the user works in; the lower panel follows its bindings |
 | `connections` | each connection's spec and status (closed, opening, open, closing, failed) with its last error |
 | `sessions` | each session's spec, status, the `system/init` facts (conversation id, model, CLI version, capabilities), pending turns, cost, context tokens and window, activity, git branch |
-| `runs` | at most one SQL run per panel: request id, SQL, status, row count, timings, error |
+| `runs` | at most one SQL run per panel: request id, SQL, status, row count, timings, error, start time, a note on the other statements of a multi-statement block, and whether it runs in the background (a live plot's refresh, which posts no "Query finished" and no ERROR) |
 | `approvals` | permission prompts waiting for an answer, from every session |
 | `views` | views placed by Claude or the user: id, title, spec, placement (lower or side), pinned, owning session, version |
 | `lowerTab` | the selected lower tab: Results, Session, Approvals, Terminal, or a view by id |
-| `notice` | the last status-bar message and its level |
+| `notice` | the standing status-bar message: level, text, time, and its subject (a panel, connection, session or approval) |
+| `notices` | the last 50 notices, oldest first, for the status bar's history |
 | `nextId` | the next request, view or run id |
 
 Invariants the reducer keeps: at least one panel; `focused` names a panel; connection names and session names are unique; one run per panel. The record's constructor checks the first two.
@@ -27,22 +28,24 @@ An intent is a record of the sealed interface `Intent`. Anything that changes th
 
 | Group | Intents |
 |---|---|
-| Panels | `AddPanel`, `ClosePanel`, `RenamePanel`, `FocusPanel`, `BindConnection`, `BindSession` |
+| Panels | `AddPanel`, `ClosePanel`, `ReopenPanel`, `RenamePanel`, `FocusPanel`, `BindConnection`, `BindSession` |
 | Running text | `RunText` (panel, text, target: auto, SQL or Claude), `RefreshSql` (a live plot's re-run, which keeps the lower tab), `CancelRun` |
-| SQL run events | `SqlStarted`, `SqlRows`, `SqlCompleted`, `SqlFailed`, `SqlCancelled` |
-| Connections | `SaveConnection`, `RemoveConnection`, `OpenConnection`, `CloseConnection`, `TestConnection`, `ExploreSchema`, `ConnectionOpened`, `ConnectionClosed`, `ConnectionFailed`, `ConnectionLost`, `ConnectionTested` |
+| SQL run events | `SqlStarted`, `SqlRows`, `SqlCompleted`, `SqlFailed`, `SqlCancelled`, `SqlWarning` (the later statements of a block) |
+| Connections | `SchemaChanged` (a DDL from Claude's `db_run_sql`), `SaveConnection`, `RemoveConnection`, `OpenConnection`, `CloseConnection`, `TestConnection`, `ExploreSchema`, `ConnectionOpened`, `ConnectionClosed`, `ConnectionFailed`, `ConnectionLost`, `ConnectionTested` |
 | Sessions | `SaveSession`, `RemoveSession`, `ImportSessions`, `StartSession`, `StopSession`, `InterruptSession`, `SetSessionModel`, `SetSessionEffort`, `SessionStarted`, `SessionInit`, `SessionActivity`, `SessionTurnEnded`, `SessionExited`, `SessionBranch` |
 | Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
-| Views | `ShowView`, `RefreshView` (new data for a view the user placed, without selecting it), `CloseView`, `PinView`, `SelectLowerTab`, `Arrange` |
+| Views | `ShowView`, `RefreshView` (new data for a view the user placed, without selecting it), `CloseView`, `PinView`, `SelectLowerTab`, `Arrange`, `SessionLayout` (a session's layout request, which the reducer limits to that session's panels), `SessionFocus` (that request's focus and tab, applied after the typing pause only if the panel is still the session's) |
 | Editor and files | `EditPanel`, `OpenFile` |
 | Development tools | `RunGradle`, `RunJfrq`, `CommandFinished`, `CancelCommand`, `OpenRecording`, `BrowseScratchpad` |
-| Notices | `Notify` |
+| Notices | `Notify` (level, text, desktop, subject), `DismissNotice` |
 
 A panel argument may be null in `RunText`, `RunGradle` and `EditPanel`; it means the focused panel. A console view records the panel its run came from, so a failed test goes to that panel's session, not to whichever panel has the focus.
 
 ## 3. The reducer
 
 `Reducer.apply(state, intent)` returns a `Transition`: the next state and a list of effects. It is a pure function of its arguments and of a `Clock`, so tests drive it with a fake clock and assert on both outputs. It throws for nothing a user or an adapter can send: an intent naming a missing panel, connection or session changes nothing or sets a notice.
+
+Notices follow four rules. Every notice joins the history. A new notice replaces the standing one unless the standing one is an ERROR about another subject, so an error stays until it is dismissed, replaced by another error, or settled by its own subject. An event that settles a subject clears its notice: a statement that runs or completes clears its panel's, an opened connection its connection's, a started session or a successful turn its session's, an answered or withdrawn approval its approval's, and removing a connection or session clears its own. A new ERROR notice also asks for a desktop notification, which shows while the window is behind.
 
 Rules that recur:
 

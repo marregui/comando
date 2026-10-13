@@ -47,21 +47,21 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one. |
 | **Panel header** | two chips: the panel's **connection** and its **session**, each with a status dot (○ closed, ● open) and a button to connect or start it. **Run** and **Stop** on the right. |
 | **Editor** | where you write SQL and prompts, mixed in one text. |
-| **Prompt bar**, under the editor | a one-line field for short messages to the panel's session. |
+| **Prompt bar**, under the editor | a field for messages to the panel's session: **⏎** sends, **⇧⏎** adds a line, **↑** brings back earlier prompts. It grows with the text to six rows. |
 | **Lower tabs** | **Results** (SQL output), **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell). Plots and kept results open more tabs here. |
-| **Status bar**, bottom | the last message on the left; the panel's session, connection and running work on the right. |
+| **Status bar**, bottom | the current message on the left (click it for the recent ones); the panel's session, connection, running work and the embedded QuestDB on the right. |
 
 One idea runs through the whole tool: **a panel is bound to at most one connection and one session**. SQL you run in the panel goes to its connection; anything else goes to its session.
 
-The command palette lists every command with its key. Press **⌘⇧P**, type a few letters, press **⏎**. When you forget a key, use the palette.
+The command palette lists every command that can run now, with its key. Press **⌘⇧P**, type a few letters, press **⏎**. When you forget a key, use the palette, or **⌘⇧/** for the table of keys. The menus grey out what cannot run now.
 
 ## 2. A database
 
 comando can run a QuestDB server for you, so you need nothing else installed.
 
-1. Press **⌘⇧P**, type `embedded`, press **⏎** on "Start or stop the embedded QuestDB".
-   *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few seconds. The server keeps its data in `~/.comando/questdb` and listens on this machine only.
-2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Press **⌘⇧O** to open **Connections** and click **Add**. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. Change only **Name** to `tutorial`. Click **Save**, then **Assign to panel**, then close the dialog.
+1. Press **⌘⇧P**, type `embedded`, press **⏎** on "Start the embedded QuestDB" (also in the **Connections** menu).
+   *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few seconds, and `QuestDB ●` at its right end; clicking that stops or starts the server. The server keeps its data in `~/.comando/questdb` and listens on this machine only.
+2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Press **⌘⇧O** to open **Connections** and click **Add**. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. Change only **Name** to `tutorial`. Click **Assign to panel**: it saves the new connection first, and the line under the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
    *You should see* `tutorial ○` in the panel header and in the sidebar.
 3. Click the plug button next to `tutorial` in the panel header.
    *You should see* the dot turn to `●`. If the connection fails, the status bar says why in red.
@@ -86,11 +86,11 @@ select sym, count(), avg(price) from trades;
 
 1. Look at the **gutter**, left of the line numbers. Each block carries an icon: a **database** for SQL, Claude's **asterisk** for a prompt. comando decides before you run, and the icon tells you where the text will go.
 2. Put the caret anywhere in the `create table` block and press **⌘⏎**.
-   *You should see* "0 rows changed" in Results, and below it a status line with the connection, the outcome and the times.
+   *You should see* "Done." in Results, and below it a status line with the connection, the outcome and the times. The schema the completion uses reloads after a `create`, `alter` or `drop`.
 3. Do the same on the `insert` block, then on the `select` block.
    *You should see* three rows, one per symbol, with counts adding up to 100 000.
 
-What ran: the **block under the caret**, meaning the lines between two empty lines. If you select text, the selection runs instead. Running a block selects it, so you can see what ran; press an arrow key before you type, or your next keystroke replaces the block (⌘Z brings it back).
+What ran: the **block under the caret**, meaning the lines between two empty lines. If you select text, the selection runs instead. On an empty line, the nearest block above runs. The block that ran is tinted until your next edit; nothing is selected and the caret stays where it was, so you can keep typing. A block of `--` comments only has nothing to run.
 
 Three keys decide where text goes:
 
@@ -107,7 +107,7 @@ select sum(rnd_double()) from long_sequence(20000000000);
 ```
 
 Press **⌘.** while it runs.
-*You should see* "Cancelled." in Results. The database stops working on it, and the connection is ready for the next query.
+*You should see* "Running on tutorial · 3 s" counting up while it runs, then "Cancelled." in Results. The database stops working on it, and the connection is ready for the next query.
 
 ## 4. Looking at results
 
@@ -123,7 +123,9 @@ Press **⌘.** while it runs.
 4. Press **⌘⇧E** to explore the schema.
    *You should see* a side pane with the connection, its tables and each table's columns and types.
 
-The Results grid holds millions of rows. **⌘F** searches the view in front of you, **⌘⇧C** copies it, **⌘S** exports it.
+The Results grid holds millions of rows. **⌘F** searches the view in front of you (the one with the keyboard, else the lower tab in front), **⌘G** and **⌘⇧G** step through the matches, **⌘⇧C** copies it, **⌘⇧S** exports it. **⌘S** saves the panel now; panels also save as you type.
+
+When a statement fails, Results shows the database's error as text you can select and copy. If the error names a position and the block was a single statement, the token there is underlined in the editor.
 
 ## 5. A Claude session
 
@@ -138,10 +140,10 @@ A session is a Claude Code process that comando starts for you in a working dire
    | Model | `haiku` |
    | Budget (USD) | `0.50` |
 
-   Leave the rest as it is. Click **Save**, then **Assign to panel**, then close the dialog.
-   *You should see* `tutor` in the panel header, in the sidebar, and in the window title.
+   Leave the rest as it is; the line under each field says what it does. Click **Assign to panel**, then press **Esc**.
+   *You should see* `tutor` in the panel header, in the sidebar (marked "· this panel"), and in the window title.
 2. Click the **prompt bar** under the editor, type `In one sentence, what is QuestDB?` and press **⏎**.
-   *You should see* the session start (its dot turns to `●`), the lower panel switch to **Session**, and the answer stream in. Under the answer: the time it took and the cost so far. If your Claude Code setup has hooks, their output appears as grey lines with a gear icon; that is normal.
+   *You should see* the session start (its dot turns to `●`), the lower panel switch to **Session**, and the answer stream in. Under the answer: the time it took and the cost so far. While the turn runs, the session chip counts the seconds. If your Claude Code setup has hooks, their output folds into one grey line, "hooks · …"; click it to read it.
 3. Prompts can live in the editor too. At the end of the editor, after an empty line, type this block and press **⌘⏎**:
 
    ```
@@ -149,10 +151,9 @@ A session is a Claude Code process that comando starts for you in a working dire
    ```
 
    The gutter shows the asterisk: the block is a question, not SQL. In the Session tab you see Claude call `db_describe` to read the table, then `ui_insert` to write into your editor.
-   *You should see* the query appear in the editor under your question. Click in it and press **⌘⏎** to run it: one row per hour and symbol. Without the first half of the prompt, Claude has not seen the table and guesses column names; ask it to look first.
-   Claude's inserted text ends without an empty line. Before you type the next block, press **⏎** twice at the end of the editor.
+   *You should see* the query appear at the end of the editor as a block of its own, and the status bar say how many lines tutor added, such as "tutor added 4 lines to scratch". Your question stays as it was, and your caret does not move. Click in the query and press **⌘⏎** to run it: one row per hour and symbol. Without the first half of the prompt, Claude has not seen the table and guesses column names; ask it to look first.
 
-The **Session** tab shows the whole turn: your prompt, Claude's thinking, every tool call as a card with its input and result, and the answer. **⌘⇧.** interrupts a turn that is taking too long; the session stays alive for the next prompt. In the prompt bar, **↑** brings back earlier prompts.
+The **Session** tab shows the whole turn: your prompt, Claude's thinking, every tool call as a card with its input and result, and the answer. **⌘⇧.** interrupts a turn that is taking too long: the turn ends with a grey "interrupted" line and the session stays alive for the next prompt. In the prompt bar, **↑** brings back earlier prompts, also after a restart. While you read further up, new output does not scroll the view; **↓ Latest** jumps back, and sending a prompt follows again.
 
 ## 6. Claude and your database
 
@@ -160,12 +161,12 @@ The session can read your database and draw in your window through tools comando
 
 1. In the prompt bar, send:
    `Use db_run_sql to insert one row into trades: sym 'TEST', price 1.0, ts now().`
-   *You should see* "1 waiting for approval" in the status bar and a count on the **Approvals** tab.
+   *You should see* "1 waiting for approval" in the status bar, a count on the **Approvals** tab, and the tool's card in the Session tab reading "waiting for your approval · ⌃3".
 2. Open **Approvals**. The card shows the connection and the exact statement.
    - **Run** (or **⏎**) executes it.
    - **Deny** (or **D**) refuses it. Type a reason in the note field first, and Claude receives it.
 
-   Click **Deny** with the note `just testing`.
+   The keys work anywhere in the card. In the note field, letters type; **⏎** denies with the note once you have typed one (on an empty note it runs), **⌘⏎** denies with the note, **Esc** returns to the card. Click **Deny** with the note `just testing`.
    *You should see* in the Session tab that Claude reports the denial and your note.
 3. Send it again: click the prompt bar, press **↑** to bring the prompt back, press **⏎**. Click **Run** on the new card this time. Then run `select * from trades where sym = 'TEST';` yourself to see the row.
 4. Ask for a picture:
@@ -174,17 +175,18 @@ The session can read your database and draw in your window through tools comando
 5. Ask about a result. At the end of the editor, after an empty line, type and run `select sym, count(), avg(price) from trades;`, then press **⌘⇧I**.
    *You should see* the result appended to the editor as a block, with the caret on the line under it. Type `Which symbol has the highest average?` on that line, with no blank line in between, and press **⌘⏎**. The rows and the question go to Claude together.
 
-Other permission requests, such as a shell command or a file edit, appear as the same kind of card: **Allow once** (⏎ or A), **For session** (S), **Always** (L), **Deny** (D or Esc). Whether a request reaches you depends on your Claude Code permission settings. comando keeps those settings as they are; a database write from Claude always asks.
+Other permission requests, such as a shell command or a file edit, appear as the same kind of card: **Allow once** (⏎ or A), **For session** (S), **Always** (L), **Deny** (D or Esc). The card shows the rule "For session" and "Always" would add, such as `Bash(git status:*)` for a command or `Edit(//Users/you/project/**)` for an edit; **L** must be pressed twice within 3 seconds, because Always saves the rule in the project's local settings. **↑** and **↓** move between cards. Whether a request reaches you depends on your Claude Code permission settings. comando keeps those settings as they are; a database write from Claude always asks.
 
 ## 7. Terminal, panels, quitting
 
-1. Press **⌃4**. The **Terminal** tab opens a login shell in the session's working directory. Type `ls` and press **⏎**.
-2. Back in the editor (**⌘E**), at the end, after an empty line, type `date` and press **⌃⏎**. The line under the caret is typed into the terminal and runs there.
+1. Press **⌃4** (or **⌘⌥4**, if Mission Control takes ⌃4). The **Terminal** tab starts a login shell in the session's working directory and gives it the keyboard. Type `ls` and press **⏎**.
+2. Back in the editor (**⌘E**), at the end, after an empty line, type `date` and press **⌃⏎**. The line under the caret is typed into the terminal and runs there; a shell that is still starting gets it once it is ready.
 3. Press **⌘T** for a second panel. It starts with the same connection and session as the panel you were in; change either from the chips in its header, or by double-clicking a name in the sidebar. **⌘1**…**⌘9** jump between panels.
-4. Press **⌘Q**. comando stops the session's process and the embedded QuestDB and saves everything.
-5. Start it again with `./gradlew :app:run`.
+4. Press **⌘W** to close the new panel, then **⌘⇧T**: it comes back with its text and bindings. comando asks first only when the panel's shell is running a program.
+5. Press **⌘Q**. comando stops the session's process and the embedded QuestDB and saves everything. If a query, a turn, a Gradle run or a shell job is running, it asks first; while it closes, the window stays, greyed, titled "closing…".
+6. Start it again with `./gradlew :app:run`.
    *You should see* your panels, their text and their bindings as you left them. Sessions come back stopped, with their transcripts, and the next prompt resumes the same conversation: ask `What was the first question I asked you?` in the prompt bar.
-   Connections come back closed, and the embedded QuestDB does not start by itself: start it again from the palette (step 2) before you connect.
+   Connections come back closed, and the embedded QuestDB does not start by itself: start it again from the palette (step 2) before you connect. The window comes back where it was, with the sidebar shown or hidden as you left it. Views (plots, files, kept results) belong to one run: the side pane comes back empty.
 
 Your data lives in `~/.comando`: `connections.json`, `sessions.json` and `panels.json`, plus the logs in `logs/`. Connection passwords are kept in the macOS keychain, not in the files.
 
@@ -199,17 +201,26 @@ Your data lives in `~/.comando`: `connections.json`, `sessions.json` and `panels
 | ⌘. | stop the query, else interrupt the session's turn |
 | ⌘⇧. | interrupt the session's turn |
 | ⌘L / ⌘E | focus the prompt bar / the editor |
+| ⏎ / ⇧⏎ / ↑ | in the prompt bar: send / new line / earlier prompts |
+| ⌃Space or ⌥⎋ | complete SQL (⌥⎋ where macOS takes ⌃Space for the input source) |
 | ⌘J / ⌘⇧J | plot the last result / plot it and keep refreshing |
 | ⌘⇧R | keep the result in a tab |
 | ⌘⇧I | attach the result (or selected rows, or the error) to the editor |
 | ⌘⇧E | explore the schema |
-| ⌃1 ⌃2 ⌃3 ⌃4 | Results, Session, Approvals, Terminal |
-| ⌘T / ⌘W | new panel / close panel |
+| ⌃1 ⌃2 ⌃3 ⌃4 (or ⌘⌥1…4) | Results, Session, Approvals, Terminal, with the keyboard |
+| ⌃⇥ / ⌃⇧⇥ | next / previous lower tab |
+| ⌘T / ⌘W / ⌘⇧T | new panel / close the panel, or the view that has the keyboard / reopen the last closed panel |
+| ⌘⇧W | close the lower view in front |
 | ⌘1…⌘9, ⌘⇧[ ⌘⇧] | go to a panel |
 | ⌘⇧O / ⌘⇧K | Connections / Sessions |
 | ⌘⇧P | command palette |
 | ⌘B / ⌘\ | sidebar / side pane |
-| ⌘F, ⌘⇧C, ⌘S | find, copy, export the view |
+| ⌘F, ⌘G ⌘⇧G | find in the view, next, previous |
+| ⌘⇧C, ⌘⇧S | copy, export the view |
+| ⌘S | save the panel now |
+| ⌥⌘G | run Gradle tasks |
+| ⌘⇧/ | the table of every key |
+| ⌘/ | comment or uncomment the line, in the editor |
 | ⌘= ⌘- ⌘0 | zoom |
 | ⌘Q | quit |
 

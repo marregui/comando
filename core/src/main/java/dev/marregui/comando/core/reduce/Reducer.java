@@ -1,6 +1,7 @@
 package dev.marregui.comando.core.reduce;
 
 import dev.marregui.comando.core.dispatch.Classifier;
+import dev.marregui.comando.core.dispatch.Statements;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
@@ -22,6 +23,7 @@ import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.state.ViewState;
+import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
@@ -45,6 +47,9 @@ public final class Reducer {
     /** Queries running this long or longer notify the desktop when they end. */
     static final long LONG_RUN_MILLIS = 10_000L;
 
+    /** The message of a turn the user interrupted, as the stream mapper reports it. */
+    static final String INTERRUPTED = "interrupted";
+
     private final Clock clock;
 
     public Reducer(Clock clock) {
@@ -52,10 +57,30 @@ public final class Reducer {
     }
 
     public Transition apply(AppState s, Intent intent) {
+        return withDesktopError(s, reduce(s, intent));
+    }
+
+    /**
+     * A new error notice also goes to the desktop, which shows it only while the window is in the background, so
+     * an error that arrives while the user works elsewhere is not lost.
+     */
+    private static Transition withDesktopError(AppState before, Transition t) {
+        Notice n = t.state().notice();
+        if (n.level() != Notice.Level.ERROR || n.isEmpty() || n.equals(before.notice())
+                || t.effects().stream().anyMatch(e -> e instanceof Effect.DesktopNotify)) {
+            return t;
+        }
+        List<Effect> effects = new ArrayList<>(t.effects());
+        effects.add(new Effect.DesktopNotify("comando", n.text()));
+        return new Transition(t.state(), effects);
+    }
+
+    private Transition reduce(AppState s, Intent intent) {
         return switch (intent) {
             case Intent.AddPanel i -> addPanel(s, i);
             case Intent.ClosePanel i -> closePanel(s, i.panel());
             case Intent.RenamePanel i -> renamePanel(s, i);
+            case Intent.ReopenPanel i -> reopenPanel(s, i);
             case Intent.FocusPanel i -> s.panel(i.panel()).isPresent() ? Transition.of(s.withFocused(i.panel())) : Transition.of(s);
             case Intent.BindConnection i -> bindConnection(s, i);
             case Intent.BindSession i -> bindSession(s, i);
@@ -64,32 +89,34 @@ public final class Reducer {
             case Intent.RefreshSql i -> refreshSql(s, i);
             case Intent.CancelRun i -> cancelRun(s, i.panel());
 
-            case Intent.SqlStarted i -> onRun(s, i.requestId(), r -> r.withStatus(RunStatus.RUNNING));
+            case Intent.SqlStarted i -> onRun(s, i.requestId(), r -> r.started(clock.millis()));
             case Intent.SqlRows i -> onRun(s, i.requestId(), r -> r.withProgress(i.rows(), i.execMillis(), i.fetchMillis(), i.totalMillis()));
-            case Intent.SqlCompleted i -> notifyLongRun(s, onRun(s, i.requestId(),
-                    r -> r.completed(i.rows(), i.updateCount(), i.truncated(), i.execMillis(), i.fetchMillis(), i.totalMillis())),
-                    i.requestId(), i.totalMillis(), i.rows() + " rows");
+            case Intent.SqlCompleted i -> notifyLongRun(s, sqlCompleted(s, i), i.requestId(), i.totalMillis(), i.rows() + " rows");
             case Intent.SqlFailed i -> notifyLongRun(s, sqlFailed(s, i), i.requestId(), i.totalMillis(), "failed: " + i.message());
             case Intent.SqlCancelled i -> onRun(s, i.requestId(), r -> r.withStatus(RunStatus.CANCELLED));
+            case Intent.SqlWarning i -> sqlWarning(s, i);
 
             case Intent.SaveConnection i -> saveConnection(s, i);
             case Intent.RemoveConnection i -> removeConnection(s, i.name());
             case Intent.OpenConnection i -> openConnection(s, i.name());
             case Intent.CloseConnection i -> closeConnection(s, i.name());
-            case Intent.TestConnection i -> new Transition(notice(s, Notice.Level.INFO, "Testing " + i.spec().label()), List.of(new Effect.TestDb(i.spec())));
+            case Intent.TestConnection i -> new Transition(notice(s, Notice.Level.INFO, "Testing " + i.spec().label(), Notice.connection(i.spec().name())),
+                    List.of(new Effect.TestDb(i.spec())));
             // an open that completes after the user's Close is stale: the queued disconnect closes it; no schema load reopens it
             case Intent.ConnectionOpened i -> s.connection(i.name()).map(c -> c.status() == Status.CLOSING).orElse(false)
                     ? Transition.of(s)
-                    : withSchemaLoad(connectionStatus(s, i.name(), Status.OPEN, ""), i.name(), false);
+                    : withSchemaLoad(Transition.of(clear(connectionStatus(s, i.name(), Status.OPEN, "").state(), Notice.connection(i.name()))),
+                    i.name(), false);
             case Intent.ExploreSchema i -> s.connection(i.connection()).isEmpty()
-                    ? Transition.of(notice(s, Notice.Level.WARN, "No connection " + i.connection()))
+                    ? Transition.of(notice(s, Notice.Level.WARN, "No connection " + i.connection(), Notice.connection(i.connection())))
                     : withSchemaLoad(Transition.of(s), i.connection(), true);
             case Intent.ConnectionClosed i -> connectionStatus(s, i.name(), Status.CLOSED, "");
             case Intent.ConnectionFailed i -> Transition.of(notice(connectionStatus(s, i.name(), Status.FAILED, i.error()).state(),
-                    Notice.Level.ERROR, "Connection " + i.name() + " failed: " + i.error()));
+                    Notice.Level.ERROR, "Connection " + i.name() + " failed: " + i.error(), Notice.connection(i.name())));
             case Intent.ConnectionLost i -> connectionLost(s, i);
+            case Intent.SchemaChanged i -> withSchemaLoad(Transition.of(s), i.connection(), explorerShows(s, i.connection()));
             case Intent.ConnectionTested i -> Transition.of(notice(s, i.ok() ? Notice.Level.INFO : Notice.Level.ERROR,
-                    "Test " + i.name() + ": " + i.message()));
+                    "Test " + i.name() + ": " + i.message(), Notice.connection(i.name())));
 
             case Intent.SaveSession i -> saveSession(s, i);
             case Intent.RemoveSession i -> removeSession(s, i.name());
@@ -99,7 +126,7 @@ public final class Reducer {
             case Intent.InterruptSession i -> interruptSession(s, i.name());
             case Intent.SetSessionModel i -> sessionSetting(s, i.name(), i.model(), true);
             case Intent.SetSessionEffort i -> sessionSetting(s, i.name(), i.effort(), false);
-            case Intent.SessionStarted i -> Transition.of(s.withSession(i.name(), x -> x.withStatus(Status.OPEN, "")));
+            case Intent.SessionStarted i -> Transition.of(clear(s.withSession(i.name(), x -> x.withStatus(Status.OPEN, "")), Notice.session(i.name())));
             case Intent.SessionInit i -> sessionInit(s, i);
             case Intent.SessionActivity i -> Transition.of(s.withSession(i.name(), x -> x.withActivity(i.activity(), clock.millis())));
             case Intent.SessionTurnEnded i -> turnEnded(s, i);
@@ -111,6 +138,11 @@ public final class Reducer {
             case Intent.ApprovalWithdrawn i -> approvalWithdrawn(s, i);
 
             case Intent.ShowView i -> showView(s, i);
+            case Intent.SessionLayout i -> sessionLayout(s, i);
+            case Intent.SessionFocus i -> Transition.of(s.panel(i.panel())
+                    .filter(p -> p.session().equals(i.session()))
+                    .map(p -> i.tab() == null ? s.withFocused(i.panel()) : s.withFocused(i.panel()).withLowerTab(i.tab()))
+                    .orElse(s)); // rebound or closed while the user typed: the request no longer holds
             case Intent.RefreshView i -> Transition.of(s.views().stream()
                     .filter(v -> !v.pinned() && v.session().isEmpty() && v.title().equals(i.title()) && v.placement() == Placement.LOWER)
                     .findFirst().map(v -> s.withViews(replaceView(s.views(), v.replaced(i.spec())))).orElse(s));
@@ -131,8 +163,9 @@ public final class Reducer {
             case Intent.BrowseScratchpad i -> new Transition(s, List.of(new Effect.BrowseScratchpad()));
             case Intent.OpenFile i -> new Transition(s, List.of(new Effect.ShowFile(i.session(), i.path(),
                     s.session(i.session()).map(x -> x.spec().workDir()).orElse(System.getProperty("user.home")), i.line())));
-            case Intent.Notify i -> new Transition(notice(s, i.level(), i.text()),
+            case Intent.Notify i -> new Transition(notice(s, i.level(), i.text(), i.subject()),
                     i.desktop() ? List.of(new Effect.DesktopNotify("comando", i.text())) : List.of());
+            case Intent.DismissNotice i -> Transition.of(s.withNotice(Notice.NONE));
         };
     }
 
@@ -176,6 +209,21 @@ public final class Reducer {
         effects.add(new Effect.ForgetPanel(id));
         effects.add(new Effect.SavePanels(next.panels()));
         return new Transition(next, effects);
+    }
+
+    /** A closed panel comes back after the focused one, with the bindings that still exist. */
+    private Transition reopenPanel(AppState s, Intent.ReopenPanel i) {
+        if (s.panel(i.panel()).isPresent()) {
+            return Transition.of(s);
+        }
+        String connection = s.connection(i.connection()).isPresent() ? i.connection() : "";
+        String session = s.session(i.session()).isPresent() ? i.session() : "";
+        String title = i.title().isBlank() ? "panel " + (s.panels().size() + 1) : i.title().strip();
+        List<PanelState> panels = new ArrayList<>(s.panels());
+        int at = s.panels().indexOf(s.focusedPanel()) + 1;
+        panels.add(Math.min(at, panels.size()), new PanelState(i.panel(), title, connection, session));
+        AppState next = notice(s.withPanels(panels, i.panel()), Notice.Level.INFO, "Reopened " + title);
+        return new Transition(next, List.of(new Effect.SavePanels(next.panels())));
     }
 
     private Transition renamePanel(AppState s, Intent.RenamePanel i) {
@@ -222,8 +270,10 @@ public final class Reducer {
             case SQL -> new Classifier.Classification(Target.SQL, Classifier.stripMarker(i.text()));
             case CLAUDE -> new Classifier.Classification(Target.CLAUDE, Classifier.stripMarker(i.text()));
         };
-        if (c.text().isBlank()) {
-            return Transition.of(notice(s, Notice.Level.WARN, "Nothing to run"));
+        // forced to SQL (⌥⏎), a block of comments would reach the database and report "0 rows changed"
+        if (c.text().isBlank() || c.target() == Target.SQL && Classifier.isCommentOnly(c.text())) {
+            return Transition.of(notice(s, Notice.Level.WARN, "Nothing to run: the block holds only comments",
+                    Notice.panel(panel.id().value())));
         }
         return c.target() == Target.SQL ? runSql(s, panel, c.text()) : runPrompt(s, panel, c.text());
     }
@@ -246,29 +296,35 @@ public final class Reducer {
     }
 
     private Transition runSql(AppState s, PanelState panel, String sql, boolean showResults) {
+        String subject = Notice.panel(panel.id().value());
         if (panel.connection().isEmpty()) {
-            return Transition.of(notice(s, Notice.Level.ERROR, "Panel " + panel.title() + " has no connection; bind one"));
+            return Transition.of(notice(s, Notice.Level.ERROR, "Panel " + panel.title()
+                    + " has no connection: pick one from its header, or add one with Connections… (⌘⇧O)", subject));
         }
         Optional<ConnectionState> conn = s.connection(panel.connection());
         if (conn.isEmpty()) {
-            return Transition.of(notice(s, Notice.Level.ERROR, "No connection called " + panel.connection()));
+            return Transition.of(notice(s, Notice.Level.ERROR, "No connection called " + panel.connection(), subject));
         }
         List<Effect> effects = new ArrayList<>();
+        // a live plot's refresh leaves the status bar alone; the user's own run clears its panel's notice
+        AppState next = showResults ? clear(s, subject) : s;
         Optional<SqlRun> previous = s.runOf(panel.id());
         if (previous.isPresent()) {
             if (previous.get().status().isActive()) {
                 effects.add(new Effect.CancelSql(previous.get().requestId()));
+                if (showResults) {
+                    next = notice(next, Notice.Level.WARN, "Stopped the statement still running in " + panel.title(), subject);
+                }
             }
             effects.add(new Effect.ReleaseResult(previous.get().requestId()));
         }
-        AppState next = s;
         ConnectionState c = conn.get();
         if (!c.status().isUsable()) {
             effects.add(new Effect.OpenDb(c.spec()));
             next = next.withConnection(c.with(Status.OPENING, ""));
         }
         long id = next.nextId();
-        next = next.withIdTaken().withRun(SqlRun.queued(id, panel.id(), c.name(), sql));
+        next = next.withIdTaken().withRun(SqlRun.queued(id, panel.id(), c.name(), sql, !showResults));
         if (showResults) {
             next = next.withLowerTab(LowerTab.RESULTS);
         }
@@ -277,17 +333,20 @@ public final class Reducer {
     }
 
     private Transition runPrompt(AppState s, PanelState panel, String prompt) {
+        String subject = Notice.panel(panel.id().value());
         if (panel.session().isEmpty()) {
-            return Transition.of(notice(s, Notice.Level.ERROR, "Panel " + panel.title() + " has no session; bind one"));
+            return Transition.of(notice(s, Notice.Level.ERROR, "Panel " + panel.title()
+                    + " has no session: pick one from its header, or add one with Sessions… (⌘⇧K)", subject));
         }
         Optional<SessionState> found = s.session(panel.session());
         if (found.isEmpty()) {
-            return Transition.of(notice(s, Notice.Level.ERROR, "No session called " + panel.session()));
+            return Transition.of(notice(s, Notice.Level.ERROR, "No session called " + panel.session(), subject));
         }
         SessionState session = found.get();
         if (session.status() == Status.CLOSING) {
             // the old process still reads stdin until it exits; a start now would reuse it and lose the prompt
-            return Transition.of(notice(s, Notice.Level.WARN, "Session " + session.name() + " is stopping; send the prompt again once it has stopped"));
+            return Transition.of(notice(s, Notice.Level.WARN, "Session " + session.name() + " is stopping; send the prompt again once it has stopped",
+                    subject));
         }
         List<Effect> effects = new ArrayList<>();
         if (!session.status().isUsable()) {
@@ -297,7 +356,7 @@ public final class Reducer {
         effects.add(new Effect.SendToClaude(session.name(), prompt, panel.title()));
         long now = clock.millis();
         session = session.withTurns(session.pendingTurns() + 1, now).withActivity("sending", now);
-        AppState next = s.withSession(session).withLowerTab(LowerTab.SESSION);
+        AppState next = clear(s.withSession(session), subject).withLowerTab(LowerTab.SESSION);
         return new Transition(next, effects);
     }
 
@@ -310,7 +369,7 @@ public final class Reducer {
         return s.panel(id)
                 .flatMap(p -> s.session(p.session()))
                 .filter(SessionState::isBusy)
-                .map(sess -> new Transition(s, List.of(new Effect.InterruptClaude(sess.name()))))
+                .map(sess -> interruptSession(s, sess.name()))
                 .orElse(Transition.of(s));
     }
 
@@ -335,7 +394,8 @@ public final class Reducer {
 
     /** A query that ran {@link #LONG_RUN_MILLIS} or more ends with a desktop notification naming its panel. */
     private static Transition notifyLongRun(AppState before, Transition t, long requestId, long totalMillis, String outcome) {
-        if (totalMillis < LONG_RUN_MILLIS || t.state() == before) {
+        // a live plot's refresh is a run nobody typed: no desktop notification for it
+        if (totalMillis < LONG_RUN_MILLIS || t.state() == before || before.run(requestId).map(SqlRun::background).orElse(false)) {
             return t;
         }
         String panel = before.run(requestId).flatMap(r -> before.panel(r.panel())).map(PanelState::title).orElse("query");
@@ -344,12 +404,79 @@ public final class Reducer {
         return new Transition(t.state(), effects);
     }
 
+    /**
+     * A failed run keeps the database's error. In a block of several statements the driver stops at the failing one
+     * and the ones before it may have committed, so the error says so, and a block holding a schema change reloads
+     * the schema. A live plot's failed refresh is a warning, so a broken plot never raises a desktop notification
+     * each period.
+     */
     private Transition sqlFailed(AppState s, Intent.SqlFailed i) {
         Optional<SqlRun> run = s.run(i.requestId());
         if (run.isEmpty() || !run.get().status().isActive()) {
             return Transition.of(s);
         }
-        return Transition.of(notice(s.withRun(run.get().failed(i.message(), i.totalMillis())), Notice.Level.ERROR, i.message()));
+        SqlRun r = run.get();
+        List<String> statements = Statements.split(r.sql());
+        String message = statements.size() > 1 ? i.message() + "\n" + blockNote(statements.size()) : i.message();
+        String subject = Notice.panel(r.panel().value());
+        AppState next = s.withRun(r.failed(message, i.totalMillis()));
+        if (r.background()) {
+            String title = s.panel(r.panel()).map(PanelState::title).orElse("a closed panel");
+            next = notice(next, Notice.Level.WARN, "Live plot in " + title + " failed: " + i.message(), subject);
+        } else {
+            next = notice(next, Notice.Level.ERROR, statements.size() > 1 ? i.message() + " — " + blockNote(statements.size()) : i.message(),
+                    subject);
+        }
+        Transition t = Transition.of(next);
+        return statements.size() > 1 && statements.stream().anyMatch(Classifier::isDdl)
+                ? withSchemaLoad(t, r.connection(), explorerShows(next, r.connection())) : t;
+    }
+
+    static String blockNote(int statements) {
+        return "The block holds " + statements + " statements; the ones before the failing statement may have run.";
+    }
+
+    /** True when the explorer shows the connection's schema, so a reload after a schema change shows it again. */
+    private static boolean explorerShows(AppState s, String connection) {
+        String title = Effect.LoadSchema.viewTitle(connection);
+        return s.views().stream().anyMatch(v -> !v.pinned() && v.session().isEmpty() && v.placement() == Placement.SIDE && v.title().equals(title));
+    }
+
+    /**
+     * A finished statement clears its panel's earlier error; a block holding a statement that changes the schema
+     * reloads the schema behind completion, and the explorer when it shows that connection. A live plot's refresh
+     * finishes without a word.
+     */
+    private Transition sqlCompleted(AppState s, Intent.SqlCompleted i) {
+        Optional<SqlRun> run = s.run(i.requestId());
+        Transition t = onRun(s, i.requestId(),
+                r -> r.completed(i.rows(), i.updateCount(), i.truncated(), i.execMillis(), i.fetchMillis(), i.totalMillis()));
+        if (run.isEmpty() || t.state() == s) {
+            return t;
+        }
+        String subject = Notice.panel(run.get().panel().value());
+        AppState next = clear(t.state(), subject);
+        String title = s.panel(run.get().panel()).map(PanelState::title).orElse("a closed panel");
+        if (i.truncated()) {
+            next = notice(next, Notice.Level.WARN, "Showing the first " + String.format(java.util.Locale.ROOT, "%,d", i.rows()) + " rows in " + title
+                    + "; the query returned more (add a LIMIT, or export from the grid for what is shown)", subject);
+        } else if (!run.get().background() && !run.get().panel().equals(s.focused())) {
+            next = notice(next, Notice.Level.INFO, "Query finished in " + title, subject);
+        }
+        if (Classifier.anyDdl(run.get().sql())) {
+            return withSchemaLoad(new Transition(next, t.effects()), run.get().connection(), explorerShows(next, run.get().connection()));
+        }
+        return new Transition(next, t.effects());
+    }
+
+    /** Statements after the first one: the run keeps the note for its status line; a failure is also a notice. */
+    private Transition sqlWarning(AppState s, Intent.SqlWarning i) {
+        Optional<SqlRun> run = s.run(i.requestId());
+        if (run.isEmpty()) {
+            return Transition.of(s);
+        }
+        AppState next = s.withRun(run.get().withNote(i.text(), i.failed()));
+        return Transition.of(notice(next, i.failed() ? Notice.Level.ERROR : Notice.Level.WARN, i.text(), Notice.panel(run.get().panel().value())));
     }
 
     // ---- connections
@@ -403,7 +530,7 @@ public final class Reducer {
         if (conn.get().status() != Status.CLOSED) {
             effects.add(new Effect.CloseDb(name));
         }
-        AppState next = s.withConnections(s.connections().stream().filter(c -> !c.name().equals(name)).toList());
+        AppState next = clear(s, Notice.connection(name)).withConnections(s.connections().stream().filter(c -> !c.name().equals(name)).toList());
         next = rebindConnection(next, name, "");
         effects.add(new Effect.SaveConnections(specs(next)));
         effects.add(new Effect.SavePanels(next.panels()));
@@ -444,7 +571,7 @@ public final class Reducer {
             return Transition.of(s);
         }
         AppState next = notice(connectionStatus(s, i.name(), Status.FAILED, i.error()).state(), Notice.Level.WARN,
-                "Connection " + i.name() + " lost: " + i.error());
+                "Connection " + i.name() + " lost: " + i.error(), Notice.connection(i.name()));
         return new Transition(next, List.of(new Effect.DesktopNotify("Connection lost", i.name() + ": " + i.error())));
     }
 
@@ -466,7 +593,7 @@ public final class Reducer {
         SessionSpec spec = i.spec();
         if (i.previousName().isEmpty()) {
             if (s.session(spec.name()).isPresent()) {
-                return Transition.of(notice(s, Notice.Level.ERROR, "A session called " + spec.name() + " exists"));
+                return Transition.of(notice(s, Notice.Level.ERROR, "A session called " + spec.name() + " exists", Notice.session(spec.name())));
             }
             List<SessionState> sessions = new ArrayList<>(s.sessions());
             sessions.add(SessionState.closed(spec));
@@ -485,7 +612,7 @@ public final class Reducer {
         boolean renamed = !i.previousName().equals(spec.name());
         SessionState old = previous.get();
         if (renamed && old.status() != Status.CLOSED && old.status() != Status.FAILED) {
-            return Transition.of(notice(s, Notice.Level.ERROR, "Stop session " + old.name() + " before renaming it"));
+            return Transition.of(notice(s, Notice.Level.ERROR, "Stop session " + old.name() + " before renaming it", Notice.session(old.name())));
         }
         if (renamed && s.session(spec.name()).isPresent()) {
             return Transition.of(notice(s, Notice.Level.ERROR, "A session called " + spec.name() + " exists"));
@@ -506,7 +633,7 @@ public final class Reducer {
             }
         }
         if (old.status().isUsable() && !old.spec().equals(spec)) {
-            next = notice(next, Notice.Level.INFO, "Session " + spec.name() + ": changes apply at the next start");
+            next = notice(next, Notice.Level.INFO, "Session " + spec.name() + ": changes apply at the next start", Notice.session(spec.name()));
         }
         return new Transition(next, effects);
     }
@@ -521,7 +648,7 @@ public final class Reducer {
             effects.add(new Effect.StopClaude(name));
         }
         effects.add(new Effect.ForgetSession(name));
-        AppState next = withdrawApprovals(s, name, "session removed", effects);
+        AppState next = clear(withdrawApprovals(s, name, "session removed", effects), Notice.session(name));
         next = next.withSessions(next.sessions().stream().filter(x -> !x.name().equals(name)).toList());
         next = rebindSession(next, name, "");
         effects.add(new Effect.SaveSessions(sessionSpecs(next)));
@@ -553,6 +680,14 @@ public final class Reducer {
         if (added > 0) {
             effects.add(new Effect.SaveSessions(sessionSpecs(next)));
         }
+        PanelState focused = next.focusedPanel();
+        if (added == 1 && focused.session().isEmpty()) {
+            // the usual "import, then talk": one conversation and a panel waiting for one
+            String name = next.sessions().getLast().name();
+            next = next.withPanel(focused.withSession(name));
+            effects.add(new Effect.SavePanels(next.panels()));
+            return new Transition(notice(next, Notice.Level.INFO, "Imported " + name + " and bound it to " + focused.title()), effects);
+        }
         return new Transition(notice(next, Notice.Level.INFO, "Imported " + added + " of " + specs.size() + " sessions"), effects);
     }
 
@@ -570,10 +705,12 @@ public final class Reducer {
                 .orElse(Transition.of(s));
     }
 
+    /** The chip and the sidebar say "interrupting" at once; the next activity or the turn's end replaces it. */
     private Transition interruptSession(AppState s, String name) {
         return s.session(name)
                 .filter(SessionState::isBusy)
-                .map(x -> new Transition(s, List.<Effect>of(new Effect.InterruptClaude(name))))
+                .map(x -> new Transition(s.withSession(x.withActivity("interrupting", clock.millis())),
+                        List.<Effect>of(new Effect.InterruptClaude(name))))
                 .orElse(Transition.of(s));
     }
 
@@ -621,6 +758,10 @@ public final class Reducer {
             return Transition.of(s);
         }
         long now = clock.millis();
+        if (i.error() && found.get().status() == Status.FAILED) {
+            // a prompt to a session whose start failed: the start's error already stands, once
+            return Transition.of(s.withSession(found.get().withTurns(Math.max(0, i.queued()), now).withActivity("", now)));
+        }
         SessionState x = found.get()
                 .withTurns(Math.max(0, i.queued()), now)
                 .withUsage(i.costUsd() >= 0 ? i.costUsd() : found.get().costUsd(),
@@ -629,11 +770,19 @@ public final class Reducer {
                 .withActivity("", now);
         AppState next = s.withSession(x);
         List<Effect> effects = new ArrayList<>();
-        if (i.error()) {
-            next = notice(next, Notice.Level.ERROR, i.name() + ": " + i.message());
+        // the user's own interrupt is an outcome, not a failure
+        boolean interrupted = i.error() && INTERRUPTED.equals(i.message());
+        if (interrupted) {
+            next = notice(next, Notice.Level.INFO, i.name() + ": interrupted", Notice.session(i.name()));
+        } else if (i.error()) {
+            next = notice(next, Notice.Level.ERROR, i.name() + ": " + i.message(), Notice.session(i.name()));
+        } else {
+            next = clear(next, Notice.session(i.name()));
         }
         if (!x.isBusy()) {
-            effects.add(new Effect.DesktopNotify(i.name(), i.error() ? "Turn failed: " + i.message() : "Turn finished"));
+            if (!interrupted) {
+                effects.add(new Effect.DesktopNotify(i.name(), i.error() ? "Turn failed: " + i.message() : "Turn finished"));
+            }
             // nothing runs or is queued: a statement card still waiting belongs to a call the turn abandoned (an
             // interrupt), and answering Run would execute it after the fact. Other cards may belong to a background
             // agent that outlives the turn; Claude Code cancels abandoned calls itself, which withdraws them.
@@ -650,14 +799,16 @@ public final class Reducer {
     private static AppState withdrawApprovals(AppState s, String session, String reason, List<Effect> effects,
                                               java.util.function.Predicate<Approval> which) {
         List<Approval> kept = new ArrayList<>();
+        AppState next = s;
         for (Approval a : s.approvals()) {
             if (a.session().equals(session) && which.test(a)) {
                 effects.add(new Effect.ResolveApproval(a, new ApprovalDecision.Deny(reason)));
+                next = clear(next, Notice.approval(a.id())); // its "asks" notice would point at an empty Approvals tab
             } else {
                 kept.add(a);
             }
         }
-        return kept.size() == s.approvals().size() ? s : s.withApprovals(kept);
+        return kept.size() == s.approvals().size() ? s : next.withApprovals(kept);
     }
 
     private Transition sessionExited(AppState s, Intent.SessionExited i) {
@@ -674,7 +825,10 @@ public final class Reducer {
         List<Effect> effects = new ArrayList<>();
         AppState next = withdrawApprovals(s.withSession(x), i.name(), "session ended", effects);
         if (!expected) {
-            next = notice(next, Notice.Level.ERROR, "Session " + i.name() + " exited [code=" + i.exitCode() + "] " + i.error());
+            // -1: the process never started; the transcript holds the same text, so the notice says only what happened
+            String text = i.exitCode() == -1 ? "Session " + i.name() + " could not start: " + i.error()
+                    : "Session " + i.name() + " exited [code=" + i.exitCode() + "] " + i.error();
+            next = notice(next, Notice.Level.ERROR, text, Notice.session(i.name()));
         }
         return new Transition(next, effects);
     }
@@ -699,7 +853,8 @@ public final class Reducer {
         }
         List<Approval> approvals = new ArrayList<>(s.approvals());
         approvals.add(a);
-        AppState next = notice(s.withApprovals(approvals), Notice.Level.INFO, a.session() + " asks: " + a.summary());
+        AppState next = notice(s.withApprovals(approvals), Notice.Level.INFO, a.session() + " asks: " + a.summary() + " (⌃3)",
+                Notice.approval(a.id()));
         return new Transition(next, List.of(new Effect.DesktopNotify(a.session() + " needs approval", a.summary())));
     }
 
@@ -708,7 +863,7 @@ public final class Reducer {
         if (a.isEmpty()) {
             return Transition.of(s);
         }
-        AppState next = s.withApprovals(s.approvals().stream().filter(x -> x.id() != i.id()).toList());
+        AppState next = clear(s.withApprovals(s.approvals().stream().filter(x -> x.id() != i.id()).toList()), Notice.approval(i.id()));
         return new Transition(next, List.of(new Effect.ResolveApproval(a.get(), i.decision())));
     }
 
@@ -717,12 +872,17 @@ public final class Reducer {
             return Transition.of(s);
         }
         AppState next = s.withApprovals(s.approvals().stream().filter(x -> x.id() != i.id()).toList());
-        return Transition.of(notice(next, Notice.Level.WARN, "Approval withdrawn: " + i.reason()));
+        return Transition.of(notice(next, Notice.Level.WARN, "Approval withdrawn: " + i.reason(), Notice.approval(i.id())));
     }
 
     // ---- views
 
-    private Transition showView(AppState s, Intent.ShowView i) {
+    /** Longest view title kept; a session's title past it is clipped, so a tab never fills the window. */
+    static final int VIEW_TITLE_CHARS = 80;
+
+    private Transition showView(AppState s, Intent.ShowView shown) {
+        Intent.ShowView i = shown.title().length() <= VIEW_TITLE_CHARS ? shown
+                : new Intent.ShowView(shown.session(), shown.title().substring(0, VIEW_TITLE_CHARS - 1) + "…", shown.spec(), shown.placement());
         for (ViewState v : s.views()) {
             if (!v.pinned() && v.title().equals(i.title()) && v.session().equals(i.session()) && v.placement() == i.placement()) {
                 // the user's own command (session "") shows its view again; a session's update in place does not move the user
@@ -734,7 +894,52 @@ public final class Reducer {
         List<ViewState> views = new ArrayList<>(s.views());
         views.add(new ViewState(id, i.title(), i.spec(), i.placement(), false, i.session(), 1L));
         AppState next = s.withIdTaken().withViews(views);
-        return Transition.of(i.placement() == Placement.LOWER ? next.withLowerTab(LowerTab.view(id)) : next);
+        // a new view takes the lower panel for the user's own command or the session the user is looking at; a
+        // session working in another panel adds its tab without moving the user
+        boolean lookingAt = i.session().isEmpty() || i.session().equals(s.focusedPanel().session());
+        if (i.placement() == Placement.LOWER && lookingAt) {
+            return Transition.of(next.withLowerTab(LowerTab.view(id)));
+        }
+        return Transition.of(lookingAt ? next : notice(next, Notice.Level.INFO, i.session() + " opened " + i.title()));
+    }
+
+    /**
+     * What a session may change in the window, so it never moves the user away from another session's panel. Focus
+     * is not changed here: the panel to focus rides on the {@link Effect.Arrange} effect, which the shell applies once
+     * the user pauses typing, so keystrokes never land in a panel the user did not pick.
+     */
+    private Transition sessionLayout(AppState s, Intent.SessionLayout i) {
+        AppState next = s;
+        List<String> done = new ArrayList<>();
+        PanelId focus = null;
+        if (i.panel() != null) {
+            Optional<PanelState> target = s.panel(i.panel());
+            if (target.isPresent() && target.get().session().equals(i.session()) && !s.focused().equals(i.panel())) {
+                focus = i.panel();
+                done.add("will focus " + target.get().title() + " once you pause typing");
+            }
+        }
+        LowerTab laterTab = null;
+        if (i.tab() != null && focus != null) {
+            laterTab = i.tab(); // selected with the focus, once it is the session's panel the user looks at
+        } else if (i.tab() != null && s.focusedPanel().session().equals(i.session()) && !s.lowerTab().equals(i.tab())) {
+            next = next.withLowerTab(i.tab());
+            done.add("selected a tab");
+        }
+        boolean panes = i.layout() != null && !i.layout().changesNothing();
+        if (panes) {
+            done.add("arranged the panes");
+        }
+        List<Effect> effects = new ArrayList<>();
+        if (panes || focus != null) {
+            Layout base = panes ? i.layout() : Layout.KEEP;
+            effects.add(new Effect.Arrange(new Layout(base.sidebar(), base.sidePane(), base.lowerShare(), focus, laterTab, focus == null ? "" : i.session())));
+        }
+        if (done.isEmpty()) {
+            return Transition.of(s);
+        }
+        String undo = panes ? " (View ▸ Restore layout undoes it)" : "";
+        return new Transition(notice(next, Notice.Level.INFO, i.session() + " " + String.join(", ", done) + undo), effects);
     }
 
     private Transition closeView(AppState s, long id) {
@@ -828,15 +1033,50 @@ public final class Reducer {
 
     private Transition editPanel(AppState s, Intent.EditPanel i) {
         PanelId target = i.panel() != null ? i.panel() : s.focused();
-        if (s.panel(target).isEmpty()) {
+        Optional<PanelState> panel = s.panel(target);
+        if (panel.isEmpty()) {
             return Transition.of(notice(s, Notice.Level.ERROR, "No panel " + target));
         }
-        return new Transition(s, List.of(new Effect.EditPanelText(target, i.text(), i.mode())));
+        AppState next = s;
+        if (!i.session().isEmpty()) {
+            // a session's write into the user's editor is announced, so it never goes unnoticed
+            long lines = i.text().isEmpty() ? 0 : i.text().lines().count();
+            String what = switch (i.mode()) {
+                case REPLACE -> "replaced the text of " + panel.get().title() + " (⌘Z undoes)";
+                case INSERT -> "inserted " + lines + (lines == 1 ? " line" : " lines") + " in " + panel.get().title();
+                case APPEND -> "added " + lines + (lines == 1 ? " line" : " lines") + " to " + panel.get().title();
+                case CARET -> "typed " + lines + (lines == 1 ? " line" : " lines") + " at the caret in " + panel.get().title();
+            };
+            next = notice(s, Notice.Level.INFO, i.session() + " " + what);
+        }
+        return new Transition(next, List.of(new Effect.EditPanelText(target, i.text(), i.mode())));
     }
 
     // ---- notices
 
     private AppState notice(AppState s, Notice.Level level, String text) {
-        return s.withNotice(new Notice(level, text, clock.millis()));
+        return notice(s, level, text, "");
+    }
+
+    /**
+     * Records a notice in the history and shows it unless an error stands: an error stays on the status bar until
+     * the user dismisses it, a newer error replaces it, or a notice about the same subject replaces it.
+     */
+    private AppState notice(AppState s, Notice.Level level, String text, String subject) {
+        Notice n = new Notice(level, text, clock.millis(), subject);
+        List<Notice> history = new ArrayList<>(s.notices().size() + 1);
+        int from = Math.max(0, s.notices().size() + 1 - AppState.NOTICE_HISTORY);
+        history.addAll(s.notices().subList(from, s.notices().size()));
+        history.add(n);
+        Notice standing = s.notice();
+        boolean replaces = standing.isEmpty() || standing.level() != Notice.Level.ERROR || level == Notice.Level.ERROR
+                || !subject.isEmpty() && subject.equals(standing.subject());
+        return s.withNotices(replaces ? n : standing, history);
+    }
+
+    /** Clears the status bar's notice when it is about {@code subject}: the thing it reported on has moved on. */
+    private static AppState clear(AppState s, String subject) {
+        Notice n = s.notice();
+        return !n.isEmpty() && !subject.isEmpty() && subject.equals(n.subject()) ? s.withNotice(Notice.NONE) : s;
     }
 }

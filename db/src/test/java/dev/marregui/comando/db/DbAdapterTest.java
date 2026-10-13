@@ -61,8 +61,10 @@ class DbAdapterTest {
 
         Intent.SqlCompleted done = sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 1L, WAIT);
         assertThat(done.rows()).isEqualTo(1);
-        Intent.Notify notice = sink.await(Intent.Notify.class, WAIT);
-        assertThat(notice.text()).startsWith("2 statements ran");
+        Intent.SqlWarning warning = sink.await(Intent.SqlWarning.class, WAIT);
+        assertThat(warning.requestId()).isEqualTo(1L);
+        assertThat(warning.failed()).isFalse();
+        assertThat(warning.text()).startsWith("2 statements ran");
     }
 
     @Test
@@ -71,6 +73,7 @@ class DbAdapterTest {
 
         sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 1L, WAIT);
         assertThat(sink.of(Intent.Notify.class)).isEmpty();
+        assertThat(sink.of(Intent.SqlWarning.class)).isEmpty();
     }
 
     @Test
@@ -193,11 +196,27 @@ class DbAdapterTest {
         Intent.ShowView view = sink.await(Intent.ShowView.class, WAIT);
         Schema.Table probe = schemas.of("local").tables().stream().filter(t -> t.name().equals("schema_probe")).findFirst().orElseThrow();
         assertThat(probe.columns()).extracting(Schema.Column::name).containsExactly("ts", "Mixed Case", "v");
-        assertThat(probe.columns()).extracting(Schema.Column::type).allSatisfy(t -> assertThat(t).isNotEmpty());
+        // QuestDB's own type names, not the PostgreSQL names its information schema maps them to
+        assertThat(probe.columns()).extracting(Schema.Column::type).containsExactly("TIMESTAMP", "SYMBOL", "DOUBLE");
         ViewSpec.TreeNode table = ((ViewSpec.Tree) view.spec()).root().children().stream()
                 .filter(n -> n.label().equals("schema_probe")).findFirst().orElseThrow();
         assertThat(table.link()).isEqualTo("comando-insert:SELECT * FROM schema_probe LIMIT 100;");
         assertThat(table.children().get(1).link()).isEqualTo("comando-insert:\"Mixed Case\"");
+    }
+
+    @Test
+    void aQuestDbWithMoreTablesThanTheLimitReadsTheInformationSchemaInstead() throws Exception {
+        SchemaRegistry schemas = new SchemaRegistry();
+        db.close();
+        db = new DbAdapter(sink, results, schemas, new DbSettings(0, 1_000, 500, 60, 1_000L), 0);
+        db.query(spec, "CREATE TABLE IF NOT EXISTS wide_probe (ts TIMESTAMP, s SYMBOL) TIMESTAMP(ts)", 1).get();
+        db.loadSchema(spec, true);
+        sink.await(Intent.ShowView.class, WAIT);
+
+        Schema.Table probe = schemas.of("local").tables().stream().filter(t -> t.name().equals("wide_probe")).findFirst().orElseThrow();
+        assertThat(probe.columns()).extracting(Schema.Column::name).containsExactly("ts", "s");
+        // the information schema's PostgreSQL names: one query, not one per table
+        assertThat(probe.columns()).extracting(Schema.Column::type).doesNotContain("SYMBOL");
     }
 
     @Test

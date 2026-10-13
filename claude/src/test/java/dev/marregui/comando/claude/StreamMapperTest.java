@@ -143,4 +143,19 @@ class StreamMapperTest {
         assertThat(mapper.accept("not json")).isEmpty();
         assertThat(blocks()).isEmpty();
     }
+
+    @Test
+    void endingRunningToolsClosesOnlyTheCallsWithoutAResult() {
+        mapper.accept("{\"type\":\"assistant\",\"message\":{\"id\":\"m1\",\"content\":[{\"type\":\"tool_use\",\"id\":\"a\",\"name\":\"Bash\",\"input\":{}},"
+                + "{\"type\":\"tool_use\",\"id\":\"b\",\"name\":\"Read\",\"input\":{}}]}}");
+        mapper.accept("{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"b\",\"content\":\"ok\"}]}}");
+
+        assertThat(mapper.endRunningTools()).isEqualTo(1);
+
+        List<Block.ToolCall> calls = blocks(Block.ToolCall.class);
+        assertThat(calls.get(0).status()).isEqualTo(Block.ToolStatus.ERROR);
+        assertThat(calls.get(0).resultText()).isEqualTo(StreamMapper.NO_RESULT);
+        assertThat(calls.get(1).status()).isEqualTo(Block.ToolStatus.DONE);
+        assertThat(mapper.endRunningTools()).isZero();
+    }
 }

@@ -40,7 +40,7 @@ public final class TreeWidget implements Widget<ViewSpec.Tree>, Copyable {
         if (n.link().startsWith(SourceLinks.SCHEME)) {
             context.intents().dispatch(new Intent.OpenFile("", SourceLinks.path(n.link()), SourceLinks.line(n.link())));
         } else if (n.link().startsWith(INSERT)) {
-            context.intents().dispatch(new Intent.EditPanel(null, n.link().substring(INSERT.length()), EditMode.INSERT));
+            context.intents().dispatch(new Intent.EditPanel(null, n.link().substring(INSERT.length()), EditMode.CARET));
         }
     }
 

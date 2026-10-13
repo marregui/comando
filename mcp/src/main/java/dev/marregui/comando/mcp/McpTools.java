@@ -1,10 +1,13 @@
 package dev.marregui.comando.mcp;
 
+import dev.marregui.comando.core.model.PermissionRules;
+
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
@@ -152,11 +155,12 @@ public final class McpTools {
                 case "ui_show_view" -> show(session, args.path("title").asText(args.path("type").asText("view")),
                         ViewSpecs.parse(args.path("type").asText(""), args.path("data")), args);
                 case "ui_set_editor" -> edit(session, args, EditMode.REPLACE);
-                case "ui_insert" -> edit(session, args, "append".equals(args.path("mode").asText("insert")) ? EditMode.APPEND : EditMode.INSERT);
+                // neither lands inside the user's text: append at the end, insert after the block the user ran last
+                case "ui_insert" -> edit(session, args, "insert".equals(args.path("mode").asText("append")) ? EditMode.INSERT : EditMode.APPEND);
                 case "ui_open_file" -> openFile(session, args);
                 case "ui_notify" -> notify(args);
                 case "ui_get_state" -> Outcome.ok(stateJson());
-                case "ui_set_layout" -> layout(args);
+                case "ui_set_layout" -> layout(session, args);
                 case "ui_close_view" -> closeView(session, args);
                 case "db_run_sql" -> runSql(session, args);
                 case "db_describe" -> describe(session, args);
@@ -184,13 +188,13 @@ public final class McpTools {
             return Outcome.fail("approve takes {tool_name, input}");
         }
         ApprovalKind kind = ApprovalKind.ofTool(tool);
-        ApprovalDecision decision = ask(session, kind, tool, input.toString(), Summaries.of(tool, input));
+        ApprovalDecision decision = ask(session, kind, tool, input.toString(), Summaries.of(tool, input), args.path("tool_use_id").asText(""));
         audit.record(session, "approval", tool, input.toString(), decision.toString());
         return Outcome.ok(permissionResult(tool, (ObjectNode) input, decision));
     }
 
     /** Puts a card in the inbox and waits for the user's answer, or denies at the deadline. */
-    private ApprovalDecision ask(String session, ApprovalKind kind, String tool, String inputJson, String summary) {
+    private ApprovalDecision ask(String session, ApprovalKind kind, String tool, String inputJson, String summary, String toolUseId) {
         long id = approvalIds.incrementAndGet();
         CompletableFuture<ApprovalDecision> answer = new CompletableFuture<>();
         pending.put(id, answer);
@@ -198,7 +202,7 @@ public final class McpTools {
         if (call != null) {
             approvalByCall.put(call, id);
         }
-        sink.dispatch(new Intent.ApprovalRequested(new Approval(id, session, kind, tool, inputJson, summary, clock.millis())));
+        sink.dispatch(new Intent.ApprovalRequested(new Approval(id, session, kind, tool, inputJson, summary, clock.millis(), toolUseId)));
         try {
             return answer.get(approvalTimeout.toMillis(), TimeUnit.MILLISECONDS);
         } catch (TimeoutException e) {
@@ -250,32 +254,34 @@ public final class McpTools {
             case ApprovalDecision.Allow a -> {
                 r.put("behavior", "allow");
                 r.set("updatedInput", input);
-                if (a.scope() != ApprovalDecision.Scope.ONCE) {
-                    ObjectNode update = r.putArray("updatedPermissions").addObject();
-                    update.put("type", "addRules");
-                    ObjectNode rule = update.putArray("rules").addObject();
-                    rule.put("toolName", tool);
-                    if (tool.equals("Bash") && input.hasNonNull("command")) {
-                        rule.put("ruleContent", input.path("command").asText());
-                    } else if (tool.equals("WebFetch") && hostOf(input.path("url").asText("")) != null) {
-                        rule.put("ruleContent", "domain:" + hostOf(input.path("url").asText(""))); // that host, not every URL
-                    }
-                    update.put("behavior", "allow");
-                    update.put("destination", a.scope() == ApprovalDecision.Scope.SESSION ? "session" : "localSettings");
+                if (a.scope() == ApprovalDecision.Scope.ONCE) {
+                    break;
                 }
+                ObjectNode update = r.putArray("updatedPermissions").addObject();
+                if (ApprovalKind.ofTool(tool) == ApprovalKind.PLAN) {
+                    // a plan approved beyond once switches the session to accepting edits, as the terminal's third plan choice does
+                    update.put("type", "setMode");
+                    update.put("mode", "acceptEdits");
+                    update.put("destination", "session");
+                    break;
+                }
+                PermissionRules.Rules rules = PermissionRules.rules(tool, field -> input.path(field).asText(""));
+                update.put("type", "addRules");
+                ArrayNode entries = update.putArray("rules");
+                for (PermissionRules.Rule rule : rules.rules()) {
+                    ObjectNode entry = entries.addObject();
+                    entry.put("toolName", rule.toolName());
+                    if (!rule.ruleContent().isEmpty()) {
+                        entry.put("ruleContent", rule.ruleContent());
+                    }
+                }
+                update.put("behavior", "allow");
+                // the card offers no Always for a rule that may not be saved; an Always for one still stays in the session
+                boolean save = a.scope() == ApprovalDecision.Scope.ALWAYS && rules.persistable();
+                update.put("destination", save ? "localSettings" : "session");
             }
         }
         return r.toString();
-    }
-
-    /** The host of {@code url}, or null when it has none. */
-    static String hostOf(String url) {
-        try {
-            String host = java.net.URI.create(url.strip()).getHost();
-            return host == null || host.isBlank() ? null : host.toLowerCase(Locale.ROOT);
-        } catch (IllegalArgumentException e) {
-            return null;
-        }
     }
 
     // ---- UI tools
@@ -292,7 +298,11 @@ public final class McpTools {
             return Outcome.fail("text is required");
         }
         PanelState panel = targetPanel(session, args.path("panel").asText(""));
-        sink.dispatch(new Intent.EditPanel(panel.id(), text.asText(), mode));
+        if (!panel.session().isEmpty() && !panel.session().equals(session) && !args.path("force").asBoolean(false)) {
+            return Outcome.fail("panel '" + panel.title() + "' belongs to session " + panel.session()
+                    + "; pass force: true only when the user asked you to write there");
+        }
+        sink.dispatch(new Intent.EditPanel(panel.id(), text.asText(), mode, session));
         return Outcome.ok(mode.name().toLowerCase(Locale.ROOT) + " in panel '" + panel.title() + "'");
     }
 
@@ -360,7 +370,7 @@ public final class McpTools {
      * Focuses a panel, selects a lower tab, shows or hides panes and moves the split; every argument is
      * optional. Every argument is checked before anything changes, so a refused call changed nothing.
      */
-    private Outcome layout(JsonNode args) {
+    private Outcome layout(String session, JsonNode args) {
         AppState s = state.get();
         String panel = args.path("panel").asText("");
         PanelState target = null;
@@ -385,21 +395,32 @@ public final class McpTools {
         }
         Layout layout = new Layout(toggle(args.path("sidebar")), toggle(args.path("side_pane")),
                 args.path("lower_share").isNumber() ? args.path("lower_share").asDouble() : Double.NaN);
-        StringBuilder done = new StringBuilder();
-        if (target != null) {
-            sink.dispatch(new Intent.FocusPanel(target.id()));
-            done.append("focused panel ").append(target.title()).append("; ");
+        if (target == null && lower == null && layout.changesNothing()) {
+            return Outcome.fail("nothing to change: pass panel, lower_tab, sidebar, side_pane or lower_share");
         }
-        if (lower != null) {
-            sink.dispatch(new Intent.SelectLowerTab(lower));
-            done.append("selected lower tab ").append(tab).append("; ");
+        // the user's window: a session may focus only its own panels, and select a tab only while the user looks at
+        // one of them; the user sees a notice and can undo an arrangement with View > Restore layout
+        if (target != null && !target.session().equals(session)) {
+            return Outcome.fail("panel " + target.title() + " is not bound to this session; a session may focus only its own panels");
+        }
+        sink.dispatch(new Intent.SessionLayout(session, target == null ? null : target.id(), lower, layout.changesNothing() ? null : layout));
+        StringBuilder done = new StringBuilder();
+        if (target != null && s.focused().equals(target.id())) {
+            done.append("panel ").append(target.title()).append(" already has the focus")
+                    .append(lower != null ? "; selected lower tab " + tab : "").append("; ");
+        } else if (target != null) {
+            // the focus, and a tab with it, wait for a pause in the user's typing
+            done.append("will focus panel ").append(target.title()).append(lower != null ? " and select lower tab " + tab : "")
+                    .append(" once the user pauses typing; ");
+        } else if (lower != null) {
+            boolean mine = s.focusedPanel().session().equals(session);
+            done.append(mine ? "selected lower tab " + tab : "did not select lower tab " + tab
+                    + ": the user is looking at a panel of another session").append("; ");
         }
         if (!layout.changesNothing()) {
-            sink.dispatch(new Intent.Arrange(layout));
-            done.append("arranged ").append(layout).append("; ");
+            done.append("arranged ").append(layout).append(" once the user pauses typing; ");
         }
-        return done.isEmpty() ? Outcome.fail("nothing to change: pass panel, lower_tab, sidebar, side_pane or lower_share")
-                : Outcome.ok(done.substring(0, done.length() - 2));
+        return Outcome.ok(done.substring(0, done.length() - 2));
     }
 
     /** Closes a view this session placed and the user has not pinned; the user's own views are not Claude's to close. */
@@ -510,7 +531,7 @@ public final class McpTools {
             input.put("connection", spec.name());
             input.put("sql", sql);
             ApprovalDecision d = ask(session, ApprovalKind.SQL_WRITE, "db_run_sql", input.toString(),
-                    "Run on " + spec.name() + ": " + firstLine(sql));
+                    "Run on " + spec.name() + ": " + firstLine(sql), "");
             audit.record(session, "approval", "db_run_sql", sql, d.toString());
             if (d instanceof ApprovalDecision.Deny deny) {
                 return Outcome.fail("The user denied the statement" + (deny.message().isBlank() ? "." : ": " + deny.message()));
@@ -518,9 +539,15 @@ public final class McpTools {
         }
         QueryPort.Rows rows;
         CompletableFuture<QueryPort.Rows> pending = db.query(spec, sql, maxRows);
+        // a schema change reloads the schema behind completion and an open explorer, as a panel's run does; a failed
+        // block may have run its earlier statements
+        boolean ddl = Classifier.anyDdl(sql);
         try {
             rows = pending.get(90, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
+            if (ddl) {
+                sink.dispatch(new Intent.SchemaChanged(spec.name()));
+            }
             return Outcome.fail(e.getCause().getMessage());
         } catch (TimeoutException e) {
             // withdrawn: a statement still queued behind the user's runs will not run after Claude was told it failed
@@ -530,6 +557,9 @@ public final class McpTools {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return Outcome.fail("interrupted");
+        }
+        if (ddl) {
+            sink.dispatch(new Intent.SchemaChanged(spec.name()));
         }
         if (args.path("show").asBoolean(false) && !rows.columns().isEmpty()) {
             sink.dispatch(new Intent.ShowView(session, args.path("title").asText(firstLine(sql)),

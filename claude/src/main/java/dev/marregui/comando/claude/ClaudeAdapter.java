@@ -89,6 +89,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         Run current;
         Path workDir;
         String branch = "";
+        /** The last start failed and said so; a prompt sent after it adds no second error. Cleared by a start. */
+        boolean startFailed;
 
         Session(String name) {
             this.name = name;
@@ -141,6 +143,14 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             s.mapper.prompt(text, origin);
             s.transcript.changed();
             if (s.current == null || !s.current.isAlive()) {
+                if (s.startFailed) {
+                    // the failed start already reported why, in the transcript and on the status bar: one error surface;
+                    // the prompt still says, plainly, that it went nowhere
+                    s.mapper.note(Block.NoteKind.INFO, "Not sent: the session could not start (the reason is above)");
+                    s.transcript.changed();
+                    sink.dispatch(new Intent.SessionTurnEnded(name, 0, -1.0, -1L, 0L, true, "session could not start"));
+                    return;
+                }
                 s.mapper.note(Block.NoteKind.ERROR, "Session is not running; the prompt was not sent");
                 s.transcript.changed();
                 sink.dispatch(new Intent.SessionTurnEnded(name, 0, -1.0, -1L, 0L, true, "session not running"));
@@ -193,6 +203,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             } catch (IOException e) {
                 s.mapper.note(Block.NoteKind.ERROR, "Cannot read the stored conversation: " + e.getMessage());
             }
+            s.mapper.endRunningTools(); // a call the stored conversation never answered will not be answered now
             s.mapper.note(Block.NoteKind.INFO, "Stored conversation " + spec.claudeSessionId() + " loaded; start the session to continue it");
             s.transcript.changed();
             String b = GitBranch.of(Path.of(spec.workDir()));
@@ -227,6 +238,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
 
     private void startProcess(Session s, SessionSpec spec) {
         if (s.current != null && s.current.isAlive()) {
+            s.startFailed = false;
             sink.dispatch(new Intent.SessionStarted(s.name));
             return;
         }
@@ -239,6 +251,12 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         Run run = new Run();
         try {
             run.mcpConfig = writeConfig(s.name, run);
+        } catch (IOException e) {
+            // the run directory, not the executable: COMANDO_CLAUDE would not help
+            failStart(s, run, "cannot write the MCP configuration in " + settings.runDir() + ": " + e.getMessage());
+            return;
+        }
+        try {
             var argv = ClaudeCommand.of(settings.executable(), spec, newId, run.mcpConfig, settings.uiInstructions());
             s.workDir = workDir;
             s.mapper.resetStreams();
@@ -246,6 +264,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                     line -> s.run(() -> onLine(s, line)),
                     code -> s.run(() -> onExit(s, run, code)));
             s.current = run;
+            s.startFailed = false;
             LOG.log(System.Logger.Level.INFO, "claude started [session=" + s.name + ", pid=" + run.process.pid() + ", mode=" + spec.startMode() + ']');
             s.mapper.note(Block.NoteKind.INFO, switch (spec.startMode()) {
                 case NEW -> "New conversation " + newId;
@@ -256,7 +275,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             sink.dispatch(new Intent.SessionStarted(s.name));
             refreshBranch(s);
         } catch (IOException e) {
-            failStart(s, run, "cannot start " + settings.executable() + ": " + e.getMessage());
+            failStart(s, run, "cannot start " + settings.executable() + ": " + e.getMessage()
+                    + "; install Claude Code, or set COMANDO_CLAUDE to its path");
         }
     }
 
@@ -265,6 +285,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             deleteConfig(run);
             mcp.unregister(s.name, run.ticket);
         }
+        s.startFailed = true;
         s.mapper.note(Block.NoteKind.ERROR, message);
         s.transcript.changed();
         sink.dispatch(new Intent.SessionExited(s.name, -1, message));
@@ -290,6 +311,9 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         s.transcript.changed();
         if (s.current != run) {
             return; // a newer process already runs for this session
+        }
+        if (s.mapper.endRunningTools() > 0) {
+            s.transcript.changed();
         }
         s.current = null;
         mcp.unregister(s.name, run.ticket);

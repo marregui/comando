@@ -17,6 +17,13 @@ dependencies {
     testImplementation(libs.archunit)
 }
 
+// Help ▸ Tutorial shows the tutorial from the docs, so the app and the docs never disagree.
+tasks.processResources {
+    from(rootProject.file("docs/guides/tutorial.md")) {
+        into("dev/marregui/comando/ui/help")
+    }
+}
+
 // The transcript renderer's frame-time gate: ./gradlew :ui:transcriptGate
 tasks.register<JavaExec>("transcriptGate") {
     group = "verification"

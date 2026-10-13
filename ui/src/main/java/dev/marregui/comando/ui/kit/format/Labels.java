@@ -28,6 +28,18 @@ public final class Labels {
         return s / 86_400 + " d";
     }
 
+    /** A running duration: "4 s", "2 min 05 s", "1 h 02 min". */
+    public static String elapsed(long millis) {
+        long s = Math.max(0, millis / 1000);
+        if (s < 60) {
+            return s + " s";
+        }
+        if (s < 3600) {
+            return String.format(Locale.ROOT, "%d min %02d s", s / 60, s % 60);
+        }
+        return String.format(Locale.ROOT, "%d h %02d min", s / 3600, (s % 3600) / 60);
+    }
+
     public static String usd(double usd) {
         if (usd <= 0) {
             return "$0";

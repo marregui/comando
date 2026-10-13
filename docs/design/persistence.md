@@ -9,6 +9,8 @@ The data root is the directory in `-Dcomando.home`, else the environment variabl
 | `connections.json` | connection specs; passwords empty when the keychain holds them | `Store` |
 | `sessions.json` | session specs, including the conversation id that makes the next start a resume | `Store` |
 | `panels.json` | each panel's id, title, connection and session binding, and editor text | `Store` |
+| `prompts.json` | each session's last 200 prompts from the prompt bar, shared by the panels bound to it | `Store` |
+| `comando.lock` | a file lock held while comando runs, so a second comando on the same data root says so and exits; the operating system releases it, also after a crash | `Main` |
 | `run/` | one MCP configuration per running session, mode `0600`, deleted when the process exits | `ClaudeAdapter` |
 | `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision | `AuditLog` |
 | `logs/comando-<n>.log` | the application log, 5 files of 5 MB, rotated | `Logging` |
@@ -20,14 +22,14 @@ Outside the data root:
 | Location | Holds |
 |---|---|
 | macOS login keychain, service `comando` | connection passwords, one item per connection name ([Approvals and safety](approvals-and-safety.md#5-credentials)) |
-| Java preferences, node `dev/marregui/comando` | window size and position, divider positions, the side pane's state; tests use another node through `comando.prefsNode` |
+| Java preferences, node `dev/marregui/comando` | window size, position and maximised state, divider positions, whether the sidebar shows and the side pane is hidden, the last Gradle tasks, recording, jfrq arguments and export directory; tests use another node through `comando.prefsNode` |
 | `~/.claude/projects/` | Claude Code's conversations; comando reads them and never writes them |
 
 ## 2. Atomic store files
 
 `JsonFile` writes a file to a temporary file in the same directory, then moves it over the old one with `ATOMIC_MOVE`. A crash leaves the old content or the new, never a torn file. A file that cannot be parsed at start is renamed to `<name>.corrupt-<epoch ms>` and comando starts without it, so the next save does not destroy what the user may want to recover.
 
-`Store` runs every write from an immutable snapshot of the state, so a save never races an edit. Sessions and panels are written on one thread; connections on another, because a connection save talks to the keychain, which may wait on an unlock prompt, and panel text must not queue behind it. Connection and session changes are written at once. Panel text is written 800 ms after the last change. `Store.close()` writes what is pending.
+`Store` runs every write from an immutable snapshot of the state, so a save never races an edit. Sessions and panels are written on one thread; connections on another, because a connection save talks to the keychain, which may wait on an unlock prompt, and panel text must not queue behind it. Connection and session changes are written at once. Panel text is written 800 ms after the last change, prompts likewise. `Store.close()` writes what is pending.
 
 ## 3. What comes back after a restart
 
@@ -36,7 +38,8 @@ Outside the data root:
 | connections | closed; a password is read from the keychain when the connection is loaded; when the keychain cannot be asked, the connection loads without it and the stored item is kept |
 | sessions | closed; a session with a conversation id shows its stored transcript, read from Claude Code's file without starting a process |
 | panels | their text and bindings; a binding to a name that no longer exists is dropped; with no panel left, one panel named `scratch` with the welcome text |
-| window | size, position, dividers; a side pane divider outside the window is ignored |
+| window | size, position, maximised state, dividers, sidebar and side pane visibility; saved a second after each resize or move and at quit; bounds are kept on a screen that still exists, else the window opens centred on the main screen; a side pane divider outside the window is ignored |
+| prompt history | each session's prompts, walked with ↑ in the prompt bar |
 | views, results, terminals | not restored; they belong to one run |
 
 Nothing is sent to a session until the user sends something; the first prompt resumes the conversation.

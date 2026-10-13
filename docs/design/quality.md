@@ -2,18 +2,18 @@
 
 ## 1. Test suites
 
-`./gradlew build` compiles every module with `-Xlint:all -Werror` (except `serial`, `processing`, `this-escape`) and runs the unit and adapter tests. Counts from the build of 2026-10-12:
+`./gradlew build` compiles every module with `-Xlint:all -Werror` (except `serial`, `processing`, `this-escape`) and runs the unit and adapter tests. Counts from the build of 2026-10-13:
 
 | Module | Classes | Tests | What they cover |
 |---|---|---|---|
-| `core` | 9 | 102 | the reducer (one test per behaviour), the state loop and its drain on close, the classifier and block finder, resource kinds and specs, the transcript's publication, console output past its cap, formatting, the JFR intent event |
-| `db` | 2 | 17 | lanes against an embedded QuestDB: runs stored by column, nulls, the row cap, DDL, server errors, cancel of a running and of a queued run, connect failures, Claude's capped rows, schema loading, tests, close; against PostgreSQL in Docker through Testcontainers (skipped without Docker): type mapping, cancel of `pg_sleep`, schema from `information_schema`, the describe fallback |
-| `claude` | 6 | 22 | the stream mapper on recorded CLI streams, the command line, the adapter against a fake CLI script, the session catalogue, git branch reading, version checks |
-| `mcp` | 2 | 51 | the server over HTTP: authentication, Origin, protocol versions, tokens per process, every tool, tool scoping to the caller's panels and views, approvals, cancelled calls, host-scoped WebFetch rules, the SQL policy |
+| `core` | 11 | 142 | the reducer (one test per behaviour; notice subjects, history and clearing, session layout limits, reopened panels), the state loop and its drain on close, the classifier and block finder, resource kinds and specs, the transcript's publication, console output past its cap, formatting, the JFR intent event |
+| `db` | 2 | 20 | lanes against an embedded QuestDB: runs stored by column, nulls, the row cap, DDL, server errors, cancel of a running and of a queued run, connect failures, Claude's capped rows, schema loading, tests, close; against PostgreSQL in Docker through Testcontainers (skipped without Docker): type mapping, cancel of `pg_sleep`, schema from `information_schema`, the describe fallback |
+| `claude` | 6 | 27 | the stream mapper on recorded CLI streams, the command line, the adapter against a fake CLI script, the session catalogue, git branch reading, version checks |
+| `mcp` | 3 | 63 | the server over HTTP: authentication, Origin, protocol versions, tokens per process, every tool, tool scoping to the caller's panels and views, approvals, cancelled calls, the permission rules derived per tool, the plan's `setMode`, the SQL policy |
 | `tools` | 1 | 11 | Gradle runs and test reports, cancel and SIGKILL escalation, output held by an orphan, a console released after its view closed, an unreadable directory, shell-like argument splitting, jfrq, JFR recordings, the scratchpad tree |
-| `ui` | 17 | 50 | import rules (ArchUnit), Markdown to paragraphs and to HTML (images as alt text), the HTML guard against Swing, attachments without blank lines, the transcript canvas, diffs, completion and its disposal, plan trees, result views and live plots, plot time ticks, the dialog's form merge, sorted selection and CSV export, source links, the pseudo-terminal, the external editor, the EDT watchdog |
-| `app` | 3 | 14 | the store (atomic files, corrupt files kept aside, keychain migration, an unreadable keychain item kept, both keychain answer forms, panel saves not queued behind a keychain prompt), the intent log; 2 skipped by default: the real keychain and the window replay |
-| total | 40 | 267 | 0 failures |
+| `ui` | 34 | 182 | import rules (ArchUnit), the approval cards (keys, focus, the two-press Always, questions), the transcript's folding, following and find, the resource dialogs at their default size, the terminal's input gate and foreground job on a real pty, the editor's tint, inserts and error underline, the prompt bar's history and refusals, palette ranking and key glyphs, key forwarding, Markdown to paragraphs and to HTML (images as alt text), the HTML guard against Swing, attachments without blank lines, the transcript canvas, diffs, completion and its disposal, plan trees, result views and live plots, plot time ticks, the dialog's form merge, sorted selection and CSV export, source links, the pseudo-terminal, the external editor, the EDT watchdog |
+| `app` | 6 | 20 | the store (atomic files, corrupt files kept aside, keychain migration, an unreadable keychain item kept, both keychain answer forms, panel saves not queued behind a keychain prompt), the intent log; 2 skipped by default: the real keychain and the window replay |
+| total | 63 | 465 | 0 failures |
 
 Two tests touch the user's machine and are opt-in:
 

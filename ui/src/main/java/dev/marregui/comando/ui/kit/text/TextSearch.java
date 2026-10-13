@@ -35,4 +35,10 @@ public final class TextSearch {
         context.setSearchFor("");
         SearchEngine.markAll(area, context);
     }
+
+    /** Clears the marks and puts the caret at the start of the current match, where the next search starts. */
+    public void rewind() {
+        clear();
+        area.setCaretPosition(area.getSelectionStart());
+    }
 }

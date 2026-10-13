@@ -8,16 +8,28 @@ Claude Code asks comando's `approve` tool before each tool call its permission r
 
 | Kind | Raised by | Card shows | Answers |
 |---|---|---|---|
-| tool | Bash, Edit, Write, an MCP tool | a one-line summary; the command, or the edit as a diff | Allow once (⏎ or A), For session (S), Always (L), Deny (D or Esc) |
-| question | `AskUserQuestion` | each question with its options (radio buttons, or check boxes when it allows several) and a free-text field | Answer (⏎), Skip (Esc) |
-| plan | `ExitPlanMode` | the plan rendered | Approve plan (⏎), Keep planning (Esc) |
+| tool | Bash, Edit, Write, an MCP tool | a one-line summary; the command, or the edit as a diff; the line "Always: <rules>", or "For session: <rules>" for a tool whose rules are not saved | Allow once (⏎ or A), For session (S), Always (L twice; Bash and WebFetch only), Deny (D or Esc) |
+| question | `AskUserQuestion` | each question with its options and their descriptions (radio buttons, or check boxes when it allows several), none chosen, and a free-text field | Answer (⏎, once every question has an answer), Skip (Esc) |
+| plan | `ExitPlanMode` | the plan rendered | Approve plan (⏎), Approve, auto-accept edits (button), Keep planning (Esc) |
 | SQL write | `db_run_sql` with a statement that is not read-only | the connection and the statement | Run (⏎), Deny (D or Esc) |
 
 - A denial carries the note typed on the card, so Claude learns why.
-- "For session" and "Always" return an `addRules` permission update to Claude Code, with destination `session` or `localSettings`. For Bash the rule names the exact command; for WebFetch it names the host (`domain:docs.example.org`); for any other tool it names the tool, so "Always" on an Edit allows every later Edit in that project.
+- "For session" and "Always" return an `addRules` permission update to Claude Code, with destination `session` or `localSettings`. The rules follow how Claude Code matches them, and never allow more than the command could do:
+
+  | Tool | Rules | Always |
+  |---|---|---|
+  | Bash | one rule per subcommand of `&&`, `\|\|`, `;`, `\|`, `&` and newlines, as Claude Code splits and saves them; the wrappers Claude Code strips before matching (`timeout`, `time`, `nice`, `nohup`, `stdbuf`, `command`, `builtin`, `noglob`) come off first. Each rule is the command's prefix with `:*`: one word (`Bash(ls:*)`), two for a command with subcommands such as `git`, `npm`, `./gradlew` (`Bash(git commit:*)`), three for a runner (`npm run test:*`, `uv run pytest:*`) and for `python -m <module>`. The exact command instead for what runs other commands or code (`sudo`, `su`, `env`, `xargs`, `eval`, `source` and `.`, `command`, shells, interpreters and runtimes without `-m` (`python`, `node`, `java`, `awk`, `osascript`, …), `npx`, `ssh`, `rm`, the exec wrappers `watch`, `setsid`, `ionice`, `flock`, `docker exec`/`run`, `docker compose exec`/`run`, `kubectl exec`, `find` with `-exec` or `-delete`), for a nested command (`$(`, backticks, `<(`, `>(`), for a command that feeds a here-document (`<<EOF`: its lines are data, so the whole command is one exact rule), and when a prefix word holds a quote, a `$`, an `=` or is an option where the subcommand would be | yes |
+  | WebFetch | `domain:<host>` | yes |
+  | Edit, Write, MultiEdit, NotebookEdit | `Edit(//abs/dir/**)`, the edited file's directory; Claude Code consults only `Edit` path rules for every edit tool | no: for the session only, as Claude Code does for file edits |
+  | Read, Glob, Grep | `Read(//abs/dir/**)` | no |
+  | MCP tools, any other tool | the tool | no |
+
+  The card prints the rules under its buttons ("Always: …", or "For session: …" where Always is not offered), and each scope button's tooltip names the rule and where it is saved. Because "Always" writes the project's local settings, its key must be pressed twice within 3 s ("Press L again to always allow …"); a click on the button opens a confirm row in the card. Esc cancels a pending Always before it denies.
+- "Approve, auto-accept edits" on a plan answers with a `setMode` update, mode `acceptEdits`, destination `session`.
 - A question's answers go back in `updatedInput.answers`, keyed by question text; several chosen options are joined with ", ".
 - A card is withdrawn and its call denied when the call can no longer use the answer: Claude Code cancels the call (`notifications/cancelled`), the session's process exits, or the session is removed. A statement card is also withdrawn when a turn ends with nothing queued, because answering Run after an interrupt would execute the statement after the fact; other cards stay, since a background agent may still wait on them.
-- The keys act only on the focused card; ↑ and ↓ move between cards.
+- The keys act on the card holding the keyboard, wherever in the card it is; a click on the card's text gives it the keyboard. In the note field letters type; ⏎ denies with the note once it holds text, and gives the primary answer while it is empty; ⌘⏎ denies with the note; Esc returns to the card. In "Other answer" ⏎ answers. ↑ and ↓ move between cards, except inside a code, diff or plan viewer, where they move the caret. After an answer given in the card, the keyboard goes to the next card, else the previous one; when the card holding the keyboard is withdrawn, or leaves for any other reason, the keyboard goes to the Approvals list itself, where no key answers anything. The keyboard is never taken from outside the Approvals tab.
+- While a card waits, the tool call it holds reads "waiting for your approval · ⌃3" in the Session tab, and the status bar names the request until it is answered. The card's age ("2 min ago") updates every 30 s.
 - A card nobody answers is withdrawn after 55 minutes and the call is denied with that reason. Claude Code's per-server timeout is 60 minutes, so comando answers first.
 - At exit every waiting card is denied ("comando is shutting down"), so no call outlives the server.
 

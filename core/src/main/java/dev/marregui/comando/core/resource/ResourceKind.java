@@ -1,5 +1,7 @@
 package dev.marregui.comando.core.resource;
 
+import dev.marregui.comando.core.state.AppState;
+
 import java.util.List;
 import java.util.Map;
 
@@ -32,4 +34,33 @@ public interface ResourceKind<S> {
 
     /** A new spec with defaults. */
     S template(String name);
+
+    /** The {@link dev.marregui.comando.core.state.Notice#subject() subject} of notices about the resource {@code name}. */
+    String noticeSubject(String name);
+
+    /** The question asked before removing {@code name}, naming what the removal does in state {@code s}. */
+    String removalQuestion(AppState s, String name);
+
+    /** Whether a form holding {@code values} opens its "Advanced" section. */
+    default boolean showAdvanced(Map<String, String> values) {
+        return false;
+    }
+
+    /** A warning about what the form's values will do, or empty. */
+    default String advice(Map<String, String> values) {
+        return "";
+    }
+
+    /** "a, b and c". */
+    static String sentence(List<String> parts) {
+        if (parts.size() <= 1) {
+            return String.join("", parts);
+        }
+        return String.join(", ", parts.subList(0, parts.size() - 1)) + " and " + parts.getLast();
+    }
+
+    /** "1 panel", "2 panels". */
+    static String count(int n, String noun) {
+        return n + " " + noun + (n == 1 ? "" : "s");
+    }
 }

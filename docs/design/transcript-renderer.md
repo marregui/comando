@@ -26,10 +26,11 @@ Swing's HTML renderer (`HTMLEditorKit`) supports HTML 3.2, lays out the whole do
 |---|---|
 | prompt | the text in a bubble, with the panel it came from |
 | text | the paragraphs; code highlighted with the editors' colours; tables as grids |
-| thinking | collapsed to a line with the token count; opens on click |
-| tool card | an icon for running, done or failed; a one-line summary of the input; open: the input (shell command, edit as a diff, write as a diff from empty, subagent prompt), the result clipped to 400 lines, and the subagent's blocks |
-| note | an icon by kind (error, denial, retry, interrupt, command, hook) and the text, clipped to 600 characters |
-| turn end | duration and cost |
+| thinking | open while it streams, then collapsed to a line with the token count, unless the user clicked it; opens on click |
+| tool card | an icon for running, done or failed; a one-line summary of the input; "running · 12 s" while it runs (a 1 s repaint, only while a card runs and the tab shows), "waiting for your approval · ⌃3" in the warn colour while an approval card holds the call; open: the input (shell command, edit as a diff, write as a diff from empty, subagent prompt), the result clipped to 400 lines, and the subagent's blocks. A card opens by itself for edits, errors and running subagents, and never closes by itself |
+| note | an icon by kind (error, denial, retry, interrupt, command) and the first line with ▸; a click opens the full text, up to 400 lines; error notes start open |
+| hook group | consecutive hook outputs as one closed line, "hooks · UserPromptSubmit, SessionStart (3)" ("hook · SessionStart" for one); open, each hook's text; a JSON reply that only adds context shows as `name: additionalContext`, any other reply raw |
+| turn end | duration and cost, selectable; an interrupted turn reads muted, "interrupted · 12.0 s · $0.120 total" |
 
 Layout of the canvas at a width:
 
@@ -41,26 +42,28 @@ Painting walks the items whose vertical range intersects the clip, found by bina
 
 ## 4. The widget
 
-`TranscriptWidget` loads the last 2 000 blocks when it opens a transcript, with a button that adds the 2 000 before; blocks that arrive later are appended, so a long-running session grows past 2 000 on the canvas. On each change it compares every shown block with the store by identity, updates the items whose block was replaced, appends the new ones, and keeps following the end when the view was at the end. The shell renders transcript changes through a `Coalescer`, so a burst of stream deltas from the session strand is one update.
+`TranscriptWidget` loads the last 2 000 blocks when it opens a transcript, with a button that adds the 2 000 before; blocks that arrive later are appended, so a long-running session grows past 2 000 on the canvas. On each change it compares every shown block with the store by identity, updates the items whose block was replaced, appends the new ones, and keeps following the end when the view was at the end. Only a scroll by the user stops following; a prompt sent from a panel follows again, and while the view does not follow, a "↓ Latest" button at the bottom right returns to the end. The shell renders transcript changes through a `Coalescer`, so a burst of stream deltas from the session strand is one update.
 
-Selection runs across blocks with the mouse; ⌘⇧C copies the selection, or the loaded blocks as Markdown; ⌘F finds with every match marked; ⌘= and ⌘- change the style's font size, which makes every layout stale. A `path:line` link opens the file in the side pane at the line; a web link opens in the browser.
+Selection runs across blocks with the mouse; ⌘⇧C copies the selection, or the loaded blocks as Markdown, each tool call as `**Name** · summary` with its input and its result (clipped to 400 lines) fenced, and each turn end as an italic footer; ⌘F finds with every match marked, opening the cards, notes, hook groups and thinking that hold a match, and closing them again when find closes, except the one with the current match and any the user toggled meanwhile; ⌘= and ⌘- change the style's font size, which makes every layout stale. A `path:line` link opens the file in the side pane at the line; a web link opens in the browser.
 
 ## 5. The frame-time gate
 
-`./gradlew :ui:transcriptGate` replays `SyntheticSession` from `testkit` (8 turns, 40 tool calls including a subagent, Markdown with headings, lists, code, tables and source references, about 10 k tokens) one stream delta of 16 characters per frame. Each frame applies the change, lays out, and paints a 1200 × 800 viewport at the end, as the widget does while following a turn. The task fails when the 99th percentile exceeds 16 ms.
+`./gradlew :ui:transcriptGate` replays `SyntheticSession` from `testkit` (8 turns, 40 tool calls including a subagent, Markdown with headings, lists, code, tables and source references, about 10 k tokens) one stream delta of 16 characters per frame. Each frame applies the change, lays out, and paints a 1200 × 800 viewport at the end, as the widget does while following a turn. It then streams a 9 000-character thinking block, open, one delta per frame: an open thinking block keeps one text box per line and lays out only the last. The task fails when either 99th percentile exceeds 16 ms.
 
-Run of 2026-10-12, Apple silicon, JDK 25, headless:
+Run of 2026-10-13, Apple silicon, JDK 25, headless:
 
 | Measure | Value |
 |---|---|
 | Frames | 1 798 |
-| Frame p50 | 1.16 ms |
-| Frame p99 | 3.26 ms |
-| Frame max | 6.05 ms |
+| Content height | 11 455 px |
+| Frame p50 | 1.13 ms |
+| Frame p99 | 3.22 ms |
+| Frame max | 8.58 ms |
 | Frames over 16 ms | 0 |
-| Width change, visible part laid out and painted | 7.19 ms |
-| Idle pass after it, in 8 ms slices | 24.86 ms |
-| Full exact relayout | 67.02 ms |
-| Paint after a scroll | 8.00 ms |
+| Open thinking streamed, 562 frames: p50 / p99 / max | 0.66 / 1.29 / 2.72 ms |
+| Width change, visible part laid out and painted | 6.71 ms |
+| Idle pass after it, in 8 ms slices | 25.25 ms |
+| Full exact relayout | 68.14 ms |
+| Paint after a scroll | 5.73 ms |
 
 `TranscriptShot` (test sources) paints the synthetic session to a PNG for visual checks; `docs/images/transcript.png` is its output.

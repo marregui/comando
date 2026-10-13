@@ -16,6 +16,7 @@ import javax.swing.JButton;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.JRootPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
@@ -46,7 +47,10 @@ public final class ImportSessionsDialog {
 
     private static final String[] COLUMNS = {"Title", "Directory", "Branch", "Last prompt", "Modified", "Size"};
 
-    private final JDialog dialog;
+    private final Window owner;
+    private final JPanel content = new JPanel(new BorderLayout(0, Theme.GAP));
+    private final JButton importButton = new JButton("Import selected");
+    private JDialog dialog;
     private final IntentSink intents;
     private final Supplier<List<StoredConversation>> catalogue;
     private final Model model = new Model();
@@ -61,7 +65,7 @@ public final class ImportSessionsDialog {
     public ImportSessionsDialog(Window owner, IntentSink intents, Supplier<List<StoredConversation>> catalogue) {
         this.intents = intents;
         this.catalogue = catalogue;
-        dialog = new JDialog(owner, "Import stored conversations");
+        this.owner = owner;
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         // titles and prompts come from stored conversations: shown as text, never as HTML
         for (Class<?> type : new Class<?>[]{Object.class, String.class}) {
@@ -88,11 +92,10 @@ public final class ImportSessionsDialog {
                 applyFilter();
             }
         });
-        JButton importButton = new JButton("Import selected");
         importButton.putClientProperty("JButton.buttonType", "default");
         importButton.addActionListener(e -> importSelected());
         JButton close = new JButton("Close");
-        close.addActionListener(e -> dialog.setVisible(false));
+        close.addActionListener(e -> hide());
         JPanel top = new JPanel(new BorderLayout(Theme.GAP, 0));
         top.add(filter, BorderLayout.CENTER);
         JPanel south = new JPanel(new BorderLayout());
@@ -102,22 +105,36 @@ public final class ImportSessionsDialog {
         buttons.add(importButton);
         south.add(info, BorderLayout.CENTER);
         south.add(buttons, BorderLayout.EAST);
-        JPanel root = new JPanel(new BorderLayout(0, Theme.GAP));
-        root.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
-        root.add(top, BorderLayout.NORTH);
-        root.add(overlay, BorderLayout.CENTER);
-        root.add(south, BorderLayout.SOUTH);
-        dialog.setContentPane(root);
-        dialog.setSize(new Dimension(1100, 560));
-        dialog.getRootPane().registerKeyboardAction(e -> dialog.setVisible(false),
-                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        content.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
+        content.add(top, BorderLayout.NORTH);
+        content.add(overlay, BorderLayout.CENTER);
+        content.add(south, BorderLayout.SOUTH);
+        content.setPreferredSize(new Dimension(1100, 560));
         int[] widths = {220, 220, 120, 360, 80, 60};
         for (int i = 0; i < widths.length; i++) {
             table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
         }
     }
 
+    /** ⏎ imports the selection (or the only row the filter leaves); Esc closes. */
+    void install(JRootPane rootPane) {
+        rootPane.setDefaultButton(importButton);
+        rootPane.registerKeyboardAction(e -> hide(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
+    }
+
+    private void hide() {
+        if (dialog != null) {
+            dialog.setVisible(false);
+        }
+    }
+
     public void show(AppState s) {
+        if (dialog == null) {
+            dialog = new JDialog(owner, "Import stored conversations");
+            dialog.setContentPane(content);
+            install(dialog.getRootPane());
+            dialog.pack();
+        }
         known = new HashSet<>();
         knownNames = new HashSet<>();
         for (SessionState x : s.sessions()) {
@@ -166,10 +183,14 @@ public final class ImportSessionsDialog {
     }
 
     private void importSelected() {
+        int[] selected = table.getSelectedRows();
+        if (selected.length == 0 && table.getRowCount() == 1) {
+            selected = new int[]{0};
+        }
         List<SessionSpec> specs = new ArrayList<>();
         // a title equal to an existing session's name gets a number, so the import is not skipped as a duplicate
         Set<String> names = new HashSet<>(knownNames);
-        for (int viewRow : table.getSelectedRows()) {
+        for (int viewRow : selected) {
             StoredConversation c = model.rows.get(table.convertRowIndexToModel(viewRow));
             String name = uniqueName(nameFor(c), names);
             names.add(name);
@@ -177,7 +198,7 @@ public final class ImportSessionsDialog {
         }
         if (!specs.isEmpty()) {
             intents.dispatch(new Intent.ImportSessions(specs));
-            dialog.setVisible(false);
+            hide();
         }
     }
 

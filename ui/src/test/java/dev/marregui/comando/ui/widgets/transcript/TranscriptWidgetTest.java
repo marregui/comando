@@ -1,11 +1,16 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.ApprovalKind;
+import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.SyntheticSession;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -53,5 +58,46 @@ class TranscriptWidgetTest {
         fill(second, 0, 10);
         widget.render(new TranscriptView("b", second));
         assertThat(widget.following()).isTrue();
+    }
+
+    @Test
+    void aPromptSentFromAPanelFollowsAgainAndHidesTheLatestButton() {
+        Transcript t = new Transcript();
+        fill(t, 0, 40);
+        widget.render(new TranscriptView("s", t));
+        widget.jumpToLastPrompt();
+        assertThat(widget.following()).isFalse();
+        assertThat(widget.latestShown()).as("not following: the way back to the end shows").isTrue();
+
+        // a prompt replayed from history does not move the view
+        t.append(new Block.UserPrompt("from history", "", ""));
+        widget.render(new TranscriptView("s", t));
+        assertThat(widget.following()).isFalse();
+
+        t.append(new Block.UserPrompt("go", "main", ""));
+        widget.render(new TranscriptView("s", t));
+        assertThat(widget.following()).isTrue();
+        assertThat(widget.latestShown()).isFalse();
+    }
+
+    @Test
+    void aWaitingApprovalMarksItsToolCallAndSurvivesAReload() {
+        Transcript t = new Transcript();
+        t.append(new Block.UserPrompt("clean", "main", ""));
+        t.append(new Block.ToolCall("tu1", "Bash", "{\"command\":\"rm -rf build\"}", "", Block.ToolStatus.RUNNING, ""));
+        widget.render(new TranscriptView("s", t));
+        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("running");
+
+        List<Approval> waiting = List.of(new Approval(7, "s", ApprovalKind.TOOL, "Bash", "{}", "rm -rf build", 0L, "tu1"));
+        widget.setWaiting(waiting);
+        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("waiting for your approval · ⌃3");
+
+        // another session's transcript, then back: the canvas is rebuilt and the mark comes back with it
+        widget.render(new TranscriptView("other", new Transcript()));
+        widget.render(new TranscriptView("s", t));
+        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("waiting for your approval · ⌃3");
+
+        widget.setWaiting(List.of());
+        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("running");
     }
 }

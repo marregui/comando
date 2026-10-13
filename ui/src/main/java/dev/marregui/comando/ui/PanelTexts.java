@@ -11,4 +11,12 @@ public interface PanelTexts {
     void changed(PanelId panel, String text);
 
     void forget(PanelId panel);
+
+    /**
+     * Writes the panels now rather than after the quiet period; completes with null once written, or with the
+     * reason the write failed.
+     */
+    default java.util.concurrent.CompletableFuture<String> saveNow() {
+        return java.util.concurrent.CompletableFuture.completedFuture(null);
+    }
 }
