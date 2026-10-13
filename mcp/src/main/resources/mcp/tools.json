@@ -1,0 +1,351 @@
+[
+  {
+    "name": "approve",
+    "description": "Answers Claude Code's permission prompts through comando's approval cards. Claude Code calls it; do not call it yourself.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "tool_name": {
+          "type": "string"
+        },
+        "input": {
+          "type": "object"
+        },
+        "tool_use_id": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "tool_name",
+        "input"
+      ]
+    }
+  },
+  {
+    "name": "ui_show_table",
+    "description": "Shows rows you hold as a table in comando. Use for results the user should scan, sort or copy.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Tab title; a later call with the same title replaces the table unless the user pinned it."
+        },
+        "columns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "rows": {
+          "type": "array",
+          "items": {
+            "type": "array"
+          },
+          "description": "One array per row, as many values as columns."
+        },
+        "placement": {
+          "type": "string",
+          "enum": [
+            "lower",
+            "side"
+          ],
+          "default": "lower"
+        }
+      },
+      "required": [
+        "title",
+        "columns",
+        "rows"
+      ]
+    }
+  },
+  {
+    "name": "ui_plot",
+    "description": "Plots numeric series over shared axes in comando. With time_x, x values are epoch milliseconds.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "x_label": {
+          "type": "string"
+        },
+        "y_label": {
+          "type": "string"
+        },
+        "time_x": {
+          "type": "boolean",
+          "default": false
+        },
+        "series": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "x": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              },
+              "y": {
+                "type": "array",
+                "items": {
+                  "type": "number"
+                }
+              }
+            },
+            "required": [
+              "x",
+              "y"
+            ]
+          }
+        },
+        "placement": {
+          "type": "string",
+          "enum": [
+            "lower",
+            "side"
+          ],
+          "default": "lower"
+        }
+      },
+      "required": [
+        "title",
+        "series"
+      ]
+    }
+  },
+  {
+    "name": "ui_show_view",
+    "description": "Shows a view in comando. type markdown: data {markdown}. diff: data {path, before, after}. text: data {path, text, syntax, line}. tree: data {root: {label, detail, children: [...]}}. table and plot take the same data as ui_show_table and ui_plot.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "markdown",
+            "diff",
+            "text",
+            "tree",
+            "table",
+            "plot"
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "data": {
+          "type": "object"
+        },
+        "placement": {
+          "type": "string",
+          "enum": [
+            "lower",
+            "side"
+          ],
+          "default": "lower"
+        }
+      },
+      "required": [
+        "type",
+        "title",
+        "data"
+      ]
+    }
+  },
+  {
+    "name": "ui_set_editor",
+    "description": "Replaces the text of an editor panel. Without panel, uses the user's focused panel when it is bound to this session, else this session's first panel; a session bound to no panel must pass panel.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "panel": {
+          "type": "string",
+          "description": "Panel title or id."
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  },
+  {
+    "name": "ui_insert",
+    "description": "Inserts text in an editor panel at the caret, or appends it as a new paragraph.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "panel": {
+          "type": "string"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "insert",
+            "append"
+          ],
+          "default": "insert"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  },
+  {
+    "name": "ui_open_file",
+    "description": "Opens a file read-only in comando's side pane, scrolled to a line. Relative paths resolve against the session's working directory.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "path"
+      ]
+    }
+  },
+  {
+    "name": "ui_notify",
+    "description": "Shows a message in comando's status bar and as a desktop notification.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "level": {
+          "type": "string",
+          "enum": [
+            "info",
+            "warn",
+            "error"
+          ],
+          "default": "info"
+        }
+      },
+      "required": [
+        "text"
+      ]
+    }
+  },
+  {
+    "name": "ui_get_state",
+    "description": "Returns comando's panels with their bindings and last SQL run, the connections, the sessions and the open views.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "ui_set_layout",
+    "description": "Arranges comando's window. Every argument is optional: panel focuses an editor panel by id or title; lower_tab selects results, session, approvals, terminal, or a view in the lower panel by id or title; sidebar and side_pane show (true) or hide (false) those panes; lower_share sets the lower panel's share of the window height, 0.05 to 0.95.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "panel": {
+          "type": "string"
+        },
+        "lower_tab": {
+          "type": "string"
+        },
+        "sidebar": {
+          "type": "boolean"
+        },
+        "side_pane": {
+          "type": "boolean"
+        },
+        "lower_share": {
+          "type": "number",
+          "minimum": 0.05,
+          "maximum": 0.95
+        }
+      }
+    }
+  },
+  {
+    "name": "ui_close_view",
+    "description": "Closes a view this session placed, by the id ui_get_state reports. Views the user opened or pinned cannot be closed.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  {
+    "name": "db_run_sql",
+    "description": "Runs one SQL statement on a database connection and returns rows as tab-separated text. Read-only statements run at once; others need the user's approval, and production connections refuse them. Without connection, uses the connection of this session's panel; a session bound to no panel must pass connection.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "sql": {
+          "type": "string"
+        },
+        "connection": {
+          "type": "string"
+        },
+        "max_rows": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 10000,
+          "default": 200
+        },
+        "show": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also show the rows as a table view."
+        },
+        "title": {
+          "type": "string",
+          "description": "Title of the table view when show is true."
+        }
+      },
+      "required": [
+        "sql"
+      ]
+    }
+  },
+  {
+    "name": "db_describe",
+    "description": "Lists the columns of a table: name and type.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "table": {
+          "type": "string"
+        },
+        "connection": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "table"
+      ]
+    }
+  }
+]

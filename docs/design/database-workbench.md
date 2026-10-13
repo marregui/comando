@@ -1,0 +1,61 @@
+# Database workbench
+
+comando speaks to PostgreSQL and to QuestDB over the PostgreSQL wire protocol, through the PostgreSQL JDBC driver. This document covers how a statement runs, how its rows are stored and shown, and the tools built on a result.
+
+## 1. Lanes
+
+A JDBC connection runs one statement at a time, so each connection name has a lane: one connection and one thread that runs every open, close, statement and health check of that connection in order. The user's runs and Claude's `db_run_sql` calls on the same connection queue on the same lane.
+
+| Property | Value |
+|---|---|
+| URL | `jdbc:postgresql://<host>:<port>/<database>` |
+| Driver properties | `ApplicationName=comando`, `loginTimeout=20`, `tcpKeepAlive=true`, `cancelSignalTimeout=2`, `sslmode` from the connection |
+| TLS | `sslmode` is one of `prefer` (default), `disable`, `allow`, `require`, `verify-ca`, `verify-full` |
+| Autocommit | on |
+| Fetch | 5 000 rows per round trip |
+| Rows kept per run | 5 000 000; past that the fetch stops and the run is marked truncated |
+| Health check | every 60 s each open connection is checked with `isValid(5)` as a task on its lane; a failed check closes the connection and reports it lost |
+| Opening | running SQL in a panel opens its connection when closed |
+
+**Cancel.** ⌘. marks the request cancelled, then reads the statement the lane is running; the lane publishes its statement, then reads the mark. Either the lane sees the mark before it runs, or the caller sees the statement and calls `Statement.cancel()`. A statement still running 2 s after its cancel has its connection aborted, which unblocks a socket read the server never answers; the lane reconnects on the next run.
+
+## 2. Results
+
+`ColumnarResult` stores a run's rows by column in primitive chunks of 16 384 values: no boxed value and no row object per cell.
+
+| Column kind | Stored as |
+|---|---|
+| `smallint`, `integer`, `bigint` | `long` |
+| `real`, `double precision` | `double` |
+| `boolean` | `long`, 0 or 1 |
+| `date`, `timestamp`, `timestamp with time zone` | `long`, epoch microseconds UTC |
+| everything else, `numeric` included | text |
+
+The lane appends rows and publishes the row count with a volatile write; the grid and plots read rows below that count while the fetch continues. A result lives in `ResultRegistry` under its request id; the state's run record (status, row and update counts, truncated flag, execution, fetch and total times, error) refers to it by that id.
+
+The Results tab shows the focused panel's last run: the grid, the row count, and the times. Cells format into one reused buffer through `Formats`; painting still makes one short string per visible cell, since `JTable` takes a value object per cell. The cost is bounded by the visible cells, not the rows.
+
+## 3. What can be done with a result
+
+| Key | Command | Result |
+|---|---|---|
+| ⌘J | Plot last result | a plot view: x is the first time column, else the first numeric column; up to eight other numeric columns become series; at most 2 000 000 points |
+| ⌘⇧J | Plot last result, refreshing… | asks for a period (default 5 s); the panel's query runs again each period when it is not running, and each finished run replaces the plot without moving the lower panel's tab; running another statement in the panel, closing the plot's tab, or "Stop refreshing plots" stops it |
+| ⌘⇧R | Keep the result in a tab | a table view of the rows, at most 100 000, that the next run does not replace |
+| ⌘⇧I | Attach the result | the selected rows, else the first 50, else the error, as a block in the editor ([Command dispatch](command-dispatch.md#6-attaching-results)) |
+| ⌘S | Export | the grid as CSV, in the order shown; the file is written off the EDT from a snapshot |
+
+**Plans.** A finished `EXPLAIN` whose result has one column shows as a tree by default: each line becomes a node under the nearest line above it with less indentation, and PostgreSQL's `->` markers are dropped. A toggle switches between the tree and the rows.
+
+## 4. Schema
+
+When a connection opens, its schema loads in the background, without a view: tables and columns from `information_schema.columns` (system schemas excluded); when that fails, as on QuestDB, from `tables()` and a description of each table. At most 50 000 rows are read.
+
+| Use | Detail |
+|---|---|
+| Explore the schema (⌘⇧E, or the connection's menu in the sidebar) | a tree in the side pane: tables with their column count, columns with their types; Enter or "Insert into the editor" in a table's context menu puts `SELECT * FROM <table> LIMIT 100;` at the editor's caret; double-click on a table expands it, on a column inserts the column's name; names that need quotes are quoted |
+| Completion in the editor | SQL keywords, then the tables and columns of the bound connection's schema; a column found in several tables is offered once with its tables |
+
+## 5. Embedded QuestDB
+
+comando can start a QuestDB server in the data root, on QuestDB's default ports (PostgreSQL wire 8812, web console 9000), from a toggle in the window. It stops when comando exits, after the lanes that may use it.

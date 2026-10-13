@@ -1,0 +1,69 @@
+package dev.marregui.comando.app;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.util.logging.ConsoleHandler;
+import java.util.logging.FileHandler;
+import java.util.logging.Formatter;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogManager;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
+
+/**
+ * Routes {@link System.Logger} (backed by java.util.logging) to a rotating file under the data root and
+ * warnings to stderr. One line per record: time, level, logger, message, then the stack trace.
+ */
+final class Logging {
+
+    private Logging() {
+    }
+
+    static void configure(Path dir) {
+        LogManager.getLogManager().reset();
+        Logger root = Logger.getLogger("");
+        root.setLevel(Level.INFO);
+        Formatter format = new Line();
+        try {
+            Files.createDirectories(dir);
+            FileHandler file = new FileHandler(dir.resolve("comando-%g.log").toString(), 5 * 1024 * 1024, 5, true);
+            file.setFormatter(format);
+            file.setLevel(Level.INFO);
+            root.addHandler(file);
+        } catch (IOException e) {
+            System.err.println("comando: cannot write logs to " + dir + ": " + e.getMessage());
+        }
+        Handler console = new ConsoleHandler();
+        console.setFormatter(format);
+        console.setLevel(Level.WARNING);
+        root.addHandler(console);
+    }
+
+    private static final class Line extends Formatter {
+        @Override
+        public String format(LogRecord r) {
+            StringBuilder sb = new StringBuilder(160);
+            sb.append(Instant.ofEpochMilli(r.getMillis())).append(' ')
+                    .append(r.getLevel().getName()).append(' ')
+                    .append(shortName(r.getLoggerName())).append(' ')
+                    .append(formatMessage(r)).append('\n');
+            if (r.getThrown() != null) {
+                java.io.StringWriter w = new java.io.StringWriter();
+                r.getThrown().printStackTrace(new java.io.PrintWriter(w));
+                sb.append(w);
+            }
+            return sb.toString();
+        }
+
+        private static String shortName(String name) {
+            if (name == null) {
+                return "-";
+            }
+            int dot = name.lastIndexOf('.');
+            return dot < 0 ? name : name.substring(dot + 1);
+        }
+    }
+}

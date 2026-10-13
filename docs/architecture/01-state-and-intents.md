@@ -1,0 +1,89 @@
+# State and intents
+
+## 1. The state
+
+`AppState` is one immutable record. It holds metadata and ids; lists are short (tens of entries), so lookups scan.
+
+| Field | Holds |
+|---|---|
+| `panels` | each editor panel: id, title, the connection and the session it is bound to |
+| `focused` | the panel the user works in; the lower panel follows its bindings |
+| `connections` | each connection's spec and status (closed, opening, open, closing, failed) with its last error |
+| `sessions` | each session's spec, status, the `system/init` facts (conversation id, model, CLI version, capabilities), pending turns, cost, context tokens and window, activity, git branch |
+| `runs` | at most one SQL run per panel: request id, SQL, status, row count, timings, error |
+| `approvals` | permission prompts waiting for an answer, from every session |
+| `views` | views placed by Claude or the user: id, title, spec, placement (lower or side), pinned, owning session, version |
+| `lowerTab` | the selected lower tab: Results, Session, Approvals, Terminal, or a view by id |
+| `notice` | the last status-bar message and its level |
+| `nextId` | the next request, view or run id |
+
+Invariants the reducer keeps: at least one panel; `focused` names a panel; connection names and session names are unique; one run per panel. The record's constructor checks the first two.
+
+Large data stays out of the state ([section 5](#5-stores-outside-the-state)).
+
+## 2. Intents
+
+An intent is a record of the sealed interface `Intent`. Anything that changes the state is an intent: a key the user pressed, a row batch from the database, an event from Claude Code, a call to an MCP tool.
+
+| Group | Intents |
+|---|---|
+| Panels | `AddPanel`, `ClosePanel`, `RenamePanel`, `FocusPanel`, `BindConnection`, `BindSession` |
+| Running text | `RunText` (panel, text, target: auto, SQL or Claude), `RefreshSql` (a live plot's re-run, which keeps the lower tab), `CancelRun` |
+| SQL run events | `SqlStarted`, `SqlRows`, `SqlCompleted`, `SqlFailed`, `SqlCancelled` |
+| Connections | `SaveConnection`, `RemoveConnection`, `OpenConnection`, `CloseConnection`, `TestConnection`, `ExploreSchema`, `ConnectionOpened`, `ConnectionClosed`, `ConnectionFailed`, `ConnectionLost`, `ConnectionTested` |
+| Sessions | `SaveSession`, `RemoveSession`, `ImportSessions`, `StartSession`, `StopSession`, `InterruptSession`, `SetSessionModel`, `SetSessionEffort`, `SessionStarted`, `SessionInit`, `SessionActivity`, `SessionTurnEnded`, `SessionExited`, `SessionBranch` |
+| Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
+| Views | `ShowView`, `RefreshView` (new data for a view the user placed, without selecting it), `CloseView`, `PinView`, `SelectLowerTab`, `Arrange` |
+| Editor and files | `EditPanel`, `OpenFile` |
+| Development tools | `RunGradle`, `RunJfrq`, `CommandFinished`, `CancelCommand`, `OpenRecording`, `BrowseScratchpad` |
+| Notices | `Notify` |
+
+A panel argument may be null in `RunText`, `RunGradle` and `EditPanel`; it means the focused panel. A console view records the panel its run came from, so a failed test goes to that panel's session, not to whichever panel has the focus.
+
+## 3. The reducer
+
+`Reducer.apply(state, intent)` returns a `Transition`: the next state and a list of effects. It is a pure function of its arguments and of a `Clock`, so tests drive it with a fake clock and assert on both outputs. It throws for nothing a user or an adapter can send: an intent naming a missing panel, connection or session changes nothing or sets a notice.
+
+Rules that recur:
+
+- **Ids.** The reducer assigns request, run and view ids from `nextId`. An adapter event carries the id; `onRun` drops an event whose run is no longer active, so a cancelled or superseded run never changes the state again.
+- **Start on demand.** Running SQL on a closed connection opens it first; sending a prompt to a stopped session starts it first. The effects come out in that order.
+- **Same state for no change.** Focusing the focused panel or selecting the selected tab returns the same object, so listeners and the UI do not re-render.
+- **User wins.** `ShowView` replaces an unpinned view with the same title, session and placement; a pinned view is never replaced, so a view the user pinned survives Claude's next call.
+
+## 4. Effects
+
+An effect is work the reducer asks an adapter to do. `EffectRouter` hands each to its port on the reducer thread; every port method only queues work and returns.
+
+| Port | Effects |
+|---|---|
+| `DatabasePort` | `OpenDb`, `CloseDb`, `TestDb`, `ExecuteSql`, `CancelSql`, `ReleaseResult`, `LoadSchema` |
+| `ClaudePort` | `StartClaude`, `StopClaude`, `SendToClaude`, `InterruptClaude`, `LoadHistory`, `ForgetSession` |
+| `ApprovalPort` | `ResolveApproval` |
+| `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `ShowFile`, `Arrange` |
+| `PersistencePort` | `SaveConnections`, `SaveSessions`, `SavePanels` |
+| `ToolPort` | `RunGradle`, `RunJfrq`, `CancelCommand`, `ForgetCommand`, `OpenRecording`, `BrowseScratchpad` |
+
+`StateLoop` runs one intent at a time: observers first (the intent log), then the reducer, then the effects in order, then the state listeners (the UI's coalesced render). Each step is guarded, so a failing effect or listener is logged and the loop goes on. Each applied intent is a JFR event `comando.Intent` with its type, effect count and whether the state changed.
+
+## 5. Stores outside the state
+
+A result of five million rows, a transcript of thousands of blocks or a build's output would make every state copy expensive. They live in stores that the state refers to by id. Each store has one writer thread; the EDT reads.
+
+| Store | Keyed by | Written by | Read by |
+|---|---|---|---|
+| `ResultRegistry` → `ColumnarResult` | SQL request id | the connection's lane thread | Results tab, plots, MCP |
+| `TranscriptRegistry` → `Transcript` | session name | the session's strand | Session tab |
+| `ConsoleRegistry` → `Console` | command run id | the run's thread | console views |
+| `SchemaRegistry` → `Schema` | connection name | the database adapter | editor completion |
+| `PanelTexts` (the store) | panel id | the EDT | the store thread, on save |
+
+Publication: `ColumnarResult` and `Transcript` publish their size through a `volatile` field after the data it covers is written, so a reader that reads the size first sees complete rows or blocks. `Console` guards its buffer with its own lock and readers copy from the length they already have. A writer that replaced a transcript block tells listeners; the UI coalesces those calls into one repaint.
+
+## 6. The intent log and replay
+
+With `-Dcomando.recordIntents=true`, `IntentLog` writes one JSON line per intent to `logs/intents-<millis>.jsonl` under the data root. The first line holds the state the intents start from. Interface-typed fields (view specs, approval decisions) carry their record's class name. Every `password` field is blanked before the line is written.
+
+`IntentLog.read` returns the starting state and the intents. The replay test feeds them to a real `StateLoop` and the real Swing shell, with every other port replaced by a recording fake, and compares the window with the final state ([Quality](../design/quality.md)).
+
+The log holds intents only. The stores outside the state (result rows, transcripts, console output) are not recorded, so a replay reproduces the window's layout, panels, views and run states, but not the rows, transcript text or console text they showed. The plan asked for the stream fixtures and result snapshots to be recorded too; that is not built.

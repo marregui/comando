@@ -1,0 +1,181 @@
+package dev.marregui.comando.core.view;
+
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+
+/**
+ * Data for one view, validated before it reaches the reducer. Each record is one view type; the UI's
+ * widget registry maps the type to the widget that renders it.
+ */
+public sealed interface ViewSpec {
+
+    /** The view type name used by the MCP tools and the widget registry. */
+    String type();
+
+    /** Rows Claude holds, as text. */
+    record Table(List<String> columns, List<List<String>> rows) implements ViewSpec {
+        public Table {
+            columns = List.copyOf(columns);
+            rows = rows.stream().map(List::copyOf).toList();
+            for (List<String> row : rows) {
+                if (row.size() != columns.size()) {
+                    throw new IllegalArgumentException("row width " + row.size() + " differs from column count " + columns.size());
+                }
+            }
+        }
+
+        @Override
+        public String type() {
+            return "table";
+        }
+    }
+
+    /** One plotted series: points sorted or not, x and y of equal length. */
+    record Series(String name, double[] x, double[] y) {
+        public Series {
+            Objects.requireNonNull(name, "name");
+            if (x.length != y.length) {
+                throw new IllegalArgumentException("series '" + name + "': x has " + x.length + " points, y has " + y.length);
+            }
+            x = x.clone();
+            y = y.clone();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof Series s && name.equals(s.name) && Arrays.equals(x, s.x) && Arrays.equals(y, s.y);
+        }
+
+        @Override
+        public int hashCode() {
+            return 31 * name.hashCode() + Arrays.hashCode(x) * 17 + Arrays.hashCode(y);
+        }
+
+        @Override
+        public String toString() {
+            return "Series[" + name + ", points=" + x.length + ']';
+        }
+    }
+
+    /** Series over shared axes; {@code timeX} formats x as epoch milliseconds. */
+    record Plot(String xLabel, String yLabel, boolean timeX, List<Series> series) implements ViewSpec {
+        public Plot {
+            Objects.requireNonNull(xLabel, "xLabel");
+            Objects.requireNonNull(yLabel, "yLabel");
+            series = List.copyOf(series);
+            if (series.isEmpty()) {
+                throw new IllegalArgumentException("plot has no series");
+            }
+        }
+
+        @Override
+        public String type() {
+            return "plot";
+        }
+    }
+
+    /** Two versions of a text, rendered as a diff. */
+    record Diff(String path, String before, String after) implements ViewSpec {
+        public Diff {
+            Objects.requireNonNull(path, "path");
+            Objects.requireNonNull(before, "before");
+            Objects.requireNonNull(after, "after");
+        }
+
+        @Override
+        public String type() {
+            return "diff";
+        }
+    }
+
+    record Markdown(String markdown) implements ViewSpec {
+        public Markdown {
+            Objects.requireNonNull(markdown, "markdown");
+        }
+
+        @Override
+        public String type() {
+            return "markdown";
+        }
+    }
+
+    /** A text or file shown read-only, scrolled to {@code line} (1-based, 0 for none). */
+    record Text(String path, String text, String syntax, int line) implements ViewSpec {
+        public Text {
+            Objects.requireNonNull(path, "path");
+            Objects.requireNonNull(text, "text");
+            Objects.requireNonNull(syntax, "syntax");
+        }
+
+        @Override
+        public String type() {
+            return "text";
+        }
+    }
+
+    /**
+     * A tree node; {@code link} is what activating the node opens ({@code comando-file:} path and line),
+     * empty for none.
+     */
+    record TreeNode(String label, String detail, String link, List<TreeNode> children) {
+        public TreeNode {
+            Objects.requireNonNull(label, "label");
+            Objects.requireNonNull(detail, "detail");
+            Objects.requireNonNull(link, "link");
+            children = List.copyOf(children);
+        }
+
+        public TreeNode(String label, String detail, List<TreeNode> children) {
+            this(label, detail, "", children);
+        }
+
+        public static final TreeNode NONE = new TreeNode("", "", "", List.of());
+    }
+
+    /** A labelled tree: test results, a schema, a call tree. */
+    record Tree(TreeNode root) implements ViewSpec {
+        public Tree {
+            Objects.requireNonNull(root, "root");
+        }
+
+        @Override
+        public String type() {
+            return "tree";
+        }
+    }
+
+    enum RunState { RUNNING, PASSED, FAILED, CANCELLED }
+
+    /**
+     * A command run: its output lives in the console store under {@code runId}. When it ends, {@code tests}
+     * holds the test results found (root {@link TreeNode#NONE} when none) and {@code failures} the text of
+     * each failed test by its name.
+     *
+     * @param panel the id of the panel the run was started from, "" when none; failures go to its session
+     */
+    record Console(long runId, String command, RunState state, int exitCode, long millis, TreeNode tests,
+                   Map<String, String> failures, String panel) implements ViewSpec {
+        public Console {
+            Objects.requireNonNull(command, "command");
+            panel = panel == null ? "" : panel;
+            Objects.requireNonNull(state, "state");
+            Objects.requireNonNull(tests, "tests");
+            failures = Map.copyOf(failures);
+        }
+
+        public static Console running(long runId, String command) {
+            return running(runId, command, "");
+        }
+
+        public static Console running(long runId, String command, String panel) {
+            return new Console(runId, command, RunState.RUNNING, -1, 0L, TreeNode.NONE, Map.of(), panel);
+        }
+
+        @Override
+        public String type() {
+            return "console";
+        }
+    }
+}

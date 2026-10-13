@@ -1,0 +1,842 @@
+package dev.marregui.comando.core.reduce;
+
+import dev.marregui.comando.core.dispatch.Classifier;
+import dev.marregui.comando.core.dispatch.Target;
+import dev.marregui.comando.core.effect.Effect;
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.model.ApprovalKind;
+import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.StartMode;
+import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.port.Clock;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.ConnectionState;
+import dev.marregui.comando.core.state.LowerTab;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.RunStatus;
+import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.state.SqlRun;
+import dev.marregui.comando.core.state.ViewState;
+import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.core.view.ViewSpec;
+
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.LongFunction;
+import java.util.function.UnaryOperator;
+
+/**
+ * Applies one intent to the state and lists the effects that follow. Pure apart from the clock, which
+ * only stamps notices and activity: the same state, intent and time always give the same transition.
+ *
+ * <p>Request identity closes the stale-result class of defects: every SQL run gets an id from the state's
+ * counter, a panel holds one run, and an event for an id that is no longer a panel's run is dropped.</p>
+ */
+public final class Reducer {
+
+    /** Queries running this long or longer notify the desktop when they end. */
+    static final long LONG_RUN_MILLIS = 10_000L;
+
+    private final Clock clock;
+
+    public Reducer(Clock clock) {
+        this.clock = clock;
+    }
+
+    public Transition apply(AppState s, Intent intent) {
+        return switch (intent) {
+            case Intent.AddPanel i -> addPanel(s, i);
+            case Intent.ClosePanel i -> closePanel(s, i.panel());
+            case Intent.RenamePanel i -> renamePanel(s, i);
+            case Intent.FocusPanel i -> s.panel(i.panel()).isPresent() ? Transition.of(s.withFocused(i.panel())) : Transition.of(s);
+            case Intent.BindConnection i -> bindConnection(s, i);
+            case Intent.BindSession i -> bindSession(s, i);
+
+            case Intent.RunText i -> runText(s, i);
+            case Intent.RefreshSql i -> refreshSql(s, i);
+            case Intent.CancelRun i -> cancelRun(s, i.panel());
+
+            case Intent.SqlStarted i -> onRun(s, i.requestId(), r -> r.withStatus(RunStatus.RUNNING));
+            case Intent.SqlRows i -> onRun(s, i.requestId(), r -> r.withProgress(i.rows(), i.execMillis(), i.fetchMillis(), i.totalMillis()));
+            case Intent.SqlCompleted i -> notifyLongRun(s, onRun(s, i.requestId(),
+                    r -> r.completed(i.rows(), i.updateCount(), i.truncated(), i.execMillis(), i.fetchMillis(), i.totalMillis())),
+                    i.requestId(), i.totalMillis(), i.rows() + " rows");
+            case Intent.SqlFailed i -> notifyLongRun(s, sqlFailed(s, i), i.requestId(), i.totalMillis(), "failed: " + i.message());
+            case Intent.SqlCancelled i -> onRun(s, i.requestId(), r -> r.withStatus(RunStatus.CANCELLED));
+
+            case Intent.SaveConnection i -> saveConnection(s, i);
+            case Intent.RemoveConnection i -> removeConnection(s, i.name());
+            case Intent.OpenConnection i -> openConnection(s, i.name());
+            case Intent.CloseConnection i -> closeConnection(s, i.name());
+            case Intent.TestConnection i -> new Transition(notice(s, Notice.Level.INFO, "Testing " + i.spec().label()), List.of(new Effect.TestDb(i.spec())));
+            // an open that completes after the user's Close is stale: the queued disconnect closes it; no schema load reopens it
+            case Intent.ConnectionOpened i -> s.connection(i.name()).map(c -> c.status() == Status.CLOSING).orElse(false)
+                    ? Transition.of(s)
+                    : withSchemaLoad(connectionStatus(s, i.name(), Status.OPEN, ""), i.name(), false);
+            case Intent.ExploreSchema i -> s.connection(i.connection()).isEmpty()
+                    ? Transition.of(notice(s, Notice.Level.WARN, "No connection " + i.connection()))
+                    : withSchemaLoad(Transition.of(s), i.connection(), true);
+            case Intent.ConnectionClosed i -> connectionStatus(s, i.name(), Status.CLOSED, "");
+            case Intent.ConnectionFailed i -> Transition.of(notice(connectionStatus(s, i.name(), Status.FAILED, i.error()).state(),
+                    Notice.Level.ERROR, "Connection " + i.name() + " failed: " + i.error()));
+            case Intent.ConnectionLost i -> connectionLost(s, i);
+            case Intent.ConnectionTested i -> Transition.of(notice(s, i.ok() ? Notice.Level.INFO : Notice.Level.ERROR,
+                    "Test " + i.name() + ": " + i.message()));
+
+            case Intent.SaveSession i -> saveSession(s, i);
+            case Intent.RemoveSession i -> removeSession(s, i.name());
+            case Intent.ImportSessions i -> importSessions(s, i.specs());
+            case Intent.StartSession i -> startSession(s, i.name());
+            case Intent.StopSession i -> stopSession(s, i.name());
+            case Intent.InterruptSession i -> interruptSession(s, i.name());
+            case Intent.SetSessionModel i -> sessionSetting(s, i.name(), i.model(), true);
+            case Intent.SetSessionEffort i -> sessionSetting(s, i.name(), i.effort(), false);
+            case Intent.SessionStarted i -> Transition.of(s.withSession(i.name(), x -> x.withStatus(Status.OPEN, "")));
+            case Intent.SessionInit i -> sessionInit(s, i);
+            case Intent.SessionActivity i -> Transition.of(s.withSession(i.name(), x -> x.withActivity(i.activity(), clock.millis())));
+            case Intent.SessionTurnEnded i -> turnEnded(s, i);
+            case Intent.SessionExited i -> sessionExited(s, i);
+            case Intent.SessionBranch i -> Transition.of(s.withSession(i.name(), x -> x.withBranch(i.branch())));
+
+            case Intent.ApprovalRequested i -> approvalRequested(s, i.approval());
+            case Intent.ApprovalAnswered i -> approvalAnswered(s, i);
+            case Intent.ApprovalWithdrawn i -> approvalWithdrawn(s, i);
+
+            case Intent.ShowView i -> showView(s, i);
+            case Intent.RefreshView i -> Transition.of(s.views().stream()
+                    .filter(v -> !v.pinned() && v.session().isEmpty() && v.title().equals(i.title()) && v.placement() == Placement.LOWER)
+                    .findFirst().map(v -> s.withViews(replaceView(s.views(), v.replaced(i.spec())))).orElse(s));
+            case Intent.CloseView i -> closeView(s, i.id());
+            case Intent.PinView i -> Transition.of(s.view(i.id())
+                    .map(v -> s.withViews(replaceView(s.views(), v.withPinned(i.pinned())))).orElse(s));
+            case Intent.SelectLowerTab i -> Transition.of(s.withLowerTab(i.tab()));
+
+            case Intent.EditPanel i -> editPanel(s, i);
+            case Intent.Arrange i -> new Transition(s, i.layout().changesNothing() ? List.of() : List.of(new Effect.Arrange(i.layout())));
+            case Intent.RunGradle i -> runGradle(s, i);
+            case Intent.RunJfrq i -> runCommand(s, "jfrq " + i.args().strip() + " " + fileName(i.recording()), "",
+                    id -> new Effect.RunJfrq(id, i.recording(), i.args()));
+            case Intent.CommandFinished i -> commandFinished(s, i);
+            case Intent.CancelCommand i -> new Transition(s, List.of(new Effect.CancelCommand(i.runId())));
+            case Intent.OpenRecording i -> new Transition(notice(s, Notice.Level.INFO, "Reading " + fileName(i.path())),
+                    List.of(new Effect.OpenRecording(i.path())));
+            case Intent.BrowseScratchpad i -> new Transition(s, List.of(new Effect.BrowseScratchpad()));
+            case Intent.OpenFile i -> new Transition(s, List.of(new Effect.ShowFile(i.session(), i.path(),
+                    s.session(i.session()).map(x -> x.spec().workDir()).orElse(System.getProperty("user.home")), i.line())));
+            case Intent.Notify i -> new Transition(notice(s, i.level(), i.text()),
+                    i.desktop() ? List.of(new Effect.DesktopNotify("comando", i.text())) : List.of());
+        };
+    }
+
+    // ---- panels
+
+    private Transition addPanel(AppState s, Intent.AddPanel i) {
+        if (s.panel(i.panel()).isPresent()) {
+            return Transition.of(s);
+        }
+        PanelState current = s.focusedPanel();
+        String title = i.title().isBlank() ? "panel " + (s.panels().size() + 1) : i.title().strip();
+        List<PanelState> panels = new ArrayList<>(s.panels());
+        panels.add(new PanelState(i.panel(), title, current.connection(), current.session()));
+        AppState next = s.withPanels(panels, i.panel());
+        return new Transition(next, List.of(new Effect.SavePanels(next.panels())));
+    }
+
+    private Transition closePanel(AppState s, PanelId id) {
+        Optional<PanelState> panel = s.panel(id);
+        if (panel.isEmpty()) {
+            return Transition.of(s);
+        }
+        if (s.panels().size() == 1) {
+            return Transition.of(notice(s, Notice.Level.WARN, "The last panel cannot be closed"));
+        }
+        List<Effect> effects = new ArrayList<>();
+        AppState next = s;
+        Optional<SqlRun> run = s.runOf(id);
+        if (run.isPresent()) {
+            if (run.get().status().isActive()) {
+                effects.add(new Effect.CancelSql(run.get().requestId()));
+            }
+            effects.add(new Effect.ReleaseResult(run.get().requestId()));
+            next = next.withRuns(s.runs().stream().filter(r -> !r.panel().equals(id)).toList());
+        }
+        int idx = s.panels().indexOf(panel.get());
+        List<PanelState> panels = new ArrayList<>(s.panels());
+        panels.remove(idx);
+        PanelId focused = s.focused().equals(id) ? panels.get(Math.max(0, idx - 1)).id() : s.focused();
+        next = next.withPanels(panels, focused);
+        effects.add(new Effect.ForgetPanel(id));
+        effects.add(new Effect.SavePanels(next.panels()));
+        return new Transition(next, effects);
+    }
+
+    private Transition renamePanel(AppState s, Intent.RenamePanel i) {
+        if (i.title().isBlank()) {
+            return Transition.of(s);
+        }
+        return s.panel(i.panel())
+                .map(p -> s.withPanel(p.withTitle(i.title().strip())))
+                .map(next -> new Transition(next, List.of(new Effect.SavePanels(next.panels()))))
+                .orElse(Transition.of(s));
+    }
+
+    private Transition bindConnection(AppState s, Intent.BindConnection i) {
+        if (!i.connection().isEmpty() && s.connection(i.connection()).isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "No connection called " + i.connection()));
+        }
+        return s.panel(i.panel())
+                .map(p -> s.withPanel(p.withConnection(i.connection())))
+                .map(next -> new Transition(next, List.of(new Effect.SavePanels(next.panels()))))
+                .orElse(Transition.of(s));
+    }
+
+    private Transition bindSession(AppState s, Intent.BindSession i) {
+        if (!i.session().isEmpty() && s.session(i.session()).isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "No session called " + i.session()));
+        }
+        return s.panel(i.panel())
+                .map(p -> s.withPanel(p.withSession(i.session())))
+                .map(next -> new Transition(next, List.of(new Effect.SavePanels(next.panels()))))
+                .orElse(Transition.of(s));
+    }
+
+    // ---- running text
+
+    private Transition runText(AppState s, Intent.RunText i) {
+        // a panel closed since the text was sent (a console's origin) falls back to the focused one
+        Optional<PanelState> found = s.panel(i.panel() != null && s.panel(i.panel()).isPresent() ? i.panel() : s.focused());
+        if (found.isEmpty()) {
+            return Transition.of(s);
+        }
+        PanelState panel = found.get();
+        Classifier.Classification c = switch (i.target()) {
+            case AUTO -> Classifier.classify(i.text());
+            case SQL -> new Classifier.Classification(Target.SQL, Classifier.stripMarker(i.text()));
+            case CLAUDE -> new Classifier.Classification(Target.CLAUDE, Classifier.stripMarker(i.text()));
+        };
+        if (c.text().isBlank()) {
+            return Transition.of(notice(s, Notice.Level.WARN, "Nothing to run"));
+        }
+        return c.target() == Target.SQL ? runSql(s, panel, c.text()) : runPrompt(s, panel, c.text());
+    }
+
+    /**
+     * A live plot's re-run: only while the panel's last run is that same statement and no longer active, so a
+     * refresh decided on an older state never cancels or replaces a statement the user ran since.
+     */
+    private Transition refreshSql(AppState s, Intent.RefreshSql i) {
+        Optional<PanelState> panel = s.panel(i.panel());
+        Optional<SqlRun> last = panel.flatMap(p -> s.runOf(p.id()));
+        if (panel.isEmpty() || last.isPresent() && (!last.get().sql().equals(i.sql()) || last.get().status().isActive())) {
+            return Transition.of(s);
+        }
+        return runSql(s, panel.get(), i.sql(), false);
+    }
+
+    private Transition runSql(AppState s, PanelState panel, String sql) {
+        return runSql(s, panel, sql, true);
+    }
+
+    private Transition runSql(AppState s, PanelState panel, String sql, boolean showResults) {
+        if (panel.connection().isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "Panel " + panel.title() + " has no connection; bind one"));
+        }
+        Optional<ConnectionState> conn = s.connection(panel.connection());
+        if (conn.isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "No connection called " + panel.connection()));
+        }
+        List<Effect> effects = new ArrayList<>();
+        Optional<SqlRun> previous = s.runOf(panel.id());
+        if (previous.isPresent()) {
+            if (previous.get().status().isActive()) {
+                effects.add(new Effect.CancelSql(previous.get().requestId()));
+            }
+            effects.add(new Effect.ReleaseResult(previous.get().requestId()));
+        }
+        AppState next = s;
+        ConnectionState c = conn.get();
+        if (!c.status().isUsable()) {
+            effects.add(new Effect.OpenDb(c.spec()));
+            next = next.withConnection(c.with(Status.OPENING, ""));
+        }
+        long id = next.nextId();
+        next = next.withIdTaken().withRun(SqlRun.queued(id, panel.id(), c.name(), sql));
+        if (showResults) {
+            next = next.withLowerTab(LowerTab.RESULTS);
+        }
+        effects.add(new Effect.ExecuteSql(id, c.spec(), sql));
+        return new Transition(next, effects);
+    }
+
+    private Transition runPrompt(AppState s, PanelState panel, String prompt) {
+        if (panel.session().isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "Panel " + panel.title() + " has no session; bind one"));
+        }
+        Optional<SessionState> found = s.session(panel.session());
+        if (found.isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "No session called " + panel.session()));
+        }
+        SessionState session = found.get();
+        if (session.status() == Status.CLOSING) {
+            // the old process still reads stdin until it exits; a start now would reuse it and lose the prompt
+            return Transition.of(notice(s, Notice.Level.WARN, "Session " + session.name() + " is stopping; send the prompt again once it has stopped"));
+        }
+        List<Effect> effects = new ArrayList<>();
+        if (!session.status().isUsable()) {
+            effects.add(new Effect.StartClaude(session.spec()));
+            session = session.withStatus(Status.OPENING, "");
+        }
+        effects.add(new Effect.SendToClaude(session.name(), prompt, panel.title()));
+        long now = clock.millis();
+        session = session.withTurns(session.pendingTurns() + 1, now).withActivity("sending", now);
+        AppState next = s.withSession(session).withLowerTab(LowerTab.SESSION);
+        return new Transition(next, effects);
+    }
+
+    private Transition cancelRun(AppState s, PanelId id) {
+        Optional<SqlRun> run = s.runOf(id);
+        if (run.isPresent() && run.get().status().isActive()) {
+            AppState next = s.withRun(run.get().withStatus(RunStatus.CANCELLED));
+            return new Transition(next, List.of(new Effect.CancelSql(run.get().requestId())));
+        }
+        return s.panel(id)
+                .flatMap(p -> s.session(p.session()))
+                .filter(SessionState::isBusy)
+                .map(sess -> new Transition(s, List.of(new Effect.InterruptClaude(sess.name()))))
+                .orElse(Transition.of(s));
+    }
+
+    // ---- SQL events
+
+    private Transition onRun(AppState s, long requestId, UnaryOperator<SqlRun> change) {
+        Optional<SqlRun> run = s.run(requestId);
+        if (run.isEmpty() || !run.get().status().isActive()) {
+            return Transition.of(s); // superseded, cancelled or already finished: drop
+        }
+        return Transition.of(s.withRun(change.apply(run.get())));
+    }
+
+    /** Adds a schema read after a connection opened (for completion) or on request (to show it). */
+    private static Transition withSchemaLoad(Transition t, String connection, boolean show) {
+        return t.state().connection(connection).map(c -> {
+            List<Effect> effects = new ArrayList<>(t.effects());
+            effects.add(new Effect.LoadSchema(c.spec(), show));
+            return new Transition(t.state(), effects);
+        }).orElse(t);
+    }
+
+    /** A query that ran {@link #LONG_RUN_MILLIS} or more ends with a desktop notification naming its panel. */
+    private static Transition notifyLongRun(AppState before, Transition t, long requestId, long totalMillis, String outcome) {
+        if (totalMillis < LONG_RUN_MILLIS || t.state() == before) {
+            return t;
+        }
+        String panel = before.run(requestId).flatMap(r -> before.panel(r.panel())).map(PanelState::title).orElse("query");
+        List<Effect> effects = new ArrayList<>(t.effects());
+        effects.add(new Effect.DesktopNotify(panel + ": query finished", outcome + " in " + totalMillis / 1000 + " s"));
+        return new Transition(t.state(), effects);
+    }
+
+    private Transition sqlFailed(AppState s, Intent.SqlFailed i) {
+        Optional<SqlRun> run = s.run(i.requestId());
+        if (run.isEmpty() || !run.get().status().isActive()) {
+            return Transition.of(s);
+        }
+        return Transition.of(notice(s.withRun(run.get().failed(i.message(), i.totalMillis())), Notice.Level.ERROR, i.message()));
+    }
+
+    // ---- connections
+
+    private Transition saveConnection(AppState s, Intent.SaveConnection i) {
+        ConnectionSpec spec = i.spec();
+        boolean isNew = i.previousName().isEmpty();
+        if (isNew) {
+            if (s.connection(spec.name()).isPresent()) {
+                return Transition.of(notice(s, Notice.Level.ERROR, "A connection called " + spec.name() + " exists"));
+            }
+            List<ConnectionState> conns = new ArrayList<>(s.connections());
+            conns.add(ConnectionState.closed(spec));
+            AppState next = s.withConnections(conns);
+            return new Transition(next, List.of(new Effect.SaveConnections(specs(next))));
+        }
+        Optional<ConnectionState> previous = s.connection(i.previousName());
+        if (previous.isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "No connection called " + i.previousName()));
+        }
+        boolean renamed = !i.previousName().equals(spec.name());
+        if (renamed && s.connection(spec.name()).isPresent()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "A connection called " + spec.name() + " exists"));
+        }
+        List<Effect> effects = new ArrayList<>();
+        ConnectionState old = previous.get();
+        ConnectionState updated = new ConnectionState(spec, old.status(), old.error());
+        if (old.status().isUsable() && !old.spec().equals(spec)) {
+            effects.add(new Effect.CloseDb(old.name()));
+            updated = ConnectionState.closed(spec);
+        }
+        List<ConnectionState> conns = new ArrayList<>(s.connections().size());
+        for (ConnectionState c : s.connections()) {
+            conns.add(c.name().equals(i.previousName()) ? updated : c);
+        }
+        AppState next = s.withConnections(conns);
+        effects.add(new Effect.SaveConnections(specs(next)));
+        if (renamed) {
+            next = rebindConnection(next, i.previousName(), spec.name());
+            effects.add(new Effect.SavePanels(next.panels()));
+        }
+        return new Transition(next, effects);
+    }
+
+    private Transition removeConnection(AppState s, String name) {
+        Optional<ConnectionState> conn = s.connection(name);
+        if (conn.isEmpty()) {
+            return Transition.of(s);
+        }
+        List<Effect> effects = new ArrayList<>();
+        if (conn.get().status() != Status.CLOSED) {
+            effects.add(new Effect.CloseDb(name));
+        }
+        AppState next = s.withConnections(s.connections().stream().filter(c -> !c.name().equals(name)).toList());
+        next = rebindConnection(next, name, "");
+        effects.add(new Effect.SaveConnections(specs(next)));
+        effects.add(new Effect.SavePanels(next.panels()));
+        return new Transition(next, effects);
+    }
+
+    private Transition openConnection(AppState s, String name) {
+        return s.connection(name)
+                .filter(c -> !c.status().isUsable())
+                .map(c -> new Transition(s.withConnection(c.with(Status.OPENING, "")), List.of(new Effect.OpenDb(c.spec()))))
+                .orElse(Transition.of(s));
+    }
+
+    private Transition closeConnection(AppState s, String name) {
+        Optional<ConnectionState> conn = s.connection(name);
+        if (conn.isEmpty() || conn.get().status() == Status.CLOSED) {
+            return Transition.of(s);
+        }
+        List<Effect> effects = new ArrayList<>();
+        AppState next = s;
+        for (SqlRun r : s.runs()) {
+            if (r.connection().equals(name) && r.status().isActive()) {
+                effects.add(new Effect.CancelSql(r.requestId()));
+                next = next.withRun(r.withStatus(RunStatus.CANCELLED));
+            }
+        }
+        effects.add(new Effect.CloseDb(name));
+        next = next.withConnection(conn.get().with(Status.CLOSING, ""));
+        return new Transition(next, effects);
+    }
+
+    private Transition connectionStatus(AppState s, String name, Status status, String error) {
+        return Transition.of(s.connection(name).map(c -> s.withConnection(c.with(status, error))).orElse(s));
+    }
+
+    private Transition connectionLost(AppState s, Intent.ConnectionLost i) {
+        if (s.connection(i.name()).isEmpty()) {
+            return Transition.of(s);
+        }
+        AppState next = notice(connectionStatus(s, i.name(), Status.FAILED, i.error()).state(), Notice.Level.WARN,
+                "Connection " + i.name() + " lost: " + i.error());
+        return new Transition(next, List.of(new Effect.DesktopNotify("Connection lost", i.name() + ": " + i.error())));
+    }
+
+    private static AppState rebindConnection(AppState s, String from, String to) {
+        List<PanelState> panels = new ArrayList<>(s.panels().size());
+        for (PanelState p : s.panels()) {
+            panels.add(p.connection().equals(from) ? p.withConnection(to) : p);
+        }
+        return s.withPanels(panels, s.focused());
+    }
+
+    private static List<ConnectionSpec> specs(AppState s) {
+        return s.connections().stream().map(ConnectionState::spec).toList();
+    }
+
+    // ---- sessions
+
+    private Transition saveSession(AppState s, Intent.SaveSession i) {
+        SessionSpec spec = i.spec();
+        if (i.previousName().isEmpty()) {
+            if (s.session(spec.name()).isPresent()) {
+                return Transition.of(notice(s, Notice.Level.ERROR, "A session called " + spec.name() + " exists"));
+            }
+            List<SessionState> sessions = new ArrayList<>(s.sessions());
+            sessions.add(SessionState.closed(spec));
+            AppState next = s.withSessions(sessions);
+            List<Effect> effects = new ArrayList<>();
+            effects.add(new Effect.SaveSessions(sessionSpecs(next)));
+            if (!spec.claudeSessionId().isEmpty()) {
+                effects.add(new Effect.LoadHistory(spec));
+            }
+            return new Transition(next, effects);
+        }
+        Optional<SessionState> previous = s.session(i.previousName());
+        if (previous.isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "No session called " + i.previousName()));
+        }
+        boolean renamed = !i.previousName().equals(spec.name());
+        SessionState old = previous.get();
+        if (renamed && old.status() != Status.CLOSED && old.status() != Status.FAILED) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "Stop session " + old.name() + " before renaming it"));
+        }
+        if (renamed && s.session(spec.name()).isPresent()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "A session called " + spec.name() + " exists"));
+        }
+        List<SessionState> sessions = new ArrayList<>(s.sessions().size());
+        for (SessionState x : s.sessions()) {
+            sessions.add(x.name().equals(i.previousName()) ? x.withSpec(spec) : x);
+        }
+        AppState next = s.withSessions(sessions);
+        List<Effect> effects = new ArrayList<>();
+        effects.add(new Effect.SaveSessions(sessionSpecs(next)));
+        if (renamed) {
+            next = rebindSession(next, i.previousName(), spec.name());
+            effects.add(new Effect.ForgetSession(i.previousName()));
+            effects.add(new Effect.SavePanels(next.panels()));
+            if (!spec.claudeSessionId().isEmpty()) {
+                effects.add(new Effect.LoadHistory(spec));
+            }
+        }
+        if (old.status().isUsable() && !old.spec().equals(spec)) {
+            next = notice(next, Notice.Level.INFO, "Session " + spec.name() + ": changes apply at the next start");
+        }
+        return new Transition(next, effects);
+    }
+
+    private Transition removeSession(AppState s, String name) {
+        Optional<SessionState> session = s.session(name);
+        if (session.isEmpty()) {
+            return Transition.of(s);
+        }
+        List<Effect> effects = new ArrayList<>();
+        if (session.get().status() != Status.CLOSED) {
+            effects.add(new Effect.StopClaude(name));
+        }
+        effects.add(new Effect.ForgetSession(name));
+        AppState next = withdrawApprovals(s, name, "session removed", effects);
+        next = next.withSessions(next.sessions().stream().filter(x -> !x.name().equals(name)).toList());
+        next = rebindSession(next, name, "");
+        effects.add(new Effect.SaveSessions(sessionSpecs(next)));
+        effects.add(new Effect.SavePanels(next.panels()));
+        return new Transition(next, effects);
+    }
+
+    private Transition importSessions(AppState s, List<SessionSpec> specs) {
+        Set<String> names = new HashSet<>();
+        Set<String> ids = new HashSet<>();
+        for (SessionState x : s.sessions()) {
+            names.add(x.name());
+            ids.add(x.spec().claudeSessionId());
+        }
+        List<SessionState> sessions = new ArrayList<>(s.sessions());
+        List<Effect> effects = new ArrayList<>();
+        int added = 0;
+        for (SessionSpec spec : specs) {
+            if (names.contains(spec.name()) || (!spec.claudeSessionId().isEmpty() && ids.contains(spec.claudeSessionId()))) {
+                continue;
+            }
+            names.add(spec.name());
+            ids.add(spec.claudeSessionId());
+            sessions.add(SessionState.closed(spec));
+            effects.add(new Effect.LoadHistory(spec));
+            added++;
+        }
+        AppState next = s.withSessions(sessions);
+        if (added > 0) {
+            effects.add(new Effect.SaveSessions(sessionSpecs(next)));
+        }
+        return new Transition(notice(next, Notice.Level.INFO, "Imported " + added + " of " + specs.size() + " sessions"), effects);
+    }
+
+    private Transition startSession(AppState s, String name) {
+        return s.session(name)
+                .filter(x -> !x.status().isUsable() && x.status() != Status.CLOSING)
+                .map(x -> new Transition(s.withSession(x.withStatus(Status.OPENING, "")), List.of(new Effect.StartClaude(x.spec()))))
+                .orElse(Transition.of(s));
+    }
+
+    private Transition stopSession(AppState s, String name) {
+        return s.session(name)
+                .filter(x -> x.status().isUsable())
+                .map(x -> new Transition(s.withSession(x.withStatus(Status.CLOSING, "")), List.<Effect>of(new Effect.StopClaude(name))))
+                .orElse(Transition.of(s));
+    }
+
+    private Transition interruptSession(AppState s, String name) {
+        return s.session(name)
+                .filter(SessionState::isBusy)
+                .map(x -> new Transition(s, List.<Effect>of(new Effect.InterruptClaude(name))))
+                .orElse(Transition.of(s));
+    }
+
+    private Transition sessionSetting(AppState s, String name, String value, boolean model) {
+        Optional<SessionState> found = s.session(name);
+        if (found.isEmpty() || value.isBlank()) {
+            return Transition.of(s);
+        }
+        SessionState x = found.get();
+        SessionState updated = x.withSpec(model ? x.spec().withModel(value) : x.spec().withEffort(value));
+        List<Effect> effects = new ArrayList<>();
+        if (x.status() == Status.OPEN) {
+            effects.add(new Effect.SendToClaude(name, (model ? "/model " : "/effort ") + value, "settings"));
+            updated = updated.withTurns(updated.pendingTurns() + 1, clock.millis());
+        }
+        AppState next = s.withSession(updated);
+        effects.add(new Effect.SaveSessions(sessionSpecs(next)));
+        return new Transition(next, effects);
+    }
+
+    private Transition sessionInit(AppState s, Intent.SessionInit i) {
+        Optional<SessionState> found = s.session(i.name());
+        if (found.isEmpty()) {
+            return Transition.of(s);
+        }
+        SessionState x = found.get().withInfo(i.info(), clock.millis());
+        if (x.status() == Status.OPENING) {
+            x = x.withStatus(Status.OPEN, "");
+        }
+        List<Effect> effects = new ArrayList<>();
+        String id = i.info().claudeSessionId();
+        if (!id.isEmpty() && (!id.equals(x.spec().claudeSessionId()) || x.spec().startMode() != StartMode.RESUME)) {
+            x = x.withSpec(x.spec().resumable(id));
+        }
+        AppState next = s.withSession(x);
+        if (!x.spec().equals(found.get().spec())) {
+            effects.add(new Effect.SaveSessions(sessionSpecs(next)));
+        }
+        return new Transition(next, effects);
+    }
+
+    private Transition turnEnded(AppState s, Intent.SessionTurnEnded i) {
+        Optional<SessionState> found = s.session(i.name());
+        if (found.isEmpty()) {
+            return Transition.of(s);
+        }
+        long now = clock.millis();
+        SessionState x = found.get()
+                .withTurns(Math.max(0, i.queued()), now)
+                .withUsage(i.costUsd() >= 0 ? i.costUsd() : found.get().costUsd(),
+                        i.contextTokens() >= 0 ? i.contextTokens() : found.get().contextTokens(),
+                        i.contextWindow() > 0 ? i.contextWindow() : found.get().contextWindow(), now)
+                .withActivity("", now);
+        AppState next = s.withSession(x);
+        List<Effect> effects = new ArrayList<>();
+        if (i.error()) {
+            next = notice(next, Notice.Level.ERROR, i.name() + ": " + i.message());
+        }
+        if (!x.isBusy()) {
+            effects.add(new Effect.DesktopNotify(i.name(), i.error() ? "Turn failed: " + i.message() : "Turn finished"));
+            // nothing runs or is queued: a statement card still waiting belongs to a call the turn abandoned (an
+            // interrupt), and answering Run would execute it after the fact. Other cards may belong to a background
+            // agent that outlives the turn; Claude Code cancels abandoned calls itself, which withdraws them.
+            next = withdrawApprovals(next, i.name(), "the turn ended", effects, a -> a.kind() == ApprovalKind.SQL_WRITE);
+        }
+        return new Transition(next, effects);
+    }
+
+    /** Denies and drops every waiting approval of {@code session}, so no MCP call waits for an answer nobody can give. */
+    private static AppState withdrawApprovals(AppState s, String session, String reason, List<Effect> effects) {
+        return withdrawApprovals(s, session, reason, effects, a -> true);
+    }
+
+    private static AppState withdrawApprovals(AppState s, String session, String reason, List<Effect> effects,
+                                              java.util.function.Predicate<Approval> which) {
+        List<Approval> kept = new ArrayList<>();
+        for (Approval a : s.approvals()) {
+            if (a.session().equals(session) && which.test(a)) {
+                effects.add(new Effect.ResolveApproval(a, new ApprovalDecision.Deny(reason)));
+            } else {
+                kept.add(a);
+            }
+        }
+        return kept.size() == s.approvals().size() ? s : s.withApprovals(kept);
+    }
+
+    private Transition sessionExited(AppState s, Intent.SessionExited i) {
+        Optional<SessionState> found = s.session(i.name());
+        if (found.isEmpty()) {
+            return Transition.of(s);
+        }
+        SessionState x = found.get();
+        boolean expected = x.status() == Status.CLOSING || i.exitCode() == 0;
+        long now = clock.millis();
+        x = x.withStatus(expected ? Status.CLOSED : Status.FAILED, expected ? "" : i.error())
+                .withTurns(0, now)
+                .withActivity("", now);
+        List<Effect> effects = new ArrayList<>();
+        AppState next = withdrawApprovals(s.withSession(x), i.name(), "session ended", effects);
+        if (!expected) {
+            next = notice(next, Notice.Level.ERROR, "Session " + i.name() + " exited [code=" + i.exitCode() + "] " + i.error());
+        }
+        return new Transition(next, effects);
+    }
+
+    private static AppState rebindSession(AppState s, String from, String to) {
+        List<PanelState> panels = new ArrayList<>(s.panels().size());
+        for (PanelState p : s.panels()) {
+            panels.add(p.session().equals(from) ? p.withSession(to) : p);
+        }
+        return s.withPanels(panels, s.focused());
+    }
+
+    private static List<SessionSpec> sessionSpecs(AppState s) {
+        return s.sessions().stream().map(SessionState::spec).toList();
+    }
+
+    // ---- approvals
+
+    private Transition approvalRequested(AppState s, Approval a) {
+        if (s.approval(a.id()).isPresent()) {
+            return Transition.of(s);
+        }
+        List<Approval> approvals = new ArrayList<>(s.approvals());
+        approvals.add(a);
+        AppState next = notice(s.withApprovals(approvals), Notice.Level.INFO, a.session() + " asks: " + a.summary());
+        return new Transition(next, List.of(new Effect.DesktopNotify(a.session() + " needs approval", a.summary())));
+    }
+
+    private Transition approvalAnswered(AppState s, Intent.ApprovalAnswered i) {
+        Optional<Approval> a = s.approval(i.id());
+        if (a.isEmpty()) {
+            return Transition.of(s);
+        }
+        AppState next = s.withApprovals(s.approvals().stream().filter(x -> x.id() != i.id()).toList());
+        return new Transition(next, List.of(new Effect.ResolveApproval(a.get(), i.decision())));
+    }
+
+    private Transition approvalWithdrawn(AppState s, Intent.ApprovalWithdrawn i) {
+        if (s.approval(i.id()).isEmpty()) {
+            return Transition.of(s);
+        }
+        AppState next = s.withApprovals(s.approvals().stream().filter(x -> x.id() != i.id()).toList());
+        return Transition.of(notice(next, Notice.Level.WARN, "Approval withdrawn: " + i.reason()));
+    }
+
+    // ---- views
+
+    private Transition showView(AppState s, Intent.ShowView i) {
+        for (ViewState v : s.views()) {
+            if (!v.pinned() && v.title().equals(i.title()) && v.session().equals(i.session()) && v.placement() == i.placement()) {
+                // the user's own command (session "") shows its view again; a session's update in place does not move the user
+                AppState next = s.withViews(replaceView(s.views(), v.replaced(i.spec())));
+                return Transition.of(i.session().isEmpty() && i.placement() == Placement.LOWER ? next.withLowerTab(LowerTab.view(v.id())) : next);
+            }
+        }
+        long id = s.nextId();
+        List<ViewState> views = new ArrayList<>(s.views());
+        views.add(new ViewState(id, i.title(), i.spec(), i.placement(), false, i.session(), 1L));
+        AppState next = s.withIdTaken().withViews(views);
+        return Transition.of(i.placement() == Placement.LOWER ? next.withLowerTab(LowerTab.view(id)) : next);
+    }
+
+    private Transition closeView(AppState s, long id) {
+        Optional<ViewState> view = s.view(id);
+        if (view.isEmpty()) {
+            return Transition.of(s);
+        }
+        AppState next = s.withViews(s.views().stream().filter(v -> v.id() != id).toList());
+        if (s.lowerTab().kind() == LowerTab.Kind.VIEW && s.lowerTab().viewId() == id) {
+            next = next.withLowerTab(LowerTab.RESULTS);
+        }
+        List<Effect> effects = new ArrayList<>();
+        if (view.get().spec() instanceof ViewSpec.Console c) {
+            if (c.state() == ViewSpec.RunState.RUNNING) {
+                effects.add(new Effect.CancelCommand(c.runId()));
+            }
+            effects.add(new Effect.ForgetCommand(c.runId()));
+        }
+        return new Transition(next, effects);
+    }
+
+    private static List<ViewState> replaceView(List<ViewState> views, ViewState view) {
+        List<ViewState> next = new ArrayList<>(views.size());
+        for (ViewState v : views) {
+            next.add(v.id() == view.id() ? view : v);
+        }
+        return next;
+    }
+
+    // ---- development tools
+
+    private Transition runGradle(AppState s, Intent.RunGradle i) {
+        PanelId panel = i.panel() != null ? i.panel() : s.focused();
+        String tasks = i.tasks().strip();
+        if (tasks.isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.WARN, "No Gradle tasks given"));
+        }
+        String dir = s.panel(panel).flatMap(p -> s.session(p.session())).map(x -> x.spec().workDir())
+                .orElse(System.getProperty("user.home"));
+        return runCommand(s, "gradle " + tasks, panel == null ? "" : panel.value(), id -> new Effect.RunGradle(id, dir, tasks));
+    }
+
+    /**
+     * Opens a console view for a new run and starts it. Running the same command again replaces the
+     * previous run's view, unless it is pinned, and stops that run when it still runs.
+     */
+    private Transition runCommand(AppState s, String title, String panel, LongFunction<Effect> start) {
+        long runId = s.nextId();
+        List<Effect> effects = new ArrayList<>();
+        for (ViewState v : s.views()) {
+            if (!v.pinned() && v.title().equals(title) && v.placement() == Placement.LOWER && v.spec() instanceof ViewSpec.Console c) {
+                if (c.state() == ViewSpec.RunState.RUNNING) {
+                    effects.add(new Effect.CancelCommand(c.runId()));
+                }
+                effects.add(new Effect.ForgetCommand(c.runId()));
+            }
+        }
+        Transition shown = showView(s.withIdTaken(), new Intent.ShowView("", title, ViewSpec.Console.running(runId, title, panel), Placement.LOWER));
+        // a re-run replaces its view in place, which keeps the tab; the user asked for this run, so show it
+        AppState placed = shown.state();
+        AppState withTab = placed.views().stream()
+                .filter(v -> v.spec() instanceof ViewSpec.Console c && c.runId() == runId).findFirst()
+                .map(v -> placed.withLowerTab(LowerTab.view(v.id()))).orElse(placed);
+        shown = new Transition(withTab, shown.effects());
+        effects.add(start.apply(runId));
+        return new Transition(shown.state(), effects);
+    }
+
+    private Transition commandFinished(AppState s, Intent.CommandFinished i) {
+        for (ViewState v : s.views()) {
+            if (v.spec() instanceof ViewSpec.Console c && c.runId() == i.runId()) {
+                ViewSpec.RunState state = i.cancelled() ? ViewSpec.RunState.CANCELLED
+                        : i.exitCode() == 0 ? ViewSpec.RunState.PASSED : ViewSpec.RunState.FAILED;
+                ViewSpec.Console done = new ViewSpec.Console(c.runId(), c.command(), state, i.exitCode(), i.millis(), i.tests(), i.failures(), c.panel());
+                AppState next = s.withViews(replaceView(s.views(), v.replaced(done)));
+                List<Effect> effects = i.millis() >= LONG_RUN_MILLIS && !i.cancelled()
+                        ? List.of(new Effect.DesktopNotify(c.command(), (state == ViewSpec.RunState.PASSED ? "passed" : "failed")
+                        + " in " + i.millis() / 1000 + " s")) : List.of();
+                return new Transition(next, effects);
+            }
+        }
+        return Transition.of(s); // the view was closed; nothing shows the result
+    }
+
+    private static String fileName(String path) {
+        int slash = path.lastIndexOf('/');
+        return slash < 0 ? path : path.substring(slash + 1);
+    }
+
+    // ---- editor
+
+    private Transition editPanel(AppState s, Intent.EditPanel i) {
+        PanelId target = i.panel() != null ? i.panel() : s.focused();
+        if (s.panel(target).isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "No panel " + target));
+        }
+        return new Transition(s, List.of(new Effect.EditPanelText(target, i.text(), i.mode())));
+    }
+
+    // ---- notices
+
+    private AppState notice(AppState s, Notice.Level level, String text) {
+        return s.withNotice(new Notice(level, text, clock.millis()));
+    }
+}
