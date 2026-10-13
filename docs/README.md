@@ -38,5 +38,6 @@ Reference for how comando is built and why. The [repository README](../README.md
 
 | Document | Contents |
 |---|---|
+| [comando in ten minutes](guides/tutorial.md) | a first session, step by step: a database, SQL, plots, a Claude session, approvals, the terminal |
 | [Build and run](guides/build-and-run.md) | prerequisites, Gradle tasks, configuration properties, the data root |
 | [Coding guidelines](guides/coding-guidelines.md) | the rules the code follows and the ones it does not, with the reason |

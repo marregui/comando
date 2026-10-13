@@ -58,4 +58,4 @@ When a connection opens, its schema loads in the background, without a view: tab
 
 ## 5. Embedded QuestDB
 
-comando can start a QuestDB server in the data root, on QuestDB's default ports (PostgreSQL wire 8812, web console 9000), from a toggle in the window. It stops when comando exits, after the lanes that may use it.
+comando can start a QuestDB server in the data root, on QuestDB's default ports (PostgreSQL wire 8812, web console 9000, ILP 9009), from a toggle in the window. It creates `questdb/` on first start. Every listener binds 127.0.0.1 and ILP over UDP is off, because QuestDB binds all interfaces by default and its default login is public; the settings go through QuestDB's `QDB_` environment overrides, so `server.conf` is left as it is. It stops when comando exits, after the lanes that may use it.

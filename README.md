@@ -26,7 +26,7 @@ Requires JDK 25 and the Claude Code CLI.
 ./gradlew :app:dmg           # unsigned macOS disk image in app/build/dmg
 ```
 
-[Build and run](docs/guides/build-and-run.md) lists every task and setting.
+[comando in ten minutes](docs/guides/tutorial.md) walks through a first session. [Build and run](docs/guides/build-and-run.md) lists every task and setting.
 
 ## Documentation
 

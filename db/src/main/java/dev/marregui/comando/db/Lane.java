@@ -5,6 +5,7 @@ import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.result.ResultRegistry;
+import dev.marregui.comando.core.state.Notice;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -293,9 +294,14 @@ final class Lane implements AutoCloseable {
                 long updates = st.getLargeUpdateCount();
                 long total = millisSince(start);
                 sink.dispatch(new Intent.SqlCompleted(requestId, 0, updates, false, execMillis, total - execMillis, total));
+                reportMoreResults(st);
                 return "done";
             }
-            return fetch(requestId, st.getResultSet(), start, execMillis);
+            String outcome = fetch(requestId, st.getResultSet(), start, execMillis);
+            if (outcome.equals("done")) {
+                reportMoreResults(st);
+            }
+            return outcome;
         } catch (SQLException e) {
             boolean wasCancelled = cancelled.contains(requestId);
             if (wasCancelled) {
@@ -318,6 +324,26 @@ final class Lane implements AutoCloseable {
                     // the statement's connection may be gone; nothing left to release
                 }
             }
+        }
+    }
+
+    /**
+     * Says so when the text held more than one statement: the driver runs them all and the Results tab shows
+     * the first one's result only, which would otherwise pass without a word.
+     */
+    private void reportMoreResults(Statement st) {
+        int more = 0;
+        try {
+            while (st.getMoreResults() || st.getLargeUpdateCount() != -1) {
+                more++;
+            }
+        } catch (SQLException e) {
+            sink.dispatch(new Intent.Notify(Notice.Level.ERROR, "A later statement in the block failed: " + message(e), false));
+            return;
+        }
+        if (more > 0) {
+            sink.dispatch(new Intent.Notify(Notice.Level.WARN,
+                    (more + 1) + " statements ran; the Results tab shows the first one's result only", false));
         }
     }
 

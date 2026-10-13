@@ -513,7 +513,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     /** Placed boxes need exact positions; an estimated layout is completed first. */
     private void ensureExact() {
-        if (estimated) {
+        // a canvas never laid out (its tab not yet shown) has items but no tops, and is not marked estimated
+        if (estimated || tops.length != items.size()) {
             layoutFully(getWidth() > 0 ? getWidth() : viewportWidth());
         }
     }

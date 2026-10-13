@@ -67,6 +67,9 @@ public final class EdtWatchdog implements AutoCloseable {
             long blockedSince = probe;
             while (running && answered != probe) {
                 sleep(PERIOD_MILLIS);
+                if (answered == probe) {
+                    break; // answered during the sleep: the wait ended below the threshold, or was already reported
+                }
                 long waited = (System.nanoTime() - blockedSince) / 1_000_000;
                 if (stack == null && waited >= THRESHOLD_MILLIS) {
                     stack = stackOf(edt);

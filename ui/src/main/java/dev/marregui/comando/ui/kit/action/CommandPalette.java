@@ -59,6 +59,11 @@ public final class CommandPalette {
                 return label;
             }
         });
+        // rows are HTML labels: without a prototype the list lays out every row's HTML to size itself, over
+        // 200 ms on the EDT at the first opening; with one it measures one row and renders only the visible ones
+        registry.all().stream()
+                .max(java.util.Comparator.comparingInt((Command c) -> c.label().length() + c.group().length()))
+                .ifPresent(list::setPrototypeCellValue);
         Runnable filter = () -> {
             String q = search.getText().strip().toLowerCase(Locale.ROOT);
             model.clear();

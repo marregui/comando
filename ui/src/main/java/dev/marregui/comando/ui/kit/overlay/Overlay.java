@@ -31,6 +31,9 @@ public final class Overlay extends JPanel {
         setLayout(cards);
         progress.setIndeterminate(true);
         progress.setVisible(false);
+        // the text is a centred block of fixed width: an icon beside it lands far from short messages
+        message.setHorizontalTextPosition(SwingConstants.CENTER);
+        message.setVerticalTextPosition(SwingConstants.BOTTOM);
         JPanel inner = new JPanel(new BorderLayout(0, Theme.GAP));
         inner.setOpaque(false);
         inner.add(message, BorderLayout.CENTER);

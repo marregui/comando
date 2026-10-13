@@ -192,7 +192,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
         notifier = new Notifier(frame);
         livePlots = new LivePlots(deps.intents(), deps.results());
-        watchdog = EdtWatchdog.logging();
         Thread.ofVirtual().name("pty-preload").start(TerminalWidget::preload);
         workspace = new Workspace(deps.intents(), deps.texts(), deps.schemas());
         deps.schemas().addListener(schemaListener);
@@ -270,6 +269,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (p != null) {
             p.editor().requestFocus();
         }
+        // started last: a probe posted during the build waits for the rest of it and reports the build itself
+        watchdog = EdtWatchdog.logging();
     }
 
     private static Map<String, Status> statuses(List<Map.Entry<String, Status>> entries) {
@@ -844,7 +845,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
             lower.terminals().closeAll();
             livePlots.stopAll();
-            watchdog.close();
+            if (watchdog != null) {
+                watchdog.close();
+            }
             keyPriority.close();
             sidebarTimer.stop();
             deps.loop().removeListener(stateListener);
@@ -888,7 +891,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
         lower.terminals().closeAll();
         livePlots.stopAll();
-        watchdog.close();
+        if (watchdog != null) {
+            watchdog.close();
+        }
         keyPriority.close();
         frame.dispose();
         deps.onQuit().run();

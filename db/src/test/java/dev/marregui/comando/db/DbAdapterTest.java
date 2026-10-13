@@ -56,6 +56,24 @@ class DbAdapterTest {
     }
 
     @Test
+    void aBlockOfSeveralStatementsSaysThatOnlyTheFirstResultIsShown() {
+        db.execute(1L, spec, "SELECT 1 a; SELECT 2 b");
+
+        Intent.SqlCompleted done = sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 1L, WAIT);
+        assertThat(done.rows()).isEqualTo(1);
+        Intent.Notify notice = sink.await(Intent.Notify.class, WAIT);
+        assertThat(notice.text()).startsWith("2 statements ran");
+    }
+
+    @Test
+    void oneStatementRaisesNoNotice() {
+        db.execute(1L, spec, "SELECT 1 a;");
+
+        sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 1L, WAIT);
+        assertThat(sink.of(Intent.Notify.class)).isEmpty();
+    }
+
+    @Test
     void runsAQueryAndStoresRowsByColumn() {
         db.execute(1L, spec, "SELECT x, x * 1.5 d, x % 2 = 0 even, cast(x AS STRING) s, "
                 + "timestamp_sequence(to_timestamp('2024-01-01T00:00:00', 'yyyy-MM-ddTHH:mm:ss'), 1000000) ts "

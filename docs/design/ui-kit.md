@@ -18,7 +18,7 @@
 
 ## 2. Commands
 
-A command appears in at most one menu (its group) and carries at most one key stroke. The palette (⌘⇧P) lists every enabled command whose label matches what the user types, with its key and menu. A command in a menu gets its key as the menu item's accelerator, not as a second binding, so it runs once per key press. Registering an id twice throws. The shell registers every command today; `WidgetContext.actions()` lets a widget register its own, and none does yet.
+A command appears in at most one menu (its group) and carries at most one key stroke. The palette (⌘⇧P) lists every enabled command whose label matches what the user types, with its key and menu. A command in a menu gets its key as the menu item's accelerator, not as a second binding, so it runs once per key press. In the main window a command's key is claimed before the focused component sees it (`KeyPriority`), because Swing offers a key to the focused component's own bindings first: RSyntaxTextArea binds ⌘⏎, ⌘J and ⌘⇧K, and the terminal consumes every key. A disabled command leaves its key to the component. Registering an id twice throws. The shell registers every command today; `WidgetContext.actions()` lets a widget register its own, and none does yet.
 
 ## 3. Threads in the UI
 

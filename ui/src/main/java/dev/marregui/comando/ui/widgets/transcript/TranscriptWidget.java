@@ -21,12 +21,18 @@ import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Desktop;
+import java.awt.event.HierarchyEvent;
 import java.net.URI;
 
 /**
  * A session's transcript as structured blocks, painted by {@link TranscriptCanvas}. Holds the last
  * {@link #WINDOW} blocks, with a button for earlier ones; replaces items in place when the writer replaced
  * a block; follows the end while the user is at the end.
+ *
+ * <p>Whether to follow is remembered rather than read from the scroll bar alone: a transcript loaded while its
+ * tab is hidden has a scroll pane that was never laid out, so its bar reads "at the top" and a later turn would
+ * not be followed. The bar decides only while the pane is on screen; becoming visible scrolls a following
+ * transcript to its end.
  */
 public final class TranscriptWidget implements Widget<TranscriptView>, Searchable, Copyable, Zoomable {
 
@@ -42,6 +48,8 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     private String session = "";
     private int windowStart;
     private int built;
+    /** Follow the end on the next change; set from the scroll bar only while the pane is showing. */
+    private boolean following = true;
 
     public TranscriptWidget(WidgetContext context) {
         this.context = context;
@@ -53,6 +61,11 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         earlier.setVisible(false);
         root.add(earlier, BorderLayout.NORTH);
         root.add(scroll, BorderLayout.CENTER);
+        scroll.addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0 && scroll.isShowing() && following) {
+                SwingUtilities.invokeLater(this::scrollToEnd);
+            }
+        });
         Capabilities.mark(overlay, this);
         overlay.showEmpty("No session bound to this panel. Bind one from the sidebar, then type a prompt below.");
     }
@@ -60,6 +73,11 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     @Override
     public JComponent component() {
         return overlay;
+    }
+
+    /** For tests: whether the next change scrolls to the end. */
+    boolean following() {
+        return following;
     }
 
     /** The painter, for measurement and tests. */
@@ -91,13 +109,17 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
 
     private void reset(int start) {
         canvas.clear();
+        following = true;
         windowStart = start;
         built = start;
         updateEarlierButton();
     }
 
     private void sync() {
-        boolean follow = atEnd();
+        if (scroll.isShowing()) {
+            following = atEnd();
+        }
+        boolean follow = following;
         int n = transcript.size();
         for (int i = windowStart; i < built; i++) {
             Block b = transcript.get(i);
@@ -128,6 +150,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
             }
         }
         built = end;
+        following = false;
         SwingUtilities.invokeLater(() -> scroll.getVerticalScrollBar().setValue(0));
     }
 
@@ -156,13 +179,16 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         return bar.getValue() + bar.getVisibleAmount() >= bar.getMaximum() - 40;
     }
 
+    /** Lays the pane out first, so the bar's maximum covers blocks appended since the last layout. */
     private void scrollToEnd() {
+        scroll.validate();
         JScrollBar bar = scroll.getVerticalScrollBar();
         bar.setValue(bar.getMaximum());
     }
 
     /** Scrolls to the last prompt and highlights it; false when there is none. */
     public boolean jumpToLastPrompt() {
+        following = false;
         return canvas.jumpToLastPrompt();
     }
 

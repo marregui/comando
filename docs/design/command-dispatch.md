@@ -4,7 +4,7 @@ One editor holds SQL and prompts. Running text sends it to one of two places: SQ
 
 ## 1. What runs
 
-The selection runs when there is one. Otherwise the block under the caret runs: a block is a run of non-blank lines between blank lines, so a query and the question below it are two blocks. Fences carry no meaning here, so a stray fence cannot join the statements around it.
+The selection runs when there is one. Otherwise the block under the caret runs: a block is a run of non-blank lines between blank lines, so a query and the question below it are two blocks. Fences carry no meaning here, so a stray fence cannot join the statements around it. A block holding several SQL statements runs them all in one call; the Results tab shows the first one's result, and the status bar says how many statements ran.
 
 ## 2. The classifier
 
