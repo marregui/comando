@@ -24,6 +24,19 @@ final class Pty extends ProcessTtyConnector {
         this.process = process;
     }
 
+    /**
+     * Loads pty4j's native code, which its first use otherwise loads on the EDT that opens a terminal (over
+     * 200 ms on macOS: JNA's dispatch library and pty4j's own). Call off the EDT; a failure is left for the
+     * first terminal to report.
+     */
+    static void preload() {
+        try {
+            Class.forName("com.pty4j.unix.PtyHelpers", true, Pty.class.getClassLoader());
+        } catch (ClassNotFoundException | LinkageError e) {
+            System.getLogger(Pty.class.getName()).log(System.Logger.Level.DEBUG, "pty4j preload skipped: " + e);
+        }
+    }
+
     /** The user's login shell: {@code $SHELL -l}, so an app started from Finder gets the user's PATH. */
     static List<String> loginShell() {
         String shell = System.getenv("SHELL");

@@ -63,6 +63,9 @@ public final class EditorPanel extends JPanel {
         run.setToolTipText("Run the selection or the block under the caret (⌘⏎); ⌘⇧⏎ sends to Claude, ⌥⏎ runs as SQL");
         stop.setToolTipText("Stop the running SQL or interrupt the session (⌘.)");
         stop.putClientProperty("JButton.buttonType", "toolBarButton");
+        // a click leaves the keyboard in the editor, ready for the next edit or run
+        run.setFocusable(false);
+        stop.setFocusable(false);
         right.add(run);
         right.add(stop);
         header.add(left, BorderLayout.WEST);

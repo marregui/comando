@@ -58,6 +58,11 @@ public final class TerminalWidget {
         return pty != null && pty.process().isAlive();
     }
 
+    /** Loads the pseudo-terminal's native code ahead of the first terminal; call off the EDT. */
+    public static void preload() {
+        Pty.preload();
+    }
+
     /** Starts the shell when it is not running; on the EDT. */
     public void start() {
         if (isRunning()) {

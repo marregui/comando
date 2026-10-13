@@ -7,6 +7,7 @@ import javax.swing.Action;
 import javax.swing.JComponent;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
+import javax.swing.KeyStroke;
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -30,6 +31,16 @@ public final class ActionRegistry {
 
     public Command get(String id) {
         return commands.get(id);
+    }
+
+    /** The first command bound to {@code key}, or null. */
+    public Command forKey(KeyStroke key) {
+        for (Command c : commands.values()) {
+            if (key.equals(c.key())) {
+                return c;
+            }
+        }
+        return null;
     }
 
     public void run(String id) {

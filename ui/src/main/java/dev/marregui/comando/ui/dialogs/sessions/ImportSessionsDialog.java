@@ -19,6 +19,7 @@ import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingWorker;
 import javax.swing.event.DocumentEvent;
@@ -28,6 +29,7 @@ import java.awt.BorderLayout;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Window;
+import java.awt.event.KeyEvent;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -107,7 +109,8 @@ public final class ImportSessionsDialog {
         root.add(south, BorderLayout.SOUTH);
         dialog.setContentPane(root);
         dialog.setSize(new Dimension(1100, 560));
-        dialog.setLocationRelativeTo(owner);
+        dialog.getRootPane().registerKeyboardAction(e -> dialog.setVisible(false),
+                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
         int[] widths = {220, 220, 120, 360, 80, 60};
         for (int i = 0; i < widths.length; i++) {
             table.getColumnModel().getColumn(i).setPreferredWidth(widths[i]);
@@ -122,6 +125,9 @@ public final class ImportSessionsDialog {
             knownNames.add(x.name());
         }
         overlay.showLoading("Reading stored conversations");
+        if (!dialog.isVisible()) {
+            dialog.setLocationRelativeTo(dialog.getOwner());
+        }
         dialog.setVisible(true);
         new SwingWorker<List<StoredConversation>, Void>() {
             @Override

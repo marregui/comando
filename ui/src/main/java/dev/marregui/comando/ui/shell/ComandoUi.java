@@ -36,6 +36,7 @@ import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
 import dev.marregui.comando.ui.kit.action.Command;
 import dev.marregui.comando.ui.kit.action.CommandPalette;
+import dev.marregui.comando.ui.kit.action.KeyPriority;
 import dev.marregui.comando.ui.kit.async.Coalescer;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.EdtWatchdog;
@@ -150,6 +151,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private boolean sidePaneShown;
     private LivePlots livePlots;
     private EdtWatchdog watchdog;
+    private KeyPriority keyPriority;
     /** The user or Claude hid the side pane; a change in the side views shows it again. */
     private boolean sidePaneHidden;
     private long sideViewsKey;
@@ -191,6 +193,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         notifier = new Notifier(frame);
         livePlots = new LivePlots(deps.intents(), deps.results());
         watchdog = EdtWatchdog.logging();
+        Thread.ofVirtual().name("pty-preload").start(TerminalWidget::preload);
         workspace = new Workspace(deps.intents(), deps.texts(), deps.schemas());
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
@@ -256,6 +259,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         registerCommands();
         frame.setJMenuBar(menuBar());
         actions.bind(frame.getRootPane());
+        keyPriority = KeyPriority.install(actions, frame);
         restoreLayout();
         deps.loop().addListener(stateListener);
         render();
@@ -841,6 +845,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             lower.terminals().closeAll();
             livePlots.stopAll();
             watchdog.close();
+            keyPriority.close();
             sidebarTimer.stop();
             deps.loop().removeListener(stateListener);
             deps.schemas().removeListener(schemaListener);
@@ -884,6 +889,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         lower.terminals().closeAll();
         livePlots.stopAll();
         watchdog.close();
+        keyPriority.close();
         frame.dispose();
         deps.onQuit().run();
     }

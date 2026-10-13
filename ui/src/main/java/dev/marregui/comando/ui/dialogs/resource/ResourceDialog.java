@@ -26,6 +26,7 @@ import javax.swing.JPasswordField;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -35,6 +36,7 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Window;
+import java.awt.event.KeyEvent;
 import java.io.File;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -167,7 +169,8 @@ public final class ResourceDialog<S> {
         split.setBorder(null);
         dialog.setContentPane(split);
         dialog.setSize(new Dimension(820, 520));
-        dialog.setLocationRelativeTo(owner);
+        dialog.getRootPane().registerKeyboardAction(e -> dialog.setVisible(false),
+                KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
     }
 
     public void show(AppState s, String select) {
@@ -179,6 +182,10 @@ public final class ResourceDialog<S> {
             list.setSelectedIndex(0);
         } else if (names.isEmpty()) {
             add();
+        }
+        if (!dialog.isVisible()) {
+            // placed on each opening: the main window may have moved, or restored its bounds, since the dialog was built
+            dialog.setLocationRelativeTo(dialog.getOwner());
         }
         dialog.setVisible(true);
         dialog.toFront();

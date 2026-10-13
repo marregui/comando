@@ -234,7 +234,12 @@ final class Lane implements AutoCloseable {
         props.setProperty("tcpKeepAlive", "true");
         props.setProperty("sslmode", spec.sslMode());
         props.setProperty("cancelSignalTimeout", "2");
-        connection = DriverManager.getConnection(spec.jdbcUrl(), props);
+        try {
+            connection = DriverManager.getConnection(spec.jdbcUrl(), props);
+        } catch (SQLException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot connect [connection=" + name + ", sqlState=" + e.getSQLState() + "]: " + e.getMessage());
+            throw e;
+        }
         connection.setAutoCommit(true);
         sink.dispatch(new Intent.ConnectionOpened(name));
         LOG.log(System.Logger.Level.INFO, "connected [connection=" + name + ']');

@@ -188,10 +188,14 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
             for (Schema.Column c : t.columns()) {
                 columns.add(new ViewSpec.TreeNode(c.name(), c.type(), "comando-insert:" + quoteIfNeeded(c.name()), List.of()));
             }
-            tables.add(new ViewSpec.TreeNode(t.name(), t.columns().size() + " columns",
+            tables.add(new ViewSpec.TreeNode(t.name(), count(t.columns().size(), "column"),
                     "comando-insert:SELECT * FROM " + quoteIfNeeded(t.name()) + " LIMIT 100;", columns));
         }
-        return new ViewSpec.TreeNode(connection, schema.tables().size() + " tables", tables);
+        return new ViewSpec.TreeNode(connection, count(schema.tables().size(), "table"), tables);
+    }
+
+    private static String count(int n, String noun) {
+        return n + " " + noun + (n == 1 ? "" : "s");
     }
 
     private static String quoteIfNeeded(String name) {
