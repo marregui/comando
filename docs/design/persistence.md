@@ -29,7 +29,7 @@ Outside the data root:
 
 `JsonFile` writes a file to a temporary file in the same directory, then moves it over the old one with `ATOMIC_MOVE`. A crash leaves the old content or the new, never a torn file. A file that cannot be parsed at start is renamed to `<name>.corrupt-<epoch ms>` and comando starts without it, so the next save does not destroy what the user may want to recover.
 
-`Store` runs every write from an immutable snapshot of the state, so a save never races an edit. Sessions and panels are written on one thread; connections on another, because a connection save talks to the keychain, which may wait on an unlock prompt, and panel text must not queue behind it. Connection and session changes are written at once. Panel text is written 800 ms after the last change, prompts likewise. `Store.close()` writes what is pending.
+`Store` runs every write from an immutable snapshot of the state, so a save never races an edit. Sessions and panels are written on one thread; connections on another, because a connection save talks to the keychain, which may wait on an unlock prompt, and panel text must not queue behind it. Connection and session changes are written at once. Panel text is written 800 ms after the first change not yet saved, so continuous typing saves about every 800 ms; prompts likewise. `Store.close()` writes what is pending.
 
 ## 3. What comes back after a restart
 

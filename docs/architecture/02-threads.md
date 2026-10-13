@@ -16,10 +16,11 @@
 | `gradle-<run>`, `jfrq-<run>` | virtual | run the child process, copy its output to the console, collect test reports | the run's `Console` |
 | `tool-output-<run>`, `tool-kill-<run>` | virtual | copy a run's output while it is open; SIGKILL what a stop left alive after 2 s | — |
 | `recording`, `scratchpad` | virtual | read a JFR file or the scratchpad folder, then send a view | — |
-| `store` | platform | atomic writes of `sessions.json` and `panels.json`, debounced panel saves | those files |
+| `store` | platform | atomic writes of `sessions.json`, `panels.json` and `prompts.json`; panel text and prompts 800 ms after the first unsaved change | those files |
 | `store-secrets` | platform | keychain calls and `connections.json`, apart so an unanswered unlock prompt never holds back panel text | `connections.json` |
 | `edt-watchdog` | platform, daemon | posts a probe to the EDT every 100 ms and reports one that waits 200 ms | — |
-| `show-file`, `notify`, `open-link`, `external-editor`, `terminal-exit`, `claude-version`, `export` | virtual | one blocking call each, off the EDT | — |
+| `show-file`, `show-log`, `reveal`, `notify`, `open-link`, `external-editor`, `terminal-exit`, `claude-version`, `questdb-toggle`, `pty-preload`, `export` | virtual | one blocking call each, off the EDT | — |
+| `exit`, `shutdown` | platform | close the application after Quit, or from the JVM's shutdown hook ([Ownership](04-ownership.md#2-exit)) | — |
 | `keychain-output` | virtual | reads the `security` tool's output, so the call's 10 s bound holds even while an unlock prompt is open | — |
 
 JediTerm and pty4j start their own threads for each terminal; comando closes the terminal, and with it those threads.

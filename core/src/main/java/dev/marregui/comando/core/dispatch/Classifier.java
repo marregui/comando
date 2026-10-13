@@ -9,10 +9,11 @@ import java.util.regex.Pattern;
  * Decides whether a block of editor text is SQL for the panel's connection or a prompt for its session.
  *
  * <p>Rules, in order: (a) a first line {@code -- @sql} or {@code -- @claude} wins and is removed;
- * (b) a leading {@code /} is a Claude command; (c) a leading SQL keyword followed by the shape that
- * keyword takes, with no English function word outside quotes and no closing {@code ?} or {@code .},
- * is SQL; (d) a block of comments only goes nowhere (empty text); (e) anything else is a prompt. Rule (c) is deliberately strict: "update the README" and
- * "show me the log" are prompts. A statement the classifier misses is forced with the SQL key.</p>
+ * (b) a leading {@code /} followed by a letter is a Claude command; (c) a block of comments only goes nowhere
+ * (empty text); (d) a leading SQL keyword followed by the shape that keyword takes, with no English function
+ * word outside quotes and no closing {@code ?} or {@code .}, is SQL; (e) anything else is a prompt. Rule (d) is
+ * deliberately strict: "update the README" and "show me the log" are prompts. A statement the classifier misses
+ * is forced with the SQL key.</p>
  */
 public final class Classifier {
 

@@ -16,8 +16,8 @@ The rest of the window replaces what a terminal was used for: a shell per panel,
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored-conversation loading, the session catalogue | `core`, Jackson |
 | `mcp` | the MCP server over HTTP on loopback, the tools, the SQL policy, the audit log | `core`, Jackson |
 | `tools` | Gradle and jfrq runs, JFR summaries, the scratchpad tree | `core` |
-| `ui` | the Swing shell, panels, dialogs, the widget kit, the widgets | `core`, FlatLaf, RSyntaxTextArea, JediTerm, pty4j |
-| `app` | wiring, configuration, the store files, the keychain, the intent log, `main` | all |
+| `ui` | the Swing shell, panels, dialogs, the widget kit, the widgets | `core`, FlatLaf, RSyntaxTextArea and AutoComplete, CommonMark, java-diff-utils, Jackson, JediTerm, pty4j |
+| `app` | wiring, configuration, the store files, the keychain, the intent log, the embedded QuestDB, `main` | all, Jackson, QuestDB |
 
 ```mermaid
 flowchart BT
@@ -61,6 +61,8 @@ flowchart LR
   R -->|effects| DBA
   R -->|effects| CL
   R -->|effects| TL
+  R -->|"effects (ResolveApproval)"| MC
+  R -->|"effects (EditPanelText, Arrange, …)"| ED
   DBA -->|"SqlRows, SqlCompleted"| Q
   CL -->|"SessionInit, SessionTurnEnded"| Q
   CC["Claude Code"] -->|"MCP calls"| MC
@@ -75,7 +77,7 @@ Large data does not pass through the state. Result rows, transcript blocks, comm
 
 1. **Ports and adapters.** `core` names every outside system as a port interface; adapters implement them, and tests replace each with a fake from `testkit`.
 2. **One state, one direction.** `AppState` is an immutable value. Only the reducer replaces it, one intent at a time, on its own thread.
-3. **Request identity.** Every SQL run, every command run and every approval has an id the reducer assigns. A late event for a superseded id is dropped, so a stale result never binds to a new run.
+3. **Request identity.** Every SQL run and every command run has an id the reducer assigns; every approval has an id the MCP server assigns from its own counter. A late event for a superseded id is dropped, so a stale result never binds to a new run.
 4. **Nothing blocks the EDT or the reducer.** Adapters queue work on their own threads and return at once. Every wait has a deadline ([Threads](02-threads.md)).
 5. **Ownership is a tree.** `App` creates every part and closes them in reverse order, each once ([Ownership](04-ownership.md)).
 6. **Widgets on one foundation.** A view type maps to one widget; widgets share the kit and the capability implementations and never import each other ([Widgets](../design/widgets.md)).

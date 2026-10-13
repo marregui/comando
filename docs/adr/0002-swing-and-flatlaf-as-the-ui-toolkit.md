@@ -6,7 +6,7 @@
 
 ## 1. Context
 
-The window needs a code editor, a terminal, a large table, a large plot and a transcript of rich text. JavaFX, Compose Desktop and a web UI were compared against Swing ([plan, §4.6]). Swing has RSyntaxTextArea and JediTerm, keeps the existing code, and ships smallest.
+The window needs a code editor, a terminal, a large table, a large plot and a transcript of rich text. JavaFX, Compose Desktop and a web UI were compared against Swing in the design plan (§4.6). Swing has RSyntaxTextArea and JediTerm, keeps the existing code, and ships smallest.
 
 ## 2. Decision
 

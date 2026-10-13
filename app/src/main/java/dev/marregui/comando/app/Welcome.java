@@ -7,7 +7,7 @@ final class Welcome {
             -- Welcome to comando.
             -- A block is a run of lines between blank lines. Put the caret in a block and press ⌘⏎:
             -- SQL goes to the panel's connection, anything else to the panel's Claude session.
-            -- ⌘⇧⏎ forces Claude, ⌥⏎ forces SQL, ⌘. stops. ⌘⇧P lists every command; ⌘/ shows the keys.
+            -- ⌘⇧⏎ forces Claude, ⌥⏎ forces SQL, ⌘. stops. ⌘⇧P lists what can run now; ⌘⇧/ shows the keys.
             -- First: start the embedded QuestDB (Connections ▸ Start the embedded QuestDB), then add a
             -- Claude session with ⌘⇧K and pick it from the panel's "no session ▾" chip. Help ▸ Tutorial walks through it.
 

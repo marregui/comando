@@ -468,6 +468,13 @@ public final class ResourceDialog<S> {
         say(Theme.MUTED, "New " + config.kind().noun() + "; Save adds it.");
         advice = "";
         updateOpenClose();
+        // a new resource is named first: the keyboard goes to the first field, its default selected to type over;
+        // later, as the dialog may only now be opening
+        JComponent first = fields.values().iterator().next();
+        if (first instanceof javax.swing.text.JTextComponent t) {
+            t.selectAll();
+        }
+        javax.swing.SwingUtilities.invokeLater(first::requestFocusInWindow);
     }
 
     /**

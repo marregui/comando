@@ -1,6 +1,6 @@
 # Coding guidelines
 
-comando follows the author's high-throughput Java guidelines where a path is hot or a resource is owned. Rule identifiers (`G-<section>.<n>`) refer to that document and are cited in reviews. Most of comando is UI, orchestration and text shown once, which those guidelines exempt or do not target; the tables below say which rules apply where, so that code not following an inapplicable rule is not a review finding.
+comando follows the author's high-throughput Java guidelines, a document kept outside this repository, where a path is hot or a resource is owned. Rule identifiers (`G-<section>.<n>`) refer to its sections and are cited in reviews. Most of comando is UI, orchestration and text shown once, which those guidelines exempt or do not target; the tables below say which rules apply where, so that code not following an inapplicable rule is not a review finding.
 
 ## 1. Where the rules apply
 
@@ -10,7 +10,7 @@ comando follows the author's high-throughput Java guidelines where a path is hot
 | Grid, plot and transcript painting | G-2.1, G-2.3, G-2.4, G-3.4 | cells format into one reused buffer (`Formats`); the plot reduces each pixel column to min and max; the transcript keeps layouts and paints only the clip |
 | Ownership: processes, connections, statements, the MCP server | G-4.1 to G-4.6, G-5.6 | idempotent `close()` safe on half-built objects; `App` rolls back a failed construction; one ownership tree ([Ownership](../architecture/04-ownership.md)) |
 | Concurrency: reducer queue, lanes, transcripts, MCP waits | G-7.2, G-7.6, G-7.7, G-7.8, G-7.9 | release and acquire publication (`Transcript`, `ColumnarResult`); every wait bounded ([Threads](../architecture/02-threads.md)); a closed flag plus wake-up in the state loop |
-| Errors and logging | G-5.2, G-5.3, G-6.1, G-6.2 | messages as `verb phrase [key=value]`; errors from external input are explicit exceptions with the input named |
+| Errors and logging | G-5.2, G-5.3, G-6.1, G-6.2 | messages as `verb phrase [key=value]`; a message about one file may name it inline, `cannot <verb> <path>: <reason>`; errors from external input are explicit exceptions with the input named |
 | Configuration and platform seams | G-9.1, G-9.2, G-9.5 | the clock, the database, Claude, the MCP gateway, tools and the UI behind ports in `core.port` |
 | Style | G-10.1 to G-10.8 | `final` where it applies; comments say why; no streams in per-row, per-frame or per-line paths |
 | Tests | G-11.1, G-11.2, G-11.3 | AssertJ only; fault injection through port fakes (`RecordingPorts`, fake CLI scripts) |

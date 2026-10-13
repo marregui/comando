@@ -9,19 +9,19 @@ Claude Code asks comando's `approve` tool before each tool call its permission r
 | Kind | Raised by | Card shows | Answers |
 |---|---|---|---|
 | tool | Bash, Edit, Write, an MCP tool | a one-line summary; the command, or the edit as a diff; the line "Always: <rules>", or "For session: <rules>" for a tool whose rules are not saved | Allow once (⏎ or A), For session (S), Always (L twice; Bash and WebFetch only), Deny (D or Esc) |
-| question | `AskUserQuestion` | each question with its options and their descriptions (radio buttons, or check boxes when it allows several), none chosen, and a free-text field | Answer (⏎, once every question has an answer), Skip (Esc) |
-| plan | `ExitPlanMode` | the plan rendered | Approve plan (⏎), Approve, auto-accept edits (button), Keep planning (Esc) |
-| SQL write | `db_run_sql` with a statement that is not read-only | the connection and the statement | Run (⏎), Deny (D or Esc) |
+| question | `AskUserQuestion` | each question with its options and their descriptions (radio buttons, or check boxes when it allows several), none chosen, and a free-text field | Answer (⏎ or A, once every question has an answer), Skip (D or Esc) |
+| plan | `ExitPlanMode` | the plan rendered | Approve plan (⏎ or A), Approve, auto-accept edits (button), Keep planning (D or Esc) |
+| SQL write | `db_run_sql` with a statement that is not read-only | the connection and the statement | Run (⏎ or A), Deny (D or Esc) |
 
 - A denial carries the note typed on the card, so Claude learns why.
 - "For session" and "Always" return an `addRules` permission update to Claude Code, with destination `session` or `localSettings`. The rules follow how Claude Code matches them, and never allow more than the command could do:
 
   | Tool | Rules | Always |
   |---|---|---|
-  | Bash | one rule per subcommand of `&&`, `\|\|`, `;`, `\|`, `&` and newlines, as Claude Code splits and saves them; the wrappers Claude Code strips before matching (`timeout`, `time`, `nice`, `nohup`, `stdbuf`, `command`, `builtin`, `noglob`) come off first. Each rule is the command's prefix with `:*`: one word (`Bash(ls:*)`), two for a command with subcommands such as `git`, `npm`, `./gradlew` (`Bash(git commit:*)`), three for a runner (`npm run test:*`, `uv run pytest:*`) and for `python -m <module>`. The exact command instead for what runs other commands or code (`sudo`, `su`, `env`, `xargs`, `eval`, `source` and `.`, `command`, shells, interpreters and runtimes without `-m` (`python`, `node`, `java`, `awk`, `osascript`, …), `npx`, `ssh`, `rm`, the exec wrappers `watch`, `setsid`, `ionice`, `flock`, `docker exec`/`run`, `docker compose exec`/`run`, `kubectl exec`, `find` with `-exec` or `-delete`), for a nested command (`$(`, backticks, `<(`, `>(`), for a command that feeds a here-document (`<<EOF`: its lines are data, so the whole command is one exact rule), and when a prefix word holds a quote, a `$`, an `=` or is an option where the subcommand would be | yes |
-  | WebFetch | `domain:<host>` | yes |
+  | Bash | one rule per subcommand of `&&`, `\|\|`, `;`, `\|`, `&` and newlines, as Claude Code splits and saves them; the wrappers Claude Code strips before matching (`timeout`, `time`, `nice`, `nohup`, `stdbuf`, `command`, `builtin`, `noglob`) come off first. Each rule is the command's prefix with `:*`: one word (`Bash(ls:*)`), two for a command with subcommands such as `git`, `npm`, `./gradlew` (`Bash(git commit:*)`), three for a runner (`npm run test:*`, `uv run pytest:*`) and for `python -m <module>`. A command typed with its path keeps it: `/usr/bin/git commit` gives `Bash(/usr/bin/git commit:*)`. The exact command instead for what runs other commands or code (`sudo`, `su`, `env`, `xargs`, `eval`, `source` and `.`, `command -v` and `command -V`, shells, interpreters and runtimes without `-m` (`python`, `node`, `java`, `awk`, `osascript`, …), `npx`, `ssh`, `rm`, the exec wrappers `watch`, `setsid`, `ionice`, `flock`, `docker exec`/`run`, `docker compose exec`/`run`, `kubectl exec`, `find` with `-exec` or `-delete`), for a nested command (`$(`, backticks, `<(`, `>(`), for a command that feeds a here-document (`<<EOF`: its lines are data, so the whole command is one exact rule), and when a prefix word holds a quote, a `$`, an `=` or is an option where the subcommand would be | yes |
+  | WebFetch | `domain:<host>` | yes; a URL with no host: the tool, for the session only |
   | Edit, Write, MultiEdit, NotebookEdit | `Edit(//abs/dir/**)`, the edited file's directory; Claude Code consults only `Edit` path rules for every edit tool | no: for the session only, as Claude Code does for file edits |
-  | Read, Glob, Grep | `Read(//abs/dir/**)` | no |
+  | Read, Glob, Grep | `Read(//abs/dir/**)`; for Glob or Grep without a `path`, the tool itself | no |
   | MCP tools, any other tool | the tool | no |
 
   The card prints the rules under its buttons ("Always: …", or "For session: …" where Always is not offered), and each scope button's tooltip names the rule and where it is saved. Because "Always" writes the project's local settings, its key must be pressed twice within 3 s ("Press L again to always allow …"); a click on the button opens a confirm row in the card. Esc cancels a pending Always before it denies.
@@ -87,4 +87,4 @@ Swing renders the text of a label, button, tooltip, tab title or table cell as H
 
 ## 7. The audit log
 
-Every tool call and every approval decision is appended to `audit/audit-<UTC date>.jsonl` in the data root: time, session, event, tool, the arguments clipped to 2 000 characters per field, and the outcome. The file is append-only; comando never reads it back.
+Every tool call and every approval decision is appended to `audit/audit-<UTC date>.jsonl` in the data root: time, session, event, tool, the arguments as one JSON string, clipped to 2 000 characters, and the outcome. The file is append-only; comando never reads it back.

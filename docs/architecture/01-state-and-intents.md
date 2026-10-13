@@ -45,7 +45,7 @@ A panel argument may be null in `RunText`, `RunGradle` and `EditPanel`; it means
 
 `Reducer.apply(state, intent)` returns a `Transition`: the next state and a list of effects. It is a pure function of its arguments and of a `Clock`, so tests drive it with a fake clock and assert on both outputs. It throws for nothing a user or an adapter can send: an intent naming a missing panel, connection or session changes nothing or sets a notice.
 
-Notices follow four rules. Every notice joins the history. A new notice replaces the standing one unless the standing one is an ERROR about another subject, so an error stays until it is dismissed, replaced by another error, or settled by its own subject. An event that settles a subject clears its notice: a statement that runs or completes clears its panel's, an opened connection its connection's, a started session or a successful turn its session's, an answered or withdrawn approval its approval's, and removing a connection or session clears its own. A new ERROR notice also asks for a desktop notification, which shows while the window is behind.
+Notices follow four rules. Every notice joins the history. A new notice replaces the standing one unless the standing one is an ERROR, the new one is not, and the two are about different subjects; so an error stays until it is dismissed, replaced by another error, or replaced or settled by its own subject. An event that settles a subject clears its notice: a statement that runs or completes clears its panel's, an opened connection its connection's, a started session or a successful turn its session's, an answered approval its approval's (a withdrawn one replaces it with a warning that names the reason; approvals withdrawn because their session ended or was removed clear it), and removing a connection or session clears its own. A new ERROR notice also asks for a desktop notification, which shows while the window is behind.
 
 Rules that recur:
 
@@ -67,7 +67,7 @@ An effect is work the reducer asks an adapter to do. `EffectRouter` hands each t
 | `PersistencePort` | `SaveConnections`, `SaveSessions`, `SavePanels` |
 | `ToolPort` | `RunGradle`, `RunJfrq`, `CancelCommand`, `ForgetCommand`, `OpenRecording`, `BrowseScratchpad` |
 
-`StateLoop` runs one intent at a time: observers first (the intent log), then the reducer, then the effects in order, then the state listeners (the UI's coalesced render). Each step is guarded, so a failing effect or listener is logged and the loop goes on. Each applied intent is a JFR event `comando.Intent` with its type, effect count and whether the state changed.
+`StateLoop` runs one intent at a time: observers first (the intent log), then the reducer, then the effects in order, then the state listeners (the UI's coalesced render). The reducer, each effect and each listener are guarded, so a failing one is logged and the loop goes on; an observer must not throw (the intent log catches its own failures). Each applied intent is a JFR event `comando.Intent` with its type, effect count and whether the state changed.
 
 ## 5. Stores outside the state
 

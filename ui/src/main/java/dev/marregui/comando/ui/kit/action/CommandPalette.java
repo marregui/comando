@@ -177,7 +177,7 @@ public final class CommandPalette {
         return i == query.length();
     }
 
-    /** A key as the Mac writes it: modifiers ⌃⌥⇧⌘ in that order, then the key ("⌘⇧⏎", "⌃1"). */
+    /** A key as the Mac writes it: modifiers ⌃⌥⇧⌘ in that order, then the key ("⇧⌘⏎", "⌃1"). */
     public static String keyText(KeyStroke k) {
         int m = k.getModifiers();
         StringBuilder sb = new StringBuilder();

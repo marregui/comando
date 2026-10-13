@@ -38,10 +38,10 @@ import java.util.Deque;
 import java.util.List;
 
 /**
- * The ownership tree. Builds every part in dependency order and closes them in reverse, each once:
- * the UI goes first (its shells and live plots with it), then the tool runs, Claude's processes, the MCP
- * server, the database lanes, the intent log, the reducer, the store (which writes the panels last), and
- * the embedded QuestDB.
+ * The ownership tree. Builds every part in dependency order and closes them in reverse, each once: the tool
+ * runs, Claude's processes, the MCP server, the database lanes, the intent log, the reducer, the store (which
+ * writes the panels last), the embedded QuestDB, and last the window, which stays up, greyed, until the rest has
+ * closed; quitting has already ended its shells and live plots.
  */
 public final class App implements AutoCloseable {
 

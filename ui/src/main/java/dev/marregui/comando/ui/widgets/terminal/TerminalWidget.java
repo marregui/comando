@@ -19,7 +19,6 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
-import org.jetbrains.annotations.NotNull;
 
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -488,7 +487,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         try {
             buffer.processHistoryAndScreenLines(-buffer.getHistoryLinesCount(), -1, new StyledTextConsumer() {
                 @Override
-                public void consume(int x, int y, @NotNull TextStyle style, @NotNull CharBuffer characters, int startRow) {
+                public void consume(int x, int y, TextStyle style, CharBuffer characters, int startRow) {
                     CharBuffer chars = characters;
                     int offset = 0;
                     int length = characters.length();
@@ -502,7 +501,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
                 }
 
                 @Override
-                public void consumeNul(int x, int y, int nulIndex, @NotNull TextStyle style, @NotNull CharBuffer characters, int startRow) {
+                public void consumeNul(int x, int y, int nulIndex, TextStyle style, CharBuffer characters, int startRow) {
                     // blank cells match nothing
                 }
 
@@ -525,7 +524,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         }
 
         @Override
-        protected TerminalPanel createTerminalPanel(@NotNull SettingsProvider settings, @NotNull StyleState style, @NotNull TerminalTextBuffer buffer) {
+        protected TerminalPanel createTerminalPanel(SettingsProvider settings, StyleState style, TerminalTextBuffer buffer) {
             return new Panel(settings, buffer, style);
         }
 
@@ -547,7 +546,9 @@ public final class TerminalWidget implements Zoomable, Searchable {
     }
 
     /** Colours from the theme; the font is the theme's monospaced font at the terminal's own size. */
-    private static final class Settings extends DefaultSettingsProvider {
+    static final class Settings extends DefaultSettingsProvider {
+
+        private static final boolean MAC = System.getProperty("os.name", "").startsWith("Mac");
 
         private final DoubleSupplier size;
 
@@ -580,6 +581,17 @@ public final class TerminalWidget implements Zoomable, Searchable {
         @SuppressWarnings("deprecation")
         public TextStyle getDefaultStyle() {
             return new TextStyle(getDefaultForeground(), getDefaultBackground());
+        }
+
+        /**
+         * JediTerm binds no key to Select All; on macOS ⌘A selects the buffer, as the Edit menu says. Elsewhere Ctrl+A
+         * stays the shell's start of line.
+         */
+        @Override
+        public com.jediterm.terminal.ui.TerminalActionPresentation getSelectAllActionPresentation() {
+            return MAC ? new com.jediterm.terminal.ui.TerminalActionPresentation("Select All",
+                    javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_A, java.awt.event.InputEvent.META_DOWN_MASK))
+                    : super.getSelectAllActionPresentation();
         }
 
         @Override

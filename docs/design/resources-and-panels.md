@@ -23,6 +23,7 @@ The dialog works from the keyboard and never drops an edit without asking:
 | Esc | closes; with unsaved changes it asks "Discard changes to X?" inside the dialog |
 | another row, Add, Clone, or the sidebar opening another resource | with unsaved changes, the same question first; Keep editing returns to the edited row; opening the dialog on the resource being edited keeps the edits |
 | Assign, Connect, Start | save a new or changed form first and say so ("Saved and connecting"); an invalid form shows the reason in red and does nothing |
+| Add, or opening the dialog with no resource yet | a new form named "new connection" or "new session"; the keyboard is in Name, its default selected to type over |
 | Test | tests the form as typed, saved or not |
 | Remove | asks first and names what applies: stops it, denies its waiting approvals, unbinds its panels, deletes its saved password, and that an imported conversation can be imported again; the form then shows the next resource or a new one |
 
@@ -34,9 +35,9 @@ An editor panel is a tab in the workspace with an id, a title, its text, and two
 
 - The panel header shows the connection and the session as chips with their status dot, the session's git branch and whether a turn is running, with a button each to connect or disconnect, start or stop. A production connection frames the panel in red.
 - Running SQL in a panel uses its connection, opening it when closed. Sending a prompt uses its session, starting it when stopped.
-- Renaming a connection or a session renames every binding; a running session is stopped before it can be renamed. Removing one closes it first and unbinds every panel.
+- Renaming a connection or a session renames every binding; a running session must be stopped first, and the dialog refuses the rename until it is. Removing one closes it first and unbinds every panel.
 - The lower panel follows the focused panel: its last SQL run, its session's transcript, its terminal. The Approvals tab lists every session's requests. Results and Session get a dot when something arrived that the user has not seen; a panel whose query finished while another panel was in front gets a "● " before its title and a notice.
-- ⌘W, or a tab's close button, closes the panel; ⌘⇧T reopens the last of the ten most recently closed, after the focused panel, with its text, title and the bindings that still exist. Closing asks first only when the panel's shell runs a job in the foreground (a background helper of the shell, such as a prompt's git daemon, does not count). Tab titles are clipped to 32 characters; the tooltip has the full title and bindings.
+- ⌘W, or a tab's close button, closes the panel; ⌘⇧T reopens the last of the ten most recently closed, after the focused panel, with its text, title and the bindings that still exist. Closing asks first when the panel's shell runs a job in the foreground, when the shell was replaced by a program (`exec ssh …`), or when comando cannot check ([Development tools](dev-tools.md#1-terminal)); a background helper of the shell, such as a prompt's git daemon, does not count. Tab titles are clipped to 32 characters; the tooltip has the full title and bindings.
 - Importing exactly one stored conversation binds it to the focused panel when that panel has no session.
 
 ## 3. The sidebar

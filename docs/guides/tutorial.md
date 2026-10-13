@@ -61,8 +61,8 @@ comando can run a QuestDB server for you, so you need nothing else installed.
 
 1. Press **⌘⇧P**, type `embedded`, press **⏎** on "Start the embedded QuestDB" (also in the **Connections** menu).
    *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few seconds, and `QuestDB ●` at its right end; clicking that stops or starts the server. The server keeps its data in `~/.comando/questdb` and listens on this machine only.
-2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Press **⌘⇧O** to open **Connections** and click **Add**. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. Change only **Name** to `tutorial`. Click **Assign to panel**: it saves the new connection first, and the line under the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
-   *You should see* `tutorial ○` in the panel header and in the sidebar.
+2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Press **⌘⇧O** to open **Connections** and click **Add**. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
+   *You should see* `tutorial ○` in the panel header and `○ tutorial` in the sidebar.
 3. Click the plug button next to `tutorial` in the panel header.
    *You should see* the dot turn to `●`. If the connection fails, the status bar says why in red.
 
@@ -118,7 +118,7 @@ Press **⌘.** while it runs.
    ```
 
 2. Press **⌘J**.
-   *You should see* a new lower tab, **plot**, with the prices over time. A timestamp column becomes the x axis; every numeric column becomes a line. **⌘⇧J** asks for an interval in seconds, then re-runs the query and redraws the plot at that interval, for data that changes.
+   *You should see* a new lower tab, **plot · scratch** (a plot is named after its panel), with the prices over time. A timestamp column becomes the x axis; up to eight numeric columns become lines. **⌘⇧J** asks for an interval in seconds, then re-runs the query and redraws the plot at that interval, for data that changes.
 3. Press **⌘⇧R** to keep the result in a tab of its own; the next query no longer replaces it.
 4. Press **⌘⇧E** to explore the schema.
    *You should see* a side pane with the connection, its tables and each table's columns and types.
@@ -131,7 +131,7 @@ When a statement fails, Results shows the database's error as text you can selec
 
 A session is a Claude Code process that comando starts for you in a working directory, with a model and a budget you choose.
 
-1. Press **⌘⇧K** to open **Sessions**. Click **Add** and fill in:
+1. Press **⌘⇧K** to open **Sessions**. With no session yet it opens on a new one; otherwise click **Add**. The keyboard is in **Name**, its default selected. Fill in:
 
    | Field | Value |
    |---|---|
@@ -143,7 +143,7 @@ A session is a Claude Code process that comando starts for you in a working dire
    Leave the rest as it is; the line under each field says what it does. Click **Assign to panel**, then press **Esc**.
    *You should see* `tutor` in the panel header, in the sidebar (marked "· this panel"), and in the window title.
 2. Click the **prompt bar** under the editor, type `In one sentence, what is QuestDB?` and press **⏎**.
-   *You should see* the session start (its dot turns to `●`), the lower panel switch to **Session**, and the answer stream in. Under the answer: the time it took and the cost so far. While the turn runs, the session chip counts the seconds. If your Claude Code setup has hooks, their output folds into one grey line, "hooks · …"; click it to read it.
+   *You should see* the session start (its dot turns to `●`), the lower panel switch to **Session**, and the answer stream in. Under the answer: the time it took and the cost so far. While the turn runs, the session chip counts the seconds. If your Claude Code setup has hooks, their output folds into grey "hooks · …" lines, one before the answer and one after it; click one to read it.
 3. Prompts can live in the editor too. At the end of the editor, after an empty line, type this block and press **⌘⏎**:
 
    ```
@@ -170,12 +170,12 @@ The session can read your database and draw in your window through tools comando
    *You should see* in the Session tab that Claude reports the denial and your note.
 3. Send it again: click the prompt bar, press **↑** to bring the prompt back, press **⏎**. Click **Run** on the new card this time. Then run `select * from trades where sym = 'TEST';` yourself to see the row.
 4. Ask for a picture:
-   `Call ui_plot with x=[1,2,3,4,5] and y=[1,4,9,16,25], title squares.`
+   `Call ui_plot with title squares and one series named squares, x=[1,2,3,4,5] and y=[1,4,9,16,25].`
    *You should see* a **squares** plot tab. Claude can also show tables, diffs and files, put text into your editor, and switch tabs.
 5. Ask about a result. At the end of the editor, after an empty line, type and run `select sym, count(), avg(price) from trades;`, then press **⌘⇧I**.
    *You should see* the result appended to the editor as a block, with the caret on the line under it. Type `Which symbol has the highest average?` on that line, with no blank line in between, and press **⌘⏎**. The rows and the question go to Claude together.
 
-Other permission requests, such as a shell command or a file edit, appear as the same kind of card: **Allow once** (⏎ or A), **For session** (S), **Always** (L), **Deny** (D or Esc). The card shows the rule "For session" and "Always" would add, such as `Bash(git status:*)` for a command or `Edit(//Users/you/project/**)` for an edit; **L** must be pressed twice within 3 seconds, because Always saves the rule in the project's local settings. **↑** and **↓** move between cards. Whether a request reaches you depends on your Claude Code permission settings. comando keeps those settings as they are; a database write from Claude always asks.
+Other permission requests, such as a shell command or a file edit, appear as the same kind of card: **Allow once** (⏎ or A), **For session** (S), **Deny** (D or Esc), and for a shell command or a web fetch also **Always** (L). The card shows the rule the answer adds, such as `Bash(git status:*)` for a command or `Edit(//Users/you/project/**)` for an edit; an edit, a read or another tool can be allowed for the session only. **L** must be pressed twice within 3 seconds, because Always saves the rule in the project's local settings. **↑** and **↓** move between cards. Whether a request reaches you depends on your Claude Code permission settings. comando keeps those settings as they are; a database write from Claude always asks.
 
 ## 7. Terminal, panels, quitting
 
@@ -188,9 +188,11 @@ Other permission requests, such as a shell command or a file edit, appear as the
    *You should see* your panels, their text and their bindings as you left them. Sessions come back stopped, with their transcripts, and the next prompt resumes the same conversation: ask `What was the first question I asked you?` in the prompt bar.
    Connections come back closed, and the embedded QuestDB does not start by itself: start it again from the palette (step 2) before you connect. The window comes back where it was, with the sidebar shown or hidden as you left it. Views (plots, files, kept results) belong to one run: the side pane comes back empty.
 
-Your data lives in `~/.comando`: `connections.json`, `sessions.json` and `panels.json`, plus the logs in `logs/`. Connection passwords are kept in the macOS keychain, not in the files.
+Your data lives in `~/.comando`: `connections.json`, `sessions.json`, `panels.json` and `prompts.json` (the prompt bar's history), the embedded QuestDB's data in `questdb/`, and the logs in `logs/`. Connection passwords are kept in the macOS keychain, not in the files.
 
 ## Cheat sheet
+
+The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any macOS application.
 
 | Key | Does |
 |---|---|
@@ -201,7 +203,7 @@ Your data lives in `~/.comando`: `connections.json`, `sessions.json` and `panels
 | ⌘. | stop the query, else interrupt the session's turn |
 | ⌘⇧. | interrupt the session's turn |
 | ⌘L / ⌘E | focus the prompt bar / the editor |
-| ⏎ / ⇧⏎ / ↑ | in the prompt bar: send / new line / earlier prompts |
+| ⏎ / ⇧⏎ / ↑ ↓ / ⎋ | in the prompt bar: send / new line / earlier and later prompts / back to the editor |
 | ⌃Space or ⌥⎋ | complete SQL (⌥⎋ where macOS takes ⌃Space for the input source) |
 | ⌘J / ⌘⇧J | plot the last result / plot it and keep refreshing |
 | ⌘⇧R | keep the result in a tab |
@@ -220,6 +222,7 @@ Your data lives in `~/.comando`: `connections.json`, `sessions.json` and `panels
 | ⌘S | save the panel now |
 | ⌥⌘G | run Gradle tasks |
 | ⌘⇧/ | the table of every key |
+| ⏎ or A / D or ⎋ / S / L twice / ↑ ↓ | on an approval card: allow, run, answer or approve / deny / for session, on a tool card / always, on a tool card that offers it / previous or next card |
 | ⌘/ | comment or uncomment the line, in the editor |
 | ⌘= ⌘- ⌘0 | zoom |
 | ⌘Q | quit |

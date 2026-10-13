@@ -426,4 +426,12 @@ class ApprovalInboxTest {
             }
         }
     }
+
+    /** A statement card names the connection it would change; the status-bar notice is gone after the next one. */
+    @Test
+    void aStatementCardNamesItsConnection() {
+        Approval sql = new Approval(9, "work", ApprovalKind.SQL_WRITE, "db_run_sql",
+                "{\"connection\":\"local QuestDB\",\"sql\":\"insert into t values (1)\"}", "Run on local QuestDB: insert", T0);
+        assertThat(ApprovalInbox.title(sql)).isEqualTo("wants to run a statement on local QuestDB");
+    }
 }

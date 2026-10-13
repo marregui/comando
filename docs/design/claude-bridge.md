@@ -9,14 +9,14 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   --include-partial-messages --forward-subagent-text --include-hook-events \
   ( --session-id <new uuid> | --resume <id> | --resume <id> --fork-session ) \
   --name <session name> \
-  --mcp-config <run>/<session>.json --permission-prompt-tool mcp__comando__approve \
+  --mcp-config <run>/<session>-<uuid>.mcp.json --permission-prompt-tool mcp__comando__approve \
   --append-system-prompt <comando's UI instructions> \
   [--model m] [--effort e] [--permission-mode p] [--add-dir d]... [--max-budget-usd n]
 ```
 
 - **Start mode.** A new session gets a fresh id; a session resumes its own conversation by id. An imported conversation is forked on its first start, and cloning a session with a conversation forks it, so two processes never write one conversation ([decision 4](../adr/0004-a-session-open-in-another-terminal.md)).
 - **Not `--bare`.** The session loads CLAUDE.md, hooks, plugins, skills and the user's MCP servers as a terminal session does; the login is the CLI's own and comando stores no key.
-- **MCP configuration.** One file per running process, mode `0600` from its creation, under `run/` in the data root. It names comando's server with its URL, the process's bearer token in a header, and `"timeout": 3600000`. That per-server timeout also raises Claude Code's idle window for a tool call, so an approval card can wait up to 55 minutes without progress notifications. The file is deleted when the process exits.
+- **MCP configuration.** One file per running process, named after the session (characters outside `A-Za-z0-9._-` become `_`) and a random UUID, mode `0600` from its creation, under `run/` in the data root. It names comando's server with its URL, the process's bearer token in a header, and `"timeout": 3600000`. That per-server timeout also raises Claude Code's idle window for a tool call, so an approval card can wait up to 55 minutes without progress notifications. The file is deleted when the process exits.
 - **Working directory.** The session's directory; the panel header shows its git branch, read from `.git/HEAD` after each turn.
 
 Threads per process: a stdout reader, a stdin writer fed by a queue, a stderr reader that keeps the last 40 lines for the exit message, and an exit waiter. Everything that changes the session runs on the session's strand, a single-threaded virtual executor, so the transcript has one writer.

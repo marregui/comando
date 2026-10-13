@@ -50,17 +50,10 @@ Selection runs across blocks with the mouse; ⌘⇧C copies the selection, or th
 
 `./gradlew :ui:transcriptGate` replays `SyntheticSession` from `testkit` (8 turns, 40 tool calls including a subagent, Markdown with headings, lists, code, tables and source references, about 10 k tokens) one stream delta of 16 characters per frame. Each frame applies the change, lays out, and paints a 1200 × 800 viewport at the end, as the widget does while following a turn. It then streams a 9 000-character thinking block, open, one delta per frame: an open thinking block keeps one text box per line and lays out only the last. The task fails when either 99th percentile exceeds 16 ms.
 
-Run of 2026-10-13, Apple silicon, JDK 25, headless:
+Run of 2026-10-13, Apple silicon, JDK 25, headless, 1 798 frames over 11 455 px of content: p99 about 3 ms, under 16 ms for every frame ([Quality](quality.md) keeps the measured figures). The open thinking block, 562 frames, also stays under 16 ms for every frame. The same run measured layout and paint:
 
 | Measure | Value |
 |---|---|
-| Frames | 1 798 |
-| Content height | 11 455 px |
-| Frame p50 | 1.13 ms |
-| Frame p99 | 3.22 ms |
-| Frame max | 8.58 ms |
-| Frames over 16 ms | 0 |
-| Open thinking streamed, 562 frames: p50 / p99 / max | 0.66 / 1.29 / 2.72 ms |
 | Width change, visible part laid out and painted | 6.71 ms |
 | Idle pass after it, in 8 ms slices | 25.25 ms |
 | Full exact relayout | 68.14 ms |

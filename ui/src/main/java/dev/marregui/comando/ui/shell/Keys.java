@@ -50,7 +50,8 @@ final class Keys {
             }
         }
         md.append("\nIn the prompt bar: ⏎ sends, ⇧⏎ adds a line, ↑ and ↓ walk the history, ⎋ returns to the editor.\n")
-                .append("On an approval card: ⏎ allows, D denies, S allows for the session, L twice allows always.\n");
+                .append("On an approval card: ⏎ or A gives the green answer (allow, run, answer, approve), D or ⎋ denies; on a tool card S ")
+                .append("allows for the session and L twice allows always; ↑ and ↓ move between cards.\n");
         return md.toString();
     }
 }

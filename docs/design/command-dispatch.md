@@ -12,13 +12,13 @@ The block that ran is tinted until the next edit; it is not selected, and the ca
 
 `Classifier.classify` decides, in this order:
 
-0. **Comments only.** A block of `--` and `/* */` comments has nothing to run: it shows no gutter icon, and ⌘⏎ or ⌥⏎ on it says "Nothing to run"; ⌘⇧⏎ still sends it to the session, as it forces a prompt.
 1. **Marker.** A first line `-- @sql` or `-- @claude` decides, and is removed before the text is sent.
-2. **Slash.** A leading `/` is a Claude command (`/compact`, `/model sonnet`, a skill).
-3. **SQL shape.** A leading SQL keyword followed by the shape that keyword takes is SQL, unless an English function word appears outside quotes or the text ends with `?` or `.`. The keywords are `SELECT`, `WITH`, `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `EXPLAIN`, `SHOW`, `COPY`, `VACUUM`, `REINDEX`, `SET`, `CANCEL`, `BACKUP`, `CHECKPOINT`, `SNAPSHOT`, `DECLARE`, `BEGIN`, `COMMIT`, `ROLLBACK`, each with its own shape (`SELECT` needs an expression, `UPDATE` a table and `SET`, `SHOW` an object, and so on).
-4. **Otherwise** the text is a prompt.
+2. **Slash.** A leading `/` followed by a letter is a Claude command (`/compact`, `/model sonnet`, a skill).
+3. **Comments only.** A block left with only `--` and `/* */` comments has nothing to run: it shows no gutter icon, and ⌘⏎ or ⌥⏎ on it says "Nothing to run"; ⌘⇧⏎ still sends it to the session, as it forces a prompt.
+4. **SQL shape.** A leading SQL keyword followed by the shape that keyword takes is SQL, unless an English function word appears outside quotes or the text ends with `?` or `.`. The keywords are `SELECT`, `WITH`, `INSERT`, `UPDATE`, `DELETE`, `CREATE`, `ALTER`, `DROP`, `TRUNCATE`, `EXPLAIN`, `SHOW`, `COPY`, `VACUUM`, `REINDEX`, `SET`, `CANCEL`, `BACKUP`, `CHECKPOINT`, `SNAPSHOT`, `DECLARE`, `BEGIN`, `COMMIT`, `ROLLBACK`, each with its own shape (`SELECT` needs an expression, `UPDATE` a table and `SET`, `SHOW` an object, and so on).
+5. **Otherwise** the text is a prompt.
 
-Rule 3 is strict on purpose. "update the README" and "show me the log" start with keywords and are prompts: they do not have the shape, and they contain function words. Words are whole identifiers: letters, digits, `_` and `$` belong to the word, so `my_table`, `can_id` and `us_east` are not prose, and a word next to a dot is part of a qualified name (`i.k`). The pronoun counts only as a capital "I", so the alias `i` stays SQL. Quoted strings and `--` and `/* */` comments are skipped. A word with an apostrophe ("don't") counts as one word. A statement the classifier misses is forced with a key.
+Rule 4 is strict on purpose. "update the README" and "show me the log" start with keywords and are prompts: the first lacks the shape (no `SET`), and both contain function words. Words are whole identifiers: letters, digits, `_` and `$` belong to the word, so `my_table`, `can_id` and `us_east` are not prose, and a word next to a dot is part of a qualified name (`i.k`). The pronoun counts only as a capital "I", so the alias `i` stays SQL. Quoted strings and `--` and `/* */` comments are skipped. A word with an apostrophe ("don't") counts as one word. A statement the classifier misses is forced with a key.
 
 ## 3. Keys
 
@@ -33,7 +33,7 @@ Rule 3 is strict on purpose. "update the README" and "show me the log" start wit
 | ⌘L | — | focuses the prompt bar |
 | ⌘E | — | focuses the editor |
 
-The run keys work while the keyboard is in the focused panel's editor or prompt bar; elsewhere the key belongs to the component that has the keyboard (an approval card, where ⌘⏎ denies with the note; the terminal; the results grid). In the prompt bar ⌘⏎ and ⌘⇧⏎ send the prompt, and ⌥⏎ is a new line.
+The run keys work while the keyboard is in the focused panel's editor or prompt bar (⌃⏎ in the editor only); elsewhere the key belongs to the component that has the keyboard (in an approval card's note field ⌘⏎ denies with the note; the terminal; the results grid). In the prompt bar ⌘⏎ and ⌘⇧⏎ send the prompt, and ⌥⏎ is a new line.
 
 ## 4. The gutter
 

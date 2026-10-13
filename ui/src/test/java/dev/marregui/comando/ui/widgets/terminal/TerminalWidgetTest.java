@@ -229,4 +229,16 @@ class TerminalWidgetTest {
             drain.join(2000);
         }
     }
+
+    /** JediTerm ships Select All with no key; on macOS the terminal takes ⌘A for it, as the Edit menu promises. */
+    @Test
+    void commandASelectsTheTerminalBufferOnMacOs() {
+        var keys = new TerminalWidget.Settings(() -> 13).getSelectAllActionPresentation().getKeyStrokes();
+        if (System.getProperty("os.name", "").startsWith("Mac")) {
+            assertThat(keys).containsExactly(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_A,
+                    java.awt.event.InputEvent.META_DOWN_MASK));
+        } else {
+            assertThat(keys).as("Ctrl+A stays the shell's start of line").isEmpty();
+        }
+    }
 }

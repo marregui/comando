@@ -24,9 +24,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * The store files: {@code connections.json}, {@code sessions.json} and {@code panels.json} (each panel's
- * bindings and text). Every write runs on one thread from an immutable snapshot, so a save never races an
- * edit; panel text is saved after 800 ms without changes.
+ * The store files: {@code connections.json}, {@code sessions.json}, {@code panels.json} (each panel's bindings
+ * and text) and {@code prompts.json} (each session's prompt history). Every write runs on one thread from an
+ * immutable snapshot, so a save never races an edit; panel text is saved 800 ms after the first unsaved change,
+ * so continuous typing saves about every 800 ms.
  */
 final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoCloseable {
 

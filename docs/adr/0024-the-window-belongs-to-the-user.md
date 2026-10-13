@@ -12,14 +12,14 @@ A review of comando at `69c0ed9`, run live and in the code, found that the tool'
 
 | # | Question | Decision |
 |---|---|---|
-| D1 | How the block that ran is shown | tinted until the next edit; never selected; the caret stays |
-| D2 | Closing a panel | no question; ⌘⇧T reopens the last ten; a question only when the panel's shell runs a foreground job |
-| D3 | Hook output in the transcript | consecutive hook notes fold into one closed line; a click opens them |
-| D4 | "Always" on an approval card | the card shows the rule; L must be pressed twice within 3 s, a click asks in the card |
-| D5 | A session placing views or arranging the window | a tab is selected only for the session of the focused panel; layout changes wait for a typing pause, post a notice and can be undone |
-| D6 | The prompt bar | a growing text area; ⏎ sends, ⇧⏎ adds a line; history per session, kept across restarts |
-| D7 | Type names in the schema | QuestDB's own (`SYMBOL`, `TIMESTAMP`) when the server is QuestDB |
-| D8 | Menus | Edit and Help menus; run Gradle moves from ⌘⇧G (macOS find previous) to ⌥⌘G |
+| 24.1 | How the block that ran is shown | tinted until the next edit; never selected; the caret stays |
+| 24.2 | Closing a panel | no question; ⌘⇧T reopens the last ten; a question only when the panel's shell runs a foreground job, was replaced by a program, or cannot be checked |
+| 24.3 | Hook output in the transcript | consecutive hook notes fold into one closed line; a click opens them |
+| 24.4 | "Always" on an approval card | the card shows the rule; L must be pressed twice within 3 s, a click asks in the card |
+| 24.5 | A session placing views or arranging the window | a tab is selected only for the session of the focused panel; layout changes wait for a typing pause, post a notice and can be undone |
+| 24.6 | The prompt bar | a growing text area; ⏎ sends, ⇧⏎ adds a line; history per session, kept across restarts |
+| 24.7 | Type names in the schema | QuestDB's own (`SYMBOL`, `TIMESTAMP`) when the server is QuestDB |
+| 24.8 | Menus | Edit and Help menus; run Gradle moves from ⌘⇧G (macOS find previous) to ⌥⌘G |
 
 ## 3. Consequences
 

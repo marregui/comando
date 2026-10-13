@@ -14,4 +14,4 @@ A transcript painted with Java2D: Markdown to paragraphs, rich text laid out wit
 
 ## 3. Consequences
 
-Frame p99 is 3.26 ms on the synthetic session; `:ui:transcriptGate` fails the build of the gate above 16 ms ([Transcript renderer](../design/transcript-renderer.md)). Text selection, find and links are comando's own code.
+Frame p99 is about 3 ms on the synthetic session, no frame over 16 ms ([Quality](../design/quality.md) keeps the measured figures). `./gradlew :ui:transcriptGate` fails when either p99 (the streamed session, the open thinking block) exceeds 16 ms; CI runs it without enforcing it, because runner speed varies ([Transcript renderer](../design/transcript-renderer.md)). Text selection, find and links are comando's own code.

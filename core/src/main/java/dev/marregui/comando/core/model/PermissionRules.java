@@ -96,12 +96,14 @@ public final class PermissionRules {
         return switch (tool) {
             case "Bash" -> {
                 String command = field.apply("command").strip();
-                yield new Rules(command.isEmpty() ? List.of(new Rule(tool, "")) : bash(command).stream().map(c -> new Rule(tool, c)).toList(),
-                        true);
+                // no command to name: the tool itself, for the session only; saved, it would allow every command
+                yield command.isEmpty() ? session(new Rule(tool, ""))
+                        : new Rules(bash(command).stream().map(c -> new Rule(tool, c)).toList(), true);
             }
             case "WebFetch" -> {
                 String host = host(field.apply("url"));
-                yield new Rules(List.of(new Rule(tool, host == null ? "" : "domain:" + host)), true);
+                // no host to name (no scheme, a file: URL): the tool itself, for the session only
+                yield host == null ? session(new Rule(tool, "")) : new Rules(List.of(new Rule(tool, "domain:" + host)), true);
             }
             // file permissions are checked against Edit rules only: a path rule naming Write or NotebookEdit is never consulted
             case "Edit", "Write", "MultiEdit" -> session(file("Edit", field.apply("file_path")));
@@ -248,7 +250,8 @@ public final class PermissionRules {
             return exact; // find runs or deletes what it finds: `find:*` would allow any command through it
         } else if (name.equals("docker") && w.size() > 2 && w.get(1).equals("compose") && (w.get(2).equals("exec") || w.get(2).equals("run"))) {
             return exact; // runs a command in a container, like docker exec
-        } else if (WITH_SUBCOMMANDS.contains(w.get(0)) && w.size() > 1) {
+        } else if ((WITH_SUBCOMMANDS.contains(w.get(0)) || WITH_SUBCOMMANDS.contains(name)) && w.size() > 1) {
+            // by its base name too: /usr/bin/git commit is git commit, and its rule keeps the path as typed
             String sub = w.get(1);
             if (CONTAINER_EXEC.contains(name + ' ' + sub)) {
                 return exact;

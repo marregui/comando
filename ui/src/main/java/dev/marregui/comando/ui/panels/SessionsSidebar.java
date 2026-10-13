@@ -213,10 +213,11 @@ public final class SessionsSidebar {
         String bound = boundText(s);
         String where = bound.isEmpty() ? "" : "&nbsp;<span style='color:" + Theme.hex(bound.equals("this panel") ? Theme.ACCENT : Theme.MUTED_STRONG)
                 + "'>· " + MarkdownHtml.escape(clip(bound, 24)) + "</span>";
-        return "<html>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(s.name()) + "</b>" + where + badge
+        // two lines that never wrap: a narrow sidebar clips them at its edge rather than pushing the folder out
+        return "<html><nobr>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(s.name()) + "</b>" + where + badge
                 + "&nbsp;&nbsp;<span style='color:" + muted + "'>" + (s.costUsd() > 0 ? Labels.usd(s.costUsd()) + " · " : "") + activity + "</span>"
-                + "<br><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>" + MarkdownHtml.escape(clip(Labels.shortPath(s.spec().workDir()), 34))
-                + branch + "</span></html>";
+                + "</nobr><br><nobr><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>"
+                + MarkdownHtml.escape(clip(Labels.shortPath(s.spec().workDir()), 34)) + branch + "</span></nobr></html>";
     }
 
     private String connectionHtml(ConnectionState c) {
@@ -346,7 +347,7 @@ public final class SessionsSidebar {
         header.add(label, BorderLayout.WEST);
         header.add(actions, BorderLayout.EAST);
         JPanel p = new JPanel(new BorderLayout());
-        JScrollPane sp = new JScrollPane(list);
+        JScrollPane sp = new JScrollPane(list, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         sp.setBorder(null);
         p.add(header, BorderLayout.NORTH);
         p.add(sp, BorderLayout.CENTER);

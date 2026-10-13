@@ -17,7 +17,7 @@ A port is an interface in `core` that names an outside system. Every port method
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `showFile`, `arrange` | `ComandoUi` | `ui` |
 | `PersistencePort` | `saveConnections`, `saveSessions`, `savePanels` | `Store` | `app` |
 
-`ClaudeAdapter` receives the `McpGateway` at construction: starting a session registers it with the MCP server and writes the ticket into the session's MCP configuration. `McpGateway.NONE` starts sessions without comando's tools, which the adapter tests use.
+`ClaudeAdapter` receives the `McpGateway` at construction: starting a session registers it with the MCP server and writes the ticket into the session's MCP configuration. `McpGateway.NONE` starts sessions without comando's tools; the adapter tests use a gateway that records each registration instead.
 
 ## 2. Test fakes
 
@@ -30,7 +30,7 @@ A port is an interface in `core` that names an outside system. Every port method
 | `FakeClock` | a settable clock |
 | `States` | a two-panel state bound to one connection and one session |
 | `Fixtures` | recorded stream-JSON sessions from the Claude Code CLI, sanitized |
-| `SyntheticSession` | a deterministic eight-turn session with forty tool calls, replayed delta by delta |
+| `SyntheticSession` | a deterministic eight-turn session with 41 tool calls, one of them a subagent, replayed delta by delta |
 | `FakeResult` | a small `ResultView` of rows of objects |
 
 ## 3. Import rules

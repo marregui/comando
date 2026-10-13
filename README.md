@@ -14,7 +14,7 @@ A macOS desktop workbench where SQL and Claude Code sessions share one editor. A
 | Window tools for Claude | an MCP server in the app: show a table, a plot, a diff, a file; set the layout; run SQL and describe tables; read the window's state |
 | Databases | PostgreSQL and QuestDB over the PostgreSQL wire protocol; one lane per connection with fast cancel; results stored by column, millions of rows; plots, live plots, `EXPLAIN` trees, a schema explorer; production connections framed in red and refused to Claude for writes |
 | Development | a terminal per panel; Gradle runs with test results as a tree and failures sent to Claude; JFR recordings as tables and plots; jfrq; the scratchpad browser |
-| Persistence | panels, bindings, text, prompt history and the window layout survive restarts; closed panels reopen with ⌘⇧T; passwords in the macOS keychain; atomic store files |
+| Persistence | panels, bindings, text, prompt history and the window layout survive restarts; while comando runs, ⌘⇧T reopens the last ten closed panels; passwords in the macOS keychain; atomic store files |
 
 ## Quick start
 
@@ -35,10 +35,10 @@ Requires JDK 25 and the Claude Code CLI.
 | [Architecture](docs/architecture/README.md) | state and intents, threads, modules and ports, ownership |
 | [Design](docs/README.md#2-design) | the Claude bridge, panels, dispatch, MCP tools, widgets, the transcript, safety, persistence, tools, the database workbench, quality |
 | [Decisions](docs/adr/README.md) | one record per decision, dated |
-| [Guides](docs/README.md#4-guides) | build and run, coding guidelines |
+| [Guides](docs/README.md#4-guides) | comando in ten minutes, build and run, coding guidelines |
 
 ## Status
 
 Private repository, in daily use by its author. Version 2.0.0-SNAPSHOT. The macOS build is unsigned. comando is under the [Apache License 2.0](LICENSE).
 
-Third-party components keep their licences: JediTerm (LGPL-3.0) and pty4j (EPL-1.0) for the terminal, FlatLaf, RSyntaxTextArea and AutoComplete, commonmark-java, java-diff-utils, Jackson, the PostgreSQL JDBC driver, QuestDB.
+Third-party components keep their licences: JediTerm (LGPL-3.0) and pty4j (EPL-1.0) for the terminal, FlatLaf, RSyntaxTextArea and AutoComplete, commonmark-java, java-diff-utils, Jackson, SLF4J, the PostgreSQL JDBC driver, QuestDB.

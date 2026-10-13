@@ -29,7 +29,7 @@ comando runs an MCP server inside its own JVM. Each Claude Code session it start
 | `ui_get_state` | — | the panels with bindings and last SQL run, the connections, the sessions, the open views |
 | `ui_set_layout` | `panel`, `lower_tab`, `sidebar`, `side_pane`, `lower_share` | focuses a panel bound to this session (another session's panel is refused), and selects `lower_tab` with it, once the user pauses typing and only if the panel is still bound to this session then (the reply says so when the panel already has the focus); without `panel`, selects a lower tab (results, session, approvals, terminal, or a view) only while the user looks at a panel of this session; shows or hides panes and sets the lower panel's share of the height once the user has not typed for 2 s. View ▸ Restore layout puts the panes back as they were before the first arrangement not yet undone. Every argument is checked before anything changes |
 | `ui_close_view` | `id` | closes a view this session placed; views the user opened or pinned are refused |
-| `db_run_sql` | `sql`, `connection`, `max_rows`, `show`, `title` | runs one statement on a connection's lane; returns rows as tab-separated text; `show` also opens them as a table |
+| `db_run_sql` | `sql`, `connection`, `max_rows`, `show`, `title` | runs SQL on a connection's lane and returns the first result's rows as tab-separated text; text with several statements always needs approval, runs whole, and returns only the first result; `show` also opens the rows as a table |
 | `db_describe` | `table`, `connection` | a table's columns and types |
 
 Without a `panel` argument, the editor tools use the focused panel when it is bound to the calling session, else the session's first panel. A `panel` bound to another session is refused unless `force` is set. Every edit posts a notice naming the session, the panel and what changed ("work added 4 lines to scratch"). Without a `connection`, the database tools use the connection of that panel. A session bound to no panel must name the panel or the connection; it never writes into another session's panel or runs SQL on its connection by default. Every call gets an answer: an unexpected failure inside a tool is returned as a tool error.
@@ -53,4 +53,4 @@ Each session starts with `--append-system-prompt` text that names the tools and 
 
 ## 5. Audit
 
-Every tool call and every approval decision is appended to `audit/audit-<date>.jsonl` in the data root, with the session, the tool, the arguments (clipped to 2 000 characters per field) and the outcome.
+Every tool call and every approval decision is appended to `audit/audit-<date>.jsonl` in the data root, with the session, the tool, the arguments (one JSON string, clipped to 2 000 characters) and the outcome.

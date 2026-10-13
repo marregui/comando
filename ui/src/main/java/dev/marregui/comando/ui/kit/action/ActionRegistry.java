@@ -40,7 +40,7 @@ public final class ActionRegistry {
     /**
      * The command {@code key} runs: the first enabled one bound to it, else the first bound to it (disabled, so the
      * key goes on to the focused component), or null. Two commands may share a key when at most one is enabled at a
-     * time, as ⌘S saves the panel in the editor and exports the view elsewhere.
+     * time, as ⌘W closes the view that has the keyboard, else the panel.
      */
     public Command forKey(KeyStroke key) {
         Command first = null;

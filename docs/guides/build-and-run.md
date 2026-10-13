@@ -5,11 +5,13 @@
 | Need | For | Note |
 |---|---|---|
 | JDK 25 | building and running from Gradle | the toolchain is not provisioned automatically; Gradle finds an installed JDK 25 |
-| Claude Code CLI | sessions | found at `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, else on `PATH`; `COMANDO_CLAUDE` overrides. Tested from 2.1.296 up to 2.2.0 |
+| Claude Code CLI | sessions | found at `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, else on `PATH`; `COMANDO_CLAUDE` overrides. Tested from 2.1.296 up to, not including, 2.2.0; another version gets a warning at start |
 | Docker | the PostgreSQL adapter tests | optional; those tests are skipped without it |
 | macOS | the keychain, the DMG, IntelliJ links | everything else runs on Linux |
 | IntelliJ IDEA's `idea` launcher | "Open in IntelliJ" | optional; files open in the default application without it |
 | jfrq | "Run jfrq on a recording" | optional; built from `~/workspace/jfr` |
+| a scratchpad folder at `~/.claude/SCRATCHPAD` | "Browse the scratchpad" | optional; the location is fixed |
+| `gradle-serial` at `~/.claude/plugins/local-acme/bin/gradle-serial` | "Run Gradle tasks" | optional; used instead of `./gradlew` when present |
 
 ## 2. Gradle tasks
 
@@ -52,6 +54,8 @@ COMANDO_OPTS="-Dcomando.recordIntents=true" app/build/install/comando/bin/comand
 ├── connections.json
 ├── sessions.json
 ├── panels.json
+├── prompts.json  each session's last 200 prompts
+├── comando.lock  held while comando runs; a second start on the same root refuses
 ├── run/          MCP configurations of running sessions (0600)
 ├── audit/        audit-<UTC date>.jsonl
 ├── logs/         comando-<n>.log, intents-<epoch ms>.jsonl
@@ -62,7 +66,7 @@ COMANDO_OPTS="-Dcomando.recordIntents=true" app/build/install/comando/bin/comand
 
 ## 5. First start
 
-1. Start comando. On a fresh data root it seeds connections and notebooks from `~/QUESTS` when present, else creates one panel with a welcome text.
+1. Start comando. On a fresh data root it seeds connections and notebooks from `~/QUESTS` when present, else creates one panel, scratch, with a welcome text, bound to a connection named local QuestDB with QuestDB's defaults.
 2. Sessions… (⌘⇧K) adds a session: a name and a working directory. Import… lists Claude Code's stored conversations.
 3. Connections… (⌘⇧O) adds a database connection.
 4. Bind both to the panel from the sidebar (double-click), type SQL or a prompt, press ⌘⏎.

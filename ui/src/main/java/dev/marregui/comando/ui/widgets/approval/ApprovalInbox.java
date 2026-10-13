@@ -745,11 +745,15 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         return t;
     }
 
-    private static String title(Approval a) {
+    static String title(Approval a) {
         return switch (a.kind()) {
             case QUESTION -> "asks";
             case PLAN -> "presents a plan";
-            case SQL_WRITE -> "wants to run a statement";
+            case SQL_WRITE -> {
+                // the connection the statement would change is part of the question, not only of the status bar
+                String connection = parse(a.inputJson()).path("connection").asText("");
+                yield connection.isEmpty() ? "wants to run a statement" : "wants to run a statement on " + connection;
+            }
             case TOOL -> "wants to use " + a.toolName() + ": " + a.summary();
         };
     }

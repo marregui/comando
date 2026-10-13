@@ -50,6 +50,10 @@ class PermissionRulesTest {
         assertThat(bash("diff <(ls a) <(ls b)")).isEqualTo("Bash(diff <(ls a) <(ls b))");
         assertThat(bash("ls\nrm -rf /")).as("split as the CLI splits it; rm keeps its exact text").isEqualTo("Bash(ls:*), Bash(rm -rf /)");
         assertThat(bash("sleep 5 & ls")).isEqualTo("Bash(sleep:*), Bash(ls:*)");
+        // a command typed with its path is classified by its base name and keeps the path
+        assertThat(bash("/usr/bin/git commit -m x")).isEqualTo("Bash(/usr/bin/git commit:*)");
+        assertThat(bash("/opt/homebrew/bin/npm run test")).isEqualTo("Bash(/opt/homebrew/bin/npm run test:*)");
+        assertThat(bash("/opt/homebrew/bin/npm exec")).as("a runner with nothing named").isEqualTo("Bash(/opt/homebrew/bin/npm exec)");
         // a here-document's lines are data: no rule for a line that never runs
         assertThat(bash("cat > deploy.sh <<'EOF'\n#!/bin/bash\ngit push origin main\nnpm publish\nEOF"))
                 .isEqualTo("Bash(cat > deploy.sh <<'EOF'\n#!/bin/bash\ngit push origin main\nnpm publish\nEOF)");
@@ -160,6 +164,12 @@ class PermissionRulesTest {
     void onlyBashAndFetchRulesMayBeSaved() {
         assertThat(PermissionRules.rules("Bash", k -> k.equals("command") ? "ls" : "").persistable()).isTrue();
         assertThat(PermissionRules.rules("WebFetch", k -> k.equals("url") ? "https://a.org" : "").persistable()).isTrue();
+        // nothing to name the rule after: the whole tool, never saved
+        for (String url : new String[]{"example.com/x", "file:///etc/passwd", ""}) {
+            PermissionRules.Rules r = PermissionRules.rules("WebFetch", k -> k.equals("url") ? url : "");
+            assertThat(r.persistable()).as(url).isFalse();
+        }
+        assertThat(PermissionRules.rules("Bash", k -> "").persistable()).as("a blank command").isFalse();
         for (String tool : List.of("Edit", "Write", "MultiEdit", "NotebookEdit", "Read", "Glob", "Grep", "mcp__comando__db_run_sql", "Task")) {
             assertThat(PermissionRules.rules(tool, k -> "/a/b").persistable()).as(tool).isFalse();
         }

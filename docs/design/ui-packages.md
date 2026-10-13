@@ -4,7 +4,7 @@
 
 ```
 dev.marregui.comando.ui
-├── kit/            foundation: theme, icons, commands, overlays, EDT helpers, text, trees, desktop (file choosers, links)
+├── kit/            foundation: theme, icons, commands, overlays, EDT helpers, formatting, text, trees, desktop (file choosers, links)
 ├── widget/         the contract: Widget, WidgetContext, WidgetRegistry
 │   └── capability/ Searchable, Copyable, Exportable, Zoomable, FindBar, Capabilities
 ├── widgets/        one package per widget
@@ -24,7 +24,7 @@ dev.marregui.comando.ui
 ├── dialogs/
 │   ├── resource/   ResourceDialog<S>, the one dialog for connections and sessions
 │   └── sessions/   ImportSessionsDialog
-├── shell/          ComandoUi (the frame and the UI port), Keys, LivePlots, ResultViews, Notifier, ServerToggle
+├── shell/          ComandoUi (the frame and the UI port), Keys, LivePlots, ResultViews, Notifier, ServerToggle, Attachments, ClosingCover
 ├── PanelTexts      editor text between runs, written by the store
 └── PromptHistory   each session's prompts between runs, written by the store
 ```

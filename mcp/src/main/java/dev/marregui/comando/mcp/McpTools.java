@@ -352,7 +352,9 @@ public final class McpTools {
             }
             String text = Files.readString(path, StandardCharsets.UTF_8);
             int line = args.path("line").asInt(0);
-            sink.dispatch(new Intent.ShowView(session, path.getFileName().toString(),
+            // titled with the parent folder, as a link the user clicks: two files with one name get two tabs
+            Path folder = path.getParent() == null ? null : path.getParent().getFileName();
+            sink.dispatch(new Intent.ShowView(session, (folder == null ? "" : folder + "/") + path.getFileName(),
                     new ViewSpec.Text(path.toString(), text, syntaxOf(path), line), Placement.SIDE));
             return Outcome.ok("opened " + path + (line > 0 ? " at line " + line : ""));
         } catch (IOException e) {

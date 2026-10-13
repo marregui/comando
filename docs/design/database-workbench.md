@@ -39,7 +39,7 @@ The Results tab shows the focused panel's last run: the grid, the row count, and
 
 | Key | Command | Result |
 |---|---|---|
-| ⌘J | Plot last result | a plot view: x is the first time column, else the first numeric column; up to eight other numeric columns become series; at most 2 000 000 points |
+| ⌘J | Plot last result | a plot view: x is the first time column, else the first numeric column; up to eight other numeric columns become series; at most the first 2 000 000 rows are plotted |
 | ⌘⇧J | Plot last result, refreshing… | asks for a period (default 5 s); the panel's query runs again each period when it is not running, and each finished run replaces the plot without moving the lower panel's tab; running another statement in the panel, closing the plot's tab, "Stop refreshing plots", or its connection failing stops it, with a notice. A refresh posts no notice of its own; a refresh that fails posts a warning ("Live plot in <panel> failed: …"), never a desktop notification |
 | ⌘⇧R | Keep the result in a tab | a table view of the rows, at most 100 000, that the next run does not replace |
 | ⌘⇧I | Attach the result | the selected rows, else the first 50, else the error, as a block in the editor ([Command dispatch](command-dispatch.md#6-attaching-results)) |

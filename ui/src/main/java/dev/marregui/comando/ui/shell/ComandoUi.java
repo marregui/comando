@@ -186,8 +186,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private final PropertyChangeListener focusListener = e -> actions.refresh();
     /** The panes as they were before a session last arranged them; Restore layout puts them back. */
     private LayoutSnapshot beforeArrange;
-    /** A component to give the keyboard after the next render, once the tab holding it shows. */
-    private Component focusAfterRender;
+    /** What gives the keyboard away once the lower tab holding {@code shown} shows, after the render that selects it. */
+    private record FocusAfterRender(Component shown, Runnable focus) {
+    }
+
+    private FocusAfterRender focusAfterRender;
     static final long TYPING_PAUSE_MILLIS = 2_000;
 
     private record LayoutSnapshot(boolean sidebar, boolean sidePaneHidden, int lowerDivider) {
@@ -404,10 +407,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         connectionsDialog.render(s);
         sessionsDialog.render(s);
         watchTranscript(s.focusedPanel().session());
-        if (focusAfterRender != null && focusAfterRender.isShowing()) {
-            Component c = focusAfterRender;
+        if (focusAfterRender != null && focusAfterRender.shown().isShowing()) {
+            Runnable focus = focusAfterRender.focus();
             focusAfterRender = null;
-            Edt.later(c::requestFocusInWindow);
+            Edt.later(focus);
         }
         if (findBar.isOpen() && !findBar.targetShowing()) {
             findBar.close(); // the view it searched was closed
@@ -648,9 +651,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("panel.new", "New panel", "add", key(KeyEvent.VK_T, CMD), "Panels", () -> workspace.newPanel());
         cmd("panel.reopen", "Reopen closed panel", "refresh", key(KeyEvent.VK_T, CMD | SHIFT), "Panels", this::reopenPanel,
                 () -> workspace.hasClosed());
-        // ⌘S in the editor or prompt saves the panel; elsewhere it exports the view (registered later, same key)
-        cmd("panel.save", "Save panel", null, key(KeyEvent.VK_S, CMD), "Panels", this::savePanel,
-                () -> editorFocused() || promptFocused());
+        // ⌘S saves the focused panel wherever the keyboard is; exporting a view is ⌘⇧S
+        cmd("panel.save", "Save panel", null, key(KeyEvent.VK_S, CMD), "Panels", this::savePanel);
         // ⌘W closes the view that has the focus, else the panel
         cmd("panel.close", "Close panel", "close", key(KeyEvent.VK_W, CMD), "Panels", () -> closePanel(focusedId()),
                 () -> focusedView() < 0);
@@ -679,10 +681,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 () -> showLowerAndFocus(LowerTab.RESULTS, lower.results().grid().table()));
         cmd("view.session", "Show session transcript", "session", key(KeyEvent.VK_2, CTRL), "View",
                 () -> showLowerAndFocus(LowerTab.SESSION, lower.transcript().canvas()));
-        cmd("view.approvals", "Show approvals", "check", key(KeyEvent.VK_3, CTRL), "View", () -> {
-            deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.APPROVALS));
-            Edt.later(() -> lower.inbox().focusFirst());
-        });
+        cmd("view.approvals", "Show approvals", "check", key(KeyEvent.VK_3, CTRL), "View",
+                () -> showLowerAndFocus(LowerTab.APPROVALS, lower.inbox().component(), lower.inbox()::focusFirst));
         cmd("view.terminal", "Show the panel's terminal", "terminal", key(KeyEvent.VK_4, CTRL), "View", () -> {
             deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.TERMINAL));
             Edt.later(() -> lower.terminals().focusShown(deps.state().get()));
@@ -877,11 +877,19 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * refuses focus, so the request waits for the render that switches the tab.
      */
     private void showLowerAndFocus(LowerTab tab, Component target) {
-        if (deps.state().get().lowerTab().equals(tab)) {
-            target.requestFocusInWindow();
+        showLowerAndFocus(tab, target, target::requestFocusInWindow);
+    }
+
+    /**
+     * Selects {@code tab} and runs {@code focus} once {@code shown} is on screen: a component in a tab that is not
+     * showing yet refuses the keyboard, so the focus waits for the render that shows the tab.
+     */
+    private void showLowerAndFocus(LowerTab tab, Component shown, Runnable focus) {
+        if (deps.state().get().lowerTab().equals(tab) && shown.isShowing()) {
+            focus.run();
             return;
         }
-        focusAfterRender = target;
+        focusAfterRender = new FocusAfterRender(shown, focus);
         deps.intents().dispatch(new Intent.SelectLowerTab(tab));
     }
 
@@ -994,9 +1002,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "The tutorial is not in this build", false));
                 return;
             }
-            // links to other docs are relative to the repository, which the app does not ship: keep their text only
+            // links to other docs are relative to the repository, which the app does not ship, and the view does not
+            // follow in-page anchors: keep their text only
             String text = new String(in.readAllBytes(), StandardCharsets.UTF_8)
-                    .replaceAll("\\[([^\\]]+)\\]\\((\\.\\./[^)]+|[a-z-]+\\.md)\\)", "$1");
+                    .replaceAll("\\[([^\\]]+)\\]\\((\\.\\./[^)]+|[a-z-]+\\.md[^)]*|#[^)]+)\\)", "$1");
             deps.intents().dispatch(new Intent.ShowView("", "Tutorial", new ViewSpec.Markdown(text), Placement.SIDE));
         } catch (IOException e) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot read the tutorial: " + e.getMessage(), false));

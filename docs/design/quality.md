@@ -9,17 +9,17 @@
 | `core` | 11 | 142 | the reducer (one test per behaviour; notice subjects, history and clearing, session layout limits, reopened panels), the state loop and its drain on close, the classifier and block finder, resource kinds and specs, the transcript's publication, console output past its cap, formatting, the JFR intent event |
 | `db` | 2 | 20 | lanes against an embedded QuestDB: runs stored by column, nulls, the row cap, DDL, server errors, cancel of a running and of a queued run, connect failures, Claude's capped rows, schema loading, tests, close; against PostgreSQL in Docker through Testcontainers (skipped without Docker): type mapping, cancel of `pg_sleep`, schema from `information_schema`, the describe fallback |
 | `claude` | 6 | 27 | the stream mapper on recorded CLI streams, the command line, the adapter against a fake CLI script, the session catalogue, git branch reading, version checks |
-| `mcp` | 3 | 63 | the server over HTTP: authentication, Origin, protocol versions, tokens per process, every tool, tool scoping to the caller's panels and views, approvals, cancelled calls, the permission rules derived per tool, the plan's `setMode`, the SQL policy |
+| `mcp` | 3 | 64 | the server over HTTP: authentication, Origin, protocol versions, tokens per process, every tool, tool scoping to the caller's panels and views, approvals, cancelled calls, the permission rules derived per tool, the plan's `setMode`, the SQL policy |
 | `tools` | 1 | 11 | Gradle runs and test reports, cancel and SIGKILL escalation, output held by an orphan, a console released after its view closed, an unreadable directory, shell-like argument splitting, jfrq, JFR recordings, the scratchpad tree |
-| `ui` | 34 | 182 | import rules (ArchUnit), the approval cards (keys, focus, the two-press Always, questions), the transcript's folding, following and find, the resource dialogs at their default size, the terminal's input gate and foreground job on a real pty, the editor's tint, inserts and error underline, the prompt bar's history and refusals, palette ranking and key glyphs, key forwarding, Markdown to paragraphs and to HTML (images as alt text), the HTML guard against Swing, attachments without blank lines, the transcript canvas, diffs, completion and its disposal, plan trees, result views and live plots, plot time ticks, the dialog's form merge, sorted selection and CSV export, source links, the pseudo-terminal, the external editor, the EDT watchdog |
+| `ui` | 34 | 184 | import rules (ArchUnit), the approval cards (keys, focus, the two-press Always, questions), the transcript's folding, following and find, the resource dialogs at their default size, the terminal's input gate and foreground job on a real pty, the editor's tint, inserts and error underline, the prompt bar's history and refusals, palette ranking and key glyphs, key forwarding, Markdown to paragraphs and to HTML (images as alt text), the HTML guard against Swing, attachments without blank lines, the transcript canvas, diffs, completion and its disposal, plan trees, result views and live plots, plot time ticks, the dialog's form merge, sorted selection and CSV export, source links, the pseudo-terminal, the external editor, the EDT watchdog |
 | `app` | 6 | 20 | the store (atomic files, corrupt files kept aside, keychain migration, an unreadable keychain item kept, both keychain answer forms, panel saves not queued behind a keychain prompt), the intent log; 2 skipped by default: the real keychain and the window replay |
-| total | 63 | 465 | 0 failures |
+| total | 63 | 468 | 0 failures |
 
 Two tests touch the user's machine and are opt-in:
 
 | Test | Enabled by | Why opt-in |
 |---|---|---|
-| keychain round trip | `-Dcomando.keychainTest=true` | writes and deletes an item in the login keychain |
+| keychain round trip | `./gradlew test -PkeychainTest=true` (sets `comando.keychainTest` in the test JVM) | writes and deletes an item in the login keychain |
 | window replay | `./gradlew :app:uiTest` | needs a display and opens a window |
 
 ## 2. Fixtures
@@ -28,7 +28,7 @@ Two tests touch the user's machine and are opt-in:
 |---|---|
 | `testkit/.../fixtures/stream/*.jsonl` | stream-JSON recorded from Claude Code 2.1.296: approvals and a question; a queued prompt, `/compact` and an interrupt |
 | `fake-claude.sh`, `fake-claude-crash.sh` | shell stand-ins for `claude -p` that answer each prompt, or die with stderr |
-| `SyntheticSession` | a deterministic session of 8 turns and 40 tool calls, replayed as stream deltas |
+| `SyntheticSession` | a deterministic session of 8 turns and 41 tool calls (one a subagent), replayed as stream deltas |
 | `RecordingPorts`, `RecordingSink`, `FakeClock`, `FakeResult`, `States` | port fakes that record effects, an intent sink with `await`, a settable clock, results and states built in one line |
 | `app/src/test/resources/replay/snapshot.jsonl` | a recorded intent log of a snapshot run, with no real connection data |
 
@@ -36,13 +36,13 @@ Two tests touch the user's machine and are opt-in:
 
 With `-Dcomando.recordIntents=true` comando writes every intent it applies to `logs/intents-<epoch ms>.jsonl` in the data root. The first line holds the initial state; each further line one intent, with its type. Every `password` field is blanked before it is written, so a log can be attached to a defect report.
 
-`IntentLog.Replay` reads a log back and applies it to the reducer. `UiReplayTest` replays the fixture against the real Swing shell, with every adapter replaced by a recording fake, and checks that the window shows what the final state says: the window title, the panel tabs and the focused one, the lower tabs and the selected one, the side pane's views, and that the editor and a non-empty side pane are each wider than a fifth of the window.
+`IntentLog.read` returns a log's starting state and its intents. `UiReplayTest` feeds the fixture to a `StateLoop` driving the real Swing shell, with every adapter replaced by a recording fake, and checks that the window shows what the final state says: the window title, the panel tabs and the focused one, the lower tabs and the selected one, the side pane's views, and that the editor and a non-empty side pane are each wider than a fifth of the window.
 
 ## 4. Performance gates
 
 | Gate | Command | Budget | Latest |
 |---|---|---|---|
-| transcript frame time | `./gradlew :ui:transcriptGate` | p99 ≤ 16 ms | p99 3.26 ms ([Transcript renderer](transcript-renderer.md#5-the-frame-time-gate)) |
+| transcript frame time | `./gradlew :ui:transcriptGate` | p99 ≤ 16 ms | 2026-10-13: frame p50 1.15 ms, p99 3.39 ms, max 9.43 ms, 0 frames over 16 ms; open thinking streamed p99 1.40 ms ([Transcript renderer](transcript-renderer.md#5-the-frame-time-gate)) |
 | EDT responsiveness | always on: `EdtWatchdog` | probe answered within 200 ms | a stack in the log and a `comando.EdtBlocked` event when exceeded |
 
 ## 5. JFR events

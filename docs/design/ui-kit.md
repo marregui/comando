@@ -12,7 +12,7 @@
 | `overlay` | `Overlay` | the empty, loading and error states; a widget wraps its content once and switches state |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` | thread hand-off and paint pacing (§3) |
 | `format` | `Labels` | short labels: time since, dollars, token counts, counts, shortened paths |
-| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `SourceLinks` | text areas and text rendering (§4) |
+| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `SourceLinks`, `Plain` | text areas and text rendering (§4) |
 | `tree` | `TreeView` | the one tree over `ViewSpec.TreeNode` |
 | `desktop` | `ExternalEditor`, `FileChoosers` | opens a file at a line in IntelliJ IDEA, else in the system's default application, on a virtual thread; folder, open and save choosers, the native `FileDialog` on macOS |
 
