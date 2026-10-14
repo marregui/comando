@@ -21,6 +21,7 @@
 | `open-file` | virtual | checks whether a file chosen for a panel is text, before the store binds it | — |
 | `store` | platform | atomic writes of `sessions.json`, `panels.json` and the panel files in `panels/`; panel text 800 ms after the first unsaved change; a check of the open panels' files for outside changes every second; the read of a file that Open spec or ⌘⇧T binds to a panel | those files |
 | `store-secrets` | platform | keychain calls and `connections.json`, apart so an unanswered unlock prompt never holds back panel text | `connections.json` |
+| `mermaid` | platform, daemon | runs `mmdc` for a Mermaid diagram a preview shows, one at a time; stopped after 30 s and at exit | `cache/mermaid/` |
 | `edt-watchdog` | platform, daemon | posts a probe to the EDT every 100 ms and reports one that waits 200 ms | — |
 | `show-file`, `show-log`, `reveal`, `notify`, `open-link`, `external-editor`, `terminal-exit`, `claude-version`, `questdb-toggle`, `pty-preload`, `export` | virtual | one blocking call each, off the EDT | — |
 | `exit`, `shutdown` | platform | close the application after Quit, or from the JVM's shutdown hook ([Ownership](04-ownership.md#2-exit)) | — |
@@ -50,7 +51,7 @@ Every wait has a deadline. A wait that can be cut short by shutdown also checks 
 | Tool output after the process exits | 2 s | a note in the console; a child holding the pipe no longer keeps the run open |
 | `claude --version` | 5 s | a warning in the status bar |
 | Keychain calls | 10 s | the tool is killed; a password not stored stays in the file, a password not read is kept in the keychain and the connection loads without it |
-| The EDT | probe answered within 200 ms | a stack in the log and a `comando.EdtBlocked` JFR event |
+| The EDT | probe answered within 200 ms | a stack in the log and a `comando.EdtBlocked` JFR event; a stall inside the JDK's drawing logs one INFO line, with a stack only past 2 s |
 
 ## 4. Publication
 

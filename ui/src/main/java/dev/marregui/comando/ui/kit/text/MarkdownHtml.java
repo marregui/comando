@@ -15,6 +15,7 @@ import org.commonmark.renderer.html.HtmlWriter;
 
 import java.util.List;
 import java.util.Set;
+import java.util.function.Function;
 
 /**
  * Markdown to HTML for Swing's HTML 3.2 renderer. Raw HTML in the source is escaped, not rendered. An image
@@ -32,14 +33,30 @@ public final class MarkdownHtml {
             .sanitizeUrls(true)
             .softbreak("<br>")
             .nodeRendererFactory(ImageAsText::new)
-            .nodeRendererFactory(ColouredCode::new)
+            .nodeRendererFactory(c -> new ColouredCode(c, null))
             .build();
 
     private MarkdownHtml() {
     }
 
     public static String render(String markdown) {
-        String html = RENDERER.render(PARSER.parse(markdown));
+        return render(markdown, null);
+    }
+
+    /**
+     * Markdown to HTML; a {@code mermaid} code block becomes what {@code mermaid} makes of its text, the picture or
+     * the source with a note. Without it, a Mermaid block shows as code.
+     */
+    public static String render(String markdown, Function<String, String> mermaid) {
+        HtmlRenderer renderer = mermaid == null ? RENDERER : HtmlRenderer.builder()
+                .extensions(EXTENSIONS)
+                .escapeHtml(true)
+                .sanitizeUrls(true)
+                .softbreak("<br>")
+                .nodeRendererFactory(ImageAsText::new)
+                .nodeRendererFactory(c -> new ColouredCode(c, mermaid))
+                .build();
+        String html = renderer.render(PARSER.parse(markdown));
         // Swing's renderer does not know <del>, and draws <pre><code> with a wrapping paragraph margin
         return html.replace("<pre><code", "<pre class=\"code\"><code").replace("<del>", "<strike>").replace("</del>", "</strike>");
     }
@@ -76,12 +93,17 @@ public final class MarkdownHtml {
         }
     }
 
-    /** A fenced code block in the editors' colours for the language its fence names; plain when it names none. */
+    /**
+     * A fenced code block in the editors' colours for the language its fence names; plain when it names none. A
+     * Mermaid block becomes what the diagram function makes of it, when there is one.
+     */
     private static final class ColouredCode implements NodeRenderer {
         private final HtmlNodeRendererContext context;
+        private final Function<String, String> mermaid;
 
-        ColouredCode(HtmlNodeRendererContext context) {
+        ColouredCode(HtmlNodeRendererContext context, Function<String, String> mermaid) {
             this.context = context;
+            this.mermaid = mermaid;
         }
 
         @Override
@@ -96,6 +118,12 @@ public final class MarkdownHtml {
             String info = block.getInfo() == null ? "" : block.getInfo().strip();
             String language = info.isEmpty() ? "" : info.split("\\s+", 2)[0];
             HtmlWriter w = context.getWriter();
+            if (mermaid != null && language.equalsIgnoreCase("mermaid")) {
+                w.line();
+                w.raw(mermaid.apply(code));
+                w.line();
+                return;
+            }
             w.line();
             w.raw("<pre class=\"code\"><code>");
             w.raw(coloured(code, language));

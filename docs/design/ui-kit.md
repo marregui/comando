@@ -12,7 +12,7 @@
 | `overlay` | `Overlay` | the empty, loading and error states; a widget wraps its content once and switches state |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` | thread hand-off and paint pacing (§3) |
 | `format` | `Labels` | short labels: time since, dollars, token counts, counts, shortened paths |
-| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `SourceLinks`, `Plain` | text areas and text rendering (§4) |
+| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `MermaidDiagrams`, `SourceLinks`, `Plain` | text areas and text rendering (§4) |
 | `tree` | `TreeView` | the one tree over `ViewSpec.TreeNode` |
 | `desktop` | `ExternalEditor`, `FileChoosers` | opens a file at a line in IntelliJ IDEA, else in the system's default application, on a virtual thread; folder, open and save choosers, the native `FileDialog` on macOS |
 
@@ -29,7 +29,7 @@ A command appears in at most one menu (its group) and carries at most one key st
 | `Edt.assertEdt` | a Java `assert` that the caller is on the EDT; active only with `-ea` (tests) |
 | `Coalescer` | many requests from any thread become at most one pending run on the EDT; the run reads the latest data, so nothing is lost and the EDT is not flooded. State renders, transcript updates and console output go through one each |
 | `Debouncer` | runs once requests stop for a delay; the editor's gutter uses 250 ms |
-| `EdtWatchdog` | every 100 ms posts a probe to the EDT; a probe still waiting after 200 ms logs the EDT's stack once, and the answer records a `comando.EdtBlocked` JFR event with the blocked time |
+| `EdtWatchdog` | every 100 ms posts a probe to the EDT; a probe still waiting after 200 ms logs the EDT's stack once, and the answer records a `comando.EdtBlocked` JFR event with the blocked time. A stall spent in the JDK's drawing (a `sun.java2d` frame and no comando frame, as when Java2D waits for its lock while macOS's Metal pipeline flushes to the GPU) logs one INFO line when it ends instead; past 2 s it is reported with its stack like any other |
 
 ## 4. Text
 
@@ -40,6 +40,7 @@ A command appears in at most one menu (its group) and carries at most one key st
 | `Highlighter` | syntax colours for text painted outside a text area (the transcript), from the same token makers and colours as the editors; safe on any thread |
 | `Diffs`, `DiffPane` | unified diff of two texts with three lines of context; the pane colours added and removed lines |
 | `MarkdownHtml`, `HtmlPane` | Markdown (CommonMark with tables) to HTML for Swing's HTML renderer; raw HTML in the source is escaped; an image becomes its alt text, so nothing is fetched; a code fence naming its language takes the editors' colours; links open in the browser |
+| `MermaidDiagrams` | Mermaid blocks as pictures `mmdc` drew into `~/.comando/cache/mermaid/`, once per diagram text, one at a time on its own thread; `HtmlPane` shows the source under a note until the picture is ready, then refreshes where the reader left it |
 | `SourceLinks` | turns `path/File.java:42` references into links that open the file at the line; leaves code blocks and existing links alone |
 | `Plain` | text shown as text: `Plain.only(component)` turns HTML rendering off (before the text is set), `Plain.text(s)` guards a single string that starts with `<html>` ([Approvals and safety](approvals-and-safety.md#6-text-is-never-rendered-as-html)) |
 

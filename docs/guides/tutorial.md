@@ -43,7 +43,7 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 
 | Part | What it is |
 |---|---|
-| **Sidebar**, left | three tabs: **Sessions** (Claude Code sessions; each row's controls connect or disconnect it, change its model or effort, and open its editor), **Connections** (databases) and **Scratchpad** (your `~/.claude/SCRATCHPAD`; one click on a file opens it in a panel: Markdown shows rendered; the header's **Edit** button or **⌘⇧M** switches to the text, and **Preview** switches back; source files show in their language's colours). Sessions and Connections each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
+| **Sidebar**, left | three tabs: **Sessions** (Claude Code sessions; each row's controls connect or disconnect it, change its model or effort, and open its editor), **Connections** (databases) and **Scratchpad** (your `~/.claude/SCRATCHPAD`; one click on a file opens it in a panel: Markdown shows rendered, Mermaid diagrams drawn as pictures; the header's **Edit** button or **⌘⇧M** switches to the text, and **Preview** switches back; source files show in their language's colours). Sessions and Connections each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one. |
 | **Panel header** | two chips: the panel's **session** and its **connection**, each with a status dot (○ closed, ● open) and a button to start or connect it. **Run** and **Stop** on the right. |
 | **Editor** | where you write SQL and prompts, mixed in one text. |

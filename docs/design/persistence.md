@@ -16,6 +16,7 @@ The data root is the directory in `-Dcomando.home`, else the environment variabl
 | `logs/comando-<n>.log` | the application log, 5 files of 5 MB, rotated | `Logging` |
 | `logs/intents-<epoch ms>.jsonl` | the intent log, when recording is on ([Quality](quality.md)) | `IntentLog` |
 | `questdb/` | the embedded QuestDB's data, when the user starts it | `EmbeddedQuestDb` |
+| `cache/mermaid/<hash>.png` | Mermaid diagrams `mmdc` drew for the previews, one per diagram text; safe to delete ([ADR 35](../adr/0035-mermaid-diagrams-drawn-by-mmdc.md)) | `MermaidDiagrams` |
 
 Outside the data root:
 

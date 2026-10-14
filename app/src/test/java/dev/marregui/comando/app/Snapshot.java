@@ -120,6 +120,13 @@ public final class Snapshot {
                 | read | EDT |
                 | write | store |
 
+                ```mermaid
+                flowchart LR
+                    E[EDT] -->|edit| S[store]
+                    S -->|write| F[(file)]
+                    F -->|outside change| S
+                ```
+
                 ```java
                 @Override
                 public String write(String id, String text) throws IOException {
@@ -148,7 +155,7 @@ public final class Snapshot {
                 """);
         PanelId first = loop.state().focused();
         SwingUtilities.invokeAndWait(() -> app.ui().openFile(plan));
-        Thread.sleep(1500);
+        Thread.sleep(4000); // mmdc draws the diagram in about 1.5 s, and the preview shows it then
         shoot(out.resolve("02e-markdown-document.png"));
         SwingUtilities.invokeAndWait(() -> app.ui().openFile(source));
         Thread.sleep(1500);

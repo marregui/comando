@@ -40,3 +40,4 @@ A decision is changed by a new record that names the one it replaces; the old re
 | [32](0032-session-rows-carry-their-controls.md) | Session rows carry their controls | Miguel, Claude | accepted |
 | [33](0033-thinking-gives-way-and-the-conclusion-is-gold.md) | Thinking gives way, and the conclusion is gold | Miguel, Claude | accepted |
 | [34](0034-a-deleted-document-closes-its-panel.md) | A deleted document closes its panel | Miguel, Claude | accepted |
+| [35](0035-mermaid-diagrams-drawn-by-mmdc.md) | Mermaid diagrams drawn by mmdc | Miguel, Claude | accepted |

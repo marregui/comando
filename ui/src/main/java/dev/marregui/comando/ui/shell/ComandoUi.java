@@ -357,13 +357,21 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             p.editor().requestFocus();
         }
         // started last: a probe posted during the build waits for the rest of it and reports the build itself
-        watchdog = new EdtWatchdog((millis, stack) -> LOG.log(System.Logger.Level.WARNING,
-                "the EDT has not answered for " + millis + " ms:\n" + stack), this::stalled);
+        watchdog = new EdtWatchdog(stall -> LOG.log(System.Logger.Level.WARNING,
+                "the EDT has not answered for " + stall.millis() + " ms:\n" + stall.stack()), this::stalled);
     }
 
-    /** A stall of the EDT ended after {@code millis}: the user hears of one that lasted a second or more. */
-    private void stalled(long millis) {
-        LOG.log(System.Logger.Level.WARNING, "the EDT answered again after " + millis + " ms");
+    /**
+     * A stall of the EDT ended after {@code millis}: one spent in the JDK's drawing is a line of its own, any other
+     * a warning after the stack; the user hears of one that lasted a second or more.
+     */
+    private void stalled(EdtWatchdog.Stall stall, long millis) {
+        if (stall.drawing()) {
+            LOG.log(System.Logger.Level.INFO, "the window's drawing held the EDT for " + millis
+                    + " ms (Java2D waiting for its lock while the GPU flushes; no comando code on the stack)");
+        } else {
+            LOG.log(System.Logger.Level.WARNING, "the EDT answered again after " + millis + " ms");
+        }
         if (millis >= 1_000) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN,
                     "The window stopped responding for " + Labels.elapsed(millis) + "; the log has where (Help ▸ Show the log)", false));

@@ -1,0 +1,112 @@
+package dev.marregui.comando.ui.kit.text;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import javax.imageio.ImageIO;
+import java.awt.image.BufferedImage;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class MermaidDiagramsTest {
+
+    private static final String FLOW = "flowchart LR\n    A --> B\n";
+
+    @TempDir
+    Path dir;
+
+    /** A stand-in for mmdc: counts its runs, then copies a picture to the -o path, or fails as mmdc does on bad text. */
+    private Path fakeMmdc(boolean fails) throws Exception {
+        Path picture = dir.resolve("picture.png");
+        ImageIO.write(new BufferedImage(400, 120, BufferedImage.TYPE_INT_ARGB), "png", picture.toFile());
+        Path exe = dir.resolve("bin").resolve("mmdc");
+        Files.createDirectories(exe.getParent());
+        Files.writeString(exe, """
+                #!/bin/sh
+                echo run >> '%s'
+                out=""
+                while [ $# -gt 0 ]; do
+                  if [ "$1" = "-o" ]; then out="$2"; fi
+                  shift
+                done
+                %s
+                """.formatted(dir.resolve("runs"), fails
+                ? "echo 'Error: Parse error on line 2:' >&2; exit 1"
+                : "cp '" + picture + "' \"$out\""));
+        exe.toFile().setExecutable(true);
+        return exe;
+    }
+
+    private long runs() throws Exception {
+        Path runs = dir.resolve("runs");
+        return Files.exists(runs) ? Files.readAllLines(runs).size() : 0;
+    }
+
+    @Test
+    void aDiagramIsDrawnOnceThenShownFromTheCacheAtHalfItsPixels() throws Exception {
+        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), fakeMmdc(false));
+        try {
+            CountDownLatch drawn = new CountDownLatch(1);
+            assertThat(diagrams.diagram(FLOW, drawn::countDown)).isInstanceOf(MermaidDiagrams.Diagram.Pending.class);
+            assertThat(drawn.await(10, TimeUnit.SECONDS)).as("the asker hears when it is drawn").isTrue();
+
+            MermaidDiagrams.Diagram again = diagrams.diagram(FLOW, () -> { });
+            assertThat(again).isEqualTo(new MermaidDiagrams.Diagram.Ready(
+                    dir.resolve("cache").resolve(MermaidDiagrams.key(FLOW) + ".png"), 200, 60));
+            assertThat(runs()).as("drawn once").isEqualTo(1);
+            try (var files = Files.list(dir.resolve("cache"))) {
+                assertThat(files.map(p -> p.getFileName().toString())).as("no temporary files left")
+                        .containsExactly(MermaidDiagrams.key(FLOW) + ".png");
+            }
+        } finally {
+            diagrams.close();
+        }
+    }
+
+    @Test
+    void aDiagramMmdcRejectsSaysWhyAndIsNotDrawnAgain() throws Exception {
+        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), fakeMmdc(true));
+        try {
+            CountDownLatch done = new CountDownLatch(1);
+            diagrams.diagram("flowchart LR\n  A -->", done::countDown);
+            assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(diagrams.diagram("flowchart LR\n  A -->", () -> { }))
+                    .isEqualTo(new MermaidDiagrams.Diagram.Unavailable("mmdc cannot draw it: Error: Parse error on line 2:"));
+            assertThat(runs()).isEqualTo(1);
+        } finally {
+            diagrams.close();
+        }
+    }
+
+    @Test
+    void withoutMmdcTheSourceShowsWithHowToGetIt() {
+        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), null);
+        assertThat(diagrams.diagram(FLOW, () -> { })).isInstanceOfSatisfying(MermaidDiagrams.Diagram.Unavailable.class,
+                u -> assertThat(u.why()).contains("npm install -g @mermaid-js/mermaid-cli"));
+    }
+
+    @Test
+    void theKeyFollowsTheTextNotItsSurroundingBlankLines() {
+        assertThat(MermaidDiagrams.key(FLOW)).isEqualTo(MermaidDiagrams.key("\n" + FLOW + "\n\n"))
+                .isNotEqualTo(MermaidDiagrams.key("flowchart LR\n    A --> C\n")).hasSize(32);
+        assertThat(MermaidDiagrams.compareVersions("v22.20.0", "v20.9.1")).isPositive();
+        assertThat(MermaidDiagrams.compareVersions("v9.0.0", "v10.0.0")).isNegative();
+    }
+
+    @Test
+    void thePreviewShowsThePictureNoWiderThanThePaneElseTheSourceUnderANote() {
+        Path png = dir.resolve("d.png");
+        String ready = HtmlPane.diagramHtml(FLOW, new MermaidDiagrams.Diagram.Ready(png, 800, 100), 400);
+        assertThat(ready).contains("<img src=\"" + png.toUri() + "\" width=\"400\" height=\"50\"");
+        assertThat(HtmlPane.diagramHtml("A --> <b>", new MermaidDiagrams.Diagram.Pending(), 400))
+                .contains("drawing the diagram…").contains("A --&gt; &lt;b&gt;").doesNotContain("<b>");
+        assertThat(MarkdownHtml.render("# Plan\n\n```mermaid\n" + FLOW + "```\n", source -> "[diagram of " + source.strip() + "]"))
+                .contains("[diagram of flowchart LR").doesNotContain("<pre");
+        assertThat(MarkdownHtml.render("```mermaid\n" + FLOW + "```\n")).as("no diagram function: code")
+                .contains("<pre class=\"code\"><code>flowchart LR");
+    }
+}

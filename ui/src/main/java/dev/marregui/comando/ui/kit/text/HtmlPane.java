@@ -3,6 +3,8 @@ package dev.marregui.comando.ui.kit.text;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.JEditorPane;
+import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.View;
@@ -11,6 +13,7 @@ import javax.swing.text.html.StyleSheet;
 import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Insets;
+import java.awt.Point;
 import java.net.URI;
 import java.util.Locale;
 
@@ -72,8 +75,62 @@ public class HtmlPane extends JEditorPane {
         });
     }
 
+    /** The Markdown shown, so a diagram drawn later refreshes the pane only while it still shows the same text. */
+    private String markdown;
+
+    /** Shows {@code markdown} rendered; its Mermaid diagrams as pictures once {@link MermaidDiagrams} has drawn them. */
     public void setMarkdown(String markdown) {
-        setHtml(MarkdownHtml.render(markdown));
+        this.markdown = markdown;
+        setHtml(MarkdownHtml.render(markdown, this::diagram));
+    }
+
+    private String diagram(String source) {
+        String shown = markdown;
+        MermaidDiagrams.Diagram d = MermaidDiagrams.current().diagram(source, () -> SwingUtilities.invokeLater(() -> redraw(shown)));
+        Insets in = getInsets();
+        return diagramHtml(source, d, getWidth() - in.left - in.right - 8);
+    }
+
+    /** A diagram was drawn: the same text again, with the view where the reader left it. */
+    private void redraw(String shown) {
+        if (shown == null || !shown.equals(markdown)) {
+            return;
+        }
+        Point at = getParent() instanceof JViewport vp ? vp.getViewPosition() : null;
+        int caret = getCaretPosition();
+        setMarkdown(shown);
+        setCaretPosition(Math.min(caret, getDocument().getLength()));
+        if (at != null) {
+            SwingUtilities.invokeLater(() -> ((JViewport) getParent()).setViewPosition(at));
+        }
+    }
+
+    /**
+     * The HTML of a Mermaid block: its picture, no wider than {@code maxWidth} points when that is positive; else its
+     * source as code under a muted note saying why there is no picture yet.
+     */
+    static String diagramHtml(String source, MermaidDiagrams.Diagram d, int maxWidth) {
+        return switch (d) {
+            case MermaidDiagrams.Diagram.Ready r -> {
+                int w = r.width();
+                int h = r.height();
+                if (maxWidth > 0 && w > maxWidth) {
+                    h = Math.max(1, h * maxWidth / w);
+                    w = maxWidth;
+                }
+                yield "<p><img src=\"" + r.png().toUri() + "\" width=\"" + w + "\" height=\"" + h + "\" alt=\"diagram\"></p>";
+            }
+            case MermaidDiagrams.Diagram.Pending p -> note("drawing the diagram…") + code(source);
+            case MermaidDiagrams.Diagram.Unavailable u -> note(u.why()) + code(source);
+        };
+    }
+
+    private static String note(String text) {
+        return "<p><font color=\"" + Theme.hex(Theme.MUTED) + "\"><i>" + MarkdownHtml.escape(text) + "</i></font></p>";
+    }
+
+    private static String code(String source) {
+        return "<pre class=\"code\"><code>" + MarkdownHtml.escape(source) + "</code></pre>";
     }
 
     public void setHtml(String bodyHtml) {
