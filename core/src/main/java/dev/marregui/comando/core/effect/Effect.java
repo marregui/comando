@@ -8,6 +8,7 @@ import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.Layout;
+import dev.marregui.comando.core.view.ViewSpec;
 
 import java.util.List;
 
@@ -110,6 +111,10 @@ public sealed interface Effect {
     }
 
     record BrowseScratchpad() implements Effect {
+    }
+
+    /** Shows the scratchpad's tree in the sidebar's Scratchpad tab. */
+    record ShowScratchpad(ViewSpec.TreeNode root) implements Effect {
     }
 
     // ---- persistence

@@ -364,10 +364,17 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
     }
 
-    /** Once a second: elapsed times on the panels and the results, the embedded server's state. */
+    /** Seconds between reads of the scratchpad while its tab shows. */
+    static final int SCRATCHPAD_SECONDS = 10;
+    private int ticks;
+
+    /** Once a second: elapsed times on the panels and the results, the embedded server's state, the scratchpad. */
     private void tick() {
         workspace.tick();
         lower.results().tick();
+        if (++ticks % SCRATCHPAD_SECONDS == 0 && sidebar.scratchpadShowing()) {
+            deps.intents().dispatch(new Intent.BrowseScratchpad());
+        }
         if (deps.server() != null) {
             status.server(deps.server().name(), deps.server().isRunning(), () -> deps.server().toggle());
         }
@@ -544,6 +551,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     @Override
     public void arrange(Layout layout) {
         Edt.run(() -> arrangeWhenIdle(layout));
+    }
+
+    @Override
+    public void showScratchpad(ViewSpec.TreeNode root) {
+        Edt.run(() -> sidebar.showScratchpad(root));
     }
 
     /** Applies a session's layout once the user has not typed for two seconds, so panes never move under the keys. */
@@ -777,9 +789,15 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("tools.recording", "Open JFR recording…", "chart", null, "Tools", () -> chooseRecording().ifPresent(f ->
                 deps.intents().dispatch(new Intent.OpenRecording(f))));
         cmd("tools.jfrq", "Run jfrq on a recording…", "terminal", null, "Tools", this::runJfrq);
-        cmd("tools.scratchpad", "Browse the scratchpad", "file", null, "Tools", () -> {
-            sidePaneHidden = false;
-            deps.intents().dispatch(new Intent.BrowseScratchpad());
+        cmd("tools.scratchpad", "Show the scratchpad", "file", null, "Tools", () -> {
+            if (!sidebar.isShown()) {
+                toggleSidebar();
+            }
+            if (sidebar.selectedTab() == SessionsSidebar.SCRATCHPAD) {
+                deps.intents().dispatch(new Intent.BrowseScratchpad());
+            } else {
+                sidebar.selectTab(SessionsSidebar.SCRATCHPAD);
+            }
         });
         // help
         cmd("help.tutorial", "Tutorial", "file", null, "Help", this::showTutorial);
@@ -1156,6 +1174,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      */
     private void showSidebar(boolean shown) {
         sidebar.show(shown);
+        if (sidebar.scratchpadShowing()) {
+            deps.intents().dispatch(new Intent.BrowseScratchpad());
+        }
         outer.setDividerSize(shown ? outerDividerSize : 0);
         outer.setDividerLocation(shown ? prefs.getInt("divider.sidebar", 260) : sidebar.railWidth());
         outer.revalidate();
@@ -1284,6 +1305,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             frame.setSize(w, h);
             frame.setLocationRelativeTo(null);
         }
+        sidebar.selectTab(prefs.getInt("sidebar.tab", SessionsSidebar.SESSIONS));
         showSidebar(prefs.getBoolean("sidebar.visible", true));
         vertical.setDividerLocation(prefs.getInt("divider.lower", (int) (h * 0.45)));
         sidePaneHidden = prefs.getBoolean("sidePane.hidden", false);
@@ -1318,6 +1340,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             prefs.putInt("divider.sidebar", outer.getDividerLocation());
         }
         prefs.putBoolean("sidebar.visible", sidebar.isShown());
+        prefs.putInt("sidebar.tab", sidebar.selectedTab());
         prefs.putBoolean("sidePane.hidden", sidePaneHidden);
         prefs.putInt("divider.lower", vertical.getDividerLocation());
         if (sidePaneShown) {

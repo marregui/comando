@@ -24,6 +24,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Runs the development tools. Each run is a child process on a virtual thread that copies its output
@@ -305,14 +307,36 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         });
     }
 
+    /** The scratchpad as last sent, so a read that finds it unchanged sends nothing. */
+    private final AtomicReference<ViewSpec.TreeNode> scratchpad = new AtomicReference<>();
+    /** One read at a time: an older read finishing last would send a stale tree, and a slow disk would pile reads up. */
+    private final AtomicBoolean readingScratchpad = new AtomicBoolean();
+
+    /**
+     * Reads the scratchpad for the sidebar, off the caller's thread; sends it only when it changed since the last
+     * read. A folder that cannot be read becomes a tree that says so, not a notice at every refresh. A request while a
+     * read runs is dropped: that read returns what is on disk.
+     */
     @Override
     public void browseScratchpad() {
+        if (!readingScratchpad.compareAndSet(false, true)) {
+            return;
+        }
         Thread.ofVirtual().name("scratchpad").start(() -> {
             try {
-                sink.dispatch(new Intent.ShowView("", "scratchpad", new ViewSpec.Tree(Scratchpad.tree(settings.scratchpad())), Placement.SIDE));
-            } catch (IOException e) {
-                sink.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot read the scratchpad at " + settings.scratchpad() + ": "
-                        + e.getMessage(), false));
+                ViewSpec.TreeNode root;
+                try {
+                    root = Scratchpad.tree(settings.scratchpad());
+                } catch (IOException | RuntimeException e) {
+                    LOG.log(System.Logger.Level.WARNING, "cannot read the scratchpad at " + settings.scratchpad() + ": " + e.getMessage());
+                    root = new ViewSpec.TreeNode(settings.scratchpad().toString(), "cannot be read: " + e.getMessage(), List.of());
+                }
+                ViewSpec.TreeNode before = scratchpad.getAndSet(root);
+                if (!root.equals(before)) {
+                    sink.dispatch(new Intent.ScratchpadLoaded(root));
+                }
+            } finally {
+                readingScratchpad.set(false);
             }
         });
     }

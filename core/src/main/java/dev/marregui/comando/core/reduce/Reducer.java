@@ -163,6 +163,7 @@ public final class Reducer {
             case Intent.OpenRecording i -> new Transition(notice(s, Notice.Level.INFO, "Reading " + fileName(i.path())),
                     List.of(new Effect.OpenRecording(i.path())));
             case Intent.BrowseScratchpad i -> new Transition(s, List.of(new Effect.BrowseScratchpad()));
+            case Intent.ScratchpadLoaded i -> new Transition(s, List.of(new Effect.ShowScratchpad(i.root())));
             case Intent.OpenFile i -> new Transition(s, List.of(new Effect.ShowFile(i.session(), i.path(),
                     s.session(i.session()).map(x -> x.spec().workDir()).orElse(System.getProperty("user.home")), i.line())));
             case Intent.Notify i -> new Transition(notice(s, i.level(), i.text(), i.subject()),

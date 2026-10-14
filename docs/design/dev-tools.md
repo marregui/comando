@@ -51,4 +51,6 @@ The jfrq launcher is `COMANDO_JFRQ`, else `~/workspace/jfr/cli/build/install/jfr
 
 ## 4. The scratchpad
 
-"Browse the scratchpad" shows `~/.claude/SCRATCHPAD` as a tree in the side pane: top-level documents first, then day folders newest first; in a day folder the `READ-` documents in reading order, then `ALPHA.md`, then the rest, with `work/` last; three levels deep. A file opens in the side pane, rendered when it is Markdown.
+The sidebar's Scratchpad tab shows `~/.claude/SCRATCHPAD` as a tree: top-level documents first, then day folders newest first; in a day folder the `READ-` documents in reading order, then `ALPHA.md`, then the rest, with `work/` last; three levels deep. The first load opens the newest day. A file opens in the side pane, rendered when it is Markdown, on a double-click, Enter or the context menu's Open.
+
+The tools adapter reads the folder on a virtual thread when the tab comes to the front, when the sidebar is shown with it in front, every 10 s while it shows, on the tab's refresh button and on Tools ▸ Show the scratchpad, which shows the sidebar and brings the tab forward. It sends the tree (`ScratchpadLoaded`, then `UiPort.showScratchpad`) only when it changed since the last read; the tree keeps the folders the user opened and the selection, matching nodes by their labels. A folder that cannot be read becomes a one-line tree that says so, rather than a notice at every refresh ([record 28](../adr/0028-the-sidebar-has-three-tabs.md)).

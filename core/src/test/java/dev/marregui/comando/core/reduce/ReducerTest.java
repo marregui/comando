@@ -81,6 +81,17 @@ class ReducerTest {
     }
 
     @Test
+    void theScratchpadIsReadThenShownInTheSidebarWithoutTouchingTheState() {
+        AppState before = state;
+        apply(new Intent.BrowseScratchpad());
+        assertThat(effects).containsExactly(new Effect.BrowseScratchpad());
+        ViewSpec.TreeNode root = new ViewSpec.TreeNode("SCRATCHPAD", "", List.of());
+        apply(new Intent.ScratchpadLoaded(root));
+        assertThat(effects).containsExactly(new Effect.ShowScratchpad(root));
+        assertThat(state).isSameAs(before);
+    }
+
+    @Test
     void runsOfTwoPanelsAreIndependent() {
         apply(new Intent.RunText(P1, "SELECT 1", Target.AUTO));
         apply(new Intent.RunText(P2, "SELECT 2", Target.AUTO));

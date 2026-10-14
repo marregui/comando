@@ -14,7 +14,7 @@ A port is an interface in `core` that names an outside system. Every port method
 | `McpGateway` | `register(session)` returns the URL and bearer token a session's CLI uses; `unregister` | `McpServer` | `mcp` |
 | `ApprovalPort` | `resolve(approval, decision)` | `McpServer` | `mcp` |
 | `ToolPort` | `runGradle`, `runJfrq`, `cancelRun`, `forgetRun`, `openRecording`, `browseScratchpad` | `ToolsAdapter` | `tools` |
-| `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `showFile`, `arrange` | `ComandoUi` | `ui` |
+| `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `showFile`, `arrange`, `showScratchpad` | `ComandoUi` | `ui` |
 | `PersistencePort` | `saveConnections`, `saveSessions`, `savePanels` | `Store` | `app` |
 
 `ClaudeAdapter` receives the `McpGateway` at construction: starting a session registers it with the MCP server and writes the ticket into the session's MCP configuration. `McpGateway.NONE` starts sessions without comando's tools; the adapter tests use a gateway that records each registration instead.

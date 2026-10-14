@@ -7,6 +7,7 @@ import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
@@ -25,22 +26,23 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
+import javax.swing.JTabbedPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.Insets;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.List;
 import java.util.Objects;
 
 /**
- * The switch surface: every session with its project, branch, state, cost, last activity and pending
- * approvals, and every connection. Double-click binds it to the focused panel. Hidden, it collapses to a rail
- * whose button shows it again.
+ * The left column, three tabs: Sessions (every session with its project, branch, state, cost, last activity and
+ * pending approvals), Connections, and Scratchpad (the scratchpad as a tree). Double-click on a session or a
+ * connection binds it to the focused panel. Hidden, the column collapses to a rail whose button shows it again.
  */
 public final class SessionsSidebar {
 
@@ -64,7 +66,12 @@ public final class SessionsSidebar {
             "No sessions yet. + creates one (⌘⇧K); the import button brings in stored Claude Code conversations.");
     private final JList<ConnectionState> connections = emptyText(new JList<>(connectionModel),
             "No connections yet. + adds one (⌘⇧O).");
-    private final JSplitPane lists;
+    public static final int SESSIONS = 0;
+    public static final int CONNECTIONS = 1;
+    public static final int SCRATCHPAD = 2;
+
+    private final JTabbedPane tabs = new JTabbedPane();
+    private final ScratchpadTab scratchpad;
     private final JPanel rail;
     private final JPanel root = new JPanel(new BorderLayout());
     private AppState state;
@@ -156,39 +163,74 @@ public final class SessionsSidebar {
                 }
             }
         });
-        JPanel top = section("Sessions", sessions,
+        scratchpad = new ScratchpadTab(intents);
+        tabs.addTab("Sessions", section(new JScrollPane(sessions),
                 button("add", "New or edit sessions", () -> dialogs.sessions(selectedSession())),
-                button("import", "Import stored conversations", dialogs::importSessions),
-                button("more", "Hide the sidebar (⌘B)", toggle));
-        JPanel bottom = section("Connections", connections,
-                button("add", "New or edit connections", () -> dialogs.connections(selectedConnection())));
-        lists = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
-        lists.setResizeWeight(0.7);
-        lists.setBorder(null);
+                button("import", "Import stored conversations", dialogs::importSessions)));
+        tabs.addTab("Connections", section(new JScrollPane(connections),
+                button("add", "New or edit connections", () -> dialogs.connections(selectedConnection()))));
+        tabs.addTab("Scratchpad", section(scratchpad.component(),
+                button("refresh", "Read the scratchpad again", () -> intents.dispatch(new Intent.BrowseScratchpad()))));
+        tabs.setToolTipTextAt(SCRATCHPAD, "~/.claude/SCRATCHPAD; double-click a file to open it");
+        // the hide button ends the tab strip, so it shows whichever tab is in front
+        tabs.putClientProperty("JTabbedPane.trailingComponent", button("more", "Hide the sidebar (⌘B)", toggle));
+        // one row that never wraps: a wrapped strip moves the selected tab's row, so tabs would jump on a click
+        tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
+        tabs.putClientProperty("JTabbedPane.scrollButtonsPolicy", "asNeededSingle");
+        tabs.putClientProperty("JTabbedPane.tabInsets", new Insets(4, 6, 4, 6));
+        tabs.putClientProperty("JTabbedPane.tabAreaInsets", new Insets(0, 2, 0, 0));
+        tabs.getAccessibleContext().setAccessibleName("Sidebar");
+        // the scratchpad is read when its tab comes to the front, then kept fresh by the owner while it shows
+        tabs.addChangeListener(e -> {
+            if (tabs.getSelectedIndex() == SCRATCHPAD) {
+                intents.dispatch(new Intent.BrowseScratchpad());
+            }
+        });
         rail = new JPanel(new BorderLayout());
         rail.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(4, 1, 0, 1)));
         rail.add(button("more", "Show the sidebar (⌘B)", toggle), BorderLayout.NORTH);
         rail.setVisible(false);
-        root.add(lists, BorderLayout.CENTER);
+        root.add(tabs, BorderLayout.CENTER);
         root.add(rail, BorderLayout.WEST);
     }
 
-    /** The lists, or the rail while hidden; the owner sizes it to {@link #railWidth} then. */
+    /** The tabs, or the rail while hidden; the owner sizes it to {@link #railWidth} then. */
     public JComponent component() {
         return root;
     }
 
     public boolean isShown() {
-        return lists.isVisible();
+        return tabs.isVisible();
     }
 
-    /** Shows the lists, or hides them behind the rail. */
+    /** Shows the tabs, or hides them behind the rail. */
     public void show(boolean shown) {
-        lists.setVisible(shown);
+        tabs.setVisible(shown);
         rail.setVisible(!shown);
         root.revalidate();
         root.repaint();
+    }
+
+    /** The tab in front: {@link #SESSIONS}, {@link #CONNECTIONS} or {@link #SCRATCHPAD}. */
+    public int selectedTab() {
+        return tabs.getSelectedIndex();
+    }
+
+    public void selectTab(int tab) {
+        if (tab >= 0 && tab < tabs.getTabCount()) {
+            tabs.setSelectedIndex(tab);
+        }
+    }
+
+    /** Whether the scratchpad is on screen: the sidebar shown with its Scratchpad tab in front. */
+    public boolean scratchpadShowing() {
+        return isShown() && tabs.getSelectedIndex() == SCRATCHPAD;
+    }
+
+    /** The scratchpad as read; a refresh keeps the tree as the user left it. */
+    public void showScratchpad(ViewSpec.TreeNode root) {
+        scratchpad.show(root);
     }
 
     /** The width the hidden sidebar takes: the rail's. */
@@ -306,7 +348,7 @@ public final class SessionsSidebar {
     /** Remove asks first, naming what it does; Cancel is the default. */
     private boolean confirmRemove(String name, String question) {
         Object[] options = {"Remove", "Cancel"};
-        return JOptionPane.showOptionDialog(lists, Plain.text(question), "Remove " + Plain.text(name), JOptionPane.DEFAULT_OPTION,
+        return JOptionPane.showOptionDialog(tabs, Plain.text(question), "Remove " + Plain.text(name), JOptionPane.DEFAULT_OPTION,
                 JOptionPane.WARNING_MESSAGE, null, options, options[1]) == 0;
     }
 
@@ -366,23 +408,20 @@ public final class SessionsSidebar {
         return i >= 0 && list.getCellBounds(i, i).contains(e.getPoint()) ? list.getModel().getElementAt(i) : null;
     }
 
-    private static JPanel section(String title, JList<?> list, JButton... buttons) {
-        JPanel header = new JPanel(new BorderLayout());
-        header.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 4));
-        JLabel label = new JLabel(title.toUpperCase());
-        label.setForeground(Theme.MUTED);
-        label.setFont(label.getFont().deriveFont(label.getFont().getSize2D() - 1f));
+    /** A tab's content: its buttons in a row at the top right, then the content. */
+    private static JPanel section(JComponent content, JButton... buttons) {
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        actions.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         for (JButton b : buttons) {
             actions.add(b);
         }
-        header.add(label, BorderLayout.WEST);
-        header.add(actions, BorderLayout.EAST);
+        if (content instanceof JScrollPane sp) {
+            sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+            sp.setBorder(null);
+        }
         JPanel p = new JPanel(new BorderLayout());
-        JScrollPane sp = new JScrollPane(list, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        sp.setBorder(null);
-        p.add(header, BorderLayout.NORTH);
-        p.add(sp, BorderLayout.CENTER);
+        p.add(actions, BorderLayout.NORTH);
+        p.add(content, BorderLayout.CENTER);
         return p;
     }
 

@@ -49,6 +49,7 @@ public final class EffectRouter implements StateLoop.EffectHandler {
             case Effect.ForgetPanel e -> ui.forgetPanel(e.panel());
             case Effect.Arrange e -> ui.arrange(e.layout());
             case Effect.ShowFile e -> ui.showFile(e.session(), e.path(), e.baseDir(), e.line());
+            case Effect.ShowScratchpad e -> ui.showScratchpad(e.root());
             case Effect.RunGradle e -> tools.runGradle(e.runId(), e.workDir(), e.tasks());
             case Effect.RunJfrq e -> tools.runJfrq(e.runId(), e.recording(), e.args());
             case Effect.CancelCommand e -> tools.cancelRun(e.runId());

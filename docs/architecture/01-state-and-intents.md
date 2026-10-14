@@ -36,7 +36,7 @@ An intent is a record of the sealed interface `Intent`. Anything that changes th
 | Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
 | Views | `ShowView`, `RefreshView` (new data for a view the user placed, without selecting it), `CloseView`, `PinView`, `SelectLowerTab`, `Arrange`, `SessionLayout` (a session's layout request, which the reducer limits to that session's panels), `SessionFocus` (that request's focus and tab, applied after the typing pause only if the panel is still the session's) |
 | Editor and files | `EditPanel`, `OpenFile` |
-| Development tools | `RunGradle`, `RunJfrq`, `CommandFinished`, `CancelCommand`, `OpenRecording`, `BrowseScratchpad` |
+| Development tools | `RunGradle`, `RunJfrq`, `CommandFinished`, `CancelCommand`, `OpenRecording`, `BrowseScratchpad`, `ScratchpadLoaded` |
 | Notices | `Notify` (level, text, desktop, subject), `DismissNotice` |
 
 A panel argument may be null in `RunText`, `RunGradle` and `EditPanel`; it means the focused panel. A console view records the panel its run came from, so a failed test goes to that panel's session, not to whichever panel has the focus.
@@ -63,7 +63,7 @@ An effect is work the reducer asks an adapter to do. `EffectRouter` hands each t
 | `DatabasePort` | `OpenDb`, `CloseDb`, `TestDb`, `ExecuteSql`, `CancelSql`, `ReleaseResult`, `LoadSchema` |
 | `ClaudePort` | `StartClaude`, `StopClaude`, `SendToClaude`, `InterruptClaude`, `LoadHistory`, `ForgetSession` |
 | `ApprovalPort` | `ResolveApproval` |
-| `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `ShowFile`, `Arrange` |
+| `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `ShowFile`, `Arrange`, `ShowScratchpad` |
 | `PersistencePort` | `SaveConnections`, `SaveSessions`, `SavePanels` |
 | `ToolPort` | `RunGradle`, `RunJfrq`, `CancelCommand`, `ForgetCommand`, `OpenRecording`, `BrowseScratchpad` |
 

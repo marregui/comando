@@ -17,10 +17,13 @@ import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
 import java.awt.Component;
+import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -148,6 +151,73 @@ public final class TreeView {
                 tree.expandRow(i);
             }
         }
+    }
+
+    /**
+     * Shows {@code root} in place of the tree shown, keeping what the user opened and selected: nodes are matched
+     * by their labels from the root, so a refresh that adds or removes files leaves the rest as it was. Nothing
+     * changes when {@code root} equals the tree shown.
+     */
+    public void update(ViewSpec.TreeNode root) {
+        Object shown = ((DefaultMutableTreeNode) tree.getModel().getRoot()).getUserObject();
+        if (root.equals(shown)) {
+            return;
+        }
+        List<List<String>> expanded = new ArrayList<>();
+        for (int i = 0; i < tree.getRowCount(); i++) {
+            TreePath p = tree.getPathForRow(i);
+            if (tree.isExpanded(p)) {
+                expanded.add(labels(p));
+            }
+        }
+        TreePath selection = tree.getSelectionPath();
+        List<String> selected = selection == null ? null : labels(selection);
+        Rectangle view = tree.getVisibleRect();
+        tree.setModel(new DefaultTreeModel(build(root)));
+        for (List<String> path : expanded) {
+            TreePath p = find(path);
+            if (p != null) {
+                tree.expandPath(p);
+            }
+        }
+        TreePath reselect = selected == null ? null : find(selected);
+        if (reselect != null) {
+            tree.setSelectionPath(reselect);
+        }
+        tree.scrollRectToVisible(view);
+    }
+
+    private static List<String> labels(TreePath path) {
+        List<String> out = new ArrayList<>(path.getPathCount());
+        for (Object o : path.getPath()) {
+            out.add(((DefaultMutableTreeNode) o).getUserObject() instanceof ViewSpec.TreeNode n ? n.label() : "");
+        }
+        return out;
+    }
+
+    /** The path whose labels are {@code labels}, from the root; null when a node is gone. */
+    private TreePath find(List<String> labels) {
+        DefaultMutableTreeNode node = (DefaultMutableTreeNode) tree.getModel().getRoot();
+        if (labels.isEmpty() || !(node.getUserObject() instanceof ViewSpec.TreeNode r) || !r.label().equals(labels.getFirst())) {
+            return null;
+        }
+        TreePath path = new TreePath(node);
+        for (String label : labels.subList(1, labels.size())) {
+            DefaultMutableTreeNode next = null;
+            for (int i = 0; i < node.getChildCount(); i++) {
+                DefaultMutableTreeNode c = (DefaultMutableTreeNode) node.getChildAt(i);
+                if (c.getUserObject() instanceof ViewSpec.TreeNode n && n.label().equals(label)) {
+                    next = c;
+                    break;
+                }
+            }
+            if (next == null) {
+                return null;
+            }
+            node = next;
+            path = path.pathByAddingChild(node);
+        }
+        return path;
     }
 
     private static DefaultMutableTreeNode build(ViewSpec.TreeNode n) {

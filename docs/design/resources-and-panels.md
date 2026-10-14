@@ -42,13 +42,13 @@ An editor panel is a tab in the workspace with an id, a title, its text, and two
 
 ## 3. The sidebar
 
-The sidebar is the switch surface, because sessions change many times a day while connections are configured rarely.
+The sidebar is the left column: three tabs at the top, **Sessions**, **Connections** and **Scratchpad**, on one row that never wraps; the tab in front is kept across restarts ([record 28](../adr/0028-the-sidebar-has-three-tabs.md)). Sessions and Connections are the switch surface; each has its buttons at the top right of the tab. Scratchpad is the scratchpad's documents as a tree ([Development tools](dev-tools.md#4-the-scratchpad)).
 
 - **Sessions:** name, where it is bound ("· this panel" in the accent colour for the focused panel's session, else the titles of its panels), working directory, branch, status, cost, time since the last activity, pending approvals. Double-click binds the session to the focused panel; the context menu binds, starts or stops, interrupts the turn, edits or removes it. The import button lists stored conversations from `~/.claude/projects`; a title equal to an existing session's name gets a number.
 - **Connections:** name, user, host, port and database, status. Double-click binds; the context menu binds, connects or disconnects, tests, explores the schema, edits or removes.
 - Remove in either context menu asks first, with the same question as the dialog. An empty list says how to add the first item.
 - From the keyboard, the palette's "Bind a session to the panel…" and "Bind a connection to the panel…" do what a double-click does.
-- ⌘B, or the `⋯` button in the Sessions header, hides the sidebar; it collapses to a rail on the window's left edge whose `⋯` button shows it again at the width it had. While hidden there is no divider to drag. The split keeps both sides visible and sets the divider to the rail's width, because Swing's split pane leaves a hidden side's width unclaimed when the split's own size changes in the same layout.
+- ⌘B, or the `⋯` button at the end of the tab strip, hides the sidebar; it collapses to a rail on the window's left edge whose `⋯` button shows it again at the width it had. While hidden there is no divider to drag. The split keeps both sides visible and sets the divider to the rail's width, because Swing's split pane leaves a hidden side's width unclaimed when the split's own size changes in the same layout.
 
 ## 4. Persistence of bindings
 

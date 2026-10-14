@@ -289,7 +289,12 @@ public sealed interface Intent {
     record OpenRecording(String path) implements Intent {
     }
 
+    /** Reads the scratchpad for the sidebar's Scratchpad tab. */
     record BrowseScratchpad() implements Intent {
+    }
+
+    /** The scratchpad as read, for the sidebar; sent only when it changed since the last read. */
+    record ScratchpadLoaded(ViewSpec.TreeNode root) implements Intent {
     }
 
     // ---- notices

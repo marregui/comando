@@ -66,7 +66,7 @@ There is one find bar per window (`FindBar`); it attaches to the `Searchable` th
 | `DiffWidget` | a unified diff of two texts | |
 | `TextWidget` | a file or text, read-only | highlighted by file type, scrolled to a line; a header button opens the file in IntelliJ |
 | `MarkdownWidget` | rendered Markdown | |
-| `TreeWidget` | test results, a schema, the scratchpad | a node with a file link opens the file; an insert link puts its text into the editor |
+| `TreeWidget` | test results, a schema | a node with a file link opens the file; an insert link puts its text into the editor |
 | `ConsoleWidget` | a Gradle or jfrq run | output as it arrives, state and stop button, test results as a tree; a failure can be sent to the panel's session |
 | `TerminalWidget` | the user's login shell | JediTerm on a pseudo-terminal (pty4j); restart bar when the shell exits |
 | `ApprovalInbox` | pending approvals of every session | cards with keys ([Approvals and safety](approvals-and-safety.md)) |

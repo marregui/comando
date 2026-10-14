@@ -10,7 +10,7 @@
 | macOS | the keychain, the DMG, IntelliJ links | everything else runs on Linux |
 | IntelliJ IDEA's `idea` launcher | "Open in IntelliJ" | optional; files open in the default application without it |
 | jfrq | "Run jfrq on a recording" | optional; built from `~/workspace/jfr` |
-| a scratchpad folder at `~/.claude/SCRATCHPAD` | "Browse the scratchpad" | optional; the location is fixed |
+| a scratchpad folder at `~/.claude/SCRATCHPAD` | the sidebar's Scratchpad tab | optional; the location is fixed; without it the tab says it cannot be read |
 | `gradle-serial` at `~/.claude/plugins/local-acme/bin/gradle-serial` | "Run Gradle tasks" | optional; used instead of `./gradlew` when present |
 
 ## 2. Gradle tasks

@@ -14,6 +14,7 @@ import dev.marregui.comando.core.port.ToolPort;
 import dev.marregui.comando.core.port.UiPort;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.Layout;
+import dev.marregui.comando.core.view.ViewSpec;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -126,6 +127,11 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     @Override
     public void arrange(Layout layout) {
         record("ui.arrange " + layout);
+    }
+
+    @Override
+    public void showScratchpad(ViewSpec.TreeNode root) {
+        record("ui.scratchpad " + root.label());
     }
 
     @Override

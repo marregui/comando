@@ -20,7 +20,7 @@ dev.marregui.comando.ui
 │   ├── transcript/ TranscriptWidget, TranscriptView, ToolText; doc/ (Markdown to paragraphs), render/ (layout, paint, Fold)
 │   └── tree/       TreeWidget
 ├── panels/         the window's regions: Workspace, EditorPanel, LowerPanel, ResultsView, PlanTree,
-│                   SessionsSidebar, SidePane, StatusBar, TerminalTabs, ViewTabs
+│                   SessionsSidebar, ScratchpadTab, SidePane, StatusBar, TerminalTabs, ViewTabs
 ├── dialogs/
 │   ├── resource/   ResourceDialog<S>, the one dialog for connections and sessions
 │   └── sessions/   ImportSessionsDialog

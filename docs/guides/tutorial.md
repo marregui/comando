@@ -43,7 +43,7 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 
 | Part | What it is |
 |---|---|
-| **Sidebar**, left | two lists: **Sessions** (Claude Code sessions) at the top, **Connections** (databases) below. Each list has a `+` button. ⌘B or the `⋯` button hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
+| **Sidebar**, left | three tabs: **Sessions** (Claude Code sessions), **Connections** (databases) and **Scratchpad** (your `~/.claude/SCRATCHPAD` as a tree; double-click a file to read it). Sessions and Connections each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one. |
 | **Panel header** | two chips: the panel's **connection** and its **session**, each with a status dot (○ closed, ● open) and a button to connect or start it. **Run** and **Stop** on the right. |
 | **Editor** | where you write SQL and prompts, mixed in one text. |

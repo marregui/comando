@@ -213,6 +213,26 @@ class ToolsAdapterTest {
     }
 
     @Test
+    void theScratchpadIsSentOnlyWhenItChangedAndAnUnreadableOneSaysSoInTheTree(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("PLAN.md"), "# plan");
+        ToolsAdapter tools = adapter(dir, dir.resolve("none"));
+        tools.browseScratchpad();
+        sink.await(Intent.ScratchpadLoaded.class, WAIT);
+        tools.browseScratchpad();
+        Thread.sleep(500);
+        assertThat(sink.of(Intent.ScratchpadLoaded.class)).as("unchanged: nothing sent").hasSize(1);
+        Files.writeString(dir.resolve("NEW.md"), "new");
+        tools.browseScratchpad();
+        sink.await(Intent.ScratchpadLoaded.class, l -> l.root().children().size() == 2, WAIT);
+
+        sink.clear();
+        adapter(dir.resolve("missing"), dir.resolve("none")).browseScratchpad();
+        ViewSpec.TreeNode unreadable = sink.await(Intent.ScratchpadLoaded.class, WAIT).root();
+        assertThat(unreadable.detail()).startsWith("cannot be read");
+        assertThat(sink.of(Intent.Notify.class)).as("no notice at every refresh").isEmpty();
+    }
+
+    @Test
     void scratchpadTreeOrdersDaysAndDocuments(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("PLAN.md"), "# plan");
         Files.createDirectories(dir.resolve("datahub"));
@@ -223,9 +243,7 @@ class ToolsAdapterTest {
             Files.createDirectories(d.resolve("work")).resolve("spec.md").toFile().createNewFile();
         }
         adapter(dir, dir.resolve("none")).browseScratchpad();
-        Intent.ShowView v = sink.await(Intent.ShowView.class, WAIT);
-        assertThat(v.placement()).isEqualTo(Placement.SIDE);
-        ViewSpec.TreeNode root = ((ViewSpec.Tree) v.spec()).root();
+        ViewSpec.TreeNode root = sink.await(Intent.ScratchpadLoaded.class, WAIT).root();
         assertThat(root.children()).extracting(ViewSpec.TreeNode::label).containsExactly("PLAN.md", "2026-10-12/", "2026-10-11/", "datahub/");
         assertThat(root.children().get(1).children()).extracting(ViewSpec.TreeNode::label).containsExactly("READ-01-X.md", "ALPHA.md", "work/");
         assertThat(root.children().getFirst().link()).isEqualTo("comando-file:" + dir.resolve("PLAN.md") + "#0");

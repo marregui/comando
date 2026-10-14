@@ -15,7 +15,7 @@
 | MCP server | virtual per request | MCP JSON-RPC over HTTP; an `approve` call waits for its card | pending approvals |
 | `gradle-<run>`, `jfrq-<run>` | virtual | run the child process, copy its output to the console, collect test reports | the run's `Console` |
 | `tool-output-<run>`, `tool-kill-<run>` | virtual | copy a run's output while it is open; SIGKILL what a stop left alive after 2 s | — |
-| `recording`, `scratchpad` | virtual | read a JFR file or the scratchpad folder, then send a view | — |
+| `recording`, `scratchpad` | virtual | read a JFR file, then send a view; read the scratchpad folder, then send its tree when it changed | — |
 | `store` | platform | atomic writes of `sessions.json`, `panels.json` and the panel files in `panels/`; panel text 800 ms after the first unsaved change; a check of the open panels' files for outside changes every second; the read of a file that Open spec or ⌘⇧T binds to a panel | those files |
 | `store-secrets` | platform | keychain calls and `connections.json`, apart so an unanswered unlock prompt never holds back panel text | `connections.json` |
 | `edt-watchdog` | platform, daemon | posts a probe to the EDT every 100 ms and reports one that waits 200 ms | — |

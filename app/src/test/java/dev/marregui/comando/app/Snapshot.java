@@ -17,7 +17,10 @@ import dev.marregui.comando.core.view.ViewSpec;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFrame;
+import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Frame;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -91,6 +94,12 @@ public final class Snapshot {
         Thread.sleep(2800);
         shoot(out.resolve("02b-sidebar-collapsed.png"));
         loop.dispatch(new Intent.Arrange(new Layout(Layout.Toggle.SHOW, Layout.Toggle.KEEP, Double.NaN)));
+        Thread.sleep(2800);
+        // the sidebar's third tab, clicked as a user would: the scratchpad as a tree, read when the tab shows
+        selectSidebarTab(2);
+        Thread.sleep(2000);
+        shoot(out.resolve("02c-sidebar-scratchpad.png"));
+        selectSidebarTab(0);
         long plotId = loop.state().views().stream().filter(v -> v.title().equals("delay")).findFirst().orElseThrow().id();
         loop.dispatch(new Intent.SelectLowerTab(LowerTab.view(plotId)));
         Thread.sleep(800);
@@ -136,10 +145,6 @@ public final class Snapshot {
                 && c.command().startsWith("jfrq") && c.state() != ViewSpec.RunState.RUNNING), 120_000);
         Thread.sleep(800);
         shoot(out.resolve("10-jfrq.png"));
-        loop.dispatch(new Intent.BrowseScratchpad());
-        await(loop, st -> st.views().stream().anyMatch(v -> v.title().equals("scratchpad")), 20_000);
-        Thread.sleep(800);
-        shoot(out.resolve("11-scratchpad.png"));
     }
 
     /** A stored conversation shown in the transcript, scrolled to its end, then a find. */
@@ -182,6 +187,35 @@ public final class Snapshot {
                 return s;
             }
             Thread.sleep(200);
+        }
+        return null;
+    }
+
+    /** Brings a tab of the sidebar to the front, found by the tab strip's accessible name. */
+    private static void selectSidebarTab(int index) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            for (Frame f : Frame.getFrames()) {
+                if (f instanceof JFrame jf && f.isVisible()) {
+                    JTabbedPane tabs = sidebarTabs(jf.getContentPane());
+                    if (tabs != null) {
+                        tabs.setSelectedIndex(index);
+                    }
+                }
+            }
+        });
+    }
+
+    private static JTabbedPane sidebarTabs(Component c) {
+        if (c instanceof JTabbedPane t && "Sidebar".equals(t.getAccessibleContext().getAccessibleName())) {
+            return t;
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                JTabbedPane t = sidebarTabs(child);
+                if (t != null) {
+                    return t;
+                }
+            }
         }
         return null;
     }
