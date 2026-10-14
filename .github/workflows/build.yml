@@ -1,0 +1,56 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+# A newer push to a pull request supersedes its run in progress; every push to main is built.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+      # Every test: embedded QuestDB, recorded Claude streams, and PostgreSQL through Testcontainers
+      # where the runner has Docker (Ubuntu; macOS runners have none, so that test is skipped there).
+      - run: ./gradlew build
+      # The intent-log replay in a real window: a virtual display on Linux, the runner's own on macOS.
+      - name: Window replay
+        run: ${{ runner.os == 'Linux' && 'xvfb-run --auto-servernum ' || '' }}./gradlew :app:uiTest
+      # What ran, per module, in the job summary, with every skipped test named.
+      - name: Test report
+        if: success() || failure()
+        run: java ci/TestReport.java
+      # The transcript renderer's frame-time gate: reported, not enforced, because runner speed varies.
+      - name: Transcript gate
+        continue-on-error: true
+        run: ./gradlew :ui:transcriptGate
+      # The macOS disk image, as a smoke test of the packaging: jpackage, the trimmed runtime.
+      - name: Disk image
+        if: runner.os == 'macOS'
+        run: ./gradlew :app:dmg
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: test-reports-${{ matrix.os }}
+          path: |
+            **/build/reports/tests/
+            **/build/test-results/
+          if-no-files-found: ignore

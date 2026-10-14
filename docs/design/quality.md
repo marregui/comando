@@ -61,12 +61,16 @@ comando records its own events in any JFR recording of the process (`-XX:StartFl
 
 ## 6. Continuous integration
 
-`.github/workflows/gradle.yml` runs on pushes and pull requests to `main`, on Ubuntu with Temurin 25:
+`.github/workflows/build.yml` runs on pushes to `main` and on pull requests, on Ubuntu and macOS with Temurin 25; a newer push to a pull request cancels its run in progress. Actions are pinned by commit SHA.
 
-1. `./gradlew build`: every test, PostgreSQL through Testcontainers on the runner's Docker.
-2. `./gradlew :ui:transcriptGate || true`: reported, not enforced, because runner speed varies.
-3. `xvfb-run --auto-servernum ./gradlew :app:uiTest`: the window replay on a virtual display.
-4. On failure, the test reports are uploaded as an artifact.
+1. `./gradlew build`: every test, PostgreSQL through Testcontainers where the runner has Docker (Ubuntu; macOS runners have none, so that test is skipped there).
+2. `./gradlew :app:uiTest`: the window replay, under `xvfb-run` on Ubuntu, in the runner's own window session on macOS.
+3. `java ci/TestReport.java`: tests, skips, failures and errors per module and task, with every skipped test named, in the job summary.
+4. `./gradlew :ui:transcriptGate`: reported, not enforced, because runner speed varies.
+5. `./gradlew :app:dmg`, on macOS: the disk image, as a smoke test of the packaging.
+6. The test reports and results are uploaded per runner.
+
+`assign.yml` assigns every pull request to the owner; `dependabot.yml` opens one grouped pull request a week for the pinned actions and one for the Gradle dependencies. There is no CodeQL workflow: code scanning on a private repository needs GitHub Advanced Security.
 
 ## 7. The macOS build
 
