@@ -1,8 +1,11 @@
 package dev.marregui.comando.app;
 
+import javax.swing.JOptionPane;
+import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -26,8 +29,8 @@ public final class Main {
         if (!lock(config.home())) {
             String message = lockedMessage(config.home());
             System.err.println(message);
-            if (!java.awt.GraphicsEnvironment.isHeadless()) {
-                javax.swing.JOptionPane.showMessageDialog(null, message, "comando", javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            if (!GraphicsEnvironment.isHeadless()) {
+                JOptionPane.showMessageDialog(null, message, "comando", JOptionPane.INFORMATION_MESSAGE);
             }
             System.exit(1);
         }
@@ -63,7 +66,7 @@ public final class Main {
                 return false;
             }
             return true;
-        } catch (IOException | java.nio.channels.OverlappingFileLockException e) {
+        } catch (IOException | OverlappingFileLockException e) {
             // a data root that cannot hold a lock file still runs; the lock is a guard, not a requirement
             return true;
         }

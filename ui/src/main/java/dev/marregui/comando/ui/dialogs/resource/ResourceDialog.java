@@ -33,8 +33,10 @@ import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.Scrollable;
+import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.text.JTextComponent;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -53,10 +55,14 @@ import java.awt.event.KeyEvent;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
@@ -83,12 +89,12 @@ public final class ResourceDialog<S> {
             ResourceKind<S> kind,
             Function<AppState, List<S>> specs,
             Function<AppState, Map<String, Status>> statuses,
-            java.util.function.BiFunction<String, S, Intent> save,
+            BiFunction<String, S, Intent> save,
             Function<String, Intent> remove,
             Function<S, Intent> test,
             Function<String, Intent> open,
             Function<String, Intent> close,
-            java.util.function.BiFunction<AppState, String, Intent> assign,
+            BiFunction<AppState, String, Intent> assign,
             String icon,
             Runnable extra,
             String extraLabel) {
@@ -335,7 +341,7 @@ public final class ResourceDialog<S> {
         state = s;
         List<String> current = config.specs().apply(s).stream().map(config.kind()::nameOf).toList();
         String selected = list.getSelectedValue();
-        if (!current.equals(java.util.Collections.list(names.elements()))) {
+        if (!current.equals(Collections.list(names.elements()))) {
             rebuilding = true;
             try {
                 names.clear();
@@ -377,9 +383,9 @@ public final class ResourceDialog<S> {
 
     /** The form after the stored values changed: a field the user left as filled takes the stored value. */
     static Map<String, String> merge(Map<String, String> form, Map<String, String> filled, Map<String, String> stored) {
-        Map<String, String> merged = new java.util.HashMap<>(form);
+        Map<String, String> merged = new HashMap<>(form);
         for (Map.Entry<String, String> e : stored.entrySet()) {
-            if (java.util.Objects.equals(form.get(e.getKey()), filled.get(e.getKey()))) {
+            if (Objects.equals(form.get(e.getKey()), filled.get(e.getKey()))) {
                 merged.put(e.getKey(), e.getValue());
             }
         }
@@ -471,10 +477,10 @@ public final class ResourceDialog<S> {
         // a new resource is named first: the keyboard goes to the first field, its default selected to type over;
         // later, as the dialog may only now be opening
         JComponent first = fields.values().iterator().next();
-        if (first instanceof javax.swing.text.JTextComponent t) {
+        if (first instanceof JTextComponent t) {
             t.selectAll();
         }
-        javax.swing.SwingUtilities.invokeLater(first::requestFocusInWindow);
+        SwingUtilities.invokeLater(first::requestFocusInWindow);
     }
 
     /**
@@ -519,7 +525,7 @@ public final class ResourceDialog<S> {
                 editing = "";
                 filled = Map.of();
             }
-            List<String> rest = new ArrayList<>(java.util.Collections.list(names.elements()));
+            List<String> rest = new ArrayList<>(Collections.list(names.elements()));
             rest.remove(name);
             if (rest.isEmpty()) {
                 add();

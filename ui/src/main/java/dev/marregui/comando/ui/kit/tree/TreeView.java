@@ -1,7 +1,7 @@
 package dev.marregui.comando.ui.kit.tree;
 
-import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.AbstractAction;

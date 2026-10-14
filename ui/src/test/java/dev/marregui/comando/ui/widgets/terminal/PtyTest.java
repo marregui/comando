@@ -4,6 +4,7 @@ import com.jediterm.core.util.TermSize;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -23,7 +24,7 @@ class PtyTest {
             int n;
             try {
                 n = pty.read(buf, 0, buf.length);
-            } catch (java.io.IOException e) {
+            } catch (IOException e) {
                 break; // the pty closes when the process ends
             }
             if (n < 0) {

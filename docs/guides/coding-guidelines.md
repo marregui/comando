@@ -37,3 +37,4 @@ G-3.3 object pools, G-4.7 off-heap memory, G-7.1 ring queues, G-7.3 cache-line p
 5. Tests never touch the user's data root, keychain or window preferences unless a flag says so.
 6. Code and comments name no tool, agent or review finding; they say what the code does and why.
 7. Compiler warnings are errors.
+8. Types are imported, never written fully qualified in code, except to tell apart two types with one simple name (comando's `Theme` and RSyntaxTextArea's). Imports: project, then `javax`, then `java`, each group sorted; no wildcards.

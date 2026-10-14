@@ -3,11 +3,14 @@ package dev.marregui.comando.ui.kit.text;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.JEditorPane;
+import javax.swing.UIManager;
 import javax.swing.event.HyperlinkEvent;
+import javax.swing.text.View;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
 import java.awt.Desktop;
 import java.awt.Dimension;
+import java.awt.Insets;
 import java.net.URI;
 import java.util.Locale;
 
@@ -31,9 +34,9 @@ public class HtmlPane extends JEditorPane {
         HTMLEditorKit kit = new HTMLEditorKit();
         StyleSheet css = new StyleSheet();
         css.addStyleSheet(kit.getStyleSheet());
-        String fg = Theme.hex(javax.swing.UIManager.getColor("Label.foreground"));
+        String fg = Theme.hex(UIManager.getColor("Label.foreground"));
         String mono = Theme.mono().getFamily();
-        int size = javax.swing.UIManager.getFont("Label.font").getSize();
+        int size = UIManager.getFont("Label.font").getSize();
         css.addRule("body { font-family: sans-serif; font-size: " + size + "pt; color: " + fg + "; margin: 0; }");
         css.addRule("p { margin-top: 2px; margin-bottom: 6px; }");
         css.addRule("h1 { font-size: " + (size + 6) + "pt; margin: 6px 0 4px 0; }");
@@ -87,12 +90,12 @@ public class HtmlPane extends JEditorPane {
     @Override
     public Dimension getPreferredSize() {
         if (fitWidth && getParent() != null && getParent().getWidth() > 0) {
-            java.awt.Insets pi = getParent().getInsets();
+            Insets pi = getParent().getInsets();
             int w = Math.max(50, getParent().getWidth() - pi.left - pi.right);
-            javax.swing.text.View root = getUI().getRootView(this);
-            java.awt.Insets in = getInsets();
+            View root = getUI().getRootView(this);
+            Insets in = getInsets();
             root.setSize(w - in.left - in.right, Integer.MAX_VALUE);
-            int h = (int) Math.ceil(root.getPreferredSpan(javax.swing.text.View.Y_AXIS)) + in.top + in.bottom;
+            int h = (int) Math.ceil(root.getPreferredSpan(View.Y_AXIS)) + in.top + in.bottom;
             return new Dimension(w, h);
         }
         return super.getPreferredSize();

@@ -16,9 +16,12 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -118,7 +121,7 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
         if (promptsPending.compareAndSet(false, true)) {
             try {
                 writer.schedule(this::writePrompts, PANEL_DELAY_MILLIS, TimeUnit.MILLISECONDS);
-            } catch (java.util.concurrent.RejectedExecutionException e) {
+            } catch (RejectedExecutionException e) {
                 promptsPending.set(false);
             }
         }
@@ -126,7 +129,7 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
 
     private void writePrompts() {
         promptsPending.set(false);
-        Map<String, List<String>> out = new java.util.TreeMap<>();
+        Map<String, List<String>> out = new TreeMap<>();
         promptHistory.forEach((k, v) -> {
             synchronized (v) {
                 out.put(k, List.copyOf(v));
@@ -198,7 +201,7 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
         }
         try {
             secretsWriter.execute(() -> write(connections, secrets.available() ? toSecretStore(copy) : copy));
-        } catch (java.util.concurrent.RejectedExecutionException e) {
+        } catch (RejectedExecutionException e) {
             LOG.log(System.Logger.Level.WARNING, "store closed, connections write dropped");
         }
     }
@@ -280,8 +283,8 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
     }
 
     @Override
-    public java.util.concurrent.CompletableFuture<String> saveNow() {
-        java.util.concurrent.CompletableFuture<String> done = new java.util.concurrent.CompletableFuture<>();
+    public CompletableFuture<String> saveNow() {
+        CompletableFuture<String> done = new CompletableFuture<>();
         if (closed) {
             done.complete("comando is closing");
             return done;
@@ -301,7 +304,7 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
                     done.complete(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
                 }
             });
-        } catch (java.util.concurrent.RejectedExecutionException e) {
+        } catch (RejectedExecutionException e) {
             done.complete("comando is closing");
         }
         return done;
@@ -313,7 +316,7 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
         if (panelsPending.compareAndSet(false, true)) {
             try {
                 writer.schedule(this::writePanels, PANEL_DELAY_MILLIS, TimeUnit.MILLISECONDS);
-            } catch (java.util.concurrent.RejectedExecutionException e) {
+            } catch (RejectedExecutionException e) {
                 panelsPending.set(false);
             }
         }
@@ -334,7 +337,7 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
         }
         try {
             writer.execute(task);
-        } catch (java.util.concurrent.RejectedExecutionException e) {
+        } catch (RejectedExecutionException e) {
             LOG.log(System.Logger.Level.WARNING, "store closed, write dropped");
         }
     }

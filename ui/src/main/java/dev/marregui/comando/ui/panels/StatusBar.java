@@ -1,7 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
-import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
@@ -9,26 +7,38 @@ import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
+import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.port.IntentSink;
 
 import javax.swing.BorderFactory;
+import javax.swing.DefaultListCellRenderer;
+import javax.swing.DefaultListModel;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
 import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.Component;
 import java.awt.Cursor;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * The standing notice on the left, which opens the recent notices when clicked; the focused panel's session,
@@ -102,13 +112,13 @@ public final class StatusBar {
     public void showHistory() {
         JPopupMenu menu = new JPopupMenu();
         List<Notice> recent = history.reversed();
-        javax.swing.DefaultListModel<Notice> model = new javax.swing.DefaultListModel<>();
+        DefaultListModel<Notice> model = new DefaultListModel<>();
         model.addAll(recent);
-        javax.swing.JList<Notice> list = new javax.swing.JList<>(model);
+        JList<Notice> list = new JList<>(model);
         list.getAccessibleContext().setAccessibleName("Recent notices");
-        list.setCellRenderer(new javax.swing.DefaultListCellRenderer() {
+        list.setCellRenderer(new DefaultListCellRenderer() {
             @Override
-            public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> l, Object value, int index, boolean selected,
+            public Component getListCellRendererComponent(JList<?> l, Object value, int index, boolean selected,
                                                                    boolean focus) {
                 JLabel c = (JLabel) super.getListCellRendererComponent(l, "", index, selected, focus);
                 Notice n = (Notice) value;
@@ -126,14 +136,14 @@ public final class StatusBar {
             public void mouseClicked(MouseEvent e) {
                 int i = list.locationToIndex(e.getPoint());
                 if (i >= 0) {
-                    java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
-                            .setContents(new java.awt.datatransfer.StringSelection(model.get(i).text()), null);
+                    Toolkit.getDefaultToolkit().getSystemClipboard()
+                            .setContents(new StringSelection(model.get(i).text()), null);
                     menu.setVisible(false);
                 }
             }
         });
-        javax.swing.JScrollPane scroll = new javax.swing.JScrollPane(list);
-        scroll.setPreferredSize(new java.awt.Dimension(640, Math.min(360, Math.max(40, recent.size() * 22 + 6))));
+        JScrollPane scroll = new JScrollPane(list);
+        scroll.setPreferredSize(new Dimension(640, Math.min(360, Math.max(40, recent.size() * 22 + 6))));
         if (recent.isEmpty()) {
             JMenuItem none = new JMenuItem("No notices yet");
             none.setEnabled(false);
@@ -155,7 +165,7 @@ public final class StatusBar {
 
     /** Characters on a tooltip line before it wraps, about the 520 px the wrapping width allows. */
     private static final int LINE = 70;
-    private static final java.util.regex.Pattern LONG_WORD = java.util.regex.Pattern.compile("\\S{" + LINE + "}(?=\\S)");
+    private static final Pattern LONG_WORD = Pattern.compile("\\S{" + LINE + "}(?=\\S)");
 
     /**
      * A tooltip that keeps line breaks and wraps a long text at a readable width, while a short one stays as wide as
@@ -179,7 +189,7 @@ public final class StatusBar {
         return (n.atMillis() > 0 ? TIME.format(Instant.ofEpochMilli(n.atMillis())) + "  " : "") + text;
     }
 
-    private static java.awt.Color color(Notice.Level level) {
+    private static Color color(Notice.Level level) {
         return switch (level) {
             case INFO -> Theme.MUTED;
             case WARN -> Theme.WARN;

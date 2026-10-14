@@ -48,6 +48,7 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
@@ -725,7 +726,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         };
     }
 
-    private static Border border(java.awt.Color line) {
+    private static Border border(Color line) {
         return BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(line, 1, true),
                 BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
     }

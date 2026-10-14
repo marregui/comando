@@ -9,6 +9,7 @@ import dev.marregui.comando.ui.widget.capability.Zoomable;
 
 import javax.imageio.ImageIO;
 import javax.swing.JComponent;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.file.Path;
 
@@ -57,7 +58,7 @@ public final class PlotWidget implements Widget<ViewSpec.Plot>, Zoomable, Export
 
     @Override
     public Export prepare() {
-        java.awt.image.BufferedImage image = canvas.snapshot();
+        BufferedImage image = canvas.snapshot();
         return file -> ImageIO.write(image, "png", file.toFile());
     }
 }

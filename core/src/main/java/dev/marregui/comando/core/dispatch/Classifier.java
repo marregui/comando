@@ -1,5 +1,6 @@
 package dev.marregui.comando.core.dispatch;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -104,7 +105,7 @@ public final class Classifier {
         return Statements.split(sql).stream().anyMatch(Classifier::isDdl);
     }
 
-    private static final java.util.List<String> DDL = java.util.List.of("CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME");
+    private static final List<String> DDL = List.of("CREATE", "ALTER", "DROP", "TRUNCATE", "RENAME");
 
     /** Removes a marker first line, if any, for text whose target is forced by a key. */
     public static String stripMarker(String raw) {
@@ -201,7 +202,7 @@ public final class Classifier {
         if (word.equals("i")) {
             return false; // lowercase i is an alias or a loop variable; the pronoun is written "I"
         }
-        return PROSE_WORDS.contains(word.toLowerCase(java.util.Locale.ROOT));
+        return PROSE_WORDS.contains(word.toLowerCase(Locale.ROOT));
     }
 
     private static Map.Entry<String, Pattern> shape(String keyword, String regex) {

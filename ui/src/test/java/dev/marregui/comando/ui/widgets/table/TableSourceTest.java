@@ -2,7 +2,10 @@ package dev.marregui.comando.ui.widgets.table;
 
 import dev.marregui.comando.core.view.ViewSpec;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -19,7 +22,7 @@ class TableSourceTest {
     }
 
     @Test
-    void selectionAndExportFollowTheSortOrder(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
+    void selectionAndExportFollowTheSortOrder(@TempDir Path dir) throws Exception {
         GridTable grid = new GridTable();
         grid.setSource(TableSource.of(new ViewSpec.Table(List.of("id", "v"),
                 List.of(List.of("a", "3"), List.of("b", "1"), List.of("c", "2")))), "t.csv");
@@ -27,9 +30,9 @@ class TableSourceTest {
         grid.table().setRowSelectionInterval(0, 1);
         assertThat(grid.selectedSourceRows()).containsExactly(1, 2);
 
-        java.nio.file.Path file = dir.resolve("t.csv");
+        Path file = dir.resolve("t.csv");
         grid.prepare().writeTo(file);
-        assertThat(java.nio.file.Files.readString(file)).isEqualTo("id,v\nb,1\nc,2\na,3\n");
+        assertThat(Files.readString(file)).isEqualTo("id,v\nb,1\nc,2\na,3\n");
     }
 
     @Test

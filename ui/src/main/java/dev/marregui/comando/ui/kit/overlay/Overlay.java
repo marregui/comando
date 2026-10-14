@@ -8,9 +8,12 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JProgressBar;
+import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.swing.SwingConstants;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
+import java.awt.Color;
 import java.awt.GridBagLayout;
 
 /**
@@ -26,7 +29,7 @@ public final class Overlay extends JPanel {
     private final CardLayout cards = new CardLayout();
     private final JLabel message = new JLabel("", SwingConstants.CENTER);
     private final JProgressBar progress = new JProgressBar();
-    private final javax.swing.JTextArea error = new javax.swing.JTextArea();
+    private final JTextArea error = new JTextArea();
     private String showing = CONTENT;
     private String messageText = "";
 
@@ -57,7 +60,7 @@ public final class Overlay extends JPanel {
         errorIcon.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, 0, 0));
         JPanel errorPanel = new JPanel(new BorderLayout());
         errorPanel.add(errorIcon, BorderLayout.WEST);
-        javax.swing.JScrollPane errorScroll = new javax.swing.JScrollPane(error);
+        JScrollPane errorScroll = new JScrollPane(error);
         errorScroll.setBorder(null);
         errorPanel.add(errorScroll, BorderLayout.CENTER);
         add(content, CONTENT);
@@ -101,7 +104,7 @@ public final class Overlay extends JPanel {
         return showing.equals(MESSAGE) ? messageText : "";
     }
 
-    private void show(String text, String icon, boolean loading, java.awt.Color color) {
+    private void show(String text, String icon, boolean loading, Color color) {
         messageText = text;
         message.setText("<html><div style='text-align:center;width:420px'>" + escape(text) + "</div></html>");
         message.setIcon(icon == null ? null : Icons.get(icon));

@@ -1,18 +1,20 @@
 package dev.marregui.comando.ui.shell;
 
-import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.result.ResultView;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.view.Placement;
 
 import javax.swing.Timer;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -75,7 +77,7 @@ final class LivePlots {
 
     /** Every live plot's tick now, as its timer would; for tests. */
     void tickAll() {
-        for (Live l : java.util.List.copyOf(live.values())) {
+        for (Live l : List.copyOf(live.values())) {
             tick(l);
         }
     }
@@ -91,7 +93,7 @@ final class LivePlots {
         // a connection that failed stays failed until the user reconnects: refreshing would reopen it and raise
         // the same error every period
         String connection = s == null ? "" : s.panel(l.panel).map(p -> p.connection()).orElse("");
-        boolean failed = s != null && s.connection(connection).map(c -> c.status() == dev.marregui.comando.core.model.Status.FAILED)
+        boolean failed = s != null && s.connection(connection).map(c -> c.status() == Status.FAILED)
                 .orElse(false);
         if (failed) {
             stop(l.panel);

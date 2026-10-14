@@ -3,18 +3,19 @@ package dev.marregui.comando.ui.shell;
 import dev.marregui.comando.ui.kit.action.Command;
 import org.junit.jupiter.api.Test;
 
-import java.awt.event.KeyEvent;
-import java.util.List;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.text.DefaultEditorKit;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class CommandKeysTest {
 
-    private static final int CMD = java.awt.event.InputEvent.META_DOWN_MASK;
+    private static final int CMD = InputEvent.META_DOWN_MASK;
 
     @Test
     void anEditKeyRunsTheFocusedComponentsOwnBindingAndPassesWhenThereIsNone() {

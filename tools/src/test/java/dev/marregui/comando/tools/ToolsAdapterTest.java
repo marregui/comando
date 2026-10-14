@@ -6,6 +6,7 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingSink;
 import jdk.jfr.Recording;
+import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -96,7 +97,7 @@ class ToolsAdapterTest {
         assertThat(Args.split("--thread \"C2 CompilerThread*\" x\\ y")).containsExactly("--thread", "C2 CompilerThread*", "x y");
         assertThat(Args.split("  ")).isEmpty();
         assertThat(Args.split("a '' b")).containsExactly("a", "", "b");
-        org.assertj.core.api.Assertions.assertThatThrownBy(() -> Args.split("a 'b")).isInstanceOf(IllegalArgumentException.class);
+        Assertions.assertThatThrownBy(() -> Args.split("a 'b")).isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test

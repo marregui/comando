@@ -3,15 +3,24 @@ package dev.marregui.comando.ui.widgets.editor;
 import dev.marregui.comando.ui.PromptHistory;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.JComponent;
+import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Utilities;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Graphics2D;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.image.BufferedImage;
+import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import javax.swing.JComponent;
-import javax.swing.KeyStroke;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -144,15 +153,15 @@ class PromptBarTest {
     private static final String LONG = "Look up the columns of the trades table with db_describe, then put a SQL query that returns the "
             + "hourly average price per symbol into my editor with ui_insert, and explain each clause briefly.";
 
-    private static void layout(java.awt.Component c, int width, int height) {
+    private static void layout(Component c, int width, int height) {
         c.setSize(width, height);
         layoutAll(c);
     }
 
-    private static void layoutAll(java.awt.Component c) {
+    private static void layoutAll(Component c) {
         c.doLayout();
-        if (c instanceof java.awt.Container k) {
-            for (java.awt.Component x : k.getComponents()) {
+        if (c instanceof Container k) {
+            for (Component x : k.getComponents()) {
                 layoutAll(x);
             }
         }
@@ -160,28 +169,28 @@ class PromptBarTest {
 
     /** The rows the field's text takes at its width, counted from the caret positions of its row starts. */
     private static int wrappedRows(PromptBar bar) {
-        javax.swing.JTextArea f = bar.field();
+        JTextArea f = bar.field();
         int rows = 0;
         try {
             for (int at = 0; at <= f.getDocument().getLength(); ) {
                 rows++;
-                int end = javax.swing.text.Utilities.getRowEnd(f, at);
+                int end = Utilities.getRowEnd(f, at);
                 if (end < 0 || end >= f.getDocument().getLength()) {
                     break;
                 }
                 at = end + 1;
             }
-        } catch (javax.swing.text.BadLocationException e) {
+        } catch (BadLocationException e) {
             throw new IllegalStateException(e);
         }
         return rows;
     }
 
-    private static int ink(javax.swing.JComponent c) {
+    private static int ink(JComponent c) {
         int w = Math.max(1, c.getWidth());
         int h = Math.max(1, c.getHeight());
-        java.awt.image.BufferedImage img = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
-        java.awt.Graphics2D g = img.createGraphics();
+        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = img.createGraphics();
         c.paint(g);
         g.dispose();
         int bg = img.getRGB(w - 2, h - 2);
@@ -240,8 +249,8 @@ class PromptBarTest {
 
     private static void onEdt(Runnable r) {
         try {
-            javax.swing.SwingUtilities.invokeAndWait(r);
-        } catch (java.lang.reflect.InvocationTargetException e) {
+            SwingUtilities.invokeAndWait(r);
+        } catch (InvocationTargetException e) {
             if (e.getCause() instanceof RuntimeException x) {
                 throw x;
             }

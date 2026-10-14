@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.widgets.transcript.doc.Span;
 
 import javax.swing.UIManager;
 import java.awt.Color;
@@ -78,8 +79,8 @@ public final class Style {
         if (code) {
             return mono;
         }
-        boolean b = (spanStyle & dev.marregui.comando.ui.widgets.transcript.doc.Span.BOLD) != 0;
-        boolean i = (spanStyle & dev.marregui.comando.ui.widgets.transcript.doc.Span.ITALIC) != 0;
+        boolean b = (spanStyle & Span.BOLD) != 0;
+        boolean i = (spanStyle & Span.ITALIC) != 0;
         return b && i ? boldItalic : b ? bold : i ? italic : body;
     }
 

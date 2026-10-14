@@ -1,5 +1,6 @@
 package dev.marregui.comando.core.reduce;
 
+import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.EditMode;
@@ -135,9 +136,9 @@ class ReducerNoticeAndLayoutTest {
         apply(new Intent.SqlCompleted(1L, 0, 0L, false, 1, 0, 1));
 
         assertThat(effects).contains(new Effect.LoadSchema(States.LOCAL, false));
-        assertThat(dev.marregui.comando.core.dispatch.Classifier.isDdl("  DROP TABLE t")).isTrue();
-        assertThat(dev.marregui.comando.core.dispatch.Classifier.isDdl("created_at")).isFalse();
-        assertThat(dev.marregui.comando.core.dispatch.Classifier.isDdl("SELECT 1")).isFalse();
+        assertThat(Classifier.isDdl("  DROP TABLE t")).isTrue();
+        assertThat(Classifier.isDdl("created_at")).isFalse();
+        assertThat(Classifier.isDdl("SELECT 1")).isFalse();
     }
 
     @Test

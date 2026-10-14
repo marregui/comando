@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.widget.capability;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
+import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -10,7 +11,11 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
+import javax.swing.Timer;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.FlowLayout;
+import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 
 /** The shared find bar: one instance per window, pointed at whichever {@link Searchable} has focus. */
@@ -19,7 +24,7 @@ public final class FindBar extends JPanel {
     private final JTextField text = new JTextField(24);
     private final JLabel count = new JLabel();
     private Searchable target;
-    private final javax.swing.Timer typing = new javax.swing.Timer(250, e -> {
+    private final Timer typing = new Timer(250, e -> {
         if (target != null) {
             // a longer search text starts where the current match begins, so the match under the cursor is not skipped
             target.rewindFind();
@@ -42,33 +47,33 @@ public final class FindBar extends JPanel {
         });
         // find as you type, once typing pauses; ⏎ and ⇧⏎ then step through the matches
         typing.setRepeats(false);
-        text.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+        text.getDocument().addDocumentListener(new DocumentListener() {
             @Override
-            public void insertUpdate(javax.swing.event.DocumentEvent e) {
+            public void insertUpdate(DocumentEvent e) {
                 typing.restart();
             }
 
             @Override
-            public void removeUpdate(javax.swing.event.DocumentEvent e) {
+            public void removeUpdate(DocumentEvent e) {
                 typing.restart();
             }
 
             @Override
-            public void changedUpdate(javax.swing.event.DocumentEvent e) {
+            public void changedUpdate(DocumentEvent e) {
                 // attributes only
             }
         });
         text.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, KeyEvent.SHIFT_DOWN_MASK), "previous");
-        text.getActionMap().put("previous", new javax.swing.AbstractAction() {
+        text.getActionMap().put("previous", new AbstractAction() {
             @Override
-            public void actionPerformed(java.awt.event.ActionEvent e) {
+            public void actionPerformed(ActionEvent e) {
                 find(false);
             }
         });
         text.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "close");
-        text.getActionMap().put("close", new javax.swing.AbstractAction() {
+        text.getActionMap().put("close", new AbstractAction() {
             @Override
-            public void actionPerformed(java.awt.event.ActionEvent e) {
+            public void actionPerformed(ActionEvent e) {
                 close();
             }
         });

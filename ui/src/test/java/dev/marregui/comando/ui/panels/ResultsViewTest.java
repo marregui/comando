@@ -8,8 +8,10 @@ import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
+import java.lang.reflect.InvocationTargetException;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -100,8 +102,8 @@ class ResultsViewTest {
 
     private static void onEdt(Runnable r) {
         try {
-            javax.swing.SwingUtilities.invokeAndWait(r);
-        } catch (java.lang.reflect.InvocationTargetException e) {
+            SwingUtilities.invokeAndWait(r);
+        } catch (InvocationTargetException e) {
             if (e.getCause() instanceof RuntimeException x) {
                 throw x;
             }

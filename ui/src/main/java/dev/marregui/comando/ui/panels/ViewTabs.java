@@ -1,11 +1,11 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.state.ViewState;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.WidgetContext;

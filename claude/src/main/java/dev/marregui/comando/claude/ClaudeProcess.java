@@ -11,6 +11,7 @@ import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
@@ -131,7 +132,7 @@ final class ClaudeProcess {
     /** Waits up to {@code millis} for the process to exit; true when it has. */
     boolean awaitExit(long millis) {
         try {
-            return process.waitFor(millis, java.util.concurrent.TimeUnit.MILLISECONDS);
+            return process.waitFor(millis, TimeUnit.MILLISECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return !process.isAlive();

@@ -1,6 +1,8 @@
 package dev.marregui.comando.ui.kit.text;
 
+import javax.swing.AbstractButton;
 import javax.swing.JComponent;
+import javax.swing.JLabel;
 import java.util.Locale;
 
 /**
@@ -33,11 +35,11 @@ public final class Plain {
      */
     public static <T extends JComponent> T only(T c) {
         c.putClientProperty("html.disable", Boolean.TRUE);
-        if (c instanceof javax.swing.JLabel l && l.getText() != null && !l.getText().isEmpty()) {
+        if (c instanceof JLabel l && l.getText() != null && !l.getText().isEmpty()) {
             String t = l.getText();
             l.setText("");
             l.setText(t);
-        } else if (c instanceof javax.swing.AbstractButton b && b.getText() != null && !b.getText().isEmpty()) {
+        } else if (c instanceof AbstractButton b && b.getText() != null && !b.getText().isEmpty()) {
             String t = b.getText();
             b.setText("");
             b.setText(t);

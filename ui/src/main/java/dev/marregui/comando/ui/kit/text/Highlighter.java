@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.kit.text;
 
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rsyntaxtextarea.Token;
 import org.fife.ui.rsyntaxtextarea.TokenMaker;
 import org.fife.ui.rsyntaxtextarea.TokenMakerFactory;
@@ -27,7 +28,7 @@ public final class Highlighter {
     public static List<Run> runs(String text, String syntax) {
         String style = Editors.styleFor(syntax);
         List<Run> out = new ArrayList<>();
-        if (style.equals(org.fife.ui.rsyntaxtextarea.SyntaxConstants.SYNTAX_STYLE_NONE)) {
+        if (style.equals(SyntaxConstants.SYNTAX_STYLE_NONE)) {
             return out;
         }
         TokenMaker maker = TokenMakerFactory.getDefaultInstance().getTokenMaker(style);

@@ -14,16 +14,20 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Window;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -69,7 +73,7 @@ public final class CommandPalette {
         // rows are HTML labels: without a prototype the list lays out every row's HTML to size itself, over
         // 200 ms on the EDT at the first opening; with one it measures one row and renders only the visible ones
         registry.all().stream()
-                .max(java.util.Comparator.comparingInt((Command c) -> c.label().length() + c.group().length()))
+                .max(Comparator.comparingInt((Command c) -> c.label().length() + c.group().length()))
                 .ifPresent(list::setPrototypeCellValue);
         Runnable filter = () -> {
             String q = search.getText().strip().toLowerCase(Locale.ROOT);
@@ -106,7 +110,7 @@ public final class CommandPalette {
             Command c = list.getSelectedValue();
             dialog.dispose();
             if (c != null) {
-                javax.swing.SwingUtilities.invokeLater(c.run());
+                SwingUtilities.invokeLater(c.run());
             }
         };
         search.addKeyListener(new KeyAdapter() {
@@ -133,9 +137,9 @@ public final class CommandPalette {
                 }
             }
         });
-        dialog.addWindowFocusListener(new java.awt.event.WindowAdapter() {
+        dialog.addWindowFocusListener(new WindowAdapter() {
             @Override
-            public void windowLostFocus(java.awt.event.WindowEvent e) {
+            public void windowLostFocus(WindowEvent e) {
                 dialog.dispose();
             }
         });
@@ -181,16 +185,16 @@ public final class CommandPalette {
     public static String keyText(KeyStroke k) {
         int m = k.getModifiers();
         StringBuilder sb = new StringBuilder();
-        if ((m & java.awt.event.InputEvent.CTRL_DOWN_MASK) != 0) {
+        if ((m & InputEvent.CTRL_DOWN_MASK) != 0) {
             sb.append('⌃');
         }
-        if ((m & java.awt.event.InputEvent.ALT_DOWN_MASK) != 0) {
+        if ((m & InputEvent.ALT_DOWN_MASK) != 0) {
             sb.append('⌥');
         }
-        if ((m & java.awt.event.InputEvent.SHIFT_DOWN_MASK) != 0) {
+        if ((m & InputEvent.SHIFT_DOWN_MASK) != 0) {
             sb.append('⇧');
         }
-        if ((m & java.awt.event.InputEvent.META_DOWN_MASK) != 0) {
+        if ((m & InputEvent.META_DOWN_MASK) != 0) {
             sb.append('⌘');
         }
         return sb.append(switch (k.getKeyCode()) {

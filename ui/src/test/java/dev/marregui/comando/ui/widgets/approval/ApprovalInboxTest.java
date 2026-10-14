@@ -12,7 +12,9 @@ import org.junit.jupiter.api.Test;
 
 import javax.swing.AbstractButton;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JRadioButton;
+import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.text.JTextComponent;
@@ -79,10 +81,10 @@ class ApprovalInboxTest {
     }
 
     private static List<Component> cardsOf(ApprovalInbox inbox) {
-        Container list = (Container) ((javax.swing.JScrollPane) find(inbox.component(), c -> c instanceof javax.swing.JScrollPane)).getViewport().getView();
+        Container list = (Container) ((JScrollPane) find(inbox.component(), c -> c instanceof JScrollPane)).getViewport().getView();
         List<Component> out = new ArrayList<>();
         for (Component c : list.getComponents()) {
-            if (c instanceof javax.swing.JPanel) {
+            if (c instanceof JPanel) {
                 out.add(c);
             }
         }

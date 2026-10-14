@@ -1,11 +1,14 @@
 package dev.marregui.comando.app;
 
+import dev.marregui.comando.claude.ClaudeSettings;
+import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.view.Placement;
@@ -17,6 +20,8 @@ import javax.swing.SwingUtilities;
 import java.awt.Frame;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -40,8 +45,8 @@ public final class Snapshot {
         boolean live = args.length > 1 && Boolean.parseBoolean(args[1]);
         Files.createDirectories(out);
         Path home = Files.createTempDirectory("comando-snapshot");
-        AppConfig config = new AppConfig(home, dev.marregui.comando.claude.ClaudeSettings.findExecutable(),
-                dev.marregui.comando.claude.ClaudeSettings.defaultProjectsDir(), true);
+        AppConfig config = new AppConfig(home, ClaudeSettings.findExecutable(),
+                ClaudeSettings.defaultProjectsDir(), true);
         App app = new App(config, "snapshot", () -> {
         });
         app.start();
@@ -149,7 +154,7 @@ public final class Snapshot {
         });
         loop.dispatch(new Intent.RunText(loop.state().focused(),
                 "Call the mcp__comando__ui_show_table tool once to show a table titled 'squares' with columns n and square for n = 1..5. "
-                        + "Then reply with the single word DONE.", dev.marregui.comando.core.dispatch.Target.CLAUDE));
+                        + "Then reply with the single word DONE.", Target.CLAUDE));
         AppState s = await(loop, st -> st.views().stream().anyMatch(v -> v.title().equals("squares")), 120_000);
         System.out.println(s == null ? "no squares view within 120 s" : "squares view placed by Claude");
         await(loop, st -> st.session("comando").map(x -> !x.isBusy()).orElse(false), 120_000);
@@ -157,7 +162,7 @@ public final class Snapshot {
         Thread.sleep(1500);
         shoot(out.resolve("04-live-session.png"));
         loop.dispatch(new Intent.StopSession("comando"));
-        await(loop, st -> st.session("comando").map(x -> x.status() == dev.marregui.comando.core.model.Status.CLOSED).orElse(true), 15_000);
+        await(loop, st -> st.session("comando").map(x -> x.status() == Status.CLOSED).orElse(true), 15_000);
     }
 
     private static AppState await(StateLoop loop, Predicate<AppState> done, long millis) throws InterruptedException {
@@ -182,8 +187,8 @@ public final class Snapshot {
                     g.dispose();
                     try {
                         ImageIO.write(img, "png", file.toFile());
-                    } catch (java.io.IOException e) {
-                        throw new java.io.UncheckedIOException(e);
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
                     }
                 }
             }

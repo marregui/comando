@@ -19,6 +19,7 @@ import dev.marregui.comando.ui.widgets.editor.CommandEditor;
 import dev.marregui.comando.ui.widgets.editor.PromptBar;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
@@ -27,6 +28,8 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
 import java.util.Optional;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * One editor panel: a header with its connection and session, the command editor, and the prompt bar.
@@ -63,7 +66,7 @@ public final class EditorPanel extends JPanel {
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
         left.add(connection);
         left.add(connectionToggle);
-        left.add(javax.swing.Box.createHorizontalStrut(Theme.PAD));
+        left.add(Box.createHorizontalStrut(Theme.PAD));
         left.add(session);
         left.add(sessionToggle);
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
@@ -180,11 +183,11 @@ public final class EditorPanel extends JPanel {
         });
     }
 
-    private static final java.util.regex.Pattern POSITION = java.util.regex.Pattern.compile("Position: (\\d+)");
+    private static final Pattern POSITION = Pattern.compile("Position: (\\d+)");
 
     /** The 1-based position a database error names ("Position: 38"), or 0. */
     static int errorPosition(String error) {
-        java.util.regex.Matcher m = POSITION.matcher(error == null ? "" : error);
+        Matcher m = POSITION.matcher(error == null ? "" : error);
         if (!m.find()) {
             return 0;
         }

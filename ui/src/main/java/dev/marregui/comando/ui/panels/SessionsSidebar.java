@@ -1,6 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.resource.ConnectionKind;
@@ -11,6 +10,7 @@ import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
+import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.BorderFactory;
@@ -27,6 +27,8 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.ListSelectionModel;
+import javax.swing.event.ListDataEvent;
+import javax.swing.event.ListDataListener;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.FlowLayout;
@@ -288,19 +290,19 @@ public final class SessionsSidebar {
         overlay.add(hint, BorderLayout.NORTH);
         list.setLayout(new BorderLayout());
         list.add(overlay, BorderLayout.CENTER);
-        list.getModel().addListDataListener(new javax.swing.event.ListDataListener() {
+        list.getModel().addListDataListener(new ListDataListener() {
             @Override
-            public void intervalAdded(javax.swing.event.ListDataEvent e) {
+            public void intervalAdded(ListDataEvent e) {
                 overlay.setVisible(list.getModel().getSize() == 0);
             }
 
             @Override
-            public void intervalRemoved(javax.swing.event.ListDataEvent e) {
+            public void intervalRemoved(ListDataEvent e) {
                 overlay.setVisible(list.getModel().getSize() == 0);
             }
 
             @Override
-            public void contentsChanged(javax.swing.event.ListDataEvent e) {
+            public void contentsChanged(ListDataEvent e) {
                 overlay.setVisible(list.getModel().getSize() == 0);
             }
         });

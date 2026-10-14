@@ -2,9 +2,9 @@ package dev.marregui.comando.ui.kit.action;
 
 import org.junit.jupiter.api.Test;
 
+import javax.swing.KeyStroke;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
-import javax.swing.KeyStroke;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

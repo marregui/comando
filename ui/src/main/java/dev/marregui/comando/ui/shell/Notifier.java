@@ -1,6 +1,10 @@
 package dev.marregui.comando.ui.shell;
 
+import java.awt.AWTException;
+import java.awt.SystemTray;
+import java.awt.TrayIcon;
 import java.awt.Window;
+import java.awt.image.BufferedImage;
 import java.util.Locale;
 
 /**
@@ -36,23 +40,23 @@ final class Notifier {
         });
     }
 
-    private java.awt.TrayIcon trayIcon;
+    private TrayIcon trayIcon;
 
     /** Elsewhere: a tray balloon, where the desktop has a tray; nothing otherwise. */
     private void tray(String title, String text) {
-        if (!java.awt.SystemTray.isSupported()) {
+        if (!SystemTray.isSupported()) {
             return;
         }
         try {
             if (trayIcon == null) {
-                java.awt.image.BufferedImage image = new java.awt.image.BufferedImage(16, 16, java.awt.image.BufferedImage.TYPE_INT_ARGB);
-                trayIcon = new java.awt.TrayIcon(image, "comando");
+                BufferedImage image = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+                trayIcon = new TrayIcon(image, "comando");
                 trayIcon.setImageAutoSize(true);
-                java.awt.SystemTray.getSystemTray().add(trayIcon);
+                SystemTray.getSystemTray().add(trayIcon);
             }
             String clipped = text.length() > 200 ? text.substring(0, 200) + "…" : text;
-            trayIcon.displayMessage(title, clipped, java.awt.TrayIcon.MessageType.INFO);
-        } catch (java.awt.AWTException | RuntimeException e) {
+            trayIcon.displayMessage(title, clipped, TrayIcon.MessageType.INFO);
+        } catch (AWTException | RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "notification failed: " + e.getMessage());
         }
     }

@@ -8,6 +8,8 @@ import dev.marregui.comando.ui.widget.WidgetRegistry;
 
 import javax.swing.JComponent;
 import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
+import java.awt.Component;
 
 /** Views placed beside the editor: files Claude opened, diffs, plots. Hidden when it holds none. */
 public final class SidePane {
@@ -26,9 +28,9 @@ public final class SidePane {
     }
 
     /** The view whose tab holds {@code c}, or -1. */
-    public long viewHolding(java.awt.Component c) {
+    public long viewHolding(Component c) {
         for (int i = 0; i < tabs.getTabCount(); i++) {
-            if (javax.swing.SwingUtilities.isDescendingFrom(c, tabs.getComponentAt(i))) {
+            if (SwingUtilities.isDescendingFrom(c, tabs.getComponentAt(i))) {
                 return views.viewAt(i);
             }
         }

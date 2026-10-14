@@ -4,12 +4,17 @@ import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.PanelState;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -104,7 +109,7 @@ class StoreTest {
 
     /** A secret store in memory. */
     static class MapSecrets implements Secrets {
-        final java.util.Map<String, String> map = new java.util.concurrent.ConcurrentHashMap<>();
+        final Map<String, String> map = new ConcurrentHashMap<>();
 
         @Override
         public boolean available() {
@@ -112,8 +117,8 @@ class StoreTest {
         }
 
         @Override
-        public java.util.Optional<String> read(String name) {
-            return java.util.Optional.ofNullable(map.get(name));
+        public Optional<String> read(String name) {
+            return Optional.ofNullable(map.get(name));
         }
 
         @Override
@@ -137,7 +142,7 @@ class StoreTest {
                     new ConnectionSpec("open", "h", 8812, "qdb", "admin", "", false)));
         }
         assertThat(Files.readString(home.resolve("connections.json"))).doesNotContain("s3cret");
-        assertThat(secrets.map).containsExactly(java.util.Map.entry("lab", "s3cret"));
+        assertThat(secrets.map).containsExactly(Map.entry("lab", "s3cret"));
         try (Store store = new Store(home, secrets)) {
             assertThat(store.load(Legacy.none()).connections()).extracting(ConnectionSpec::password).containsExactly("s3cret", "");
             store.saveConnections(List.of(new ConnectionSpec("open", "h", 8812, "qdb", "admin", "", false)));
@@ -154,7 +159,7 @@ class StoreTest {
         }
         MapSecrets locked = new MapSecrets() {
             @Override
-            public java.util.Optional<String> read(String name) {
+            public Optional<String> read(String name) {
                 throw new Secrets.Unreadable("locked");
             }
         };
@@ -170,7 +175,7 @@ class StoreTest {
 
     @Test
     void aKeychainPromptNobodyAnswersDoesNotHoldBackPanelText() throws Exception {
-        java.util.concurrent.CountDownLatch prompt = new java.util.concurrent.CountDownLatch(1);
+        CountDownLatch prompt = new CountDownLatch(1);
         MapSecrets waiting = new MapSecrets() {
             @Override
             public boolean write(String name, String password) {
@@ -210,7 +215,7 @@ class StoreTest {
 
     @Test
     void theKeychainStoresReadsAndDeletes() {
-        org.junit.jupiter.api.Assumptions.assumeTrue(Boolean.getBoolean("comando.keychainTest"), "set -Dcomando.keychainTest=true to touch the login keychain");
+        Assumptions.assumeTrue(Boolean.getBoolean("comando.keychainTest"), "set -Dcomando.keychainTest=true to touch the login keychain");
         Secrets.Keychain k = new Secrets.Keychain(Path.of("/usr/bin/security"), "comando-test");
         String name = "test-" + System.nanoTime();
         try {

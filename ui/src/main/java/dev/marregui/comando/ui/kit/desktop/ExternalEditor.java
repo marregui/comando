@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.kit.desktop;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,7 +28,7 @@ public final class ExternalEditor {
                 Path.of("/opt/homebrew/bin/idea")));
         String path = System.getenv("PATH");
         if (path != null) {
-            for (String dir : path.split(java.io.File.pathSeparator)) {
+            for (String dir : path.split(File.pathSeparator)) {
                 if (!dir.isEmpty()) {
                     candidates.add(Path.of(dir, "idea"));
                 }

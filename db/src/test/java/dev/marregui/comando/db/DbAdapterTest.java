@@ -18,6 +18,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -177,7 +178,7 @@ class DbAdapterTest {
     void queryForClaudeReturnsCappedTextRows() throws Exception {
         var rows = db.query(spec, "SELECT x, x * 2 y FROM long_sequence(10)", 4).get();
         assertThat(rows.columns()).containsExactly("x", "y");
-        assertThat(rows.rows()).hasSize(4).first().isEqualTo(java.util.List.of("1", "2"));
+        assertThat(rows.rows()).hasSize(4).first().isEqualTo(List.of("1", "2"));
         assertThat(rows.truncated()).isTrue();
 
         db.query(spec, "CREATE TABLE IF NOT EXISTS described (ts TIMESTAMP, v DOUBLE) TIMESTAMP(ts)", 1).get();

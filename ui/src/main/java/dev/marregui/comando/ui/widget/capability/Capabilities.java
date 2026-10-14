@@ -7,12 +7,19 @@ import javax.swing.JComponent;
 import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.KeyboardFocusManager;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
+import java.util.WeakHashMap;
 import java.util.function.BiConsumer;
 
 /**
@@ -47,7 +54,7 @@ public final class Capabilities {
      * showing components; null when there is none. Lets a key act on the view in front when the focus is elsewhere.
      */
     public static <T> T within(Component root, Class<T> type) {
-        java.util.ArrayDeque<Component> queue = new java.util.ArrayDeque<>();
+        ArrayDeque<Component> queue = new ArrayDeque<>();
         if (root != null) {
             queue.add(root);
         }
@@ -59,25 +66,25 @@ public final class Capabilities {
             if (c instanceof JComponent jc && type.isInstance(jc.getClientProperty(OWNER))) {
                 return type.cast(jc.getClientProperty(OWNER));
             }
-            if (c instanceof java.awt.Container k) {
-                queue.addAll(java.util.Arrays.asList(k.getComponents()));
+            if (c instanceof Container k) {
+                queue.addAll(Arrays.asList(k.getComponents()));
             }
         }
         return null;
     }
 
     /** The root each owner marked, weakly, so the find bar can tell when the view it searches is gone. */
-    private static final java.util.Map<Object, java.lang.ref.WeakReference<JComponent>> ROOTS =
-            java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>());
+    private static final Map<Object, WeakReference<JComponent>> ROOTS =
+            Collections.synchronizedMap(new WeakHashMap<>());
 
     public static void mark(JComponent root, Object owner) {
         root.putClientProperty(OWNER, owner);
-        ROOTS.put(owner, new java.lang.ref.WeakReference<>(root));
+        ROOTS.put(owner, new WeakReference<>(root));
     }
 
     /** The component {@code owner} marked, or null. */
     public static JComponent rootOf(Object owner) {
-        java.lang.ref.WeakReference<JComponent> r = ROOTS.get(owner);
+        WeakReference<JComponent> r = ROOTS.get(owner);
         return r == null ? null : r.get();
     }
 

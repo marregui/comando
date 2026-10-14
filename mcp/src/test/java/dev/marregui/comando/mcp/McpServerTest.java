@@ -22,11 +22,14 @@ import dev.marregui.comando.testkit.States;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -352,9 +355,9 @@ class McpServerTest {
 
     /** A file the session opens is titled with its folder, so two READMEs get two tabs. */
     @Test
-    void anOpenedFileIsTitledWithItsFolder(@org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {
-        java.nio.file.Path docs = java.nio.file.Files.createDirectories(dir.resolve("docs"));
-        java.nio.file.Path readme = java.nio.file.Files.writeString(docs.resolve("README.md"), "# hi\n");
+    void anOpenedFileIsTitledWithItsFolder(@TempDir Path dir) throws Exception {
+        Path docs = Files.createDirectories(dir.resolve("docs"));
+        Path readme = Files.writeString(docs.resolve("README.md"), "# hi\n");
         assertThat(text(tool("ui_open_file", "{\"path\":\"" + readme + "\"}"))).contains("opened");
         assertThat(sink.await(Intent.ShowView.class, WAIT).title()).isEqualTo("docs/README.md");
     }

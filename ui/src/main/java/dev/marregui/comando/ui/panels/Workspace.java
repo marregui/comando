@@ -1,6 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.port.IntentSink;
@@ -13,6 +12,7 @@ import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.PromptHistory;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.Plain;
 
 import javax.swing.JButton;
 import javax.swing.JComponent;

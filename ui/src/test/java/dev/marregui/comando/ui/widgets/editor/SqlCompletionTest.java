@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.widgets.editor;
 import dev.marregui.comando.core.schema.Schema;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.UIManager;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,11 +35,11 @@ class SqlCompletionTest {
 
     @Test
     void aDisposedEditorLeavesNoGlobalListener() {
-        int before = javax.swing.UIManager.getPropertyChangeListeners().length;
+        int before = UIManager.getPropertyChangeListeners().length;
         CommandEditor editor = new CommandEditor();
-        assertThat(javax.swing.UIManager.getPropertyChangeListeners().length).isGreaterThan(before);
+        assertThat(UIManager.getPropertyChangeListeners().length).isGreaterThan(before);
         editor.dispose();
-        assertThat(javax.swing.UIManager.getPropertyChangeListeners().length).isEqualTo(before);
+        assertThat(UIManager.getPropertyChangeListeners().length).isEqualTo(before);
     }
 
     @Test

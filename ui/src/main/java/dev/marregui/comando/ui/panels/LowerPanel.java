@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
@@ -10,6 +11,7 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
 import dev.marregui.comando.ui.widgets.approval.ApprovalInbox;
@@ -18,6 +20,10 @@ import dev.marregui.comando.ui.widgets.transcript.TranscriptWidget;
 
 import javax.swing.JComponent;
 import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
+import java.awt.Component;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * The lower panel: Results, Session (the focused panel's transcript), Approvals (every session), Terminal
@@ -42,9 +48,9 @@ public final class LowerPanel {
     private boolean rendering;
     private String transcriptSession = "";
     /** The transcript version the user last saw on the Session tab, by session. */
-    private final java.util.Map<String, Long> seenTranscript = new java.util.HashMap<>();
+    private final Map<String, Long> seenTranscript = new HashMap<>();
     /** The run the user last saw on the Results tab, by panel: request id and status. */
-    private final java.util.Map<dev.marregui.comando.core.model.PanelId, String> seenRun = new java.util.HashMap<>();
+    private final Map<PanelId, String> seenRun = new HashMap<>();
 
     public LowerPanel(WidgetContext context, ResultRegistry results, TranscriptRegistry transcripts, WidgetRegistry registry) {
         this.context = context;
@@ -101,7 +107,7 @@ public final class LowerPanel {
     }
 
     /** The component of the tab in front: a fixed tab's view or a placed view. */
-    public java.awt.Component selected() {
+    public Component selected() {
         return tabs.getSelectedComponent();
     }
 
@@ -112,9 +118,9 @@ public final class LowerPanel {
     }
 
     /** The placed view whose tab holds {@code c}, or -1. */
-    public long viewHolding(java.awt.Component c) {
+    public long viewHolding(Component c) {
         for (int i = TERMINAL + 1; i < tabs.getTabCount(); i++) {
-            if (javax.swing.SwingUtilities.isDescendingFrom(c, tabs.getComponentAt(i))) {
+            if (SwingUtilities.isDescendingFrom(c, tabs.getComponentAt(i))) {
                 return views.viewAt(i);
             }
         }
@@ -145,7 +151,7 @@ public final class LowerPanel {
             inbox.render(s.approvals());
             int pending = s.approvals().size();
             tabs.setTitleAt(APPROVALS, pending == 0 ? "Approvals" : "Approvals (" + pending + ")");
-            tabs.setForegroundAt(APPROVALS, pending == 0 ? null : dev.marregui.comando.ui.kit.theme.Theme.WARN);
+            tabs.setForegroundAt(APPROVALS, pending == 0 ? null : Theme.WARN);
             views.render(s.views());
             int want = switch (s.lowerTab().kind()) {
                 case RESULTS -> RESULTS;
@@ -196,7 +202,7 @@ public final class LowerPanel {
         String title = marked ? name + " ●" : name;
         if (!tabs.getTitleAt(index).equals(title)) {
             tabs.setTitleAt(index, title);
-            tabs.setForegroundAt(index, marked ? dev.marregui.comando.ui.kit.theme.Theme.ACCENT : null);
+            tabs.setForegroundAt(index, marked ? Theme.ACCENT : null);
         }
     }
 

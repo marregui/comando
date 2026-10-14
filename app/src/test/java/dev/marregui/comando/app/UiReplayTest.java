@@ -1,6 +1,7 @@
 package dev.marregui.comando.app;
 
 import dev.marregui.comando.core.console.ConsoleRegistry;
+import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.effect.EffectRouter;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
@@ -16,6 +17,7 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.testkit.RecordingPorts;
 import dev.marregui.comando.ui.PanelTexts;
+import dev.marregui.comando.ui.PromptHistory;
 import dev.marregui.comando.ui.shell.ComandoUi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -29,6 +31,8 @@ import java.awt.Container;
 import java.awt.Frame;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -72,7 +76,7 @@ class UiReplayTest {
         Deferred effects = new Deferred();
         try (StateLoop loop = new StateLoop(replay.initial(), new Reducer(Clock.SYSTEM), effects)) {
             ComandoUi ui = new ComandoUi(new ComandoUi.Dependencies(loop, loop::state, loop, new TranscriptRegistry(), new ResultRegistry(),
-                    new ConsoleRegistry(), new SchemaRegistry(), new Texts(), dev.marregui.comando.ui.PromptHistory.NONE, List::of, null,
+                    new ConsoleRegistry(), new SchemaRegistry(), new Texts(), PromptHistory.NONE, List::of, null,
                     "replay", null, null, () -> { }));
             effects.target = new EffectRouter(ports, ports, ports, ui, ports, ports);
             try (ui) {
@@ -180,8 +184,8 @@ class UiReplayTest {
             g.dispose();
             try {
                 ImageIO.write(img, "png", file.toFile());
-            } catch (java.io.IOException e) {
-                throw new java.io.UncheckedIOException(e);
+            } catch (IOException e) {
+                throw new UncheckedIOException(e);
             }
         });
     }
@@ -191,7 +195,7 @@ class UiReplayTest {
         volatile StateLoop.EffectHandler target;
 
         @Override
-        public void handle(dev.marregui.comando.core.effect.Effect effect) {
+        public void handle(Effect effect) {
             if (target != null) {
                 target.handle(effect);
             }

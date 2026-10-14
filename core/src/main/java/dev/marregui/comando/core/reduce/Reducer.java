@@ -30,9 +30,11 @@ import dev.marregui.comando.core.view.ViewSpec;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.LongFunction;
+import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
 
 /**
@@ -458,7 +460,7 @@ public final class Reducer {
         AppState next = clear(t.state(), subject);
         String title = s.panel(run.get().panel()).map(PanelState::title).orElse("a closed panel");
         if (i.truncated()) {
-            next = notice(next, Notice.Level.WARN, "Showing the first " + String.format(java.util.Locale.ROOT, "%,d", i.rows()) + " rows in " + title
+            next = notice(next, Notice.Level.WARN, "Showing the first " + String.format(Locale.ROOT, "%,d", i.rows()) + " rows in " + title
                     + "; the query returned more (add a LIMIT, or export from the grid for what is shown)", subject);
         } else if (!run.get().background() && !run.get().panel().equals(s.focused())) {
             next = notice(next, Notice.Level.INFO, "Query finished in " + title, subject);
@@ -797,7 +799,7 @@ public final class Reducer {
     }
 
     private static AppState withdrawApprovals(AppState s, String session, String reason, List<Effect> effects,
-                                              java.util.function.Predicate<Approval> which) {
+                                              Predicate<Approval> which) {
         List<Approval> kept = new ArrayList<>();
         AppState next = s;
         for (Approval a : s.approvals()) {

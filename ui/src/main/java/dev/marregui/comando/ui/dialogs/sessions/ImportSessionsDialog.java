@@ -1,6 +1,5 @@
 package dev.marregui.comando.ui.dialogs.sessions;
 
-import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.IntentSink;
@@ -8,11 +7,12 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
+import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
-import javax.swing.JComponent;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JPanel;

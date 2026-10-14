@@ -1,6 +1,8 @@
 package dev.marregui.comando.app;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
@@ -51,8 +53,8 @@ final class Logging {
                     .append(shortName(r.getLoggerName())).append(' ')
                     .append(formatMessage(r)).append('\n');
             if (r.getThrown() != null) {
-                java.io.StringWriter w = new java.io.StringWriter();
-                r.getThrown().printStackTrace(new java.io.PrintWriter(w));
+                StringWriter w = new StringWriter();
+                r.getThrown().printStackTrace(new PrintWriter(w));
                 sb.append(w);
             }
             return sb.toString();

@@ -19,6 +19,7 @@ import org.fife.ui.rtextarea.Gutter;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
 import javax.swing.JComponent;
+import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
@@ -183,7 +184,7 @@ public final class CommandEditor implements Searchable, Zoomable {
 
     /** Back to the first column after a run, so a long statement does not leave the line starts off screen. */
     private void scrollHome() {
-        javax.swing.SwingUtilities.invokeLater(() -> scroll.getHorizontalScrollBar().setValue(0));
+        SwingUtilities.invokeLater(() -> scroll.getHorizontalScrollBar().setValue(0));
     }
 
     /**

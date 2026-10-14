@@ -9,6 +9,7 @@ import com.jediterm.terminal.model.StyleState;
 import com.jediterm.terminal.model.SubCharBuffer;
 import com.jediterm.terminal.model.TerminalTextBuffer;
 import com.jediterm.terminal.ui.JediTermWidget;
+import com.jediterm.terminal.ui.TerminalActionPresentation;
 import com.jediterm.terminal.ui.TerminalPanel;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import com.jediterm.terminal.ui.settings.SettingsProvider;
@@ -25,20 +26,28 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
 import javax.swing.Timer;
 import java.awt.BorderLayout;
 import java.awt.Cursor;
 import java.awt.Font;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.function.DoubleSupplier;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 /**
  * A terminal: the user's login shell on a pseudo-terminal, shown by JediTerm. For what Claude does not
@@ -57,7 +66,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
     /** The job reported when {@code ps} cannot say what the shell runs: closing asks rather than kills unseen. */
     public static final String UNCHECKED_JOB = "a program comando could not check";
     /** Names of shells: a pty whose process carries another name has been replaced by a program ({@code exec ssh host}). */
-    private static final java.util.Set<String> SHELLS = java.util.Set.of("sh", "bash", "zsh", "fish", "dash", "ksh", "mksh",
+    private static final Set<String> SHELLS = Set.of("sh", "bash", "zsh", "fish", "dash", "ksh", "mksh",
             "tcsh", "csh", "nu", "xonsh", "elvish", "pwsh", "login");
 
     private final JPanel root = new JPanel(new BorderLayout());
@@ -330,7 +339,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         }
         String foreground = ids[0];
         String pids = ProcessHandle.of(shellPid).map(h -> h.descendants().map(d -> Long.toString(d.pid()))
-                .collect(java.util.stream.Collectors.joining(","))).orElse("");
+                .collect(Collectors.joining(","))).orElse("");
         if (pids.isEmpty()) {
             return Optional.of("a program");
         }
@@ -353,23 +362,23 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
     /** The lines {@code ps} prints for {@code args}, or none when it fails or takes over a second. */
     private static List<String> ps(List<String> args) {
-        List<String> command = new java.util.ArrayList<>();
+        List<String> command = new ArrayList<>();
         command.add("ps");
         command.addAll(args);
         try {
             Process ps = new ProcessBuilder(command).redirectErrorStream(true).start();
             ps.getOutputStream().close();
-            if (!ps.waitFor(1, java.util.concurrent.TimeUnit.SECONDS)) {
+            if (!ps.waitFor(1, TimeUnit.SECONDS)) {
                 ps.destroyForcibly();
-                return java.util.List.of();
+                return List.of();
             }
-            String out = new String(ps.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+            String out = new String(ps.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             return out.lines().filter(l -> !l.isBlank()).toList();
-        } catch (java.io.IOException e) {
-            return java.util.List.of();
+        } catch (IOException e) {
+            return List.of();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return java.util.List.of();
+            return List.of();
         }
     }
 
@@ -588,9 +597,9 @@ public final class TerminalWidget implements Zoomable, Searchable {
          * stays the shell's start of line.
          */
         @Override
-        public com.jediterm.terminal.ui.TerminalActionPresentation getSelectAllActionPresentation() {
-            return MAC ? new com.jediterm.terminal.ui.TerminalActionPresentation("Select All",
-                    javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_A, java.awt.event.InputEvent.META_DOWN_MASK))
+        public TerminalActionPresentation getSelectAllActionPresentation() {
+            return MAC ? new TerminalActionPresentation("Select All",
+                    KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.META_DOWN_MASK))
                     : super.getSelectAllActionPresentation();
         }
 

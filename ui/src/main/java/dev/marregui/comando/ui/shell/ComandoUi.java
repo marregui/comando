@@ -28,7 +28,6 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.PromptHistory;
 import dev.marregui.comando.ui.dialogs.resource.ResourceDialog;
@@ -43,6 +42,7 @@ import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.EdtWatchdog;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.panels.EditorPanel;
 import dev.marregui.comando.ui.panels.LowerPanel;
@@ -68,7 +68,6 @@ import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 import dev.marregui.comando.ui.widgets.text.TextWidget;
 import dev.marregui.comando.ui.widgets.tree.TreeWidget;
 
-import javax.swing.SwingUtilities;
 import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
@@ -77,18 +76,22 @@ import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import javax.swing.JTable;
 import javax.swing.KeyStroke;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.WindowConstants;
+import javax.swing.text.BadLocationException;
 import java.awt.AWTEvent;
+import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Desktop;
-import java.awt.BorderLayout;
 import java.awt.Frame;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.KeyboardFocusManager;
 import java.awt.Rectangle;
 import java.awt.Toolkit;
+import java.awt.desktop.QuitResponse;
+import java.awt.event.AWTEventListener;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.InputEvent;
@@ -100,13 +103,16 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.prefs.Preferences;
 
@@ -178,7 +184,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private Timer layoutSaver;
     /** When the user last pressed a key in the window; a session's layout change waits until typing pauses. */
     private long lastKeyNanos;
-    private final java.awt.event.AWTEventListener keyClock = e -> {
+    private final AWTEventListener keyClock = e -> {
         if (e.getID() == KeyEvent.KEY_PRESSED && e.getSource() instanceof Component c && SwingUtilities.getWindowAncestor(c) == frame) {
             lastKeyNanos = System.nanoTime();
         }
@@ -233,7 +239,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 // a trigger that arrives while the question is open is answered with it
                 pendingQuits.add(response);
                 if (!confirmingQuit && !quit()) {
-                    pendingQuits.forEach(java.awt.desktop.QuitResponse::cancelQuit);
+                    pendingQuits.forEach(QuitResponse::cancelQuit);
                     pendingQuits.clear();
                 }
             }));
@@ -387,7 +393,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // session's view, an update of a view, or only a change of focus leaves it hidden; the user's own commands that
         // show a side view reveal the pane themselves
         String mine = s.focusedPanel().session();
-        Map<Long, Long> versions = new java.util.HashMap<>();
+        Map<Long, Long> versions = new HashMap<>();
         for (var v : s.views()) {
             if (v.placement() == Placement.SIDE) {
                 versions.put(v.id(), v.version());
@@ -1092,7 +1098,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             try {
                 int line = area.getLineOfOffset(area.getCaretPosition());
                 text = area.getText(area.getLineStartOffset(line), area.getLineEndOffset(line) - area.getLineStartOffset(line));
-            } catch (javax.swing.text.BadLocationException e) {
+            } catch (BadLocationException e) {
                 return;
             }
         }
@@ -1328,7 +1334,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /** Asks for one of {@code names}; nothing happens when there are none or the user cancels. */
-    private void choose(String title, List<String> names, java.util.function.Consumer<String> chosen) {
+    private void choose(String title, List<String> names, Consumer<String> chosen) {
         if (names.isEmpty()) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Nothing to choose: add one first", false));
             return;
@@ -1352,7 +1358,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** What quitting would stop: running queries, sessions in a turn, shells running a job; empty when nothing. */
     private List<String> runningWork() {
         AppState s = deps.state().get();
-        List<String> work = new java.util.ArrayList<>();
+        List<String> work = new ArrayList<>();
         long queries = s.runs().stream().filter(r -> r.status().isActive()).count();
         if (queries > 0) {
             work.add(queries + (queries == 1 ? " running query" : " running queries"));
@@ -1373,12 +1379,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     private boolean quitting;
     private Timer sidebarTimer;
-    private final java.util.function.Consumer<String> schemaListener = connection -> render.request();
+    private final Consumer<String> schemaListener = connection -> render.request();
     private final StateLoop.Listener stateListener = (previous, next) -> render.request();
 
     private boolean confirmingQuit;
     /** The macOS quit requests waiting for the answer to the open question. */
-    private final List<java.awt.desktop.QuitResponse> pendingQuits = new java.util.ArrayList<>();
+    private final List<QuitResponse> pendingQuits = new ArrayList<>();
 
     /** Quits, asking first when work would stop; false when the user kept comando open. */
     private boolean quit() {
@@ -1393,7 +1399,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             confirmingQuit = true;
             try {
                 if (!confirm("Quit comando?", "Quitting stops " + String.join(", ", work) + ".", "Quit")) {
-                    pendingQuits.forEach(java.awt.desktop.QuitResponse::cancelQuit);
+                    pendingQuits.forEach(QuitResponse::cancelQuit);
                     pendingQuits.clear();
                     return false;
                 }

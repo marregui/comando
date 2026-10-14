@@ -9,11 +9,14 @@ import org.fife.ui.autocomplete.DefaultCompletionProvider;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 import javax.swing.text.JTextComponent;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
+import java.util.regex.Pattern;
 
 /**
  * Completion for the command editor: SQL keywords, then the tables and columns of the bound connection's
@@ -70,19 +73,19 @@ final class SqlCompletion {
      * "UPDATE tr", "update tr" and "WITH x" qualify; "Show", "Explain" and "Update", capitalised as prose starts, do
      * not, nor does "show me the log".
      */
-    private static final java.util.regex.Pattern SQL_MARK = java.util.regex.Pattern.compile("[*=<>(),;.']|\\d");
-    private static final java.util.Set<String> CLAUSES = java.util.Set.of("FROM", "WHERE", "SET", "INTO", "TABLE", "VALUES", "JOIN",
+    private static final Pattern SQL_MARK = Pattern.compile("[*=<>(),;.']|\\d");
+    private static final Set<String> CLAUSES = Set.of("FROM", "WHERE", "SET", "INTO", "TABLE", "VALUES", "JOIN",
             "GROUP", "ORDER", "LIMIT", "SAMPLE", "LATEST", "PARTITION", "SELECT", "DISTINCT", "HAVING", "UNION");
 
     /** The words one of which must follow a statement keyword; {@code UPDATE} is checked on its own. */
-    private static final Map<String, java.util.Set<String>> NEXT = Map.of(
-            "CREATE", java.util.Set.of("TABLE", "MATERIALIZED", "VIEW", "INDEX", "USER", "GROUP", "SERVICE", "OR", "UNIQUE", "TEMP",
+    private static final Map<String, Set<String>> NEXT = Map.of(
+            "CREATE", Set.of("TABLE", "MATERIALIZED", "VIEW", "INDEX", "USER", "GROUP", "SERVICE", "OR", "UNIQUE", "TEMP",
                     "TEMPORARY", "SCHEMA", "DATABASE"),
-            "ALTER", java.util.Set.of("TABLE", "MATERIALIZED", "VIEW", "INDEX", "USER", "GROUP", "SERVICE", "SCHEMA", "DATABASE"),
-            "DROP", java.util.Set.of("TABLE", "ALL", "MATERIALIZED", "VIEW", "INDEX", "USER", "GROUP", "SERVICE", "SCHEMA", "DATABASE"),
-            "TRUNCATE", java.util.Set.of("TABLE"),
-            "INSERT", java.util.Set.of("INTO", "ATOMIC", "BATCH"),
-            "DELETE", java.util.Set.of("FROM"));
+            "ALTER", Set.of("TABLE", "MATERIALIZED", "VIEW", "INDEX", "USER", "GROUP", "SERVICE", "SCHEMA", "DATABASE"),
+            "DROP", Set.of("TABLE", "ALL", "MATERIALIZED", "VIEW", "INDEX", "USER", "GROUP", "SERVICE", "SCHEMA", "DATABASE"),
+            "TRUNCATE", Set.of("TABLE"),
+            "INSERT", Set.of("INTO", "ATOMIC", "BATCH"),
+            "DELETE", Set.of("FROM"));
 
     static boolean startsAStatement(String block) {
         String text = block.strip();
@@ -111,7 +114,7 @@ final class SqlCompletion {
             return grammar;
         }
         return words.length <= 2 || SQL_MARK.matcher(text).find()
-                || java.util.Arrays.stream(words).skip(1).anyMatch(w -> CLAUSES.contains(w.toUpperCase(Locale.ROOT)));
+                || Arrays.stream(words).skip(1).anyMatch(w -> CLAUSES.contains(w.toUpperCase(Locale.ROOT)));
     }
 
     /**
@@ -126,13 +129,13 @@ final class SqlCompletion {
                 return null;
             }
             // UPDATE table [alias] SET
-            return isWord(words, 2, java.util.Set.of("SET")) || words.length > 3 && isWord(words, 3, java.util.Set.of("SET"));
+            return isWord(words, 2, Set.of("SET")) || words.length > 3 && isWord(words, 3, Set.of("SET"));
         }
-        java.util.Set<String> next = NEXT.get(keyword);
+        Set<String> next = NEXT.get(keyword);
         return next == null || words.length < 2 ? null : isWord(words, 1, next);
     }
 
-    private static boolean isWord(String[] words, int i, java.util.Set<String> allowed) {
+    private static boolean isWord(String[] words, int i, Set<String> allowed) {
         String w = words[i].toUpperCase(Locale.ROOT);
         return i == words.length - 1 ? allowed.stream().anyMatch(a -> a.startsWith(w)) : allowed.contains(w);
     }

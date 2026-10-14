@@ -1,5 +1,8 @@
 package dev.marregui.comando.core.view;
 
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.state.LowerTab;
+
 /**
  * A change to the window's arrangement that is not application state: which panes show and how the
  * window is split. The UI keeps these values itself and stores them with the window.
@@ -11,8 +14,8 @@ package dev.marregui.comando.core.view;
  * @param tab        a lower tab to select with that focus, or null
  * @param session    the session that asked for the focus, checked again when the focus is applied; empty otherwise
  */
-public record Layout(Toggle sidebar, Toggle sidePane, double lowerShare, dev.marregui.comando.core.model.PanelId focus,
-                     dev.marregui.comando.core.state.LowerTab tab, String session) {
+public record Layout(Toggle sidebar, Toggle sidePane, double lowerShare, PanelId focus,
+                     LowerTab tab, String session) {
 
     public enum Toggle { KEEP, SHOW, HIDE }
 
@@ -22,12 +25,12 @@ public record Layout(Toggle sidebar, Toggle sidePane, double lowerShare, dev.mar
         this(sidebar, sidePane, lowerShare, null, null, "");
     }
 
-    public Layout(Toggle sidebar, Toggle sidePane, double lowerShare, dev.marregui.comando.core.model.PanelId focus) {
+    public Layout(Toggle sidebar, Toggle sidePane, double lowerShare, PanelId focus) {
         this(sidebar, sidePane, lowerShare, focus, null, "");
     }
 
-    public Layout(Toggle sidebar, Toggle sidePane, double lowerShare, dev.marregui.comando.core.model.PanelId focus,
-                  dev.marregui.comando.core.state.LowerTab tab) {
+    public Layout(Toggle sidebar, Toggle sidePane, double lowerShare, PanelId focus,
+                  LowerTab tab) {
         this(sidebar, sidePane, lowerShare, focus, tab, "");
     }
 

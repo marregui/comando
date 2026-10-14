@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.function.Function;
 
 /**
@@ -132,9 +133,9 @@ public final class TerminalTabs {
     }
 
     /** The command of the job the panel's shell runs in front, or empty. */
-    public java.util.Optional<String> runningJob(PanelId panel) {
+    public Optional<String> runningJob(PanelId panel) {
         TerminalWidget t = terminals.get(panel);
-        return t == null ? java.util.Optional.empty() : t.runningJob();
+        return t == null ? Optional.empty() : t.runningJob();
     }
 
     /** How many panels' shells run a program. */

@@ -5,6 +5,7 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.AbstractAction;
+import javax.swing.Action;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -22,8 +23,8 @@ import javax.swing.text.Utilities;
 import javax.swing.text.View;
 import java.awt.BorderLayout;
 import java.awt.FontMetrics;
-import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Graphics;
 import java.awt.Insets;
 import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
@@ -271,7 +272,7 @@ public final class PromptBar extends JPanel {
 
     /** One wrapped row up or down, as the text area's own caret keys move. */
     private void moveRow(String action) {
-        javax.swing.Action a = field.getActionMap().get(action);
+        Action a = field.getActionMap().get(action);
         if (a != null) {
             a.actionPerformed(new ActionEvent(field, ActionEvent.ACTION_PERFORMED, action));
         }

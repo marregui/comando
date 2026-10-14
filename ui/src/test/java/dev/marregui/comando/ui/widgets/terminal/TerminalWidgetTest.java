@@ -4,8 +4,14 @@ import dev.marregui.comando.ui.widget.capability.Capabilities;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -100,7 +106,7 @@ class TerminalWidgetTest {
     @Test
     void aJobInFrontWhoseNameCannotBeReadIsStillAJob() {
         long self = ProcessHandle.current().pid();
-        List<List<String>> calls = new java.util.ArrayList<>();
+        List<List<String>> calls = new ArrayList<>();
         assertThat(TerminalWidget.foregroundJob(self, "/bin/zsh", args -> {
             calls.add(args);
             return calls.size() == 1 ? List.of("77 76 zsh") : List.of();
@@ -200,8 +206,8 @@ class TerminalWidgetTest {
         Pty pty = Pty.start(List.of("/bin/sh", "-i"), dir, 80, 24);
         Thread drain = Thread.ofVirtual().start(() -> {
             try {
-                pty.process().getInputStream().transferTo(java.io.OutputStream.nullOutputStream());
-            } catch (java.io.IOException e) {
+                pty.process().getInputStream().transferTo(OutputStream.nullOutputStream());
+            } catch (IOException e) {
                 // the shell ended
             }
         });
@@ -235,8 +241,8 @@ class TerminalWidgetTest {
     void commandASelectsTheTerminalBufferOnMacOs() {
         var keys = new TerminalWidget.Settings(() -> 13).getSelectAllActionPresentation().getKeyStrokes();
         if (System.getProperty("os.name", "").startsWith("Mac")) {
-            assertThat(keys).containsExactly(javax.swing.KeyStroke.getKeyStroke(java.awt.event.KeyEvent.VK_A,
-                    java.awt.event.InputEvent.META_DOWN_MASK));
+            assertThat(keys).containsExactly(KeyStroke.getKeyStroke(KeyEvent.VK_A,
+                    InputEvent.META_DOWN_MASK));
         } else {
             assertThat(keys).as("Ctrl+A stays the shell's start of line").isEmpty();
         }

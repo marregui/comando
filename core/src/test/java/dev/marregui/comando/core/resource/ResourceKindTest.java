@@ -12,6 +12,7 @@ import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
+import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -67,8 +68,8 @@ class ResourceKindTest {
     void onlyTheModelAcceptsTypedValues() {
         assertThat(SessionKind.INSTANCE.attributes()).filteredOn(a -> a.kind() == Attribute.Kind.CHOICE)
                 .extracting(Attribute::key, Attribute::editable)
-                .containsExactly(org.assertj.core.groups.Tuple.tuple("model", true), org.assertj.core.groups.Tuple.tuple("effort", false),
-                        org.assertj.core.groups.Tuple.tuple("permissionMode", false), org.assertj.core.groups.Tuple.tuple("startMode", false));
+                .containsExactly(Tuple.tuple("model", true), Tuple.tuple("effort", false),
+                        Tuple.tuple("permissionMode", false), Tuple.tuple("startMode", false));
         assertThat(ConnectionKind.INSTANCE.attributes()).filteredOn(a -> a.kind() == Attribute.Kind.CHOICE)
                 .allMatch(a -> !a.editable());
         assertThat(Attribute.of("x", "X", Attribute.Kind.TEXT, false, "").editable()).isTrue();

@@ -6,6 +6,7 @@ import com.formdev.flatlaf.themes.FlatMacDarkLaf;
 
 import javax.swing.UIManager;
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.GraphicsEnvironment;
 import java.util.Set;
@@ -57,7 +58,7 @@ public final class Theme {
         UIManager.put("TabbedPane.showTabSeparators", true);
         UIManager.put("TabbedPane.tabsOverlapBorder", true);
         UIManager.put("Table.showHorizontalLines", true);
-        UIManager.put("Table.intercellSpacing", new java.awt.Dimension(0, 1));
+        UIManager.put("Table.intercellSpacing", new Dimension(0, 1));
         UIManager.put("SplitPane.dividerSize", 5);
         boolean mac = System.getProperty("os.name", "").toLowerCase().contains("mac");
         boolean ok = mac ? FlatMacDarkLaf.setup() : FlatDarkLaf.setup();

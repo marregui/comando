@@ -10,6 +10,7 @@ import jdk.jfr.Timespan;
 
 import javax.swing.SwingUtilities;
 import java.util.function.BiConsumer;
+import java.util.function.LongConsumer;
 
 /**
  * Reports an event dispatch thread that does not answer for {@link #THRESHOLD_MILLIS}: every
@@ -39,7 +40,7 @@ public final class EdtWatchdog implements AutoCloseable {
     private final Thread thread;
     private final BiConsumer<Long, String> report;
     /** Receives the whole blocked time once a stall that was reported has ended. */
-    private final java.util.function.LongConsumer ended;
+    private final LongConsumer ended;
     private volatile Thread edt;
     private volatile long posted;
     private volatile long answered;
@@ -54,7 +55,7 @@ public final class EdtWatchdog implements AutoCloseable {
      * Starts watching; {@code report} receives the blocked time at the threshold and the EDT's stack, and
      * {@code ended} the whole blocked time when that stall ends; both on the watchdog thread.
      */
-    public EdtWatchdog(BiConsumer<Long, String> report, java.util.function.LongConsumer ended) {
+    public EdtWatchdog(BiConsumer<Long, String> report, LongConsumer ended) {
         this.report = report;
         this.ended = ended;
         this.thread = Thread.ofPlatform().daemon(true).name("edt-watchdog").start(this::watch);

@@ -5,6 +5,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.imageio.ImageIO;
 import javax.swing.SwingUtilities;
+import javax.swing.UIManager;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.nio.file.Path;
@@ -37,7 +38,7 @@ public final class TranscriptShot {
         canvas.clearFind();
         BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
-        g.setColor(javax.swing.UIManager.getColor("Panel.background"));
+        g.setColor(UIManager.getColor("Panel.background"));
         g.fillRect(0, 0, width, height);
         g.translate(0, -offset);
         g.setClip(0, offset, width, height);

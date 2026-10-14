@@ -11,15 +11,21 @@ import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -137,21 +143,21 @@ record TestReports(ViewSpec.TreeNode tree, Map<String, String> failures) {
      * The regular files under {@code root} that {@code keep} accepts. A directory that cannot be read is
      * skipped, not fatal: one unreadable folder in a checkout must not hide every report.
      */
-    static List<Path> walk(Path root, int depth, java.util.function.Predicate<Path> keep) {
+    static List<Path> walk(Path root, int depth, Predicate<Path> keep) {
         List<Path> out = new ArrayList<>();
         try {
-            Files.walkFileTree(root, java.util.EnumSet.noneOf(java.nio.file.FileVisitOption.class), depth, new java.nio.file.SimpleFileVisitor<>() {
+            Files.walkFileTree(root, EnumSet.noneOf(FileVisitOption.class), depth, new SimpleFileVisitor<>() {
                 @Override
-                public java.nio.file.FileVisitResult visitFile(Path file, java.nio.file.attribute.BasicFileAttributes attrs) {
+                public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                     if (attrs.isRegularFile() && keep.test(file)) {
                         out.add(file);
                     }
-                    return java.nio.file.FileVisitResult.CONTINUE;
+                    return FileVisitResult.CONTINUE;
                 }
 
                 @Override
-                public java.nio.file.FileVisitResult visitFileFailed(Path file, IOException e) {
-                    return java.nio.file.FileVisitResult.CONTINUE;
+                public FileVisitResult visitFileFailed(Path file, IOException e) {
+                    return FileVisitResult.CONTINUE;
                 }
             });
         } catch (IOException | UncheckedIOException e) {
