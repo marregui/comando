@@ -499,11 +499,11 @@ class ReducerTest {
     }
 
     @Test
-    void closingTheSelectedViewSelectsResults() {
+    void closingTheSelectedViewSelectsTheFirstTabTheSession() {
         apply(new Intent.ShowView("work", "t", new ViewSpec.Markdown("x"), Placement.LOWER));
         apply(new Intent.CloseView(state.views().getFirst().id()));
         assertThat(state.views()).isEmpty();
-        assertThat(state.lowerTab()).isEqualTo(LowerTab.RESULTS);
+        assertThat(state.lowerTab()).isEqualTo(LowerTab.SESSION);
     }
 
     // ---- editor

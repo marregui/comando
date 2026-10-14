@@ -26,9 +26,9 @@ class TerminalWidgetTest {
     void beforeItsShellStartsTheAreaSaysWhereAndHow() {
         TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge2"));
         assertThat(t.isStarted()).isFalse();
-        assertThat(t.emptyText()).isEqualTo("Shell in ~/edge2 — click or press ⌃4 to start");
+        assertThat(t.emptyText()).isEqualTo("Shell in ~/edge2 — click or press ⌃3 to start");
         t.setDirectory(Path.of("/srv/x"));
-        assertThat(t.emptyText()).isEqualTo("Shell in /srv/x — click or press ⌃4 to start");
+        assertThat(t.emptyText()).isEqualTo("Shell in /srv/x — click or press ⌃3 to start");
     }
 
     @Test

@@ -370,13 +370,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
     }
 
-    /** Once a second: elapsed times on the panels and the results, the embedded server's state. */
+    /** Once a second: elapsed times on the panels and the results. */
     private void tick() {
         workspace.tick();
         lower.results().tick();
-        if (deps.server() != null) {
-            status.server(deps.server().name(), deps.server().isRunning(), () -> deps.server().toggle());
-        }
     }
 
     private static Map<String, Status> statuses(List<Map.Entry<String, Status>> entries) {
@@ -700,18 +697,19 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             cmd("panel." + i, "Go to panel " + i, null, key(KeyEvent.VK_0 + i, CMD), "", () -> workspace.select(index));
         }
         // view
-        cmd("view.results", "Show results", "table", key(KeyEvent.VK_1, CTRL), "View",
-                () -> showLowerAndFocus(LowerTab.RESULTS, lower.results().grid().table()));
-        cmd("view.session", "Show session transcript", "session", key(KeyEvent.VK_2, CTRL), "View",
+        // ⌃1–⌃4 follow the lower tabs' order: Session, Approvals, Terminal, Results
+        cmd("view.session", "Show session transcript", "session", key(KeyEvent.VK_1, CTRL), "View",
                 () -> showLowerAndFocus(LowerTab.SESSION, lower.transcript().canvas()));
-        cmd("view.approvals", "Show approvals", "check", key(KeyEvent.VK_3, CTRL), "View",
+        cmd("view.approvals", "Show approvals", "check", key(KeyEvent.VK_2, CTRL), "View",
                 () -> showLowerAndFocus(LowerTab.APPROVALS, lower.inbox().component(), lower.inbox()::focusFirst));
-        cmd("view.terminal", "Show the panel's terminal", "terminal", key(KeyEvent.VK_4, CTRL), "View", () -> {
+        cmd("view.terminal", "Show the panel's terminal", "terminal", key(KeyEvent.VK_3, CTRL), "View", () -> {
             deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.TERMINAL));
             Edt.later(() -> lower.terminals().focusShown(deps.state().get()));
         });
+        cmd("view.results", "Show results", "table", key(KeyEvent.VK_4, CTRL), "View",
+                () -> showLowerAndFocus(LowerTab.RESULTS, lower.results().grid().table()));
         // ⌘⌥1–4 as well: macOS Mission Control takes ⌃1–⌃4 when its desktop shortcuts are on
-        String[] lowerTabs = {"view.results", "view.session", "view.approvals", "view.terminal"};
+        String[] lowerTabs = {"view.session", "view.approvals", "view.terminal", "view.results"};
         for (int i = 0; i < lowerTabs.length; i++) {
             String target = lowerTabs[i];
             cmd(target + ".alt", actions.get(target).label(), null, key(KeyEvent.VK_1 + i, CMD | ALT), "", () -> actions.run(target));

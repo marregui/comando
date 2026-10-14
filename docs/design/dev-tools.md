@@ -17,7 +17,7 @@ The tools cover the work around a Claude session that otherwise needs another wi
 
 | Key | Action |
 |---|---|
-| ⌃4 | shows the panel's terminal |
+| ⌃3 | shows the panel's terminal |
 | ⌃⏎ in the editor | types the selection, or the line under the caret, into the panel's terminal and presses Enter |
 
 The terminal is for what Claude does not do: interactive logins, git by hand, ssh.

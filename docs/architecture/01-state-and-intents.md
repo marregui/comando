@@ -13,7 +13,7 @@
 | `runs` | at most one SQL run per panel: request id, SQL, status, row count, timings, error, start time, a note on the other statements of a multi-statement block, and whether it runs in the background (a live plot's refresh, which posts no "Query finished" and no ERROR) |
 | `approvals` | permission prompts waiting for an answer, from every session |
 | `views` | views placed by Claude or the user: id, title, spec, placement (lower or side), pinned, owning session, version |
-| `lowerTab` | the selected lower tab: Results, Session, Approvals, Terminal, or a view by id |
+| `lowerTab` | the selected lower tab: Session (the initial one), Approvals, Terminal, Results, or a view by id |
 | `notice` | the standing status-bar message: level, text, time, and its subject (a panel, connection, session or approval) |
 | `notices` | the last 50 notices, oldest first, for the status bar's history |
 | `nextId` | the next request, view or run id |

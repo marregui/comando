@@ -351,7 +351,7 @@ final class Items {
     // ---- tool call
 
     static final class ToolItem extends Item {
-        static final String WAITING = "waiting for your approval · ⌃3";
+        static final String WAITING = "waiting for your approval · ⌃2";
         private static final int IN_X = 8;
         private static final int IN_Y = 5;
         private static final int CHILD_INDENT = 12;

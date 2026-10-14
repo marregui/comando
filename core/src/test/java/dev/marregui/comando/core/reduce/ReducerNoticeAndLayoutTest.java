@@ -234,7 +234,7 @@ class ReducerNoticeAndLayoutTest {
         apply(new Intent.SaveSession("", SessionSpec.fresh("other", "/tmp")));
         apply(new Intent.ShowView("other", "plot", new ViewSpec.Markdown("x"), Placement.LOWER));
 
-        assertThat(state.lowerTab()).isEqualTo(LowerTab.RESULTS);
+        assertThat(state.lowerTab()).as("the tab it had: the first, Session").isEqualTo(LowerTab.SESSION);
         assertThat(state.views()).hasSize(1);
         assertThat(state.notice().text()).isEqualTo("other opened plot");
 

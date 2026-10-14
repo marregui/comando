@@ -301,14 +301,14 @@ class TranscriptReadingTest {
         assertThat(canvas.cardStatus("t1")).isEqualTo("running");
 
         canvas.setWaiting(List.of(approval("Bash", "t1")));
-        assertThat(canvas.cardStatus("t1")).isEqualTo("waiting for your approval · ⌃3");
+        assertThat(canvas.cardStatus("t1")).isEqualTo("waiting for your approval · ⌃2");
         assertThat(canvas.cardStatus("q2")).isEqualTo("running");
 
         // a statement card names no tool call: the last running call of that tool waits
         canvas.setWaiting(List.of(approval("db_run_sql", "")));
         assertThat(canvas.cardStatus("t1")).isEqualTo("running");
         assertThat(canvas.cardStatus("q1")).isEqualTo("running");
-        assertThat(canvas.cardStatus("q2")).isEqualTo("waiting for your approval · ⌃3");
+        assertThat(canvas.cardStatus("q2")).isEqualTo("waiting for your approval · ⌃2");
 
         canvas.setWaiting(List.of());
         assertThat(canvas.cardStatus("q2")).isEqualTo("running");
@@ -319,7 +319,7 @@ class TranscriptReadingTest {
         canvas.setWaiting(List.of(approval("Bash", "late")));
         Block.ToolCall late = running("late", "Bash", "{\"command\":\"ls\"}");
         int at = add(late);
-        assertThat(canvas.cardStatus("late")).isEqualTo("waiting for your approval · ⌃3");
+        assertThat(canvas.cardStatus("late")).isEqualTo("waiting for your approval · ⌃2");
         canvas.update(at, late.withResult("a\nb", false));
         assertThat(canvas.cardStatus("late")).as("a finished call waits for nothing").isEmpty();
     }

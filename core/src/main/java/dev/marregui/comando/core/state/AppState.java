@@ -60,7 +60,7 @@ public record AppState(
 
     public static AppState initial(List<PanelState> panels, List<ConnectionState> connections, List<SessionState> sessions) {
         return new AppState(panels, panels.getFirst().id(), connections, sessions, List.of(), List.of(), List.of(),
-                LowerTab.RESULTS, Notice.NONE, List.of(), 1L);
+                LowerTab.SESSION, Notice.NONE, List.of(), 1L);
     }
 
     // ---- lookups

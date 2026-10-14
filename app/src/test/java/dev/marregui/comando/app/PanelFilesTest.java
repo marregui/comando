@@ -255,6 +255,58 @@ class PanelFilesTest {
     }
 
     @Test
+    void aDocumentDeletedOutsideIsReportedForItsPanelToCloseAndNotWrittenAgain() throws Exception {
+        Path day = Files.createDirectories(home.resolve("SCRATCHPAD").resolve("2026-10-14"));
+        Path doc = Files.writeString(day.resolve("ALPHA.md"), "# day");
+        PanelId id = new PanelId("x");
+        PanelId own = new PanelId("o");
+        List<String> notices = new CopyOnWriteArrayList<>();
+        List<PanelTexts.Deleted> deleted = new CopyOnWriteArrayList<>();
+        try (Store store = new Store(home)) {
+            store.onNotice(notices::add);
+            store.onDeleted(deleted::add);
+            store.load();
+            assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEmpty();
+            store.savePanels(List.of(new PanelState(id, "ALPHA", "", ""), new PanelState(own, "spec", "", "")));
+            store.changed(own, "mine");
+            store.saveNow().get(5, TimeUnit.SECONDS);
+
+            Files.delete(doc);
+            Files.delete(day);
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            assertThat(deleted).containsExactly(new PanelTexts.Deleted(id, "ALPHA.md"));
+            assertThat(notices).as("no warning: the panel closes instead").isEmpty();
+
+            store.forget(id);
+            store.savePanels(List.of(new PanelState(own, "spec", "", "")));
+            store.saveNow().get(5, TimeUnit.SECONDS);
+        }
+        assertThat(day).as("closing the document's panel does not bring its folder back").doesNotExist();
+    }
+
+    @Test
+    void aDocumentDeletedWhileComandoWasClosedLeavesNoPanelUnlessItHasUnsavedText() throws Exception {
+        Path day = Files.createDirectories(home.resolve("SCRATCHPAD").resolve("2026-10-14"));
+        Path gone = day.resolve("READ-01-X.md");
+        Path alsoGone = day.resolve("ALPHA.md");
+        Files.writeString(home.resolve("connections.json"), "[]");
+        Files.writeString(home.resolve("sessions.json"), "[]");
+        Files.writeString(home.resolve("panels.json"), """
+                [{"id":"g","title":"READ-01-X","connection":"","session":"","file":"%s"},
+                 {"id":"u","title":"ALPHA","connection":"","session":"","file":"%s","content":"typed, never saved"},
+                 {"id":"p","title":"spec","connection":"","session":"","file":"spec.md"}]""".formatted(gone, alsoGone));
+        List<String> notices = new CopyOnWriteArrayList<>();
+        try (Store store = new Store(home)) {
+            store.onNotice(notices::add);
+            Store.Loaded loaded = store.load();
+            assertThat(loaded.panels()).extracting(p -> p.id().value()).containsExactly("u", "p");
+            assertThat(store.load(new PanelId("u"))).isEqualTo("typed, never saved");
+        }
+        assertThat(notices).containsExactly("READ-01-X.md was deleted while comando was closed; its panel is gone");
+    }
+
+    @Test
     void aNewPanelClosedBeforeItsFirstSaveStillReachesAFile() throws Exception {
         PanelId kept = new PanelId("k");
         PanelId quick = new PanelId("q");

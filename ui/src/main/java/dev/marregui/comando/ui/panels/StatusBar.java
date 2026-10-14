@@ -43,7 +43,7 @@ import java.util.regex.Pattern;
 
 /**
  * The standing notice on the left, which opens the recent notices when clicked; the plan's usage limits, the focused
- * panel's session, connection, running work and the embedded server on the right.
+ * panel's session, connection and running work on the right.
  */
 public final class StatusBar {
 
@@ -54,13 +54,11 @@ public final class StatusBar {
     private final JLabel session = new JLabel();
     private final JLabel connection = new JLabel();
     private final JLabel work = new JLabel();
-    private final JLabel server = new JLabel();
     private final JLabel usage = new JLabel();
     /** The last read that had windows; a failed read after it keeps showing it, marked as old. */
     private PlanUsage lastUsage;
     private final IntentSink intents;
     private List<Notice> history = List.of();
-    private Runnable serverClick = () -> { };
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
 
@@ -73,17 +71,8 @@ public final class StatusBar {
         right.add(session);
         right.add(connection);
         right.add(work);
-        right.add(server);
-        server.setVisible(false);
         usage.setVisible(false);
         usage.getAccessibleContext().setAccessibleName("Plan usage");
-        server.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        server.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                serverClick.run();
-            }
-        });
         notice.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         notice.getAccessibleContext().setAccessibleName("Status");
         notice.addMouseListener(new MouseAdapter() {
@@ -101,15 +90,6 @@ public final class StatusBar {
 
     public JComponent component() {
         return root;
-    }
-
-    /** Shows the embedded server's name and state; a click on it runs {@code click}, which starts or stops it. */
-    public void server(String name, boolean running, Runnable click) {
-        server.setVisible(true);
-        server.setText(name + " " + (running ? "●" : "○"));
-        server.setForeground(running ? Theme.OK : Theme.MUTED);
-        server.setToolTipText(Plain.text(name + (running ? " is running; click to stop it" : " is stopped; click to start it")));
-        serverClick = click;
     }
 
     /** At or above this much of a window used, the usage shows as a warning. */

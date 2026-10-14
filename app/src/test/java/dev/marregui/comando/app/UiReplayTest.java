@@ -117,7 +117,7 @@ class UiReplayTest {
 
         JTabbedPane lower = tabs(frame, "lower");
         List<String> lowerViews = s.views().stream().filter(v -> v.placement() == Placement.LOWER).map(ViewState::title).toList();
-        assertThat(titles(lower)).containsSubsequence("Results", "Session").containsAll(lowerViews);
+        assertThat(titles(lower)).containsSubsequence("Session", "Approvals", "Terminal", "Results").containsAll(lowerViews);
         String approvals = s.approvals().isEmpty() ? "Approvals" : "Approvals (" + s.approvals().size() + ")";
         assertThat(titles(lower)).contains(approvals);
         String selected = lower.getTitleAt(lower.getSelectedIndex());

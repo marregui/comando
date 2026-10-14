@@ -33,7 +33,7 @@ The outcome of Test, Connect, Start and Stop shows on the line under the buttons
 
 An editor panel is a tab in the workspace with an id, a title, its text, and two bindings: one connection and one session, each by name; either may be empty. Several panels may bind one session or one connection.
 
-- The panel header shows the connection and the session as chips with their status dot, the session's git branch and whether a turn is running, with a button each to connect or disconnect, start or stop. A production connection frames the panel in red.
+- The panel header shows the session, then the connection, as chips with their status dot, the session's git branch and whether a turn is running, with a button each to start or stop, connect or disconnect. The status bar's right side keeps the same order: the session, then the connection. A production connection frames the panel in red.
 - Running SQL in a panel uses its connection, opening it when closed. Sending a prompt uses its session, starting it when stopped.
 - Renaming a connection or a session renames every binding; a running session must be stopped first, and the dialog refuses the rename until it is. Removing one closes it first and unbinds every panel.
 - The lower panel follows the focused panel: its last SQL run, its session's transcript, its terminal. The Approvals tab lists every session's requests. Results and Session get a dot when something arrived that the user has not seen; a panel whose query finished while another panel was in front gets a "● " before its title and a notice.

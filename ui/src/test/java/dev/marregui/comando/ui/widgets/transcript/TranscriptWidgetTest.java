@@ -90,12 +90,12 @@ class TranscriptWidgetTest {
 
         List<Approval> waiting = List.of(new Approval(7, "s", ApprovalKind.TOOL, "Bash", "{}", "rm -rf build", 0L, "tu1"));
         widget.setWaiting(waiting);
-        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("waiting for your approval · ⌃3");
+        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("waiting for your approval · ⌃2");
 
         // another session's transcript, then back: the canvas is rebuilt and the mark comes back with it
         widget.render(new TranscriptView("other", new Transcript()));
         widget.render(new TranscriptView("s", t));
-        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("waiting for your approval · ⌃3");
+        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("waiting for your approval · ⌃2");
 
         widget.setWaiting(List.of());
         assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("running");

@@ -24,6 +24,12 @@ class WorkspaceTest {
     private static final class Texts implements PanelTexts {
         final AtomicInteger changes = new AtomicInteger();
         Consumer<Outside> listener;
+        Consumer<Deleted> deletions;
+
+        @Override
+        public void onDeleted(Consumer<Deleted> listener) {
+            this.deletions = listener;
+        }
 
         @Override
         public String load(PanelId panel) {
@@ -64,5 +70,29 @@ class WorkspaceTest {
         assertThat(texts.changes).as("a reload is not an edit to save").hasValue(0);
         assertThat(intents).filteredOn(Intent.Notify.class::isInstance).extracting(i -> ((Intent.Notify) i).text())
                 .containsExactly("Reloaded spec.md: it changed outside comando");
+    }
+
+    @Test
+    void aDeletedDocumentClosesItsPanelWithNothingToReopen() throws Exception {
+        PanelId doc = new PanelId("d");
+        Texts texts = new Texts();
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        PanelState spec = new PanelState(P, "spec", "", "");
+        Workspace[] w = new Workspace[1];
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(intents::add, texts, new SchemaRegistry());
+            w[0].render(AppState.initial(List.of(spec, new PanelState(doc, "ALPHA", "", "")), List.of(), List.of()));
+        });
+        assertThat(texts.deletions).as("the workspace listens for deleted documents").isNotNull();
+
+        SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(doc, "ALPHA.md")));
+        assertThat(intents).containsExactly(new Intent.ClosePanel(doc));
+        SwingUtilities.invokeAndWait(() -> w[0].render(AppState.initial(List.of(spec), List.of(), List.of())));
+        assertThat(w[0].hasClosed()).as("⌘⇧T has nothing to reopen: the file is gone").isFalse();
+        assertThat(intents).filteredOn(Intent.Notify.class::isInstance).extracting(i -> ((Intent.Notify) i).text())
+                .containsExactly("Closed ALPHA: ALPHA.md was deleted outside comando");
+
+        SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(doc, "ALPHA.md")));
+        assertThat(intents).as("a panel already gone is not closed twice").filteredOn(Intent.ClosePanel.class::isInstance).hasSize(1);
     }
 }

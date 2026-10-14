@@ -45,10 +45,10 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 |---|---|
 | **Sidebar**, left | three tabs: **Sessions** (Claude Code sessions; each row's controls connect or disconnect it, change its model or effort, and open its editor), **Connections** (databases) and **Scratchpad** (your `~/.claude/SCRATCHPAD`; one click on a file opens it in a panel: Markdown shows rendered; the header's **Edit** button or **⌘⇧M** switches to the text, and **Preview** switches back; source files show in their language's colours). Sessions and Connections each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one. |
-| **Panel header** | two chips: the panel's **connection** and its **session**, each with a status dot (○ closed, ● open) and a button to connect or start it. **Run** and **Stop** on the right. |
+| **Panel header** | two chips: the panel's **session** and its **connection**, each with a status dot (○ closed, ● open) and a button to start or connect it. **Run** and **Stop** on the right. |
 | **Editor** | where you write SQL and prompts, mixed in one text. |
-| **Lower tabs** | **Results** (SQL output), **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell). Plots and kept results open more tabs here. |
-| **Status bar**, bottom | the current message on the left (click it for the recent ones); your plan's usage (session, week, Fable; hover for the reset times; read every 5 minutes), the panel's session, connection, running work and the embedded QuestDB on the right. |
+| **Lower tabs** | **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell), **Results** (SQL output). Plots and kept results open more tabs here. |
+| **Status bar**, bottom | the current message on the left (click it for the recent ones); your plan's usage (session, week, Fable; hover for the reset times; read every 5 minutes), the panel's session, connection and running work on the right. |
 
 One idea runs through the whole tool: **a panel is bound to at most one connection and one session**. SQL you run in the panel goes to its connection; anything else goes to its session.
 
@@ -59,7 +59,7 @@ The command palette lists every command that can run now, with its key. Press **
 comando can run a QuestDB server for you, so you need nothing else installed.
 
 1. Press **⌘⇧P**, type `embedded`, press **⏎** on "Start the embedded QuestDB" (also in the **Connections** menu).
-   *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few seconds, and `QuestDB ●` at its right end; clicking that stops or starts the server. The server keeps its data in `~/.comando/questdb` and listens on this machine only.
+   *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few seconds; "Stop the embedded QuestDB", in the same places, stops it. The server keeps its data in `~/.comando/questdb` and listens on this machine only.
 2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Press **⌘⇧O** to open **Connections** and click **Add**. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
    *You should see* `tutorial ○` in the panel header and `○ tutorial` in the sidebar.
 3. Click the plug button next to `tutorial` in the panel header.
@@ -160,7 +160,7 @@ The session can read your database and draw in your window through tools comando
 
 1. At the end of the editor, after an empty line, type this block and press **⌘⇧⏎**:
    `Use db_run_sql to insert one row into trades: sym 'TEST', price 1.0, ts now().`
-   *You should see* "1 waiting for approval" in the status bar, a count on the **Approvals** tab, and the tool's card in the Session tab reading "waiting for your approval · ⌃3".
+   *You should see* "1 waiting for approval" in the status bar, a count on the **Approvals** tab, and the tool's card in the Session tab reading "waiting for your approval · ⌃2".
 2. Open **Approvals**. The card shows the connection and the exact statement.
    - **Run** (or **⏎**) executes it.
    - **Deny** (or **D**) refuses it. Type a reason in the note field first, and Claude receives it.
@@ -178,7 +178,7 @@ Other permission requests, such as a shell command or a file edit, appear as the
 
 ## 7. Terminal, panels, quitting
 
-1. Press **⌃4** (or **⌘⌥4**, if Mission Control takes ⌃4). The **Terminal** tab starts a login shell in the session's working directory and gives it the keyboard. Type `ls` and press **⏎**.
+1. Press **⌃3** (or **⌘⌥3**, if Mission Control takes ⌃3). The **Terminal** tab starts a login shell in the session's working directory and gives it the keyboard. Type `ls` and press **⏎**.
 2. Back in the editor (**⌘E**), at the end, after an empty line, type `date` and press **⌃⏎**. The line under the caret is typed into the terminal and runs there; a shell that is still starting gets it once it is ready.
 3. Press **⌘T** for a second panel. It starts with the same connection and session as the panel you were in; change either from the chips in its header, or by double-clicking a name in the sidebar. **⌘1**…**⌘9** jump between panels.
 4. Press **⌘W** to close the new panel, then **⌘⇧T**: it comes back with its text and bindings. comando asks first only when the panel's shell is running a program.
@@ -207,7 +207,7 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌘⇧R | keep the result in a tab |
 | ⌘⇧I | attach the result (or selected rows, or the error) to the editor |
 | ⌘⇧E | explore the schema |
-| ⌃1 ⌃2 ⌃3 ⌃4 (or ⌘⌥1…4) | Results, Session, Approvals, Terminal, with the keyboard |
+| ⌃1 ⌃2 ⌃3 ⌃4 (or ⌘⌥1…4) | Session, Approvals, Terminal, Results, with the keyboard |
 | ⌃⇥ / ⌃⇧⇥ | next / previous lower tab |
 | ⌘T / ⌘W / ⌘⇧T | new panel / close the panel, or the view that has the keyboard / reopen the last closed panel |
 | ⌘O | open a file in a panel |

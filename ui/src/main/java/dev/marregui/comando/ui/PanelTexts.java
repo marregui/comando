@@ -63,4 +63,15 @@ public interface PanelTexts {
     /** Where outside changes to open panels' files are reported, from the store's thread. */
     default void onOutsideChange(Consumer<Outside> listener) {
     }
+
+    /** A document's file, {@code file} by name, was deleted outside comando while its panel had no unsaved edits. */
+    record Deleted(PanelId panel, String file) {
+    }
+
+    /**
+     * Where deleted documents are reported, from the store's thread: the panel shows a file that is gone. A panel's
+     * own file deleted outside is not reported here; its panel writes it again on the next save.
+     */
+    default void onDeleted(Consumer<Deleted> listener) {
+    }
 }

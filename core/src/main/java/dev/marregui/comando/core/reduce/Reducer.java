@@ -857,7 +857,7 @@ public final class Reducer {
         }
         List<Approval> approvals = new ArrayList<>(s.approvals());
         approvals.add(a);
-        AppState next = notice(s.withApprovals(approvals), Notice.Level.INFO, a.session() + " asks: " + a.summary() + " (⌃3)",
+        AppState next = notice(s.withApprovals(approvals), Notice.Level.INFO, a.session() + " asks: " + a.summary() + " (⌃2)",
                 Notice.approval(a.id()));
         return new Transition(next, List.of(new Effect.DesktopNotify(a.session() + " needs approval", a.summary())));
     }
@@ -953,7 +953,7 @@ public final class Reducer {
         }
         AppState next = s.withViews(s.views().stream().filter(v -> v.id() != id).toList());
         if (s.lowerTab().kind() == LowerTab.Kind.VIEW && s.lowerTab().viewId() == id) {
-            next = next.withLowerTab(LowerTab.RESULTS);
+            next = next.withLowerTab(LowerTab.SESSION); // the first tab
         }
         List<Effect> effects = new ArrayList<>();
         if (view.get().spec() instanceof ViewSpec.Console c) {

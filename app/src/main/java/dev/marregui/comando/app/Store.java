@@ -11,6 +11,7 @@ import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.PanelTexts.Outside;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -98,6 +99,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     };
     private volatile Consumer<Outside> outsideChanges = change -> {
     };
+    private volatile Consumer<Deleted> deletions = deleted -> {
+    };
     private final AtomicBoolean panelsPending = new AtomicBoolean();
     private volatile List<PanelState> panelMeta = List.of();
     private volatile boolean closed;
@@ -147,13 +150,23 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         secretNames = new HashSet<>(c.stream().map(ConnectionSpec::name).toList());
         List<SessionSpec> s = orEmpty(sessions.read());
         List<PanelState> p = new ArrayList<>();
+        List<String> gone = new ArrayList<>();
         for (StoredPanel sp : orEmpty(panels.read())) {
             if (sp.id() == null || sp.id().isBlank()) {
+                continue;
+            }
+            if (documentGone(sp)) {
+                gone.add(Path.of(sp.file()).getFileName().toString());
                 continue;
             }
             String title = nz(sp.title(), "panel");
             p.add(new PanelState(new PanelId(sp.id()), title, nz(sp.connection(), ""), nz(sp.session(), "")));
             texts.put(sp.id(), textOf(sp, title));
+        }
+        if (!gone.isEmpty()) {
+            LOG.log(System.Logger.Level.INFO, "documents deleted while comando was closed, their panels dropped " + gone);
+            notices.accept(String.join(", ", gone) + (gone.size() == 1 ? " was" : " were")
+                    + " deleted while comando was closed; " + (gone.size() == 1 ? "its panel is" : "their panels are") + " gone");
         }
         p = validBindings(p, c, s);
         if (p.isEmpty()) {
@@ -191,6 +204,15 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             return sp.content();
         }
         return fromFile;
+    }
+
+    /** A document's file deleted while comando was closed, with no unsaved text kept for it: nothing to show. */
+    private static boolean documentGone(StoredPanel sp) {
+        if (sp.content() != null || sp.file() == null || sp.file().isBlank()) {
+            return false;
+        }
+        Path f = Path.of(sp.file());
+        return f.isAbsolute() && !Files.exists(f);
     }
 
     /** Drops bindings to names the files no longer have. */
@@ -357,6 +379,11 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         outsideChanges = listener;
     }
 
+    @Override
+    public void onDeleted(Consumer<Deleted> listener) {
+        deletions = listener;
+    }
+
     /** Checks the open panels' files every second, on the writer thread, so a check never races a write. */
     private void pollFiles() {
         try {
@@ -373,8 +400,9 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     /**
      * Reports each open panel's file written outside comando since comando last wrote, read or took it. A panel
-     * with unsaved edits is skipped: its save keeps the outside version aside. A file deleted outside is reported
-     * once and written again on the panel's next save.
+     * with unsaved edits is skipped: its save keeps the outside version aside, and writes a deleted file again. A
+     * panel's own file deleted outside is reported once and written again on the panel's next save; a document's is
+     * reported for its panel to close.
      */
     private void checkFiles() {
         if (closed) {
@@ -388,7 +416,11 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             try {
                 String name = files.file(id).map(f -> f.getFileName().toString()).orElse("");
                 if (files.deleted(id)) {
-                    notices.accept(name + " was deleted outside comando; the panel keeps its text and writes the file again on the next edit or ⌘S");
+                    if (files.document(id)) {
+                        deletions.accept(new Deleted(p.id(), name));
+                    } else {
+                        notices.accept(name + " was deleted outside comando; the panel keeps its text and writes the file again on the next edit or ⌘S");
+                    }
                     continue;
                 }
                 files.outside(id).ifPresent(o -> outsideChanges.accept(new Outside(p.id(), name, o.text(), () -> take(id, o))));

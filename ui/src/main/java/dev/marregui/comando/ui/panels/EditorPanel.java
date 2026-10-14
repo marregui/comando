@@ -37,7 +37,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * One editor panel: a header with its connection and session, and the command editor. A panel's own text is SQL and
+ * One editor panel: a header with its session and connection, and the command editor. A panel's own text is SQL and
  * prompts; a panel opened on a file, a scratchpad document, is coloured as the file's language, and a Markdown one
  * opens rendered. Any Markdown panel switches between the editor and the rendered text with its header button, which
  * names the other view: Preview while editing, Edit while previewing. A
@@ -76,11 +76,12 @@ public final class EditorPanel extends JPanel {
         JPanel header = new JPanel(new BorderLayout());
         header.setBorder(BorderFactory.createEmptyBorder(4, Theme.GAP, 4, Theme.GAP));
         JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
-        left.add(connection);
-        left.add(connectionToggle);
-        left.add(Box.createHorizontalStrut(Theme.PAD));
+        // the session first, as a panel is mostly for it; the database second
         left.add(session);
         left.add(sessionToggle);
+        left.add(Box.createHorizontalStrut(Theme.PAD));
+        left.add(connection);
+        left.add(connectionToggle);
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
         run.setToolTipText("Run the selection or the block under the caret (⌘⏎); ⌘⇧⏎ sends to Claude, ⌥⏎ runs as SQL");
         stop.setToolTipText("Stop the running SQL or interrupt the session (⌘.)");

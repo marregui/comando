@@ -26,16 +26,19 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * The lower panel: Results, Session (the focused panel's transcript), Approvals (every session), Terminal
- * (the focused panel's shell), then one tab per view placed below. The selected tab follows the state, and selecting a tab updates the state.
+ * The lower panel: Session (the focused panel's transcript), Approvals (every session), Terminal (the focused
+ * panel's shell), Results, then one tab per view placed below. The selected tab follows the state, and selecting a tab updates the state.
  * Results and Session carry a dot when something new arrived while another tab was in front.
  */
 public final class LowerPanel {
 
-    static final int RESULTS = 0;
-    static final int SESSION = 1;
-    static final int APPROVALS = 2;
-    static final int TERMINAL = 3;
+    // the session's tabs first; the database's results last
+    static final int SESSION = 0;
+    static final int APPROVALS = 1;
+    static final int TERMINAL = 2;
+    static final int RESULTS = 3;
+    /** The fixed tabs; placed views follow them. */
+    static final int FIXED_TABS = 4;
 
     private final WidgetContext context;
     private final TranscriptRegistry transcripts;
@@ -58,13 +61,13 @@ public final class LowerPanel {
         this.results = new ResultsView(results);
         this.transcript = new TranscriptWidget(context);
         this.inbox = new ApprovalInbox(context);
-        tabs.addTab("Results", Icons.get("table"), this.results.component());
         tabs.addTab("Session", Icons.get("session"), transcript.component());
         tabs.addTab("Approvals", Icons.get("check"), inbox.component());
         tabs.addTab("Terminal", Icons.get("terminal"), terminals.component());
+        tabs.addTab("Results", Icons.get("table"), this.results.component());
         tabs.putClientProperty("JTabbedPane.tabType", "underlined");
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
-        views = new ViewTabs(tabs, 4, Placement.LOWER, registry, context);
+        views = new ViewTabs(tabs, FIXED_TABS, Placement.LOWER, registry, context);
         tabs.addChangeListener(e -> {
             if (rendering) {
                 return;
@@ -114,12 +117,12 @@ public final class LowerPanel {
     /** The placed view in front, or -1 when a fixed tab (Results, Session, Approvals, Terminal) is in front. */
     public long selectedView() {
         int i = tabs.getSelectedIndex();
-        return i < TERMINAL + 1 ? -1 : views.viewAt(i);
+        return i < FIXED_TABS ? -1 : views.viewAt(i);
     }
 
     /** The placed view whose tab holds {@code c}, or -1. */
     public long viewHolding(Component c) {
-        for (int i = TERMINAL + 1; i < tabs.getTabCount(); i++) {
+        for (int i = FIXED_TABS; i < tabs.getTabCount(); i++) {
             if (SwingUtilities.isDescendingFrom(c, tabs.getComponentAt(i))) {
                 return views.viewAt(i);
             }

@@ -224,7 +224,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
     }
 
     private void showDirectory() {
-        empty.setText("Shell in " + Labels.shortPath(directory.toString()) + " — click or press ⌃4 to start");
+        empty.setText("Shell in " + Labels.shortPath(directory.toString()) + " — click or press ⌃3 to start");
         if (exitedBar.isVisible() && isStarted()) {
             restartButton.setText(restartText());
         }
