@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.kit.action;
 
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rtextarea.RTextArea;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.JComponent;
@@ -16,7 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class KeyPriorityTest {
 
-    private static final int CMD = InputEvent.META_DOWN_MASK;
+    /** The shortcut modifier the editor binds its keys with: ⌘ on macOS, Ctrl elsewhere, as comando's own keys. */
+    private static final int CMD = RTextArea.getDefaultModifier();
     private static final KeyStroke RUN = KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, CMD);
 
     private final RSyntaxTextArea editor = new RSyntaxTextArea();
