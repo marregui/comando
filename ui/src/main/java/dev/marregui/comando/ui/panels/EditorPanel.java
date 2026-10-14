@@ -248,8 +248,9 @@ public final class EditorPanel extends JPanel {
             session.setToolTipText(Labels.shortPath(ss.spec().workDir()) + " · " + ss.status()
                     + (ss.error().isEmpty() ? "" : " · " + ss.error()));
             sessionToggle.setVisible(true);
-            sessionToggle.setIcon(Icons.get(ss.status().isUsable() ? "stop" : "play"));
-            sessionToggle.setToolTipText(ss.status().isUsable() ? "Stop the session" : "Start the session");
+            // the plug, as on the session's row in the sidebar and in Panel ▸ Session: a ▶ here would read as Run
+            sessionToggle.setIcon(Icons.get(ss.status().isUsable() ? "unplug" : "plug"));
+            sessionToggle.setToolTipText(ss.status().isUsable() ? "Disconnect: stop the session" : "Connect: start the session");
         } else {
             session.setIcon(Icons.get("claude"));
             session.setText("no session ▾");

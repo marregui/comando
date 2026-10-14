@@ -43,6 +43,7 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 
 | Part | What it is |
 |---|---|
+| **Menu bar** | **File** (panels and files), **Edit**, **Panel** (run, then the focused panel's **Session**, **Connection**, **Result** and **Tools** submenus), **View** (the window: sidebar, lower panel, zoom), **Help**. |
 | **Sidebar**, left | three tabs: **Sessions** (Claude Code sessions; each row's controls connect or disconnect it, change its model or effort, and open its editor), **Connections** (databases) and **Scratchpad** (your `~/.claude/SCRATCHPAD`; one click on a file opens it in a panel: Markdown shows rendered, Mermaid diagrams drawn as pictures; the header's **Edit** button or **⌘⇧M** switches to the text, and **Preview** switches back; source files show in their language's colours). Sessions and Connections each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one. |
 | **Panel header** | two chips: the panel's **session** and its **connection**, each with a status dot (○ closed, ● open) and a button to start or connect it. **Run** and **Stop** on the right. |
@@ -58,8 +59,8 @@ The command palette lists every command that can run now, with its key. Press **
 
 comando can run a QuestDB server for you, so you need nothing else installed.
 
-1. Press **⌘⇧P**, type `embedded`, press **⏎** on "Start the embedded QuestDB" (also in the **Connections** menu).
-   *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few seconds; "Stop the embedded QuestDB", in the same places, stops it. The server keeps its data in `~/.comando/questdb` and listens on this machine only.
+1. Press **⌘⇧P**, type `embedded`, press **⏎** on **Start** (Panel ▸ Connection ▸ Embedded QuestDB).
+   *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few seconds; **Stop**, in the same places, stops it. The server keeps its data in `~/.comando/questdb` and listens on this machine only.
 2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Press **⌘⇧O** to open **Connections** and click **Add**. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
    *You should see* `tutorial ○` in the panel header and `○ tutorial` in the sidebar.
 3. Click the plug button next to `tutorial` in the panel header.

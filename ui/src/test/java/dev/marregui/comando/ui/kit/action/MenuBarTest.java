@@ -1,0 +1,82 @@
+package dev.marregui.comando.ui.kit.action;
+
+import org.junit.jupiter.api.Test;
+
+import javax.swing.JComponent;
+import javax.swing.JMenu;
+import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.KeyStroke;
+import java.awt.Component;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+import java.util.ArrayList;
+import java.util.List;
+
+import static dev.marregui.comando.ui.kit.action.MenuEntry.SEPARATOR;
+import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
+class MenuBarTest {
+
+    private static final KeyStroke RUN = KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.META_DOWN_MASK);
+    private static final KeyStroke GO = KeyStroke.getKeyStroke(KeyEvent.VK_1, InputEvent.META_DOWN_MASK);
+
+    private static ActionRegistry registry() {
+        ActionRegistry r = new ActionRegistry();
+        r.register(Command.of("run", "Run", "play", RUN, "", () -> { }));
+        r.register(Command.of("toggle", "Connect or disconnect", "plug", null, "", () -> { }));
+        r.register(Command.of("compact", "Compact", null, null, "", () -> { }));
+        r.register(Command.of("model.opus", "opus", null, null, "", () -> { }));
+        r.register(Command.of("go.1", "Go to panel 1", null, GO, "", () -> { }));
+        return r;
+    }
+
+    private static List<String> labels(JMenu m) {
+        List<String> out = new ArrayList<>();
+        for (Component c : m.getMenuComponents()) {
+            out.add(c instanceof JPopupMenu.Separator ? "—" : c instanceof JMenu sub ? sub.getText() + " ▸" : ((JMenuItem) c).getText());
+        }
+        return out;
+    }
+
+    @Test
+    void theBarHasSubmenusSeparatorsAndEachCommandsPath() {
+        ActionRegistry r = registry();
+        JMenuBar bar = r.menuBar(List.of(menu("Panel", null, "run", SEPARATOR,
+                menu("Session", "claude", "toggle", "compact", menu("Model", null, "model.opus")))));
+        JMenu panel = bar.getMenu(0);
+        assertThat(panel.getText()).isEqualTo("Panel");
+        assertThat(labels(panel)).containsExactly("Run", "—", "Session ▸");
+        JMenu session = (JMenu) panel.getMenuComponent(2);
+        assertThat(session.getIcon()).as("a submenu carries its subject's icon").isNotNull();
+        assertThat(labels(session)).containsExactly("Connect or disconnect", "Compact", "Model ▸");
+        assertThat(((JMenuItem) panel.getMenuComponent(0)).getAccelerator()).isEqualTo(RUN);
+
+        assertThat(r.get("run").group()).isEqualTo("Panel");
+        assertThat(r.get("toggle").group()).isEqualTo("Panel ▸ Session");
+        assertThat(r.get("model.opus").group()).isEqualTo("Panel ▸ Session ▸ Model");
+        assertThat(r.get("go.1").group()).as("in no menu").isEmpty();
+    }
+
+    @Test
+    void onlyCommandsInNoMenuGetAWindowWideKey() {
+        ActionRegistry r = registry();
+        r.menuBar(List.of(menu("Panel", null, "run")));
+        JPanel root = new JPanel();
+        r.bind(root);
+        assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(GO)).isEqualTo("go.1");
+        assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(RUN)).as("the menu item's accelerator runs it").isNull();
+    }
+
+    @Test
+    void aMenuNamingAnUnknownCommandOrOneTwiceFailsAtOnce() {
+        assertThatThrownBy(() -> registry().menuBar(List.of(menu("File", null, "nope"))))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("nope");
+        assertThatThrownBy(() -> registry().menuBar(List.of(menu("File", null, "run"), menu("View", null, "run"))))
+                .isInstanceOf(IllegalArgumentException.class).hasMessageContaining("placed twice");
+    }
+}

@@ -70,7 +70,6 @@ import dev.marregui.comando.ui.widgets.text.TextWidget;
 import dev.marregui.comando.ui.widgets.tree.TreeWidget;
 
 import javax.swing.JFrame;
-import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -625,7 +624,32 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private static final int CTRL = InputEvent.CTRL_DOWN_MASK;
     private static final int ALT = InputEvent.ALT_DOWN_MASK;
 
+    /** Registers every command; where each sits in the menus, and its icon, comes from {@link Menus}. */
     private void registerCommands() {
+        // file
+        cmd("panel.new", "New panel", key(KeyEvent.VK_T, CMD), () -> workspace.newPanel());
+        cmd("panel.openSpec", "Open file…", key(KeyEvent.VK_O, CMD), this::openSpec);
+        cmd("tools.recording", "Open JFR recording…", null, () -> chooseRecording().ifPresent(f ->
+                deps.intents().dispatch(new Intent.OpenRecording(f))));
+        cmd("panel.reopen", "Reopen closed panel", key(KeyEvent.VK_T, CMD | SHIFT), this::reopenPanel, () -> workspace.hasClosed());
+        // ⌘S saves the focused panel wherever the keyboard is; exporting a view is ⌘⇧S
+        cmd("panel.save", "Save", key(KeyEvent.VK_S, CMD), this::savePanel);
+        cmd("panel.rename", "Rename panel…", null, () -> {
+            EditorPanel p = workspace.focused();
+            if (p != null) {
+                workspace.rename(p);
+            }
+        });
+        // ⌘W closes the view that has the keyboard, else the panel
+        cmd("file.close", "Close", key(KeyEvent.VK_W, CMD), () -> {
+            long view = focusedView();
+            if (view >= 0) {
+                deps.intents().dispatch(new Intent.CloseView(view));
+            } else {
+                closePanel(focusedId());
+            }
+        });
+        cmd("view.export", "Export view…", key(KeyEvent.VK_S, CMD | SHIFT), this::export, () -> capability(Exportable.class) != null);
         // edit: each forwards its key to the focused component's own binding, so the menu shows the keys the
         // components already have; a component without the binding (the terminal) gets the key itself
         edit("edit.undo", "Undo", key(KeyEvent.VK_Z, CMD));
@@ -634,114 +658,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         edit("edit.copy", "Copy", key(KeyEvent.VK_C, CMD));
         edit("edit.paste", "Paste", key(KeyEvent.VK_V, CMD));
         edit("edit.selectAll", "Select all", key(KeyEvent.VK_A, CMD));
-        cmd("view.find", "Find…", "search", key(KeyEvent.VK_F, CMD), "Edit", () -> findBar.open(capability(Searchable.class)),
-                () -> capability(Searchable.class) != null);
-        cmd("view.findNext", "Find next", null, key(KeyEvent.VK_G, CMD), "Edit", () -> findBar.next(true), () -> findBar.isOpen());
-        cmd("view.findPrevious", "Find previous", null, key(KeyEvent.VK_G, CMD | SHIFT), "Edit", () -> findBar.next(false),
-                () -> findBar.isOpen());
-        KeyStroke complete = key(KeyEvent.VK_SPACE, CTRL);
-        cmd("edit.complete", "Complete SQL", null, complete, "Edit", () -> Keys.forward(editorArea(), complete, true),
-                () -> editorFocused() && Keys.forward(editorArea(), complete, false));
-        // ⌥⎋ as well, as in macOS text views: ⌃Space is the system's input-source switch on many Macs
-        cmd("edit.completeAlt", "Complete SQL", null, key(KeyEvent.VK_ESCAPE, ALT), "", () -> Keys.forward(editorArea(), complete, true),
-                () -> editorFocused() && Keys.forward(editorArea(), complete, false));
-        // run
-        cmd("run", "Run selection or block", "play", key(KeyEvent.VK_ENTER, CMD), "Run", () -> run(Target.AUTO), this::canRun);
-        cmd("run.claude", "Send selection or block to Claude", "claude", key(KeyEvent.VK_ENTER, CMD | SHIFT), "Run",
-                () -> run(Target.CLAUDE), this::canRun);
-        cmd("run.sql", "Run selection or block as SQL", "database", key(KeyEvent.VK_ENTER, ALT), "Run", () -> run(Target.SQL),
-                this::canRun);
-        cmd("terminal.run", "Run selection or line in the terminal", "terminal", key(KeyEvent.VK_ENTER, CTRL), "Run",
-                this::runInTerminal, this::editorFocused);
-        cmd("run.stop", "Stop query or interrupt turn", "stop", key(KeyEvent.VK_PERIOD, CMD), "Run",
-                () -> deps.intents().dispatch(new Intent.CancelRun(focusedId())), this::canStop);
-        cmd("run.insertResult", "Attach the result, selected rows or error to the editor", "attach", key(KeyEvent.VK_I, CMD | SHIFT), "Run",
-                this::insertLastResult, this::hasRun);
-        // always claimed: the editor's own ⌘J joins lines, which the user never means here; without a run it says so
-        cmd("run.plot", "Plot last result", "chart", key(KeyEvent.VK_J, CMD), "Run", this::plotLastResult);
-        cmd("run.plotLive", "Plot last result, refreshing…", "chart", key(KeyEvent.VK_J, CMD | SHIFT), "Run", this::plotLive, this::hasRun);
-        cmd("run.plotStop", "Stop refreshing plots", "stop", null, "Run", livePlots::stopAll, () -> livePlots.size() > 0);
-        cmd("run.keep", "Keep the result in a tab", "table", key(KeyEvent.VK_R, CMD | SHIFT), "Run", this::keepResult, this::hasRun);
-        cmd("focus.editor", "Focus the editor", "edit", key(KeyEvent.VK_E, CMD), "Run", () -> {
-            EditorPanel p = workspace.focused();
-            if (p != null) {
-                p.editor().requestFocus();
-            }
-        });
-        // panels
-        cmd("panel.new", "New panel", "add", key(KeyEvent.VK_T, CMD), "Panels", () -> workspace.newPanel());
-        cmd("panel.openSpec", "Open file…", "file", key(KeyEvent.VK_O, CMD), "Panels", this::openSpec);
-        cmd("panel.preview", "Edit or preview Markdown", "edit", key(KeyEvent.VK_M, CMD | SHIFT), "Panels", () -> {
-            EditorPanel p = workspace.focused();
-            if (p != null) {
-                p.togglePreview();
-            }
-        });
-        cmd("panel.reopen", "Reopen closed panel", "refresh", key(KeyEvent.VK_T, CMD | SHIFT), "Panels", this::reopenPanel,
-                () -> workspace.hasClosed());
-        // ⌘S saves the focused panel wherever the keyboard is; exporting a view is ⌘⇧S
-        cmd("panel.save", "Save panel", null, key(KeyEvent.VK_S, CMD), "Panels", this::savePanel);
-        // ⌘W closes the view that has the focus, else the panel
-        cmd("panel.close", "Close panel", "close", key(KeyEvent.VK_W, CMD), "Panels", () -> closePanel(focusedId()),
-                () -> focusedView() < 0);
-        cmd("panel.rename", "Rename panel", "edit", null, "Panels", () -> {
-            EditorPanel p = workspace.focused();
-            if (p != null) {
-                workspace.rename(p);
-            }
-        });
-        cmd("panel.bindSession", "Bind a session to the panel…", "claude", null, "Panels", () -> choose("Session for this panel",
-                deps.state().get().sessions().stream().map(x -> x.name()).toList(),
-                name -> deps.intents().dispatch(new Intent.BindSession(deps.state().get().focused(), name))));
-        cmd("panel.bindConnection", "Bind a connection to the panel…", "database", null, "Panels", () -> choose("Connection for this panel",
-                deps.state().get().connections().stream().map(x -> x.name()).toList(),
-                name -> deps.intents().dispatch(new Intent.BindConnection(deps.state().get().focused(), name))));
-        cmd("panel.next", "Next panel", null, key(KeyEvent.VK_CLOSE_BRACKET, CMD | SHIFT), "Panels",
-                () -> workspace.selectRelative(1));
-        cmd("panel.previous", "Previous panel", null, key(KeyEvent.VK_OPEN_BRACKET, CMD | SHIFT), "Panels",
-                () -> workspace.selectRelative(-1));
-        for (int i = 1; i <= 9; i++) {
-            int index = i - 1;
-            cmd("panel." + i, "Go to panel " + i, null, key(KeyEvent.VK_0 + i, CMD), "", () -> workspace.select(index));
-        }
-        // view
-        // ⌃1–⌃4 follow the lower tabs' order: Session, Approvals, Terminal, Results
-        cmd("view.session", "Show session transcript", "session", key(KeyEvent.VK_1, CTRL), "View",
-                () -> showLowerAndFocus(LowerTab.SESSION, lower.transcript().canvas()));
-        cmd("view.approvals", "Show approvals", "check", key(KeyEvent.VK_2, CTRL), "View",
-                () -> showLowerAndFocus(LowerTab.APPROVALS, lower.inbox().component(), lower.inbox()::focusFirst));
-        cmd("view.terminal", "Show the panel's terminal", "terminal", key(KeyEvent.VK_3, CTRL), "View", () -> {
-            deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.TERMINAL));
-            Edt.later(() -> lower.terminals().focusShown(deps.state().get()));
-        });
-        cmd("view.results", "Show results", "table", key(KeyEvent.VK_4, CTRL), "View",
-                () -> showLowerAndFocus(LowerTab.RESULTS, lower.results().grid().table()));
-        // ⌘⌥1–4 as well: macOS Mission Control takes ⌃1–⌃4 when its desktop shortcuts are on
-        String[] lowerTabs = {"view.session", "view.approvals", "view.terminal", "view.results"};
-        for (int i = 0; i < lowerTabs.length; i++) {
-            String target = lowerTabs[i];
-            cmd(target + ".alt", actions.get(target).label(), null, key(KeyEvent.VK_1 + i, CMD | ALT), "", () -> actions.run(target));
-        }
-        cmd("view.nextTab", "Next lower tab", null, key(KeyEvent.VK_TAB, CTRL), "View", () -> lower.selectRelative(1));
-        cmd("view.previousTab", "Previous lower tab", null, key(KeyEvent.VK_TAB, CTRL | SHIFT), "View", () -> lower.selectRelative(-1));
-        cmd("view.closeFocused", "Close view", "close", key(KeyEvent.VK_W, CMD), "View",
-                () -> deps.intents().dispatch(new Intent.CloseView(focusedView())), () -> focusedView() >= 0);
-        cmd("view.closeLower", "Close the lower view in front", null, key(KeyEvent.VK_W, CMD | SHIFT), "View",
-                () -> deps.intents().dispatch(new Intent.CloseView(lower.selectedView())), () -> lower.selectedView() >= 0);
-        cmd("terminal.restart", "Restart the panel's shell", "refresh", null, "View",
-                () -> lower.terminals().restartFocused(deps.state().get()));
-        cmd("view.sidebar", "Toggle sidebar", "sidebar", key(KeyEvent.VK_B, CMD), "View", this::toggleSidebar);
-        cmd("view.sidePane", "Toggle side pane", null, key(KeyEvent.VK_BACK_SLASH, CMD), "View", () -> {
-            sidePaneHidden = sidePaneShown;
-            render();
-        }, () -> sidePaneShown || side.component().getComponentCount() > 0);
-        cmd("view.restoreLayout", "Restore layout", null, null, "View", this::restoreArranged, () -> beforeArrange != null);
-        cmd("view.lastPrompt", "Jump to the last prompt", "session", null, "View", () -> {
-            deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.SESSION));
-            Edt.later(() -> lower.transcript().jumpToLastPrompt());
-        }, () -> focusedSession().isPresent());
-        cmd("view.notices", "Show recent notices", "info", null, "View", () -> status.showHistory());
-        cmd("view.copy", "Copy view content", "copy", key(KeyEvent.VK_C, CMD | SHIFT), "View", () -> {
+        cmd("view.copy", "Copy view content", key(KeyEvent.VK_C, CMD | SHIFT), () -> {
             Copyable c = capability(Copyable.class);
             if (c != null && Capabilities.copy(c)) {
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "Copied the view's content", false));
@@ -750,62 +667,92 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             Copyable c = capability(Copyable.class);
             return c != null && c.canCopy();
         });
-        cmd("view.export", "Export view…", "export", key(KeyEvent.VK_S, CMD | SHIFT), "View", this::export,
-                () -> capability(Exportable.class) != null);
-        cmd("view.zoomIn", "Zoom in", null, key(KeyEvent.VK_EQUALS, CMD), "View", () -> zoom(1), () -> capability(Zoomable.class) != null);
-        cmd("view.zoomOut", "Zoom out", null, key(KeyEvent.VK_MINUS, CMD), "View", () -> zoom(-1), () -> capability(Zoomable.class) != null);
-        cmd("view.zoomReset", "Reset zoom", null, key(KeyEvent.VK_0, CMD), "View", () -> {
-            Zoomable z = capability(Zoomable.class);
-            if (z != null) {
-                z.resetZoom();
+        cmd("view.find", "Find…", key(KeyEvent.VK_F, CMD), () -> findBar.open(capability(Searchable.class)),
+                () -> capability(Searchable.class) != null);
+        cmd("view.findNext", "Find next", key(KeyEvent.VK_G, CMD), () -> findBar.next(true), () -> findBar.isOpen());
+        cmd("view.findPrevious", "Find previous", key(KeyEvent.VK_G, CMD | SHIFT), () -> findBar.next(false), () -> findBar.isOpen());
+        KeyStroke complete = key(KeyEvent.VK_SPACE, CTRL);
+        cmd("edit.complete", "Complete SQL", complete, () -> Keys.forward(editorArea(), complete, true),
+                () -> editorFocused() && Keys.forward(editorArea(), complete, false));
+        // ⌥⎋ as well, as in macOS text views: ⌃Space is the system's input-source switch on many Macs
+        cmd("edit.completeAlt", "Complete SQL", key(KeyEvent.VK_ESCAPE, ALT), () -> Keys.forward(editorArea(), complete, true),
+                () -> editorFocused() && Keys.forward(editorArea(), complete, false));
+        cmd("panel.preview", "Edit / Preview Markdown", key(KeyEvent.VK_M, CMD | SHIFT), () -> {
+            EditorPanel p = workspace.focused();
+            if (p != null) {
+                p.togglePreview();
             }
-        }, () -> capability(Zoomable.class) != null);
-        cmd("view.palette", "Command palette", "palette", key(KeyEvent.VK_P, CMD | SHIFT), "View",
-                () -> new CommandPalette(actions).show(frame));
-        // sessions
-        cmd("session.dialog", "Sessions…", "session", key(KeyEvent.VK_K, CMD | SHIFT), "Sessions", () -> openSessions(""));
-        cmd("session.import", "Import stored conversations…", "import", null, "Sessions", this::openImport);
-        cmd("session.toggle", "Start or stop the panel's session", "play", null, "Sessions", () -> focusedSession().ifPresent(x ->
+        });
+        // panel: running
+        cmd("run", "Run", key(KeyEvent.VK_ENTER, CMD), () -> run(Target.AUTO), this::canRun);
+        cmd("run.claude", "Send to Claude", key(KeyEvent.VK_ENTER, CMD | SHIFT), () -> run(Target.CLAUDE), this::canRun);
+        cmd("run.sql", "Run as SQL", key(KeyEvent.VK_ENTER, ALT), () -> run(Target.SQL), this::canRun);
+        cmd("terminal.run", "Run in the terminal", key(KeyEvent.VK_ENTER, CTRL), this::runInTerminal, this::editorFocused);
+        cmd("run.stop", "Stop", key(KeyEvent.VK_PERIOD, CMD), () -> deps.intents().dispatch(new Intent.CancelRun(focusedId())),
+                this::canStop);
+        // panel: its session
+        cmd("session.toggle", "Connect or disconnect", null, () -> focusedSession().ifPresent(x ->
                 deps.intents().dispatch(x.status().isUsable() ? new Intent.StopSession(x.name()) : new Intent.StartSession(x.name()))),
                 () -> focusedSession().isPresent());
-        cmd("session.interrupt", "Interrupt the turn", "interrupt", key(KeyEvent.VK_PERIOD, CMD | SHIFT), "Sessions",
+        cmd("session.interrupt", "Interrupt the turn", key(KeyEvent.VK_PERIOD, CMD | SHIFT),
                 () -> focusedSession().ifPresent(x -> deps.intents().dispatch(new Intent.InterruptSession(x.name()))),
                 () -> focusedSession().map(SessionState::isBusy).orElse(false));
-        cmd("session.compact", "Compact the conversation", null, null, "Sessions", () -> sendCommand("/compact"),
-                () -> focusedSession().isPresent());
-        for (String m : List.of("fable", "opus", "sonnet", "haiku")) {
-            cmd("session.model." + m, "Model: " + m, null, null, "", () -> focusedSession().ifPresent(x ->
+        cmd("session.compact", "Compact the conversation", null, () -> sendCommand("/compact"), () -> focusedSession().isPresent());
+        for (String m : Menus.MODELS) {
+            cmd("session.model." + m, m, null, () -> focusedSession().ifPresent(x ->
                     deps.intents().dispatch(new Intent.SetSessionModel(x.name(), m))), () -> focusedSession().isPresent());
         }
-        for (String e : List.of("low", "medium", "high", "xhigh", "max")) {
-            cmd("session.effort." + e, "Effort: " + e, null, null, "", () -> focusedSession().ifPresent(x ->
+        for (String e : Menus.EFFORTS) {
+            cmd("session.effort." + e, e, null, () -> focusedSession().ifPresent(x ->
                     deps.intents().dispatch(new Intent.SetSessionEffort(x.name(), e))), () -> focusedSession().isPresent());
         }
-        // connections
-        cmd("connection.dialog", "Connections…", "database", key(KeyEvent.VK_O, CMD | SHIFT), "Connections",
-                () -> openConnections(""));
-        cmd("connection.toggle", "Connect or disconnect the panel's connection", "plug", null, "Connections", () -> {
+        cmd("panel.bindSession", "Bind a session…", null, () -> choose("Session for this panel",
+                deps.state().get().sessions().stream().map(x -> x.name()).toList(),
+                name -> deps.intents().dispatch(new Intent.BindSession(deps.state().get().focused(), name))));
+        cmd("session.dialog", "Sessions…", key(KeyEvent.VK_K, CMD | SHIFT), () -> openSessions(""));
+        cmd("session.import", "Import conversations…", null, this::openImport);
+        // panel: its connection
+        cmd("connection.toggle", "Connect or disconnect", null, () -> {
             AppState s = deps.state().get();
             s.connection(s.focusedPanel().connection()).ifPresent(c -> deps.intents().dispatch(c.status().isUsable()
                     ? new Intent.CloseConnection(c.name()) : new Intent.OpenConnection(c.name())));
         }, () -> !deps.state().get().focusedPanel().connection().isEmpty());
-        cmd("connection.schema", "Explore the schema", "tree", key(KeyEvent.VK_E, CMD | SHIFT), "Connections",
+        cmd("connection.schema", "Explore the schema", key(KeyEvent.VK_E, CMD | SHIFT),
                 () -> exploreSchema(deps.state().get().focusedPanel().connection()),
                 () -> !deps.state().get().focusedPanel().connection().isEmpty());
+        cmd("panel.bindConnection", "Bind a connection…", null, () -> choose("Connection for this panel",
+                deps.state().get().connections().stream().map(x -> x.name()).toList(),
+                name -> deps.intents().dispatch(new Intent.BindConnection(deps.state().get().focused(), name))));
+        cmd("connection.dialog", "Connections…", key(KeyEvent.VK_O, CMD | SHIFT), () -> openConnections(""));
         if (deps.server() != null) {
-            String name = deps.server().name();
-            cmd("server.start", "Start the embedded " + name, "play", null, "Connections", () -> deps.server().toggle(),
-                    () -> !deps.server().isRunning());
-            cmd("server.stop", "Stop the embedded " + name, "stop", null, "Connections", () -> deps.server().toggle(),
-                    () -> deps.server().isRunning());
+            cmd("server.start", "Start", null, () -> deps.server().toggle(), () -> !deps.server().isRunning());
+            cmd("server.stop", "Stop", null, () -> deps.server().toggle(), () -> deps.server().isRunning());
         }
-        // tools
-        cmd("tools.gradle", "Run Gradle tasks…", "play", key(KeyEvent.VK_G, CMD | ALT), "Tools", this::runGradle,
-                () -> focusedSession().isPresent());
-        cmd("tools.recording", "Open JFR recording…", "chart", null, "Tools", () -> chooseRecording().ifPresent(f ->
-                deps.intents().dispatch(new Intent.OpenRecording(f))));
-        cmd("tools.jfrq", "Run jfrq on a recording…", "terminal", null, "Tools", this::runJfrq);
-        cmd("tools.scratchpad", "Show the scratchpad", "file", null, "Tools", () -> {
+        // panel: its results
+        cmd("run.insertResult", "Attach to the editor", key(KeyEvent.VK_I, CMD | SHIFT), this::insertLastResult, this::hasRun);
+        cmd("run.keep", "Keep in a tab", key(KeyEvent.VK_R, CMD | SHIFT), this::keepResult, this::hasRun);
+        // always claimed: the editor's own ⌘J joins lines, which the user never means here; without a run it says so
+        cmd("run.plot", "Plot", key(KeyEvent.VK_J, CMD), this::plotLastResult);
+        cmd("run.plotLive", "Plot, refreshing…", key(KeyEvent.VK_J, CMD | SHIFT), this::plotLive, this::hasRun);
+        cmd("run.plotStop", "Stop refreshing plots", null, livePlots::stopAll, () -> livePlots.size() > 0);
+        // panel: tools that run in its project
+        cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, CMD | ALT), this::runGradle, () -> focusedSession().isPresent());
+        cmd("tools.jfrq", "Run jfrq on a recording…", null, this::runJfrq);
+        cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
+        // view
+        cmd("view.palette", "Command palette", key(KeyEvent.VK_P, CMD | SHIFT), () -> new CommandPalette(actions).show(frame));
+        cmd("focus.editor", "Focus the editor", key(KeyEvent.VK_E, CMD), () -> {
+            EditorPanel p = workspace.focused();
+            if (p != null) {
+                p.editor().requestFocus();
+            }
+        });
+        cmd("view.sidebar", "Sidebar", key(KeyEvent.VK_B, CMD), this::toggleSidebar);
+        cmd("view.sidePane", "Side pane", key(KeyEvent.VK_BACK_SLASH, CMD), () -> {
+            sidePaneHidden = sidePaneShown;
+            render();
+        }, () -> sidePaneShown || side.component().getComponentCount() > 0);
+        cmd("tools.scratchpad", "Scratchpad", null, () -> {
             if (!sidebar.isShown()) {
                 toggleSidebar();
             }
@@ -815,28 +762,67 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 sidebar.selectTab(SessionsSidebar.SCRATCHPAD);
             }
         });
+        cmd("view.restoreLayout", "Restore layout", null, this::restoreArranged, () -> beforeArrange != null);
+        // ⌃1–⌃4 follow the lower tabs' order: Session, Approvals, Terminal, Results
+        cmd("view.session", "Session", key(KeyEvent.VK_1, CTRL), () -> showLowerAndFocus(LowerTab.SESSION, lower.transcript().canvas()));
+        cmd("view.approvals", "Approvals", key(KeyEvent.VK_2, CTRL),
+                () -> showLowerAndFocus(LowerTab.APPROVALS, lower.inbox().component(), lower.inbox()::focusFirst));
+        cmd("view.terminal", "Terminal", key(KeyEvent.VK_3, CTRL), () -> {
+            deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.TERMINAL));
+            Edt.later(() -> lower.terminals().focusShown(deps.state().get()));
+        });
+        cmd("view.results", "Results", key(KeyEvent.VK_4, CTRL), () -> showLowerAndFocus(LowerTab.RESULTS, lower.results().grid().table()));
+        // ⌘⌥1–4 as well: macOS Mission Control takes ⌃1–⌃4 when its desktop shortcuts are on
+        String[] lowerTabs = {"view.session", "view.approvals", "view.terminal", "view.results"};
+        for (int i = 0; i < lowerTabs.length; i++) {
+            String target = lowerTabs[i];
+            cmd(target + ".alt", actions.get(target).label() + " tab", key(KeyEvent.VK_1 + i, CMD | ALT), () -> actions.run(target));
+        }
+        cmd("view.nextTab", "Next tab", key(KeyEvent.VK_TAB, CTRL), () -> lower.selectRelative(1));
+        cmd("view.previousTab", "Previous tab", key(KeyEvent.VK_TAB, CTRL | SHIFT), () -> lower.selectRelative(-1));
+        cmd("view.closeLower", "Close the view in front", key(KeyEvent.VK_W, CMD | SHIFT),
+                () -> deps.intents().dispatch(new Intent.CloseView(lower.selectedView())), () -> lower.selectedView() >= 0);
+        cmd("panel.next", "Next panel", key(KeyEvent.VK_CLOSE_BRACKET, CMD | SHIFT), () -> workspace.selectRelative(1));
+        cmd("panel.previous", "Previous panel", key(KeyEvent.VK_OPEN_BRACKET, CMD | SHIFT), () -> workspace.selectRelative(-1));
+        for (int i = 1; i <= 9; i++) {
+            int index = i - 1;
+            cmd("panel." + i, "Go to panel " + i, key(KeyEvent.VK_0 + i, CMD), () -> workspace.select(index));
+        }
+        cmd("view.lastPrompt", "Jump to the last prompt", null, () -> {
+            deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.SESSION));
+            Edt.later(() -> lower.transcript().jumpToLastPrompt());
+        }, () -> focusedSession().isPresent());
+        cmd("view.zoomIn", "Zoom in", key(KeyEvent.VK_EQUALS, CMD), () -> zoom(1), () -> capability(Zoomable.class) != null);
+        cmd("view.zoomOut", "Zoom out", key(KeyEvent.VK_MINUS, CMD), () -> zoom(-1), () -> capability(Zoomable.class) != null);
+        cmd("view.zoomReset", "Reset zoom", key(KeyEvent.VK_0, CMD), () -> {
+            Zoomable z = capability(Zoomable.class);
+            if (z != null) {
+                z.resetZoom();
+            }
+        }, () -> capability(Zoomable.class) != null);
+        cmd("view.notices", "Recent notices", null, () -> status.showHistory());
         // help
-        cmd("help.tutorial", "Tutorial", "file", null, "Help", this::showTutorial);
+        cmd("help.tutorial", "Tutorial", null, this::showTutorial);
         // ⌘/ stays the editor's comment toggle; ⌘⇧/ is the Mac's Help key
-        cmd("help.keys", "Keyboard shortcuts", "palette", key(KeyEvent.VK_SLASH, CMD | SHIFT), "Help", this::showKeys);
-        cmd("help.dataRoot", "Reveal the data folder", "file", null, "Help", () -> reveal(deps.home()), () -> deps.home() != null);
-        cmd("help.log", "Show the log", "file", null, "Help", this::showLog, () -> deps.logDir() != null);
+        cmd("help.keys", "Keyboard shortcuts", key(KeyEvent.VK_SLASH, CMD | SHIFT), this::showKeys);
+        cmd("help.log", "Show the log", null, this::showLog, () -> deps.logDir() != null);
+        cmd("help.dataRoot", "Reveal the data folder", null, () -> reveal(deps.home()), () -> deps.home() != null);
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice
         boolean mac = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
-        cmd("app.quit", "Quit comando", null, mac ? null : key(KeyEvent.VK_Q, CMD), "", this::quit);
+        cmd("app.quit", "Quit comando", mac ? null : key(KeyEvent.VK_Q, CMD), this::quit);
     }
 
-    private void cmd(String id, String label, String icon, KeyStroke key, String group, Runnable run) {
-        actions.register(Command.of(id, label, icon, key, group, run));
+    private void cmd(String id, String label, KeyStroke key, Runnable run) {
+        actions.register(Command.of(id, label, Menus.icon(id), key, "", run));
     }
 
-    private void cmd(String id, String label, String icon, KeyStroke key, String group, Runnable run, BooleanSupplier enabled) {
-        actions.register(Command.of(id, label, icon, key, group, run, enabled));
+    private void cmd(String id, String label, KeyStroke key, Runnable run, BooleanSupplier enabled) {
+        actions.register(Command.of(id, label, Menus.icon(id), key, "", run, enabled));
     }
 
     /** An Edit command: runs the focused component's own action for {@code key}; enabled when it has one. */
     private void edit(String id, String label, KeyStroke key) {
-        cmd(id, label, null, key, "Edit", () -> Keys.forward(focusOwnerInFrame(), key, true), () -> Keys.forward(focusOwnerInFrame(), key, false));
+        cmd(id, label, key, () -> Keys.forward(focusOwnerInFrame(), key, true), () -> Keys.forward(focusOwnerInFrame(), key, false));
     }
 
     private static KeyStroke key(int code, int modifiers) {
@@ -844,12 +830,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private JMenuBar menuBar() {
-        JMenuBar bar = new JMenuBar();
-        for (String group : actions.groups()) {
-            JMenu menu = actions.menu(group, group);
-            bar.add(menu);
-        }
-        return bar;
+        return actions.menuBar(Menus.bar(deps.server() != null));
     }
 
     // ---- focus
@@ -971,7 +952,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
     }
 
-    /** Panels ▸ Open file…: a file chosen anywhere, starting in the panels' folder. */
+    /** File ▸ Open file…: a file chosen anywhere, starting in the panels' folder. */
     private void openSpec() {
         Optional<Path> folder = deps.texts().folder();
         if (folder.isPresent()) {

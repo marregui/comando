@@ -24,7 +24,7 @@ The terminal is for what Claude does not do: interactive logins, git by hand, ss
 
 ## 2. Gradle runs
 
-⌥⌘G (Tools ▸ Run Gradle tasks…, enabled when the panel has a session) asks for tasks and options, naming the directory they run in (default `build`, then the last ones used, kept across restarts with the last recording and jfrq arguments), and runs them in the build of the focused panel's session: the nearest directory at or above the session's working directory that holds an executable `gradlew`.
+⌥⌘G (Panel ▸ Tools ▸ Run Gradle tasks…, enabled when the panel has a session) asks for tasks and options, naming the directory they run in (default `build`, then the last ones used, kept across restarts with the last recording and jfrq arguments), and runs them in the build of the focused panel's session: the nearest directory at or above the session's working directory that holds an executable `gradlew`.
 
 | Step | Detail |
 |---|---|
@@ -61,4 +61,4 @@ The sidebar's Scratchpad tab is a navigator of `~/.claude/SCRATCHPAD`, without a
 
 One click opens a folder or a file; Enter and the context menu's "Open in a panel" open a file too. A text file of at most 2 MB opens in a new editor panel bound to that file ([Persistence](persistence.md#5-panel-files)); a file another panel holds brings that panel forward; a binary or larger file shows read-only in the side pane. A Markdown panel switches between the text and the rendered page (header button, ⌘⇧M).
 
-The tools adapter reads the whole folder every 2 s on its own thread (`scratchpad-watch`), whether the tab shows or not, and sends the tree (`ScratchpadLoaded`, then `UiPort.showScratchpad`) only when something was added, removed, renamed or resized; the tab's refresh button and Tools ▸ Show the scratchpad read it at once. One read runs at a time. The tree keeps the folders the user opened and the selection, matching nodes by their labels. A folder that cannot be read becomes a one-line tree that says so, rather than a notice at every read. A full read of a 70-entry scratchpad takes about 1.5 ms ([record 29](../adr/0029-the-scratchpad-is-a-navigator.md)).
+The tools adapter reads the whole folder every 2 s on its own thread (`scratchpad-watch`), whether the tab shows or not, and sends the tree (`ScratchpadLoaded`, then `UiPort.showScratchpad`) only when something was added, removed, renamed or resized; the tab's refresh button and View ▸ Scratchpad read it at once. One read runs at a time. The tree keeps the folders the user opened and the selection, matching nodes by their labels. A folder that cannot be read becomes a one-line tree that says so, rather than a notice at every read. A full read of a 70-entry scratchpad takes about 1.5 ms ([record 29](../adr/0029-the-scratchpad-is-a-navigator.md)).

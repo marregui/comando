@@ -80,11 +80,16 @@ public final class CommandPalette {
             model.clear();
             List<Command> found = new ArrayList<>();
             for (Command c : registry.all()) {
-                if ((q.isEmpty() || matches(c.label().toLowerCase(Locale.ROOT), q)) && runnable.contains(c)) {
+                // the menu path counts too: "model" finds the models, whose labels are just their names
+                if ((q.isEmpty() || matches((c.label() + " " + c.group()).toLowerCase(Locale.ROOT), q)) && runnable.contains(c)) {
                     found.add(c);
                 }
             }
-            found.sort(Comparator.comparingInt(c -> rank(c.label().toLowerCase(Locale.ROOT), q)));
+            // a match in the label first; one in the menu path only after them
+            found.sort(Comparator.comparingInt(c -> {
+                String label = c.label().toLowerCase(Locale.ROOT);
+                return matches(label, q) ? rank(label, q) : 4;
+            }));
             found.forEach(model::addElement);
             if (!model.isEmpty()) {
                 list.setSelectedIndex(0);

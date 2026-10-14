@@ -6,15 +6,18 @@ import javax.swing.AbstractAction;
 import javax.swing.Action;
 import javax.swing.JComponent;
 import javax.swing.JMenu;
+import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.KeyStroke;
 import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** The registry of commands. Widgets register; the shell builds menus, bindings and the palette from it. */
 public final class ActionRegistry {
@@ -66,7 +69,8 @@ public final class ActionRegistry {
 
     /**
      * Binds the keys of commands that are in no menu in {@code root}'s window-wide input map. Commands in a
-     * menu get their key as the menu item's accelerator; binding both would run them twice.
+     * menu get their key as the menu item's accelerator; binding both would run them twice. Call it after
+     * {@link #menuBar}, which says which commands are in a menu.
      */
     public void bind(JComponent root) {
         for (Command c : commands.values()) {
@@ -78,20 +82,48 @@ public final class ActionRegistry {
     }
 
     /**
-     * The commands of {@code group} as a menu, in registration order. Items grey out, as the palette hides them,
-     * when their command cannot run now: each item asks its command as the menu opens.
+     * The menu bar of {@code menus}. Each command it places is named by its path ("Panel ▸ Session") for the palette
+     * and the shortcuts list, and gets its key as its item's accelerator; {@link #bind} binds the others. Items grey
+     * out, as the palette hides them, when their command cannot run now: each menu asks its items as it opens.
+     *
+     * @throws IllegalArgumentException when an entry names no registered command, or a command is placed twice
      */
-    public JMenu menu(String group, String title) {
-        JMenu menu = new JMenu(title);
+    public JMenuBar menuBar(List<MenuEntry.Menu> menus) {
+        JMenuBar bar = new JMenuBar();
+        Set<String> placed = new HashSet<>();
+        for (MenuEntry.Menu m : menus) {
+            bar.add(build(m, m.title(), placed));
+        }
+        return bar;
+    }
+
+    private JMenu build(MenuEntry.Menu spec, String path, Set<String> placed) {
+        JMenu menu = new JMenu(spec.title());
+        if (spec.icon() != null) {
+            menu.setIcon(Icons.get(spec.icon()));
+        }
         List<JMenuItem> items = new ArrayList<>();
-        for (Command c : commands.values()) {
-            if (c.group().equals(group)) {
-                JMenuItem item = new JMenuItem(action(c));
-                item.setAccelerator(c.key());
-                item.setEnabled(c.enabled().getAsBoolean());
-                items.add(item);
-                built.add(item);
-                menu.add(item);
+        for (MenuEntry e : spec.entries()) {
+            switch (e) {
+                case MenuEntry.Separator s -> menu.addSeparator();
+                case MenuEntry.Menu sub -> menu.add(build(sub, path + " ▸ " + sub.title(), placed));
+                case MenuEntry.Item i -> {
+                    Command c = commands.get(i.id());
+                    if (c == null) {
+                        throw new IllegalArgumentException("the menu names no command: " + i.id());
+                    }
+                    if (!placed.add(i.id())) {
+                        throw new IllegalArgumentException("command placed twice in the menus: " + i.id());
+                    }
+                    c = c.withGroup(path);
+                    commands.put(c.id(), c);
+                    JMenuItem item = new JMenuItem(action(c));
+                    item.setAccelerator(c.key());
+                    item.setEnabled(c.enabled().getAsBoolean());
+                    items.add(item);
+                    built.add(item);
+                    menu.add(item);
+                }
             }
         }
         menu.addMenuListener(new MenuListener() {
@@ -127,16 +159,6 @@ public final class ActionRegistry {
                 item.setEnabled(enabled);
             }
         }
-    }
-
-    public List<String> groups() {
-        List<String> groups = new ArrayList<>();
-        for (Command c : commands.values()) {
-            if (!c.group().isEmpty() && !groups.contains(c.group())) {
-                groups.add(c.group());
-            }
-        }
-        return groups;
     }
 
     public static Action action(Command c) {

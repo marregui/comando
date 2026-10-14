@@ -61,7 +61,7 @@ public final class SessionsSidebar {
 
         void connections(String select);
 
-        /** Shows the connection's schema explorer, as Connections ▸ Explore the schema does. */
+        /** Shows the connection's schema explorer, as Panel ▸ Connection ▸ Explore the schema does. */
         void exploreSchema(String connection);
 
         /** Opens a file in a panel, or brings forward the panel that has it. */
@@ -90,7 +90,7 @@ public final class SessionsSidebar {
     static final List<String> MODELS = List.of("fable", "opus", "sonnet", "haiku");
     static final List<String> EFFORTS = List.of("low", "medium", "high", "xhigh", "max");
 
-    /** {@code toggle} hides or shows the sidebar, as View ▸ Toggle sidebar does; the owner calls {@link #show}. */
+    /** {@code toggle} hides or shows the sidebar, as View ▸ Sidebar does; the owner calls {@link #show}. */
     public SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle) {
         this.intents = intents;
         this.dialogs = dialogs;
