@@ -22,3 +22,5 @@ Record 26 kept an outside edit aside at comando's next write and never reloaded 
 ## 3. Consequences
 
 A change shows within about a second. Only open panels' files are checked; a new file in the folder opens through Open spec…. A change that keeps both the modification time and the size of comando's last write is not seen.
+
+Two windows stay open, because closing them needs a lock every editor honours, which macOS editors do not share (found by the concurrency review of 2026-10-14, accepted as risks): an outside write landing in the instant between comando's check and its replacing move is overwritten (comando writes its temporary file before the check, so the window is that instant only); and a file an editor has written in part and paused on reads as complete. The second corrects itself at the next check, or, when the panel was typed in meanwhile, its complete version is kept aside.

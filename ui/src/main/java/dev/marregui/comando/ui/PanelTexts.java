@@ -36,9 +36,12 @@ public interface PanelTexts {
         return Optional.empty();
     }
 
-    /** Binds a new panel to an existing file of the folder and loads its text; the reason when it cannot, else empty. */
-    default String open(PanelId panel, Path file) {
-        return "panel text is not kept in files";
+    /**
+     * Binds a new panel to an existing file of the folder and loads its text, off the EDT; completes with the reason
+     * when it cannot, else empty.
+     */
+    default CompletableFuture<String> open(PanelId panel, Path file) {
+        return CompletableFuture.completedFuture("panel text is not kept in files");
     }
 
     /**

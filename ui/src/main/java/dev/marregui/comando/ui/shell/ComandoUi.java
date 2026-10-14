@@ -110,6 +110,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -919,15 +920,20 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     /**
      * Opens the most recently closed panel again after the focused one, with its title and bindings, on its own file
-     * when that is still there, else with the text it had.
+     * when that is still there, else with the text it had. The file is read off the EDT, after the closing panel's
+     * last write to it.
      */
     private void reopenPanel() {
         workspace.popClosed().ifPresent(c -> {
             PanelId id = PanelId.random();
-            if (c.file() == null || !Files.isRegularFile(c.file()) || !deps.texts().open(id, c.file()).isEmpty()) {
-                deps.texts().changed(id, c.text());
-            }
-            deps.intents().dispatch(new Intent.ReopenPanel(id, c.title(), c.connection(), c.session()));
+            CompletableFuture<String> opened = c.file() == null ? CompletableFuture.completedFuture("no file")
+                    : deps.texts().open(id, c.file());
+            opened.thenAccept(refused -> {
+                if (!refused.isEmpty()) {
+                    deps.texts().changed(id, c.text());
+                }
+                deps.intents().dispatch(new Intent.ReopenPanel(id, c.title(), c.connection(), c.session()));
+            });
         });
     }
 
@@ -946,14 +952,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 }
             }
             PanelId id = PanelId.random();
-            String refused = deps.texts().open(id, file);
-            if (!refused.isEmpty()) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, refused, false));
-                return;
-            }
             String name = file.getFileName().toString();
             // the title the store gives a panel opened on a file, so the file keeps its name
-            deps.intents().dispatch(new Intent.AddPanel(id, (name.toLowerCase(Locale.ROOT).endsWith(".md") ? name.substring(0, name.length() - 3) : name).strip()));
+            String title = (name.toLowerCase(Locale.ROOT).endsWith(".md") ? name.substring(0, name.length() - 3) : name).strip();
+            deps.texts().open(id, file).thenAccept(refused -> deps.intents().dispatch(refused.isEmpty()
+                    ? new Intent.AddPanel(id, title)
+                    : new Intent.Notify(Notice.Level.ERROR, refused, false)));
         });
     }
 

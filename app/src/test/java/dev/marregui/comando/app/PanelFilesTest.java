@@ -9,7 +9,10 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
@@ -158,8 +161,9 @@ class PanelFilesTest {
         PanelId id = new PanelId("o");
         try (Store store = new Store(home)) {
             store.load();
-            assertThat(store.open(new PanelId("e"), elsewhere)).startsWith("Specs live in");
-            assertThat(store.open(id, dir().resolve("Ravenna plan.md"))).isEmpty();
+            assertThat(store.open(new PanelId("e"), elsewhere).get(5, TimeUnit.SECONDS)).startsWith("Specs live in");
+            assertThat(store.open(new PanelId("g"), dir().resolve("gone.md")).get(5, TimeUnit.SECONDS)).isEqualTo("gone.md no longer exists");
+            assertThat(store.open(id, dir().resolve("Ravenna plan.md")).get(5, TimeUnit.SECONDS)).isEmpty();
             assertThat(store.load(id)).isEqualTo("# Ravenna");
             store.savePanels(List.of(new PanelState(id, PanelFiles.title(dir().resolve("Ravenna plan.md")), "", "")));
             store.changed(id, "# Ravenna\n\nmore");
@@ -248,6 +252,193 @@ class PanelFilesTest {
             store.saveNow().get(5, TimeUnit.SECONDS);
         }
         assertThat(Files.readString(dir().resolve("spec.md"))).isEqualTo("kept");
+    }
+
+    @Test
+    void aNewPanelClosedBeforeItsFirstSaveStillReachesAFile() throws Exception {
+        PanelId kept = new PanelId("k");
+        PanelId quick = new PanelId("q");
+        try (Store store = new Store(home)) {
+            store.load();
+            store.savePanels(List.of(new PanelState(kept, "kept", "", "")));
+            store.changed(kept, "x");
+            store.saveNow().get(5, TimeUnit.SECONDS);
+
+            // the reducer's order on close: the panel is still listed when forget runs, then the list without it
+            store.savePanels(List.of(new PanelState(kept, "kept", "", ""), new PanelState(quick, "quick", "", "")));
+            store.changed(quick, "typed and closed within 800 ms");
+            store.forget(quick);
+            store.savePanels(List.of(new PanelState(kept, "kept", "", "")));
+            store.saveNow().get(5, TimeUnit.SECONDS);
+        }
+        assertThat(Files.readString(dir().resolve("quick.md"))).isEqualTo("typed and closed within 800 ms");
+    }
+
+    @Test
+    void aPanelFileThatCannotBeWrittenKeepsItsTextAcrossARestartAndTheUserIsTold() throws Exception {
+        PanelId id = new PanelId("n");
+        List<String> notices = new CopyOnWriteArrayList<>();
+        Files.createDirectories(dir());
+        Set<PosixFilePermission> writable = Files.getPosixFilePermissions(dir());
+        try {
+            try (Store store = new Store(home)) {
+                store.onNotice(notices::add);
+                store.load();
+                store.savePanels(List.of(new PanelState(id, "spec", "", "")));
+                Files.setPosixFilePermissions(dir(), PosixFilePermissions.fromString("r-xr-xr-x"));
+                store.changed(id, "typed while panels/ refuses writes");
+                assertThat(store.saveNow().get(5, TimeUnit.SECONDS)).as("⌘S says it failed").isNotNull();
+            }
+            assertThat(notices).as("the failure is not only in the log").anyMatch(n -> n.startsWith("Cannot write spec.md"));
+        } finally {
+            Files.setPosixFilePermissions(dir(), writable);
+        }
+        try (Store store = new Store(home)) {
+            store.load();
+            assertThat(store.load(id)).isEqualTo("typed while panels/ refuses writes");
+        }
+    }
+
+    @Test
+    void aReopenedPanelReadsItsFileAfterTheClosingPanelsLastWrite() throws Exception {
+        PanelId closing = new PanelId("c");
+        PanelId reopened = new PanelId("r");
+        try (Store store = new Store(home)) {
+            store.load();
+            store.savePanels(List.of(new PanelState(closing, "spec", "", "")));
+            store.changed(closing, "v1");
+            store.saveNow().get(5, TimeUnit.SECONDS);
+
+            store.changed(closing, "v2 typed just before closing");
+            store.forget(closing);
+            store.savePanels(List.of());
+            assertThat(store.open(reopened, dir().resolve("spec.md")).get(5, TimeUnit.SECONDS)).isEmpty();
+            assertThat(store.load(reopened)).isEqualTo("v2 typed just before closing");
+        }
+    }
+
+    @Test
+    void aClosedPanelWhoseFileCannotBeWrittenComesBackAtTheNextStart() throws Exception {
+        PanelId kept = new PanelId("k");
+        PanelId closing = new PanelId("c");
+        Files.createDirectories(dir());
+        Set<PosixFilePermission> writable = Files.getPosixFilePermissions(dir());
+        try {
+            try (Store store = new Store(home)) {
+                store.load();
+                store.savePanels(List.of(new PanelState(kept, "kept", "", ""), new PanelState(closing, "closing", "", "")));
+                store.changed(closing, "v1");
+                store.saveNow().get(5, TimeUnit.SECONDS);
+                Files.setPosixFilePermissions(dir(), PosixFilePermissions.fromString("r-xr-xr-x"));
+                store.changed(closing, "typed, then closed while panels/ refuses writes");
+                store.forget(closing);
+                store.savePanels(List.of(new PanelState(kept, "kept", "", "")));
+                store.saveNow().get(5, TimeUnit.SECONDS);
+            }
+        } finally {
+            Files.setPosixFilePermissions(dir(), writable);
+        }
+        try (Store store = new Store(home)) {
+            Store.Loaded loaded = store.load();
+            assertThat(loaded.panels()).extracting(PanelState::title).containsExactly("kept", "closing");
+            assertThat(store.load(closing)).isEqualTo("typed, then closed while panels/ refuses writes");
+        }
+    }
+
+    @Test
+    void aFileOpenInOnePanelIsNotBoundToASecond() throws Exception {
+        Files.createDirectories(dir());
+        Path spec = Files.writeString(dir().resolve("spec.md"), "# spec");
+        try (Store store = new Store(home)) {
+            store.load();
+            assertThat(store.open(new PanelId("a"), spec).get(5, TimeUnit.SECONDS)).isEmpty();
+            assertThat(store.open(new PanelId("b"), spec).get(5, TimeUnit.SECONDS)).isEqualTo("spec.md is already open");
+        }
+    }
+
+    @Test
+    void aNewPanelNeverTakesTheNameOfAClosedPanelStillWaitingToBeWritten() throws Exception {
+        PanelId closed = new PanelId("c");
+        PanelId fresh = new PanelId("f");
+        Files.createDirectories(dir());
+        Set<PosixFilePermission> writable = Files.getPosixFilePermissions(dir());
+        try (Store store = new Store(home)) {
+            store.load();
+            store.savePanels(List.of(new PanelState(closed, "spec", "", "")));
+            Files.setPosixFilePermissions(dir(), PosixFilePermissions.fromString("r-xr-xr-x"));
+            try {
+                store.changed(closed, "the closed panel's text");
+                store.forget(closed);
+                store.savePanels(List.of());
+                store.saveNow().get(5, TimeUnit.SECONDS);
+            } finally {
+                Files.setPosixFilePermissions(dir(), writable);
+            }
+            store.savePanels(List.of(new PanelState(fresh, "spec", "", "")));
+            store.changed(fresh, "the new panel's text");
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            store.saveNow().get(5, TimeUnit.SECONDS);
+        }
+        assertThat(names()).containsExactly("spec 2.md", "spec.md");
+        assertThat(Files.readString(dir().resolve("spec.md"))).isEqualTo("the closed panel's text");
+        assertThat(Files.readString(dir().resolve("spec 2.md"))).isEqualTo("the new panel's text");
+    }
+
+    @Test
+    void aPanelWhoseFileCannotBeNamedAtCloseComesBackAtTheNextStart() throws Exception {
+        PanelId id = new PanelId("r");
+        Files.createDirectories(dir());
+        Set<PosixFilePermission> writable = Files.getPosixFilePermissions(dir());
+        try {
+            try (Store store = new Store(home)) {
+                store.load();
+                store.savePanels(List.of(new PanelState(id, "a", "", "")));
+                store.changed(id, "v1");
+                store.saveNow().get(5, TimeUnit.SECONDS);
+                Files.setPosixFilePermissions(dir(), PosixFilePermissions.fromString("r-xr-xr-x"));
+                // renamed and closed inside one save interval: the close must move a.md to b.md, which fails
+                store.savePanels(List.of(new PanelState(id, "b", "", "")));
+                store.changed(id, "v2, renamed and closed");
+                store.forget(id);
+                store.savePanels(List.of());
+                store.saveNow().get(5, TimeUnit.SECONDS);
+            }
+        } finally {
+            Files.setPosixFilePermissions(dir(), writable);
+        }
+        try (Store store = new Store(home)) {
+            Store.Loaded loaded = store.load();
+            assertThat(loaded.panels()).extracting(PanelState::title).containsExactly("b");
+            assertThat(store.load(id)).isEqualTo("v2, renamed and closed");
+        }
+    }
+
+    @Test
+    void aPanelsJsonThatCannotBeWrittenIsToldAndTriedAgain() throws Exception {
+        PanelId id = new PanelId("j");
+        List<String> notices = new CopyOnWriteArrayList<>();
+        try (Store store = new Store(home)) {
+            store.onNotice(notices::add);
+            store.load();
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            // a non-empty directory where panels.json goes: the replacing move cannot remove it
+            Files.delete(home.resolve("panels.json"));
+            Files.createDirectory(home.resolve("panels.json"));
+            Files.writeString(home.resolve("panels.json").resolve("keep"), "x");
+            store.savePanels(List.of(new PanelState(id, "spec", "", "")));
+            store.changed(id, "text");
+            assertThat(store.saveNow().get(5, TimeUnit.SECONDS)).isNotNull();
+            assertThat(notices).anyMatch(n -> n.startsWith("Cannot write panels.json"));
+
+            Files.delete(home.resolve("panels.json").resolve("keep"));
+            Files.delete(home.resolve("panels.json"));
+            long deadline = System.currentTimeMillis() + Store.RETRY_MILLIS + 3_000;
+            while (!Files.isRegularFile(home.resolve("panels.json")) && System.currentTimeMillis() < deadline) {
+                Thread.sleep(100);
+            }
+            assertThat(home.resolve("panels.json")).as("tried again without another edit").isRegularFile();
+            assertThat(Files.readString(home.resolve("panels.json"))).contains("spec.md");
+        }
     }
 
     @Test

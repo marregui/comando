@@ -70,12 +70,15 @@ final class PanelFiles {
     String read(String id, String title, String name) throws IOException {
         Path f = dir.resolve(name);
         boolean exists = Files.isRegularFile(f);
+        // the stamp from before the read: an editor writing the file while it is read leaves another stamp, so the
+        // next check reads the whole file again rather than the panel keeping a part of it
+        Stamp before = exists ? stamp(f) : null;
         // a file that cannot be read leaves the panel unbound, so the next save takes another name instead of it
         String text = exists ? Files.readString(f, StandardCharsets.UTF_8) : "";
         names.put(id, name);
         titles.put(id, title);
         if (exists) {
-            stamps.put(id, stamp(f));
+            stamps.put(id, before);
         } else {
             stamps.remove(id);
         }
@@ -90,6 +93,9 @@ final class PanelFiles {
         Path f = file.toAbsolutePath().normalize();
         if (!f.getParent().equals(dir.toAbsolutePath().normalize())) {
             return Result.refused("Specs live in " + dir + "; " + f.getFileName() + " is elsewhere");
+        }
+        if (!Files.isRegularFile(f)) {
+            return Result.refused(f.getFileName() + " no longer exists");
         }
         try {
             String text = read(id, title(f), f.getFileName().toString());
@@ -177,7 +183,11 @@ final class PanelFiles {
         return true;
     }
 
-    /** Writes a panel's text; an edit made outside comando that no panel took is kept aside first. */
+    /**
+     * Writes a panel's text; an edit made outside comando that no panel took is kept aside first. The text goes to a
+     * temporary file before the check, so only the instant between the check and the replacing move is left for an
+     * outside write to land in unseen: without a lock every editor shares, no check can close it.
+     */
     void write(String id, String text) throws IOException {
         String name = names.get(id);
         if (name == null) {
@@ -185,15 +195,15 @@ final class PanelFiles {
         }
         Files.createDirectories(dir);
         Path f = dir.resolve(name);
-        if (Files.exists(f) && !stamp(f).equals(stamps.get(id))) {
-            Path aside = dir.resolve(stem(name) + " (outside comando " + LocalDateTime.now().format(ASIDE) + ")" + EXTENSION);
-            Files.move(f, aside);
-            LOG.log(System.Logger.Level.WARNING, "panel file changed outside comando, kept aside [file=" + f + ", aside=" + aside + "]");
-            notices.accept(name + " changed outside comando; that version is kept as " + aside.getFileName());
-        }
         Path tmp = Files.createTempFile(dir, "." + name, ".tmp");
         try {
             Files.writeString(tmp, text, StandardCharsets.UTF_8);
+            if (Files.exists(f) && !stamp(f).equals(stamps.get(id))) {
+                Path aside = dir.resolve(stem(name) + " (outside comando " + LocalDateTime.now().format(ASIDE) + ")" + EXTENSION);
+                Files.move(f, aside);
+                LOG.log(System.Logger.Level.WARNING, "panel file changed outside comando, kept aside [file=" + f + ", aside=" + aside + "]");
+                notices.accept(name + " changed outside comando; that version is kept as " + aside.getFileName());
+            }
             try {
                 Files.move(tmp, f, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
             } catch (AtomicMoveNotSupportedException e) {

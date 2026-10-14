@@ -18,7 +18,7 @@
 | Command | Does |
 |---|---|
 | `./gradlew build` | compiles every module with warnings as errors, runs every test |
-| `./gradlew :app:run` | starts comando on the default data root, from a copy of the build output made at launch (in `.gradle/run-stage`), so a build while it runs leaves it alone |
+| `./gradlew :app:run` | starts comando on the default data root, from a copy of the build output made at launch (in `.gradle/run-stage`, one folder per launch, pruned when no process uses it), so a build while it runs leaves it alone |
 | `./gradlew :app:installDist` | a runnable distribution in `app/build/install/comando`; start it with `bin/comando` |
 | `./gradlew :app:dmg` | an unsigned macOS disk image with its own runtime in `app/build/dmg` |
 | `./gradlew test -PkeychainTest=true` | also runs the test that writes and deletes one item in the login keychain |

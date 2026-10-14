@@ -23,4 +23,4 @@ Each panel's text is a Markdown file in `panels/` under the data root; `panels.j
 
 ## 3. Consequences
 
-The folder can be opened in an IDE, diffed or kept in Git. comando does not reload a file changed outside while it runs: the next save keeps the outside version aside, and the panel shows comando's text; a reload on change is open. Specs open only from `panels/`; a file elsewhere is refused rather than adopted. A `panels.json` from before this record moves its text into files at the first save.
+The folder can be opened in an IDE, diffed or kept in Git. comando does not reload a file changed outside while it runs: the next save keeps the outside version aside, and the panel shows comando's text; a reload on change is open. Specs open only from `panels/`; a file elsewhere is refused rather than adopted. A `panels.json` from before this record moves its text into files at the first save. A panel whose file cannot be written, open or just closed, keeps its text in `panels.json` until it can; a closed one comes back as a panel at the next start if it never lands. One file is never bound to two panels (amended 2026-10-14 after the concurrency review of `bfb5f63`).
