@@ -26,6 +26,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
@@ -61,8 +62,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     private final JsonFile<List<ConnectionSpec>> connections;
     private final JsonFile<List<SessionSpec>> sessions;
     private final JsonFile<List<StoredPanel>> panels;
-    private final ScheduledExecutorService writer =
-            Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("store").daemon(false).unstarted(r));
+    private final ScheduledExecutorService writer = writer();
     /**
      * Connection saves talk to the keychain, which can wait on an unlock prompt for its whole bound; they get a
      * thread of their own, so panel text and sessions are never queued behind a prompt nobody answers.
@@ -70,6 +70,16 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     private final ExecutorService secretsWriter =
             Executors.newSingleThreadExecutor(r -> Thread.ofPlatform().name("store-secrets").daemon(false).unstarted(r));
     private final ConcurrentHashMap<String, String> texts = new ConcurrentHashMap<>();
+
+    /**
+     * The writer thread. A delayed write still waiting at shutdown is dropped, not run: {@link #close} writes
+     * everything at once, and a retry run later would write into the folder after the store closed.
+     */
+    private static ScheduledExecutorService writer() {
+        ScheduledThreadPoolExecutor e = new ScheduledThreadPoolExecutor(1, r -> Thread.ofPlatform().name("store").daemon(false).unstarted(r));
+        e.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
+        return e;
+    }
     /** Panels whose text changed since their file was written. */
     private final Set<String> dirty = ConcurrentHashMap.newKeySet();
     /** Panels whose last file write failed; the user is told once per run of failures. Writer thread only. */
@@ -330,6 +340,11 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     @Override
     public Optional<Path> file(PanelId panel) {
         return files.file(panel.value());
+    }
+
+    @Override
+    public boolean document(PanelId panel) {
+        return files.document(panel.value());
     }
 
     @Override
@@ -602,6 +617,11 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     private static String nz(String s, String fallback) {
         return s == null ? fallback : s;
+    }
+
+    /** The writer thread ran its last task and ended; for tests. */
+    boolean writerTerminated() {
+        return writer.isTerminated();
     }
 
     /** Writes the panels now and stops the writer after the queued writes. Idempotent. */

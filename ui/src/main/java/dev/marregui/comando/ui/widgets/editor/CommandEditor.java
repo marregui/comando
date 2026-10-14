@@ -15,6 +15,7 @@ import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SquiggleUnderlineHighlightPainter;
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.Gutter;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
@@ -59,6 +60,7 @@ public final class CommandEditor implements Searchable, Zoomable {
     };
     private boolean silent;
     private final SqlCompletion completion = new SqlCompletion();
+    private int marked;
 
     /** The panel closed: releases what outlives the component (the completion's global listener, the gutter timer). */
     public void dispose() {
@@ -96,6 +98,23 @@ public final class CommandEditor implements Searchable, Zoomable {
 
     public RSyntaxTextArea area() {
         return area;
+    }
+
+    /**
+     * The syntax the text is coloured as: SQL for a panel's own text, where blocks run on a database or go to Claude;
+     * a file's own language for a file opened in a panel, where the gutter marks no targets and nothing reads as SQL.
+     */
+    public void syntax(String style) {
+        if (style.equals(area.getSyntaxEditingStyle())) {
+            return;
+        }
+        area.setSyntaxEditingStyle(style);
+        refreshMarkers();
+        refreshOccurrences();
+    }
+
+    private boolean sqlStyle() {
+        return SyntaxConstants.SYNTAX_STYLE_SQL.equals(area.getSyntaxEditingStyle());
     }
 
     /** Completes SQL keywords and the tables and columns of {@code schema}; Ctrl+Space, or after a pause in a word. */
@@ -404,6 +423,9 @@ public final class CommandEditor implements Searchable, Zoomable {
      * up on its own and repeated words light up.
      */
     boolean caretInSql() {
+        if (!sqlStyle()) {
+            return false;
+        }
         String text = area.getText();
         int caret = area.getCaretPosition();
         Blocks.Block b = Blocks.at(text, caret);
@@ -415,17 +437,28 @@ public final class CommandEditor implements Searchable, Zoomable {
         return c.target() == Target.SQL && !c.text().isEmpty() || SqlCompletion.startsAStatement(block);
     }
 
-    /** Repeated words light up in SQL, where they are identifiers, not in prose for Claude. */
+    /** Repeated words light up in SQL and in source code, where they are identifiers, not in prose. */
     private void refreshOccurrences() {
-        boolean sql = caretInSql();
-        if (area.getMarkOccurrences() != sql) {
-            area.setMarkOccurrences(sql);
+        String style = area.getSyntaxEditingStyle();
+        boolean on = sqlStyle() ? caretInSql()
+                : !style.equals(SyntaxConstants.SYNTAX_STYLE_NONE) && !style.equals(SyntaxConstants.SYNTAX_STYLE_MARKDOWN);
+        if (area.getMarkOccurrences() != on) {
+            area.setMarkOccurrences(on);
         }
+    }
+
+    /** The blocks the gutter marks with their target; for tests. */
+    int marked() {
+        return marked;
     }
 
     private void refreshMarkers() {
         Gutter gutter = scroll.getGutter();
         gutter.removeAllTrackingIcons();
+        marked = 0;
+        if (!sqlStyle()) {
+            return;
+        }
         String text = area.getText();
         for (Blocks.Block b : Blocks.all(text)) {
             Classifier.Classification c = Classifier.classify(b.text(text));
@@ -436,6 +469,7 @@ public final class CommandEditor implements Searchable, Zoomable {
             try {
                 gutter.addLineTrackingIcon(b.firstLine(), Icons.get(t == Target.SQL ? "database" : "claude", 14),
                         t == Target.SQL ? "Runs on the panel's connection" : "Goes to the panel's session as a prompt");
+                marked++;
             } catch (BadLocationException e) {
                 return; // the text changed under us; the next refresh redraws
             }

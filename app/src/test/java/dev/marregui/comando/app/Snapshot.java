@@ -8,6 +8,7 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
@@ -101,11 +102,59 @@ public final class Snapshot {
         Thread.sleep(2000);
         shoot(out.resolve("02c-sidebar-scratchpad.png"));
         selectSidebarTab(0);
-        // the focused panel's Markdown preview, switched on with its header button
+        // the focused panel's Markdown preview, switched on with its header's Preview button, and back with Edit
         click("Preview");
         Thread.sleep(800);
         shoot(out.resolve("02d-markdown-preview.png"));
-        click("Preview");
+        click("Edit");
+        // files opened from the scratchpad: a Markdown document opens rendered, its code in the editors' colours,
+        // and a source file opens as text coloured as its language
+        Path docs = Files.createTempDirectory("comando-snapshot-docs");
+        Path plan = Files.writeString(docs.resolve("LANE-PLAN.md"), """
+                # Lane plan
+
+                The **writer** owns the file; readers take a *stamp* first.
+
+                | Step | Owner |
+                |---|---|
+                | read | EDT |
+                | write | store |
+
+                ```java
+                @Override
+                public String write(String id, String text) throws IOException {
+                    // the temporary file first, then the move
+                    int tries = 3;
+                    return "done";
+                }
+                ```
+                """);
+        Path source = Files.writeString(docs.resolve("Lane.java"), """
+                package dev.marregui.lane;
+
+                /** One lane of the writer. */
+                public final class Lane implements AutoCloseable {
+
+                    private static final int SLOTS = 0x40;
+                    private final String name;
+
+                    @Override
+                    public void close() {
+                        if (name.isEmpty()) {
+                            throw new IllegalStateException("closed twice: " + SLOTS);
+                        }
+                    }
+                }
+                """);
+        PanelId first = loop.state().focused();
+        SwingUtilities.invokeAndWait(() -> app.ui().openFile(plan));
+        Thread.sleep(1500);
+        shoot(out.resolve("02e-markdown-document.png"));
+        SwingUtilities.invokeAndWait(() -> app.ui().openFile(source));
+        Thread.sleep(1500);
+        shoot(out.resolve("02f-source-colours.png"));
+        loop.dispatch(new Intent.FocusPanel(first));
+        Thread.sleep(500);
         long plotId = loop.state().views().stream().filter(v -> v.title().equals("delay")).findFirst().orElseThrow().id();
         loop.dispatch(new Intent.SelectLowerTab(LowerTab.view(plotId)));
         Thread.sleep(800);

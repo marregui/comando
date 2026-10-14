@@ -35,11 +35,11 @@ A command appears in at most one menu (its group) and carries at most one key st
 
 | Class | Purpose |
 |---|---|
-| `Editors` | the one place a text area is configured: theme, font, syntax by file type; `colorOf` gives a token type's colour |
+| `Editors` | the one place a text area is configured: theme (IntelliJ's Dark colours, `editor-dark.xml`), font, syntax by file extension, file name or code-fence language; `colorOf` gives a token type's colour |
 | `TextSearch` | find in a text area with every match marked; the search of every text-based widget |
 | `Highlighter` | syntax colours for text painted outside a text area (the transcript), from the same token makers and colours as the editors; safe on any thread |
 | `Diffs`, `DiffPane` | unified diff of two texts with three lines of context; the pane colours added and removed lines |
-| `MarkdownHtml`, `HtmlPane` | Markdown (CommonMark with tables) to HTML for Swing's HTML renderer; raw HTML in the source is escaped; an image becomes its alt text, so nothing is fetched; links open in the browser |
+| `MarkdownHtml`, `HtmlPane` | Markdown (CommonMark with tables) to HTML for Swing's HTML renderer; raw HTML in the source is escaped; an image becomes its alt text, so nothing is fetched; a code fence naming its language takes the editors' colours; links open in the browser |
 | `SourceLinks` | turns `path/File.java:42` references into links that open the file at the line; leaves code blocks and existing links alone |
 | `Plain` | text shown as text: `Plain.only(component)` turns HTML rendering off (before the text is set), `Plain.text(s)` guards a single string that starts with `<html>` ([Approvals and safety](approvals-and-safety.md#6-text-is-never-rendered-as-html)) |
 

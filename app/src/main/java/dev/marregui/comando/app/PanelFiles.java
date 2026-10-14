@@ -75,6 +75,12 @@ final class PanelFiles {
         return Optional.ofNullable(names.get(id));
     }
 
+    /** True when the panel is bound to a file elsewhere rather than to a file of the folder. */
+    boolean document(String id) {
+        String name = names.get(id);
+        return name != null && !owned(name);
+    }
+
     private Path path(String name) {
         Path p = Path.of(name);
         return p.isAbsolute() ? p : dir.resolve(name);

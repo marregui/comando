@@ -5,6 +5,7 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.Layout;
@@ -115,6 +116,10 @@ public sealed interface Effect {
 
     /** Shows the scratchpad's tree in the sidebar's Scratchpad tab. */
     record ShowScratchpad(ViewSpec.TreeNode root) implements Effect {
+    }
+
+    /** Shows the plan's usage limits in the status bar. */
+    record ShowPlanUsage(PlanUsage usage) implements Effect {
     }
 
     // ---- persistence

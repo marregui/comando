@@ -43,12 +43,12 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 
 | Part | What it is |
 |---|---|
-| **Sidebar**, left | three tabs: **Sessions** (Claude Code sessions), **Connections** (databases) and **Scratchpad** (your `~/.claude/SCRATCHPAD`; one click on a file opens it in a panel, where **⌘⇧M** or the Preview button shows it rendered). Sessions and Connections each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
+| **Sidebar**, left | three tabs: **Sessions** (Claude Code sessions), **Connections** (databases) and **Scratchpad** (your `~/.claude/SCRATCHPAD`; one click on a file opens it in a panel: Markdown shows rendered; the header's **Edit** button or **⌘⇧M** switches to the text, and **Preview** switches back; source files show in their language's colours). Sessions and Connections each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one. |
 | **Panel header** | two chips: the panel's **connection** and its **session**, each with a status dot (○ closed, ● open) and a button to connect or start it. **Run** and **Stop** on the right. |
 | **Editor** | where you write SQL and prompts, mixed in one text. |
 | **Lower tabs** | **Results** (SQL output), **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell). Plots and kept results open more tabs here. |
-| **Status bar**, bottom | the current message on the left (click it for the recent ones); the panel's session, connection, running work and the embedded QuestDB on the right. |
+| **Status bar**, bottom | the current message on the left (click it for the recent ones); your plan's usage (session, week, Fable; hover for the reset times; read every 5 minutes), the panel's session, connection, running work and the embedded QuestDB on the right. |
 
 One idea runs through the whole tool: **a panel is bound to at most one connection and one session**. SQL you run in the panel goes to its connection; anything else goes to its session.
 

@@ -5,6 +5,7 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
@@ -295,6 +296,10 @@ public sealed interface Intent {
 
     /** The scratchpad as read, for the sidebar; sent only when it changed since the last read. */
     record ScratchpadLoaded(ViewSpec.TreeNode root) implements Intent {
+    }
+
+    /** The plan's usage limits as read from Claude Code, every few minutes. */
+    record PlanUsageRead(PlanUsage usage) implements Intent {
     }
 
     // ---- notices

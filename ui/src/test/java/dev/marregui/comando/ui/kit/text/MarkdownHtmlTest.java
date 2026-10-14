@@ -18,6 +18,22 @@ class MarkdownHtmlTest {
     }
 
     @Test
+    void aCodeBlockTakesTheEditorsColoursForItsLanguage() {
+        String html = MarkdownHtml.render("```java\nreturn \"<b>\";\n```\n");
+        assertThat(html).contains("<pre class=\"code\"><code>")
+                .contains("<font color=\"#cf8e6d\">return</font>")
+                .contains("<font color=\"#6aab73\">\"&lt;b&gt;\"</font>")
+                .doesNotContain("<b>");
+    }
+
+    @Test
+    void aCodeBlockWithoutALanguageIsPlainAndEscaped() {
+        assertThat(MarkdownHtml.render("```\n<script>x</script>\n```\n"))
+                .contains("<pre class=\"code\"><code>&lt;script&gt;x&lt;/script&gt;\n</code></pre>")
+                .doesNotContain("<font");
+    }
+
+    @Test
     void linksStayLinks() {
         assertThat(MarkdownHtml.render("[docs](https://example.org/a)")).contains("href=\"https://example.org/a\">docs</a>");
     }

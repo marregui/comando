@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.panels;
 
+import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
@@ -41,8 +42,8 @@ import java.util.List;
 import java.util.regex.Pattern;
 
 /**
- * The standing notice on the left, which opens the recent notices when clicked; the focused panel's session,
- * connection, running work and the embedded server on the right.
+ * The standing notice on the left, which opens the recent notices when clicked; the plan's usage limits, the focused
+ * panel's session, connection, running work and the embedded server on the right.
  */
 public final class StatusBar {
 
@@ -54,6 +55,9 @@ public final class StatusBar {
     private final JLabel connection = new JLabel();
     private final JLabel work = new JLabel();
     private final JLabel server = new JLabel();
+    private final JLabel usage = new JLabel();
+    /** The last read that had windows; a failed read after it keeps showing it, marked as old. */
+    private PlanUsage lastUsage;
     private final IntentSink intents;
     private List<Notice> history = List.of();
     private Runnable serverClick = () -> { };
@@ -65,11 +69,14 @@ public final class StatusBar {
         root.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(3, Theme.PAD, 3, Theme.PAD)));
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.PAD * 2, 0));
+        right.add(usage);
         right.add(session);
         right.add(connection);
         right.add(work);
         right.add(server);
         server.setVisible(false);
+        usage.setVisible(false);
+        usage.getAccessibleContext().setAccessibleName("Plan usage");
         server.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         server.addMouseListener(new MouseAdapter() {
             @Override
@@ -103,6 +110,78 @@ public final class StatusBar {
         server.setForeground(running ? Theme.OK : Theme.MUTED);
         server.setToolTipText(Plain.text(name + (running ? " is running; click to stop it" : " is stopped; click to start it")));
         serverClick = click;
+    }
+
+    /** At or above this much of a window used, the usage shows as a warning. */
+    static final int USAGE_WARN = 75;
+    /** At or above this much, as a danger. */
+    static final int USAGE_DANGER = 90;
+    private static final DateTimeFormatter HOUR_MINUTE = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
+
+    /**
+     * Shows the plan's usage limits: each window's share used, and when the session window resets; the tooltip has
+     * every reset time. A failed read keeps the last good one, muted, with the reason in the tooltip; with none, it
+     * shows nothing.
+     */
+    public void planUsage(PlanUsage read) {
+        if (!read.windows().isEmpty()) {
+            lastUsage = read;
+        }
+        if (lastUsage == null) {
+            usage.setVisible(false);
+            return;
+        }
+        boolean stale = read != lastUsage;
+        usage.setVisible(true);
+        usage.setText(usageText(lastUsage));
+        int worst = lastUsage.windows().stream().mapToInt(PlanUsage.Window::percent).max().orElse(0);
+        usage.setForeground(stale ? Theme.MUTED : worst >= USAGE_DANGER ? Theme.DANGER : worst >= USAGE_WARN ? Theme.WARN : Theme.MUTED);
+        StringBuilder tip = new StringBuilder();
+        for (PlanUsage.Window w : lastUsage.windows()) {
+            tip.append(MarkdownHtml.escape(w.name() + ": " + w.percent() + "% used" + (w.resets().isEmpty() ? "" : ", resets " + w.resets())))
+                    .append("<br>");
+        }
+        tip.append(MarkdownHtml.escape("Read at " + HOUR_MINUTE.format(Instant.ofEpochMilli(lastUsage.readAtMillis()))
+                + " from Claude Code's /usage, every 5 minutes"));
+        if (stale) {
+            tip.append("<br>").append(MarkdownHtml.escape("The read at " + HOUR_MINUTE.format(Instant.ofEpochMilli(read.readAtMillis()))
+                    + " failed: " + read.problem()));
+        }
+        usage.setToolTipText("<html>" + tip + "</html>");
+    }
+
+    /** The usage label; for tests. */
+    JLabel usageLabel() {
+        return usage;
+    }
+
+    /** "Session 5% (resets 7:19pm) · Week 43% · Fable 17%": the session's reset is the one that comes within hours. */
+    static String usageText(PlanUsage u) {
+        StringBuilder sb = new StringBuilder();
+        for (PlanUsage.Window w : u.windows()) {
+            if (!sb.isEmpty()) {
+                sb.append(" · ");
+            }
+            sb.append(w.name()).append(' ').append(w.percent()).append('%');
+            if (w.name().equals("Session")) {
+                String at = resetTime(w.resets());
+                if (!at.isEmpty()) {
+                    sb.append(" (resets ").append(at).append(')');
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    /** The time of day in Claude Code's reset text: "Oct 14 at 7:19pm (Europe/Madrid)" gives "7:19pm". */
+    static String resetTime(String resets) {
+        int at = resets.lastIndexOf(" at ");
+        if (at < 0) {
+            return "";
+        }
+        String t = resets.substring(at + 4);
+        int paren = t.indexOf(" (");
+        return (paren < 0 ? t : t.substring(0, paren)).strip();
     }
 
     /**

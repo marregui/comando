@@ -13,6 +13,7 @@ import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.editor.CommandEditor;
@@ -24,7 +25,6 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
-import javax.swing.JToggleButton;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -37,9 +37,11 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * One editor panel: a header with its connection and session, and the command editor. A panel kept in a Markdown
- * file, its own or a scratchpad document, switches between the editor and the rendered text. A production
- * connection frames the panel in red.
+ * One editor panel: a header with its connection and session, and the command editor. A panel's own text is SQL and
+ * prompts; a panel opened on a file, a scratchpad document, is coloured as the file's language, and a Markdown one
+ * opens rendered. Any Markdown panel switches between the editor and the rendered text with its header button, which
+ * names the other view: Preview while editing, Edit while previewing. A
+ * production connection frames the panel in red.
  */
 public final class EditorPanel extends JPanel {
 
@@ -51,10 +53,13 @@ public final class EditorPanel extends JPanel {
     private final JButton sessionToggle = iconButton();
     private final JButton run = new JButton("Run", Icons.get("play"));
     private final JButton stop = new JButton(Icons.get("stop"));
-    private final JToggleButton preview = new JToggleButton("Preview", Icons.get("markdown"));
+    /** Names the other view: Preview while the text is edited, Edit while the Markdown shows rendered. */
+    private final JButton mode = new JButton();
+    private boolean previewing;
     private final HtmlPane rendered = new HtmlPane();
     private final JPanel center = new JPanel(new CardLayout());
     private Path file;
+    private boolean document;
     private final SchemaRegistry schemas;
     private PanelState panel;
     private AppState state;
@@ -83,11 +88,10 @@ public final class EditorPanel extends JPanel {
         // a click leaves the keyboard in the editor, ready for the next edit or run
         run.setFocusable(false);
         stop.setFocusable(false);
-        preview.setFocusable(false);
-        preview.setToolTipText("Show the Markdown rendered, or the text to edit (⌘⇧M)");
-        preview.getAccessibleContext().setAccessibleName("Preview");
-        preview.addActionListener(e -> showPreview(preview.isSelected()));
-        right.add(preview);
+        mode.setFocusable(false);
+        showMode();
+        mode.addActionListener(e -> showPreview(!previewing));
+        right.add(mode);
         right.add(run);
         right.add(stop);
         header.add(left, BorderLayout.WEST);
@@ -115,16 +119,25 @@ public final class EditorPanel extends JPanel {
     private static final String EDIT = "edit";
     private static final String PREVIEW = "preview";
 
-    /** The panel's file, once it has one: a Markdown file offers the preview, any other file does not. */
-    public void file(Path file) {
-        if (Objects.equals(file, this.file)) {
+    /**
+     * The panel's file, once it has one, and whether it is a {@code document}: a file opened in the panel rather than
+     * the panel's own. A document is coloured as its language and, when Markdown, shows rendered first; the panel's
+     * own text stays SQL and prompts, in the editor. A Markdown file offers the Edit switch, any other file does not.
+     */
+    public void file(Path file, boolean document) {
+        if (Objects.equals(file, this.file) && document == this.document) {
             return;
         }
+        boolean opened = document && !(this.document && Objects.equals(file, this.file));
         this.file = file;
+        this.document = document;
+        editor.syntax(document && file != null ? Editors.styleFor(file) : Editors.styleFor("sql"));
         boolean markdown = isMarkdown();
-        preview.setVisible(markdown);
+        mode.setVisible(markdown);
         if (!markdown && previewing()) {
             showPreview(false);
+        } else if (markdown && opened) {
+            showPreview(true);
         }
     }
 
@@ -139,22 +152,28 @@ public final class EditorPanel extends JPanel {
     }
 
     boolean previewOffered() {
-        return preview.isVisible();
+        return mode.isVisible();
+    }
+
+    /** The mode button's label: the view a click switches to; for tests. */
+    String modeLabel() {
+        return mode.getText();
     }
 
     public boolean previewing() {
-        return preview.isSelected();
+        return previewing;
     }
 
     /** Switches between the text to edit and the Markdown rendered; a file that is not Markdown stays as text. */
     public void togglePreview() {
-        if (preview.isVisible()) {
+        if (mode.isVisible()) {
             showPreview(!previewing());
         }
     }
 
     private void showPreview(boolean on) {
-        preview.setSelected(on);
+        previewing = on;
+        showMode();
         if (on) {
             rendered.setMarkdown(editor.text());
             rendered.setCaretPosition(0);
@@ -163,6 +182,14 @@ public final class EditorPanel extends JPanel {
         if (!on) {
             editor.requestFocus();
         }
+    }
+
+    private void showMode() {
+        String label = previewing ? "Edit" : "Preview";
+        mode.setText(label);
+        mode.setIcon(Icons.get(previewing ? "edit" : "preview"));
+        mode.setToolTipText(previewing ? "Edit the Markdown (⌘⇧M)" : "Show the Markdown rendered (⌘⇧M)");
+        mode.getAccessibleContext().setAccessibleName(label);
     }
 
     /** The file changed outside comando: the editor takes the text, and the preview shows it when it is on. */

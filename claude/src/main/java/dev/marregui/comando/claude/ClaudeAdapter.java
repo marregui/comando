@@ -3,6 +3,7 @@ package dev.marregui.comando.claude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.port.ClaudePort;
@@ -18,6 +19,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -45,6 +47,9 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     private final ScheduledExecutorService timer =
             Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("claude-timer").daemon(true).unstarted(r));
     private volatile boolean closed;
+    /** Reads the plan's usage limits; a thread of its own, as a read can take seconds. */
+    private final ScheduledExecutorService planUsage =
+            Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("plan-usage").daemon(true).unstarted(r));
 
     public ClaudeAdapter(IntentSink sink, TranscriptRegistry transcripts, McpGateway mcp, ClaudeSettings settings) {
         this.sink = sink;
@@ -423,6 +428,27 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         return i < 0 ? text : text.substring(i + 1);
     }
 
+    /**
+     * Reads the plan's usage limits now and then every {@code every}, and sends each read to the status bar. A read
+     * runs Claude Code's local {@code /usage} command: no prompt, no tokens, no saved session.
+     */
+    public void watchPlanUsage(Duration every) {
+        planUsage.scheduleWithFixedDelay(() -> {
+            // an exception escaping a periodic task cancels every later run
+            try {
+                PlanUsage usage = PlanUsageReader.read(settings.executable(), settings.runDir(), json);
+                if (!usage.problem().isEmpty()) {
+                    LOG.log(System.Logger.Level.WARNING, "cannot read the plan's usage limits: " + usage.problem());
+                }
+                if (!closed) {
+                    sink.dispatch(new Intent.PlanUsageRead(usage));
+                }
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.ERROR, "plan usage read failed", e);
+            }
+        }, 0, every.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
     /** Stops every process (SIGTERM, then kill) and the strands. Idempotent. */
     @Override
     public void close() {
@@ -430,6 +456,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             return;
         }
         closed = true;
+        planUsage.shutdownNow();
         // SIGTERM to every process, collected on each strand; the strands then stop, so no exit handler runs and
         // this method cleans up after the processes itself: SIGKILL after the grace period, config files with
         // their bearer tokens deleted, tokens revoked

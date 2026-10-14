@@ -215,7 +215,7 @@ public final class Workspace {
                 }
                 tabs.setToolTipTextAt(at, Plain.text(tooltip(p) + texts.file(p.id()).map(f -> " · " + Labels.shortPath(f.toString())).orElse("")
                         + (unseen.contains(p.id()) ? " · a query finished" : "")));
-                view.file(texts.file(p.id()).orElse(null));
+                view.file(texts.file(p.id()).orElse(null), texts.document(p.id()));
                 view.render(p, s);
             }
             EditorPanel focused = panels.get(s.focused());

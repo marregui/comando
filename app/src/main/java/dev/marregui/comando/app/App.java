@@ -51,6 +51,8 @@ public final class App implements AutoCloseable {
     private final Deque<AutoCloseable> owned = new ArrayDeque<>();
     /** How often the scratchpad folder is read for the sidebar. */
     static final Duration SCRATCHPAD_EVERY = Duration.ofSeconds(2);
+    /** How often the status bar's plan usage is read; each read is one local {@code claude -p /usage}, about a second. */
+    static final Duration PLAN_USAGE_EVERY = Duration.ofMinutes(5);
     private final StateLoop loop;
     private final ClaudeAdapter claude;
     private final ComandoUi ui;
@@ -118,6 +120,7 @@ public final class App implements AutoCloseable {
         ui.start();
         // the sidebar's scratchpad stays in sync whether its tab shows or not
         tools.watchScratchpad(SCRATCHPAD_EVERY);
+        claude.watchPlanUsage(PLAN_USAGE_EVERY);
         List<SessionSpec> withHistory = loop.state().sessions().stream().map(SessionState::spec)
                 .filter(s -> !s.claudeSessionId().isEmpty()).toList();
         for (SessionSpec s : withHistory) {
@@ -135,6 +138,11 @@ public final class App implements AutoCloseable {
 
     public StateLoop loop() {
         return loop;
+    }
+
+    /** The window; the snapshot tool drives it as a user would. */
+    ComandoUi ui() {
+        return ui;
     }
 
     private <T extends AutoCloseable> T own(T resource) {

@@ -2,6 +2,7 @@ package dev.marregui.comando.core.port;
 
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.ViewSpec;
 
@@ -22,4 +23,7 @@ public interface UiPort {
 
     /** Shows the scratchpad's tree in the sidebar's Scratchpad tab. */
     void showScratchpad(ViewSpec.TreeNode root);
+
+    /** Shows the plan's usage limits in the status bar. */
+    void showPlanUsage(PlanUsage usage);
 }

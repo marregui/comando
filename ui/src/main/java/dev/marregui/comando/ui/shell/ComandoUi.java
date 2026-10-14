@@ -7,6 +7,7 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
@@ -558,6 +559,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         Edt.run(() -> sidebar.showScratchpad(root));
     }
 
+    @Override
+    public void showPlanUsage(PlanUsage usage) {
+        Edt.run(() -> status.planUsage(usage));
+    }
+
     /** Applies a session's layout once the user has not typed for two seconds, so panes never move under the keys. */
     private void arrangeWhenIdle(Layout layout) {
         if (frame == null) {
@@ -662,7 +668,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // panels
         cmd("panel.new", "New panel", "add", key(KeyEvent.VK_T, CMD), "Panels", () -> workspace.newPanel());
         cmd("panel.openSpec", "Open file…", "file", key(KeyEvent.VK_O, CMD), "Panels", this::openSpec);
-        cmd("panel.preview", "Toggle Markdown preview", "markdown", key(KeyEvent.VK_M, CMD | SHIFT), "Panels", () -> {
+        cmd("panel.preview", "Edit or preview Markdown", "edit", key(KeyEvent.VK_M, CMD | SHIFT), "Panels", () -> {
             EditorPanel p = workspace.focused();
             if (p != null) {
                 p.togglePreview();
@@ -975,8 +981,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /**
      * Opens a file in a new panel bound to it, or brings forward the panel that has it. The check and the read run
      * off the EDT; a file that is binary or over {@link OpenFiles#MAX_PANEL_BYTES} shows read-only in the side pane.
+     * Called on the EDT.
      */
-    private void openFile(Path chosen) {
+    public void openFile(Path chosen) {
         Path file = chosen.toAbsolutePath().normalize();
         for (PanelState p : deps.state().get().panels()) {
             if (deps.texts().file(p.id()).map(f -> samePath(f, file)).orElse(false)) {

@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widgets.editor;
 
+import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.junit.jupiter.api.Test;
 import javax.swing.SwingUtilities;
 import java.lang.reflect.InvocationTargetException;
@@ -311,6 +312,23 @@ class CommandEditorTest {
             e.area().undoLastAction();
             assertThat(e.text()).as("one step back").isEqualTo("SELECT 2;\n");
             assertThat(changes).as("an undo is the user's edit, and is saved").isNotEmpty().last().isEqualTo("SELECT 2;\n");
+            e.dispose();
+        });
+    }
+
+    @Test
+    void aSourceFileIsColouredAsItsLanguageAndMarksNoTargets() {
+        onEdt(() -> {
+            CommandEditor e = new CommandEditor();
+            e.load("select x from t;\n\nclass A {}\n");
+            assertThat(e.marked()).as("a panel's own text: each block marked with where it runs").isEqualTo(2);
+            e.syntax(SyntaxConstants.SYNTAX_STYLE_JAVA);
+            assertThat(e.area().getSyntaxEditingStyle()).isEqualTo(SyntaxConstants.SYNTAX_STYLE_JAVA);
+            assertThat(e.marked()).as("the gutter marks no targets in source code").isZero();
+            e.area().setCaretPosition(2);
+            assertThat(e.caretInSql()).as("no SQL completion pops up in Java").isFalse();
+            e.syntax(SyntaxConstants.SYNTAX_STYLE_SQL);
+            assertThat(e.marked()).isEqualTo(2);
             e.dispose();
         });
     }

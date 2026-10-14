@@ -5,6 +5,7 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.ApprovalPort;
 import dev.marregui.comando.core.port.ClaudePort;
@@ -132,6 +133,11 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     @Override
     public void showScratchpad(ViewSpec.TreeNode root) {
         record("ui.scratchpad " + root.label());
+    }
+
+    @Override
+    public void showPlanUsage(PlanUsage usage) {
+        record("ui.planUsage " + usage.windows().size());
     }
 
     @Override

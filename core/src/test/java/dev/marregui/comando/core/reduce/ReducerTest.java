@@ -9,6 +9,7 @@ import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.model.Status;
@@ -88,6 +89,9 @@ class ReducerTest {
         ViewSpec.TreeNode root = new ViewSpec.TreeNode("SCRATCHPAD", "", List.of());
         apply(new Intent.ScratchpadLoaded(root));
         assertThat(effects).containsExactly(new Effect.ShowScratchpad(root));
+        PlanUsage usage = new PlanUsage(List.of(new PlanUsage.Window("Session", 5, "Oct 14 at 7:19pm")), 1L, "");
+        apply(new Intent.PlanUsageRead(usage));
+        assertThat(effects).containsExactly(new Effect.ShowPlanUsage(usage));
         assertThat(state).isSameAs(before);
     }
 

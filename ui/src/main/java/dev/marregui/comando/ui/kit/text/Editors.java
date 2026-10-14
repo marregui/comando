@@ -9,10 +9,11 @@ import java.awt.Color;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 
-/** The one place text areas are configured: theme, font, syntax by file type. */
+/** The one place text areas are configured: theme (IntelliJ's Dark colours), font, syntax by file type. */
 public final class Editors {
 
     private static final Map<String, String> STYLES = Map.ofEntries(
@@ -43,7 +44,42 @@ public final class Editors {
             Map.entry("cpp", SyntaxConstants.SYNTAX_STYLE_CPLUSPLUS),
             Map.entry("clj", SyntaxConstants.SYNTAX_STYLE_CLOJURE),
             Map.entry("properties", SyntaxConstants.SYNTAX_STYLE_PROPERTIES_FILE),
-            Map.entry("dockerfile", SyntaxConstants.SYNTAX_STYLE_DOCKERFILE));
+            Map.entry("dockerfile", SyntaxConstants.SYNTAX_STYLE_DOCKERFILE),
+            Map.entry("markdown", SyntaxConstants.SYNTAX_STYLE_MARKDOWN),
+            Map.entry("jsx", SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT),
+            Map.entry("mjs", SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT),
+            Map.entry("tsx", SyntaxConstants.SYNTAX_STYLE_TYPESCRIPT),
+            Map.entry("htm", SyntaxConstants.SYNTAX_STYLE_HTML),
+            Map.entry("hpp", SyntaxConstants.SYNTAX_STYLE_CPLUSPLUS),
+            Map.entry("cc", SyntaxConstants.SYNTAX_STYLE_CPLUSPLUS),
+            Map.entry("cs", SyntaxConstants.SYNTAX_STYLE_CSHARP),
+            Map.entry("scala", SyntaxConstants.SYNTAX_STYLE_SCALA),
+            Map.entry("rb", SyntaxConstants.SYNTAX_STYLE_RUBY),
+            Map.entry("php", SyntaxConstants.SYNTAX_STYLE_PHP),
+            Map.entry("lua", SyntaxConstants.SYNTAX_STYLE_LUA),
+            Map.entry("pl", SyntaxConstants.SYNTAX_STYLE_PERL),
+            Map.entry("cljs", SyntaxConstants.SYNTAX_STYLE_CLOJURE),
+            Map.entry("cljc", SyntaxConstants.SYNTAX_STYLE_CLOJURE),
+            Map.entry("edn", SyntaxConstants.SYNTAX_STYLE_CLOJURE),
+            Map.entry("ini", SyntaxConstants.SYNTAX_STYLE_INI),
+            Map.entry("toml", SyntaxConstants.SYNTAX_STYLE_INI),
+            Map.entry("csv", SyntaxConstants.SYNTAX_STYLE_CSV),
+            Map.entry("makefile", SyntaxConstants.SYNTAX_STYLE_MAKEFILE),
+            Map.entry("mk", SyntaxConstants.SYNTAX_STYLE_MAKEFILE),
+            // the names a Markdown code fence gives its language
+            Map.entry("python", SyntaxConstants.SYNTAX_STYLE_PYTHON),
+            Map.entry("javascript", SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT),
+            Map.entry("typescript", SyntaxConstants.SYNTAX_STYLE_TYPESCRIPT),
+            Map.entry("kotlin", SyntaxConstants.SYNTAX_STYLE_KOTLIN),
+            Map.entry("shell", SyntaxConstants.SYNTAX_STYLE_UNIX_SHELL),
+            Map.entry("console", SyntaxConstants.SYNTAX_STYLE_UNIX_SHELL),
+            Map.entry("rust", SyntaxConstants.SYNTAX_STYLE_RUST),
+            Map.entry("golang", SyntaxConstants.SYNTAX_STYLE_GO),
+            Map.entry("clojure", SyntaxConstants.SYNTAX_STYLE_CLOJURE),
+            Map.entry("c++", SyntaxConstants.SYNTAX_STYLE_CPLUSPLUS),
+            Map.entry("csharp", SyntaxConstants.SYNTAX_STYLE_CSHARP),
+            Map.entry("ruby", SyntaxConstants.SYNTAX_STYLE_RUBY),
+            Map.entry("perl", SyntaxConstants.SYNTAX_STYLE_PERL));
 
     private static org.fife.ui.rsyntaxtextarea.Theme dark;
 
@@ -79,6 +115,13 @@ public final class Editors {
         return sp;
     }
 
+    /** The style of a file: by its extension, or by its whole name for files such as {@code Makefile}. */
+    public static String styleFor(Path file) {
+        String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+        int dot = name.lastIndexOf('.');
+        return styleFor(dot < 0 ? name : name.substring(dot + 1));
+    }
+
     public static String styleFor(String syntax) {
         if (syntax == null || syntax.isEmpty()) {
             return SyntaxConstants.SYNTAX_STYLE_NONE;
@@ -110,7 +153,7 @@ public final class Editors {
 
     private static synchronized org.fife.ui.rsyntaxtextarea.Theme darkTheme() {
         if (dark == null) {
-            try (InputStream in = RSyntaxTextArea.class.getResourceAsStream("/org/fife/ui/rsyntaxtextarea/themes/dark.xml")) {
+            try (InputStream in = Editors.class.getResourceAsStream("editor-dark.xml")) {
                 dark = org.fife.ui.rsyntaxtextarea.Theme.load(in);
             } catch (IOException e) {
                 throw new UncheckedIOException("cannot load the editor theme", e);

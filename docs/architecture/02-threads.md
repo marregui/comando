@@ -12,6 +12,7 @@
 | `claude-strand-<session>` | virtual, single-threaded executor | every change to a session: start, send, interrupt, stop, history load | the session's `Transcript` and stream mapper |
 | `claude-out-`, `claude-in-`, `claude-err-`, `claude-exit-<session>` | platform, per process | read stdout lines, write the stdin queue, keep the last 40 stderr lines, wait for the exit | the process streams |
 | `claude-timer` | platform | the stop sequence's deadlines | — |
+| `plan-usage` | platform, daemon | runs `claude --safe-mode -p /usage` at start and every 5 minutes for the status bar; a read is stopped after 30 s | — |
 | MCP server | virtual per request | MCP JSON-RPC over HTTP; an `approve` call waits for its card | pending approvals |
 | `gradle-<run>`, `jfrq-<run>` | virtual | run the child process, copy its output to the console, collect test reports | the run's `Console` |
 | `tool-output-<run>`, `tool-kill-<run>` | virtual | copy a run's output while it is open; SIGKILL what a stop left alive after 2 s | — |

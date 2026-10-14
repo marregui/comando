@@ -44,6 +44,7 @@ class PanelFilesTest {
             store.changed(spec, "# Nevsky\n\nSELECT 1;\n");
             store.changed(notes, "todo");
             assertThat(store.saveNow().get(5, TimeUnit.SECONDS)).isNull();
+            assertThat(store.document(spec)).as("a panel's own file, not a document opened in it").isFalse();
         }
         assertThat(Files.readString(dir().resolve("nevsky spec.md"))).isEqualTo("# Nevsky\n\nSELECT 1;\n");
         assertThat(Files.readString(dir().resolve("notes.md"))).isEqualTo("todo");
@@ -384,6 +385,34 @@ class PanelFilesTest {
     }
 
     @Test
+    void closingDropsAPendingRetryAndWritesNothingAfterItReturns() throws Exception {
+        PanelId id = new PanelId("q");
+        Files.createDirectories(dir());
+        Set<PosixFilePermission> writable = Files.getPosixFilePermissions(dir());
+        Store store = new Store(home);
+        long took;
+        try {
+            store.load();
+            store.savePanels(List.of(new PanelState(id, "spec", "", "")));
+            Files.setPosixFilePermissions(dir(), PosixFilePermissions.fromString("r-xr-xr-x"));
+            try {
+                store.changed(id, "v1");
+                store.saveNow().get(5, TimeUnit.SECONDS);
+            } finally {
+                Files.setPosixFilePermissions(dir(), writable);
+            }
+            // a retry is now due in Store.RETRY_MILLIS; the close writes at once and must not wait for it
+        } finally {
+            long start = System.nanoTime();
+            store.close();
+            took = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
+        }
+        assertThat(Files.readString(dir().resolve("spec.md"))).as("the close's own write").isEqualTo("v1");
+        assertThat(took).as("close waited for the retry instead of dropping it").isLessThan(Store.RETRY_MILLIS / 2);
+        assertThat(store.writerTerminated()).as("no write left to land after close").isTrue();
+    }
+
+    @Test
     void aPanelWhoseFileCannotBeNamedAtCloseComesBackAtTheNextStart() throws Exception {
         PanelId id = new PanelId("r");
         Files.createDirectories(dir());
@@ -451,6 +480,7 @@ class PanelFilesTest {
             store.load();
             assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEmpty();
             assertThat(store.load(id)).isEqualTo("# read me");
+            assertThat(store.document(id)).as("shows as its own language, Markdown rendered first").isTrue();
             store.savePanels(List.of(new PanelState(id, "READ-01-X", "", "")));
             store.changed(id, "# read me\n\nedited in comando");
             store.saveNow().get(5, TimeUnit.SECONDS);

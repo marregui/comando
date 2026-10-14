@@ -31,6 +31,14 @@ public interface PanelTexts {
         return Optional.empty();
     }
 
+    /**
+     * True when the panel was opened on a file outside the panels' folder, a scratchpad document or any file opened:
+     * it shows as that file's language, not as the panel's own SQL and prompts.
+     */
+    default boolean document(PanelId panel) {
+        return false;
+    }
+
     /** The folder of the panels' files; empty when text is not kept in files. */
     default Optional<Path> folder() {
         return Optional.empty();
