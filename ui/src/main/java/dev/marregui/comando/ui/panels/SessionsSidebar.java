@@ -8,7 +8,6 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -18,9 +17,11 @@ import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
+import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
@@ -28,22 +29,27 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JTabbedPane;
 import javax.swing.ListSelectionModel;
+import javax.swing.SwingUtilities;
 import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.FlowLayout;
 import java.awt.Insets;
+import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
- * The left column, three tabs: Sessions (every session with its project, branch, state, cost, last activity and
- * pending approvals), Connections, and Scratchpad (the scratchpad as a tree). Double-click on a session or a
- * connection binds it to the focused panel. Hidden, the column collapses to a rail whose button shows it again.
+ * The left column, three tabs: Sessions (every session with its project, branch, state and pending approvals, and
+ * controls to connect or disconnect it, change its model or effort, and edit it), Connections, and Scratchpad (the
+ * scratchpad as a tree). Double-click on a session or a connection binds it to the focused panel. Hidden, the column
+ * collapses to a rail whose button shows it again.
  */
 public final class SessionsSidebar {
 
@@ -66,7 +72,8 @@ public final class SessionsSidebar {
     private final Dialogs dialogs;
     private final DefaultListModel<SessionState> sessionModel = new DefaultListModel<>();
     private final DefaultListModel<ConnectionState> connectionModel = new DefaultListModel<>();
-    private final JList<SessionState> sessions = emptyText(new JList<>(sessionModel),
+    private final SessionRow sessionRow = new SessionRow();
+    private final JList<SessionState> sessions = emptyText(new SessionList(sessionModel),
             "No sessions yet. + creates one (⌘⇧K); the import button brings in stored Claude Code conversations.");
     private final JList<ConnectionState> connections = emptyText(new JList<>(connectionModel),
             "No connections yet. + adds one (⌘⇧O).");
@@ -79,7 +86,9 @@ public final class SessionsSidebar {
     private final JPanel rail;
     private final JPanel root = new JPanel(new BorderLayout());
     private AppState state;
-    private long now = System.currentTimeMillis();
+    /** The models and efforts the row's menus offer, as the palette and the session dialog do. */
+    static final List<String> MODELS = List.of("fable", "opus", "sonnet", "haiku");
+    static final List<String> EFFORTS = List.of("low", "medium", "high", "xhigh", "max");
 
     /** {@code toggle} hides or shows the sidebar, as View ▸ Toggle sidebar does; the owner calls {@link #show}. */
     public SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle) {
@@ -89,18 +98,9 @@ public final class SessionsSidebar {
         connections.getAccessibleContext().setAccessibleName("Connections");
         sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         connections.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        sessions.setCellRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected, boolean focus) {
-                JLabel l = (JLabel) super.getListCellRendererComponent(list, "", index, selected, focus);
-                SessionState s = (SessionState) value;
-                l.setText(sessionHtml(s));
-                l.setIcon(Icons.get("claude"));
-                l.setBorder(BorderFactory.createEmptyBorder(5, 6, 5, 6));
-                l.setToolTipText(s.spec().workDir() + (s.spec().claudeSessionId().isEmpty() ? "" : " · " + s.spec().claudeSessionId()));
-                return l;
-            }
-        });
+        sessions.setCellRenderer((list, s, index, selected, focus) -> sessionRow.show(s, boundText(s),
+                state == null ? 0 : state.pendingApprovals(s.name()), selected,
+                selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground()));
         connections.setCellRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected, boolean focus) {
@@ -117,7 +117,15 @@ public final class SessionsSidebar {
             @Override
             public void mouseClicked(MouseEvent e) {
                 SessionState s = at(sessions, e);
-                if (s != null && e.getClickCount() == 2) {
+                if (s == null || !SwingUtilities.isLeftMouseButton(e)) {
+                    return;
+                }
+                Optional<SessionRow.Control> control = control(s, e);
+                if (control.isPresent()) {
+                    if (e.getClickCount() == 1) {
+                        act(s, control.get());
+                    }
+                } else if (e.getClickCount() == 2) {
                     intents.dispatch(new Intent.BindSession(state.focused(), s.name()));
                 }
             }
@@ -138,6 +146,13 @@ public final class SessionsSidebar {
                     sessions.setSelectedValue(s, false);
                     sessionMenu(s).show(sessions, e.getX(), e.getY());
                 }
+            }
+        });
+        sessions.addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                SessionState s = at(sessions, e);
+                sessions.setCursor(s != null && control(s, e).isPresent() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
             }
         });
         connections.addMouseListener(new MouseAdapter() {
@@ -233,15 +248,81 @@ public final class SessionsSidebar {
 
     public void render(AppState s) {
         state = s;
-        now = System.currentTimeMillis();
         sync(sessionModel, s.sessions(), sessions);
         sync(connectionModel, s.connections(), connections);
     }
 
-    /** Repaints relative times without a state change. */
-    public void tick() {
-        now = System.currentTimeMillis();
-        sessions.repaint();
+    /** The row control under a mouse event on {@code s}'s cell, if any. */
+    private Optional<SessionRow.Control> control(SessionState s, MouseEvent e) {
+        int i = sessions.locationToIndex(e.getPoint());
+        Rectangle cell = sessions.getCellBounds(i, i);
+        layOutRow(s, i);
+        return sessionRow.hit(cell, e.getPoint());
+    }
+
+    /** Fills the shared renderer with the row at {@code index}, so its controls sit as they were painted. */
+    private void layOutRow(SessionState s, int index) {
+        sessions.getCellRenderer().getListCellRendererComponent(sessions, s, index, sessions.isSelectedIndex(index), false);
+    }
+
+    /** Where a row's control is, in the list's coordinates; for tests. */
+    Rectangle controlBounds(int index, SessionRow.Control control) {
+        layOutRow(sessionModel.get(index), index);
+        return sessionRow.bounds(sessions.getCellBounds(index, index), control);
+    }
+
+    /** What a click on a row's control does. */
+    private void act(SessionState s, SessionRow.Control control) {
+        int i = sessionModel.indexOf(s);
+        Rectangle cell = sessions.getCellBounds(i, i);
+        switch (control) {
+            case POWER -> intents.dispatch(s.status().isUsable() ? new Intent.StopSession(s.name()) : new Intent.StartSession(s.name()));
+            case EDIT -> dialogs.sessions(s.name());
+            case MODEL, EFFORT -> {
+                layOutRow(s, i);
+                Rectangle at = sessionRow.bounds(cell, control);
+                JPopupMenu m = new JPopupMenu();
+                (control == SessionRow.Control.MODEL ? modelItems(s) : effortItems(s)).forEach(m::add);
+                m.show(sessions, at.x, at.y + at.height);
+            }
+        }
+    }
+
+    /** One item per model, the session's own checked; a choice applies now to a running session and is saved. */
+    List<JMenuItem> modelItems(SessionState s) {
+        String current = SessionRow.modelName(s);
+        return MODELS.stream().map(m -> choice(m, m.equals(current), () -> intents.dispatch(new Intent.SetSessionModel(s.name(), m)))).toList();
+    }
+
+    List<JMenuItem> effortItems(SessionState s) {
+        String current = SessionRow.effortName(s);
+        return EFFORTS.stream().map(e -> choice(e, e.equals(current), () -> intents.dispatch(new Intent.SetSessionEffort(s.name(), e)))).toList();
+    }
+
+    private static JMenuItem choice(String text, boolean current, Runnable r) {
+        JCheckBoxMenuItem i = new JCheckBoxMenuItem(text, current);
+        i.addActionListener(e -> r.run());
+        return i;
+    }
+
+    /** The session list, whose tooltips name the control under the mouse, else the session's folder and conversation. */
+    private final class SessionList extends JList<SessionState> {
+        SessionList(DefaultListModel<SessionState> model) {
+            super(model);
+            setToolTipText("");
+        }
+
+        @Override
+        public String getToolTipText(MouseEvent e) {
+            int i = locationToIndex(e.getPoint());
+            if (i < 0 || !getCellBounds(i, i).contains(e.getPoint())) {
+                return null;
+            }
+            SessionState s = getModel().getElementAt(i);
+            layOutRow(s, i);
+            return Plain.text(sessionRow.tip(getCellBounds(i, i), e.getPoint())
+                    .orElse(s.spec().workDir() + (s.spec().claudeSessionId().isEmpty() ? "" : " · " + s.spec().claudeSessionId())));
+        }
     }
 
     private static <T> void sync(DefaultListModel<T> model, List<T> items, JList<T> list) {
@@ -270,23 +351,6 @@ public final class SessionsSidebar {
         return o instanceof SessionState s ? s.name() : o instanceof ConnectionState c ? c.name() : String.valueOf(o);
     }
 
-    private String sessionHtml(SessionState s) {
-        String muted = Theme.hex(Theme.MUTED);
-        String dot = "<span style='color:" + Theme.hex(EditorPanel.color(s.status())) + "'>" + EditorPanel.dot(s.status()) + "</span>";
-        int approvals = state == null ? 0 : state.pendingApprovals(s.name());
-        String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.WARN) + "'>⚑" + approvals + "</span>";
-        String activity = s.isBusy() ? (s.activity().isEmpty() ? "working" : MarkdownHtml.escape(clip(s.activity(), 30))) : Labels.ago(s.lastActivityMillis(), now);
-        String branch = s.branch().isEmpty() ? "" : " ⎇ " + MarkdownHtml.escape(s.branch());
-        String bound = boundText(s);
-        String where = bound.isEmpty() ? "" : "&nbsp;<span style='color:" + Theme.hex(bound.equals("this panel") ? Theme.ACCENT : Theme.MUTED_STRONG)
-                + "'>· " + MarkdownHtml.escape(clip(bound, 24)) + "</span>";
-        // two lines that never wrap: a narrow sidebar clips them at its edge rather than pushing the folder out
-        return "<html><nobr>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(s.name()) + "</b>" + where + badge
-                + "&nbsp;&nbsp;<span style='color:" + muted + "'>" + (s.costUsd() > 0 ? Labels.usd(s.costUsd()) + " · " : "") + activity + "</span>"
-                + "</nobr><br><nobr><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>"
-                + MarkdownHtml.escape(clip(Labels.shortPath(s.spec().workDir()), 34)) + branch + "</span></nobr></html>";
-    }
-
     private String connectionHtml(ConnectionState c) {
         String muted = Theme.hex(Theme.MUTED);
         String dot = "<span style='color:" + Theme.hex(EditorPanel.color(c.status())) + "'>" + EditorPanel.dot(c.status()) + "</span>";
@@ -307,6 +371,12 @@ public final class SessionsSidebar {
         } else {
             m.add(item("Start", "play", () -> intents.dispatch(new Intent.StartSession(s.name()))));
         }
+        JMenu models = new JMenu("Model");
+        modelItems(s).forEach(models::add);
+        m.add(models);
+        JMenu efforts = new JMenu("Effort");
+        effortItems(s).forEach(efforts::add);
+        m.add(efforts);
         m.addSeparator();
         m.add(item("Edit…", "edit", () -> dialogs.sessions(s.name())));
         m.add(item("Remove…", "close", () -> {

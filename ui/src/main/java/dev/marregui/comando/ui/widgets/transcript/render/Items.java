@@ -142,6 +142,19 @@ final class Items {
     static final class TextItem extends Item {
         private List<Paras.View> views = List.of();
         private int[] tops = new int[0];
+        /** The answer that ends its turn: its text reads in gold. */
+        private boolean conclusion;
+
+        boolean isConclusion() {
+            return conclusion;
+        }
+
+        void conclusion() {
+            if (!conclusion) {
+                conclusion = true;
+                invalidate();
+            }
+        }
 
         TextItem(Block.AssistantText b) {
             super(b);
@@ -158,7 +171,8 @@ final class Items {
         }
 
         @Override
-        int doLayout(int w, Style s) {
+        int doLayout(int w, Style style) {
+            Style s = conclusion ? style.conclusion() : style;
             tops = new int[views.size()];
             int y = 4;
             for (int i = 0; i < views.size(); i++) {
@@ -381,6 +395,11 @@ final class Items {
 
         void addChild(Item child) {
             children.add(child);
+            invalidate();
+        }
+
+        void removeLastChild() {
+            children.removeLast();
             invalidate();
         }
 

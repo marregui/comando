@@ -350,8 +350,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 layoutSaver.restart();
             }
         });
-        sidebarTimer = new Timer(30_000, e -> sidebar.tick());
-        sidebarTimer.start();
         tickTimer = new Timer(1_000, e -> tick());
         tickTimer.start();
         EditorPanel p = workspace.focused();
@@ -1433,7 +1431,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private void stopListening() {
-        sidebarTimer.stop();
         tickTimer.stop();
         layoutSaver.stop();
         KeyboardFocusManager.getCurrentKeyboardFocusManager().removePropertyChangeListener("permanentFocusOwner", focusListener);
@@ -1463,7 +1460,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private boolean quitting;
-    private Timer sidebarTimer;
     private final Consumer<String> schemaListener = connection -> render.request();
     private final StateLoop.Listener stateListener = (previous, next) -> render.request();
 

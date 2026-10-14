@@ -2,12 +2,19 @@ package dev.marregui.comando.ui.panels;
 
 import com.formdev.flatlaf.FlatDarkLaf;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.ViewSpec;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.AbstractButton;
+import javax.swing.JList;
+import javax.swing.JMenuItem;
 import javax.swing.JTabbedPane;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
@@ -118,6 +125,83 @@ class SessionsSidebarTest {
                     MouseEvent.BUTTON1));
         });
         assertThat(opened).containsExactly(Path.of("/s/2026-10-14/READ-01-X.md"));
+    }
+
+    @Test
+    void aSessionRowConnectsChangesModelAndEffortAndOpensItsEditor() throws Exception {
+        List<String> edited = new CopyOnWriteArrayList<>();
+        SessionsSidebar.Dialogs dialogs = new Dialogs() {
+            @Override
+            public void sessions(String select) {
+                edited.add(select);
+            }
+        };
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").withModel("opus").withEffort("high"));
+        PanelState panel = new PanelState(new PanelId("p"), "spec", "", "");
+        AppState state = AppState.initial(List.of(panel), List.of(), List.of(edge));
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intents::add, dialogs, () -> {
+            });
+            s[0].render(state);
+        });
+        SessionsSidebar sidebar = s[0];
+        JList<?> list = find(sidebar.component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+        SwingUtilities.invokeAndWait(() -> {
+            list.setSize(260, 400);
+            list.doLayout();
+        });
+
+        Rectangle power = bounds(sidebar, SessionRow.Control.POWER);
+        click(list, power, 1);
+        assertThat(intents).containsExactly(new Intent.StartSession("edge"));
+        assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Connect: start the session");
+
+        intents.clear();
+        click(list, power, 2);
+        assertThat(intents).as("a double click on a control binds nothing").doesNotHaveAnyElementsOfTypes(Intent.BindSession.class);
+        intents.clear();
+        Rectangle cell = list.getCellBounds(0, 0);
+        click(list, new Rectangle(cell.x + 40, cell.y + 4, 1, 1), 2);
+        assertThat(intents).containsExactly(new Intent.BindSession(new PanelId("p"), "edge"));
+
+        click(list, bounds(sidebar, SessionRow.Control.EDIT), 1);
+        assertThat(edited).containsExactly("edge");
+
+        intents.clear();
+        List<JMenuItem> models = sidebar.modelItems(edge);
+        assertThat(models).extracting(JMenuItem::getText).containsExactly("fable", "opus", "sonnet", "haiku");
+        assertThat(models).filteredOn(AbstractButton::isSelected).extracting(JMenuItem::getText).containsExactly("opus");
+        SwingUtilities.invokeAndWait(() -> models.getFirst().doClick());
+        List<JMenuItem> efforts = sidebar.effortItems(edge);
+        assertThat(efforts).filteredOn(AbstractButton::isSelected).extracting(JMenuItem::getText).containsExactly("high");
+        SwingUtilities.invokeAndWait(() -> efforts.getLast().doClick());
+        assertThat(intents).containsExactly(new Intent.SetSessionModel("edge", "fable"), new Intent.SetSessionEffort("edge", "max"));
+    }
+
+    @Test
+    void aRowNamesTheModelItAskedForElseTheOneReportedElseDefault() {
+        SessionSpec spec = SessionSpec.fresh("edge", "/w/edge");
+        assertThat(SessionRow.modelName(SessionState.closed(spec))).isEqualTo("default");
+        assertThat(SessionRow.modelName(SessionState.closed(spec.withModel("claude-opus-5-5")))).isEqualTo("opus");
+        assertThat(SessionRow.effortName(SessionState.closed(spec))).isEqualTo("default");
+    }
+
+    private static Rectangle bounds(SessionsSidebar sidebar, SessionRow.Control control) throws Exception {
+        Rectangle[] r = new Rectangle[1];
+        SwingUtilities.invokeAndWait(() -> r[0] = sidebar.controlBounds(0, control));
+        assertThat(r[0].width).as(control + " is laid out").isPositive();
+        return r[0];
+    }
+
+    private static MouseEvent event(Component c, Rectangle at, int clicks) {
+        return new MouseEvent(c, clicks == 0 ? MouseEvent.MOUSE_MOVED : MouseEvent.MOUSE_CLICKED, 0, 0,
+                at.x + at.width / 2, at.y + at.height / 2, clicks, false, MouseEvent.BUTTON1);
+    }
+
+    private static void click(Component c, Rectangle at, int clicks) throws Exception {
+        SwingUtilities.invokeAndWait(() -> c.dispatchEvent(event(c, at, clicks)));
     }
 
     /** Dialogs that do nothing, for tests that override what they look at. */

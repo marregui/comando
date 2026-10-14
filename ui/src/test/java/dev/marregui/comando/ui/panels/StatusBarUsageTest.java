@@ -1,6 +1,9 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.model.PlanUsage;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +44,13 @@ class StatusBarUsageTest {
         assertThat(label.getText()).as("the last good read stays").isEqualTo("Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
         assertThat(label.getForeground()).isEqualTo(Theme.MUTED);
         assertThat(label.getToolTipText()).contains("failed: &lt;b&gt;timeout&lt;/b&gt;");
+    }
+
+    @Test
+    void theSessionItemShowsTheContextAndNoCost() {
+        SessionState x = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").withModel("opus").withEffort("high"))
+                .withUsage(4.12, 412_000, 1_000_000, 1L);
+        assertThat(StatusBar.sessionText(x)).isEqualTo("edge · opus · high · ctx " + Labels.tokens(412_000) + " (41%)").doesNotContain("$");
     }
 
     @Test

@@ -323,6 +323,7 @@ public final class StatusBar {
         work.setForeground(s.approvals().isEmpty() ? Theme.MUTED : Theme.WARN);
     }
 
+    /** The focused panel's session: name, model, effort, context used and, during a turn, what it does; no cost. */
     static String sessionText(SessionState x) {
         StringBuilder sb = new StringBuilder(x.name());
         String model = x.info().model().isEmpty() ? x.spec().model() : x.info().model();
@@ -331,9 +332,6 @@ public final class StatusBar {
         }
         if (!x.spec().effort().isEmpty()) {
             sb.append(" · ").append(x.spec().effort());
-        }
-        if (x.costUsd() > 0) {
-            sb.append(" · ").append(Labels.usd(x.costUsd()));
         }
         if (x.contextTokens() > 0) {
             sb.append(" · ctx ").append(Labels.tokens(x.contextTokens()))

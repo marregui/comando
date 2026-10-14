@@ -27,6 +27,8 @@ public final class Theme {
     /** Secondary text on list and card backgrounds, where MUTED falls short of 4.5:1 contrast. */
     public static final Color MUTED_STRONG = new Color(0xA8A8A8);
     public static final Color THINKING = new Color(0xB99BF8);
+    /** The text of a turn's conclusion, the answer that ends it. */
+    public static final Color GOLD = new Color(0xD9B44A);
     public static final Color DIFF_ADDED = new Color(0x2C4A33);
     public static final Color DIFF_REMOVED = new Color(0x5A2E2E);
     public static final Color CARD = new Color(0x2B2D30);

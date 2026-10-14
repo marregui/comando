@@ -32,7 +32,7 @@ public final class Style {
     final int indent;
     final int pad;
 
-    final Color text = color("Label.foreground", new Color(0xDFE1E5));
+    final Color text;
     final Color muted = Theme.MUTED;
     final Color accent = Theme.ACCENT;
     final Color link = Theme.ACCENT;
@@ -42,7 +42,19 @@ public final class Style {
     final Color findMatch = new Color(0x6B5A1E);
     final Color findCurrent = new Color(0xA88A1E);
 
+    private final Font base;
+    private final Font monoBase;
+    /** This style with the conclusion's text colour; made once, so layouts made with it stay valid. */
+    private Style conclusion;
+
     Style(Font base, Font monoBase, int zoom) {
+        this(base, monoBase, zoom, color("Label.foreground", new Color(0xDFE1E5)));
+    }
+
+    private Style(Font base, Font monoBase, int zoom, Color text) {
+        this.base = base;
+        this.monoBase = monoBase;
+        this.text = text;
         this.zoom = zoom;
         float size = Math.max(9f, base.getSize2D() + zoom);
         float monoSize = Math.max(8f, monoBase.getSize2D() - 1f + zoom);
@@ -73,6 +85,14 @@ public final class Style {
             base = new Font(Font.SANS_SERIF, Font.PLAIN, 13);
         }
         return new Style(base, Theme.mono(), zoom);
+    }
+
+    /** The same style with the text in {@link Theme#GOLD}: a turn's conclusion. */
+    Style conclusion() {
+        if (conclusion == null) {
+            conclusion = text.equals(Theme.GOLD) ? this : new Style(base, monoBase, zoom, Theme.GOLD);
+        }
+        return conclusion;
     }
 
     Font font(int spanStyle, boolean code) {

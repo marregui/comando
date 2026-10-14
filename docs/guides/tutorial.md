@@ -43,7 +43,7 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 
 | Part | What it is |
 |---|---|
-| **Sidebar**, left | three tabs: **Sessions** (Claude Code sessions), **Connections** (databases) and **Scratchpad** (your `~/.claude/SCRATCHPAD`; one click on a file opens it in a panel: Markdown shows rendered; the header's **Edit** button or **⌘⇧M** switches to the text, and **Preview** switches back; source files show in their language's colours). Sessions and Connections each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
+| **Sidebar**, left | three tabs: **Sessions** (Claude Code sessions; each row's controls connect or disconnect it, change its model or effort, and open its editor), **Connections** (databases) and **Scratchpad** (your `~/.claude/SCRATCHPAD`; one click on a file opens it in a panel: Markdown shows rendered; the header's **Edit** button or **⌘⇧M** switches to the text, and **Preview** switches back; source files show in their language's colours). Sessions and Connections each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one. |
 | **Panel header** | two chips: the panel's **connection** and its **session**, each with a status dot (○ closed, ● open) and a button to connect or start it. **Run** and **Stop** on the right. |
 | **Editor** | where you write SQL and prompts, mixed in one text. |
@@ -152,7 +152,7 @@ A session is a Claude Code process that comando starts for you in a working dire
    The gutter shows the asterisk: the block is a question, not SQL. In the Session tab you see Claude call `db_describe` to read the table, then `ui_insert` to write into your editor.
    *You should see* the query appear at the end of the editor as a block of its own, and the status bar say how many lines tutor added, such as "tutor added 4 lines to scratch". Your question stays as it was, and your caret does not move. Click in the query and press **⌘⏎** to run it: one row per hour and symbol. Without the first half of the prompt, Claude has not seen the table and guesses column names; ask it to look first.
 
-The **Session** tab shows the whole turn: your prompt, Claude's thinking, every tool call as a card with its input and result, and the answer. **⌘⇧.** interrupts a turn that is taking too long: the turn ends with a grey "interrupted" line and the session stays alive for the next prompt. While you read further up, new output does not scroll the view; **↓ Latest** jumps back, and sending a prompt follows again.
+The **Session** tab shows the whole turn: your prompt, Claude's text, every tool call as a card with its input and result, and the answer that ends the turn in gold. A purple "Thinking…" line shows while Claude thinks, and gives way to whatever comes next. **⌘⇧.** interrupts a turn that is taking too long: the turn ends with a grey "interrupted" line and the session stays alive for the next prompt. While you read further up, new output does not scroll the view; **↓ Latest** jumps back, and sending a prompt follows again.
 
 ## 6. Claude and your database
 
