@@ -6,7 +6,7 @@
 
 | Order created | Part | Closing it |
 |---|---|---|
-| 1 | `Store` | writes `panels.json` with the pending panel text and `prompts.json` when prompts are pending, then lets the queued writes of `sessions.json` and `connections.json` finish; waits up to 5 s for panels, prompts and sessions and up to 11 s for connections (one keychain call's bound) |
+| 1 | `Store` | writes the panel files with pending text and `panels.json`, then lets the queued writes of `sessions.json` and `connections.json` finish; waits up to 5 s for panels and sessions and up to 11 s for connections (one keychain call's bound) |
 | 2 | `StateLoop` | stops the reducer thread after the intents already queued |
 | 3 | `IntentLog` (when recording) | flushes and closes the log file |
 | 4 | `DbAdapter` | closes every lane: cancels the running statement, closes the connection |

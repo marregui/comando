@@ -44,7 +44,7 @@ Every change to what the window shows is an intent applied by one reducer on one
 ```mermaid
 flowchart LR
   subgraph UI["ui (EDT)"]
-    ED["editor, prompt bar, sidebar, cards"]
+    ED["editor, sidebar, cards"]
     VW["results, transcript, views"]
   end
   subgraph CORE["core (reducer thread)"]

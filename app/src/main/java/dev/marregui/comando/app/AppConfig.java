@@ -10,14 +10,12 @@ import java.nio.file.Path;
  *
  * @param keychain keep connection passwords in the OS secret store; on for the default data root, off for
  *                 any other unless {@code -Dcomando.keychain=true}, so a test root never writes the user's keychain
- * @param legacy   the earlier comando's store folder that seeds a fresh data root; {@code -Dcomando.legacy},
- *                 default {@code ~/QUESTS}, {@code none} for no seeding; null when none
  */
-public record AppConfig(Path home, String claudeExecutable, Path claudeProjects, boolean recordIntents, boolean keychain, Path legacy) {
+public record AppConfig(Path home, String claudeExecutable, Path claudeProjects, boolean recordIntents, boolean keychain) {
 
-    /** A configuration for tests and tools: no keychain, no legacy seeding. */
+    /** A configuration for tests and tools: no keychain. */
     public AppConfig(Path home, String claudeExecutable, Path claudeProjects, boolean recordIntents) {
-        this(home, claudeExecutable, claudeProjects, recordIntents, false, null);
+        this(home, claudeExecutable, claudeProjects, recordIntents, false);
     }
 
     public static AppConfig fromEnvironment() {
@@ -33,16 +31,7 @@ public record AppConfig(Path home, String claudeExecutable, Path claudeProjects,
                 claude != null && !claude.isBlank() ? claude : ClaudeSettings.findExecutable(),
                 ClaudeSettings.defaultProjectsDir(),
                 Boolean.getBoolean("comando.recordIntents"),
-                keychain != null ? Boolean.parseBoolean(keychain) : home.toAbsolutePath().equals(standard),
-                legacyFromProperty());
-    }
-
-    private static Path legacyFromProperty() {
-        String prop = System.getProperty("comando.legacy");
-        if ("none".equals(prop)) {
-            return null;
-        }
-        return prop != null && !prop.isBlank() ? Path.of(prop) : Path.of(System.getProperty("user.home"), "QUESTS");
+                keychain != null ? Boolean.parseBoolean(keychain) : home.toAbsolutePath().equals(standard));
     }
 
     public Path runDir() {

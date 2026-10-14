@@ -11,12 +11,10 @@ import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.ui.PromptHistory;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.editor.CommandEditor;
-import dev.marregui.comando.ui.widgets.editor.PromptBar;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -32,14 +30,13 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * One editor panel: a header with its connection and session, the command editor, and the prompt bar.
+ * One editor panel: a header with its connection and session, and the command editor.
  * A production connection frames the panel in red.
  */
 public final class EditorPanel extends JPanel {
 
     private final IntentSink intents;
     private final CommandEditor editor = new CommandEditor();
-    private final PromptBar prompt;
     private final JButton connection = chip();
     private final JButton connectionToggle = iconButton();
     private final JButton session = chip();
@@ -50,13 +47,11 @@ public final class EditorPanel extends JPanel {
     private PanelState panel;
     private AppState state;
 
-    public EditorPanel(PanelState panel, IntentSink intents, SchemaRegistry schemas, PromptHistory history) {
+    public EditorPanel(PanelState panel, IntentSink intents, SchemaRegistry schemas) {
         super(new BorderLayout(0, 0));
         this.panel = panel;
         this.intents = intents;
         this.schemas = schemas;
-        this.prompt = new PromptBar(this::sendPrompt, history);
-        prompt.onEscape(editor::requestFocus);
         run.getAccessibleContext().setAccessibleName("Run");
         stop.getAccessibleContext().setAccessibleName("Stop");
         connectionToggle.getAccessibleContext().setAccessibleName("Connect or disconnect");
@@ -80,12 +75,8 @@ public final class EditorPanel extends JPanel {
         right.add(stop);
         header.add(left, BorderLayout.WEST);
         header.add(right, BorderLayout.EAST);
-        JPanel south = new JPanel(new BorderLayout());
-        south.setBorder(BorderFactory.createEmptyBorder(0, Theme.GAP, Theme.GAP, Theme.GAP));
-        south.add(prompt, BorderLayout.CENTER);
         add(header, BorderLayout.NORTH);
         add(editor.component(), BorderLayout.CENTER);
-        add(south, BorderLayout.SOUTH);
 
         run.addActionListener(e -> runSelection(Target.AUTO));
         stop.addActionListener(e -> intents.dispatch(new Intent.CancelRun(this.panel.id())));
@@ -99,28 +90,11 @@ public final class EditorPanel extends JPanel {
         return editor;
     }
 
-    public PromptBar prompt() {
-        return prompt;
-    }
-
     /** The failed run whose error position is underlined, so a re-render does not mark it again. */
     private long errorMarked = -1;
 
     public PanelState panel() {
         return panel;
-    }
-
-    /**
-     * Sends a prompt from the bar. The reducer explains a refusal in the status bar; the bar keeps the text when
-     * the prompt cannot go (no session, or one that is stopping), so nothing typed is lost.
-     */
-    private boolean sendPrompt(String text) {
-        intents.dispatch(new Intent.RunText(panel.id(), text, Target.CLAUDE));
-        if (state == null || panel.session().isEmpty()) {
-            return false;
-        }
-        Optional<SessionState> x = state.session(panel.session());
-        return x.isPresent() && x.get().status() != Status.CLOSING;
     }
 
     public void runSelection(Target target) {
@@ -163,13 +137,11 @@ public final class EditorPanel extends JPanel {
             sessionToggle.setVisible(true);
             sessionToggle.setIcon(Icons.get(ss.status().isUsable() ? "stop" : "play"));
             sessionToggle.setToolTipText(ss.status().isUsable() ? "Stop the session" : "Start the session");
-            prompt.setTarget(ss.name(), ss.isBusy());
         } else {
             session.setIcon(Icons.get("claude"));
             session.setText("no session ▾");
             session.setToolTipText("Bind a session");
             sessionToggle.setVisible(false);
-            prompt.setTarget("", false);
         }
         editor.setSchema(p.connection().isEmpty() ? Schema.EMPTY : schemas.of(p.connection()));
         boolean running = s.runOf(p.id()).map(r -> r.status().isActive()).orElse(false) || x.map(SessionState::isBusy).orElse(false);

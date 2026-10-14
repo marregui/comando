@@ -17,7 +17,8 @@ import java.util.logging.Logger;
 
 /**
  * Routes {@link System.Logger} (backed by java.util.logging) to a rotating file under the data root and
- * warnings to stderr. One line per record: time, level, logger, message, then the stack trace.
+ * warnings to stderr. One line per record: time, level, logger, message, then the stack trace. An exception no
+ * code caught, on the event thread or any other, is logged too: without a handler it reaches stderr only.
  */
 final class Logging {
 
@@ -42,6 +43,16 @@ final class Logging {
         console.setFormatter(format);
         console.setLevel(Level.WARNING);
         root.addHandler(console);
+        Thread.setDefaultUncaughtExceptionHandler(Logging::uncaught);
+    }
+
+    static void uncaught(Thread t, Throwable e) {
+        try {
+            Logger.getLogger("dev.marregui.comando.Uncaught").log(Level.SEVERE, "uncaught in thread " + t.getName(), e);
+        } catch (Throwable logging) {
+            // a logger that cannot load or write still leaves the trace on stderr
+            e.printStackTrace();
+        }
     }
 
     private static final class Line extends Formatter {

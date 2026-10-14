@@ -28,7 +28,7 @@ class StoreTest {
     void freshRootGetsDefaultsAndWritesThem() {
         Store.Loaded loaded;
         try (Store store = new Store(home)) {
-            loaded = store.load(Legacy.none());
+            loaded = store.load();
             assertThat(store.load(loaded.panels().getFirst().id())).contains("Welcome to comando");
         }
         assertThat(loaded.connections()).extracting(ConnectionSpec::name).containsExactly("local QuestDB");
@@ -41,14 +41,14 @@ class StoreTest {
     void roundTripOfSpecsBindingsAndText() {
         PanelId id = new PanelId("p-1");
         try (Store store = new Store(home)) {
-            store.load(Legacy.none());
+            store.load();
             store.saveConnections(List.of(new ConnectionSpec("lab", "10.0.0.2", 8812, "qdb", "admin", "pw", true)));
             store.saveSessions(List.of(SessionSpec.imported("edge", "/w", "abc")));
             store.savePanels(List.of(new PanelState(id, "work", "lab", "edge")));
             store.changed(id, "SELECT 42;");
         }
         try (Store store = new Store(home)) {
-            Store.Loaded loaded = store.load(Legacy.none());
+            Store.Loaded loaded = store.load();
             assertThat(loaded.connections()).singleElement().extracting(ConnectionSpec::prod).isEqualTo(true);
             assertThat(loaded.sessions()).singleElement().extracting(SessionSpec::claudeSessionId).isEqualTo("abc");
             assertThat(loaded.panels()).containsExactly(new PanelState(id, "work", "lab", "edge"));
@@ -62,7 +62,7 @@ class StoreTest {
         Files.writeString(home.resolve("sessions.json"), "[]");
         Files.writeString(home.resolve("panels.json"), "[{\"id\":\"p\",\"title\":\"t\",\"connection\":\"gone\",\"session\":\"gone\",\"content\":\"x\"}]");
         try (Store store = new Store(home)) {
-            assertThat(store.load(Legacy.none()).panels()).containsExactly(new PanelState(new PanelId("p"), "t", "", ""));
+            assertThat(store.load().panels()).containsExactly(new PanelState(new PanelId("p"), "t", "", ""));
         }
     }
 
@@ -71,7 +71,7 @@ class StoreTest {
         Files.writeString(home.resolve("connections.json"), "{ this is not json");
         Files.writeString(home.resolve("sessions.json"), "[]");
         try (Store store = new Store(home)) {
-            Store.Loaded loaded = store.load(Legacy.none());
+            Store.Loaded loaded = store.load();
             assertThat(loaded.connections()).isEmpty();
         }
         try (Stream<Path> files = Files.list(home)) {
@@ -82,7 +82,7 @@ class StoreTest {
     @Test
     void writesLeaveNoTemporaryFiles() throws Exception {
         try (Store store = new Store(home)) {
-            store.load(Legacy.none());
+            store.load();
             for (int i = 0; i < 20; i++) {
                 store.saveSessions(List.of(SessionSpec.fresh("s" + i, "/w")));
             }
@@ -90,21 +90,6 @@ class StoreTest {
         try (Stream<Path> files = Files.list(home)) {
             assertThat(files.map(p -> p.getFileName().toString())).noneMatch(n -> n.endsWith(".tmp"));
         }
-    }
-
-    @Test
-    void legacyNotebooksAndConnectionsSeedAFreshRoot(@TempDir Path quests) throws Exception {
-        Files.writeString(quests.resolve("connections.json"), """
-                [{"name":"QuestDB","attrs":{"host":"localhost","port":"8812","database":"main","username":"admin","password":"quest"}}]""");
-        Files.writeString(quests.resolve("default-notebook.json"), """
-                [{"name":"default","attrs":{"content":"SELECT 1;"}},{"name":"default","attrs":{"content":"SELECT 2;"}}]""");
-        try (Store store = new Store(home)) {
-            Store.Loaded loaded = store.load(new Legacy(quests));
-            assertThat(loaded.connections()).extracting(ConnectionSpec::database).containsExactly("main");
-            assertThat(loaded.panels()).extracting(PanelState::title).containsExactly("default", "default 2");
-            assertThat(store.load(loaded.panels().get(1).id())).isEqualTo("SELECT 2;");
-        }
-        assertThat(quests.resolve("connections.json")).exists(); // the old store is only read
     }
 
     /** A secret store in memory. */
@@ -137,14 +122,14 @@ class StoreTest {
     void passwordsLiveInTheSecretStoreNotInTheFile() throws Exception {
         MapSecrets secrets = new MapSecrets();
         try (Store store = new Store(home, secrets)) {
-            store.load(Legacy.none());
+            store.load();
             store.saveConnections(List.of(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "s3cret", false),
                     new ConnectionSpec("open", "h", 8812, "qdb", "admin", "", false)));
         }
         assertThat(Files.readString(home.resolve("connections.json"))).doesNotContain("s3cret");
         assertThat(secrets.map).containsExactly(Map.entry("lab", "s3cret"));
         try (Store store = new Store(home, secrets)) {
-            assertThat(store.load(Legacy.none()).connections()).extracting(ConnectionSpec::password).containsExactly("s3cret", "");
+            assertThat(store.load().connections()).extracting(ConnectionSpec::password).containsExactly("s3cret", "");
             store.saveConnections(List.of(new ConnectionSpec("open", "h", 8812, "qdb", "admin", "", false)));
         }
         assertThat(secrets.map).isEmpty();
@@ -154,7 +139,7 @@ class StoreTest {
     void aPasswordTheStoreCouldNotReadIsNotDeletedBySaving() throws Exception {
         MapSecrets secrets = new MapSecrets();
         try (Store store = new Store(home, secrets)) {
-            store.load(Legacy.none());
+            store.load();
             store.saveConnections(List.of(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "s3cret", false)));
         }
         MapSecrets locked = new MapSecrets() {
@@ -165,7 +150,7 @@ class StoreTest {
         };
         locked.map.putAll(secrets.map);
         try (Store store = new Store(home, locked)) {
-            assertThat(store.load(Legacy.none()).connections()).extracting(ConnectionSpec::password).containsExactly("");
+            assertThat(store.load().connections()).extracting(ConnectionSpec::password).containsExactly("");
             // saving another change, and renaming the connection away, both keep the item it could not read
             store.saveConnections(List.of(new ConnectionSpec("lab", "h2", 8812, "qdb", "admin", "", false)));
             store.saveConnections(List.of(new ConnectionSpec("lab2", "h2", 8812, "qdb", "admin", "", false)));
@@ -188,17 +173,17 @@ class StoreTest {
             }
         };
         try (Store store = new Store(home, waiting)) {
-            store.load(Legacy.none());
+            store.load();
             PanelId id = new PanelId("p-wait");
             store.saveConnections(List.of(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "s3cret", false)));
             store.savePanels(List.of(new PanelState(id, "work", "", "")));
             store.changed(id, "SELECT 7;");
             long deadline = System.currentTimeMillis() + 5_000;
-            while (!(Files.exists(home.resolve("panels.json")) && Files.readString(home.resolve("panels.json")).contains("SELECT 7;"))
-                    && System.currentTimeMillis() < deadline) {
+            Path file = home.resolve("panels").resolve("work.md");
+            while (!(Files.exists(file) && Files.readString(file).contains("SELECT 7;")) && System.currentTimeMillis() < deadline) {
                 Thread.sleep(50);
             }
-            assertThat(Files.readString(home.resolve("panels.json"))).contains("SELECT 7;");
+            assertThat(Files.readString(file)).isEqualTo("SELECT 7;");
             prompt.countDown();
         }
         assertThat(waiting.map).containsEntry("lab", "s3cret");

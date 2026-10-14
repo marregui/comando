@@ -1,6 +1,6 @@
 # Decision records
 
-One record per decision, dated, with the context, the decision and its consequences. Records 1 to 16 are decisions D1 to D16 of the design plan of 2026-10-12, which is kept outside this repository; R (requirements), U (open questions) and M1 to M4 (milestones) in the records are that plan's labels. Miguel took them on 2026-10-12 on the defaults the plan review proposed. Records 17 to 23 were taken by Claude during implementation and accepted by Miguel on 2026-10-13. Record 24 came from the UX review of 2026-10-13 and is proposed, for Miguel to accept or reverse.
+One record per decision, dated, with the context, the decision and its consequences. Records 1 to 16 are decisions D1 to D16 of the design plan of 2026-10-12, which is kept outside this repository; R (requirements), U (open questions) and M1 to M4 (milestones) in the records are that plan's labels. Miguel took them on 2026-10-12 on the defaults the plan review proposed. Records 17 to 23 were taken by Claude during implementation and accepted by Miguel on 2026-10-13. Record 24 came from the UX review of 2026-10-13 and is proposed, for Miguel to accept or reverse. Records 25 to 27 come from Miguel's use of comando on 2026-10-14.
 
 A decision is changed by a new record that names the one it replaces; the old record stays.
 
@@ -29,4 +29,7 @@ A decision is changed by a new record that names the one it replaces; the old re
 | [21](0021-painted-transcript.md) | Painted transcript | Claude | accepted |
 | [22](0022-no-parquet-export.md) | No Parquet export | Claude | accepted |
 | [23](0023-sql-from-claude-lexical-policy-production-refused.md) | SQL from Claude: lexical policy, production refused | Claude | accepted |
-| [24](0024-the-window-belongs-to-the-user.md) | The window belongs to the user | Claude | proposed |
+| [24](0024-the-window-belongs-to-the-user.md) | The window belongs to the user | Claude | proposed; item 24.6 replaced by 25 |
+| [25](0025-no-prompt-bar.md) | No prompt bar | Miguel | accepted |
+| [26](0026-a-file-per-panel.md) | A file per panel | Miguel, Claude | file per panel accepted; rules proposed; outside edits replaced by 27 |
+| [27](0027-panels-reload-files-changed-outside.md) | Panels reload files changed outside | Miguel, Claude | accepted |

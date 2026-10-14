@@ -17,7 +17,6 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.testkit.RecordingPorts;
 import dev.marregui.comando.ui.PanelTexts;
-import dev.marregui.comando.ui.PromptHistory;
 import dev.marregui.comando.ui.shell.ComandoUi;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -76,7 +75,7 @@ class UiReplayTest {
         Deferred effects = new Deferred();
         try (StateLoop loop = new StateLoop(replay.initial(), new Reducer(Clock.SYSTEM), effects)) {
             ComandoUi ui = new ComandoUi(new ComandoUi.Dependencies(loop, loop::state, loop, new TranscriptRegistry(), new ResultRegistry(),
-                    new ConsoleRegistry(), new SchemaRegistry(), new Texts(), PromptHistory.NONE, List::of, null,
+                    new ConsoleRegistry(), new SchemaRegistry(), new Texts(), List::of, null,
                     "replay", null, null, () -> { }));
             effects.target = new EffectRouter(ports, ports, ports, ui, ports, ports);
             try (ui) {

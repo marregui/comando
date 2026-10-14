@@ -42,7 +42,7 @@ The Results tab shows the focused panel's last run: the grid, the row count, and
 | ⌘J | Plot last result | a plot view: x is the first time column, else the first numeric column; up to eight other numeric columns become series; at most the first 2 000 000 rows are plotted |
 | ⌘⇧J | Plot last result, refreshing… | asks for a period (default 5 s); the panel's query runs again each period when it is not running, and each finished run replaces the plot without moving the lower panel's tab; running another statement in the panel, closing the plot's tab, "Stop refreshing plots", or its connection failing stops it, with a notice. A refresh posts no notice of its own; a refresh that fails posts a warning ("Live plot in <panel> failed: …"), never a desktop notification |
 | ⌘⇧R | Keep the result in a tab | a table view of the rows, at most 100 000, that the next run does not replace |
-| ⌘⇧I | Attach the result | the selected rows, else the first 50, else the error, as a block in the editor ([Command dispatch](command-dispatch.md#6-attaching-results)) |
+| ⌘⇧I | Attach the result | the selected rows, else the first 50, else the error, as a block in the editor ([Command dispatch](command-dispatch.md#5-attaching-results)) |
 | ⌘⇧S | Export | the grid as CSV, in the order shown; the file is written off the EDT from a snapshot; the save dialog opens in the last export directory and the status bar names the file written |
 
 **Plans.** A finished `EXPLAIN` whose result has one column shows as a tree by default: each line becomes a node under the nearest line above it with less indentation, and PostgreSQL's `->` markers are dropped. A toggle switches between the tree and the rows.

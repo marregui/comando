@@ -30,22 +30,15 @@ Rule 4 is strict on purpose. "update the README" and "show me the log" start wit
 | ⌃⏎ | selection or line | typed into the panel's terminal |
 | ⌘. | — | stops the panel's SQL run, else interrupts its session's turn |
 | ⌘⇧. | — | interrupts the session's turn |
-| ⌘L | — | focuses the prompt bar |
 | ⌘E | — | focuses the editor |
 
-The run keys work while the keyboard is in the focused panel's editor or prompt bar (⌃⏎ in the editor only); elsewhere the key belongs to the component that has the keyboard (in an approval card's note field ⌘⏎ denies with the note; the terminal; the results grid). In the prompt bar ⌘⏎ and ⌘⇧⏎ send the prompt, and ⌥⏎ is a new line.
+The run keys work while the keyboard is in the focused panel's editor; elsewhere the key belongs to the component that has the keyboard (in an approval card's note field ⌘⏎ denies with the note; the terminal; the results grid). Prompts are written in the editor like SQL: there is no separate prompt field.
 
 ## 4. The gutter
 
 Each block shows where it goes before it runs: a database icon for SQL, Claude's icon for a prompt. The icons follow the text as it is edited, 250 ms after the last keystroke.
 
-## 5. The prompt bar
-
-A field under each panel's editor carries the short prompts that make most of the traffic ("go", "fix", an option number). ⏎ sends to the panel's session; ⇧⏎ (or ⌥⏎) adds a line, and the field grows with the text, wrapped lines included, to six rows before it scrolls. ↑ on the first row and ↓ on the last walk the history (elsewhere they move one row), keeping the text being typed; the history holds the last 200 prompts of each session, shared by its panels and kept across restarts. Esc gives the keyboard back to the editor.
-
-A prompt that cannot go stays in the field, outlined in red, and the status bar says why: the panel has no session, or the session is stopping. While a turn runs, the bar says so and a prompt sent then is folded into the running turn by Claude Code ([Claude bridge](claude-bridge.md#3-turns)); the session chip counts the turn's seconds and the prompts queued behind it.
-
-## 6. Attaching results
+## 5. Attaching results
 
 ⌘⇧I appends to the editor, as a block of its own, what the panel's last run produced:
 
@@ -55,6 +48,6 @@ A prompt that cannot go stays in the field, outlined in red, and the status bar 
 
 The block names the SQL and the row counts and holds the rows as tab-separated text in a fence. It never contains a blank line, which would end the block: an empty row reads "(empty row)", a newline inside a cell reads "⏎", and blank lines of an error are dropped. The caret lands on the line after the fence, so a question typed there belongs to the same block; ⌘⏎ classifies the block as a prompt (it starts with prose) and sends the rows with the question. The text sent is the text on screen.
 
-## 7. Where things land
+## 6. Where things land
 
 SQL results fill the Results tab; an error there is selectable text, and a position the database names ("Position: 38") is underlined in the editor until the next edit, when the block was a single statement (in a block of several, the position counts from the failing statement, which the driver does not name). A prompt's turn streams into the Session tab. A failed classification is never silent: the gutter showed the target before the run, and the Results or Session tab shows the outcome.

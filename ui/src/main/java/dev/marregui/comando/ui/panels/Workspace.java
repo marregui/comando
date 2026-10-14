@@ -10,7 +10,8 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.ui.PanelTexts;
-import dev.marregui.comando.ui.PromptHistory;
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
 
@@ -20,6 +21,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JTabbedPane;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.nio.file.Path;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
@@ -40,8 +42,8 @@ import java.util.function.IntConsumer;
  */
 public final class Workspace {
 
-    /** A panel as it was when it closed. */
-    public record ClosedPanel(String title, String connection, String session, String text) {
+    /** A panel as it was when it closed; {@code file} is null when it had none yet. */
+    public record ClosedPanel(String title, String connection, String session, String text, Path file) {
     }
 
     static final int CLOSED_KEPT = 10;
@@ -50,7 +52,6 @@ public final class Workspace {
     private final IntentSink intents;
     private final PanelTexts texts;
     private final SchemaRegistry schemas;
-    private final PromptHistory prompts;
     private final JTabbedPane tabs = named(new JTabbedPane(), "workspace");
     private final Map<PanelId, EditorPanel> panels = new LinkedHashMap<>();
     private final Deque<ClosedPanel> closed = new ArrayDeque<>();
@@ -59,12 +60,12 @@ public final class Workspace {
     private Consumer<PanelId> closer;
     private boolean rendering;
 
-    public Workspace(IntentSink intents, PanelTexts texts, SchemaRegistry schemas, PromptHistory prompts) {
+    public Workspace(IntentSink intents, PanelTexts texts, SchemaRegistry schemas) {
         this.intents = intents;
         this.texts = texts;
         this.schemas = schemas;
-        this.prompts = prompts;
         this.closer = id -> intents.dispatch(new Intent.ClosePanel(id));
+        texts.onOutsideChange(change -> Edt.later(() -> takeOutside(change)));
         tabs.putClientProperty("JTabbedPane.tabClosable", true);
         tabs.putClientProperty("JTabbedPane.tabCloseToolTipText", "Close the panel (⌘W; ⌘⇧T reopens it)");
         tabs.putClientProperty("JTabbedPane.tabCloseCallback", (IntConsumer) i -> {
@@ -98,6 +99,19 @@ public final class Workspace {
 
     public JComponent component() {
         return tabs;
+    }
+
+    /**
+     * A panel's file changed outside comando (another editor, Claude's Edit tool): the panel shows the new text,
+     * unless it has edits not yet saved, whose save keeps the outside version next to the file.
+     */
+    void takeOutside(PanelTexts.Outside change) {
+        EditorPanel view = panels.get(change.panel());
+        if (view == null || !change.take().getAsBoolean() || view.editor().text().equals(change.text())) {
+            return;
+        }
+        view.editor().reload(change.text());
+        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Reloaded " + change.file() + ": it changed outside comando", false));
     }
 
     /** How a tab's close button closes its panel: the shell asks first when the panel's shell runs a job. */
@@ -166,7 +180,8 @@ public final class Workspace {
                 if (!ids.contains(id)) {
                     EditorPanel gone = panels.remove(id);
                     PanelState was = gone.panel();
-                    closed.addFirst(new ClosedPanel(was.title(), was.connection(), was.session(), gone.editor().text()));
+                    closed.addFirst(new ClosedPanel(was.title(), was.connection(), was.session(), gone.editor().text(),
+                            texts.file(id).orElse(null)));
                     while (closed.size() > CLOSED_KEPT) {
                         closed.removeLast();
                     }
@@ -182,7 +197,7 @@ public final class Workspace {
                 PanelState p = s.panels().get(i);
                 EditorPanel view = panels.get(p.id());
                 if (view == null) {
-                    view = new EditorPanel(p, intents, schemas, prompts);
+                    view = new EditorPanel(p, intents, schemas);
                     view.editor().load(texts.load(p.id()));
                     PanelId id = p.id();
                     view.editor().onChange(text -> texts.changed(id, text));
@@ -198,7 +213,8 @@ public final class Workspace {
                 if (!tabs.getTitleAt(at).equals(title)) {
                     tabs.setTitleAt(at, title);
                 }
-                tabs.setToolTipTextAt(at, Plain.text(tooltip(p) + (unseen.contains(p.id()) ? " · a query finished" : "")));
+                tabs.setToolTipTextAt(at, Plain.text(tooltip(p) + texts.file(p.id()).map(f -> " · " + Labels.shortPath(f.toString())).orElse("")
+                        + (unseen.contains(p.id()) ? " · a query finished" : "")));
                 view.render(p, s);
             }
             EditorPanel focused = panels.get(s.focused());

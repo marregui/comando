@@ -18,7 +18,7 @@
 | Command | Does |
 |---|---|
 | `./gradlew build` | compiles every module with warnings as errors, runs every test |
-| `./gradlew :app:run` | starts comando on the default data root |
+| `./gradlew :app:run` | starts comando on the default data root, from a copy of the build output made at launch (in `.gradle/run-stage`), so a build while it runs leaves it alone |
 | `./gradlew :app:installDist` | a runnable distribution in `app/build/install/comando`; start it with `bin/comando` |
 | `./gradlew :app:dmg` | an unsigned macOS disk image with its own runtime in `app/build/dmg` |
 | `./gradlew test -PkeychainTest=true` | also runs the test that writes and deletes one item in the login keychain |
@@ -37,7 +37,6 @@ Tests run headless, with the data root in each module's `build/test-home` and wi
 | `COMANDO_CLAUDE` | environment | search above | the Claude Code executable |
 | `COMANDO_JFRQ` | environment | `~/workspace/jfr/cli/build/install/jfrq/bin/jfrq` | the jfrq launcher |
 | `comando.keychain` | system property | `true` for `~/.comando`, else `false` | keep connection passwords in the login keychain |
-| `comando.legacy` | system property | `~/QUESTS` | the earlier comando's folder that seeds a fresh data root; `none` turns it off |
 | `comando.recordIntents` | system property | `false` | write the intent log to `logs/` in the data root |
 | `comando.prefsNode` | system property | `dev/marregui/comando` | the Java preferences node for window layout |
 
@@ -54,7 +53,7 @@ COMANDO_OPTS="-Dcomando.recordIntents=true" app/build/install/comando/bin/comand
 ├── connections.json
 ├── sessions.json
 ├── panels.json
-├── prompts.json  each session's last 200 prompts
+├── panels/       one Markdown file per panel, named after its title
 ├── comando.lock  held while comando runs; a second start on the same root refuses
 ├── run/          MCP configurations of running sessions (0600)
 ├── audit/        audit-<UTC date>.jsonl
@@ -66,7 +65,7 @@ COMANDO_OPTS="-Dcomando.recordIntents=true" app/build/install/comando/bin/comand
 
 ## 5. First start
 
-1. Start comando. On a fresh data root it seeds connections and notebooks from `~/QUESTS` when present, else creates one panel, scratch, with a welcome text, bound to a connection named local QuestDB with QuestDB's defaults.
+1. Start comando. On a fresh data root it creates one panel, scratch, with a welcome text, bound to a connection named local QuestDB with QuestDB's defaults.
 2. Sessions… (⌘⇧K) adds a session: a name and a working directory. Import… lists Claude Code's stored conversations.
 3. Connections… (⌘⇧O) adds a database connection.
 4. Bind both to the panel from the sidebar (double-click), type SQL or a prompt, press ⌘⏎.

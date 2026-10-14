@@ -3,6 +3,8 @@ package dev.marregui.comando.ui.widgets.editor;
 import org.junit.jupiter.api.Test;
 import javax.swing.SwingUtilities;
 import java.lang.reflect.InvocationTargetException;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -290,6 +292,27 @@ class CommandEditorTest {
         boolean in = c.caretInSql();
         c.dispose();
         return in;
+    }
+
+    @Test
+    void aReloadFromTheFileKeepsTheCaretReportsNoChangeAndUndoesInOneStep() {
+        onEdt(() -> {
+            CommandEditor e = new CommandEditor();
+            e.load(TEXT);
+            List<String> changes = new ArrayList<>();
+            e.onChange(changes::add);
+            e.area().setCaretPosition(5);
+            e.reload("SELECT 2;\n");
+            assertThat(e.text()).isEqualTo("SELECT 2;\n");
+            assertThat(e.area().getCaretPosition()).isEqualTo(5);
+            assertThat(changes).as("the file already holds the text").isEmpty();
+            e.reload("x");
+            assertThat(e.area().getCaretPosition()).as("within the new text").isEqualTo(1);
+            e.area().undoLastAction();
+            assertThat(e.text()).as("one step back").isEqualTo("SELECT 2;\n");
+            assertThat(changes).as("an undo is the user's edit, and is saved").isNotEmpty().last().isEqualTo("SELECT 2;\n");
+            e.dispose();
+        });
     }
 
     private static void onEdt(Runnable r) {

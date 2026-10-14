@@ -43,11 +43,10 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 
 | Part | What it is |
 |---|---|
-| **Sidebar**, left | two lists: **Sessions** (Claude Code sessions) at the top, **Connections** (databases) below. Each list has a `+` button. ⌘B hides and shows it. |
+| **Sidebar**, left | two lists: **Sessions** (Claude Code sessions) at the top, **Connections** (databases) below. Each list has a `+` button. ⌘B or the `⋯` button hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one. |
 | **Panel header** | two chips: the panel's **connection** and its **session**, each with a status dot (○ closed, ● open) and a button to connect or start it. **Run** and **Stop** on the right. |
 | **Editor** | where you write SQL and prompts, mixed in one text. |
-| **Prompt bar**, under the editor | a field for messages to the panel's session: **⏎** sends, **⇧⏎** adds a line, **↑** brings back earlier prompts. It grows with the text to six rows. |
 | **Lower tabs** | **Results** (SQL output), **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell). Plots and kept results open more tabs here. |
 | **Status bar**, bottom | the current message on the left (click it for the recent ones); the panel's session, connection, running work and the embedded QuestDB on the right. |
 
@@ -142,9 +141,9 @@ A session is a Claude Code process that comando starts for you in a working dire
 
    Leave the rest as it is; the line under each field says what it does. Click **Assign to panel**, then press **Esc**.
    *You should see* `tutor` in the panel header, in the sidebar (marked "· this panel"), and in the window title.
-2. Click the **prompt bar** under the editor, type `In one sentence, what is QuestDB?` and press **⏎**.
+2. At the end of the editor, after an empty line, type `In one sentence, what is QuestDB?` and press **⌘⇧⏎**, which sends the block to the panel's session.
    *You should see* the session start (its dot turns to `●`), the lower panel switch to **Session**, and the answer stream in. Under the answer: the time it took and the cost so far. While the turn runs, the session chip counts the seconds. If your Claude Code setup has hooks, their output folds into grey "hooks · …" lines, one before the answer and one after it; click one to read it.
-3. Prompts can live in the editor too. At the end of the editor, after an empty line, type this block and press **⌘⏎**:
+3. **⌘⏎** sends a block to Claude as well when the gutter shows the asterisk. At the end of the editor, after an empty line, type this block and press **⌘⏎**:
 
    ```
    Look up the columns of the trades table with db_describe, then put a SQL query that returns the hourly average price per symbol into my editor with ui_insert.
@@ -153,13 +152,13 @@ A session is a Claude Code process that comando starts for you in a working dire
    The gutter shows the asterisk: the block is a question, not SQL. In the Session tab you see Claude call `db_describe` to read the table, then `ui_insert` to write into your editor.
    *You should see* the query appear at the end of the editor as a block of its own, and the status bar say how many lines tutor added, such as "tutor added 4 lines to scratch". Your question stays as it was, and your caret does not move. Click in the query and press **⌘⏎** to run it: one row per hour and symbol. Without the first half of the prompt, Claude has not seen the table and guesses column names; ask it to look first.
 
-The **Session** tab shows the whole turn: your prompt, Claude's thinking, every tool call as a card with its input and result, and the answer. **⌘⇧.** interrupts a turn that is taking too long: the turn ends with a grey "interrupted" line and the session stays alive for the next prompt. In the prompt bar, **↑** brings back earlier prompts, also after a restart. While you read further up, new output does not scroll the view; **↓ Latest** jumps back, and sending a prompt follows again.
+The **Session** tab shows the whole turn: your prompt, Claude's thinking, every tool call as a card with its input and result, and the answer. **⌘⇧.** interrupts a turn that is taking too long: the turn ends with a grey "interrupted" line and the session stays alive for the next prompt. While you read further up, new output does not scroll the view; **↓ Latest** jumps back, and sending a prompt follows again.
 
 ## 6. Claude and your database
 
 The session can read your database and draw in your window through tools comando gives it. Reading is free; **writing needs your approval**.
 
-1. In the prompt bar, send:
+1. At the end of the editor, after an empty line, type this block and press **⌘⇧⏎**:
    `Use db_run_sql to insert one row into trades: sym 'TEST', price 1.0, ts now().`
    *You should see* "1 waiting for approval" in the status bar, a count on the **Approvals** tab, and the tool's card in the Session tab reading "waiting for your approval · ⌃3".
 2. Open **Approvals**. The card shows the connection and the exact statement.
@@ -168,7 +167,7 @@ The session can read your database and draw in your window through tools comando
 
    The keys work anywhere in the card. In the note field, letters type; **⏎** denies with the note once you have typed one (on an empty note it runs), **⌘⏎** denies with the note, **Esc** returns to the card. Click **Deny** with the note `just testing`.
    *You should see* in the Session tab that Claude reports the denial and your note.
-3. Send it again: click the prompt bar, press **↑** to bring the prompt back, press **⏎**. Click **Run** on the new card this time. Then run `select * from trades where sym = 'TEST';` yourself to see the row.
+3. Send it again: put the caret in that block and press **⌘⇧⏎**. Click **Run** on the new card this time. Then run `select * from trades where sym = 'TEST';` yourself to see the row.
 4. Ask for a picture:
    `Call ui_plot with title squares and one series named squares, x=[1,2,3,4,5] and y=[1,4,9,16,25].`
    *You should see* a **squares** plot tab. Claude can also show tables, diffs and files, put text into your editor, and switch tabs.
@@ -185,10 +184,10 @@ Other permission requests, such as a shell command or a file edit, appear as the
 4. Press **⌘W** to close the new panel, then **⌘⇧T**: it comes back with its text and bindings. comando asks first only when the panel's shell is running a program.
 5. Press **⌘Q**. comando stops the session's process and the embedded QuestDB and saves everything. If a query, a turn, a Gradle run or a shell job is running, it asks first; while it closes, the window stays, greyed, titled "closing…".
 6. Start it again with `./gradlew :app:run`.
-   *You should see* your panels, their text and their bindings as you left them. Sessions come back stopped, with their transcripts, and the next prompt resumes the same conversation: ask `What was the first question I asked you?` in the prompt bar.
+   *You should see* your panels, their text and their bindings as you left them. Sessions come back stopped, with their transcripts, and the next prompt resumes the same conversation: type `What was the first question I asked you?` in the editor and press **⌘⇧⏎**.
    Connections come back closed, and the embedded QuestDB does not start by itself: start it again from the palette (step 2) before you connect. The window comes back where it was, with the sidebar shown or hidden as you left it. Views (plots, files, kept results) belong to one run: the side pane comes back empty.
 
-Your data lives in `~/.comando`: `connections.json`, `sessions.json`, `panels.json` and `prompts.json` (the prompt bar's history), the embedded QuestDB's data in `questdb/`, and the logs in `logs/`. Connection passwords are kept in the macOS keychain, not in the files.
+Your data lives in `~/.comando`: `connections.json`, `sessions.json`, `panels.json`, and each panel's text as its own Markdown file in `panels/`, named after the panel (**⌘O** opens one as a panel; edit one in another editor and its panel shows the change within a second), the embedded QuestDB's data in `questdb/`, and the logs in `logs/`. Connection passwords are kept in the macOS keychain, not in the files.
 
 ## Cheat sheet
 
@@ -202,8 +201,7 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌃⏎ | type the line into the terminal |
 | ⌘. | stop the query, else interrupt the session's turn |
 | ⌘⇧. | interrupt the session's turn |
-| ⌘L / ⌘E | focus the prompt bar / the editor |
-| ⏎ / ⇧⏎ / ↑ ↓ / ⎋ | in the prompt bar: send / new line / earlier and later prompts / back to the editor |
+| ⌘E | focus the editor |
 | ⌃Space or ⌥⎋ | complete SQL (⌥⎋ where macOS takes ⌃Space for the input source) |
 | ⌘J / ⌘⇧J | plot the last result / plot it and keep refreshing |
 | ⌘⇧R | keep the result in a tab |
@@ -212,6 +210,7 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌃1 ⌃2 ⌃3 ⌃4 (or ⌘⌥1…4) | Results, Session, Approvals, Terminal, with the keyboard |
 | ⌃⇥ / ⌃⇧⇥ | next / previous lower tab |
 | ⌘T / ⌘W / ⌘⇧T | new panel / close the panel, or the view that has the keyboard / reopen the last closed panel |
+| ⌘O | open a panel file (a spec) as a panel |
 | ⌘⇧W | close the lower view in front |
 | ⌘1…⌘9, ⌘⇧[ ⌘⇧] | go to a panel |
 | ⌘⇧O / ⌘⇧K | Connections / Sessions |

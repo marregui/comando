@@ -40,7 +40,7 @@ final class Keys {
         return true;
     }
 
-    /** Every command with a key, by menu, as a Markdown table, then the keys of the prompt bar and the cards. */
+    /** Every command with a key, by menu, as a Markdown table, then the keys of the cards. */
     static String markdown(List<Command> commands) {
         StringBuilder md = new StringBuilder("# Keyboard shortcuts\n\n| Menu | Command | Keys |\n|---|---|---|\n");
         for (Command c : commands) {
@@ -49,8 +49,7 @@ final class Keys {
                         .append(" | ").append(CommandPalette.keyText(c.key())).append(" |\n");
             }
         }
-        md.append("\nIn the prompt bar: ⏎ sends, ⇧⏎ adds a line, ↑ and ↓ walk the history, ⎋ returns to the editor.\n")
-                .append("On an approval card: ⏎ or A gives the green answer (allow, run, answer, approve), D or ⎋ denies; on a tool card S ")
+        md.append("\nOn an approval card: ⏎ or A gives the green answer (allow, run, answer, approve), D or ⎋ denies; on a tool card S ")
                 .append("allows for the session and L twice allows always; ↑ and ↓ move between cards.\n");
         return md.toString();
     }

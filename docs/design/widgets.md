@@ -40,7 +40,7 @@ A view placed by Claude or by the user names a view type. `WidgetRegistry` maps 
 
 Registering a type twice throws. `ViewTabs` creates a widget when a view appears, calls `render` when the view's version changes (a pin change updates only the tab's pin button), and calls `unmount` when the view closes. A view tab has a pin toggle and a close button; a pinned view is never replaced by a session.
 
-Widgets outside the registry are built by panels: the command editor and prompt bar (`CommandEditor`, `PromptBar`), the result grid (`GridTable` in the Results tab), the transcript (`TranscriptWidget`), the terminal (`TerminalWidget`) and the approval cards (`ApprovalInbox`).
+Widgets outside the registry are built by panels: the command editor (`CommandEditor`), the result grid (`GridTable` in the Results tab), the transcript (`TranscriptWidget`), the terminal (`TerminalWidget`) and the approval cards (`ApprovalInbox`).
 
 ## 3. Capabilities
 
@@ -60,7 +60,6 @@ There is one find bar per window (`FindBar`); it attaches to the `Searchable` th
 | Widget | Shows | Notes |
 |---|---|---|
 | `CommandEditor` | SQL and prompts in one document | RSyntaxTextArea; gutter icons per block ([Command dispatch](command-dispatch.md)); SQL completion from the bound connection's schema, opening by itself only in a SQL block or a block that starts like a statement being typed: a statement keyword in lower or upper case, no prose word, and the words that must follow it (`TABLE` after `CREATE`, `ALTER`, `DROP`, `TRUNCATE`; `INTO` after `INSERT`; `FROM` after `DELETE`; `SET` after `UPDATE` and its table) (⌃Space or ⌥⎋ opens it anywhere in the editor); a session's write is one undo step of its own and never moves the user's caret or selection |
-| `PromptBar` | a prompt to the panel's session | a text area growing with its wrapped text to six rows; ⏎ sends, ⇧⏎ or ⌥⏎ a new line, ↑ ↓ the session's history (kept across restarts), Esc back to the editor; a refused prompt stays, outlined in red ([Command dispatch](command-dispatch.md#5-the-prompt-bar)) |
 | `GridTable` | a SQL result or a placed table | JTable paints visible rows only; cells format into one reused buffer; sorting keeps a permutation of row indices, offered up to 1 000 000 rows and computed on the EDT; a growing result appends rows without rebuilding columns and drops a sort made before it grew; ⌘⇧I and copy map selected rows through the sort |
 | `TranscriptWidget` | a session's transcript | painted, virtualised ([Transcript renderer](transcript-renderer.md)) |
 | `PlotWidget` | series over shared axes | each pixel column reduced to min and max of the visible points; points without a finite x or y are skipped; time axes tick on clock steps; a click focuses it; drag to zoom, double-click resets; an empty state when there are no points |

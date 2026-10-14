@@ -1,5 +1,6 @@
 package dev.marregui.comando.app;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.type.TypeReference;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
@@ -7,16 +8,15 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.PersistencePort;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.ui.PanelTexts;
-import dev.marregui.comando.ui.PromptHistory;
+import dev.marregui.comando.ui.PanelTexts.Outside;
 
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
-import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
@@ -25,20 +25,28 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Consumer;
 
 /**
- * The store files: {@code connections.json}, {@code sessions.json}, {@code panels.json} (each panel's bindings
- * and text) and {@code prompts.json} (each session's prompt history). Every write runs on one thread from an
- * immutable snapshot, so a save never races an edit; panel text is saved 800 ms after the first unsaved change,
- * so continuous typing saves about every 800 ms.
+ * The store files: {@code connections.json}, {@code sessions.json}, {@code panels.json} (each panel's title,
+ * bindings and file name) and one Markdown file per panel under {@code panels/} with its text ({@link PanelFiles}).
+ * Every write runs on one thread from an immutable snapshot, so a save never races an edit; panel text is saved
+ * 800 ms after the first unsaved change, so continuous typing saves about every 800 ms, and only the panels that
+ * changed are written.
  */
-final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoCloseable {
+final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(Store.class.getName());
     static final long PANEL_DELAY_MILLIS = 800;
+    /** How often open panels' files are checked for changes made outside comando. */
+    static final long POLL_MILLIS = 1_000;
 
-    /** A panel as stored: bindings and text together. */
-    record StoredPanel(String id, String title, String connection, String session, String content) {
+    /**
+     * A panel as stored: its title, bindings and the name of its file. {@code content} is read only, from a
+     * {@code panels.json} written before panels had files, and moves into the panel's file at the next save.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    record StoredPanel(String id, String title, String connection, String session, String file, String content) {
     }
 
     /** What the store held at start. */
@@ -48,11 +56,6 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
     private final JsonFile<List<ConnectionSpec>> connections;
     private final JsonFile<List<SessionSpec>> sessions;
     private final JsonFile<List<StoredPanel>> panels;
-    private final JsonFile<Map<String, List<String>>> prompts;
-    /** Prompts sent, by session, oldest first; read once at start, written after a quiet period. */
-    private final ConcurrentHashMap<String, List<String>> promptHistory = new ConcurrentHashMap<>();
-    private final AtomicBoolean promptsPending = new AtomicBoolean();
-    static final int PROMPTS_KEPT = 200;
     private final ScheduledExecutorService writer =
             Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("store").daemon(false).unstarted(r));
     /**
@@ -62,6 +65,13 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
     private final ExecutorService secretsWriter =
             Executors.newSingleThreadExecutor(r -> Thread.ofPlatform().name("store-secrets").daemon(false).unstarted(r));
     private final ConcurrentHashMap<String, String> texts = new ConcurrentHashMap<>();
+    /** Panels whose text changed since their file was written. */
+    private final Set<String> dirty = ConcurrentHashMap.newKeySet();
+    private final PanelFiles files;
+    private volatile Consumer<String> notices = text -> {
+    };
+    private volatile Consumer<Outside> outsideChanges = change -> {
+    };
     private final AtomicBoolean panelsPending = new AtomicBoolean();
     private volatile List<PanelState> panelMeta = List.of();
     private volatile boolean closed;
@@ -83,70 +93,25 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
         });
         panels = new JsonFile<>(home.resolve("panels.json"), new TypeReference<>() {
         });
-        prompts = new JsonFile<>(home.resolve("prompts.json"), new TypeReference<>() {
-        });
-        try {
-            Map<String, List<String>> read = prompts.read();
-            if (read != null) {
-                read.forEach((k, v) -> promptHistory.put(k, new ArrayList<>(v == null ? List.of() : v)));
-            }
-        } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot read the prompt history: " + e.getMessage());
-        }
+        files = new PanelFiles(home.resolve("panels"), text -> notices.accept(text));
     }
 
-    // ---- PromptHistory
-
-    @Override
-    public List<String> load(String session) {
-        List<String> h = promptHistory.get(session);
-        if (h == null) {
-            return List.of();
-        }
-        synchronized (h) {
-            return List.copyOf(h);
-        }
+    /** Where the store reports what the user should know, such as a panel file changed outside comando. */
+    void onNotice(Consumer<String> notices) {
+        this.notices = notices;
     }
 
-    @Override
-    public void add(String session, String prompt) {
-        List<String> h = promptHistory.computeIfAbsent(session, k -> new ArrayList<>());
-        synchronized (h) {
-            h.remove(prompt);
-            h.add(prompt);
-            while (h.size() > PROMPTS_KEPT) {
-                h.removeFirst();
-            }
-        }
-        if (promptsPending.compareAndSet(false, true)) {
-            try {
-                writer.schedule(this::writePrompts, PANEL_DELAY_MILLIS, TimeUnit.MILLISECONDS);
-            } catch (RejectedExecutionException e) {
-                promptsPending.set(false);
-            }
-        }
-    }
-
-    private void writePrompts() {
-        promptsPending.set(false);
-        Map<String, List<String>> out = new TreeMap<>();
-        promptHistory.forEach((k, v) -> {
-            synchronized (v) {
-                out.put(k, List.copyOf(v));
-            }
-        });
-        write(prompts, out);
-    }
-
-    /** Reads the files; a fresh data root is seeded from {@code legacy} (the old ~/QUESTS) or defaults. */
-    Loaded load(Legacy legacy) {
+    /** Reads the files; a fresh data root gets the defaults: a local QuestDB and a scratch panel with the welcome text. */
+    Loaded load() {
         boolean fresh = !connections.exists() && !sessions.exists() && !panels.exists();
         if (fresh) {
-            Loaded seeded = legacy.read().orElseGet(Store::defaults);
+            Loaded seeded = defaults();
             for (PanelState p : seeded.panels()) {
-                texts.putIfAbsent(p.id().value(), legacy.textOf(p.id()).orElse(""));
+                texts.putIfAbsent(p.id().value(), Welcome.TEXT);
+                dirty.add(p.id().value());
             }
             panelMeta = seeded.panels();
+            pollFiles();
             saveConnections(seeded.connections());
             saveSessions(seeded.sessions());
             schedulePanels();
@@ -160,17 +125,42 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
             if (sp.id() == null || sp.id().isBlank()) {
                 continue;
             }
-            p.add(new PanelState(new PanelId(sp.id()), nz(sp.title(), "panel"), nz(sp.connection(), ""), nz(sp.session(), "")));
-            texts.put(sp.id(), nz(sp.content(), ""));
+            String title = nz(sp.title(), "panel");
+            p.add(new PanelState(new PanelId(sp.id()), title, nz(sp.connection(), ""), nz(sp.session(), "")));
+            texts.put(sp.id(), textOf(sp, title));
         }
         p = validBindings(p, c, s);
         if (p.isEmpty()) {
             PanelState first = new PanelState(PanelId.random(), "scratch", c.isEmpty() ? "" : c.getFirst().name(), "");
             texts.put(first.id().value(), Welcome.TEXT);
+            dirty.add(first.id().value());
             p = List.of(first);
         }
         panelMeta = p;
+        if (!dirty.isEmpty()) {
+            schedulePanels();
+        }
+        pollFiles();
         return new Loaded(p, c, s);
+    }
+
+    /**
+     * A stored panel's text: from its file, else from {@code panels.json} as written before panels had files, which
+     * the next save moves into a file. A file that cannot be read keeps its text out of the editor and is left alone.
+     */
+    private String textOf(StoredPanel sp, String title) {
+        if (sp.file() == null || sp.file().isBlank()) {
+            dirty.add(sp.id());
+            return nz(sp.content(), "");
+        }
+        try {
+            return files.read(sp.id(), title, sp.file());
+        } catch (IOException | RuntimeException e) {
+            LOG.log(System.Logger.Level.ERROR, "cannot read the panel file, the panel starts empty and saves to another file [file="
+                    + files.dir().resolve(sp.file()) + "]: " + e.getMessage());
+            notices.accept("Cannot read " + sp.file() + "; the panel " + title + " starts empty and saves to another file");
+            return "";
+        }
     }
 
     /** Drops bindings to names the files no longer have. */
@@ -273,13 +263,102 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
     @Override
     public void changed(PanelId panel, String text) {
         texts.put(panel.value(), text);
+        dirty.add(panel.value());
+        schedulePanels();
+    }
+
+    /** The panel closed: its last text reaches its file, which stays unless blank. */
+    @Override
+    public void forget(PanelId panel) {
+        String id = panel.value();
+        submit(() -> {
+            String text = texts.getOrDefault(id, "");
+            try {
+                if (dirty.remove(id) && files.file(id).isPresent()) {
+                    files.write(id, text);
+                }
+                files.closed(id, text);
+            } catch (IOException | RuntimeException e) {
+                LOG.log(System.Logger.Level.ERROR, "cannot save the closed panel's file [panel=" + id + "]: " + e.getMessage(), e);
+            }
+            texts.remove(id);
+        });
         schedulePanels();
     }
 
     @Override
-    public void forget(PanelId panel) {
-        texts.remove(panel.value());
-        schedulePanels();
+    public Optional<Path> file(PanelId panel) {
+        return files.file(panel.value());
+    }
+
+    @Override
+    public Optional<Path> folder() {
+        return Optional.of(files.dir());
+    }
+
+    @Override
+    public void onOutsideChange(Consumer<Outside> listener) {
+        outsideChanges = listener;
+    }
+
+    /** Checks the open panels' files every second, on the writer thread, so a check never races a write. */
+    private void pollFiles() {
+        try {
+            writer.scheduleWithFixedDelay(this::checkFiles, POLL_MILLIS, POLL_MILLIS, TimeUnit.MILLISECONDS);
+        } catch (RejectedExecutionException e) {
+            LOG.log(System.Logger.Level.WARNING, "store closed, panel files not watched");
+        }
+    }
+
+    /** Runs one check of the open panels' files now, on the writer thread; for tests. */
+    CompletableFuture<Void> checkFilesNow() {
+        return CompletableFuture.runAsync(this::checkFiles, writer);
+    }
+
+    /**
+     * Reports each open panel's file written outside comando since comando last wrote, read or took it. A panel
+     * with unsaved edits is skipped: its save keeps the outside version aside. A file deleted outside is reported
+     * once and written again on the panel's next save.
+     */
+    private void checkFiles() {
+        if (closed) {
+            return;
+        }
+        for (PanelState p : panelMeta) {
+            String id = p.id().value();
+            if (dirty.contains(id)) {
+                continue;
+            }
+            try {
+                String name = files.file(id).map(f -> f.getFileName().toString()).orElse("");
+                if (files.deleted(id)) {
+                    notices.accept(name + " was deleted outside comando; the panel keeps its text and writes the file again on the next edit or ⌘S");
+                    continue;
+                }
+                files.outside(id).ifPresent(o -> outsideChanges.accept(new Outside(p.id(), name, o.text(), () -> take(id, o))));
+            } catch (IOException | RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot check the panel's file [panel=" + p.title() + "]: " + e.getMessage());
+            }
+        }
+    }
+
+    /** On the EDT: the panel takes its file's outside text, unless it has edits not yet saved. */
+    private boolean take(String id, PanelFiles.Outside o) {
+        if (dirty.contains(id)) {
+            return false;
+        }
+        texts.put(id, o.text());
+        submit(() -> files.accept(id, o.stamp()));
+        return true;
+    }
+
+    @Override
+    public String open(PanelId panel, Path file) {
+        PanelFiles.Result r = files.bind(panel.value(), file);
+        if (r.error().isEmpty()) {
+            texts.put(panel.value(), r.text());
+        }
+        return r.error();
     }
 
     @Override
@@ -291,16 +370,11 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
         }
         try {
             writer.execute(() -> {
-                panelsPending.set(false);
-                List<StoredPanel> out = new ArrayList<>();
-                for (PanelState p : panelMeta) {
-                    out.add(new StoredPanel(p.id().value(), p.title(), p.connection(), p.session(), texts.getOrDefault(p.id().value(), "")));
-                }
                 try {
-                    panels.write(out);
+                    persistPanels();
                     done.complete(null);
                 } catch (IOException | RuntimeException e) {
-                    LOG.log(System.Logger.Level.ERROR, "cannot save [file=" + panels.path() + "]: " + e.getMessage(), e);
+                    LOG.log(System.Logger.Level.ERROR, "cannot save the panels: " + e.getMessage(), e);
                     done.complete(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
                 }
             });
@@ -323,12 +397,47 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
     }
 
     private void writePanels() {
-        panelsPending.set(false);
-        List<StoredPanel> out = new ArrayList<>();
-        for (PanelState p : panelMeta) {
-            out.add(new StoredPanel(p.id().value(), p.title(), p.connection(), p.session(), texts.getOrDefault(p.id().value(), "")));
+        try {
+            persistPanels();
+        } catch (IOException | RuntimeException e) {
+            LOG.log(System.Logger.Level.ERROR, "cannot save the panels: " + e.getMessage(), e);
         }
-        write(panels, out);
+    }
+
+    /**
+     * Names each open panel's file (a new panel gets one, a renamed one moves it), writes the files whose text
+     * changed, then {@code panels.json}. A panel whose file fails stays unsaved for the next save, and the others
+     * are still written; the first failure is thrown at the end.
+     */
+    private void persistPanels() throws IOException {
+        panelsPending.set(false);
+        List<PanelState> meta = panelMeta;
+        List<String> open = meta.stream().map(p -> p.id().value()).toList();
+        List<StoredPanel> out = new ArrayList<>(meta.size());
+        IOException failed = null;
+        for (PanelState p : meta) {
+            String id = p.id().value();
+            String name = files.file(id).map(f -> f.getFileName().toString()).orElse(null);
+            try {
+                name = files.name(id, p.title(), open);
+                if (dirty.remove(id)) {
+                    try {
+                        files.write(id, texts.getOrDefault(id, ""));
+                    } catch (IOException e) {
+                        dirty.add(id);
+                        throw e;
+                    }
+                }
+            } catch (IOException e) {
+                LOG.log(System.Logger.Level.ERROR, "cannot save the panel's file [panel=" + p.title() + "]: " + e.getMessage(), e);
+                failed = failed == null ? e : failed;
+            }
+            out.add(new StoredPanel(id, p.title(), p.connection(), p.session(), name, null));
+        }
+        panels.write(out);
+        if (failed != null) {
+            throw failed;
+        }
     }
 
     private void submit(Runnable task) {
@@ -366,9 +475,6 @@ final class Store implements PersistencePort, PanelTexts, PromptHistory, AutoClo
         }
         closed = true;
         writer.execute(this::writePanels);
-        if (promptsPending.get()) {
-            writer.execute(this::writePrompts);
-        }
         writer.shutdown();
         secretsWriter.shutdown();
         try {

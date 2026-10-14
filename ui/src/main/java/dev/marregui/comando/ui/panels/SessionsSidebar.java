@@ -39,7 +39,8 @@ import java.util.Objects;
 
 /**
  * The switch surface: every session with its project, branch, state, cost, last activity and pending
- * approvals, and every connection. Double-click binds it to the focused panel.
+ * approvals, and every connection. Double-click binds it to the focused panel. Hidden, it collapses to a rail
+ * whose button shows it again.
  */
 public final class SessionsSidebar {
 
@@ -63,11 +64,14 @@ public final class SessionsSidebar {
             "No sessions yet. + creates one (⌘⇧K); the import button brings in stored Claude Code conversations.");
     private final JList<ConnectionState> connections = emptyText(new JList<>(connectionModel),
             "No connections yet. + adds one (⌘⇧O).");
-    private final JSplitPane root;
+    private final JSplitPane lists;
+    private final JPanel rail;
+    private final JPanel root = new JPanel(new BorderLayout());
     private AppState state;
     private long now = System.currentTimeMillis();
 
-    public SessionsSidebar(IntentSink intents, Dialogs dialogs) {
+    /** {@code toggle} hides or shows the sidebar, as View ▸ Toggle sidebar does; the owner calls {@link #show}. */
+    public SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle) {
         this.intents = intents;
         this.dialogs = dialogs;
         sessions.getAccessibleContext().setAccessibleName("Sessions");
@@ -154,16 +158,42 @@ public final class SessionsSidebar {
         });
         JPanel top = section("Sessions", sessions,
                 button("add", "New or edit sessions", () -> dialogs.sessions(selectedSession())),
-                button("import", "Import stored conversations", dialogs::importSessions));
+                button("import", "Import stored conversations", dialogs::importSessions),
+                button("more", "Hide the sidebar (⌘B)", toggle));
         JPanel bottom = section("Connections", connections,
                 button("add", "New or edit connections", () -> dialogs.connections(selectedConnection())));
-        root = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
-        root.setResizeWeight(0.7);
-        root.setBorder(null);
+        lists = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, bottom);
+        lists.setResizeWeight(0.7);
+        lists.setBorder(null);
+        rail = new JPanel(new BorderLayout());
+        rail.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Theme.CARD_BORDER),
+                BorderFactory.createEmptyBorder(4, 1, 0, 1)));
+        rail.add(button("more", "Show the sidebar (⌘B)", toggle), BorderLayout.NORTH);
+        rail.setVisible(false);
+        root.add(lists, BorderLayout.CENTER);
+        root.add(rail, BorderLayout.WEST);
     }
 
+    /** The lists, or the rail while hidden; the owner sizes it to {@link #railWidth} then. */
     public JComponent component() {
         return root;
+    }
+
+    public boolean isShown() {
+        return lists.isVisible();
+    }
+
+    /** Shows the lists, or hides them behind the rail. */
+    public void show(boolean shown) {
+        lists.setVisible(shown);
+        rail.setVisible(!shown);
+        root.revalidate();
+        root.repaint();
+    }
+
+    /** The width the hidden sidebar takes: the rail's. */
+    public int railWidth() {
+        return rail.getPreferredSize().width;
     }
 
     public void render(AppState s) {
@@ -276,7 +306,7 @@ public final class SessionsSidebar {
     /** Remove asks first, naming what it does; Cancel is the default. */
     private boolean confirmRemove(String name, String question) {
         Object[] options = {"Remove", "Cancel"};
-        return JOptionPane.showOptionDialog(root, Plain.text(question), "Remove " + Plain.text(name), JOptionPane.DEFAULT_OPTION,
+        return JOptionPane.showOptionDialog(lists, Plain.text(question), "Remove " + Plain.text(name), JOptionPane.DEFAULT_OPTION,
                 JOptionPane.WARNING_MESSAGE, null, options, options[1]) == 0;
     }
 

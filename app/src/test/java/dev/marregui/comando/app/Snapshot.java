@@ -11,6 +11,7 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
+import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
@@ -53,6 +54,10 @@ public final class Snapshot {
         StateLoop loop = app.loop();
         Thread.sleep(2500);
         shoot(out.resolve("01-start.png"));
+        // a panel's file edited outside comando, as by another editor or Claude's Edit tool, shows in its panel
+        Files.writeString(home.resolve("panels").resolve("scratch.md"), "-- Edited outside comando, reloaded within a second.\nSELECT now();\n");
+        Thread.sleep(2500);
+        shoot(out.resolve("01b-reloaded-from-file.png"));
 
         String repo = Path.of(System.getProperty("user.dir")).getParent().toString();
         loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("comando", repo).withModel("haiku")));
@@ -82,6 +87,10 @@ public final class Snapshot {
         loop.dispatch(new Intent.SelectLowerTab(LowerTab.APPROVALS));
         Thread.sleep(1500);
         shoot(out.resolve("02-approvals-and-side-diff.png"));
+        loop.dispatch(new Intent.Arrange(new Layout(Layout.Toggle.HIDE, Layout.Toggle.KEEP, Double.NaN)));
+        Thread.sleep(2800);
+        shoot(out.resolve("02b-sidebar-collapsed.png"));
+        loop.dispatch(new Intent.Arrange(new Layout(Layout.Toggle.SHOW, Layout.Toggle.KEEP, Double.NaN)));
         long plotId = loop.state().views().stream().filter(v -> v.title().equals("delay")).findFirst().orElseThrow().id();
         loop.dispatch(new Intent.SelectLowerTab(LowerTab.view(plotId)));
         Thread.sleep(800);

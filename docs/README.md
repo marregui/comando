@@ -18,7 +18,7 @@ Reference for how comando is built and why. The [repository README](../README.md
 |---|---|
 | [Claude bridge](design/claude-bridge.md) | the `claude -p` process, the stream-JSON mapping, turns, interrupts, versions, stored conversations |
 | [Resources and panels](design/resources-and-panels.md) | connections and sessions as one resource model, panel bindings, the sidebar and the dialogs |
-| [Command dispatch](design/command-dispatch.md) | the SQL-or-prompt classifier, the keys, the gutter, the prompt bar, attaching results |
+| [Command dispatch](design/command-dispatch.md) | the SQL-or-prompt classifier, the keys, the gutter, attaching results |
 | [MCP UI tools](design/mcp-ui-tools.md) | the MCP server, each tool's contract, view-spec validation, the instructions Claude receives |
 | [Widgets](design/widgets.md) | the widget contract, capabilities, the registry, the widgets, adding one |
 | [UI kit](design/ui-kit.md) | theme tokens, icons, actions, overlays, EDT helpers, text and tree components |

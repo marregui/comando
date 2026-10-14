@@ -28,6 +28,7 @@ import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
 import javax.swing.text.Position;
 import java.awt.Color;
+import java.awt.Rectangle;
 import java.util.function.Consumer;
 
 /**
@@ -128,6 +129,30 @@ public final class CommandEditor implements Searchable, Zoomable {
         } finally {
             silent = false;
         }
+        refreshMarkers();
+    }
+
+    /**
+     * Replaces the text with its file's new content without reporting a change: one undoable edit, so ⌘Z brings
+     * back the text it replaced; the caret and the view stay where they were, within the new text.
+     */
+    public void reload(String text) {
+        int caret = area.getCaretPosition();
+        Rectangle view = area.getVisibleRect();
+        silent = true;
+        try {
+            area.beginAtomicEdit();
+            try {
+                area.setText(text);
+            } finally {
+                area.endAtomicEdit();
+            }
+            area.setCaretPosition(Math.min(caret, area.getDocument().getLength()));
+            ranEnd = null;
+        } finally {
+            silent = false;
+        }
+        area.scrollRectToVisible(view);
         refreshMarkers();
     }
 

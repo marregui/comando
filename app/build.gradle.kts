@@ -29,6 +29,25 @@ application {
         "-Dapple.awt.application.appearance=NSAppearanceNameDarkAqua")
 }
 
+// ./gradlew :app:run starts comando from a copy of this checkout's build output made at launch. A build while comando
+// runs rewrites the module jars and class files in place, and the running JVM loads classes from them lazily: the
+// window then fails on the first class it loads afterwards. A copy is deleted at a later launch once no live process
+// names it on its command line; the jars from Gradle's cache are used where they are, builds never rewrite them. The
+// copies live under .gradle/, which clean leaves alone.
+tasks.named<JavaExec>("run") {
+    val checkout = rootDir
+    val stages = rootDir.resolve(".gradle/run-stage")
+    val objects = objects
+    doFirst {
+        val live = ProcessHandle.allProcesses().map { it.info().commandLine().orElse("") }.toList().joinToString("\n")
+        stages.listFiles()?.filter { !live.contains(it.absolutePath + File.separator) }?.forEach { it.deleteRecursively() }
+        val stage = stages.resolve(System.currentTimeMillis().toString())
+        classpath = objects.fileCollection().from(classpath.files.mapIndexed { i, f ->
+            if (f.exists() && f.startsWith(checkout)) stage.resolve("$i-${f.name}").also { f.copyRecursively(it) } else f
+        })
+    }
+}
+
 // Paints the window to PNG files while driving the app with intents: ./gradlew :app:snapshot -Pout=<dir> [-Plive=true] [-Phistory=<conversation id>] [-Ptools=true]
 tasks.register<JavaExec>("snapshot") {
     group = "verification"

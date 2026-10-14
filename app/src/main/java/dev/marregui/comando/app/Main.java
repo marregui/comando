@@ -36,12 +36,10 @@ public final class Main {
         }
         String version = Main.class.getPackage().getImplementationVersion();
         App[] app = new App[1];
-        app[0] = new App(config, version == null ? "dev" : version, () -> {
-            Thread.ofPlatform().name("exit").start(() -> {
-                app[0].close();
-                System.exit(0);
-            });
-        });
+        app[0] = new App(config, version == null ? "dev" : version, () -> Thread.ofPlatform().name("exit").start(() -> {
+            app[0].close();
+            System.exit(0);
+        }));
         Runtime.getRuntime().addShutdownHook(Thread.ofPlatform().name("shutdown").unstarted(app[0]::close));
         app[0].start();
     }

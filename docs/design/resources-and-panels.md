@@ -37,7 +37,7 @@ An editor panel is a tab in the workspace with an id, a title, its text, and two
 - Running SQL in a panel uses its connection, opening it when closed. Sending a prompt uses its session, starting it when stopped.
 - Renaming a connection or a session renames every binding; a running session must be stopped first, and the dialog refuses the rename until it is. Removing one closes it first and unbinds every panel.
 - The lower panel follows the focused panel: its last SQL run, its session's transcript, its terminal. The Approvals tab lists every session's requests. Results and Session get a dot when something arrived that the user has not seen; a panel whose query finished while another panel was in front gets a "● " before its title and a notice.
-- ⌘W, or a tab's close button, closes the panel; ⌘⇧T reopens the last of the ten most recently closed, after the focused panel, with its text, title and the bindings that still exist. Closing asks first when the panel's shell runs a job in the foreground, when the shell was replaced by a program (`exec ssh …`), or when comando cannot check ([Development tools](dev-tools.md#1-terminal)); a background helper of the shell, such as a prompt's git daemon, does not count. Tab titles are clipped to 32 characters; the tooltip has the full title and bindings.
+- ⌘W, or a tab's close button, closes the panel; ⌘⇧T reopens the last of the ten most recently closed, after the focused panel, on its file when that is still there, else with its text, and with its title and the bindings that still exist. Panels ▸ Open spec… (⌘O) opens any panel file as a panel ([Persistence](persistence.md#5-panel-files)). Closing asks first when the panel's shell runs a job in the foreground, when the shell was replaced by a program (`exec ssh …`), or when comando cannot check ([Development tools](dev-tools.md#1-terminal)); a background helper of the shell, such as a prompt's git daemon, does not count. Tab titles are clipped to 32 characters; the tooltip has the full title and bindings.
 - Importing exactly one stored conversation binds it to the focused panel when that panel has no session.
 
 ## 3. The sidebar
@@ -48,8 +48,8 @@ The sidebar is the switch surface, because sessions change many times a day whil
 - **Connections:** name, user, host, port and database, status. Double-click binds; the context menu binds, connects or disconnects, tests, explores the schema, edits or removes.
 - Remove in either context menu asks first, with the same question as the dialog. An empty list says how to add the first item.
 - From the keyboard, the palette's "Bind a session to the panel…" and "Bind a connection to the panel…" do what a double-click does.
-- ⌘B hides and shows the sidebar.
+- ⌘B, or the `⋯` button in the Sessions header, hides the sidebar; it collapses to a rail on the window's left edge whose `⋯` button shows it again at the width it had. While hidden there is no divider to drag. The split keeps both sides visible and sets the divider to the rail's width, because Swing's split pane leaves a hidden side's width unclaimed when the split's own size changes in the same layout.
 
 ## 4. Persistence of bindings
 
-`panels.json` holds each panel's id, title, bindings and text. At start, a binding to a name that no longer exists is dropped. Sessions come back closed, with their transcripts loaded from Claude Code's files ([Persistence](persistence.md)).
+`panels.json` holds each panel's id, title, bindings and file name; the text is in the panel's own file under `panels/` ([Persistence](persistence.md#5-panel-files)). At start, a binding to a name that no longer exists is dropped. Sessions come back closed, with their transcripts loaded from Claude Code's files ([Persistence](persistence.md)).

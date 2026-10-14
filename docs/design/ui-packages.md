@@ -11,7 +11,7 @@ dev.marregui.comando.ui
 │   ├── approval/   ApprovalInbox (rules from core's PermissionRules)
 │   ├── console/    ConsoleWidget
 │   ├── diff/       DiffWidget
-│   ├── editor/     CommandEditor, PromptBar, SqlCompletion
+│   ├── editor/     CommandEditor, SqlCompletion
 │   ├── markdown/   MarkdownWidget
 │   ├── plot/       PlotWidget, PlotCanvas
 │   ├── table/      TableViewWidget, GridTable, TableSource
@@ -25,8 +25,7 @@ dev.marregui.comando.ui
 │   ├── resource/   ResourceDialog<S>, the one dialog for connections and sessions
 │   └── sessions/   ImportSessionsDialog
 ├── shell/          ComandoUi (the frame and the UI port), Keys, LivePlots, ResultViews, Notifier, ServerToggle, Attachments, ClosingCover
-├── PanelTexts      editor text between runs, written by the store
-└── PromptHistory   each session's prompts between runs, written by the store
+└── PanelTexts      editor text between runs, written by the store
 ```
 
 | Layer | May use |

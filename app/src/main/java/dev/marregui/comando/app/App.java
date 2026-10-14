@@ -59,7 +59,7 @@ public final class App implements AutoCloseable {
         claudeExecutable = config.claudeExecutable();
         try {
             Store store = own(new Store(config.home(), config.keychain() ? Secrets.forPlatform() : Secrets.NONE));
-            Store.Loaded loaded = store.load(config.legacy() == null ? Legacy.none() : new Legacy(config.legacy()));
+            Store.Loaded loaded = store.load();
             AppState initial = AppState.initial(loaded.panels(),
                     loaded.connections().stream().map(ConnectionState::closed).toList(),
                     loaded.sessions().stream().map(SessionState::closed).toList());
@@ -71,6 +71,7 @@ public final class App implements AutoCloseable {
             DeferredEffects effects = new DeferredEffects();
             loop = new StateLoop(initial, new Reducer(Clock.SYSTEM), effects);
             owned.push(loop);
+            store.onNotice(text -> loop.dispatch(new Intent.Notify(Notice.Level.WARN, text, false)));
             if (config.recordIntents()) {
                 loop.addObserver(own(new IntentLog(config.logDir(), initial)));
             }
@@ -89,7 +90,7 @@ public final class App implements AutoCloseable {
             EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
             SessionCatalogue catalogue = new SessionCatalogue(config.claudeProjects());
             ui = new ComandoUi(new ComandoUi.Dependencies(
-                    loop, loop::state, loop, transcripts, results, consoles, schemas, store, store,
+                    loop, loop::state, loop, transcripts, results, consoles, schemas, store,
                     () -> catalogue.scan(500).stream().map(e -> new StoredConversation(e.sessionId(), e.cwd(), e.branch(), e.title(),
                             e.lastPrompt(), e.modifiedMillis(), e.sizeBytes())).toList(),
                     questDb, version, config.home(), config.logDir(), onQuit));

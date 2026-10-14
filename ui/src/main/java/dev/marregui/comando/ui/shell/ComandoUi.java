@@ -20,6 +20,7 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
@@ -29,7 +30,6 @@ import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.PanelTexts;
-import dev.marregui.comando.ui.PromptHistory;
 import dev.marregui.comando.ui.dialogs.resource.ResourceDialog;
 import dev.marregui.comando.ui.dialogs.sessions.ImportSessionsDialog;
 import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
@@ -74,7 +74,6 @@ import javax.swing.JMenuBar;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
-import javax.swing.JTable;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
@@ -137,7 +136,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             ConsoleRegistry consoles,
             SchemaRegistry schemas,
             PanelTexts texts,
-            PromptHistory prompts,
             Supplier<List<StoredConversation>> catalogue,
             ServerToggle server,
             String version,
@@ -161,6 +159,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private StatusBar status;
     private FindBar findBar;
     private JSplitPane outer;
+    private int outerDividerSize;
     private JSplitPane vertical;
     private JSplitPane editorAndSide;
     private JPanel top;
@@ -247,7 +246,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         notifier = new Notifier(frame);
         livePlots = new LivePlots(deps.intents(), deps.results());
         Thread.ofVirtual().name("pty-preload").start(TerminalWidget::preload);
-        workspace = new Workspace(deps.intents(), deps.texts(), deps.schemas(), deps.prompts());
+        workspace = new Workspace(deps.intents(), deps.texts(), deps.schemas());
         workspace.onClose(this::closePanel);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
@@ -272,7 +271,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             public void exploreSchema(String connection) {
                 ComandoUi.this.exploreSchema(connection);
             }
-        });
+        }, () -> actions.run("view.sidebar"));
         status = new StatusBar(deps.intents());
         findBar = new FindBar();
         top = new JPanel(new BorderLayout());
@@ -285,6 +284,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         vertical.setBorder(null);
         outer = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sidebar.component(), vertical);
         outer.setBorder(null);
+        outerDividerSize = outer.getDividerSize();
         JPanel south = new JPanel(new BorderLayout());
         south.add(findBar, BorderLayout.NORTH);
         south.add(status.component(), BorderLayout.SOUTH);
@@ -559,13 +559,13 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
         if (beforeArrange == null) {
             // Restore layout goes back to before the first arrangement the user has not undone
-            beforeArrange = new LayoutSnapshot(sidebar.component().isVisible(), sidePaneHidden, vertical.getDividerLocation());
+            beforeArrange = new LayoutSnapshot(sidebar.isShown(), sidePaneHidden, vertical.getDividerLocation());
         }
         applyLayout(layout);
     }
 
     private void applyLayout(Layout layout) {
-        if (layout.sidebar() != Layout.Toggle.KEEP && sidebar.component().isVisible() != (layout.sidebar() == Layout.Toggle.SHOW)) {
+        if (layout.sidebar() != Layout.Toggle.KEEP && sidebar.isShown() != (layout.sidebar() == Layout.Toggle.SHOW)) {
             toggleSidebar();
         }
         if (layout.sidePane() != Layout.Toggle.KEEP) {
@@ -588,7 +588,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             return;
         }
         beforeArrange = null;
-        if (sidebar.component().isVisible() != b.sidebar()) {
+        if (sidebar.isShown() != b.sidebar()) {
             toggleSidebar();
         }
         sidePaneHidden = b.sidePaneHidden();
@@ -627,9 +627,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("run", "Run selection or block", "play", key(KeyEvent.VK_ENTER, CMD), "Run", () -> run(Target.AUTO), this::canRun);
         cmd("run.claude", "Send selection or block to Claude", "claude", key(KeyEvent.VK_ENTER, CMD | SHIFT), "Run",
                 () -> run(Target.CLAUDE), this::canRun);
-        // ⌥⏎ in the prompt bar is a new line, so the prompt bar keeps it
         cmd("run.sql", "Run selection or block as SQL", "database", key(KeyEvent.VK_ENTER, ALT), "Run", () -> run(Target.SQL),
-                () -> canRun() && !promptFocused());
+                this::canRun);
         cmd("terminal.run", "Run selection or line in the terminal", "terminal", key(KeyEvent.VK_ENTER, CTRL), "Run",
                 this::runInTerminal, this::editorFocused);
         cmd("run.stop", "Stop query or interrupt turn", "stop", key(KeyEvent.VK_PERIOD, CMD), "Run",
@@ -641,12 +640,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("run.plotLive", "Plot last result, refreshing…", "chart", key(KeyEvent.VK_J, CMD | SHIFT), "Run", this::plotLive, this::hasRun);
         cmd("run.plotStop", "Stop refreshing plots", "stop", null, "Run", livePlots::stopAll, () -> livePlots.size() > 0);
         cmd("run.keep", "Keep the result in a tab", "table", key(KeyEvent.VK_R, CMD | SHIFT), "Run", this::keepResult, this::hasRun);
-        cmd("focus.prompt", "Focus the prompt bar", "claude", key(KeyEvent.VK_L, CMD), "Run", () -> {
-            EditorPanel p = workspace.focused();
-            if (p != null) {
-                p.prompt().focus();
-            }
-        });
         cmd("focus.editor", "Focus the editor", "edit", key(KeyEvent.VK_E, CMD), "Run", () -> {
             EditorPanel p = workspace.focused();
             if (p != null) {
@@ -655,6 +648,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
         // panels
         cmd("panel.new", "New panel", "add", key(KeyEvent.VK_T, CMD), "Panels", () -> workspace.newPanel());
+        cmd("panel.openSpec", "Open spec…", "file", key(KeyEvent.VK_O, CMD), "Panels", this::openSpec);
         cmd("panel.reopen", "Reopen closed panel", "refresh", key(KeyEvent.VK_T, CMD | SHIFT), "Panels", this::reopenPanel,
                 () -> workspace.hasClosed());
         // ⌘S saves the focused panel wherever the keyboard is; exporting a view is ⌘⇧S
@@ -843,12 +837,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return p != null && c != null && SwingUtilities.isDescendingFrom(c, p.editor().area());
     }
 
-    private boolean promptFocused() {
-        EditorPanel p = workspace == null ? null : workspace.focused();
-        Component c = focusOwnerInFrame();
-        return p != null && c != null && SwingUtilities.isDescendingFrom(c, p.prompt());
-    }
-
     private Component editorArea() {
         EditorPanel p = workspace == null ? null : workspace.focused();
         return p == null ? null : p.editor().area();
@@ -873,9 +861,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return id >= 0 ? id : side.viewHolding(c);
     }
 
-    /** Run keys act while the keyboard is in the focused panel's editor or prompt bar; elsewhere the key is the component's. */
+    /** Run keys act while the keyboard is in the focused panel's editor; elsewhere the key is the component's. */
     private boolean canRun() {
-        return editorFocused() || promptFocused();
+        return editorFocused();
     }
 
     /**
@@ -921,25 +909,51 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return s.session(s.focusedPanel().session());
     }
 
-    /** ⌘⏎ and ⌘⇧⏎ in the prompt bar send it; anywhere else they run the editor's selection or block. */
+    /** Runs the editor's selection or the block under the caret. */
     private void run(Target target) {
         EditorPanel p = workspace.focused();
-        if (p == null) {
-            return;
-        }
-        if (target != Target.SQL && promptFocused()) {
-            p.prompt().sendNow();
-        } else {
+        if (p != null) {
             p.runSelection(target);
         }
     }
 
-    /** Opens the most recently closed panel again after the focused one, with its text, title and bindings. */
+    /**
+     * Opens the most recently closed panel again after the focused one, with its title and bindings, on its own file
+     * when that is still there, else with the text it had.
+     */
     private void reopenPanel() {
         workspace.popClosed().ifPresent(c -> {
             PanelId id = PanelId.random();
-            deps.texts().changed(id, c.text());
+            if (c.file() == null || !Files.isRegularFile(c.file()) || !deps.texts().open(id, c.file()).isEmpty()) {
+                deps.texts().changed(id, c.text());
+            }
             deps.intents().dispatch(new Intent.ReopenPanel(id, c.title(), c.connection(), c.session()));
+        });
+    }
+
+    /** Opens a panel file as a panel, or brings forward the panel that has it open. */
+    private void openSpec() {
+        Optional<Path> folder = deps.texts().folder();
+        if (folder.isEmpty()) {
+            return;
+        }
+        FileChoosers.open(frame, "Open a spec", folder.get(), "md").ifPresent(chosen -> {
+            Path file = chosen.toAbsolutePath().normalize();
+            for (PanelState p : deps.state().get().panels()) {
+                if (deps.texts().file(p.id()).map(f -> f.toAbsolutePath().normalize().equals(file)).orElse(false)) {
+                    deps.intents().dispatch(new Intent.FocusPanel(p.id()));
+                    return;
+                }
+            }
+            PanelId id = PanelId.random();
+            String refused = deps.texts().open(id, file);
+            if (!refused.isEmpty()) {
+                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, refused, false));
+                return;
+            }
+            String name = file.getFileName().toString();
+            // the title the store gives a panel opened on a file, so the file keeps its name
+            deps.intents().dispatch(new Intent.AddPanel(id, (name.toLowerCase(Locale.ROOT).endsWith(".md") ? name.substring(0, name.length() - 3) : name).strip()));
         });
     }
 
@@ -1126,11 +1140,20 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private void toggleSidebar() {
-        boolean visible = sidebar.component().isVisible();
-        sidebar.component().setVisible(!visible);
-        if (!visible) {
-            outer.setDividerLocation(prefs.getInt("divider.sidebar", 260));
+        if (sidebar.isShown()) {
+            prefs.putInt("divider.sidebar", outer.getDividerLocation());
         }
+        showSidebar(!sidebar.isShown());
+    }
+
+    /**
+     * Shows the sidebar at its saved width, or collapses it to its rail with no divider to drag. The split keeps
+     * both sides visible: a hidden side keeps its old width when the split's size changes in the same layout.
+     */
+    private void showSidebar(boolean shown) {
+        sidebar.show(shown);
+        outer.setDividerSize(shown ? outerDividerSize : 0);
+        outer.setDividerLocation(shown ? prefs.getInt("divider.sidebar", 260) : sidebar.railWidth());
         outer.revalidate();
     }
 
@@ -1257,11 +1280,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             frame.setSize(w, h);
             frame.setLocationRelativeTo(null);
         }
-        outer.setDividerLocation(prefs.getInt("divider.sidebar", 260));
+        showSidebar(prefs.getBoolean("sidebar.visible", true));
         vertical.setDividerLocation(prefs.getInt("divider.lower", (int) (h * 0.45)));
-        if (!prefs.getBoolean("sidebar.visible", true)) {
-            sidebar.component().setVisible(false);
-        }
         sidePaneHidden = prefs.getBoolean("sidePane.hidden", false);
     }
 
@@ -1290,10 +1310,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             prefs.putInt("window.x", frame.getX());
             prefs.putInt("window.y", frame.getY());
         }
-        if (sidebar.component().isVisible()) {
+        if (sidebar.isShown()) {
             prefs.putInt("divider.sidebar", outer.getDividerLocation());
         }
-        prefs.putBoolean("sidebar.visible", sidebar.component().isVisible());
+        prefs.putBoolean("sidebar.visible", sidebar.isShown());
         prefs.putBoolean("sidePane.hidden", sidePaneHidden);
         prefs.putInt("divider.lower", vertical.getDividerLocation());
         if (sidePaneShown) {
