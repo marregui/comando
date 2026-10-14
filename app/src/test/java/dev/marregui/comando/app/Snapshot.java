@@ -16,6 +16,7 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
 import javax.imageio.ImageIO;
+import javax.swing.AbstractButton;
 import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
@@ -100,6 +101,11 @@ public final class Snapshot {
         Thread.sleep(2000);
         shoot(out.resolve("02c-sidebar-scratchpad.png"));
         selectSidebarTab(0);
+        // the focused panel's Markdown preview, switched on with its header button
+        click("Preview");
+        Thread.sleep(800);
+        shoot(out.resolve("02d-markdown-preview.png"));
+        click("Preview");
         long plotId = loop.state().views().stream().filter(v -> v.title().equals("delay")).findFirst().orElseThrow().id();
         loop.dispatch(new Intent.SelectLowerTab(LowerTab.view(plotId)));
         Thread.sleep(800);
@@ -187,6 +193,36 @@ public final class Snapshot {
                 return s;
             }
             Thread.sleep(200);
+        }
+        return null;
+    }
+
+    /** Clicks the first visible button with this accessible name, as a user would. */
+    private static void click(String name) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            for (Frame f : Frame.getFrames()) {
+                if (f instanceof JFrame jf && f.isVisible()) {
+                    AbstractButton b = button(jf.getContentPane(), name);
+                    if (b != null) {
+                        b.doClick();
+                        return;
+                    }
+                }
+            }
+        });
+    }
+
+    private static AbstractButton button(Component c, String name) {
+        if (c instanceof AbstractButton b && b.isShowing() && name.equals(b.getAccessibleContext().getAccessibleName())) {
+            return b;
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                AbstractButton b = button(child, name);
+                if (b != null) {
+                    return b;
+                }
+            }
         }
         return null;
     }

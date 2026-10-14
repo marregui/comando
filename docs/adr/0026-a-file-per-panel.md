@@ -17,7 +17,7 @@ Each panel's text is a Markdown file in `panels/` under the data root; `panels.j
 | file name | the panel's title, made a safe file name, with ` 2`, ` 3`… when taken | the folder reads as a list of specs |
 | rename | the file follows the title | the name stays the spec's name |
 | close | the file stays when it holds text; a blank one is deleted | a spec outlives its panel; empty panels leave nothing behind |
-| reopen | Panels ▸ Open spec… (⌘O) opens a file of the folder as a panel; ⌘⇧T takes the file again | a kept file needs a way back |
+| reopen | Panels ▸ Open file… (⌘O) opens a file of the folder as a panel (any file, since [record 29](0029-the-scratchpad-is-a-navigator.md)); ⌘⇧T takes the file again | a kept file needs a way back |
 | a new panel's title equal to a kept file's | the new panel takes the next free name | a closed spec is never overwritten |
 | an edit made outside comando | before writing, a file whose modification time or size differs from comando's last write or read is kept aside as `<name> (outside comando <date time>).md`, with a notice | nothing typed anywhere is lost |
 

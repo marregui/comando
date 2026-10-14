@@ -4,20 +4,23 @@ import dev.marregui.comando.core.view.ViewSpec;
 
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.stream.Stream;
 
 /**
- * The scratchpad as a tree: documents at the top level, then day folders newest first; in each day the
- * READ- documents in reading order, then ALPHA.md, then the rest, with {@code work/} last. Each file
- * links to itself.
+ * The scratchpad as a tree, every level ordered the same way: folders not named after a date first, by name; then
+ * date-named folders ({@code yyyy-MM-dd}) oldest first; then files by name, ignoring case. A file links to itself;
+ * a folder has no link and its label has no trailing slash. Hidden entries are left out, symbolic links are not
+ * followed into, and the depth is bounded.
  */
 final class Scratchpad {
 
-    private static final int MAX_DEPTH = 3;
+    static final int MAX_DEPTH = 12;
 
     private Scratchpad() {
     }
@@ -29,16 +32,14 @@ final class Scratchpad {
     private static List<ViewSpec.TreeNode> children(Path dir, int depth) throws IOException {
         List<Path> entries;
         try (Stream<Path> list = Files.list(dir)) {
-            entries = list.filter(p -> !p.getFileName().toString().startsWith(".")).sorted(order(depth)).toList();
+            entries = list.filter(p -> !p.getFileName().toString().startsWith(".")).sorted(ORDER).toList();
         }
-        List<ViewSpec.TreeNode> out = new ArrayList<>();
+        List<ViewSpec.TreeNode> out = new ArrayList<>(entries.size());
         for (Path p : entries) {
             String name = p.getFileName().toString();
-            if (Files.isDirectory(p)) {
-                if (depth < MAX_DEPTH) {
-                    List<ViewSpec.TreeNode> kids = children(p, depth + 1);
-                    out.add(new ViewSpec.TreeNode(name + "/", kids.size() + " entries", kids));
-                }
+            if (isFolder(p)) {
+                List<ViewSpec.TreeNode> kids = depth < MAX_DEPTH ? children(p, depth + 1) : List.of();
+                out.add(new ViewSpec.TreeNode(name, kids.size() == 1 ? "1 entry" : kids.size() + " entries", kids));
             } else {
                 out.add(new ViewSpec.TreeNode(name, size(p), "comando-file:" + p + "#0", List.of()));
             }
@@ -46,19 +47,14 @@ final class Scratchpad {
         return out;
     }
 
-    /** Top level: files first, then day folders newest first; inside a day: READ-, ALPHA.md, others, folders. */
-    private static Comparator<Path> order(int depth) {
-        Comparator<Path> filesFirst = Comparator.comparing(Files::isDirectory);
-        if (depth == 1) {
-            // day folders newest first, then other folders by name
-            return filesFirst.thenComparing((Path p) -> isDay(p) ? 0 : 1)
-                    .thenComparing((a, b) -> isDay(a) && isDay(b) ? b.getFileName().compareTo(a.getFileName()) : a.getFileName().compareTo(b.getFileName()));
-        }
-        return filesFirst.thenComparing((Path p) -> {
-            String n = p.getFileName().toString();
-            return n.startsWith("READ-") ? 0 : n.equals("ALPHA.md") ? 1 : 2;
-        }).thenComparing(p -> p.getFileName().toString());
+    private static boolean isFolder(Path p) {
+        return Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS);
     }
+
+    /** Folders not named after a date, then date-named folders oldest first, then files; names ignoring case. */
+    static final Comparator<Path> ORDER = Comparator.comparingInt((Path p) -> !isFolder(p) ? 2 : isDay(p) ? 1 : 0)
+            .thenComparing(p -> p.getFileName().toString().toLowerCase(Locale.ROOT))
+            .thenComparing(p -> p.getFileName().toString());
 
     private static boolean isDay(Path p) {
         return p.getFileName().toString().matches("\\d{4}-\\d{2}-\\d{2}");

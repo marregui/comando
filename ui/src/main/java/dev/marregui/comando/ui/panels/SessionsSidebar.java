@@ -36,6 +36,7 @@ import java.awt.FlowLayout;
 import java.awt.Insets;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Objects;
 
@@ -56,6 +57,9 @@ public final class SessionsSidebar {
 
         /** Shows the connection's schema explorer, as Connections ▸ Explore the schema does. */
         void exploreSchema(String connection);
+
+        /** Opens a file in a panel, or brings forward the panel that has it. */
+        void openFile(Path file);
     }
 
     private final IntentSink intents;
@@ -163,7 +167,7 @@ public final class SessionsSidebar {
                 }
             }
         });
-        scratchpad = new ScratchpadTab(intents);
+        scratchpad = new ScratchpadTab(dialogs::openFile);
         tabs.addTab("Sessions", section(new JScrollPane(sessions),
                 button("add", "New or edit sessions", () -> dialogs.sessions(selectedSession())),
                 button("import", "Import stored conversations", dialogs::importSessions)));
@@ -171,7 +175,7 @@ public final class SessionsSidebar {
                 button("add", "New or edit connections", () -> dialogs.connections(selectedConnection()))));
         tabs.addTab("Scratchpad", section(scratchpad.component(),
                 button("refresh", "Read the scratchpad again", () -> intents.dispatch(new Intent.BrowseScratchpad()))));
-        tabs.setToolTipTextAt(SCRATCHPAD, "~/.claude/SCRATCHPAD; double-click a file to open it");
+        tabs.setToolTipTextAt(SCRATCHPAD, "~/.claude/SCRATCHPAD; click a file to open it in a panel");
         // the hide button ends the tab strip, so it shows whichever tab is in front
         tabs.putClientProperty("JTabbedPane.trailingComponent", button("more", "Hide the sidebar (⌘B)", toggle));
         // one row that never wraps: a wrapped strip moves the selected tab's row, so tabs would jump on a click
@@ -180,12 +184,6 @@ public final class SessionsSidebar {
         tabs.putClientProperty("JTabbedPane.tabInsets", new Insets(4, 6, 4, 6));
         tabs.putClientProperty("JTabbedPane.tabAreaInsets", new Insets(0, 2, 0, 0));
         tabs.getAccessibleContext().setAccessibleName("Sidebar");
-        // the scratchpad is read when its tab comes to the front, then kept fresh by the owner while it shows
-        tabs.addChangeListener(e -> {
-            if (tabs.getSelectedIndex() == SCRATCHPAD) {
-                intents.dispatch(new Intent.BrowseScratchpad());
-            }
-        });
         rail = new JPanel(new BorderLayout());
         rail.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(4, 1, 0, 1)));
@@ -221,11 +219,6 @@ public final class SessionsSidebar {
         if (tab >= 0 && tab < tabs.getTabCount()) {
             tabs.setSelectedIndex(tab);
         }
-    }
-
-    /** Whether the scratchpad is on screen: the sidebar shown with its Scratchpad tab in front. */
-    public boolean scratchpadShowing() {
-        return isShown() && tabs.getSelectedIndex() == SCRATCHPAD;
     }
 
     /** The scratchpad as read; a refresh keeps the tree as the user left it. */

@@ -408,7 +408,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     panelMeta.forEach(p -> live.add(p.id().value()));
                     // checked and bound on the writer thread, so two opens of one file cannot both bind it
                     for (String other : live) {
-                        if (files.file(other).map(f -> f.getFileName().toString().equalsIgnoreCase(name)).orElse(false)) {
+                        if (files.file(other).map(f -> samePath(f, file)).orElse(false)) {
                             done.complete(name + " is already open");
                             return;
                         }
@@ -419,7 +419,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                         opening.add(id);
                         texts.put(id, r.text());
                         // a closed panel's text that never reached this file is newer than the file: the panel takes it
-                        unsaved.values().stream().filter(u -> name.equalsIgnoreCase(u.file())).findFirst().ifPresent(u -> {
+                        String stored = files.storedName(id).orElse("");
+                        unsaved.values().stream().filter(u -> stored.equalsIgnoreCase(u.file())).findFirst().ifPresent(u -> {
                             texts.put(id, u.content());
                             dirty.add(id);
                             unsaved.remove(u.id());
@@ -485,6 +486,11 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     private String fileName(String id) {
         return files.file(id).map(f -> f.getFileName().toString()).orElse(null);
+    }
+
+    /** One file, whatever the spelling: absolute, normalised, ignoring case as APFS does by default. */
+    static boolean samePath(Path a, Path b) {
+        return a.toAbsolutePath().normalize().toString().equalsIgnoreCase(b.toAbsolutePath().normalize().toString());
     }
 
     private static String reason(Exception e) {

@@ -105,11 +105,13 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -272,6 +274,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             public void exploreSchema(String connection) {
                 ComandoUi.this.exploreSchema(connection);
             }
+
+            @Override
+            public void openFile(Path file) {
+                ComandoUi.this.openFile(file);
+            }
         }, () -> actions.run("view.sidebar"));
         status = new StatusBar(deps.intents());
         findBar = new FindBar();
@@ -364,17 +371,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
     }
 
-    /** Seconds between reads of the scratchpad while its tab shows. */
-    static final int SCRATCHPAD_SECONDS = 10;
-    private int ticks;
-
-    /** Once a second: elapsed times on the panels and the results, the embedded server's state, the scratchpad. */
+    /** Once a second: elapsed times on the panels and the results, the embedded server's state. */
     private void tick() {
         workspace.tick();
         lower.results().tick();
-        if (++ticks % SCRATCHPAD_SECONDS == 0 && sidebar.scratchpadShowing()) {
-            deps.intents().dispatch(new Intent.BrowseScratchpad());
-        }
         if (deps.server() != null) {
             status.server(deps.server().name(), deps.server().isRunning(), () -> deps.server().toggle());
         }
@@ -661,7 +661,13 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
         // panels
         cmd("panel.new", "New panel", "add", key(KeyEvent.VK_T, CMD), "Panels", () -> workspace.newPanel());
-        cmd("panel.openSpec", "Open spec…", "file", key(KeyEvent.VK_O, CMD), "Panels", this::openSpec);
+        cmd("panel.openSpec", "Open file…", "file", key(KeyEvent.VK_O, CMD), "Panels", this::openSpec);
+        cmd("panel.preview", "Toggle Markdown preview", "markdown", key(KeyEvent.VK_M, CMD | SHIFT), "Panels", () -> {
+            EditorPanel p = workspace.focused();
+            if (p != null) {
+                p.togglePreview();
+            }
+        });
         cmd("panel.reopen", "Reopen closed panel", "refresh", key(KeyEvent.VK_T, CMD | SHIFT), "Panels", this::reopenPanel,
                 () -> workspace.hasClosed());
         // ⌘S saves the focused panel wherever the keyboard is; exporting a view is ⌘⇧S
@@ -955,28 +961,56 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
     }
 
-    /** Opens a panel file as a panel, or brings forward the panel that has it open. */
+    /** Panels ▸ Open file…: a file chosen anywhere, starting in the panels' folder. */
     private void openSpec() {
         Optional<Path> folder = deps.texts().folder();
-        if (folder.isEmpty()) {
+        if (folder.isPresent()) {
+            FileChoosers.open(frame, "Open a file in a panel", folder.get()).ifPresent(this::openFile);
+        }
+    }
+
+    /** Files whose opening is under way, so a second click does not open them twice. EDT only. */
+    private final Set<Path> openingFiles = new HashSet<>();
+
+    /**
+     * Opens a file in a new panel bound to it, or brings forward the panel that has it. The check and the read run
+     * off the EDT; a file that is binary or over {@link OpenFiles#MAX_PANEL_BYTES} shows read-only in the side pane.
+     */
+    private void openFile(Path chosen) {
+        Path file = chosen.toAbsolutePath().normalize();
+        for (PanelState p : deps.state().get().panels()) {
+            if (deps.texts().file(p.id()).map(f -> samePath(f, file)).orElse(false)) {
+                deps.intents().dispatch(new Intent.FocusPanel(p.id()));
+                return;
+            }
+        }
+        if (!openingFiles.add(file)) {
             return;
         }
-        FileChoosers.open(frame, "Open a spec", folder.get(), "md").ifPresent(chosen -> {
-            Path file = chosen.toAbsolutePath().normalize();
-            for (PanelState p : deps.state().get().panels()) {
-                if (deps.texts().file(p.id()).map(f -> f.toAbsolutePath().normalize().equals(file)).orElse(false)) {
-                    deps.intents().dispatch(new Intent.FocusPanel(p.id()));
-                    return;
-                }
+        Thread.ofVirtual().name("open-file").start(() -> {
+            if (!OpenFiles.isText(file)) {
+                deps.intents().dispatch(new Intent.OpenFile("", file.toString(), 0));
+                Edt.later(() -> openingFiles.remove(file));
+                return;
             }
             PanelId id = PanelId.random();
             String name = file.getFileName().toString();
             // the title the store gives a panel opened on a file, so the file keeps its name
             String title = (name.toLowerCase(Locale.ROOT).endsWith(".md") ? name.substring(0, name.length() - 3) : name).strip();
-            deps.texts().open(id, file).thenAccept(refused -> deps.intents().dispatch(refused.isEmpty()
-                    ? new Intent.AddPanel(id, title)
-                    : new Intent.Notify(Notice.Level.ERROR, refused, false)));
+            deps.texts().open(id, file).thenAccept(refused -> {
+                if (refused.isEmpty()) {
+                    deps.intents().dispatch(new Intent.AddPanel(id, title));
+                } else if (!refused.endsWith("is already open")) {
+                    // already open: a click racing the first one's panel, which comes forward on its own
+                    deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, refused, false));
+                }
+                Edt.later(() -> openingFiles.remove(file));
+            });
         });
+    }
+
+    private static boolean samePath(Path a, Path b) {
+        return a.toAbsolutePath().normalize().toString().equalsIgnoreCase(b.toAbsolutePath().normalize().toString());
     }
 
     /** Panels save as they change; ⌘S saves now and says so, for the habit. */
@@ -1174,9 +1208,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      */
     private void showSidebar(boolean shown) {
         sidebar.show(shown);
-        if (sidebar.scratchpadShowing()) {
-            deps.intents().dispatch(new Intent.BrowseScratchpad());
-        }
         outer.setDividerSize(shown ? outerDividerSize : 0);
         outer.setDividerLocation(shown ? prefs.getInt("divider.sidebar", 260) : sidebar.railWidth());
         outer.revalidate();

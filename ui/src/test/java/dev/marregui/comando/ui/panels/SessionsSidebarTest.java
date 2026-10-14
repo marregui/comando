@@ -16,8 +16,11 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -27,23 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class SessionsSidebarTest {
 
-    private static final SessionsSidebar.Dialogs NO_DIALOGS = new SessionsSidebar.Dialogs() {
-        @Override
-        public void sessions(String select) {
-        }
-
-        @Override
-        public void importSessions() {
-        }
-
-        @Override
-        public void connections(String select) {
-        }
-
-        @Override
-        public void exploreSchema(String connection) {
-        }
-    };
+    private static final SessionsSidebar.Dialogs NO_DIALOGS = new Dialogs();
 
     private static LookAndFeel previous;
 
@@ -96,33 +83,64 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void theScratchpadIsReadWhenItsTabComesToTheFrontAndShownAsATree() throws Exception {
+    void theScratchpadIsANavigatorWithoutARootRowWhoseFilesOpenWithOneClick() throws Exception {
+        List<Path> opened = new CopyOnWriteArrayList<>();
+        SessionsSidebar.Dialogs dialogs = new Dialogs() {
+            @Override
+            public void openFile(Path file) {
+                opened.add(file);
+            }
+        };
         List<Intent> intents = new CopyOnWriteArrayList<>();
         SessionsSidebar[] s = new SessionsSidebar[1];
-        SwingUtilities.invokeAndWait(() -> s[0] = new SessionsSidebar(intents::add, NO_DIALOGS, () -> {
+        SwingUtilities.invokeAndWait(() -> s[0] = new SessionsSidebar(intents::add, dialogs, () -> {
         }));
         SessionsSidebar sidebar = s[0];
-        assertThat(sidebar.scratchpadShowing()).isFalse();
         SwingUtilities.invokeAndWait(() -> sidebar.selectTab(SessionsSidebar.SCRATCHPAD));
-        assertThat(sidebar.scratchpadShowing()).isTrue();
-        assertThat(intents).containsExactly(new Intent.BrowseScratchpad());
+        assertThat(intents).as("the tools adapter keeps the tree in sync; a tab switch reads nothing").isEmpty();
 
         ViewSpec.TreeNode doc = new ViewSpec.TreeNode("READ-01-X.md", "1 kB", "comando-file:/s/2026-10-14/READ-01-X.md#0", List.of());
         ViewSpec.TreeNode root = new ViewSpec.TreeNode("SCRATCHPAD", "/s", List.of(
-                new ViewSpec.TreeNode("PLAN.md", "2 kB", "comando-file:/s/PLAN.md#0", List.of()),
-                new ViewSpec.TreeNode("2026-10-14/", "1 entries", List.of(doc)),
-                new ViewSpec.TreeNode("2026-10-13/", "0 entries", List.of())));
+                new ViewSpec.TreeNode("notes", "0 entries", List.of()),
+                new ViewSpec.TreeNode("2026-10-13", "0 entries", List.of()),
+                new ViewSpec.TreeNode("2026-10-14", "1 entry", List.of(doc)),
+                new ViewSpec.TreeNode("PLAN.md", "2 kB", "comando-file:/s/PLAN.md#0", List.of())));
         SwingUtilities.invokeAndWait(() -> sidebar.showScratchpad(root));
         JTree tree = find(sidebar.component(), JTree.class, t -> "Scratchpad".equals(t.getAccessibleContext().getAccessibleName()));
-        assertThat(tree.getRowCount()).as("root, its three entries, and the newest day open").isEqualTo(5);
+        assertThat(tree.isRootVisible()).isFalse();
+        assertThat(tree.getRowCount()).as("the four entries and the newest day open").isEqualTo(5);
 
         SwingUtilities.invokeAndWait(() -> {
-            tree.setSelectionRow(3);
-            // Enter's binding, run as the focused tree would: a key event sent to an unfocused component is dropped
-            Object action = tree.getInputMap().get(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0));
-            tree.getActionMap().get(action).actionPerformed(new ActionEvent(tree, ActionEvent.ACTION_PERFORMED, "activate"));
+            tree.setSize(260, 400);
+            tree.doLayout();
+            Rectangle row = tree.getRowBounds(3);
+            tree.dispatchEvent(new MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0, row.x + 4, row.y + row.height / 2, 1, false,
+                    MouseEvent.BUTTON1));
         });
-        assertThat(intents).last().isEqualTo(new Intent.OpenFile("", "/s/2026-10-14/READ-01-X.md", 0));
+        assertThat(opened).containsExactly(Path.of("/s/2026-10-14/READ-01-X.md"));
+    }
+
+    /** Dialogs that do nothing, for tests that override what they look at. */
+    private static class Dialogs implements SessionsSidebar.Dialogs {
+        @Override
+        public void sessions(String select) {
+        }
+
+        @Override
+        public void importSessions() {
+        }
+
+        @Override
+        public void connections(String select) {
+        }
+
+        @Override
+        public void exploreSchema(String connection) {
+        }
+
+        @Override
+        public void openFile(Path file) {
+        }
     }
 
     /** Whether {@code c} and every ancestor up to {@code root} are visible. */

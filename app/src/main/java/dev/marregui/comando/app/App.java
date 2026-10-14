@@ -49,9 +49,12 @@ public final class App implements AutoCloseable {
     static final Duration APPROVAL_TIMEOUT = Duration.ofMinutes(55);
 
     private final Deque<AutoCloseable> owned = new ArrayDeque<>();
+    /** How often the scratchpad folder is read for the sidebar. */
+    static final Duration SCRATCHPAD_EVERY = Duration.ofSeconds(2);
     private final StateLoop loop;
     private final ClaudeAdapter claude;
     private final ComandoUi ui;
+    private final ToolsAdapter tools;
     private final String claudeExecutable;
     private volatile boolean closed;
 
@@ -87,6 +90,7 @@ public final class App implements AutoCloseable {
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), config.claudeProjects(), UiInstructions.TEXT)));
             ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings.defaults()));
+            tools = devTools;
             EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
             SessionCatalogue catalogue = new SessionCatalogue(config.claudeProjects());
             ui = new ComandoUi(new ComandoUi.Dependencies(
@@ -112,6 +116,8 @@ public final class App implements AutoCloseable {
     public void start() {
         loop.start();
         ui.start();
+        // the sidebar's scratchpad stays in sync whether its tab shows or not
+        tools.watchScratchpad(SCRATCHPAD_EVERY);
         List<SessionSpec> withHistory = loop.state().sessions().stream().map(SessionState::spec)
                 .filter(s -> !s.claudeSessionId().isEmpty()).toList();
         for (SessionSpec s : withHistory) {

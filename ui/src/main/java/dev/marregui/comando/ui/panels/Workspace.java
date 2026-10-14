@@ -110,7 +110,7 @@ public final class Workspace {
         if (view == null || !change.take().getAsBoolean() || view.editor().text().equals(change.text())) {
             return;
         }
-        view.editor().reload(change.text());
+        view.reload(change.text());
         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Reloaded " + change.file() + ": it changed outside comando", false));
     }
 
@@ -215,6 +215,7 @@ public final class Workspace {
                 }
                 tabs.setToolTipTextAt(at, Plain.text(tooltip(p) + texts.file(p.id()).map(f -> " · " + Labels.shortPath(f.toString())).orElse("")
                         + (unseen.contains(p.id()) ? " · a query finished" : "")));
+                view.file(texts.file(p.id()).orElse(null));
                 view.render(p, s);
             }
             EditorPanel focused = panels.get(s.focused());

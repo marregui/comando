@@ -13,6 +13,7 @@ import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.editor.CommandEditor;
 
@@ -22,16 +23,23 @@ import javax.swing.JButton;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
+import javax.swing.JToggleButton;
 import java.awt.BorderLayout;
+import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
+import java.nio.file.Path;
+import java.util.Locale;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * One editor panel: a header with its connection and session, and the command editor.
- * A production connection frames the panel in red.
+ * One editor panel: a header with its connection and session, and the command editor. A panel kept in a Markdown
+ * file, its own or a scratchpad document, switches between the editor and the rendered text. A production
+ * connection frames the panel in red.
  */
 public final class EditorPanel extends JPanel {
 
@@ -43,6 +51,10 @@ public final class EditorPanel extends JPanel {
     private final JButton sessionToggle = iconButton();
     private final JButton run = new JButton("Run", Icons.get("play"));
     private final JButton stop = new JButton(Icons.get("stop"));
+    private final JToggleButton preview = new JToggleButton("Preview", Icons.get("markdown"));
+    private final HtmlPane rendered = new HtmlPane();
+    private final JPanel center = new JPanel(new CardLayout());
+    private Path file;
     private final SchemaRegistry schemas;
     private PanelState panel;
     private AppState state;
@@ -71,12 +83,22 @@ public final class EditorPanel extends JPanel {
         // a click leaves the keyboard in the editor, ready for the next edit or run
         run.setFocusable(false);
         stop.setFocusable(false);
+        preview.setFocusable(false);
+        preview.setToolTipText("Show the Markdown rendered, or the text to edit (⌘⇧M)");
+        preview.getAccessibleContext().setAccessibleName("Preview");
+        preview.addActionListener(e -> showPreview(preview.isSelected()));
+        right.add(preview);
         right.add(run);
         right.add(stop);
         header.add(left, BorderLayout.WEST);
         header.add(right, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
-        add(editor.component(), BorderLayout.CENTER);
+        rendered.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD * 2, Theme.PAD, Theme.PAD * 2));
+        JScrollPane renderedScroll = new JScrollPane(rendered);
+        renderedScroll.setBorder(null);
+        center.add(editor.component(), EDIT);
+        center.add(renderedScroll, PREVIEW);
+        add(center, BorderLayout.CENTER);
 
         run.addActionListener(e -> runSelection(Target.AUTO));
         stop.addActionListener(e -> intents.dispatch(new Intent.CancelRun(this.panel.id())));
@@ -88,6 +110,69 @@ public final class EditorPanel extends JPanel {
 
     public CommandEditor editor() {
         return editor;
+    }
+
+    private static final String EDIT = "edit";
+    private static final String PREVIEW = "preview";
+
+    /** The panel's file, once it has one: a Markdown file offers the preview, any other file does not. */
+    public void file(Path file) {
+        if (Objects.equals(file, this.file)) {
+            return;
+        }
+        this.file = file;
+        boolean markdown = isMarkdown();
+        preview.setVisible(markdown);
+        if (!markdown && previewing()) {
+            showPreview(false);
+        }
+    }
+
+    private boolean isMarkdown() {
+        String name = file == null ? ".md" : file.getFileName().toString().toLowerCase(Locale.ROOT);
+        return name.endsWith(".md") || name.endsWith(".markdown");
+    }
+
+    /** The rendered view; for tests. */
+    HtmlPane rendered() {
+        return rendered;
+    }
+
+    boolean previewOffered() {
+        return preview.isVisible();
+    }
+
+    public boolean previewing() {
+        return preview.isSelected();
+    }
+
+    /** Switches between the text to edit and the Markdown rendered; a file that is not Markdown stays as text. */
+    public void togglePreview() {
+        if (preview.isVisible()) {
+            showPreview(!previewing());
+        }
+    }
+
+    private void showPreview(boolean on) {
+        preview.setSelected(on);
+        if (on) {
+            rendered.setMarkdown(editor.text());
+            rendered.setCaretPosition(0);
+        }
+        ((CardLayout) center.getLayout()).show(center, on ? PREVIEW : EDIT);
+        if (!on) {
+            editor.requestFocus();
+        }
+    }
+
+    /** The file changed outside comando: the editor takes the text, and the preview shows it when it is on. */
+    public void reload(String text) {
+        editor.reload(text);
+        if (previewing()) {
+            int at = rendered.getCaretPosition();
+            rendered.setMarkdown(text);
+            rendered.setCaretPosition(Math.min(at, rendered.getDocument().getLength()));
+        }
     }
 
     /** The failed run whose error position is underlined, so a re-render does not mark it again. */

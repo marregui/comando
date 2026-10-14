@@ -23,6 +23,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -312,38 +314,55 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     /** One read at a time: an older read finishing last would send a stale tree, and a slow disk would pile reads up. */
     private final AtomicBoolean readingScratchpad = new AtomicBoolean();
 
-    /**
-     * Reads the scratchpad for the sidebar, off the caller's thread; sends it only when it changed since the last
-     * read. A folder that cannot be read becomes a tree that says so, not a notice at every refresh. A request while a
-     * read runs is dropped: that read returns what is on disk.
-     */
+    /** Reads the scratchpad for the sidebar now, off the caller's thread; see {@link #readScratchpad}. */
     @Override
     public void browseScratchpad() {
+        Thread.ofVirtual().name("scratchpad").start(this::readScratchpad);
+    }
+
+    private final ScheduledExecutorService scratchpadWatch =
+            Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("scratchpad-watch").daemon(true).unstarted(r));
+
+    /**
+     * Keeps the sidebar's scratchpad in sync whether it shows or not: reads the whole folder every {@code every},
+     * on a thread of its own, and sends the tree when something was added, removed, renamed or resized.
+     */
+    public void watchScratchpad(Duration every) {
+        scratchpadWatch.scheduleWithFixedDelay(this::readScratchpad, 0, every.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Reads the scratchpad and sends it only when it changed since the last read. A folder that cannot be read
+     * becomes a tree that says so, not a notice at every read. A read while another runs is dropped: that one
+     * returns what is on disk, and an older read finishing last would send a stale tree.
+     */
+    private void readScratchpad() {
         if (!readingScratchpad.compareAndSet(false, true)) {
             return;
         }
-        Thread.ofVirtual().name("scratchpad").start(() -> {
+        try {
+            ViewSpec.TreeNode root;
             try {
-                ViewSpec.TreeNode root;
-                try {
-                    root = Scratchpad.tree(settings.scratchpad());
-                } catch (IOException | RuntimeException e) {
-                    LOG.log(System.Logger.Level.WARNING, "cannot read the scratchpad at " + settings.scratchpad() + ": " + e.getMessage());
-                    root = new ViewSpec.TreeNode(settings.scratchpad().toString(), "cannot be read: " + e.getMessage(), List.of());
-                }
-                ViewSpec.TreeNode before = scratchpad.getAndSet(root);
-                if (!root.equals(before)) {
-                    sink.dispatch(new Intent.ScratchpadLoaded(root));
-                }
-            } finally {
-                readingScratchpad.set(false);
+                root = Scratchpad.tree(settings.scratchpad());
+            } catch (IOException | RuntimeException e) {
+                root = new ViewSpec.TreeNode(settings.scratchpad().toString(), "cannot be read: " + e.getMessage(), List.of());
             }
-        });
+            ViewSpec.TreeNode before = scratchpad.getAndSet(root);
+            if (!root.equals(before)) {
+                if (root.detail().startsWith("cannot be read")) {
+                    LOG.log(System.Logger.Level.WARNING, "cannot read the scratchpad at " + settings.scratchpad() + ": " + root.detail());
+                }
+                sink.dispatch(new Intent.ScratchpadLoaded(root));
+            }
+        } finally {
+            readingScratchpad.set(false);
+        }
     }
 
     /** Stops every run; called at exit. */
     @Override
     public void close() {
+        scratchpadWatch.shutdownNow();
         Map<Process, List<ProcessHandle>> trees = new HashMap<>();
         for (Process p : List.copyOf(running.values())) {
             trees.put(p, terminate(p, false));

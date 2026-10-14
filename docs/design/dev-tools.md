@@ -51,6 +51,14 @@ The jfrq launcher is `COMANDO_JFRQ`, else `~/workspace/jfr/cli/build/install/jfr
 
 ## 4. The scratchpad
 
-The sidebar's Scratchpad tab shows `~/.claude/SCRATCHPAD` as a tree: top-level documents first, then day folders newest first; in a day folder the `READ-` documents in reading order, then `ALPHA.md`, then the rest, with `work/` last; three levels deep. The first load opens the newest day. A file opens in the side pane, rendered when it is Markdown, on a double-click, Enter or the context menu's Open.
+The sidebar's Scratchpad tab is a navigator of `~/.claude/SCRATCHPAD`, without a root row: the folder's entries are the top level. Every level is ordered the same way: folders not named after a date first, by name; then date-named folders (`yyyy-MM-dd`) oldest first; then files by name, ignoring case. The whole depth is shown (bounded at 12 levels; hidden entries left out, symbolic links not followed). The first load opens the newest day.
 
-The tools adapter reads the folder on a virtual thread when the tab comes to the front, when the sidebar is shown with it in front, every 10 s while it shows, on the tab's refresh button and on Tools ▸ Show the scratchpad, which shows the sidebar and brings the tab forward. It sends the tree (`ScratchpadLoaded`, then `UiPort.showScratchpad`) only when it changed since the last read; the tree keeps the folders the user opened and the selection, matching nodes by their labels. A folder that cannot be read becomes a one-line tree that says so, rather than a notice at every refresh ([record 28](../adr/0028-the-sidebar-has-three-tabs.md)).
+| Entry | Icon |
+|---|---|
+| folder; `work` folder | folder; folder with a gear |
+| `*plan*.md`; `READ-*`; `ALPHA.md`; other Markdown | plan; book; index; Markdown |
+| code (`.java`, `.py`, `.kt`, `.js`, …); data (`.json`, `.yaml`, `.xml`, …); shell; `.sql`; tables (`.csv`, `.tsv`); images; `.jfr`; diffs; `.txt`/`.log` | code; braces; terminal; database; table; image; chart; diff; text |
+
+One click opens a folder or a file; Enter and the context menu's "Open in a panel" open a file too. A text file of at most 2 MB opens in a new editor panel bound to that file ([Persistence](persistence.md#5-panel-files)); a file another panel holds brings that panel forward; a binary or larger file shows read-only in the side pane. A Markdown panel switches between the text and the rendered page (header button, ⌘⇧M).
+
+The tools adapter reads the whole folder every 2 s on its own thread (`scratchpad-watch`), whether the tab shows or not, and sends the tree (`ScratchpadLoaded`, then `UiPort.showScratchpad`) only when something was added, removed, renamed or resized; the tab's refresh button and Tools ▸ Show the scratchpad read it at once. One read runs at a time. The tree keeps the folders the user opened and the selection, matching nodes by their labels. A folder that cannot be read becomes a one-line tree that says so, rather than a notice at every read. A full read of a 70-entry scratchpad takes about 1.5 ms ([record 29](../adr/0029-the-scratchpad-is-a-navigator.md)).

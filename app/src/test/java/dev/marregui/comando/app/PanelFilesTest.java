@@ -161,7 +161,6 @@ class PanelFilesTest {
         PanelId id = new PanelId("o");
         try (Store store = new Store(home)) {
             store.load();
-            assertThat(store.open(new PanelId("e"), elsewhere).get(5, TimeUnit.SECONDS)).startsWith("Specs live in");
             assertThat(store.open(new PanelId("g"), dir().resolve("gone.md")).get(5, TimeUnit.SECONDS)).isEqualTo("gone.md no longer exists");
             assertThat(store.open(id, dir().resolve("Ravenna plan.md")).get(5, TimeUnit.SECONDS)).isEmpty();
             assertThat(store.load(id)).isEqualTo("# Ravenna");
@@ -439,6 +438,62 @@ class PanelFilesTest {
             assertThat(home.resolve("panels.json")).as("tried again without another edit").isRegularFile();
             assertThat(Files.readString(home.resolve("panels.json"))).contains("spec.md");
         }
+    }
+
+    @Test
+    void aFileElsewhereOpensInAPanelAndIsNeverRenamedOrDeletedByComando() throws Exception {
+        Path day = Files.createDirectories(home.resolve("SCRATCHPAD").resolve("2026-10-14"));
+        Path doc = Files.writeString(day.resolve("READ-01-X.md"), "# read me");
+        PanelId id = new PanelId("x");
+        List<PanelTexts.Outside> outside = new CopyOnWriteArrayList<>();
+        try (Store store = new Store(home)) {
+            store.onOutsideChange(outside::add);
+            store.load();
+            assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEmpty();
+            assertThat(store.load(id)).isEqualTo("# read me");
+            store.savePanels(List.of(new PanelState(id, "READ-01-X", "", "")));
+            store.changed(id, "# read me\n\nedited in comando");
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            assertThat(Files.readString(doc)).isEqualTo("# read me\n\nedited in comando");
+
+            store.savePanels(List.of(new PanelState(id, "renamed tab", "", "")));
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            assertThat(doc).as("a file elsewhere keeps its name").exists();
+
+            writeOutside(doc, "edited by Claude");
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            assertThat(outside).singleElement().extracting(PanelTexts.Outside::text).isEqualTo("edited by Claude");
+            assertThat(outside.getFirst().take().getAsBoolean()).isTrue();
+
+            store.changed(id, "");
+            store.forget(id);
+            store.savePanels(List.of());
+            store.saveNow().get(5, TimeUnit.SECONDS);
+        }
+        assertThat(doc).as("blank, but not comando's to delete").exists();
+        assertThat(Files.readString(home.resolve("panels.json"))).doesNotContain("READ-01-X");
+        try (Stream<Path> files = Files.list(day)) {
+            assertThat(files.map(p -> p.getFileName().toString())).as("no temporary files left").containsExactly("READ-01-X.md");
+        }
+    }
+
+    @Test
+    void aPanelOnAFileElsewhereComesBackOnThatFileAfterARestart() throws Exception {
+        Path doc = Files.writeString(Files.createDirectories(home.resolve("SCRATCHPAD")).resolve("PLAN.md"), "# plan");
+        PanelId id = new PanelId("p");
+        try (Store store = new Store(home)) {
+            store.load();
+            store.open(id, doc).get(5, TimeUnit.SECONDS);
+            store.savePanels(List.of(new PanelState(id, "PLAN", "", "")));
+            store.changed(id, "# plan v2");
+            store.saveNow().get(5, TimeUnit.SECONDS);
+        }
+        try (Store store = new Store(home)) {
+            store.load();
+            assertThat(store.load(id)).isEqualTo("# plan v2");
+            assertThat(store.file(id)).contains(doc);
+        }
+        assertThat(Files.notExists(dir()) || !names().contains("PLAN.md")).as("nothing copied into panels/").isTrue();
     }
 
     @Test

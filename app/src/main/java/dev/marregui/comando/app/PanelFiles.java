@@ -19,9 +19,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
- * Each panel's text as a Markdown file of its own in one folder, named after the panel's title. A file follows its
- * panel's renames, outlives the panel when it holds text, and is never overwritten after an edit made outside
- * comando: {@link #outside} reports the outside text so the panel can take it, and a write that finds an outside
+ * Each panel's text as a file of its own. A panel's own file is Markdown in one folder, named after the panel's
+ * title; it follows the panel's renames and outlives the panel when it holds text. A panel opened on a file elsewhere
+ * (a scratchpad document) is bound to that path: comando never renames or deletes it. No file is overwritten after an
+ * edit made outside comando: {@link #outside} reports the outside text so the panel can take it, and a write that finds an outside
  * edit nobody took keeps it next to the file under another name. Writes go to a temporary file moved over the old
  * one, as the store files do.
  * <p>
@@ -45,7 +46,10 @@ final class PanelFiles {
 
     private final Path dir;
     private final Consumer<String> notices;
-    /** Panel id to its file's name, also after the panel closed, so a reopened panel finds its file. */
+    /**
+     * Panel id to its file: a name in the folder, or an absolute path for a file elsewhere; kept after the panel
+     * closed, so a reopened panel finds its file.
+     */
     private final Map<String, String> names = new ConcurrentHashMap<>();
     /** Panel id to the title its file is named after. */
     private final Map<String, String> titles = new ConcurrentHashMap<>();
@@ -63,12 +67,27 @@ final class PanelFiles {
     }
 
     Optional<Path> file(String id) {
-        return Optional.ofNullable(names.get(id)).map(dir::resolve);
+        return Optional.ofNullable(names.get(id)).map(this::path);
+    }
+
+    /** The stored name of a panel's file: its name in the folder, or its absolute path elsewhere. */
+    Optional<String> storedName(String id) {
+        return Optional.ofNullable(names.get(id));
+    }
+
+    private Path path(String name) {
+        Path p = Path.of(name);
+        return p.isAbsolute() ? p : dir.resolve(name);
+    }
+
+    /** A file of the folder, which comando names, renames and deletes when blank; not a file elsewhere. */
+    private static boolean owned(String name) {
+        return !Path.of(name).isAbsolute();
     }
 
     /** Binds a stored panel to its file and returns the file's text; empty when the file is missing. */
     String read(String id, String title, String name) throws IOException {
-        Path f = dir.resolve(name);
+        Path f = path(name);
         boolean exists = Files.isRegularFile(f);
         // the stamp from before the read: an editor writing the file while it is read leaves another stamp, so the
         // next check reads the whole file again rather than the panel keeping a part of it
@@ -86,19 +105,17 @@ final class PanelFiles {
     }
 
     /**
-     * Binds a new panel to an existing file of the folder and returns its text, or empty with the reason when
-     * the file is elsewhere or unreadable.
+     * Binds a new panel to an existing file and returns its text, or empty with the reason when it is gone or
+     * unreadable. A file of the folder is bound by its name; a file elsewhere by its absolute path.
      */
     Result bind(String id, Path file) {
         Path f = file.toAbsolutePath().normalize();
-        if (!f.getParent().equals(dir.toAbsolutePath().normalize())) {
-            return Result.refused("Specs live in " + dir + "; " + f.getFileName() + " is elsewhere");
-        }
         if (!Files.isRegularFile(f)) {
             return Result.refused(f.getFileName() + " no longer exists");
         }
+        String name = f.getParent().equals(dir.toAbsolutePath().normalize()) ? f.getFileName().toString() : f.toString();
         try {
-            String text = read(id, title(f), f.getFileName().toString());
+            String text = read(id, title(f), name);
             return new Result(text, "");
         } catch (IOException e) {
             return Result.refused("Cannot read " + f.getFileName() + ": " + e.getMessage());
@@ -124,12 +141,14 @@ final class PanelFiles {
      */
     String name(String id, String title, Collection<String> open) throws IOException {
         String current = names.get(id);
-        if (current != null && title.equals(titles.get(id))) {
+        if (current != null && (title.equals(titles.get(id)) || !owned(current))) {
+            // a file elsewhere keeps its name whatever the panel is called
+            titles.put(id, title);
             return current;
         }
         String next = free(safe(title), id, open);
         if (current != null && !current.equals(next)) {
-            Path from = dir.resolve(current);
+            Path from = path(current);
             if (Files.exists(from)) {
                 Files.createDirectories(dir);
                 Files.move(from, dir.resolve(next));
@@ -149,7 +168,7 @@ final class PanelFiles {
         if (name == null) {
             return Optional.empty();
         }
-        Path f = dir.resolve(name);
+        Path f = path(name);
         if (!Files.isRegularFile(f)) {
             return Optional.empty();
         }
@@ -175,7 +194,7 @@ final class PanelFiles {
     /** True once when a panel's file that comando wrote or read is gone; the next write creates it again. */
     boolean deleted(String id) {
         String name = names.get(id);
-        if (name == null || !stamps.containsKey(id) || Files.exists(dir.resolve(name))) {
+        if (name == null || !stamps.containsKey(id) || Files.exists(path(name))) {
             return false;
         }
         stamps.remove(id);
@@ -193,16 +212,17 @@ final class PanelFiles {
         if (name == null) {
             throw new IllegalStateException("panel " + id + " has no file");
         }
-        Files.createDirectories(dir);
-        Path f = dir.resolve(name);
-        Path tmp = Files.createTempFile(dir, "." + name, ".tmp");
+        Path f = path(name);
+        Files.createDirectories(f.getParent());
+        Path tmp = Files.createTempFile(f.getParent(), "." + f.getFileName(), ".tmp");
         try {
             Files.writeString(tmp, text, StandardCharsets.UTF_8);
             if (Files.exists(f) && !stamp(f).equals(stamps.get(id))) {
-                Path aside = dir.resolve(stem(name) + " (outside comando " + LocalDateTime.now().format(ASIDE) + ")" + EXTENSION);
+                Path aside = f.resolveSibling(stem(f.getFileName().toString()) + " (outside comando " + LocalDateTime.now().format(ASIDE) + ")"
+                        + extension(f.getFileName().toString()));
                 Files.move(f, aside);
                 LOG.log(System.Logger.Level.WARNING, "panel file changed outside comando, kept aside [file=" + f + ", aside=" + aside + "]");
-                notices.accept(name + " changed outside comando; that version is kept as " + aside.getFileName());
+                notices.accept(f.getFileName() + " changed outside comando; that version is kept as " + aside.getFileName());
             }
             try {
                 Files.move(tmp, f, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
@@ -216,13 +236,16 @@ final class PanelFiles {
         reported.remove(id);
     }
 
-    /** The panel closed: its file stays when it holds text, and is deleted when blank and unchanged outside. */
+    /**
+     * The panel closed: its own file stays when it holds text, and is deleted when blank and unchanged outside; a
+     * file elsewhere always stays.
+     */
     void closed(String id, String text) throws IOException {
         String name = names.get(id);
-        if (name == null || !text.isBlank()) {
+        if (name == null || !text.isBlank() || !owned(name)) {
             return;
         }
-        Path f = dir.resolve(name);
+        Path f = path(name);
         if (Files.exists(f) && stamp(f).equals(stamps.get(id))) {
             Files.delete(f);
             stamps.remove(id);
@@ -234,7 +257,7 @@ final class PanelFiles {
         Set<String> taken = new HashSet<>();
         for (String other : open) {
             String n = other.equals(id) ? null : names.get(other);
-            if (n != null) {
+            if (n != null && owned(n)) {
                 taken.add(n.toLowerCase(Locale.ROOT));
             }
         }
@@ -272,7 +295,13 @@ final class PanelFiles {
     }
 
     private static String stem(String name) {
-        return name.endsWith(EXTENSION) ? name.substring(0, name.length() - EXTENSION.length()) : name;
+        int dot = name.lastIndexOf('.');
+        return dot <= 0 ? name : name.substring(0, dot);
+    }
+
+    private static String extension(String name) {
+        int dot = name.lastIndexOf('.');
+        return dot <= 0 ? "" : name.substring(dot);
     }
 
     private static Stamp stamp(Path f) throws IOException {

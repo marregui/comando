@@ -5,6 +5,7 @@ import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.AbstractAction;
+import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JScrollPane;
@@ -26,6 +27,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * A {@link ViewSpec.TreeNode} tree: details muted after the label; a double click or Enter activates a
@@ -37,6 +39,8 @@ public final class TreeView {
     private final JScrollPane scroll = new JScrollPane(tree);
     private Consumer<ViewSpec.TreeNode> onActivate = n -> { };
     private BiConsumer<ViewSpec.TreeNode, MouseEvent> onMenu = (n, e) -> { };
+    private Function<ViewSpec.TreeNode, Icon> icons = n -> null;
+    private int activateClicks = 2;
 
     public TreeView() {
         tree.setRootVisible(true);
@@ -51,7 +55,11 @@ public final class TreeView {
                     l.setText(node.detail().isEmpty() && !node.label().startsWith("✗ ") ? Plain.text(node.label())
                             : "<html>" + label + (node.detail().isEmpty() ? "" : "&nbsp;&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>"
                             + esc(node.detail()) + "</span>") + "</html>");
-                    l.setToolTipText(node.link().isEmpty() ? null : "Double-click to open");
+                    l.setToolTipText(node.link().isEmpty() ? null : activateClicks == 1 ? "Click to open" : "Double-click to open");
+                    Icon icon = icons.apply(node);
+                    if (icon != null) {
+                        l.setIcon(icon);
+                    }
                 }
                 return l;
             }
@@ -59,7 +67,7 @@ public final class TreeView {
         tree.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
-                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
+                if (e.getClickCount() == activateClicks && SwingUtilities.isLeftMouseButton(e)) {
                     ViewSpec.TreeNode n = nodeAt(e);
                     if (n != null && n.children().isEmpty()) {
                         onActivate.accept(n);
@@ -141,6 +149,20 @@ public final class TreeView {
 
     public void onMenu(BiConsumer<ViewSpec.TreeNode, MouseEvent> handler) {
         onMenu = handler;
+    }
+
+    /** The icon of each node; null keeps the look's own folder and leaf icons. */
+    public void icons(Function<ViewSpec.TreeNode, Icon> icons) {
+        this.icons = icons;
+    }
+
+    /**
+     * Opens with one click, as a file browser does, rather than two: a leaf is activated on one click and a folder
+     * opens or closes on one click.
+     */
+    public void singleClick() {
+        activateClicks = 1;
+        tree.setToggleClickCount(1);
     }
 
     /** Shows {@code root}, expanded to {@code levels} below it. */

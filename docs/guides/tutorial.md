@@ -43,7 +43,7 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 
 | Part | What it is |
 |---|---|
-| **Sidebar**, left | three tabs: **Sessions** (Claude Code sessions), **Connections** (databases) and **Scratchpad** (your `~/.claude/SCRATCHPAD` as a tree; double-click a file to read it). Sessions and Connections each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
+| **Sidebar**, left | three tabs: **Sessions** (Claude Code sessions), **Connections** (databases) and **Scratchpad** (your `~/.claude/SCRATCHPAD`; one click on a file opens it in a panel, where **⌘⇧M** or the Preview button shows it rendered). Sessions and Connections each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one. |
 | **Panel header** | two chips: the panel's **connection** and its **session**, each with a status dot (○ closed, ● open) and a button to connect or start it. **Run** and **Stop** on the right. |
 | **Editor** | where you write SQL and prompts, mixed in one text. |
@@ -210,7 +210,8 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌃1 ⌃2 ⌃3 ⌃4 (or ⌘⌥1…4) | Results, Session, Approvals, Terminal, with the keyboard |
 | ⌃⇥ / ⌃⇧⇥ | next / previous lower tab |
 | ⌘T / ⌘W / ⌘⇧T | new panel / close the panel, or the view that has the keyboard / reopen the last closed panel |
-| ⌘O | open a panel file (a spec) as a panel |
+| ⌘O | open a file in a panel |
+| ⌘⇧M | switch a Markdown panel between its text and the rendered page |
 | ⌘⇧W | close the lower view in front |
 | ⌘1…⌘9, ⌘⇧[ ⌘⇧] | go to a panel |
 | ⌘⇧O / ⌘⇧K | Connections / Sessions |

@@ -241,11 +241,18 @@ class ToolsAdapterTest {
             Files.writeString(d.resolve("ALPHA.md"), "a");
             Files.writeString(d.resolve("READ-01-X.md"), "r");
             Files.createDirectories(d.resolve("work")).resolve("spec.md").toFile().createNewFile();
+            Files.writeString(Files.createDirectories(d.resolve("work").resolve("deep")).resolve("deeper.md"), "d");
         }
         adapter(dir, dir.resolve("none")).browseScratchpad();
         ViewSpec.TreeNode root = sink.await(Intent.ScratchpadLoaded.class, WAIT).root();
-        assertThat(root.children()).extracting(ViewSpec.TreeNode::label).containsExactly("PLAN.md", "2026-10-12/", "2026-10-11/", "datahub/");
-        assertThat(root.children().get(1).children()).extracting(ViewSpec.TreeNode::label).containsExactly("READ-01-X.md", "ALPHA.md", "work/");
-        assertThat(root.children().getFirst().link()).isEqualTo("comando-file:" + dir.resolve("PLAN.md") + "#0");
+        assertThat(root.children()).extracting(ViewSpec.TreeNode::label).containsExactly("datahub", "2026-10-11", "2026-10-12", "PLAN.md");
+        assertThat(root.children().get(2).children()).as("folders first, then files by name").extracting(ViewSpec.TreeNode::label)
+                .containsExactly("work", "ALPHA.md", "READ-01-X.md");
+        assertThat(root.children().get(2).children().getFirst().children()).as("every level, not three")
+                .extracting(ViewSpec.TreeNode::label).containsExactly("deep", "spec.md");
+        assertThat(root.children().get(2).children().getFirst().children().getFirst().children())
+                .extracting(ViewSpec.TreeNode::label).containsExactly("deeper.md");
+        assertThat(root.children().getLast().link()).isEqualTo("comando-file:" + dir.resolve("PLAN.md") + "#0");
+        assertThat(root.children().getFirst().link()).as("a folder has no link").isEmpty();
     }
 }
