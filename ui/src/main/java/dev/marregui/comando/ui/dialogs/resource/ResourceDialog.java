@@ -34,6 +34,7 @@ import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
 import javax.swing.Scrollable;
 import javax.swing.SwingUtilities;
+import javax.swing.WindowConstants;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
@@ -52,6 +53,8 @@ import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -70,8 +73,8 @@ import java.util.function.Function;
  * attributes on the right, and Add, Clone, Remove, Test, Open/Close, Assign and Save. Connections and
  * sessions are two configurations of it.
  *
- * <p>⏎ saves, ⌘⏎ saves and assigns to the focused panel, Esc closes and asks first when the form has
- * unsaved changes. Every other path that would replace the form while it has unsaved changes (a click on
+ * <p>⏎ saves, ⌘⏎ saves and assigns to the focused panel, Esc or the window's close button closes and asks
+ * first when the form has unsaved changes, so a closed dialog never holds an edit that was not saved. Every other path that would replace the form while it has unsaved changes (a click on
  * another row, Add, Clone, opening the dialog on another resource) asks the same question first; keeping the
  * edits cancels the path and selects the edited row again. Questions (discard, remove) are asked in a row
  * inside the dialog. The outcome of Test, Connect and Start is the latest notice about the resource, shown
@@ -169,7 +172,12 @@ public final class ResourceDialog<S> {
         // two columns, so every list button stays visible at the list's width
         JPanel leftButtons = new JPanel(new GridLayout(0, 2, Theme.GAP / 2, Theme.GAP / 2));
         leftButtons.add(button("Add", "add", "A new " + noun + " with defaults", () -> replacingForm(this::add)));
-        leftButtons.add(button("Clone", "copy", "A copy of the selected " + noun, () -> replacingForm(this::cloneSelected)));
+        leftButtons.add(button("Clone", "copy", "A copy of the selected " + noun, () -> {
+            String selected = list.getSelectedValue();
+            if (selected != null) {
+                replacingForm(() -> cloneOf(selected));
+            }
+        }));
         leftButtons.add(button("Remove", "close", "Removes the selected " + noun + " after asking", this::removeSelected));
         if (config.extra() != null) {
             leftButtons.add(button(config.extraLabel(), "import", null, config.extra()));
@@ -273,14 +281,36 @@ public final class ResourceDialog<S> {
     }
 
     public void show(AppState s, String select) {
+        open(() -> prepare(s, select));
+    }
+
+    /** Shows the dialog on a new resource, as Add does. */
+    public void showNew(AppState s) {
+        open(() -> prepareNew(s));
+    }
+
+    /** Shows the dialog on a copy of {@code of}, not saved yet, as Clone does. */
+    public void showClone(AppState s, String of) {
+        open(() -> prepareClone(s, of));
+    }
+
+    private void open(Runnable prepare) {
         if (dialog == null) {
             dialog = new JDialog(owner, title);
             dialog.setModal(false);
             dialog.setContentPane(content);
             install(dialog.getRootPane());
+            // the close button is Esc: unsaved changes are kept or discarded on the user's word, never left behind
+            dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
+            dialog.addWindowListener(new WindowAdapter() {
+                @Override
+                public void windowClosing(WindowEvent e) {
+                    close();
+                }
+            });
             dialog.pack();
         }
-        prepare(s, select);
+        prepare.run();
         if (!dialog.isVisible()) {
             // placed on each opening: the main window may have moved, or restored its bounds, since the dialog was built
             dialog.setLocationRelativeTo(dialog.getOwner());
@@ -314,6 +344,20 @@ public final class ResourceDialog<S> {
             list.setSelectedIndex(0);
         } else if (names.isEmpty() && editing.isEmpty() && !isDirty()) {
             add();
+        }
+    }
+
+    void prepareNew(AppState s) {
+        render(s);
+        replacingForm(this::add);
+    }
+
+    void prepareClone(AppState s, String of) {
+        render(s);
+        if (names.contains(of)) {
+            replacingForm(() -> cloneOf(of));
+        } else {
+            prepare(s, "");
         }
     }
 
@@ -496,8 +540,8 @@ public final class ResourceDialog<S> {
         return last.isBlank() ? System.getProperty("user.home") : last;
     }
 
-    private void cloneSelected() {
-        S spec = selectedSpec();
+    private void cloneOf(String of) {
+        S spec = spec(of);
         if (spec == null) {
             return;
         }
@@ -640,6 +684,12 @@ public final class ResourceDialog<S> {
         hide();
     }
 
+    /** The window's close button: an open question is answered with its safe button, then the dialog closes as with Esc. */
+    void close() {
+        hideConfirm();
+        escape();
+    }
+
     /**
      * Runs {@code replace}, which fills the form with something else, at once when the form has no unsaved
      * changes; else asks first. Discard runs it; Keep editing (or Esc, or any other button) cancels it and
@@ -753,11 +803,7 @@ public final class ResourceDialog<S> {
         }
     }
 
-    private S selectedSpec() {
-        String name = list.getSelectedValue();
-        if (name == null) {
-            return null;
-        }
+    private S spec(String name) {
         for (S spec : config.specs().apply(state)) {
             if (config.kind().nameOf(spec).equals(name)) {
                 return spec;

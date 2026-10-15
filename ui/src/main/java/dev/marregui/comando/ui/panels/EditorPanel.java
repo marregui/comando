@@ -229,8 +229,9 @@ public final class EditorPanel extends JPanel {
             connection.setText(cs.name() + "  " + dot(cs.status()));
             connection.setToolTipText(cs.spec().label() + " · " + cs.status() + (cs.error().isEmpty() ? "" : " · " + cs.error()));
             connectionToggle.setVisible(true);
-            connectionToggle.setIcon(Icons.get(cs.status().isUsable() ? "unplug" : "plug"));
-            connectionToggle.setToolTipText(cs.status().isUsable() ? "Disconnect" : "Connect");
+            // the plug shows the state, as on the sidebar's session rows: green while connected, grey while not
+            connectionToggle.setIcon(Icons.get(cs.status().isUsable() ? "plug" : "unplug"));
+            connectionToggle.setToolTipText(cs.status().isUsable() ? "Connected; click to disconnect" : "Disconnected; click to connect");
             setBorder(cs.spec().prod() ? BorderFactory.createLineBorder(Theme.DANGER, 2) : BorderFactory.createEmptyBorder(2, 2, 2, 2));
         } else {
             connection.setIcon(Icons.get("database"));
@@ -248,9 +249,10 @@ public final class EditorPanel extends JPanel {
             session.setToolTipText(Labels.shortPath(ss.spec().workDir()) + " · " + ss.status()
                     + (ss.error().isEmpty() ? "" : " · " + ss.error()));
             sessionToggle.setVisible(true);
-            // the plug, as on the session's row in the sidebar and in Panel ▸ Session: a ▶ here would read as Run
-            sessionToggle.setIcon(Icons.get(ss.status().isUsable() ? "unplug" : "plug"));
-            sessionToggle.setToolTipText(ss.status().isUsable() ? "Disconnect: stop the session" : "Connect: start the session");
+            // the plug, as on the session's row in the sidebar: green while running, grey while not; a ▶ here would read as Run
+            sessionToggle.setIcon(Icons.get(ss.status().isUsable() ? "plug" : "unplug"));
+            sessionToggle.setToolTipText(ss.status().isUsable() ? "Connected; click to disconnect (stops the session)"
+                    : "Disconnected; click to connect (starts the session)");
         } else {
             session.setIcon(Icons.get("claude"));
             session.setText("no session ▾");

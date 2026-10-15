@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.resource.ConnectionKind;
 import dev.marregui.comando.core.resource.SessionKind;
@@ -47,7 +48,8 @@ import java.util.Optional;
 
 /**
  * The left column, three tabs: Sessions (every session with its project, branch, state and pending approvals, and
- * controls to connect or disconnect it, change its model or effort, and edit it), Connections, and Scratchpad (the
+ * controls to connect or disconnect it and change its model or effort; above the list, buttons that add a session and
+ * edit, clone or remove the selected one, and import stored conversations), Connections, and Scratchpad (the
  * scratchpad as a tree). Double-click on a session or a connection binds it to the focused panel. Hidden, the column
  * collapses to a rail whose button shows it again.
  */
@@ -55,7 +57,14 @@ public final class SessionsSidebar {
 
     /** What the sidebar's buttons open. */
     public interface Dialogs {
+        /** Opens the session dialog on {@code select}, or on the first session when empty. */
         void sessions(String select);
+
+        /** Opens the session dialog on a new session. */
+        void newSession();
+
+        /** Opens the session dialog on a copy of {@code name}, not saved yet. */
+        void cloneSession(String name);
 
         void importSessions();
 
@@ -68,19 +77,31 @@ public final class SessionsSidebar {
         void openFile(Path file);
     }
 
+    /** Asks a question with buttons and answers the index of the one chosen, -1 when closed; tests answer for the user. */
+    interface Questions {
+        Questions MODAL = (parent, text, title, options) -> JOptionPane.showOptionDialog(parent, text, title,
+                JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE, null, options, options[options.length - 1]);
+
+        int ask(Component parent, String text, String title, Object[] options);
+    }
+
     private final IntentSink intents;
     private final Dialogs dialogs;
+    private final Questions questions;
     private final DefaultListModel<SessionState> sessionModel = new DefaultListModel<>();
     private final DefaultListModel<ConnectionState> connectionModel = new DefaultListModel<>();
     private final SessionRow sessionRow = new SessionRow();
     private final JList<SessionState> sessions = emptyText(new SessionList(sessionModel),
-            "No sessions yet. + creates one (⌘⇧K); the import button brings in stored Claude Code conversations.");
+            "No sessions yet. + creates one; the import button brings in stored Claude Code conversations.");
     private final JList<ConnectionState> connections = emptyText(new JList<>(connectionModel),
             "No connections yet. + adds one (⌘⇧O).");
     public static final int SESSIONS = 0;
     public static final int CONNECTIONS = 1;
     public static final int SCRATCHPAD = 2;
 
+    private final JButton editSession;
+    private final JButton cloneSession;
+    private final JButton removeSession;
     private final JTabbedPane tabs = new JTabbedPane();
     private final ScratchpadTab scratchpad;
     private final JPanel rail;
@@ -92,13 +113,18 @@ public final class SessionsSidebar {
 
     /** {@code toggle} hides or shows the sidebar, as View ▸ Sidebar does; the owner calls {@link #show}. */
     public SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle) {
+        this(intents, dialogs, toggle, Questions.MODAL);
+    }
+
+    SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle, Questions questions) {
         this.intents = intents;
         this.dialogs = dialogs;
+        this.questions = questions;
         sessions.getAccessibleContext().setAccessibleName("Sessions");
         connections.getAccessibleContext().setAccessibleName("Connections");
         sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         connections.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        sessions.setCellRenderer((list, s, index, selected, focus) -> sessionRow.show(s, boundText(s),
+        sessions.setCellRenderer((list, s, index, selected, focus) -> sessionRow.show(s, boundText(s), boundToFocused(s),
                 state == null ? 0 : state.pendingApprovals(s.name()), selected,
                 selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground()));
         connections.setCellRenderer(new DefaultListCellRenderer() {
@@ -183,9 +209,16 @@ public final class SessionsSidebar {
             }
         });
         scratchpad = new ScratchpadTab(dialogs::openFile);
+        // the buttons other than add and import act on the selected session, and are off while none is
+        editSession = button("edit", "Edit the selected session…", () -> selected().ifPresent(x -> dialogs.sessions(x.name())));
+        cloneSession = button("copy", "Clone the selected session…", () -> selected().ifPresent(x -> dialogs.cloneSession(x.name())));
+        removeSession = button("close", "Remove the selected session…", () -> selected().ifPresent(this::remove));
+        sessions.addListSelectionListener(e -> enableSessionButtons());
+        enableSessionButtons();
         tabs.addTab("Sessions", section(new JScrollPane(sessions),
-                button("add", "New or edit sessions", () -> dialogs.sessions(selectedSession())),
-                button("import", "Import stored conversations", dialogs::importSessions)));
+                button("add", "New session…", dialogs::newSession),
+                editSession, cloneSession, removeSession,
+                button("import", "Import stored conversations…", dialogs::importSessions)));
         tabs.addTab("Connections", section(new JScrollPane(connections),
                 button("add", "New or edit connections", () -> dialogs.connections(selectedConnection()))));
         tabs.addTab("Scratchpad", section(scratchpad.component(),
@@ -250,6 +283,30 @@ public final class SessionsSidebar {
         state = s;
         sync(sessionModel, s.sessions(), sessions);
         sync(connectionModel, s.connections(), connections);
+        enableSessionButtons();
+    }
+
+    private void enableSessionButtons() {
+        boolean any = sessions.getSelectedValue() != null;
+        editSession.setEnabled(any);
+        cloneSession.setEnabled(any);
+        removeSession.setEnabled(any);
+    }
+
+    private Optional<SessionState> selected() {
+        return Optional.ofNullable(sessions.getSelectedValue());
+    }
+
+    /**
+     * Removes {@code s} after asking, naming what removal does. A running session is stopped first: the question
+     * offers "Stop and remove" or "Leave it". Leave it, or closing the question, keeps the session as it is.
+     */
+    void remove(SessionState s) {
+        boolean running = s.status() != Status.CLOSED && s.status() != Status.FAILED;
+        String question = SessionKind.INSTANCE.removalQuestion(state, s.name());
+        if (running ? ask(s.name(), question, "Stop and remove", "Leave it") : ask(s.name(), question, "Remove", "Cancel")) {
+            intents.dispatch(new Intent.RemoveSession(s.name()));
+        }
     }
 
     /** The row control under a mouse event on {@code s}'s cell, if any. */
@@ -277,7 +334,6 @@ public final class SessionsSidebar {
         Rectangle cell = sessions.getCellBounds(i, i);
         switch (control) {
             case POWER -> intents.dispatch(s.status().isUsable() ? new Intent.StopSession(s.name()) : new Intent.StartSession(s.name()));
-            case EDIT -> dialogs.sessions(s.name());
             case MODEL, EFFORT -> {
                 layOutRow(s, i);
                 Rectangle at = sessionRow.bounds(cell, control);
@@ -379,11 +435,8 @@ public final class SessionsSidebar {
         m.add(efforts);
         m.addSeparator();
         m.add(item("Edit…", "edit", () -> dialogs.sessions(s.name())));
-        m.add(item("Remove…", "close", () -> {
-            if (confirmRemove(s.name(), SessionKind.INSTANCE.removalQuestion(state, s.name()))) {
-                intents.dispatch(new Intent.RemoveSession(s.name()));
-            }
-        }));
+        m.add(item("Clone…", "copy", () -> dialogs.cloneSession(s.name())));
+        m.add(item("Remove…", "close", () -> remove(s)));
         return m;
     }
 
@@ -401,18 +454,17 @@ public final class SessionsSidebar {
         m.addSeparator();
         m.add(item("Edit…", "edit", () -> dialogs.connections(c.name())));
         m.add(item("Remove…", "close", () -> {
-            if (confirmRemove(c.name(), ConnectionKind.INSTANCE.removalQuestion(state, c.name()))) {
+            if (ask(c.name(), ConnectionKind.INSTANCE.removalQuestion(state, c.name()), "Remove", "Cancel")) {
                 intents.dispatch(new Intent.RemoveConnection(c.name()));
             }
         }));
         return m;
     }
 
-    /** Remove asks first, naming what it does; Cancel is the default. */
-    private boolean confirmRemove(String name, String question) {
-        Object[] options = {"Remove", "Cancel"};
-        return JOptionPane.showOptionDialog(tabs, Plain.text(question), "Remove " + Plain.text(name), JOptionPane.DEFAULT_OPTION,
-                JOptionPane.WARNING_MESSAGE, null, options, options[1]) == 0;
+    /** Remove asks first, naming what it does; {@code no}, the safe answer, is the default. */
+    private boolean ask(String name, String question, String yes, String no) {
+        Object[] options = {yes, no};
+        return questions.ask(tabs, Plain.text(question), "Remove " + Plain.text(name), options) == 0;
     }
 
     /** A list that says what to do while it is empty. */
@@ -444,21 +496,19 @@ public final class SessionsSidebar {
         return list;
     }
 
-    /** Where a session is bound: "this panel" for the focused one, else the panels' titles; empty when unbound. */
+    /** Where a session is bound: the titles of its panels, the focused one first; "headless" when it has none. */
     private String boundText(SessionState s) {
         if (state == null) {
-            return "";
+            return "headless";
         }
-        if (state.focusedPanel().session().equals(s.name())) {
-            return "this panel";
-        }
-        List<String> titles = state.panels().stream().filter(p -> p.session().equals(s.name())).map(p -> p.title()).toList();
-        return titles.isEmpty() ? "" : String.join(", ", titles);
+        List<String> titles = state.panels().stream().filter(p -> p.session().equals(s.name()))
+                .sorted((a, b) -> Boolean.compare(b.id().equals(state.focused()), a.id().equals(state.focused())))
+                .map(p -> p.title()).toList();
+        return titles.isEmpty() ? "headless" : String.join(", ", titles);
     }
 
-    private String selectedSession() {
-        SessionState s = sessions.getSelectedValue();
-        return s == null ? "" : s.name();
+    private boolean boundToFocused(SessionState s) {
+        return state != null && state.focusedPanel().session().equals(s.name());
     }
 
     private String selectedConnection() {

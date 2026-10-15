@@ -64,7 +64,7 @@ comando can run a QuestDB server for you, so you need nothing else installed.
 2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Press **⌘⇧O** to open **Connections** and click **Add**. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
    *You should see* `tutorial ○` in the panel header and `○ tutorial` in the sidebar.
 3. Click the plug button next to `tutorial` in the panel header.
-   *You should see* the dot turn to `●`. If the connection fails, the status bar says why in red.
+   *You should see* the dot turn to `●` and the plug turn from grey to green. If the connection fails, the status bar says why in red.
 
 Any PostgreSQL-wire database works the same way: PostgreSQL itself, or a QuestDB you run yourself. A connection marked **production** frames its panels in red and refuses every write Claude tries.
 
@@ -131,7 +131,7 @@ When a statement fails, Results shows the database's error as text you can selec
 
 A session is a Claude Code process that comando starts for you in a working directory, with a model and a budget you choose.
 
-1. Press **⌘⇧K** to open **Sessions**. With no session yet it opens on a new one; otherwise click **Add**. The keyboard is in **Name**, its default selected. Fill in:
+1. Click **+** above the list in the sidebar's **Sessions** tab: it opens **Sessions** on a new session. The keyboard is in **Name**, its default selected. Fill in:
 
    | Field | Value |
    |---|---|
@@ -141,7 +141,7 @@ A session is a Claude Code process that comando starts for you in a working dire
    | Budget (USD) | `0.50` |
 
    Leave the rest as it is; the line under each field says what it does. Click **Assign to panel**, then press **Esc**.
-   *You should see* `tutor` in the panel header, in the sidebar (marked "· this panel"), and in the window title.
+   *You should see* `tutor` in the panel header, in the sidebar (marked "· scratch", the title of the panel it is bound to), and in the window title.
 2. At the end of the editor, after an empty line, type `In one sentence, what is QuestDB?` and press **⌘⇧⏎**, which sends the block to the panel's session.
    *You should see* the session start (its dot turns to `●`), the lower panel switch to **Session**, and the answer stream in. Under the answer: the time it took and the cost so far. While the turn runs, the session chip counts the seconds. If your Claude Code setup has hooks, their output folds into grey "hooks · …" lines, one before the answer and one after it; click one to read it.
 3. **⌘⏎** sends a block to Claude as well when the gutter shows the asterisk. At the end of the editor, after an empty line, type this block and press **⌘⏎**:

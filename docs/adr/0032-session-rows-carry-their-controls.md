@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-14 | accepted | Miguel (no cost or time, the controls), Claude (how) |
+| 2026-10-14 | accepted; edit control and plug icons replaced by [37](0037-session-actions-act-on-the-selected-row.md) | Miguel (no cost or time, the controls), Claude (how) |
 
 ## 1. Context
 

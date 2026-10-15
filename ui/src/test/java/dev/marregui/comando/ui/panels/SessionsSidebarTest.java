@@ -4,6 +4,7 @@ import com.formdev.flatlaf.FlatDarkLaf;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
@@ -13,6 +14,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.AbstractButton;
+import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenuItem;
 import javax.swing.JTabbedPane;
@@ -23,6 +25,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
@@ -128,14 +131,8 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void aSessionRowConnectsChangesModelAndEffortAndOpensItsEditor() throws Exception {
-        List<String> edited = new CopyOnWriteArrayList<>();
-        SessionsSidebar.Dialogs dialogs = new Dialogs() {
-            @Override
-            public void sessions(String select) {
-                edited.add(select);
-            }
-        };
+    void aSessionRowConnectsAndChangesModelAndEffort() throws Exception {
+        SessionsSidebar.Dialogs dialogs = new Dialogs();
         List<Intent> intents = new CopyOnWriteArrayList<>();
         SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").withModel("opus").withEffort("high"));
         PanelState panel = new PanelState(new PanelId("p"), "spec", "", "");
@@ -156,7 +153,7 @@ class SessionsSidebarTest {
         Rectangle power = bounds(sidebar, SessionRow.Control.POWER);
         click(list, power, 1);
         assertThat(intents).containsExactly(new Intent.StartSession("edge"));
-        assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Connect: start the session");
+        assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Disconnected; click to connect (starts the session)");
 
         intents.clear();
         click(list, power, 2);
@@ -165,9 +162,6 @@ class SessionsSidebarTest {
         Rectangle cell = list.getCellBounds(0, 0);
         click(list, new Rectangle(cell.x + 40, cell.y + 4, 1, 1), 2);
         assertThat(intents).containsExactly(new Intent.BindSession(new PanelId("p"), "edge"));
-
-        click(list, bounds(sidebar, SessionRow.Control.EDIT), 1);
-        assertThat(edited).containsExactly("edge");
 
         intents.clear();
         List<JMenuItem> models = sidebar.modelItems(edge);
@@ -178,6 +172,122 @@ class SessionsSidebarTest {
         assertThat(efforts).filteredOn(AbstractButton::isSelected).extracting(JMenuItem::getText).containsExactly("high");
         SwingUtilities.invokeAndWait(() -> efforts.getLast().doClick());
         assertThat(intents).containsExactly(new Intent.SetSessionModel("edge", "fable"), new Intent.SetSessionEffort("edge", "max"));
+    }
+
+    @Test
+    void theButtonsAboveTheListAddOneAndEditCloneOrRemoveTheSelectedOne() throws Exception {
+        List<String> opened = new CopyOnWriteArrayList<>();
+        SessionsSidebar.Dialogs dialogs = new Dialogs() {
+            @Override
+            public void sessions(String select) {
+                opened.add("edit " + select);
+            }
+
+            @Override
+            public void newSession() {
+                opened.add("new");
+            }
+
+            @Override
+            public void cloneSession(String name) {
+                opened.add("clone " + name);
+            }
+        };
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        List<String> asked = new CopyOnWriteArrayList<>();
+        AtomicInteger answer = new AtomicInteger();
+        SessionsSidebar.Questions questions = (parent, text, title, options) -> {
+            asked.add(title + ": " + text + " " + List.of(options));
+            return answer.get();
+        };
+        SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
+        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(edge, work));
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intents::add, dialogs, () -> {
+            }, questions);
+            s[0].render(state);
+        });
+        SessionsSidebar sidebar = s[0];
+        JList<?> list = find(sidebar.component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+        AbstractButton add = button(sidebar.component(), "New session…");
+        AbstractButton edit = button(sidebar.component(), "Edit the selected session…");
+        AbstractButton clone = button(sidebar.component(), "Clone the selected session…");
+        AbstractButton remove = button(sidebar.component(), "Remove the selected session…");
+        assertThat(List.of(edit, clone, remove)).as("nothing selected, nothing to act on").noneMatch(AbstractButton::isEnabled);
+
+        add.doClick();
+        assertThat(opened).as("+ only adds").containsExactly("new");
+
+        SwingUtilities.invokeAndWait(() -> list.setSelectedIndex(0));
+        assertThat(List.of(edit, clone, remove)).allMatch(AbstractButton::isEnabled);
+        edit.doClick();
+        clone.doClick();
+        assertThat(opened).containsExactly("new", "edit edge", "clone edge");
+
+        answer.set(1);
+        remove.doClick();
+        assertThat(asked.getLast()).isEqualTo("Remove edge: Remove session edge? [Remove, Cancel]");
+        assertThat(intents).as("Cancel keeps it").isEmpty();
+        answer.set(0);
+        remove.doClick();
+        assertThat(intents).containsExactly(new Intent.RemoveSession("edge"));
+
+        intents.clear();
+        SwingUtilities.invokeAndWait(() -> list.setSelectedIndex(1));
+        answer.set(1);
+        remove.doClick();
+        assertThat(asked.getLast()).as("a running session is stopped first, or left as it is")
+                .isEqualTo("Remove work: Remove session work? This stops it and unbinds 1 panel. [Stop and remove, Leave it]");
+        assertThat(intents).isEmpty();
+        answer.set(-1);
+        remove.doClick();
+        assertThat(intents).as("closing the question leaves it too").isEmpty();
+        answer.set(0);
+        remove.doClick();
+        assertThat(intents).containsExactly(new Intent.RemoveSession("work"));
+    }
+
+    @Test
+    void aRowNamesThePanelsItIsBoundToElseHeadlessAndItsPlugShowsTheState() throws Exception {
+        SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
+        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work"),
+                new PanelState(new PanelId("q"), "notes", "", "work")), List.of(), List.of(edge, work));
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intent -> {
+            }, new Dialogs(), () -> {
+            });
+            s[0].render(state);
+        });
+        JList<?> list = find(s[0].component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+        assertThat(rowText(list, 0)).contains("· headless").doesNotContain("this panel");
+        assertThat(rowText(list, 1)).contains("· main, notes");
+
+        SessionRow row = (SessionRow) render(list, 1);
+        assertThat(row.tip(new Rectangle(0, 0, 260, 60), new Point(0, 0))).isEmpty();
+        assertThat(SessionRow.Control.values()).as("no edit control: the button above the list edits")
+                .containsExactly(SessionRow.Control.POWER, SessionRow.Control.MODEL, SessionRow.Control.EFFORT);
+        Rectangle power = s[0].controlBounds(1, SessionRow.Control.POWER);
+        assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Connected; click to disconnect (stops the session)");
+    }
+
+    private static Component render(JList<?> list, int index) throws Exception {
+        Component[] c = new Component[1];
+        SwingUtilities.invokeAndWait(() -> {
+            list.setSize(260, 400);
+            list.doLayout();
+            @SuppressWarnings("unchecked")
+            JList<Object> l = (JList<Object>) list;
+            c[0] = l.getCellRenderer().getListCellRendererComponent(l, l.getModel().getElementAt(index), index, false, false);
+        });
+        return c[0];
+    }
+
+    private static String rowText(JList<?> list, int index) throws Exception {
+        return find(render(list, index), JLabel.class, l -> l.getText() != null && l.getText().startsWith("<html>")).getText();
     }
 
     @Test
@@ -208,6 +318,14 @@ class SessionsSidebarTest {
     private static class Dialogs implements SessionsSidebar.Dialogs {
         @Override
         public void sessions(String select) {
+        }
+
+        @Override
+        public void newSession() {
+        }
+
+        @Override
+        public void cloneSession(String name) {
         }
 
         @Override

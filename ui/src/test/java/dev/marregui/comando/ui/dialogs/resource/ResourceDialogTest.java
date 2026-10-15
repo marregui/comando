@@ -217,6 +217,50 @@ class ResourceDialogTest {
     }
 
     @Test
+    void theCloseButtonAsksLikeEscSoAReopenedDialogHoldsNoUnsavedEdit() {
+        RecordingSink sink = new RecordingSink();
+        ResourceDialog<SessionSpec> d = sessions(sink);
+        JRootPane root = new JRootPane();
+        d.install(root);
+        AppState s = twoSessions();
+        d.prepare(s, "edge");
+        text(d, "name").setText("mine");
+
+        d.close();
+        assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to edge?");
+        click(d, "Discard", confirmRow(d));
+        d.prepare(s, "edge");
+        assertThat(text(d, "name").getText()).as("the stored name, not the edit").isEqualTo("edge");
+        assertThat(d.isDirty()).isFalse();
+        assertThat(sink.intents()).isEmpty();
+
+        // a question open when the close button is clicked is answered with its safe button first
+        text(d, "name").setText("mine");
+        click(d, "Remove");
+        d.close();
+        assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to edge?");
+        assertThat(sink.intents()).isEmpty();
+    }
+
+    @Test
+    void newAndCloneOpenTheirOwnFormNotTheSelectedResource() {
+        RecordingSink sink = new RecordingSink();
+        ResourceDialog<SessionSpec> d = sessions(sink);
+        AppState s = twoSessions();
+        d.prepare(s, "edge");
+
+        d.prepareNew(s);
+        assertThat(text(d, "name").getText()).isEqualTo("new session");
+        assertThat(list(d).getSelectedValue()).as("a new resource has no row").isNull();
+
+        d.prepareClone(s, "edge2");
+        assertThat(text(d, "name").getText()).isEqualTo("edge2 copy");
+        assertThat(text(d, "workDir").getText()).isEqualTo("/var");
+        assertThat(list(d).getSelectedValue()).isNull();
+        assertThat(sink.intents()).isEmpty();
+    }
+
+    @Test
     void openingOnTheResourceBeingEditedKeepsTheEdits() {
         ResourceDialog<SessionSpec> d = sessions(new RecordingSink());
         AppState s = twoSessions();

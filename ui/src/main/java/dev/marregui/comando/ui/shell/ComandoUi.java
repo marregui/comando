@@ -261,6 +261,16 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
 
             @Override
+            public void newSession() {
+                sessionsDialog.showNew(deps.state().get());
+            }
+
+            @Override
+            public void cloneSession(String name) {
+                sessionsDialog.showClone(deps.state().get(), name);
+            }
+
+            @Override
             public void importSessions() {
                 openImport();
             }
