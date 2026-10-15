@@ -228,14 +228,14 @@ public final class SessionsSidebar {
         connectionActions = new ResourceActions<>(connections,
                 ResourceActions.Rows.of(ConnectionKind.INSTANCE, ConnectionState::name, ConnectionState::status, "Disconnect", () -> state),
                 dialogs.connections(), name -> intents.dispatch(new Intent.RemoveConnection(name)), questions);
-        tabs.add("Sessions", "Claude Code sessions", section(new JScrollPane(sessions), sessionActions.component()));
-        tabs.add("Panels", "comando's own panels, open and closed; double-click opens one",
+        tabs.add("Sessions", "session", "Claude Code sessions", section(new JScrollPane(sessions), sessionActions.component()));
+        tabs.add("Panels", "text", "comando's own panels, open and closed; double-click opens one",
                 section(new JScrollPane(panelsTab.list()), panelsTab.actions()));
-        tabs.add("Connections", "database connections", section(new JScrollPane(connections), connectionActions.component()));
+        tabs.add("Connections", "database", "database connections", section(new JScrollPane(connections), connectionActions.component()));
         JPanel refresh = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         refresh.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         refresh.add(ToolButton.of("refresh", "Read the scratchpad again", () -> intents.dispatch(new Intent.BrowseScratchpad())));
-        tabs.add("Scratchpad", "~/.claude/SCRATCHPAD; click a file to open it in a panel", section(scratchpad.component(), refresh));
+        tabs.add("Scratchpad", "folder-work", "~/.claude/SCRATCHPAD; click a file to open it in a panel", section(scratchpad.component(), refresh));
         // two fixed rows (Miguel, 2026-10-15): the documents on top, the resources below; a click moves nothing
         tabs.arrange(new int[][]{{PANELS, SCRATCHPAD}, {SESSIONS, CONNECTIONS}}, ToolButton.of("more", "Hide the sidebar (⌘B)", toggle));
         rail = new JPanel(new BorderLayout());

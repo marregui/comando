@@ -20,6 +20,7 @@ which a narrow sidebar clips.
 | ⌘⇧K, ⌘⇧O | "Session settings…" and "Connection settings…": the focused panel's session or connection, else a new one | the list that used to choose is gone |
 | removal | only from the sidebar ([record 37](0037-session-actions-act-on-the-selected-row.md)) | one way to remove |
 | the sidebar's tabs | two fixed rows: Panels and Scratchpad on top, Sessions and Connections below; the `⋯` hide button ends the top row; a click selects a tab and moves nothing (not a wrapped `JTabbedPane`, which moves the selected row next to the content); the tab indices, and the one kept across restarts, are unchanged | Miguel's order; documents on top, resources below; four titles fit a narrow sidebar |
+| a tab's header | a bordered toggle button with an icon (Panels: text, Scratchpad: work folder, Sessions: session, Connections: database), icon and title at the leading edge, 3 px apart; the selected one in the list-selection blue | Miguel: each tab's bounds visible and suggestive of a click; titles of one column start at the same x |
 
 ## 3. Consequences
 
