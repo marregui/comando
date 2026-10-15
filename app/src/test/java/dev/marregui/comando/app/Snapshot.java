@@ -19,7 +19,7 @@ import dev.marregui.comando.core.view.ViewSpec;
 import javax.imageio.ImageIO;
 import javax.swing.AbstractButton;
 import javax.swing.JFrame;
-import javax.swing.JTabbedPane;
+import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
@@ -97,11 +97,11 @@ public final class Snapshot {
         shoot(out.resolve("02b-sidebar-collapsed.png"));
         loop.dispatch(new Intent.Arrange(new Layout(Layout.Toggle.SHOW, Layout.Toggle.KEEP, Double.NaN)));
         Thread.sleep(2800);
-        // the sidebar's third tab, clicked as a user would: the scratchpad as a tree, read when the tab shows
-        selectSidebarTab(2);
+        // the sidebar's Scratchpad tab, clicked as a user would: the scratchpad as a tree
+        selectSidebarTab("Scratchpad");
         Thread.sleep(2000);
         shoot(out.resolve("02c-sidebar-scratchpad.png"));
-        selectSidebarTab(0);
+        selectSidebarTab("Sessions");
         // the focused panel's Markdown preview, switched on with its header's Preview button, and back with Edit
         click("Preview");
         Thread.sleep(800);
@@ -283,29 +283,29 @@ public final class Snapshot {
         return null;
     }
 
-    /** Brings a tab of the sidebar to the front, found by the tab strip's accessible name. */
-    private static void selectSidebarTab(int index) throws Exception {
+    /** Brings a tab of the sidebar to the front by clicking its header, as a user would. */
+    private static void selectSidebarTab(String title) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             for (Frame f : Frame.getFrames()) {
                 if (f instanceof JFrame jf && f.isVisible()) {
-                    JTabbedPane tabs = sidebarTabs(jf.getContentPane());
-                    if (tabs != null) {
-                        tabs.setSelectedIndex(index);
+                    JToggleButton header = header(jf.getContentPane(), title);
+                    if (header != null) {
+                        header.doClick();
                     }
                 }
             }
         });
     }
 
-    private static JTabbedPane sidebarTabs(Component c) {
-        if (c instanceof JTabbedPane t && "Sidebar".equals(t.getAccessibleContext().getAccessibleName())) {
-            return t;
+    private static JToggleButton header(Component c, String title) {
+        if (c instanceof JToggleButton b && title.equals(b.getText())) {
+            return b;
         }
         if (c instanceof Container k) {
             for (Component child : k.getComponents()) {
-                JTabbedPane t = sidebarTabs(child);
-                if (t != null) {
-                    return t;
+                JToggleButton b = header(child, title);
+                if (b != null) {
+                    return b;
                 }
             }
         }

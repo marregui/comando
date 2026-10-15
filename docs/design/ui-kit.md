@@ -15,6 +15,7 @@
 | `format` | `Labels` | short labels: time since, dollars, token counts, counts, shortened paths |
 | `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `MermaidDiagrams`, `SourceLinks`, `Plain` | text areas and text rendering (§4) |
 | `tree` | `TreeView` | the one tree over `ViewSpec.TreeNode` |
+| `tabs` | `FixedRowTabs` | tabs whose headers sit in fixed rows: a click selects and nothing moves; the sidebar's two rows |
 | `desktop` | `ExternalEditor`, `FileChoosers` | opens a file at a line in IntelliJ IDEA, else in the system's default application, on a virtual thread; folder, open and save choosers, the native `FileDialog` on macOS |
 
 ## 2. Commands

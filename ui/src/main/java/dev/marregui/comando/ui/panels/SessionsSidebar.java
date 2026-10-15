@@ -13,6 +13,7 @@ import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
+import dev.marregui.comando.ui.kit.tabs.FixedRowTabs;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -20,7 +21,6 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
-import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -30,7 +30,6 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
-import javax.swing.JTabbedPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ListDataEvent;
@@ -39,7 +38,6 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.FlowLayout;
-import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -49,7 +47,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * The left column, four tabs: Sessions (every session with its project, branch, state and pending approvals, and
+ * The left column, four tabs in two fixed rows (Panels and Scratchpad, then Sessions and Connections): Sessions (every session with its project, branch, state and pending approvals, and
  * controls to connect or disconnect it and change its model or effort), Panels (comando's own panels, open and
  * closed), Connections, and Scratchpad (the scratchpad as a tree). Above the sessions and the connections, the same {@link ResourceActions}: add (and, for sessions,
  * import) on the left; edit, clone and remove of the selected row on the right. Double-click on a session opens it in
@@ -108,7 +106,7 @@ public final class SessionsSidebar {
     private final ResourceActions<SessionState> sessionActions;
     private final ResourceActions<ConnectionState> connectionActions;
     private final PanelsTab panelsTab;
-    private final JTabbedPane tabs = new JTabbedPane();
+    private final FixedRowTabs tabs = new FixedRowTabs("Sidebar");
     private final ScratchpadTab scratchpad;
     private final JPanel rail;
     private final JPanel root = new JPanel(new BorderLayout());
@@ -230,29 +228,22 @@ public final class SessionsSidebar {
         connectionActions = new ResourceActions<>(connections,
                 ResourceActions.Rows.of(ConnectionKind.INSTANCE, ConnectionState::name, ConnectionState::status, "Disconnect", () -> state),
                 dialogs.connections(), name -> intents.dispatch(new Intent.RemoveConnection(name)), questions);
-        tabs.addTab("Sessions", section(new JScrollPane(sessions), sessionActions.component()));
-        tabs.addTab("Panels", section(new JScrollPane(panelsTab.list()), panelsTab.actions()));
-        tabs.setToolTipTextAt(PANELS, "comando's own panels, open and closed; double-click opens one");
-        tabs.addTab("Connections", section(new JScrollPane(connections), connectionActions.component()));
+        tabs.add("Sessions", "Claude Code sessions", section(new JScrollPane(sessions), sessionActions.component()));
+        tabs.add("Panels", "comando's own panels, open and closed; double-click opens one",
+                section(new JScrollPane(panelsTab.list()), panelsTab.actions()));
+        tabs.add("Connections", "database connections", section(new JScrollPane(connections), connectionActions.component()));
         JPanel refresh = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         refresh.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         refresh.add(ToolButton.of("refresh", "Read the scratchpad again", () -> intents.dispatch(new Intent.BrowseScratchpad())));
-        tabs.addTab("Scratchpad", section(scratchpad.component(), refresh));
-        tabs.setToolTipTextAt(SCRATCHPAD, "~/.claude/SCRATCHPAD; click a file to open it in a panel");
-        // the hide button ends the tab strip, so it shows whichever tab is in front
-        tabs.putClientProperty("JTabbedPane.trailingComponent", ToolButton.of("more", "Hide the sidebar (⌘B)", toggle));
-        // one row that never wraps: a wrapped strip moves the selected tab's row, so tabs would jump on a click
-        tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
-        tabs.putClientProperty("JTabbedPane.scrollButtonsPolicy", "asNeededSingle");
-        tabs.putClientProperty("JTabbedPane.tabInsets", new Insets(4, 6, 4, 6));
-        tabs.putClientProperty("JTabbedPane.tabAreaInsets", new Insets(0, 2, 0, 0));
-        tabs.getAccessibleContext().setAccessibleName("Sidebar");
+        tabs.add("Scratchpad", "~/.claude/SCRATCHPAD; click a file to open it in a panel", section(scratchpad.component(), refresh));
+        // two fixed rows (Miguel, 2026-10-15): the documents on top, the resources below; a click moves nothing
+        tabs.arrange(new int[][]{{PANELS, SCRATCHPAD}, {SESSIONS, CONNECTIONS}}, ToolButton.of("more", "Hide the sidebar (⌘B)", toggle));
         rail = new JPanel(new BorderLayout());
         rail.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(4, 1, 0, 1)));
         rail.add(ToolButton.of("more", "Show the sidebar (⌘B)", toggle), BorderLayout.NORTH);
         rail.setVisible(false);
-        root.add(tabs, BorderLayout.CENTER);
+        root.add(tabs.component(), BorderLayout.CENTER);
         root.add(rail, BorderLayout.WEST);
     }
 
@@ -262,12 +253,12 @@ public final class SessionsSidebar {
     }
 
     public boolean isShown() {
-        return tabs.isVisible();
+        return tabs.component().isVisible();
     }
 
     /** Shows the tabs, or hides them behind the rail. */
     public void show(boolean shown) {
-        tabs.setVisible(shown);
+        tabs.component().setVisible(shown);
         rail.setVisible(!shown);
         root.revalidate();
         root.repaint();
@@ -275,13 +266,11 @@ public final class SessionsSidebar {
 
     /** The tab in front: {@link #SESSIONS}, {@link #CONNECTIONS} or {@link #SCRATCHPAD}. */
     public int selectedTab() {
-        return tabs.getSelectedIndex();
+        return tabs.selectedIndex();
     }
 
     public void selectTab(int tab) {
-        if (tab >= 0 && tab < tabs.getTabCount()) {
-            tabs.setSelectedIndex(tab);
-        }
+        tabs.select(tab);
     }
 
     /** The scratchpad as read; a refresh keeps the tree as the user left it. */

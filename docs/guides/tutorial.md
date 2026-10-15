@@ -61,7 +61,7 @@ comando can run a QuestDB server for you, so you need nothing else installed.
 
 1. Press **⌘⇧P**, type `embedded`, press **⏎** on **Start** (Panel ▸ Connection ▸ Embedded QuestDB).
    *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few seconds; **Stop**, in the same places, stops it. The server keeps its data in `~/.comando/questdb` and listens on this machine only.
-2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Press **⌘⇧O** to open **Connections** and click **Add**. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
+2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Click **+** above the list in the sidebar's **Connections** tab: the dialog opens on a new connection. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
    *You should see* `tutorial ○` in the panel header and `○ tutorial` in the sidebar.
 3. Click the plug button next to `tutorial` in the panel header.
    *You should see* the dot turn to `●` and the plug turn from grey to green. If the connection fails, the status bar says why in red.
@@ -215,7 +215,7 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌘⇧M | switch a Markdown panel between its text and the rendered page |
 | ⌘⇧W | close the lower view in front |
 | ⌘1…⌘9, ⌘⇧[ ⌘⇧] | go to a panel |
-| ⌘⇧O / ⌘⇧K | Connections / Sessions |
+| ⌘⇧O / ⌘⇧K | the focused panel's connection / session settings (a new one when the panel has none) |
 | ⌘⇧P | command palette |
 | ⌘B / ⌘\ | sidebar / side pane |
 | ⌘F, ⌘G ⌘⇧G | find in the view, next, previous |

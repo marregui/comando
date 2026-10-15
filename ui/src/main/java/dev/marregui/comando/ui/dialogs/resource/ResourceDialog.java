@@ -15,23 +15,18 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.BorderFactory;
 import javax.swing.DefaultComboBoxModel;
-import javax.swing.DefaultListCellRenderer;
-import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
-import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JRootPane;
 import javax.swing.JScrollPane;
-import javax.swing.JSplitPane;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
-import javax.swing.ListSelectionModel;
 import javax.swing.Scrollable;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
@@ -40,12 +35,10 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.GridLayout;
 import java.awt.HeadlessException;
 import java.awt.Insets;
 import java.awt.Rectangle;
@@ -57,8 +50,6 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -69,23 +60,22 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /**
- * The one dialog for configurable resources: a list on the left, a form generated from the kind's
- * attributes on the right, and Add, Clone, Remove, Test, Open/Close, Assign and Save. Connections and
- * sessions are two configurations of it.
+ * The one dialog for configurable resources: the form of one resource, generated from the kind's attributes, with
+ * Test, Open/Close, Assign and Save. It edits the resource the caller names, or a new one, or an unsaved copy of one;
+ * the sidebar's lists add, pick, clone and remove resources. Connections and sessions are two configurations of it.
  *
  * <p>⏎ saves, ⌘⏎ saves and assigns to the focused panel, Esc or the window's close button closes and asks
- * first when the form has unsaved changes, so a closed dialog never holds an edit that was not saved. Every other path that would replace the form while it has unsaved changes (a click on
- * another row, Add, Clone, opening the dialog on another resource) asks the same question first; keeping the
- * edits cancels the path and selects the edited row again. Questions (discard, remove) are asked in a row
- * inside the dialog. The outcome of Test, Connect and Start is the latest notice about the resource, shown
- * under the form.</p>
+ * first when the form has unsaved changes, so a closed dialog never holds an edit that was not saved. Opening the
+ * dialog on another resource while the form has unsaved changes asks the same question first; keeping the edits
+ * cancels the opening. Questions are asked in a row inside the dialog. The outcome of Test, Connect and Start is the
+ * latest notice about the resource, shown under the form.</p>
  *
  * @param <S> the spec record
  */
 public final class ResourceDialog<S> {
 
     /** The content's size when the dialog first opens: every control is visible at this size. */
-    static final Dimension DEFAULT_SIZE = new Dimension(820, 520);
+    static final Dimension DEFAULT_SIZE = new Dimension(600, 520);
 
     /** What differs between connections and sessions. */
     public record Config<S>(
@@ -93,24 +83,20 @@ public final class ResourceDialog<S> {
             Function<AppState, List<S>> specs,
             Function<AppState, Map<String, Status>> statuses,
             BiFunction<String, S, Intent> save,
-            Function<String, Intent> remove,
             Function<S, Intent> test,
             Function<String, Intent> open,
             Function<String, Intent> close,
-            BiFunction<AppState, String, Intent> assign,
-            String icon,
-            Runnable extra,
-            String extraLabel) {
+            BiFunction<AppState, String, Intent> assign) {
     }
 
     private final Config<S> config;
     private final IntentSink intents;
     private final Window owner;
-    private final String title;
+    private final String noun;
     private final boolean session;
     private final JPanel content = new JPanel(new BorderLayout());
-    private final DefaultListModel<String> names = new DefaultListModel<>();
-    private final JList<String> list = new JList<>(names);
+    /** The resources' names as of the last render: a saved name must be free, a new one is made free. */
+    private List<String> names = List.of();
     private final Map<String, JComponent> fields = new LinkedHashMap<>();
     private final JLabel message = Plain.only(new JLabel());
     private final JButton openClose = new JButton();
@@ -131,7 +117,6 @@ public final class ResourceDialog<S> {
     /** The values the form was last filled with: what the user has not changed since is refreshed from the state. */
     private Map<String, String> filled = Map.of();
     private boolean filling;
-    private boolean rebuilding;
     private String advice = "";
     private String lastDirectory = "";
     /** The notice subject whose newer notices the message shows, after Test, Connect or Start. */
@@ -145,46 +130,8 @@ public final class ResourceDialog<S> {
         this.config = config;
         this.intents = intents;
         this.owner = owner;
-        String noun = config.kind().noun();
-        this.title = Character.toUpperCase(noun.charAt(0)) + noun.substring(1) + "s";
+        this.noun = config.kind().noun();
         this.session = noun.equals("session");
-        list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        list.setCellRenderer(new DefaultListCellRenderer() {
-            @Override
-            public Component getListCellRendererComponent(JList<?> l, Object value, int index, boolean selected, boolean focus) {
-                JLabel label = (JLabel) super.getListCellRendererComponent(l, value, index, selected, focus);
-                Status st = state == null ? Status.CLOSED : config.statuses().apply(state).getOrDefault((String) value, Status.CLOSED);
-                label.setIcon(Icons.get(config.icon()));
-                label.setText(Plain.text(value + "   " + st.name().toLowerCase(Locale.ROOT)));
-                label.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
-                return label;
-            }
-        });
-        list.addListSelectionListener(e -> {
-            String v = list.getSelectedValue();
-            // selecting the row being edited (after a rebuild, or when the user keeps editing) keeps the form as it is
-            if (!e.getValueIsAdjusting() && !rebuilding && v != null && !v.equals(editing)) {
-                replacingForm(() -> edit(v));
-            }
-        });
-        JPanel left = new JPanel(new BorderLayout(0, Theme.GAP));
-        left.add(new JScrollPane(list), BorderLayout.CENTER);
-        // two columns, so every list button stays visible at the list's width
-        JPanel leftButtons = new JPanel(new GridLayout(0, 2, Theme.GAP / 2, Theme.GAP / 2));
-        leftButtons.add(button("Add", "add", "A new " + noun + " with defaults", () -> replacingForm(this::add)));
-        leftButtons.add(button("Clone", "copy", "A copy of the selected " + noun, () -> {
-            String selected = list.getSelectedValue();
-            if (selected != null) {
-                replacingForm(() -> cloneOf(selected));
-            }
-        }));
-        leftButtons.add(button("Remove", "close", "Removes the selected " + noun + " after asking", this::removeSelected));
-        if (config.extra() != null) {
-            leftButtons.add(button(config.extraLabel(), "import", null, config.extra()));
-        }
-        left.add(leftButtons, BorderLayout.SOUTH);
-        left.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, 0));
-
         JPanel form = new WidthTracking(new GridBagLayout());
         GridBagConstraints g = new GridBagConstraints();
         int row = 0;
@@ -275,13 +222,11 @@ public final class ResourceDialog<S> {
         south.add(actions, BorderLayout.SOUTH);
         right.add(south, BorderLayout.SOUTH);
 
-        JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, left, right);
-        split.setDividerLocation(250);
-        split.setBorder(null);
-        content.add(split, BorderLayout.CENTER);
+        content.add(right, BorderLayout.CENTER);
         content.setPreferredSize(DEFAULT_SIZE);
     }
 
+    /** Shows the dialog on the resource named {@code select}, or on a new one when it is empty or unknown. */
     public void show(AppState s, String select) {
         open(() -> prepare(s, select));
     }
@@ -298,7 +243,7 @@ public final class ResourceDialog<S> {
 
     private void open(Runnable prepare) {
         if (dialog == null) {
-            dialog = new JDialog(owner, title);
+            dialog = new JDialog(owner, title());
             dialog.setModal(false);
             dialog.setContentPane(content);
             install(dialog.getRootPane());
@@ -313,6 +258,7 @@ public final class ResourceDialog<S> {
             dialog.pack();
         }
         prepare.run();
+        dialog.setTitle(title());
         if (!dialog.isVisible()) {
             // placed on each opening: the main window may have moved, or restored its bounds, since the dialog was built
             dialog.setLocationRelativeTo(dialog.getOwner());
@@ -326,27 +272,30 @@ public final class ResourceDialog<S> {
     }
 
     /**
-     * Fills the list and the form for {@code select}, or the first resource, or a new one when there is none.
-     * Unsaved changes to another resource are kept until the user discards them; unsaved changes to
-     * {@code select} itself stay in the form.
+     * Fills the form for {@code select}, or for a new resource when it is empty or names none. Unsaved changes to
+     * another resource are kept until the user discards them; unsaved changes to {@code select} itself stay.
      */
     void prepare(AppState s, String select) {
         render(s);
-        if (!select.isEmpty() && names.contains(select)) {
-            if (select.equals(editing) && isDirty()) {
-                hideConfirm(); // a pending switch to another row is dropped: the form stays on select
-                list.setSelectedValue(select, true);
-            } else {
-                replacingForm(() -> {
-                    edit(select); // first: the selection's event then names the row being edited and refills nothing
-                    list.setSelectedValue(select, true);
-                });
-            }
-        } else if (!names.isEmpty() && list.getSelectedIndex() < 0 && editing.isEmpty() && !isDirty()) {
-            list.setSelectedIndex(0);
-        } else if (names.isEmpty() && editing.isEmpty() && !isDirty()) {
-            add();
+        if (select.isEmpty() || !names.contains(select)) {
+            prepareNew(s);
+        } else if (select.equals(editing) && isDirty()) {
+            hideConfirm(); // a pending switch elsewhere is dropped: the form stays on select
+        } else {
+            replacingForm(() -> edit(select));
         }
+    }
+
+    private void retitle() {
+        if (dialog != null) {
+            dialog.setTitle(title());
+        }
+    }
+
+    /** The window's title: what the form edits. */
+    String title() {
+        String capital = Character.toUpperCase(noun.charAt(0)) + noun.substring(1);
+        return editing.isEmpty() ? "New " + noun : capital + " " + editing;
     }
 
     void prepareNew(AppState s) {
@@ -379,30 +328,14 @@ public final class ResourceDialog<S> {
     }
 
     /**
-     * Refreshes the list from the state. The form keeps what the user changed; every other field takes the
-     * stored value, so a value the application changed meanwhile (a session's conversation id after a
-     * start) is not written back stale by the next Save.
+     * Takes the state's resources. The form keeps what the user changed; every other field takes the stored value,
+     * so a value the application changed meanwhile (a session's conversation id after a start) is not written back
+     * stale by the next Save.
      */
     public void render(AppState s) {
         state = s;
-        List<String> current = config.specs().apply(s).stream().map(config.kind()::nameOf).toList();
-        String selected = list.getSelectedValue();
-        if (!current.equals(Collections.list(names.elements()))) {
-            rebuilding = true;
-            try {
-                names.clear();
-                names.addAll(current);
-                if (selected != null && current.contains(selected)) {
-                    list.setSelectedValue(selected, false);
-                } else if (!editing.isEmpty() && current.contains(editing)) {
-                    list.setSelectedValue(editing, false);
-                }
-            } finally {
-                rebuilding = false;
-            }
-        }
+        names = config.specs().apply(s).stream().map(config.kind()::nameOf).toList();
         refreshUntouchedFields();
-        list.repaint();
         updateOpenClose();
         showOutcome(s);
     }
@@ -496,6 +429,7 @@ public final class ResourceDialog<S> {
                 say(Theme.MUTED, "");
                 showAdvice(true);
                 updateOpenClose();
+        retitle();
                 return;
             }
         }
@@ -506,7 +440,6 @@ public final class ResourceDialog<S> {
         hideConfirm();
         unwatch();
         editing = "";
-        list.clearSelection();
         Map<String, String> values = config.kind().toAttributes(config.kind().template(name));
         for (Attribute a : config.kind().attributes()) {
             if (a.kind() == Attribute.Kind.DIRECTORY && state != null) {
@@ -520,6 +453,7 @@ public final class ResourceDialog<S> {
         say(Theme.MUTED, "New " + config.kind().noun() + "; Save adds it.");
         advice = "";
         updateOpenClose();
+        retitle();
         // a new resource is named first: the keyboard goes to the first field, its default selected to type over;
         // later, as the dialog may only now be opening
         JComponent first = fields.values().iterator().next();
@@ -550,36 +484,12 @@ public final class ResourceDialog<S> {
         String name = unique(config.kind().nameOf(spec) + " copy");
         unwatch();
         editing = "";
-        list.clearSelection();
         filled = config.kind().toAttributes(config.kind().cloneOf(spec, name));
         fill(filled);
         setAdvancedOpen(config.kind().showAdvanced(filled));
         say(Theme.MUTED, "Clone of " + config.kind().nameOf(spec) + "; Save adds it.");
         updateOpenClose();
-    }
-
-    private void removeSelected() {
-        String name = list.getSelectedValue();
-        if (name == null || state == null) {
-            return;
-        }
-        confirm(config.kind().removalQuestion(state, name), "Remove", "Cancel", () -> {
-            int at = names.indexOf(name);
-            intents.dispatch(config.remove().apply(name));
-            if (name.equals(editing)) {
-                // the form's resource is gone: its unsaved edits go with it, without a second question
-                editing = "";
-                filled = Map.of();
-            }
-            List<String> rest = new ArrayList<>(Collections.list(names.elements()));
-            rest.remove(name);
-            if (rest.isEmpty()) {
-                add();
-            } else {
-                list.setSelectedValue(rest.get(Math.min(at, rest.size() - 1)), true);
-            }
-            say(Theme.MUTED, "Removed " + name);
-        });
+        retitle();
     }
 
     /** Saves the form; false, with the reason in the message, when it is invalid or refused. */
@@ -607,6 +517,7 @@ public final class ResourceDialog<S> {
                 }
             }
             say(Theme.MUTED, "Saved " + editing);
+            retitle();
             updateOpenClose();
             return true;
         } catch (IllegalArgumentException e) {
@@ -696,8 +607,7 @@ public final class ResourceDialog<S> {
 
     /**
      * Runs {@code replace}, which fills the form with something else, at once when the form has no unsaved
-     * changes; else asks first. Discard runs it; Keep editing (or Esc, or any other button) cancels it and
-     * selects the edited row again.
+     * changes; else asks first. Discard runs it; Keep editing (or Esc, or any other button) cancels it.
      */
     private void replacingForm(Runnable replace) {
         if (!isDirty()) {
@@ -705,20 +615,10 @@ public final class ResourceDialog<S> {
             return;
         }
         confirm(discardQuestion(), "Discard", "Keep editing", replace);
-        onCancel = this::selectEdited;
     }
 
     private String discardQuestion() {
         return "Discard changes to " + (editing.isEmpty() ? "the new " + config.kind().noun() : editing) + "?";
-    }
-
-    /** Selects the row the form edits, or no row for a new resource. */
-    private void selectEdited() {
-        if (!editing.isEmpty() && names.contains(editing)) {
-            list.setSelectedValue(editing, true);
-        } else {
-            list.clearSelection();
-        }
     }
 
     private void hide() {

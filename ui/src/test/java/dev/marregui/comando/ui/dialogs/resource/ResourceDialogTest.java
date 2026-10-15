@@ -83,17 +83,20 @@ class ResourceDialogTest {
     void everyButtonIsVisibleAtTheDefaultSize() {
         ResourceDialog<SessionSpec> sessions = sessions(new RecordingSink());
         sessions.prepare(States.twoPanels(), "work");
-        assertEveryButtonVisible(sessions.content(), "Add", "Clone", "Remove", "Import…", "Start", "Assign to panel", "Save", "…");
+        assertEveryButtonVisible(sessions.content(), "Start", "Assign to panel", "Save", "…");
+        assertThat(all(sessions.content(), AbstractButton.class, b -> List.of("Add", "Clone", "Remove", "Import…").contains(b.getText())))
+                .as("the sidebar adds, clones, removes and imports; the dialog edits one resource").isEmpty();
+        assertThat(all(sessions.content(), JList.class, l -> true)).as("no list of resources").isEmpty();
 
         AppState imported = AppState.initial(List.of(new PanelState(States.P1, "one", "", "imp")), List.of(),
                 List.of(SessionState.closed(SessionSpec.imported("imp", "/tmp", "c0ffee"))));
         ResourceDialog<SessionSpec> advanced = sessions(new RecordingSink());
         advanced.prepare(imported, "imp");
-        assertEveryButtonVisible(advanced.content(), "Add", "Clone", "Remove", "Import…", "Start", "Assign to panel", "Save");
+        assertEveryButtonVisible(advanced.content(), "Start", "Assign to panel", "Save");
 
         ResourceDialog<ConnectionSpec> connections = connections(new RecordingSink());
         connections.prepare(States.twoPanels(), "local");
-        assertEveryButtonVisible(connections.content(), "Add", "Clone", "Remove", "Test", "Connect", "Assign to panel", "Save");
+        assertEveryButtonVisible(connections.content(), "Test", "Connect", "Assign to panel", "Save");
     }
 
     // ---- keys
@@ -146,73 +149,40 @@ class ResourceDialogTest {
     }
 
     @Test
-    void aClickOnAnotherRowWithUnsavedChangesAsksFirst() {
+    void openingOnAnotherResourceANewOneOrACopyAsksFirstWhenTheFormHasUnsavedChanges() {
         RecordingSink sink = new RecordingSink();
         ResourceDialog<SessionSpec> d = sessions(sink);
         JRootPane root = new JRootPane();
         d.install(root);
-        d.prepare(twoSessions(), "edge");
+        AppState s = twoSessions();
+        d.prepare(s, "edge");
         combo(d, "model").setSelectedItem("opus");
         text(d, "budgetUsd").setText("2");
 
-        list(d).setSelectedValue("edge2", false);
-        assertThat(confirmRow(d).isVisible()).isTrue();
+        d.prepare(s, "edge2");
         assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to edge?");
         assertThat(text(d, "name").getText()).isEqualTo("edge");
+        click(d, "Keep editing", confirmRow(d));
+        assertThat(text(d, "budgetUsd").getText()).isEqualTo("2");
         assertThat(combo(d, "model").getSelectedItem()).isEqualTo("opus");
-
-        click(d, "Keep editing", confirmRow(d));
-        assertThat(confirmRow(d).isVisible()).isFalse();
-        assertThat(list(d).getSelectedValue()).as("the edited row is selected again").isEqualTo("edge");
-        assertThat(text(d, "budgetUsd").getText()).isEqualTo("2");
         assertThat(d.isDirty()).isTrue();
 
-        list(d).setSelectedValue("edge2", false);
+        d.prepareNew(s);
         d.escape();
-        assertThat(list(d).getSelectedValue()).as("Esc keeps editing too").isEqualTo("edge");
+        assertThat(text(d, "name").getText()).as("Esc keeps editing too").isEqualTo("edge");
         assertThat(d.isDirty()).isTrue();
 
-        list(d).setSelectedValue("edge2", false);
+        d.prepareClone(s, "edge2");
         click(d, "Discard", confirmRow(d));
-        assertThat(text(d, "name").getText()).isEqualTo("edge2");
+        assertThat(text(d, "name").getText()).isEqualTo("edge2 copy");
         assertThat(text(d, "workDir").getText()).isEqualTo("/var");
-        assertThat(list(d).getSelectedValue()).isEqualTo("edge2");
-        assertThat(d.isDirty()).isFalse();
-        assertThat(sink.intents()).isEmpty();
-    }
-
-    @Test
-    void addCloneAndOpeningOnAnotherResourceAskFirstWhenTheFormHasUnsavedChanges() {
-        RecordingSink sink = new RecordingSink();
-        ResourceDialog<SessionSpec> d = sessions(sink);
-        AppState s = twoSessions();
-        d.prepare(s, "edge");
-        text(d, "budgetUsd").setText("2");
-
-        click(d, "Add");
-        assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to edge?");
-        click(d, "Keep editing", confirmRow(d));
-        assertThat(text(d, "name").getText()).isEqualTo("edge");
-        assertThat(text(d, "budgetUsd").getText()).isEqualTo("2");
-
-        click(d, "Clone");
-        assertThat(confirmRow(d).isVisible()).isTrue();
-        click(d, "Discard", confirmRow(d));
-        assertThat(text(d, "name").getText()).isEqualTo("edge copy");
         assertThat(d.isDirty()).isFalse();
 
         text(d, "name").setText("mine");
         d.prepare(s, "edge2");
         assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to the new session?");
-        assertThat(text(d, "name").getText()).isEqualTo("mine");
-        click(d, "Keep editing", confirmRow(d));
-        assertThat(text(d, "name").getText()).isEqualTo("mine");
-        assertThat(list(d).getSelectedValue()).as("a new resource has no row").isNull();
-
-        d.prepare(s, "edge2");
         click(d, "Discard", confirmRow(d));
         assertThat(text(d, "name").getText()).isEqualTo("edge2");
-        assertThat(list(d).getSelectedValue()).isEqualTo("edge2");
         assertThat(sink.intents()).isEmpty();
     }
 
@@ -236,7 +206,7 @@ class ResourceDialogTest {
 
         // a question open when the close button is clicked is answered with its safe button first
         text(d, "name").setText("mine");
-        click(d, "Remove");
+        d.prepare(s, "edge2");
         d.close();
         assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to edge?");
         assertThat(sink.intents()).isEmpty();
@@ -249,14 +219,19 @@ class ResourceDialogTest {
         AppState s = twoSessions();
         d.prepare(s, "edge");
 
+        assertThat(d.title()).isEqualTo("Session edge");
+
         d.prepareNew(s);
         assertThat(text(d, "name").getText()).isEqualTo("new session");
-        assertThat(list(d).getSelectedValue()).as("a new resource has no row").isNull();
+        assertThat(d.title()).isEqualTo("New session");
 
         d.prepareClone(s, "edge2");
         assertThat(text(d, "name").getText()).isEqualTo("edge2 copy");
         assertThat(text(d, "workDir").getText()).isEqualTo("/var");
-        assertThat(list(d).getSelectedValue()).isNull();
+        assertThat(d.title()).as("a copy is new until saved").isEqualTo("New session");
+
+        d.prepare(s, "");
+        assertThat(text(d, "name").getText()).as("no name: a new one").isEqualTo("new session");
         assertThat(sink.intents()).isEmpty();
     }
 
@@ -277,8 +252,7 @@ class ResourceDialogTest {
     void assignOnANewFormSavesItFirstAndSaysSo() {
         RecordingSink sink = new RecordingSink();
         ResourceDialog<SessionSpec> d = sessions(sink);
-        d.prepare(States.twoPanels(), "work");
-        click(d, "Add");
+        d.prepareNew(States.twoPanels());
         text(d, "name").setText("fresh");
         click(d, "Assign to panel");
 
@@ -387,54 +361,13 @@ class ResourceDialogTest {
         assertThat(message(d).getText()).isBlank();
     }
 
-    // ---- remove
-
-    @Test
-    void removeAsksWithTheConsequencesThenShowsTheNextResource() {
-        AppState s = AppState.initial(List.of(new PanelState(States.P1, "one", "", "work")), List.of(),
-                List.of(SessionState.closed(SessionSpec.imported("work", "/tmp", "id-1")).withStatus(Status.OPEN, ""),
-                        SessionState.closed(SessionSpec.fresh("other", "/var"))));
-        RecordingSink sink = new RecordingSink();
-        ResourceDialog<SessionSpec> d = sessions(sink);
-        d.prepare(s, "work");
-        click(d, "Remove");
-        assertThat(sink.intents()).isEmpty();
-        assertThat(label(confirmRow(d)).getText()).isEqualTo(SessionKind.INSTANCE.removalQuestion(s, "work"))
-                .contains("stops it").contains("unbinds 1 panel").contains("can be imported again");
-
-        click(d, "Remove", confirmRow(d));
-        assertThat(sink.intents()).containsExactly(new Intent.RemoveSession("work"));
-        assertThat(text(d, "name").getText()).isEqualTo("other");
-        assertThat(text(d, "workDir").getText()).isEqualTo("/var");
-        assertThat(d.isDirty()).isFalse();
-    }
-
-    @Test
-    void removingTheLastResourceLeavesANewForm() {
-        RecordingSink sink = new RecordingSink();
-        ResourceDialog<ConnectionSpec> d = connections(sink);
-        AppState s = States.twoPanels();
-        d.prepare(s, "local");
-        click(d, "Remove");
-        assertThat(label(confirmRow(d)).getText()).isEqualTo("Remove connection local? This unbinds 2 panels and deletes its saved password.");
-        click(d, "Cancel", confirmRow(d));
-        assertThat(sink.intents()).isEmpty();
-        assertThat(text(d, "name").getText()).isEqualTo("local");
-
-        click(d, "Remove");
-        click(d, "Remove", confirmRow(d));
-        assertThat(sink.intents()).containsExactly(new Intent.RemoveConnection("local"));
-        assertThat(text(d, "name").getText()).isEqualTo("new connection");
-    }
-
     // ---- new session directory
 
     @Test
     void aNewSessionStartsInTheFocusedPanelsSessionDirectoryElseTheLastUsedElseHome() {
         AppState bound = States.twoPanels();
         ResourceDialog<SessionSpec> d = sessions(new RecordingSink());
-        d.prepare(bound, "work");
-        click(d, "Add");
+        d.prepareNew(bound);
         assertThat(text(d, "workDir").getText()).isEqualTo("/tmp");
 
         AppState unbound = AppState.initial(List.of(new PanelState(new PanelId("p9"), "nine", "", "")), List.of(),
@@ -444,12 +377,11 @@ class ResourceDialogTest {
         assertThat(ResourceDialog.defaultDirectory(bound, "/srv/last")).isEqualTo("/tmp");
 
         ResourceDialog<SessionSpec> e = sessions(new RecordingSink());
-        e.prepare(unbound, "work");
-        click(e, "Add");
+        e.prepareNew(unbound);
         text(e, "name").setText("x");
         text(e, "workDir").setText("/opt/proj");
         click(e, "Save");
-        click(e, "Add");
+        e.prepareNew(unbound);
         assertThat(text(e, "workDir").getText()).isEqualTo("/opt/proj");
     }
 
@@ -465,12 +397,10 @@ class ResourceDialogTest {
                     return m;
                 },
                 Intent.SaveSession::new,
-                Intent.RemoveSession::new,
                 null,
                 Intent.StartSession::new,
                 Intent.StopSession::new,
-                (s, name) -> new Intent.BindSession(s.focused(), name),
-                "claude", () -> { }, "Import…"), sink);
+                (s, name) -> new Intent.BindSession(s.focused(), name)), sink);
     }
 
     private static ResourceDialog<ConnectionSpec> connections(RecordingSink sink) {
@@ -483,12 +413,10 @@ class ResourceDialogTest {
                     return m;
                 },
                 Intent.SaveConnection::new,
-                Intent.RemoveConnection::new,
                 Intent.TestConnection::new,
                 Intent.OpenConnection::new,
                 Intent.CloseConnection::new,
-                (s, name) -> new Intent.BindConnection(s.focused(), name),
-                "database", null, null), sink);
+                (s, name) -> new Intent.BindConnection(s.focused(), name)), sink);
     }
 
     private static void assertEveryButtonVisible(JComponent content, String... expected) {
@@ -581,11 +509,6 @@ class ResourceDialogTest {
 
     private static JLabel message(ResourceDialog<?> d) {
         return one(d.content(), JLabel.class, l -> "message".equals(l.getName()));
-    }
-
-    @SuppressWarnings("unchecked")
-    private static JList<String> list(ResourceDialog<?> d) {
-        return one(d.content(), JList.class, l -> true);
     }
 
     private static Container confirmRow(ResourceDialog<?> d) {

@@ -20,7 +20,7 @@ import javax.swing.AbstractButton;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenuItem;
-import javax.swing.JTabbedPane;
+import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.LookAndFeel;
@@ -34,7 +34,9 @@ import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
@@ -59,16 +61,40 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void theColumnIsFourTabsAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
+    void theColumnIsFourTabsInTwoFixedRowsAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
         AtomicInteger toggles = new AtomicInteger();
         SessionsSidebar[] s = new SessionsSidebar[1];
         SwingUtilities.invokeAndWait(() -> s[0] = new SessionsSidebar(intent -> {
         }, NO_DIALOGS, toggles::incrementAndGet));
         SessionsSidebar sidebar = s[0];
-        JTabbedPane tabs = find(sidebar.component(), JTabbedPane.class, c -> true);
-        assertThat(List.of(tabs.getTitleAt(0), tabs.getTitleAt(1), tabs.getTitleAt(2), tabs.getTitleAt(3)))
-                .containsExactly("Sessions", "Panels", "Connections", "Scratchpad");
-        assertThat(tabs.getTabLayoutPolicy()).as("one row: a wrapped strip moves rows on a click").isEqualTo(JTabbedPane.SCROLL_TAB_LAYOUT);
+        Map<String, Rectangle> at = new HashMap<>();
+        SwingUtilities.invokeAndWait(() -> {
+            sidebar.component().setSize(280, 500);
+            layout(sidebar.component());
+            for (String t : List.of("Sessions", "Panels", "Connections", "Scratchpad")) {
+                JToggleButton h = find(sidebar.component(), JToggleButton.class, b -> t.equals(b.getText()));
+                at.put(t, SwingUtilities.convertRectangle(h.getParent(), h.getBounds(), sidebar.component()));
+            }
+        });
+        assertThat(at.get("Panels").y).as("Panels and Scratchpad on the top row").isEqualTo(at.get("Scratchpad").y)
+                .isLessThan(at.get("Sessions").y);
+        assertThat(at.get("Sessions").y).as("Sessions and Connections below").isEqualTo(at.get("Connections").y);
+        assertThat(at.get("Panels").x).isLessThan(at.get("Scratchpad").x).isEqualTo(at.get("Sessions").x);
+        assertThat(at.get("Sessions").x).isLessThan(at.get("Connections").x);
+
+        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.PANELS, SessionsSidebar.CONNECTIONS, SessionsSidebar.SCRATCHPAD}) {
+            SwingUtilities.invokeAndWait(() -> sidebar.selectTab(tab));
+            assertThat(sidebar.selectedTab()).isEqualTo(tab);
+        }
+        SwingUtilities.invokeAndWait(() -> find(sidebar.component(), JToggleButton.class, b -> "Panels".equals(b.getText())).doClick());
+        assertThat(sidebar.selectedTab()).as("a click selects; nothing moves").isEqualTo(SessionsSidebar.PANELS);
+        Rectangle panelsAfter = new Rectangle();
+        SwingUtilities.invokeAndWait(() -> {
+            layout(sidebar.component());
+            JToggleButton h = find(sidebar.component(), JToggleButton.class, b -> "Panels".equals(b.getText()));
+            panelsAfter.setBounds(SwingUtilities.convertRectangle(h.getParent(), h.getBounds(), sidebar.component()));
+        });
+        assertThat(panelsAfter).isEqualTo(at.get("Panels"));
 
         AbstractButton hide = button(sidebar.component(), "Hide the sidebar (⌘B)");
         AbstractButton show = button(sidebar.component(), "Show the sidebar (⌘B)");

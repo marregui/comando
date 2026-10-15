@@ -305,23 +305,19 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 s -> s.connections().stream().map(ConnectionState::spec).toList(),
                 s -> statuses(s.connections().stream().map(c -> Map.entry(c.name(), c.status())).toList()),
                 Intent.SaveConnection::new,
-                Intent.RemoveConnection::new,
                 Intent.TestConnection::new,
                 Intent.OpenConnection::new,
                 Intent.CloseConnection::new,
-                (s, name) -> new Intent.BindConnection(s.focused(), name),
-                "database", null, null), deps.intents());
+                (s, name) -> new Intent.BindConnection(s.focused(), name)), deps.intents());
         sessionsDialog = new ResourceDialog<>(frame, new ResourceDialog.Config<>(
                 SessionKind.INSTANCE,
                 s -> s.sessions().stream().map(SessionState::spec).toList(),
                 s -> statuses(s.sessions().stream().map(x -> Map.entry(x.name(), x.status())).toList()),
                 Intent.SaveSession::new,
-                Intent.RemoveSession::new,
                 null,
                 Intent.StartSession::new,
                 Intent.StopSession::new,
-                (s, name) -> new Intent.OpenSession(name, s.focused(), PanelId.random()),
-                "claude", this::openImport, "Import…"), deps.intents());
+                (s, name) -> new Intent.OpenSession(name, s.focused(), PanelId.random())), deps.intents());
         importDialog = new ImportSessionsDialog(frame, deps.intents(), deps.catalogue());
 
         registerCommands();
@@ -720,7 +716,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("panel.bindSession", "Open a session…", null, () -> choose("Session to open",
                 deps.state().get().sessions().stream().map(x -> x.name()).toList(),
                 name -> deps.intents().dispatch(new Intent.OpenSession(name, deps.state().get().focused(), PanelId.random()))));
-        cmd("session.dialog", "Sessions…", key(KeyEvent.VK_K, CMD | SHIFT), () -> openSessions(""));
+        // the focused panel's session in the dialog, or a new one when the panel has none
+        cmd("session.dialog", "Session settings…", key(KeyEvent.VK_K, CMD | SHIFT), () -> openSessions(deps.state().get().focusedPanel().session()));
         cmd("session.import", "Import conversations…", null, this::openImport);
         // panel: its connection
         cmd("connection.toggle", "Connect or disconnect", null, () -> {
@@ -734,7 +731,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("panel.bindConnection", "Bind a connection…", null, () -> choose("Connection for this panel",
                 deps.state().get().connections().stream().map(x -> x.name()).toList(),
                 name -> deps.intents().dispatch(new Intent.BindConnection(deps.state().get().focused(), name))));
-        cmd("connection.dialog", "Connections…", key(KeyEvent.VK_O, CMD | SHIFT), () -> openConnections(""));
+        cmd("connection.dialog", "Connection settings…", key(KeyEvent.VK_O, CMD | SHIFT), () -> openConnections(deps.state().get().focusedPanel().connection()));
         if (deps.server() != null) {
             cmd("server.start", "Start", null, () -> deps.server().toggle(), () -> !deps.server().isRunning());
             cmd("server.stop", "Stop", null, () -> deps.server().toggle(), () -> deps.server().isRunning());

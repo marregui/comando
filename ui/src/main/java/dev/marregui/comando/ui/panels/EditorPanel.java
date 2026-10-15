@@ -334,7 +334,7 @@ public final class EditorPanel extends JPanel {
             m.add(none);
         }
         if (state.connections().isEmpty()) {
-            m.add(new JMenuItem("No connections; add one with Connections…")).setEnabled(false);
+            m.add(new JMenuItem("No connections; + in the sidebar's Connections tab adds one")).setEnabled(false);
         }
         return m;
     }
@@ -360,7 +360,7 @@ public final class EditorPanel extends JPanel {
             m.add(item);
         }
         if (state.sessions().isEmpty()) {
-            m.add(new JMenuItem("No sessions; add or import one with Sessions…")).setEnabled(false);
+            m.add(new JMenuItem("No sessions; + or import in the sidebar's Sessions tab adds one")).setEnabled(false);
         }
         return m;
     }

@@ -66,6 +66,6 @@ COMANDO_OPTS="-Dcomando.recordIntents=true" app/build/install/comando/bin/comand
 ## 5. First start
 
 1. Start comando. On a fresh data root it creates one panel, scratch, with a welcome text, bound to a connection named local QuestDB with QuestDB's defaults.
-2. Sessions… (⌘⇧K) adds a session: a name and a working directory. Import… lists Claude Code's stored conversations.
-3. Connections… (⌘⇧O) adds a database connection.
+2. **+** in the sidebar's Sessions tab adds a session: a name and a working directory; the import button next to it lists Claude Code's stored conversations.
+3. **+** in the sidebar's Connections tab adds a database connection.
 4. Bind both to the panel from the sidebar (double-click), type SQL or a prompt, press ⌘⏎.
