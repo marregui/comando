@@ -8,7 +8,8 @@
 |---|---|---|
 | `theme` | `Theme` | FlatLaf dark (`FlatMacDarkLaf` on macOS); design tokens: accent, Claude, ok, warn, danger, muted, muted strong (secondary text on lists, for contrast), thinking, diff added and removed, card, card border, user bubble, the plot series palette; spacing `GAP` 6, `PAD` 10, `RADIUS` 8; the monospaced font (JetBrains Mono when installed, else the platform's) |
 | `icon` | `Icons` | one SVG icon set under `/icons`, scaled for HiDPI, drawn in the colours of the SVG files (no theme filter) |
-| `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority` | every user action is a `Command` (id, label, icon, key, menu path, action, enablement); the menu bar is built from a `MenuEntry` layout (menus, submenus, separators, command ids), and key bindings and the palette from the registry |
+| `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority`, `ToolButton` | every user action is a `Command` (id, label, icon, key, menu path, action, enablement); the menu bar is built from a `MenuEntry` layout (menus, submenus, separators, command ids), and key bindings and the palette from the registry; `ToolButton` is the flat icon button of the bars above lists and tabs |
+| `resource` | `ResourceActions` | the bar above a list of resources (sessions, connections): add and what brings resources in on the left; edit, clone and remove of the selected row on the right, off while none is selected; removal asks the kind's question and offers to stop a resource in use or leave it ([record 37](../adr/0037-session-actions-act-on-the-selected-row.md)) |
 | `overlay` | `Overlay` | the empty, loading and error states; a widget wraps its content once and switches state |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` | thread hand-off and paint pacing (§3) |
 | `format` | `Labels` | short labels: time since, dollars, token counts, counts, shortened paths |

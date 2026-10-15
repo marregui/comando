@@ -1,4 +1,4 @@
-# 37. Session actions act on the selected row
+# 37. Session and connection actions act on the selected row
 
 | Date | Status | Decided by |
 |---|---|---|
@@ -24,11 +24,12 @@ disconnect) rather than the state. A row bound to the focused panel said "this p
 | the row's edit button | removed | the button above the list edits; the context menu keeps Edit… and gains Clone… |
 | the plug, on the row and in the panel header | shows the state: green while the session runs (or the connection is open), grey while not; a click toggles; the tooltip says the state and what the click does | a control that shows its action read as the wrong state |
 | where a row is bound | the titles of its panels, the focused one first, in the accent colour when the focused panel is one of them; "headless" when no panel binds it | "this panel" did not say which; an unbound session said nothing |
+| connections | the same bar, without import: add on the left; edit, clone and remove of the selected connection on the right; removing an open connection offers **Disconnect and remove** or **Leave it**; the context menu gains Clone… (Miguel, 2026-10-15) | one behaviour for both resource lists |
+| one component | `ResourceActions` in `ui.kit.resource` draws the bar for any resource list: the kind names its buttons and asks its removal question, the owner passes what add, edit and clone open and what remove dispatches | the two tabs share the code; it is a kit component rather than a widget, since a widget in comando is a view placed in a tab ([Widgets](../design/widgets.md)) |
 | the dialog's close button | does what Esc does: with unsaved changes it asks "Discard changes to X?" first; an open question is answered with its safe button | a closed dialog never holds an unsaved edit that reappears at the next opening |
 
 ## 3. Consequences
 
 [Record 32](0032-session-rows-carry-their-controls.md)'s edit control and plug icons are replaced by this record. The
-Connections tab keeps its single **+** button, which still opens the dialog on the selected connection; the dialog's
-close button asks there too. Removal from the sidebar asks with a modal question; removal in the dialog asks in its
-own question row, as before.
+dialog's close button asks in the connection dialog too. Removal from the sidebar asks with a modal question; removal in
+the dialog asks in its own question row, as before.

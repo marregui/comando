@@ -42,4 +42,4 @@ A decision is changed by a new record that names the one it replaces; the old re
 | [34](0034-a-deleted-document-closes-its-panel.md) | A deleted document closes its panel | Miguel, Claude | accepted |
 | [35](0035-mermaid-diagrams-drawn-by-mmdc.md) | Mermaid diagrams drawn by mmdc | Miguel, Claude | accepted |
 | [36](0036-five-menus-by-subject.md) | Five menus, by subject | Miguel, Claude | accepted |
-| [37](0037-session-actions-act-on-the-selected-row.md) | Session actions act on the selected row | Miguel, Claude | accepted |
+| [37](0037-session-actions-act-on-the-selected-row.md) | Session and connection actions act on the selected row | Miguel, Claude | accepted |

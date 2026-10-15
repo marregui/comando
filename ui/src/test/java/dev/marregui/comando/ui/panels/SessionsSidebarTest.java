@@ -2,13 +2,16 @@ package dev.marregui.comando.ui.panels;
 
 import com.formdev.flatlaf.FlatDarkLaf;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -175,90 +178,82 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void theButtonsAboveTheListAddOneAndEditCloneOrRemoveTheSelectedOne() throws Exception {
+    void sessionsAndConnectionsCarryTheSameButtonsAndOnlySessionsImport() throws Exception {
         List<String> opened = new CopyOnWriteArrayList<>();
         SessionsSidebar.Dialogs dialogs = new Dialogs() {
             @Override
-            public void sessions(String select) {
-                opened.add("edit " + select);
+            public ResourceActions.Editor sessions() {
+                return recording("session", opened);
             }
 
             @Override
-            public void newSession() {
-                opened.add("new");
+            public ResourceActions.Editor connections() {
+                return recording("connection", opened);
             }
 
             @Override
-            public void cloneSession(String name) {
-                opened.add("clone " + name);
+            public void importSessions() {
+                opened.add("import");
             }
         };
         List<Intent> intents = new CopyOnWriteArrayList<>();
         List<String> asked = new CopyOnWriteArrayList<>();
-        AtomicInteger answer = new AtomicInteger();
-        SessionsSidebar.Questions questions = (parent, text, title, options) -> {
-            asked.add(title + ": " + text + " " + List.of(options));
-            return answer.get();
-        };
         SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
-        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
-        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(edge, work));
+        ConnectionState local = ConnectionState.closed(ConnectionSpec.questDbDefaults("local")).with(Status.OPEN, "");
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "local", "")), List.of(local), List.of(edge));
         SessionsSidebar[] s = new SessionsSidebar[1];
         SwingUtilities.invokeAndWait(() -> {
             s[0] = new SessionsSidebar(intents::add, dialogs, () -> {
-            }, questions);
+            }, (parent, text, title, options) -> {
+                asked.add(title + ": " + List.of(options));
+                return 0;
+            });
             s[0].render(state);
         });
-        SessionsSidebar sidebar = s[0];
-        JList<?> list = find(sidebar.component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
-        AbstractButton add = button(sidebar.component(), "New session…");
-        AbstractButton edit = button(sidebar.component(), "Edit the selected session…");
-        AbstractButton clone = button(sidebar.component(), "Clone the selected session…");
-        AbstractButton remove = button(sidebar.component(), "Remove the selected session…");
-        assertThat(List.of(edit, clone, remove)).as("nothing selected, nothing to act on").noneMatch(AbstractButton::isEnabled);
-        AbstractButton importer = button(sidebar.component(), "Import stored conversations…");
+        Component root = s[0].component();
+        JList<?> connections = find(root, JList.class, l -> "Connections".equals(l.getAccessibleContext().getAccessibleName()));
+        JList<?> sessions = find(root, JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+
+        button(root, "New session…").doClick();
+        button(root, "Import stored conversations…").doClick();
+        button(root, "New connection…").doClick();
+        assertThat(search(root, AbstractButton.class, b -> b.getAccessibleContext().getAccessibleName() != null
+                && b.getAccessibleContext().getAccessibleName().startsWith("Import") && b != button(root, "Import stored conversations…")))
+                .as("one import, on the sessions").isNull();
         SwingUtilities.invokeAndWait(() -> {
-            sidebar.component().setSize(300, 400);
-            layout(sidebar.component());
+            sessions.setSelectedIndex(0);
+            connections.setSelectedIndex(0);
         });
-        assertThat(add.getParent()).as("add and import, one group").isSameAs(importer.getParent());
-        assertThat(add.getParent()).as("two groups").isNotSameAs(edit.getParent());
-        assertThat(importer.getX() + importer.getWidth()).as("a gap between the groups").isLessThan(edit.getParent().getX());
-        assertThat(List.of(clone.getParent(), remove.getParent())).as("the row's actions, another").allMatch(p -> p == edit.getParent());
-        assertThat(add.getParent().getX()).as("on the left").isLessThan(10);
-        assertThat(edit.getParent().getX() + edit.getParent().getWidth()).as("on the right")
-                .isGreaterThan(add.getParent().getParent().getWidth() - 10);
+        button(root, "Edit the selected session…").doClick();
+        button(root, "Clone the selected connection…").doClick();
+        assertThat(opened).containsExactly("new session", "import", "new connection", "edit session edge", "clone connection local");
 
-        add.doClick();
-        assertThat(opened).as("+ only adds").containsExactly("new");
-
-        SwingUtilities.invokeAndWait(() -> list.setSelectedIndex(0));
-        assertThat(List.of(edit, clone, remove)).allMatch(AbstractButton::isEnabled);
-        edit.doClick();
-        clone.doClick();
-        assertThat(opened).containsExactly("new", "edit edge", "clone edge");
-
-        answer.set(1);
-        remove.doClick();
-        assertThat(asked.getLast()).isEqualTo("Remove edge: Remove session edge? [Remove, Cancel]");
-        assertThat(intents).as("Cancel keeps it").isEmpty();
-        answer.set(0);
-        remove.doClick();
-        assertThat(intents).containsExactly(new Intent.RemoveSession("edge"));
-
+        button(root, "Remove the selected connection…").doClick();
+        assertThat(asked).as("an open connection is disconnected first, or left")
+                .containsExactly("Remove local: [Disconnect and remove, Leave it]");
+        assertThat(intents).containsExactly(new Intent.RemoveConnection("local"));
         intents.clear();
-        SwingUtilities.invokeAndWait(() -> list.setSelectedIndex(1));
-        answer.set(1);
-        remove.doClick();
-        assertThat(asked.getLast()).as("a running session is stopped first, or left as it is")
-                .isEqualTo("Remove work: Remove session work? This stops it and unbinds 1 panel. [Stop and remove, Leave it]");
-        assertThat(intents).isEmpty();
-        answer.set(-1);
-        remove.doClick();
-        assertThat(intents).as("closing the question leaves it too").isEmpty();
-        answer.set(0);
-        remove.doClick();
-        assertThat(intents).containsExactly(new Intent.RemoveSession("work"));
+        button(root, "Remove the selected session…").doClick();
+        assertThat(intents).containsExactly(new Intent.RemoveSession("edge"));
+    }
+
+    private static ResourceActions.Editor recording(String noun, List<String> opened) {
+        return new ResourceActions.Editor() {
+            @Override
+            public void add() {
+                opened.add("new " + noun);
+            }
+
+            @Override
+            public void edit(String name) {
+                opened.add("edit " + noun + " " + name);
+            }
+
+            @Override
+            public void cloneOf(String name) {
+                opened.add("clone " + noun + " " + name);
+            }
+        };
     }
 
     @Test
@@ -329,15 +324,8 @@ class SessionsSidebarTest {
     /** Dialogs that do nothing, for tests that override what they look at. */
     private static class Dialogs implements SessionsSidebar.Dialogs {
         @Override
-        public void sessions(String select) {
-        }
-
-        @Override
-        public void newSession() {
-        }
-
-        @Override
-        public void cloneSession(String name) {
+        public ResourceActions.Editor sessions() {
+            return recording("session", new CopyOnWriteArrayList<>());
         }
 
         @Override
@@ -345,7 +333,8 @@ class SessionsSidebarTest {
         }
 
         @Override
-        public void connections(String select) {
+        public ResourceActions.Editor connections() {
+            return recording("connection", new CopyOnWriteArrayList<>());
         }
 
         @Override

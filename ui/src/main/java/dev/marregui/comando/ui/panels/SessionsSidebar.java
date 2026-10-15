@@ -1,7 +1,6 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.resource.ConnectionKind;
 import dev.marregui.comando.core.resource.SessionKind;
@@ -9,7 +8,9 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -24,7 +25,6 @@ import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
@@ -48,27 +48,22 @@ import java.util.Optional;
 
 /**
  * The left column, three tabs: Sessions (every session with its project, branch, state and pending approvals, and
- * controls to connect or disconnect it and change its model or effort; above the list, buttons that add a session and
- * edit, clone or remove the selected one, and import stored conversations), Connections, and Scratchpad (the
- * scratchpad as a tree). Double-click on a session or a connection binds it to the focused panel. Hidden, the column
+ * controls to connect or disconnect it and change its model or effort), Connections, and Scratchpad (the scratchpad
+ * as a tree). Above the sessions and the connections, the same {@link ResourceActions}: add (and, for sessions,
+ * import) on the left; edit, clone and remove of the selected row on the right. Double-click on a session or a connection binds it to the focused panel. Hidden, the column
  * collapses to a rail whose button shows it again.
  */
 public final class SessionsSidebar {
 
     /** What the sidebar's buttons open. */
     public interface Dialogs {
-        /** Opens the session dialog on {@code select}, or on the first session when empty. */
-        void sessions(String select);
-
-        /** Opens the session dialog on a new session. */
-        void newSession();
-
-        /** Opens the session dialog on a copy of {@code name}, not saved yet. */
-        void cloneSession(String name);
+        /** The session dialog, on a new session, a stored one or an unsaved copy of one. */
+        ResourceActions.Editor sessions();
 
         void importSessions();
 
-        void connections(String select);
+        /** The connection dialog, as {@link #sessions()}. */
+        ResourceActions.Editor connections();
 
         /** Shows the connection's schema explorer, as Panel ▸ Connection ▸ Explore the schema does. */
         void exploreSchema(String connection);
@@ -77,31 +72,21 @@ public final class SessionsSidebar {
         void openFile(Path file);
     }
 
-    /** Asks a question with buttons and answers the index of the one chosen, -1 when closed; tests answer for the user. */
-    interface Questions {
-        Questions MODAL = (parent, text, title, options) -> JOptionPane.showOptionDialog(parent, text, title,
-                JOptionPane.DEFAULT_OPTION, JOptionPane.WARNING_MESSAGE, null, options, options[options.length - 1]);
-
-        int ask(Component parent, String text, String title, Object[] options);
-    }
-
     private final IntentSink intents;
     private final Dialogs dialogs;
-    private final Questions questions;
     private final DefaultListModel<SessionState> sessionModel = new DefaultListModel<>();
     private final DefaultListModel<ConnectionState> connectionModel = new DefaultListModel<>();
     private final SessionRow sessionRow = new SessionRow();
     private final JList<SessionState> sessions = emptyText(new SessionList(sessionModel),
             "No sessions yet. + creates one; the import button brings in stored Claude Code conversations.");
     private final JList<ConnectionState> connections = emptyText(new JList<>(connectionModel),
-            "No connections yet. + adds one (⌘⇧O).");
+            "No connections yet. + adds one.");
     public static final int SESSIONS = 0;
     public static final int CONNECTIONS = 1;
     public static final int SCRATCHPAD = 2;
 
-    private final JButton editSession;
-    private final JButton cloneSession;
-    private final JButton removeSession;
+    private final ResourceActions<SessionState> sessionActions;
+    private final ResourceActions<ConnectionState> connectionActions;
     private final JTabbedPane tabs = new JTabbedPane();
     private final ScratchpadTab scratchpad;
     private final JPanel rail;
@@ -113,13 +98,12 @@ public final class SessionsSidebar {
 
     /** {@code toggle} hides or shows the sidebar, as View ▸ Sidebar does; the owner calls {@link #show}. */
     public SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle) {
-        this(intents, dialogs, toggle, Questions.MODAL);
+        this(intents, dialogs, toggle, ResourceActions.Questions.MODAL);
     }
 
-    SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle, Questions questions) {
+    SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle, ResourceActions.Questions questions) {
         this.intents = intents;
         this.dialogs = dialogs;
-        this.questions = questions;
         sessions.getAccessibleContext().setAccessibleName("Sessions");
         connections.getAccessibleContext().setAccessibleName("Connections");
         sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -209,24 +193,22 @@ public final class SessionsSidebar {
             }
         });
         scratchpad = new ScratchpadTab(dialogs::openFile);
-        // the buttons other than add and import act on the selected session, and are off while none is
-        editSession = button("edit", "Edit the selected session…", () -> selected().ifPresent(x -> dialogs.sessions(x.name())));
-        cloneSession = button("copy", "Clone the selected session…", () -> selected().ifPresent(x -> dialogs.cloneSession(x.name())));
-        removeSession = button("close", "Remove the selected session…", () -> selected().ifPresent(this::remove));
-        sessions.addListSelectionListener(e -> enableSessionButtons());
-        enableSessionButtons();
-        // two groups: what brings sessions in on the left, what acts on the selected one on the right
-        tabs.addTab("Sessions", section(new JScrollPane(sessions),
-                List.of(button("add", "New session…", dialogs::newSession),
-                        button("import", "Import stored conversations…", dialogs::importSessions)),
-                List.of(editSession, cloneSession, removeSession)));
-        tabs.addTab("Connections", section(new JScrollPane(connections),
-                button("add", "New or edit connections", () -> dialogs.connections(selectedConnection()))));
-        tabs.addTab("Scratchpad", section(scratchpad.component(),
-                button("refresh", "Read the scratchpad again", () -> intents.dispatch(new Intent.BrowseScratchpad()))));
+        sessionActions = new ResourceActions<>(sessions,
+                new ResourceActions.Rows<>(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop"),
+                () -> state, dialogs.sessions(), name -> intents.dispatch(new Intent.RemoveSession(name)), questions,
+                ToolButton.of("import", "Import stored conversations…", dialogs::importSessions));
+        connectionActions = new ResourceActions<>(connections,
+                new ResourceActions.Rows<>(ConnectionKind.INSTANCE, ConnectionState::name, ConnectionState::status, "Disconnect"),
+                () -> state, dialogs.connections(), name -> intents.dispatch(new Intent.RemoveConnection(name)), questions);
+        tabs.addTab("Sessions", section(new JScrollPane(sessions), sessionActions.component()));
+        tabs.addTab("Connections", section(new JScrollPane(connections), connectionActions.component()));
+        JPanel refresh = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        refresh.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+        refresh.add(ToolButton.of("refresh", "Read the scratchpad again", () -> intents.dispatch(new Intent.BrowseScratchpad())));
+        tabs.addTab("Scratchpad", section(scratchpad.component(), refresh));
         tabs.setToolTipTextAt(SCRATCHPAD, "~/.claude/SCRATCHPAD; click a file to open it in a panel");
         // the hide button ends the tab strip, so it shows whichever tab is in front
-        tabs.putClientProperty("JTabbedPane.trailingComponent", button("more", "Hide the sidebar (⌘B)", toggle));
+        tabs.putClientProperty("JTabbedPane.trailingComponent", ToolButton.of("more", "Hide the sidebar (⌘B)", toggle));
         // one row that never wraps: a wrapped strip moves the selected tab's row, so tabs would jump on a click
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         tabs.putClientProperty("JTabbedPane.scrollButtonsPolicy", "asNeededSingle");
@@ -236,7 +218,7 @@ public final class SessionsSidebar {
         rail = new JPanel(new BorderLayout());
         rail.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(4, 1, 0, 1)));
-        rail.add(button("more", "Show the sidebar (⌘B)", toggle), BorderLayout.NORTH);
+        rail.add(ToolButton.of("more", "Show the sidebar (⌘B)", toggle), BorderLayout.NORTH);
         rail.setVisible(false);
         root.add(tabs, BorderLayout.CENTER);
         root.add(rail, BorderLayout.WEST);
@@ -284,30 +266,6 @@ public final class SessionsSidebar {
         state = s;
         sync(sessionModel, s.sessions(), sessions);
         sync(connectionModel, s.connections(), connections);
-        enableSessionButtons();
-    }
-
-    private void enableSessionButtons() {
-        boolean any = sessions.getSelectedValue() != null;
-        editSession.setEnabled(any);
-        cloneSession.setEnabled(any);
-        removeSession.setEnabled(any);
-    }
-
-    private Optional<SessionState> selected() {
-        return Optional.ofNullable(sessions.getSelectedValue());
-    }
-
-    /**
-     * Removes {@code s} after asking, naming what removal does. A running session is stopped first: the question
-     * offers "Stop and remove" or "Leave it". Leave it, or closing the question, keeps the session as it is.
-     */
-    void remove(SessionState s) {
-        boolean running = s.status() != Status.CLOSED && s.status() != Status.FAILED;
-        String question = SessionKind.INSTANCE.removalQuestion(state, s.name());
-        if (running ? ask(s.name(), question, "Stop and remove", "Leave it") : ask(s.name(), question, "Remove", "Cancel")) {
-            intents.dispatch(new Intent.RemoveSession(s.name()));
-        }
     }
 
     /** The row control under a mouse event on {@code s}'s cell, if any. */
@@ -435,9 +393,9 @@ public final class SessionsSidebar {
         effortItems(s).forEach(efforts::add);
         m.add(efforts);
         m.addSeparator();
-        m.add(item("Edit…", "edit", () -> dialogs.sessions(s.name())));
-        m.add(item("Clone…", "copy", () -> dialogs.cloneSession(s.name())));
-        m.add(item("Remove…", "close", () -> remove(s)));
+        m.add(item("Edit…", "edit", () -> dialogs.sessions().edit(s.name())));
+        m.add(item("Clone…", "copy", () -> dialogs.sessions().cloneOf(s.name())));
+        m.add(item("Remove…", "close", () -> sessionActions.remove(s)));
         return m;
     }
 
@@ -453,19 +411,10 @@ public final class SessionsSidebar {
         m.add(item("Test", "check", () -> intents.dispatch(new Intent.TestConnection(c.spec()))));
         m.add(item("Explore the schema", "tree", () -> dialogs.exploreSchema(c.name())));
         m.addSeparator();
-        m.add(item("Edit…", "edit", () -> dialogs.connections(c.name())));
-        m.add(item("Remove…", "close", () -> {
-            if (ask(c.name(), ConnectionKind.INSTANCE.removalQuestion(state, c.name()), "Remove", "Cancel")) {
-                intents.dispatch(new Intent.RemoveConnection(c.name()));
-            }
-        }));
+        m.add(item("Edit…", "edit", () -> dialogs.connections().edit(c.name())));
+        m.add(item("Clone…", "copy", () -> dialogs.connections().cloneOf(c.name())));
+        m.add(item("Remove…", "close", () -> connectionActions.remove(c)));
         return m;
-    }
-
-    /** Remove asks first, naming what it does; {@code no}, the safe answer, is the default. */
-    private boolean ask(String name, String question, String yes, String no) {
-        Object[] options = {yes, no};
-        return questions.ask(tabs, Plain.text(question), "Remove " + Plain.text(name), options) == 0;
     }
 
     /** A list that says what to do while it is empty. */
@@ -512,27 +461,13 @@ public final class SessionsSidebar {
         return state != null && state.focusedPanel().session().equals(s.name());
     }
 
-    private String selectedConnection() {
-        ConnectionState c = connections.getSelectedValue();
-        return c == null ? "" : c.name();
-    }
-
     private static <T> T at(JList<T> list, MouseEvent e) {
         int i = list.locationToIndex(e.getPoint());
         return i >= 0 && list.getCellBounds(i, i).contains(e.getPoint()) ? list.getModel().getElementAt(i) : null;
     }
 
-    /** A tab's content: its buttons in a row at the top right, then the content. */
-    private static JPanel section(JComponent content, JButton... buttons) {
-        return section(content, List.of(), List.of(buttons));
-    }
-
-    /** A tab's content: a row with one group of buttons at the top left and another at the top right, then the content. */
-    private static JPanel section(JComponent content, List<JButton> left, List<JButton> right) {
-        JPanel actions = new JPanel(new BorderLayout());
-        actions.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-        actions.add(group(FlowLayout.LEFT, left), BorderLayout.WEST);
-        actions.add(group(FlowLayout.RIGHT, right), BorderLayout.EAST);
+    /** A tab's content: its bar of buttons at the top, then the content. */
+    private static JPanel section(JComponent content, JComponent actions) {
         if (content instanceof JScrollPane sp) {
             sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
             sp.setBorder(null);
@@ -541,22 +476,6 @@ public final class SessionsSidebar {
         p.add(actions, BorderLayout.NORTH);
         p.add(content, BorderLayout.CENTER);
         return p;
-    }
-
-    private static JPanel group(int align, List<JButton> buttons) {
-        JPanel g = new JPanel(new FlowLayout(align, 0, 0));
-        buttons.forEach(g::add);
-        return g;
-    }
-
-    private static JButton button(String icon, String tip, Runnable r) {
-        JButton b = new JButton(Icons.get(icon));
-        b.setToolTipText(tip);
-        b.getAccessibleContext().setAccessibleName(tip);
-        b.putClientProperty("JButton.buttonType", "toolBarButton");
-        b.setFocusable(false);
-        b.addActionListener(e -> r.run());
-        return b;
     }
 
     private static JMenuItem item(String text, String icon, Runnable r) {

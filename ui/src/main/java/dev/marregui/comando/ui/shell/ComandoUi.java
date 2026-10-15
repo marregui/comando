@@ -43,6 +43,7 @@ import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.EdtWatchdog;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.panels.EditorPanel;
@@ -256,18 +257,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         side = new SidePane(ctx, widgets);
         sidebar = new SessionsSidebar(deps.intents(), new SessionsSidebar.Dialogs() {
             @Override
-            public void sessions(String select) {
-                openSessions(select);
-            }
-
-            @Override
-            public void newSession() {
-                sessionsDialog.showNew(deps.state().get());
-            }
-
-            @Override
-            public void cloneSession(String name) {
-                sessionsDialog.showClone(deps.state().get(), name);
+            public ResourceActions.Editor sessions() {
+                return editor(() -> sessionsDialog);
             }
 
             @Override
@@ -276,8 +267,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
 
             @Override
-            public void connections(String select) {
-                openConnections(select);
+            public ResourceActions.Editor connections() {
+                return editor(() -> connectionsDialog);
             }
 
             @Override
@@ -1311,6 +1302,29 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     private void openSessions(String select) {
         sessionsDialog.show(deps.state().get(), select);
+    }
+
+    /**
+     * What the sidebar's add, edit and clone buttons open in the dialog; read at the click, as the sidebar is built
+     * before the dialogs.
+     */
+    private ResourceActions.Editor editor(Supplier<ResourceDialog<?>> dialog) {
+        return new ResourceActions.Editor() {
+            @Override
+            public void add() {
+                dialog.get().showNew(deps.state().get());
+            }
+
+            @Override
+            public void edit(String name) {
+                dialog.get().show(deps.state().get(), name);
+            }
+
+            @Override
+            public void cloneOf(String name) {
+                dialog.get().showClone(deps.state().get(), name);
+            }
+        };
     }
 
     private void openImport() {
