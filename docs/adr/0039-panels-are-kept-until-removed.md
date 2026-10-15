@@ -22,13 +22,14 @@ formats such as JFR.
 | created | **+**, ⌘T, opening a session without a panel; the file is written at once, empty or not | opened from the Scratchpad tab or ⌘O |
 | close | the tab goes; the file, title and bindings stay in `panels.json` with `"closed": true`; the text stays in memory, so it reopens at once; nothing is deleted, blank or not | the tab goes; nothing is kept |
 | reopen | the Panels tab, ⌘⇧T, opening its session, or ⌘O on its file: after the focused panel, with its text and bindings | ⌘⇧T or opening the file again |
-| gone | Remove (the Panels tab, its context menu), after a question that names the file, closes an open panel first, and says its session keeps running; or its file deleted outside comando, open or closed | when the user deletes the file |
+| gone | Remove (the Panels tab, its context menu), after a question that names the file, closes an open panel first, and says its session keeps running; or its file deleted outside comando, open or closed, unless edits were typed since comando saw the file gone, whose save writes it again. Removing the last open panel leaves an empty one in its place | when the user deletes the file; a document whose last write fails at close comes back on its own path at the next start, never as a file of `panels/` |
 | listed | the Panels tab of the sidebar, open and closed, by title, with session, connection and file name | the Scratchpad tab |
 | a closed panel's file edited outside | the text is taken at once: no editor shows it | as an open panel's, while open |
-| a file of `panels/` that no panel names (left by an older comando, or put there by hand) | becomes a closed panel at the start, titled after it, with no bindings; a notice names it | |
+| a file of `panels/` that no panel names (left by an older comando, or put there by hand), also when the JSON files are gone | becomes a closed panel at the start, titled after it, with no bindings; a notice names it. A stored name names a file when it is the same file (case-insensitive on APFS by default, exact on a case-sensitive volume) | |
 | an open panel whose file is missing at the start | gets an empty file: an older comando never wrote a blank panel's file | dropped, as before ([record 34](0034-a-deleted-document-closes-its-panel.md)) |
 | a closed panel whose file is missing at the start | dropped, with a notice | |
-| a session | its panel is its panel open or closed: opening the session reopens it ([record 38](0038-a-session-has-one-panel.md)) | |
+| a session | its panel is its panel open or closed: opening the session reopens it ([record 38](0038-a-session-has-one-panel.md)); removing the session or a connection counts the closed panels it unbinds; Claude's SQL without a named connection uses the closed panel's connection, and an edit into a closed panel is refused naming it | |
+| a new panel's default title | `panel N`, skipping titles that open and closed panels hold | |
 
 The sidebar gains a fourth tab, Panels, after Sessions, with the same bar as Sessions and Connections
 ([record 37](0037-session-actions-act-on-the-selected-row.md)): **+** new; edit (rename), clone (text and connection,

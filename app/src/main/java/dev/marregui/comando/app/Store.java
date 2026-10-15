@@ -19,7 +19,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -91,6 +90,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
     /** Panels whose text changed since their file was written. */
     private final Set<String> dirty = ConcurrentHashMap.newKeySet();
+    /** How many times each panel's text changed: a deletion report removes the panel only when no edit came after it. */
+    private final ConcurrentHashMap<String, Long> edits = new ConcurrentHashMap<>();
     /** Panels whose last file write failed; the user is told once per run of failures. Writer thread only. */
     private final Set<String> failing = new HashSet<>();
     /** The key in {@link #failing} for {@code panels.json} itself; panel ids are UUIDs. */
@@ -153,12 +154,16 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 texts.putIfAbsent(p.id().value(), Welcome.TEXT);
                 dirty.add(p.id().value());
             }
+            // a panels folder left without its JSON files: its files are panels too
+            List<PanelState> shut = new ArrayList<>();
+            adoptLooseFiles(List.of(), shut);
             panelMeta = seeded.panels();
+            closedMeta = List.copyOf(shut);
             pollFiles();
             saveConnections(seeded.connections());
             saveSessions(seeded.sessions());
             schedulePanels();
-            return seeded;
+            return new Loaded(seeded.panels(), seeded.connections(), seeded.sessions(), shut);
         }
         List<ConnectionSpec> c = orEmpty(connections.read()).stream().map(this::withSecret).toList();
         secretNames = new HashSet<>(c.stream().map(ConnectionSpec::name).toList());
@@ -249,10 +254,12 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
      * Temporary and hidden files are left alone. Returns the adopted files' names.
      */
     private List<String> adoptLooseFiles(List<StoredPanel> stored, List<PanelState> shut) {
-        Set<String> named = new HashSet<>();
+        // a stored name names a file when that file exists and is the same file: case-insensitive on APFS by default,
+        // exact on a case-sensitive file system, where a stored name differing in case leaves the file loose
+        List<Path> named = new ArrayList<>();
         for (StoredPanel sp : stored) {
             if (sp.file() != null && !Path.of(sp.file()).isAbsolute()) {
-                named.add(sp.file().toLowerCase(Locale.ROOT));
+                named.add(files.dir().resolve(sp.file()));
             }
         }
         List<String> adopted = new ArrayList<>();
@@ -262,7 +269,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         try (var listing = Files.list(files.dir())) {
             for (Path f : listing.sorted().toList()) {
                 String name = f.getFileName().toString();
-                if (name.startsWith(".") || !Files.isRegularFile(f) || named.contains(name.toLowerCase(Locale.ROOT))) {
+                if (name.startsWith(".") || !Files.isRegularFile(f) || named.stream().anyMatch(n -> sameFile(n, f))) {
                     continue;
                 }
                 PanelId id = PanelId.random();
@@ -279,6 +286,14 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             LOG.log(System.Logger.Level.WARNING, "cannot list panels/: " + e.getMessage());
         }
         return adopted;
+    }
+
+    private static boolean sameFile(Path a, Path b) {
+        try {
+            return Files.exists(a) && Files.isSameFile(a, b);
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /**
@@ -416,6 +431,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     @Override
     public void changed(PanelId panel, String text) {
         texts.put(panel.value(), text);
+        edits.merge(panel.value(), 1L, Long::sum);
         dirty.add(panel.value());
         schedulePanels();
     }
@@ -445,7 +461,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                         files.write(id, text);
                     } catch (IOException | RuntimeException e) {
                         // naming (a rename's move, the folder's listing) or writing failed: the text waits in panels.json
-                        String name = fileName(id);
+                        // the stored name: a document's absolute path, so it comes back on its own file, never in panels/
+                        String name = files.storedName(id).orElse(null);
                         unsaved.put(id, new StoredPanel(id, was.title(), was.connection(), was.session(), name, text, null));
                         LOG.log(System.Logger.Level.ERROR, "cannot save the closed panel's file [panel=" + was.title() + "]: " + e.getMessage(), e);
                         notices.accept("Cannot write " + (name == null ? "the file" : name) + " for the closed panel " + was.title() + ": "
@@ -471,6 +488,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         removed.add(id);
         submit(() -> {
             dirty.remove(id);
+            edits.remove(id);
             failing.remove(id);
             opening.remove(id);
             unsaved.remove(id);
@@ -545,7 +563,10 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             try {
                 String name = files.file(id).map(f -> f.getFileName().toString()).orElse("");
                 if (files.deleted(id)) {
-                    deletions.accept(new Deleted(p.id(), name));
+                    // asked on the EDT: an edit after this report keeps the panel, and its save writes the file again;
+                    // counted rather than read from dirty, which an autosave clears before the EDT may ask
+                    long seen = edits.getOrDefault(id, 0L);
+                    deletions.accept(new Deleted(p.id(), name, () -> edits.getOrDefault(id, 0L) == seen));
                     continue;
                 }
                 if (shut.contains(p)) {
@@ -555,16 +576,20 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     });
                     continue;
                 }
-                files.outside(id).ifPresent(o -> outsideChanges.accept(new Outside(p.id(), name, o.text(), () -> take(id, o))));
+                long seen = edits.getOrDefault(id, 0L);
+                files.outside(id).ifPresent(o -> outsideChanges.accept(new Outside(p.id(), name, o.text(), () -> take(id, o, seen))));
             } catch (IOException | RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot check the panel's file [panel=" + p.title() + "]: " + e.getMessage());
             }
         }
     }
 
-    /** On the EDT: the panel takes its file's outside text, unless it has edits not yet saved. */
-    private boolean take(String id, PanelFiles.Outside o) {
-        if (dirty.contains(id)) {
+    /**
+     * On the EDT: the panel takes its file's outside text, unless it was edited after the outside version was seen,
+     * saved or not (an autosave clears {@code dirty} before the EDT may ask), or has edits not yet saved.
+     */
+    private boolean take(String id, PanelFiles.Outside o, long seen) {
+        if (dirty.contains(id) || edits.getOrDefault(id, 0L) != seen) {
             return false;
         }
         texts.put(id, o.text());
@@ -664,10 +689,6 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         return all;
     }
 
-    private String fileName(String id) {
-        return files.file(id).map(f -> f.getFileName().toString()).orElse(null);
-    }
-
     /** One file, whatever the spelling: absolute, normalised, ignoring case as APFS does by default. */
     static boolean samePath(Path a, Path b) {
         return a.toAbsolutePath().normalize().toString().equalsIgnoreCase(b.toAbsolutePath().normalize().toString());
@@ -741,7 +762,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 files.write(u.id(), u.content());
                 it.remove();
             } catch (IOException e) {
-                out.add(new StoredPanel(u.id(), u.title(), u.connection(), u.session(), fileName(u.id()), u.content(), null));
+                out.add(new StoredPanel(u.id(), u.title(), u.connection(), u.session(), files.storedName(u.id()).orElse(null), u.content(), null));
                 failed = failed == null ? e : failed;
             }
         }

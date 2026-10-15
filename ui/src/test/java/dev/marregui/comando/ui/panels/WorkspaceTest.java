@@ -85,20 +85,38 @@ class WorkspaceTest {
         });
         assertThat(texts.deletions).as("the workspace listens for deleted documents").isNotNull();
 
-        SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(doc, "ALPHA.md")));
+        SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(doc, "ALPHA.md", () -> true)));
         assertThat(intents).containsExactly(new Intent.RemovePanel(doc));
         SwingUtilities.invokeAndWait(() -> w[0].render(AppState.initial(List.of(spec), List.of(), List.of())));
         assertThat(w[0].hasClosed()).as("⌘⇧T has nothing to reopen: the file is gone").isFalse();
         assertThat(intents).filteredOn(Intent.Notify.class::isInstance).extracting(i -> ((Intent.Notify) i).text())
                 .containsExactly("Removed ALPHA: ALPHA.md was deleted outside comando");
 
-        SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(doc, "ALPHA.md")));
+        SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(doc, "ALPHA.md", () -> true)));
         assertThat(intents).as("a panel already gone is not removed twice").filteredOn(Intent.RemovePanel.class::isInstance).hasSize(1);
 
         PanelId shut = new PanelId("c");
         SwingUtilities.invokeAndWait(() -> w[0].render(AppState.initial(List.of(spec), List.of(), List.of())
                 .withClosed(List.of(new PanelState(shut, "old", "", "")))));
-        SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(shut, "old.md")));
+        SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(shut, "old.md", () -> true)));
         assertThat(intents).as("a closed panel's file deleted outside removes it too").contains(new Intent.RemovePanel(shut));
+    }
+
+    @Test
+    void aDeletedFileWhosePanelGotEditsSinceTheReportKeepsThePanel() throws Exception {
+        Texts texts = new Texts();
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        PanelState spec = new PanelState(P, "spec", "", "");
+        PanelId other = new PanelId("o");
+        Workspace[] w = new Workspace[1];
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(intents::add, texts, new SchemaRegistry());
+            w[0].render(AppState.initial(List.of(spec, new PanelState(other, "other", "", "")), List.of(), List.of()));
+        });
+        // the store saw the file gone, then the user typed before the report reached the EDT
+        SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(P, "spec.md", () -> false)));
+        assertThat(intents).doesNotHaveAnyElementsOfTypes(Intent.RemovePanel.class);
+        assertThat(intents).filteredOn(Intent.Notify.class::isInstance).extracting(i -> ((Intent.Notify) i).text())
+                .containsExactly("spec.md was deleted outside comando; the panel's unsaved edits write it again");
     }
 }

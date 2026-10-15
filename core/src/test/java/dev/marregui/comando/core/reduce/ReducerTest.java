@@ -496,6 +496,39 @@ class ReducerTest {
     }
 
     @Test
+    void removingTheLastOpenPanelLeavesAnEmptyOneInItsPlace() {
+        PanelId doc = new PanelId("doc");
+        state = AppState.initial(List.of(new PanelState(doc, "PLAN", "local", "", true)), List.of(ConnectionState.closed(States.LOCAL)), List.of());
+        apply(new Intent.RemovePanel(doc));
+        assertThat(state.panels()).singleElement().satisfies(p -> {
+            assertThat(p.id()).isNotEqualTo(doc);
+            assertThat(p.connection()).isEqualTo("local");
+            assertThat(p.document()).isFalse();
+        });
+        assertThat(state.focused()).isEqualTo(state.panels().getFirst().id());
+        assertThat(effects).contains(new Effect.DeletePanel(doc));
+    }
+
+    @Test
+    void theEmptyPanelThatReplacesTheLastNeverTakesAClosedPanelsId() {
+        // nextId starts at 1 every run, while closed panels from an earlier run keep their ids
+        PanelId open = new PanelId("o");
+        state = AppState.initial(List.of(new PanelState(open, "open", "", "")), List.of(), List.of())
+                .withClosed(List.of(new PanelState(new PanelId("p-1"), "kept", "", "")));
+        apply(new Intent.RemovePanel(open));
+        assertThat(state.panels()).singleElement().satisfies(p -> assertThat(p.id()).isNotEqualTo(new PanelId("p-1")));
+        assertThat(state.closed()).extracting(PanelState::id).containsExactly(new PanelId("p-1"));
+    }
+
+    @Test
+    void aNewPanelsDefaultTitleIsNotAClosedPanelsTitle() {
+        apply(new Intent.AddPanel(P3, ""));
+        apply(new Intent.ClosePanel(P3));
+        apply(new Intent.AddPanel(new PanelId("p4"), ""));
+        assertThat(state.panel(new PanelId("p4")).orElseThrow().title()).isNotEqualTo("panel 3");
+    }
+
+    @Test
     void aDocumentClosesForGoodAndARemovedPanelLosesItsFile() {
         state = onePanelPerSession();
         PanelId doc = new PanelId("doc");
@@ -509,10 +542,6 @@ class ReducerTest {
         assertThat(state.closed()).isEmpty();
         assertThat(state.notice().text()).isEqualTo("Removed one");
         assertThat(effects).containsExactly(new Effect.DeletePanel(P1), new Effect.SavePanels(state.panels(), state.closed()));
-
-        apply(new Intent.RemovePanel(P2));
-        assertThat(state.panels()).as("the last open panel stays").extracting(PanelState::id).containsExactly(P2);
-        assertThat(state.notice().text()).isEqualTo("The last open panel cannot be removed; open another first");
 
         apply(new Intent.AddPanel(P3, "three"));
         apply(new Intent.RemovePanel(P2));

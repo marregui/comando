@@ -70,8 +70,12 @@ public interface PanelTexts {
     default void onOutsideChange(Consumer<Outside> listener) {
     }
 
-    /** A document's file, {@code file} by name, was deleted outside comando while its panel had no unsaved edits. */
-    record Deleted(PanelId panel, String file) {
+    /**
+     * A panel's file, {@code file} by name, was deleted outside comando while the panel had no unsaved edits.
+     * {@code remove}, called on the EDT, answers false when edits were typed since: the panel stays, and their save
+     * writes the file again.
+     */
+    record Deleted(PanelId panel, String file, BooleanSupplier remove) {
     }
 
     /**

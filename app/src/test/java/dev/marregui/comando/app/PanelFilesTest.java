@@ -6,11 +6,13 @@ import dev.marregui.comando.ui.PanelTexts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
 import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -188,6 +190,139 @@ class PanelFilesTest {
     }
 
     @Test
+    void everyFileOfThePanelsFolderBelongsToAPanelWhenAStoredNameDiffersInCase() throws Exception {
+        Files.createDirectories(dir());
+        Files.writeString(dir().resolve("SPEC.md"), "typed");
+        Files.writeString(home.resolve("connections.json"), "[]");
+        Files.writeString(home.resolve("sessions.json"), "[]");
+        Files.writeString(home.resolve("panels.json"), """
+                [{"id":"s","title":"spec","connection":"","session":"","file":"spec.md"}]""");
+        try (Store store = new Store(home)) {
+            Store.Loaded loaded = store.load();
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            List<PanelState> all = new ArrayList<>(loaded.panels());
+            all.addAll(loaded.closed());
+            for (String name : names()) {
+                Path f = dir().resolve(name);
+                assertThat(all).as(name + " has a panel").anyMatch(p -> store.file(p.id()).map(x -> same(x, f)).orElse(false));
+            }
+            assertThat(all).as("the typed text is reachable").anyMatch(p -> store.load(p.id()).equals("typed"));
+        }
+    }
+
+    private static boolean same(Path a, Path b) {
+        try {
+            return Files.exists(a) && Files.isSameFile(a, b);
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    @Test
+    void aPanelsFolderWithoutTheJsonFilesIsAdoptedAsClosedPanels() throws Exception {
+        Files.createDirectories(dir());
+        Files.writeString(dir().resolve("notes.md"), "kept");
+        try (Store store = new Store(home)) {
+            Store.Loaded loaded = store.load();
+            assertThat(loaded.closed()).extracting(PanelState::title).containsExactly("notes");
+        }
+    }
+
+    @Test
+    void aDocumentWhoseLastWriteFailsAtCloseComesBackOnItsOwnPathNeverAsAPanelFile() throws Exception {
+        Path docs = Files.createDirectories(home.resolve("docs"));
+        Path doc = Files.writeString(docs.resolve("PLAN.md"), "# plan");
+        PanelId id = new PanelId("d");
+        PanelState own = new PanelState(new PanelId("o"), "spec", "", "");
+        Set<PosixFilePermission> writable = Files.getPosixFilePermissions(docs);
+        try {
+            try (Store store = new Store(home)) {
+                store.load();
+                assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEmpty();
+                store.savePanels(List.of(own, new PanelState(id, "PLAN", "", "", true)), List.of());
+                store.saveNow().get(5, TimeUnit.SECONDS);
+                Files.setPosixFilePermissions(docs, PosixFilePermissions.fromString("r-xr-xr-x"));
+                store.changed(id, "typed, then closed while docs/ refuses writes");
+                store.forget(id);
+                store.savePanels(List.of(own), List.of());
+                store.saveNow().get(5, TimeUnit.SECONDS);
+            }
+        } finally {
+            Files.setPosixFilePermissions(docs, writable);
+        }
+        try (Store store = new Store(home)) {
+            Store.Loaded loaded = store.load();
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            PanelState back = loaded.panels().stream().filter(p -> p.id().equals(id)).findFirst().orElseThrow();
+            assertThat(back.document()).isTrue();
+            assertThat(store.file(id)).contains(doc);
+            assertThat(store.load(id)).isEqualTo("typed, then closed while docs/ refuses writes");
+        }
+        assertThat(dir().resolve("PLAN.md")).as("never a copy in panels/").doesNotExist();
+    }
+
+    @Test
+    void aDocumentUnreadableAtTheStartKeepsItsPathAndNeverBecomesAPanelFile() throws Exception {
+        Path docs = Files.createDirectories(home.resolve("docs"));
+        Path doc = Files.writeString(docs.resolve("PLAN.md"), "# plan");
+        Files.writeString(home.resolve("connections.json"), "[]");
+        Files.writeString(home.resolve("sessions.json"), "[]");
+        Files.writeString(home.resolve("panels.json"), """
+                [{"id":"d","title":"PLAN","connection":"","session":"","file":"%s","content":"typed, never written"}]""".formatted(doc));
+        Set<PosixFilePermission> readable = Files.getPosixFilePermissions(doc);
+        Files.setPosixFilePermissions(doc, PosixFilePermissions.fromString("---------"));
+        try (Store store = new Store(home)) {
+            store.load();
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            assertThat(store.file(new PanelId("d"))).contains(doc);
+        } finally {
+            Files.setPosixFilePermissions(doc, readable);
+        }
+        assertThat(dir().resolve("PLAN.md")).as("never a copy in panels/").doesNotExist();
+        assertThat(Files.readString(home.resolve("panels.json"))).contains(doc.toString());
+    }
+
+    @Test
+    void anEditAfterAnOutsideChangeReportIsNotReplacedEvenOnceItIsSaved() throws Exception {
+        PanelId id = new PanelId("w");
+        List<PanelTexts.Outside> outside = new CopyOnWriteArrayList<>();
+        try (Store store = new Store(home)) {
+            store.onOutsideChange(outside::add);
+            store.load();
+            store.savePanels(List.of(new PanelState(id, "spec", "", "")), List.of());
+            store.changed(id, "v1");
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            writeOutside(dir().resolve("spec.md"), "from the IDE");
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            // the user types and the autosave lands before the report reaches the EDT
+            store.changed(id, "typed after the report");
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            assertThat(outside.getFirst().take().getAsBoolean()).as("the typing wins").isFalse();
+            assertThat(store.load(id)).isEqualTo("typed after the report");
+        }
+    }
+
+    @Test
+    void anEditAfterADeletionReportKeepsThePanelEvenOnceItIsSaved() throws Exception {
+        PanelId id = new PanelId("e");
+        List<PanelTexts.Deleted> deleted = new CopyOnWriteArrayList<>();
+        try (Store store = new Store(home)) {
+            store.onDeleted(deleted::add);
+            store.load();
+            store.savePanels(List.of(new PanelState(id, "spec", "", "")), List.of());
+            store.changed(id, "v1");
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            Files.delete(dir().resolve("spec.md"));
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            // the user types and the autosave lands before the report reaches the EDT
+            store.changed(id, "typed after the report");
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            assertThat(deleted).singleElement().matches(d -> !d.remove().getAsBoolean(), "the panel stays");
+        }
+        assertThat(Files.readString(dir().resolve("spec.md"))).isEqualTo("typed after the report");
+    }
+
+    @Test
     void aNewPanelGetsItsFileAtOnceEvenEmptyAndARemovedOneLosesIt() throws Exception {
         PanelId id = new PanelId("e");
         try (Store store = new Store(home)) {
@@ -243,12 +378,12 @@ class PanelFilesTest {
 
     @Test
     void aSpecOpensFromTheFolderOnlyAndKeepsItsName() throws Exception {
-        Files.createDirectories(dir());
-        Files.writeString(dir().resolve("Ravenna plan.md"), "# Ravenna");
         Path elsewhere = Files.writeString(home.resolve("other.md"), "no");
         PanelId id = new PanelId("o");
         try (Store store = new Store(home)) {
             store.load();
+            // put in the folder while comando runs: loose until the next start, so ⌘O binds it
+            Files.writeString(Files.createDirectories(dir()).resolve("Ravenna plan.md"), "# Ravenna");
             assertThat(store.open(new PanelId("g"), dir().resolve("gone.md")).get(5, TimeUnit.SECONDS)).isEqualTo("gone.md no longer exists");
             assertThat(store.open(id, dir().resolve("Ravenna plan.md")).get(5, TimeUnit.SECONDS)).isEmpty();
             assertThat(store.load(id)).isEqualTo("# Ravenna");
@@ -319,7 +454,7 @@ class PanelFilesTest {
     }
 
     @Test
-    void aPanelsFileDeletedOutsideIsReportedOnceForThePanelToBeRemovedOpenOrClosed() throws Exception {
+    void aPanelsFileDeletedOutsideIsReportedForThePanelToBeRemovedUnlessEditedSince() throws Exception {
         PanelId open = new PanelId("d");
         PanelId shut = new PanelId("s");
         List<PanelTexts.Deleted> deleted = new CopyOnWriteArrayList<>();
@@ -335,10 +470,15 @@ class PanelFilesTest {
             Files.delete(dir().resolve("old.md"));
             store.checkFilesNow().get(5, TimeUnit.SECONDS);
             store.checkFilesNow().get(5, TimeUnit.SECONDS);
-            assertThat(deleted).containsExactlyInAnyOrder(new PanelTexts.Deleted(open, "spec.md"), new PanelTexts.Deleted(shut, "old.md"));
-
+            assertThat(deleted).extracting(d -> d.panel().value() + " " + d.file()).containsExactlyInAnyOrder("d spec.md", "s old.md");
+            assertThat(deleted).as("no edits since: the panels go").allMatch(d -> d.remove().getAsBoolean());
             store.saveNow().get(5, TimeUnit.SECONDS);
-            assertThat(dir().resolve("spec.md")).as("not written again while the panel is being removed").doesNotExist();
+            assertThat(dir().resolve("old.md")).as("not written again while its panel is being removed").doesNotExist();
+            store.changed(open, "typed after the report");
+            assertThat(deleted.getFirst().panel().equals(open) ? deleted.getFirst() : deleted.getLast())
+                    .as("edits typed since keep the panel").matches(d -> !d.remove().getAsBoolean());
+            store.saveNow().get(5, TimeUnit.SECONDS);
+            assertThat(Files.readString(dir().resolve("spec.md"))).as("their save writes the file again").isEqualTo("typed after the report");
         }
     }
 
@@ -382,7 +522,7 @@ class PanelFilesTest {
             Files.delete(day);
             store.checkFilesNow().get(5, TimeUnit.SECONDS);
             store.checkFilesNow().get(5, TimeUnit.SECONDS);
-            assertThat(deleted).containsExactly(new PanelTexts.Deleted(id, "ALPHA.md"));
+            assertThat(deleted).extracting(d -> d.panel().value() + " " + d.file()).containsExactly("x ALPHA.md");
             assertThat(notices).as("no warning: the panel closes instead").isEmpty();
 
             store.forget(id);
@@ -510,10 +650,10 @@ class PanelFilesTest {
 
     @Test
     void aFileOpenInOnePanelIsNotBoundToASecond() throws Exception {
-        Files.createDirectories(dir());
-        Path spec = Files.writeString(dir().resolve("spec.md"), "# spec");
         try (Store store = new Store(home)) {
             store.load();
+            // put in the folder while comando runs: loose until the next start, so ⌘O binds it
+            Path spec = Files.writeString(Files.createDirectories(dir()).resolve("spec.md"), "# spec");
             assertThat(store.open(new PanelId("a"), spec).get(5, TimeUnit.SECONDS)).isEmpty();
             assertThat(store.open(new PanelId("b"), spec).get(5, TimeUnit.SECONDS)).isEqualTo("spec.md is already open");
         }

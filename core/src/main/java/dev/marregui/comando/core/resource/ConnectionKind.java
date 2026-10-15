@@ -101,7 +101,13 @@ public final class ConnectionKind implements ResourceKind<ConnectionSpec> {
             parts.add("closes it");
         }
         int panels = 0;
+        // closed panels keep their bindings, so removal unbinds them too
         for (PanelState p : s.panels()) {
+            if (p.connection().equals(name)) {
+                panels++;
+            }
+        }
+        for (PanelState p : s.closed()) {
             if (p.connection().equals(name)) {
                 panels++;
             }

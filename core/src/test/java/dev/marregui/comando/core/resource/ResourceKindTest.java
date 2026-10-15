@@ -122,6 +122,16 @@ class ResourceKindTest {
     }
 
     @Test
+    void removalCountsAClosedPanelItUnbinds() {
+        ConnectionSpec lab = new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "", false, "prefer");
+        AppState s = AppState.initial(List.of(new PanelState(new PanelId("p1"), "one", "", "")), List.of(ConnectionState.closed(lab)),
+                        List.of(SessionState.closed(SessionSpec.fresh("work", "/tmp"))))
+                .withClosed(List.of(new PanelState(new PanelId("p2"), "two", "lab", "work")));
+        assertThat(SessionKind.INSTANCE.removalQuestion(s, "work")).isEqualTo("Remove session work? This unbinds 1 panel.");
+        assertThat(ConnectionKind.INSTANCE.removalQuestion(s, "lab")).isEqualTo("Remove connection lab? This unbinds 1 panel.");
+    }
+
+    @Test
     void cloningASessionWithAConversationForksIt() {
         SessionSpec spec = SessionSpec.imported("edge", "/x", "id-1");
         assertThat(SessionKind.INSTANCE.cloneOf(spec, "edge 2").startMode()).isEqualTo(StartMode.FORK);

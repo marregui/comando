@@ -183,7 +183,7 @@ public final class Reducer {
             return Transition.of(s);
         }
         PanelState current = s.focusedPanel();
-        String title = i.title().isBlank() ? "panel " + (s.panels().size() + 1) : i.title().strip();
+        String title = i.title().isBlank() ? defaultTitle(s) : i.title().strip();
         List<PanelState> panels = new ArrayList<>(s.panels());
         panels.add(new PanelState(i.panel(), title, current.connection(), "", i.document()));
         AppState next = s.withPanels(panels, i.panel());
@@ -212,8 +212,19 @@ public final class Reducer {
             return Transition.of(s);
         }
         if (s.panels().size() == 1) {
-            return Transition.of(notice(s, Notice.Level.WARN, remove ? "The last open panel cannot be removed; open another first"
-                    : "The last panel cannot be closed"));
+            if (!remove) {
+                return Transition.of(notice(s, Notice.Level.WARN, "The last panel cannot be closed"));
+            }
+            // removing the last open panel (by the user, or its file deleted outside) leaves an empty one in its place
+            // nextId starts again at every run, while closed panels keep their ids: skip any id a panel holds
+            PanelId fresh = new PanelId("p-" + s.nextId());
+            s = s.withIdTaken();
+            while (s.panel(fresh).isPresent() || s.closedPanel(fresh).isPresent()) {
+                fresh = new PanelId("p-" + s.nextId());
+                s = s.withIdTaken();
+            }
+            PanelState empty = new PanelState(fresh, defaultTitle(s), panel.get().connection(), "");
+            s = s.withPanels(List.of(panel.get(), empty), s.focused());
         }
         List<Effect> effects = new ArrayList<>();
         AppState next = s;
@@ -340,6 +351,15 @@ public final class Reducer {
         AppState next = notice(s.withPanels(panels, i.newPanel()), Notice.Level.INFO,
                 "Opened " + i.session() + " in a new panel; " + target.title() + " keeps " + target.session());
         return new Transition(next, List.of(save(next)));
+    }
+
+    /** "panel N", N the open panels plus one, else the next number no panel, open or closed, has as its title. */
+    private static String defaultTitle(AppState s) {
+        int n = s.panels().size() + 1;
+        while (titleTaken(s, "panel " + n)) {
+            n++;
+        }
+        return "panel " + n;
     }
 
     private static boolean titleTaken(AppState s, String title) {

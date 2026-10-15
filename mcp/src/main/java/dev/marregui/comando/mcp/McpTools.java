@@ -327,8 +327,11 @@ public final class McpTools {
         }
         List<PanelState> mine = s.panelsBoundToSession(session);
         if (mine.isEmpty()) {
-            throw new IllegalArgumentException("this session is bound to no panel; pass panel (one of: "
-                    + String.join(", ", s.panels().stream().map(PanelState::title).toList()) + ')');
+            String panels = String.join(", ", s.panels().stream().map(PanelState::title).toList());
+            Optional<PanelState> closed = s.closedPanelOfSession(session);
+            throw new IllegalArgumentException(closed.isPresent()
+                    ? "this session's panel " + closed.get().title() + " is closed; the user reopens it from the Panels tab, or pass panel (one of: " + panels + ')'
+                    : "this session is bound to no panel; pass panel (one of: " + panels + ')');
         }
         return mine.getFirst();
     }
@@ -593,10 +596,12 @@ public final class McpTools {
         AppState s = state.get();
         String chosen = name;
         if (chosen.isBlank()) {
-            if (s.panelsBoundToSession(session).isEmpty()) {
+            Optional<PanelState> closed = s.closedPanelOfSession(session);
+            if (s.panelsBoundToSession(session).isEmpty() && closed.isEmpty()) {
                 throw new IllegalArgumentException("this session is bound to no panel; pass connection (one of: " + connectionNames(s) + ')');
             }
-            chosen = targetPanel(session, "").connection();
+            // a closed panel keeps its bindings: its connection is still the session's
+            chosen = s.panelsBoundToSession(session).isEmpty() ? closed.get().connection() : targetPanel(session, "").connection();
         }
         if (chosen.isBlank()) {
             throw new IllegalArgumentException("no connection given and the panel has none; connections: " + connectionNames(s));

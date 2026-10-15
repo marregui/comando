@@ -120,9 +120,15 @@ public final class Workspace {
     }
 
     /**
-     * A panel's file was deleted outside comando: the panel, open or closed, is removed, and leaves nothing for ⌘⇧T.
+     * A panel's file was deleted outside comando: the panel, open or closed, is removed, and leaves nothing for ⌘⇧T;
+     * unless edits were typed since the store saw it gone, whose save writes the file again.
      */
     void closeDeleted(PanelTexts.Deleted deleted) {
+        if (!deleted.remove().getAsBoolean()) {
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO, deleted.file()
+                    + " was deleted outside comando; the panel's unsaved edits write it again", false));
+            return;
+        }
         if (panels.containsKey(deleted.panel())) {
             deletedFiles.put(deleted.panel(), deleted.file());
         } else if (shown != null && shown.closedPanel(deleted.panel()).isPresent()) {

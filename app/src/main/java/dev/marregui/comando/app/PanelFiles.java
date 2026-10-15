@@ -101,7 +101,12 @@ final class PanelFiles {
         // the stamp from before the read: an editor writing the file while it is read leaves another stamp, so the
         // next check reads the whole file again rather than the panel keeping a part of it
         Stamp before = exists ? stamp(f) : null;
-        // a file that cannot be read leaves the panel unbound, so the next save takes another name instead of it
+        if (!owned(name)) {
+            // a document stays bound to its path even when it cannot be read: its text is never moved into the folder
+            names.put(id, name);
+            titles.put(id, title);
+        }
+        // a panel's own file that cannot be read leaves the panel unbound, so the next save takes another name instead
         String text = exists ? Files.readString(f, StandardCharsets.UTF_8) : "";
         names.put(id, name);
         titles.put(id, title);
@@ -265,6 +270,7 @@ final class PanelFiles {
         }
         stamps.put(id, stamp(f));
         reported.remove(id);
+        gone.remove(id);
     }
 
     /** {@code base}, else {@code base 2}, {@code base 3}…: not a file in the folder, nor the name of another open panel. */

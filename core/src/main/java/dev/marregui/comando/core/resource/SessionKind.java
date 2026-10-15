@@ -149,7 +149,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
         if (approvals > 0) {
             parts.add("denies " + ResourceKind.count(approvals, "waiting approval"));
         }
-        int panels = s.panelsBoundToSession(name).size();
+        int panels = s.panelsBoundToSession(name).size() + (s.closedPanelOfSession(name).isPresent() ? 1 : 0);
         if (panels > 0) {
             parts.add("unbinds " + ResourceKind.count(panels, "panel"));
         }

@@ -7,11 +7,13 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
+import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.ViewState;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
@@ -304,6 +306,18 @@ class McpServerTest {
         assertThat(text(sql)).contains("bound to no panel");
         assertThat(sink.of(Intent.EditPanel.class)).isEmpty();
         assertThat(queries).isEmpty();
+    }
+
+    @Test
+    void aSessionWhosePanelIsClosedIsToldSoAndItsSqlUsesThatPanelsConnection() throws Exception {
+        state.set(state.get().withClosed(List.of(new PanelState(new PanelId("p9"), "nine", "local", "other"))));
+        McpGateway.Ticket other = server.register("other");
+        JsonNode edit = toolAs(other, "ui_set_editor", "{\"text\":\"x\"}");
+        assertThat(edit.path("isError").asBoolean()).isTrue();
+        assertThat(text(edit)).contains("nine").contains("closed");
+        JsonNode sql = toolAs(other, "db_run_sql", "{\"sql\":\"SELECT 1\"}");
+        assertThat(sql.path("isError").asBoolean()).as(text(sql)).isFalse();
+        assertThat(queries).isNotEmpty();
     }
 
     @Test
