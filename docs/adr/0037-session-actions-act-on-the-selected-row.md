@@ -17,7 +17,7 @@ disconnect) rather than the state. A row bound to the focused panel said "this p
 
 | Question | Rule | Why |
 |---|---|---|
-| buttons above the list | add (+), edit, clone, remove, import, in that order; edit, clone and remove act on the selected row and are off while none is selected | one place for every session action; + does one thing |
+| buttons above the list | two groups: add (+) and import on the left, which bring sessions in; edit, clone and remove on the right, which act on the selected row and are off while none is selected (Miguel, 2026-10-15) | one place for every session action; + does one thing; the groups separate adding from acting on a row |
 | add | opens the dialog on a new session, whatever is selected | **+** read as "new" and opened an existing session |
 | clone | opens the dialog on a copy of the selected session, not saved until Save | as the dialog's Clone |
 | remove | asks, naming what removal does; a running session (not closed, not failed) offers **Stop and remove** or **Leave it**, a stopped one **Remove** or **Cancel**; the safe answer is the default, and closing the question is the safe answer | removing a running session stops it; the user decides that in the question |

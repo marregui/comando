@@ -215,10 +215,11 @@ public final class SessionsSidebar {
         removeSession = button("close", "Remove the selected session…", () -> selected().ifPresent(this::remove));
         sessions.addListSelectionListener(e -> enableSessionButtons());
         enableSessionButtons();
+        // two groups: what brings sessions in on the left, what acts on the selected one on the right
         tabs.addTab("Sessions", section(new JScrollPane(sessions),
-                button("add", "New session…", dialogs::newSession),
-                editSession, cloneSession, removeSession,
-                button("import", "Import stored conversations…", dialogs::importSessions)));
+                List.of(button("add", "New session…", dialogs::newSession),
+                        button("import", "Import stored conversations…", dialogs::importSessions)),
+                List.of(editSession, cloneSession, removeSession)));
         tabs.addTab("Connections", section(new JScrollPane(connections),
                 button("add", "New or edit connections", () -> dialogs.connections(selectedConnection()))));
         tabs.addTab("Scratchpad", section(scratchpad.component(),
@@ -523,11 +524,15 @@ public final class SessionsSidebar {
 
     /** A tab's content: its buttons in a row at the top right, then the content. */
     private static JPanel section(JComponent content, JButton... buttons) {
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        return section(content, List.of(), List.of(buttons));
+    }
+
+    /** A tab's content: a row with one group of buttons at the top left and another at the top right, then the content. */
+    private static JPanel section(JComponent content, List<JButton> left, List<JButton> right) {
+        JPanel actions = new JPanel(new BorderLayout());
         actions.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-        for (JButton b : buttons) {
-            actions.add(b);
-        }
+        actions.add(group(FlowLayout.LEFT, left), BorderLayout.WEST);
+        actions.add(group(FlowLayout.RIGHT, right), BorderLayout.EAST);
         if (content instanceof JScrollPane sp) {
             sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
             sp.setBorder(null);
@@ -536,6 +541,12 @@ public final class SessionsSidebar {
         p.add(actions, BorderLayout.NORTH);
         p.add(content, BorderLayout.CENTER);
         return p;
+    }
+
+    private static JPanel group(int align, List<JButton> buttons) {
+        JPanel g = new JPanel(new FlowLayout(align, 0, 0));
+        buttons.forEach(g::add);
+        return g;
     }
 
     private static JButton button(String icon, String tip, Runnable r) {

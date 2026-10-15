@@ -216,6 +216,18 @@ class SessionsSidebarTest {
         AbstractButton clone = button(sidebar.component(), "Clone the selected session…");
         AbstractButton remove = button(sidebar.component(), "Remove the selected session…");
         assertThat(List.of(edit, clone, remove)).as("nothing selected, nothing to act on").noneMatch(AbstractButton::isEnabled);
+        AbstractButton importer = button(sidebar.component(), "Import stored conversations…");
+        SwingUtilities.invokeAndWait(() -> {
+            sidebar.component().setSize(300, 400);
+            layout(sidebar.component());
+        });
+        assertThat(add.getParent()).as("add and import, one group").isSameAs(importer.getParent());
+        assertThat(add.getParent()).as("two groups").isNotSameAs(edit.getParent());
+        assertThat(importer.getX() + importer.getWidth()).as("a gap between the groups").isLessThan(edit.getParent().getX());
+        assertThat(List.of(clone.getParent(), remove.getParent())).as("the row's actions, another").allMatch(p -> p == edit.getParent());
+        assertThat(add.getParent().getX()).as("on the left").isLessThan(10);
+        assertThat(edit.getParent().getX() + edit.getParent().getWidth()).as("on the right")
+                .isGreaterThan(add.getParent().getParent().getWidth() - 10);
 
         add.doClick();
         assertThat(opened).as("+ only adds").containsExactly("new");
@@ -342,6 +354,15 @@ class SessionsSidebarTest {
 
         @Override
         public void openFile(Path file) {
+        }
+    }
+
+    private static void layout(Component c) {
+        if (c instanceof Container k) {
+            k.doLayout();
+            for (Component child : k.getComponents()) {
+                layout(child);
+            }
         }
     }
 
