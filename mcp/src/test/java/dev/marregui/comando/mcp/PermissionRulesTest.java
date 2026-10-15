@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.testkit.FakeClock;
 import dev.marregui.comando.testkit.States;
 import org.junit.jupiter.api.Test;
@@ -177,7 +178,7 @@ class PermissionRulesTest {
 
     @Test
     void theScopeButtonsSendTheDerivedRuleToItsDestination() throws Exception {
-        McpTools tools = new McpTools(i -> { }, States::twoPanels, null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
+        McpTools tools = new McpTools(i -> { }, States::twoPanels, new TranscriptRegistry(), null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
         ObjectNode input = json.createObjectNode().put("file_path", "/a/b/c.java").put("old_string", "x").put("new_string", "y");
         JsonNode session = json.readTree(tools.permissionResult("Edit", input, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)));
         JsonNode update = session.path("updatedPermissions").path(0);
@@ -209,7 +210,7 @@ class PermissionRulesTest {
 
     @Test
     void aPlanApprovedWithEditsSwitchesTheSessionToAcceptEdits() throws Exception {
-        McpTools tools = new McpTools(i -> { }, States::twoPanels, null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
+        McpTools tools = new McpTools(i -> { }, States::twoPanels, new TranscriptRegistry(), null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
         ObjectNode plan = json.createObjectNode().put("plan", "1. do it");
         JsonNode r = json.readTree(tools.permissionResult("ExitPlanMode", plan, new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION)));
         assertThat(r.path("behavior").asText()).isEqualTo("allow");

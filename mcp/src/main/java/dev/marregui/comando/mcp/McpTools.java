@@ -8,6 +8,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.dispatch.Classifier;
+import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
@@ -24,6 +25,9 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.ViewState;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
+import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -58,6 +62,9 @@ public final class McpTools {
     static final int MAX_SQL_ROWS = 200;
     static final int MAX_RESULT_CHARS = 64 * 1024;
     static final long MAX_FILE_BYTES = 4L * 1024 * 1024;
+    /** Blocks {@code session_read} shows without a cursor: the end of the transcript. */
+    static final int READ_TAIL = 40;
+    static final int MAX_WAIT_SECONDS = 600;
 
     /** A tool's outcome: text for Claude, and whether it is an error. */
     record Outcome(String text, boolean error) {
@@ -72,6 +79,7 @@ public final class McpTools {
 
     private final IntentSink sink;
     private final Supplier<AppState> state;
+    private final TranscriptRegistry transcripts;
     private final QueryPort db;
     private final AuditLog audit;
     private final Clock clock;
@@ -85,9 +93,11 @@ public final class McpTools {
     /** The JSON-RPC call this request thread serves; each request runs on its own thread. */
     private static final ThreadLocal<String> CALL = new ThreadLocal<>();
 
-    public McpTools(IntentSink sink, Supplier<AppState> state, QueryPort db, AuditLog audit, Clock clock, Duration approvalTimeout) {
+    public McpTools(IntentSink sink, Supplier<AppState> state, TranscriptRegistry transcripts, QueryPort db, AuditLog audit, Clock clock,
+                    Duration approvalTimeout) {
         this.sink = sink;
         this.state = state;
+        this.transcripts = transcripts;
         this.db = db;
         this.audit = audit;
         this.clock = clock;
@@ -164,6 +174,8 @@ public final class McpTools {
                 case "ui_close_view" -> closeView(session, args);
                 case "db_run_sql" -> runSql(session, args);
                 case "db_describe" -> describe(session, args);
+                case "session_send" -> sessionSend(session, args);
+                case "session_read" -> sessionRead(args);
                 default -> Outcome.fail("unknown tool " + name);
             };
         } catch (IllegalArgumentException e) {
@@ -517,6 +529,126 @@ public final class McpTools {
         } catch (JsonProcessingException e) {
             throw new IllegalStateException(e);
         }
+    }
+
+    // ---- sessions
+
+    /** The first line of a prompt one session sends another: the receiving session and the user both see who sent it. */
+    static String fromLine(String session) {
+        return "[from session " + session + "]";
+    }
+
+    /**
+     * Sends a prompt to another session through its panel, once the user allows it on a card: the prompt, headed
+     * with the sender, is added to that panel as a block of its own and run there, so the user sees what was sent,
+     * by whom, and what the session does with it.
+     */
+    private Outcome sessionSend(String session, JsonNode args) {
+        String to = args.path("session").asText("").strip();
+        String text = args.path("text").asText("").strip();
+        if (to.isEmpty() || text.isEmpty()) {
+            return Outcome.fail("session and text are required");
+        }
+        if (to.equals(session)) {
+            return Outcome.fail("session " + to + " is this session; session_send prompts another session");
+        }
+        AppState s = state.get();
+        if (s.session(to).isEmpty()) {
+            return Outcome.fail("no session '" + to + "'; sessions: " + sessionNames(s));
+        }
+        List<PanelState> panels = s.panelsBoundToSession(to);
+        if (panels.isEmpty()) {
+            return Outcome.fail("session " + to + " has no open panel; the prompt goes through its panel so the user sees it: "
+                    + "the user opens one for it first");
+        }
+        PanelState panel = panels.getFirst();
+        String prompt = fromLine(session) + '\n' + text;
+        ObjectNode input = json.createObjectNode();
+        input.put("session", to);
+        input.put("panel", panel.title());
+        input.put("text", prompt);
+        ApprovalDecision d = ask(session, ApprovalKind.SESSION_PROMPT, "session_send", input.toString(), "Prompt " + to + ": " + firstLine(text), "");
+        audit.record(session, "approval", "session_send", input.toString(), d.toString());
+        if (d instanceof ApprovalDecision.Deny deny) {
+            return Outcome.fail("The user did not send the prompt" + (deny.message().isBlank() ? "." : ": " + deny.message()));
+        }
+        // the card may have waited: the panel must still be open and bound to that session
+        AppState now = state.get();
+        if (now.panel(panel.id()).filter(p -> p.session().equals(to)).isEmpty()) {
+            return Outcome.fail("panel " + panel.title() + " is no longer open on session " + to + "; nothing was sent");
+        }
+        int cursor = transcripts.of(to).size();
+        sink.dispatch(new Intent.EditPanel(panel.id(), prompt, EditMode.APPEND, session));
+        sink.dispatch(new Intent.RunText(panel.id(), prompt, Target.CLAUDE));
+        boolean busy = now.session(to).map(SessionState::isBusy).orElse(false);
+        return Outcome.ok("sent to " + to + " in panel " + panel.title() + (busy ? "; it is busy, so the prompt waits for its turn" : "")
+                + "; read what it does with session_read {\"session\": \"" + to + "\", \"after\": " + cursor + ", \"wait_seconds\": 300}");
+    }
+
+    /** Another session's transcript from a cursor on, after waiting, when asked, for that session to finish its turns. */
+    private Outcome sessionRead(JsonNode args) {
+        String of = args.path("session").asText("").strip();
+        if (of.isEmpty()) {
+            return Outcome.fail("session is required");
+        }
+        if (state.get().session(of).isEmpty()) {
+            return Outcome.fail("no session '" + of + "'; sessions: " + sessionNames(state.get()));
+        }
+        Transcript t = transcripts.of(of);
+        JsonNode cursor = args.path("after");
+        int after = cursor.canConvertToInt() ? Math.max(0, cursor.asInt()) : Math.max(0, t.size() - READ_TAIL);
+        int wait = Math.max(0, Math.min(args.path("wait_seconds").asInt(0), MAX_WAIT_SECONDS));
+        boolean settled = wait == 0 || awaitTurnEnd(of, t, after, wait);
+        SessionState x = state.get().session(of).orElse(null);
+        String status = x == null ? "removed" : x.isBusy() ? "busy" : x.status().isUsable() ? "idle" : x.status().name().toLowerCase(Locale.ROOT);
+        if (!settled) {
+            status += ", still working after " + wait + " s";
+        }
+        return Outcome.ok(TranscriptText.read(of, status, t, after, MAX_RESULT_CHARS).text());
+    }
+
+    /**
+     * Waits until the session has blocks after {@code after}, none of them still streaming or running, and its turns
+     * are over (a turn end last, or the session no longer running); false at the deadline.
+     */
+    private boolean awaitTurnEnd(String session, Transcript t, int after, int seconds) {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(seconds);
+        while (true) {
+            Optional<SessionState> x = state.get().session(session);
+            if (x.isEmpty()) {
+                return true;
+            }
+            int size = t.size();
+            if (!x.get().isBusy() && settled(t, after, size) && (t.get(size - 1) instanceof Block.TurnEnd || !x.get().status().isUsable())) {
+                return true;
+            }
+            if (System.nanoTime() > deadline) {
+                return false;
+            }
+            try {
+                Thread.sleep(200);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+        }
+    }
+
+    private static boolean settled(Transcript t, int after, int size) {
+        if (size <= after) {
+            return false;
+        }
+        for (int i = after; i < size; i++) {
+            Block b = t.get(i);
+            if (b == null || !TranscriptText.finished(b)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String sessionNames(AppState s) {
+        return String.join(", ", s.sessions().stream().map(SessionState::name).toList());
     }
 
     // ---- database tools

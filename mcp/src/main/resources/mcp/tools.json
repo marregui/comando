@@ -356,5 +356,51 @@
         "table"
       ]
     }
+  },
+  {
+    "name": "session_send",
+    "description": "Sends a prompt to another comando session, once the user allows it on a card in the inbox. The prompt, headed [from session <this session>], is added to that session's panel as a block of its own and run there, so the user sees what was sent and by whom; a busy session takes it after its current turn. Only when the user asked you to hand work to another session. The answer gives the cursor for session_read.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string",
+          "description": "The session to prompt; another session, with an open panel."
+        },
+        "text": {
+          "type": "string",
+          "description": "The prompt."
+        }
+      },
+      "required": [
+        "session",
+        "text"
+      ]
+    }
+  },
+  {
+    "name": "session_read",
+    "description": "Reads another comando session's transcript: its prompts, text, tool calls with results, notes and turn ends, as numbered blocks. after is the cursor (session_send returns one; each answer names the next); without it, the last 40 blocks. wait_seconds waits, up to 600, until that session has finished its turns. A block still being written or run is shown as such, and the next cursor shows it again.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "session": {
+          "type": "string"
+        },
+        "after": {
+          "type": "integer",
+          "description": "Show blocks from this index on."
+        },
+        "wait_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 600,
+          "default": 0
+        }
+      },
+      "required": [
+        "session"
+      ]
+    }
   }
 ]

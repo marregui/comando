@@ -332,6 +332,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 case QUESTION -> "question";
                 case PLAN -> "plan";
                 case SQL_WRITE -> "database";
+                case SESSION_PROMPT -> "session";
                 case TOOL -> "warning";
             }));
             age.setName("age");
@@ -353,6 +354,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                     yield sp;
                 }
                 case SQL_WRITE -> code(in.path("sql").asText(""), "sql", 8);
+                case SESSION_PROMPT -> code(in.path("text").asText(""), "md", 8);
                 case TOOL -> switch (a.toolName()) {
                     case "Bash" -> code(in.path("command").asText("") + describe(in), "sh", 10);
                     case "Edit" -> diff(in.path("file_path").asText(""), in.path("old_string").asText(""), in.path("new_string").asText(""));
@@ -453,6 +455,11 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 }
                 case SQL_WRITE -> {
                     buttons.add(button("Run  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
+                    buttons.add(button("Deny  D", "deny", this::deny, false));
+                }
+                case SESSION_PROMPT -> {
+                    // one card per prompt: a session prompts another only when the user says so, each time
+                    buttons.add(button("Send  ⏎", "check", () -> answer(a, ApprovalDecision.allowOnce()), true));
                     buttons.add(button("Deny  D", "deny", this::deny, false));
                 }
                 case TOOL -> {
@@ -755,6 +762,8 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 String connection = parse(a.inputJson()).path("connection").asText("");
                 yield connection.isEmpty() ? "wants to run a statement" : "wants to run a statement on " + connection;
             }
+            case SESSION_PROMPT -> "wants to prompt " + parse(a.inputJson()).path("session").asText("another session")
+                    + " in panel " + parse(a.inputJson()).path("panel").asText("");
             case TOOL -> "wants to use " + a.toolName() + ": " + a.summary();
         };
     }

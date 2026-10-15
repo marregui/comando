@@ -466,7 +466,12 @@ public final class Reducer {
         effects.add(new Effect.SendToClaude(session.name(), prompt, panel.title()));
         long now = clock.millis();
         session = session.withTurns(session.pendingTurns() + 1, now).withActivity("sending", now);
-        AppState next = clear(s.withSession(session), subject).withLowerTab(LowerTab.SESSION);
+        AppState next = clear(s.withSession(session), subject);
+        // the Session tab follows a prompt run from the panel the user looks at; one another session sends to a panel
+        // in the background leaves the user's lower panel alone
+        if (panel.id().equals(s.focused())) {
+            next = next.withLowerTab(LowerTab.SESSION);
+        }
         return new Transition(next, effects);
     }
 
@@ -895,10 +900,11 @@ public final class Reducer {
             if (!interrupted) {
                 effects.add(new Effect.DesktopNotify(i.name(), i.error() ? "Turn failed: " + i.message() : "Turn finished"));
             }
-            // nothing runs or is queued: a statement card still waiting belongs to a call the turn abandoned (an
-            // interrupt), and answering Run would execute it after the fact. Other cards may belong to a background
+            // nothing runs or is queued: a statement or prompt card still waiting belongs to a call the turn abandoned
+            // (an interrupt), and answering Run or Send would act after the fact. Other cards may belong to a background
             // agent that outlives the turn; Claude Code cancels abandoned calls itself, which withdraws them.
-            next = withdrawApprovals(next, i.name(), "the turn ended", effects, a -> a.kind() == ApprovalKind.SQL_WRITE);
+            next = withdrawApprovals(next, i.name(), "the turn ended", effects,
+                    a -> a.kind() == ApprovalKind.SQL_WRITE || a.kind() == ApprovalKind.SESSION_PROMPT);
         }
         return new Transition(next, effects);
     }

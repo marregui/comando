@@ -45,6 +45,7 @@ Every wait has a deadline. A wait that can be cut short by shutdown also checks 
 | An approval card | 55 min, under Claude Code's 60 min MCP timeout set per server | the tool answers `deny` and the card is withdrawn |
 | `db_run_sql` for Claude | 90 s | a statement still queued is withdrawn and never runs; the tool says so |
 | `db_describe` | 60 s | tool error |
+| `session_read` with `wait_seconds` | the given seconds, at most 600; polled every 200 ms | the blocks so far, the status saying the session is still working |
 | Statement cancel | caller returns at once; the cancel request itself is bounded by `cancelSignalTimeout=2` | after 2 s the statement's connection is aborted |
 | Claude process stop | interrupt and close stdin; SIGTERM after 3 s; SIGKILL 2 s later | the exit thread reports the exit |
 | Tool run stop | SIGTERM to the process tree; SIGKILL 2 s later | the run ends as stopped |

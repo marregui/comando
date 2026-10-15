@@ -46,3 +46,4 @@ A decision is changed by a new record that names the one it replaces; the old re
 | [38](0038-a-session-has-one-panel.md) | A session has one panel | Miguel, Claude | accepted |
 | [39](0039-panels-are-kept-until-removed.md) | Panels are kept until removed | Miguel, Claude | accepted |
 | [40](0040-one-resource-per-dialog-and-two-tab-rows.md) | One resource per dialog, and the sidebar's tabs in two rows | Miguel, Claude | accepted |
+| [41](0041-a-session-can-prompt-another.md) | A session can prompt another | Miguel, Claude | accepted |

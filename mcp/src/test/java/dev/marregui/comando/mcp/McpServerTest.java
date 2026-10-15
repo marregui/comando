@@ -2,6 +2,12 @@ package dev.marregui.comando.mcp;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.marregui.comando.core.dispatch.Target;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ApprovalDecision;
@@ -15,6 +21,7 @@ import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.ViewState;
+import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -37,9 +44,12 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class McpServerTest {
 
@@ -48,6 +58,7 @@ class McpServerTest {
     private final ObjectMapper json = new ObjectMapper();
     private final HttpClient client = HttpClient.newHttpClient();
     private final RecordingSink sink = new RecordingSink();
+    private final TranscriptRegistry transcripts = new TranscriptRegistry();
     private final List<String> queries = new ArrayList<>();
     private final AtomicReference<AppState> state = new AtomicReference<>(States.twoPanels());
     private McpServer server;
@@ -74,7 +85,7 @@ class McpServerTest {
     }
 
     private McpServer start(Duration approvalTimeout) throws Exception {
-        McpTools tools = new McpTools(sink, state::get, db, AuditLog.none(), new FakeClock(), approvalTimeout);
+        McpTools tools = new McpTools(sink, state::get, transcripts, db, AuditLog.none(), new FakeClock(), approvalTimeout);
         McpServer s = McpServer.start(tools, 0, "test");
         ticket = s.register("work");
         return s;
@@ -145,7 +156,7 @@ class McpServerTest {
 
         JsonNode tools = rpc("tools/list", "{}").path("result").path("tools");
         assertThat(tools).extracting(t -> t.path("name").asText())
-                .contains("approve", "ui_show_table", "ui_plot", "ui_show_view", "db_run_sql", "db_describe");
+                .contains("approve", "ui_show_table", "ui_plot", "ui_show_view", "db_run_sql", "db_describe", "session_send", "session_read");
 
         // Claude Code 2.1.296 asks for server/discover first and falls back to initialize on this error
         assertThat(rpc("server/discover", "{}").path("error").path("code").asInt()).isEqualTo(-32601);
@@ -414,6 +425,152 @@ class McpServerTest {
         assertThat(r.path("isError").asBoolean()).isTrue();
         assertThat(text(r)).contains("production connection");
         assertThat(sink.of(Intent.ApprovalRequested.class)).isEmpty();
+    }
+
+    // ---- sessions
+
+    /** Panel two bound to a second session, "reviews". */
+    private void reviewsInPanelTwo() {
+        AppState s = state.get();
+        state.set(withSession(s, "reviews").withPanel(s.panel(States.P2).orElseThrow().withSession("reviews")));
+    }
+
+    private static AppState withSession(AppState s, String name) {
+        List<SessionState> sessions = new ArrayList<>(s.sessions());
+        sessions.add(SessionState.closed(SessionSpec.fresh(name, "/tmp")));
+        return s.withSessions(sessions);
+    }
+
+    private CompletableFuture<JsonNode> async(String name, String args) {
+        return CompletableFuture.supplyAsync(() -> {
+            try {
+                return tool(name, args);
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+    }
+
+    @Test
+    void aPromptToAnotherSessionWaitsForTheUserThenIsAddedToItsPanelAndRunThereHeadedWithTheSender() throws Exception {
+        reviewsInPanelTwo();
+        transcripts.of("reviews").append(new Block.UserPrompt("earlier", "two", ""));
+        CompletableFuture<JsonNode> call = async("session_send", "{\"session\":\"reviews\",\"text\":\"Review the diff\"}");
+        Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
+        assertThat(asked.approval().kind()).isEqualTo(ApprovalKind.SESSION_PROMPT);
+        assertThat(asked.approval().session()).isEqualTo("work");
+        JsonNode input = json.readTree(asked.approval().inputJson());
+        assertThat(input.path("session").asText()).isEqualTo("reviews");
+        assertThat(input.path("panel").asText()).isEqualTo("two");
+        String prompt = "[from session work]\nReview the diff";
+        assertThat(input.path("text").asText()).isEqualTo(prompt);
+        assertThat(sink.of(Intent.RunText.class)).isEmpty(); // nothing runs before the user allows it
+
+        server.resolve(asked.approval(), ApprovalDecision.allowOnce());
+        JsonNode r = call.get();
+        assertThat(r.path("isError").asBoolean()).isFalse();
+        assertThat(text(r)).contains("sent to reviews in panel two").contains("\"after\": 1");
+        assertThat(sink.of(Intent.EditPanel.class)).containsExactly(new Intent.EditPanel(States.P2, prompt, EditMode.APPEND, "work"));
+        assertThat(sink.of(Intent.RunText.class)).containsExactly(new Intent.RunText(States.P2, prompt, Target.CLAUDE));
+    }
+
+    @Test
+    void aDeniedPromptIsNeitherAddedNorRun() throws Exception {
+        reviewsInPanelTwo();
+        CompletableFuture<JsonNode> call = async("session_send", "{\"session\":\"reviews\",\"text\":\"go\"}");
+        Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
+        server.resolve(asked.approval(), new ApprovalDecision.Deny("not now"));
+        JsonNode r = call.get();
+        assertThat(r.path("isError").asBoolean()).isTrue();
+        assertThat(text(r)).contains("did not send").contains("not now");
+        assertThat(sink.of(Intent.EditPanel.class)).isEmpty();
+        assertThat(sink.of(Intent.RunText.class)).isEmpty();
+    }
+
+    @Test
+    void aPanelReboundWhileTheCardWaitsGetsNothing() throws Exception {
+        reviewsInPanelTwo();
+        CompletableFuture<JsonNode> call = async("session_send", "{\"session\":\"reviews\",\"text\":\"go\"}");
+        Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
+        AppState s = state.get();
+        state.set(s.withPanel(s.panel(States.P2).orElseThrow().withSession("work")));
+        server.resolve(asked.approval(), ApprovalDecision.allowOnce());
+        JsonNode r = call.get();
+        assertThat(r.path("isError").asBoolean()).isTrue();
+        assertThat(text(r)).contains("nothing was sent");
+        assertThat(sink.of(Intent.RunText.class)).isEmpty();
+    }
+
+    @Test
+    void promptsToItselfAnUnknownSessionOrOneWithoutAnOpenPanelAreRefusedWithoutACard() throws Exception {
+        reviewsInPanelTwo();
+        assertThat(text(tool("session_send", "{\"session\":\"work\",\"text\":\"x\"}"))).contains("is this session");
+        assertThat(text(tool("session_send", "{\"session\":\"nope\",\"text\":\"x\"}"))).contains("no session 'nope'").contains("reviews");
+        state.set(withSession(state.get(), "headless"));
+        assertThat(text(tool("session_send", "{\"session\":\"headless\",\"text\":\"x\"}"))).contains("has no open panel");
+        assertThat(text(tool("session_send", "{\"session\":\"reviews\"}"))).contains("required");
+        assertThat(sink.of(Intent.ApprovalRequested.class)).isEmpty();
+    }
+
+    @Test
+    void readingASessionShowsNumberedBlocksAndTheCursorStopsAtABlockStillRunning() throws Exception {
+        reviewsInPanelTwo();
+        Transcript t = transcripts.of("reviews");
+        t.append(new Block.UserPrompt("[from session work]\nwhich branch?", "two", ""));
+        t.append(new Block.AssistantText("m1", 0, "Checking.", false, ""));
+        int running = t.append(new Block.ToolCall("u1", "Bash", "{\"command\":\"git branch --show-current\"}", "", Block.ToolStatus.RUNNING, ""));
+        t.append(new Block.AssistantText("m1", 1, "still", true, ""));
+
+        String first = text(tool("session_read", "{\"session\":\"reviews\",\"after\":0}"));
+        assertThat(first).startsWith("session reviews · closed · 4 blocks, shown from 0 · next read: after 2")
+                .contains("[0] prompt from panel two:\n  [from session work]\n  which branch?")
+                .contains("[1] Claude:\n  Checking.")
+                .contains("[2] tool Bash {\"command\":\"git branch --show-current\"} → running")
+                .contains("[3] Claude (still writing):");
+
+        t.replace(running, ((Block.ToolCall) t.get(running)).withResult("main", false));
+        t.replace(3, new Block.AssistantText("m1", 1, "On main.", false, ""));
+        t.append(new Block.TurnEnd(0.01, 1500, 2, false, "On main."));
+        String second = text(tool("session_read", "{\"session\":\"reviews\",\"after\":2}"));
+        assertThat(second).contains("next read: after 5")
+                .contains("[2] tool Bash {\"command\":\"git branch --show-current\"} → done:\n  main")
+                .contains("[3] Claude:\n  On main.")
+                .contains("[4] turn ended: 2 turns, 1.5 s, $0.01")
+                .doesNotContain("[1]");
+    }
+
+    @Test
+    void withoutACursorTheEndIsShownAndACursorBeyondTheEndReadsFromTheStart() throws Exception {
+        reviewsInPanelTwo();
+        Transcript t = transcripts.of("reviews");
+        for (int i = 0; i < McpTools.READ_TAIL + 5; i++) {
+            t.append(new Block.Note(Block.NoteKind.INFO, "n" + i, ""));
+        }
+        String tail = text(tool("session_read", "{\"session\":\"reviews\"}"));
+        assertThat(tail).contains("shown from 5").contains("[5] note info: n5").doesNotContain("[4]");
+        String restarted = text(tool("session_read", "{\"session\":\"reviews\",\"after\":999}"));
+        assertThat(restarted).contains("restarted").contains("[0] note info: n0");
+        assertThat(text(tool("session_read", "{\"session\":\"nope\"}"))).contains("no session 'nope'");
+    }
+
+    @Test
+    void readingWithAWaitReturnsOnceTheSessionsTurnHasEndedOrSaysItIsStillWorking() throws Exception {
+        reviewsInPanelTwo();
+        state.set(state.get().withSession("reviews", x -> x.withStatus(Status.OPEN, "").withTurns(1, 0L)));
+        Transcript t = transcripts.of("reviews");
+        t.append(new Block.UserPrompt("go", "two", ""));
+
+        String timedOut = text(tool("session_read", "{\"session\":\"reviews\",\"after\":0,\"wait_seconds\":1}"));
+        assertThat(timedOut).contains("busy, still working after 1 s");
+
+        CompletableFuture<JsonNode> call = async("session_read", "{\"session\":\"reviews\",\"after\":0,\"wait_seconds\":30}");
+        // the session is still busy: the read keeps waiting
+        assertThatThrownBy(() -> call.get(400, TimeUnit.MILLISECONDS)).isInstanceOf(TimeoutException.class);
+        t.append(new Block.AssistantText("m", 0, "done", false, ""));
+        t.append(new Block.TurnEnd(0.0, 10, 1, false, "done"));
+        state.set(state.get().withSession("reviews", x -> x.withTurns(0, 0L)));
+        String read = text(call.get());
+        assertThat(read).startsWith("session reviews · idle").contains("[2] turn ended");
     }
 
     @Test

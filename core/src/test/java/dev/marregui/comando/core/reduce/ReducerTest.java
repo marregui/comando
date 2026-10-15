@@ -191,6 +191,15 @@ class ReducerTest {
     }
 
     @Test
+    void aPromptRunInAPanelTheUserIsNotLookingAtLeavesTheLowerPanelAlone() {
+        apply(new Intent.SelectLowerTab(LowerTab.RESULTS));
+        apply(new Intent.RunText(P2, "review the diff", Target.CLAUDE)); // P1 has the focus
+
+        assertThat(effects).contains(new Effect.SendToClaude("work", "review the diff", "two"));
+        assertThat(state.lowerTab()).isEqualTo(LowerTab.RESULTS);
+    }
+
+    @Test
     void twoPanelsSharingASessionFeedOneQueue() {
         apply(new Intent.RunText(P1, "first", Target.CLAUDE));
         apply(new Intent.SessionStarted("work"));
@@ -300,12 +309,15 @@ class ReducerTest {
         apply(new Intent.ApprovalRequested(a));
         Approval background = new Approval(10L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L);
         apply(new Intent.ApprovalRequested(background));
+        Approval prompt = new Approval(11L, "work", ApprovalKind.SESSION_PROMPT, "session_send", "{}", "Prompt reviews: go", 1L);
+        apply(new Intent.ApprovalRequested(prompt));
 
-        // interrupted: the result arrives with nothing queued while the cards still wait; the statement card goes,
-        // a tool card may belong to a background agent and stays until Claude Code cancels its call
+        // interrupted: the result arrives with nothing queued while the cards still wait; the statement and prompt
+        // cards go, a tool card may belong to a background agent and stays until Claude Code cancels its call
         apply(new Intent.SessionTurnEnded("work", 0, 0.55, 31_000L, 200_000L, true, "interrupted"));
         assertThat(state.approvals()).containsExactly(background);
-        assertThat(effects).contains(new Effect.ResolveApproval(a, new ApprovalDecision.Deny("the turn ended")));
+        assertThat(effects).contains(new Effect.ResolveApproval(a, new ApprovalDecision.Deny("the turn ended")),
+                new Effect.ResolveApproval(prompt, new ApprovalDecision.Deny("the turn ended")));
 
         // a turn end with unknown usage (the process was gone) keeps what was known
         apply(new Intent.SessionTurnEnded("work", 0, -1.0, -1L, 0L, true, "session not running"));

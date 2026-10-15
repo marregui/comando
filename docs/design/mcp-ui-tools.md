@@ -31,8 +31,12 @@ comando runs an MCP server inside its own JVM. Each Claude Code session it start
 | `ui_close_view` | `id` | closes a view this session placed; views the user opened or pinned are refused |
 | `db_run_sql` | `sql`, `connection`, `max_rows`, `show`, `title` | runs SQL on a connection's lane and returns the first result's rows as tab-separated text; text with several statements always needs approval, runs whole, and returns only the first result; `show` also opens the rows as a table |
 | `db_describe` | `table`, `connection` | a table's columns and types |
+| `session_send` | `session`, `text` | asks the user on a session-prompt card ([Approvals and safety](approvals-and-safety.md)); once allowed, adds the prompt, headed `[from session <sender>]`, to the receiving session's panel as an appended block and runs it there; returns the cursor for `session_read`. Refused without a card: the caller itself, an unknown session, a session with no open panel. A panel closed or rebound while the card waits gets nothing |
+| `session_read` | `session`, `after`, `wait_seconds` | another session's transcript as numbered blocks (prompts, text, tool calls with results, notes, turn ends) from `after`, or its last 40; `wait_seconds` (at most 600) waits until that session's turns are over; a block still being written or run is shown as such and the returned cursor stops at it |
 
 Without a `panel` argument, the editor tools use the focused panel when it is bound to the calling session, else the session's first panel. A `panel` bound to another session is refused unless `force` is set. Every edit posts a notice naming the session, the panel and what changed ("work added 4 lines to scratch"). Without a `connection`, the database tools use the connection of that panel. A session bound to no panel must name the panel or the connection; it never writes into another session's panel or runs SQL on its connection by default. Every call gets an answer: an unexpected failure inside a tool is returned as a tool error.
+
+Sessions talk to each other only through `session_send` and `session_read` ([record 41](../adr/0041-a-session-can-prompt-another.md)): every prompt is the user's choice on a card, lands in the receiving panel where the user reads it, and its work shows in that panel's Session tab.
 
 ## 3. View specs
 

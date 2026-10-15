@@ -88,7 +88,7 @@ public final class App implements AutoCloseable {
             own(MermaidDiagrams::shutdown);
             McpServer mcp;
             try {
-                McpTools tools = new McpTools(loop, loop::state, db, new AuditLog(config.auditDir()), Clock.SYSTEM, APPROVAL_TIMEOUT);
+                McpTools tools = new McpTools(loop, loop::state, transcripts, db, new AuditLog(config.auditDir()), Clock.SYSTEM, APPROVAL_TIMEOUT);
                 mcp = own(McpServer.start(tools, 0, version));
             } catch (IOException e) {
                 throw new UncheckedIOException("cannot start the MCP server", e);
