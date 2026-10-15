@@ -131,9 +131,13 @@ public final class Reducer {
             case Intent.InterruptSession i -> interruptSession(s, i.name());
             case Intent.SetSessionModel i -> sessionSetting(s, i.name(), i.model(), true);
             case Intent.SetSessionEffort i -> sessionSetting(s, i.name(), i.effort(), false);
-            case Intent.SessionStarted i -> Transition.of(clear(s.withSession(i.name(), x -> x.withStatus(Status.OPEN, "")), Notice.session(i.name())));
+            case Intent.SessionStarted i -> Transition.of(clear(s.withSession(i.name(), x -> x.withStatus(Status.OPEN, "").withoutTasks()),
+                    Notice.session(i.name())));
             case Intent.SessionInit i -> sessionInit(s, i);
             case Intent.SessionActivity i -> Transition.of(s.withSession(i.name(), x -> x.withActivity(i.activity(), clock.millis())));
+            case Intent.SessionTasksChanged i -> Transition.of(s.withSession(i.name(), x -> x.withTasks(i.open(), clock.millis())));
+            case Intent.SessionTurnRunning i -> Transition.of(s.withSession(i.name(),
+                    x -> x.isBusy() ? x : x.withTurns(1, clock.millis())));
             case Intent.SessionTurnEnded i -> turnEnded(s, i);
             case Intent.SessionExited i -> sessionExited(s, i);
             case Intent.SessionBranch i -> Transition.of(s.withSession(i.name(), x -> x.withBranch(i.branch())));
@@ -875,6 +879,9 @@ public final class Reducer {
             return Transition.of(s);
         }
         long now = clock.millis();
+        // a result while no turn ran made no model call (Claude Code sends one after a background agent's report): it
+        // finished nothing
+        boolean ran = found.get().isBusy();
         if (i.error() && found.get().status() == Status.FAILED) {
             // a prompt to a session whose start failed: the start's error already stands, once
             return Transition.of(s.withSession(found.get().withTurns(Math.max(0, i.queued()), now).withActivity("", now)));
@@ -899,14 +906,19 @@ public final class Reducer {
             next = clear(next, Notice.session(i.name()));
         }
         if (!x.isBusy()) {
-            if (!interrupted) {
+            // a turn that hands work to the background has not finished it: the turn Claude Code starts when the work
+            // ends notifies; a later turn that ends while older work runs on has finished; a failure always notifies
+            if (!interrupted && (i.error() || ran && !x.isAwaitingHandOff())) {
                 effects.add(new Effect.DesktopNotify(i.name(), i.error() ? "Turn failed: " + i.message() : "Turn finished"));
             }
-            // nothing runs or is queued: a statement or prompt card still waiting belongs to a call the turn abandoned
-            // (an interrupt), and answering Run or Send would act after the fact. Other cards may belong to a background
-            // agent that outlives the turn; Claude Code cancels abandoned calls itself, which withdraws them.
-            next = withdrawApprovals(next, i.name(), "the turn ended", effects,
-                    a -> a.kind() == ApprovalKind.SQL_WRITE || a.kind() == ApprovalKind.SESSION_PROMPT);
+            // nothing runs or is queued: a statement card still waiting belongs to a call the turn abandoned (an
+            // interrupt), and answering Run would act after the fact. Other cards may belong to a background
+            // agent that outlives the turn; Claude Code cancels abandoned calls itself, which withdraws them. While
+            // background work runs, any card may be its own: none is withdrawn, an approval is never missed.
+            if (!x.isWaiting()) {
+                next = withdrawApprovals(next, i.name(), "the turn ended", effects,
+                        a -> a.kind() == ApprovalKind.SQL_WRITE);
+            }
         }
         return new Transition(next, effects);
     }
@@ -941,7 +953,8 @@ public final class Reducer {
         long now = clock.millis();
         x = x.withStatus(expected ? Status.CLOSED : Status.FAILED, expected ? "" : i.error())
                 .withTurns(0, now)
-                .withActivity("", now);
+                .withActivity("", now)
+                .withoutTasks();
         List<Effect> effects = new ArrayList<>();
         AppState next = withdrawApprovals(s.withSession(x), i.name(), "session ended", effects);
         if (!expected) {

@@ -437,20 +437,4 @@ class ApprovalInboxTest {
                 "{\"connection\":\"local QuestDB\",\"sql\":\"insert into t values (1)\"}", "Run on local QuestDB: insert", T0);
         assertThat(ApprovalInbox.title(sql)).isEqualTo("wants to run a statement on local QuestDB");
     }
-
-    /** A prompt card names the session and panel the prompt would run in, and offers Send and Deny only. */
-    @Test
-    void aPromptCardNamesTheSessionAndPanelAndOffersSendOnce() {
-        Approval prompt = new Approval(9, "work", ApprovalKind.SESSION_PROMPT, "session_send",
-                "{\"session\":\"reviews\",\"panel\":\"two\",\"text\":\"[from session work]\\ngo\"}", "Prompt reviews: go", T0);
-        assertThat(ApprovalInbox.title(prompt)).isEqualTo("wants to prompt reviews in panel two");
-        inbox.render(List.of(prompt));
-        List<JButton> buttons = new ArrayList<>();
-        collect(cards().getFirst(), JButton.class, buttons);
-        assertThat(buttons).extracting(JButton::getText).contains("Send  ⏎", "Deny  D").noneMatch(t -> t.contains("session") || t.contains("Always"));
-        press(cards().getFirst(), KeyEvent.VK_S, 0); // S answers nothing on a prompt card
-        assertThat(sent).isEmpty();
-        press(cards().getFirst(), KeyEvent.VK_ENTER, 0);
-        assertThat(decision()).isEqualTo(ApprovalDecision.allowOnce());
-    }
 }

@@ -2,6 +2,7 @@ package dev.marregui.comando.claude;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.Fixtures;
@@ -136,6 +137,37 @@ class StreamMapperTest {
         assertThat(blocks()).containsExactly(
                 new Block.UserPrompt("why is it slow", "", ""),
                 new Block.Note(Block.NoteKind.COMMAND, "/compact focus", ""));
+    }
+
+    @Test
+    void theBackgroundSetIsTheSessionsBackgroundWork() {
+        // shapes as Claude Code 2.1.300 sends them for a background agent that runs a shell command of its own
+        mapper.accept("""
+                {"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"a1","run_id":"r1","task_type":"local_agent","subagent_type":"general-purpose","description":"Background sleep and pong"}]}""");
+        mapper.accept("""
+                {"type":"system","subtype":"task_started","task_id":"a1","tool_use_id":"t1","description":"Background sleep and pong","is_backgrounded":true,"task_type":"local_agent"}""");
+        mapper.accept("""
+                {"type":"system","subtype":"task_started","task_id":"b2","owned_by_subagent":true,"description":"Sleep for 5 seconds","is_backgrounded":false,"parent_task_id":"a1","task_type":"local_bash"}""");
+        mapper.accept("""
+                {"type":"system","subtype":"background_tasks_changed","tasks":[{"task_id":"a1","task_type":"local_agent","description":"Background sleep and pong"},{"task_id":"d1","task_type":"dream","description":"dreaming","ambient":true}]}""");
+        mapper.accept("""
+                {"type":"system","subtype":"task_notification","task_id":"a1","tool_use_id":"t1","status":"completed","summary":"done"}""");
+        mapper.accept("""
+                {"type":"system","subtype":"background_tasks_changed","tasks":[]}""");
+
+        BackgroundTask agent = new BackgroundTask("a1", "local_agent", "Background sleep and pong", 0L);
+        assertThat(sink.of(Intent.SessionTasksChanged.class)).as("the agent's own command and a task Claude Code runs by itself are not in it")
+                .extracting(Intent.SessionTasksChanged::open).containsExactly(List.of(agent), List.of(agent), List.of());
+    }
+
+    @Test
+    void aCallOfTheMainConversationRunsATurnAndASubagentCallDoesNot() {
+        mapper.accept("""
+                {"type":"stream_event","parent_tool_use_id":"t1","event":{"type":"message_start","message":{"id":"s1"}}}""");
+        assertThat(sink.of(Intent.SessionTurnRunning.class)).as("a background agent's call starts no turn").isEmpty();
+        mapper.accept("""
+                {"type":"stream_event","parent_tool_use_id":null,"event":{"type":"message_start","message":{"id":"m1"}}}""");
+        assertThat(sink.of(Intent.SessionTurnRunning.class)).containsExactly(new Intent.SessionTurnRunning("work"));
     }
 
     @Test

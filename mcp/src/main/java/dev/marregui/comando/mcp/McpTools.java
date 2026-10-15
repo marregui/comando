@@ -513,6 +513,9 @@ public final class McpTools {
             n.put("status", x.status().name());
             n.put("workDir", x.spec().workDir());
             n.put("busy", x.isBusy());
+            if (x.isWaiting()) {
+                n.put("waitingOn", x.waitingFor());
+            }
         }
         ArrayNode views = root.putArray("views");
         for (ViewState v : s.views()) {
@@ -539,9 +542,9 @@ public final class McpTools {
     }
 
     /**
-     * Sends a prompt to another session through its panel, once the user allows it on a card: the prompt, headed
-     * with the sender, is added to that panel as a block of its own and run there, so the user sees what was sent,
-     * by whom, and what the session does with it.
+     * Sends a prompt to another session through its panel, without asking: the sessions are trusted with each other
+     * (record 44). The prompt, headed with the sender, is added to that panel as a block of its own and run there, so
+     * the user sees what was sent, by whom, and what the session does with it; the audit log records it.
      */
     private Outcome sessionSend(String session, JsonNode args) {
         String to = args.path("session").asText("").strip();
@@ -556,6 +559,11 @@ public final class McpTools {
         if (s.session(to).isEmpty()) {
             return Outcome.fail("no session '" + to + "'; sessions: " + sessionNames(s));
         }
+        if (!s.session(to).orElseThrow().status().isUsable()) {
+            // stopping a session is the user's circuit breaker for sessions that keep prompting each other: another
+            // session never starts it again (record 44)
+            return Outcome.fail("session " + to + " is not running; a session another session prompts must be running: the user starts it");
+        }
         List<PanelState> panels = s.panelsBoundToSession(to);
         if (panels.isEmpty()) {
             return Outcome.fail("session " + to + " has no open panel; the prompt goes through its panel so the user sees it: "
@@ -567,20 +575,11 @@ public final class McpTools {
         input.put("session", to);
         input.put("panel", panel.title());
         input.put("text", prompt);
-        ApprovalDecision d = ask(session, ApprovalKind.SESSION_PROMPT, "session_send", input.toString(), "Prompt " + to + ": " + firstLine(text), "");
-        audit.record(session, "approval", "session_send", input.toString(), d.toString());
-        if (d instanceof ApprovalDecision.Deny deny) {
-            return Outcome.fail("The user did not send the prompt" + (deny.message().isBlank() ? "." : ": " + deny.message()));
-        }
-        // the card may have waited: the panel must still be open and bound to that session
-        AppState now = state.get();
-        if (now.panel(panel.id()).filter(p -> p.session().equals(to)).isEmpty()) {
-            return Outcome.fail("panel " + panel.title() + " is no longer open on session " + to + "; nothing was sent");
-        }
+        audit.record(session, "call", "session_send", input.toString(), "sent");
         int cursor = transcripts.of(to).size();
         sink.dispatch(new Intent.EditPanel(panel.id(), prompt, EditMode.APPEND, session));
         sink.dispatch(new Intent.RunText(panel.id(), prompt, Target.CLAUDE));
-        boolean busy = now.session(to).map(SessionState::isBusy).orElse(false);
+        boolean busy = s.session(to).map(SessionState::isBusy).orElse(false);
         return Outcome.ok("sent to " + to + " in panel " + panel.title() + (busy ? "; it is busy, so the prompt waits for its turn" : "")
                 + "; read what it does with session_read {\"session\": \"" + to + "\", \"after\": " + cursor + ", \"wait_seconds\": 300}");
     }
@@ -600,7 +599,8 @@ public final class McpTools {
         int wait = Math.max(0, Math.min(args.path("wait_seconds").asInt(0), MAX_WAIT_SECONDS));
         boolean settled = wait == 0 || awaitTurnEnd(of, t, after, wait);
         SessionState x = state.get().session(of).orElse(null);
-        String status = x == null ? "removed" : x.isBusy() ? "busy" : x.status().isUsable() ? "idle" : x.status().name().toLowerCase(Locale.ROOT);
+        String status = x == null ? "removed" : x.isBusy() ? "busy" : x.isWaiting() ? "waiting on background work: " + x.waitingFor()
+                : x.status().isUsable() ? "idle" : x.status().name().toLowerCase(Locale.ROOT);
         if (!settled) {
             status += ", still working after " + wait + " s";
         }

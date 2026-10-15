@@ -429,7 +429,7 @@ class McpServerTest {
 
     // ---- sessions
 
-    /** Panel two bound to a second session, "reviews". */
+    /** Panel two bound to a second session, "reviews", running. */
     private void reviewsInPanelTwo() {
         AppState s = state.get();
         state.set(withSession(s, "reviews").withPanel(s.panel(States.P2).orElseThrow().withSession("reviews")));
@@ -437,7 +437,7 @@ class McpServerTest {
 
     private static AppState withSession(AppState s, String name) {
         List<SessionState> sessions = new ArrayList<>(s.sessions());
-        sessions.add(SessionState.closed(SessionSpec.fresh(name, "/tmp")));
+        sessions.add(SessionState.closed(SessionSpec.fresh(name, "/tmp")).withStatus(Status.OPEN, ""));
         return s.withSessions(sessions);
     }
 
@@ -452,57 +452,32 @@ class McpServerTest {
     }
 
     @Test
-    void aPromptToAnotherSessionWaitsForTheUserThenIsAddedToItsPanelAndRunThereHeadedWithTheSender() throws Exception {
+    void aPromptToAnotherSessionIsAddedToItsPanelAndRunThereHeadedWithTheSenderWithoutACard() throws Exception {
         reviewsInPanelTwo();
         transcripts.of("reviews").append(new Block.UserPrompt("earlier", "two", ""));
-        CompletableFuture<JsonNode> call = async("session_send", "{\"session\":\"reviews\",\"text\":\"Review the diff\"}");
-        Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
-        assertThat(asked.approval().kind()).isEqualTo(ApprovalKind.SESSION_PROMPT);
-        assertThat(asked.approval().session()).isEqualTo("work");
-        JsonNode input = json.readTree(asked.approval().inputJson());
-        assertThat(input.path("session").asText()).isEqualTo("reviews");
-        assertThat(input.path("panel").asText()).isEqualTo("two");
-        String prompt = "[from session work]\nReview the diff";
-        assertThat(input.path("text").asText()).isEqualTo(prompt);
-        assertThat(sink.of(Intent.RunText.class)).isEmpty(); // nothing runs before the user allows it
-
-        server.resolve(asked.approval(), ApprovalDecision.allowOnce());
-        JsonNode r = call.get();
+        JsonNode r = tool("session_send", "{\"session\":\"reviews\",\"text\":\"Review the diff\"}");
         assertThat(r.path("isError").asBoolean()).isFalse();
+        assertThat(sink.of(Intent.ApprovalRequested.class)).as("the sessions are trusted with each other: nothing is asked").isEmpty();
+        String prompt = "[from session work]\nReview the diff";
         assertThat(text(r)).contains("sent to reviews in panel two").contains("\"after\": 1");
         assertThat(sink.of(Intent.EditPanel.class)).containsExactly(new Intent.EditPanel(States.P2, prompt, EditMode.APPEND, "work"));
         assertThat(sink.of(Intent.RunText.class)).containsExactly(new Intent.RunText(States.P2, prompt, Target.CLAUDE));
     }
 
     @Test
-    void aDeniedPromptIsNeitherAddedNorRun() throws Exception {
+    void aStoppedSessionIsNotStartedByAnotherSessionsPrompt() throws Exception {
+        // stopping a session is the user's circuit breaker for sessions that keep prompting each other
         reviewsInPanelTwo();
-        CompletableFuture<JsonNode> call = async("session_send", "{\"session\":\"reviews\",\"text\":\"go\"}");
-        Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
-        server.resolve(asked.approval(), new ApprovalDecision.Deny("not now"));
-        JsonNode r = call.get();
-        assertThat(r.path("isError").asBoolean()).isTrue();
-        assertThat(text(r)).contains("did not send").contains("not now");
-        assertThat(sink.of(Intent.EditPanel.class)).isEmpty();
-        assertThat(sink.of(Intent.RunText.class)).isEmpty();
-    }
-
-    @Test
-    void aPanelReboundWhileTheCardWaitsGetsNothing() throws Exception {
-        reviewsInPanelTwo();
-        CompletableFuture<JsonNode> call = async("session_send", "{\"session\":\"reviews\",\"text\":\"go\"}");
-        Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
         AppState s = state.get();
-        state.set(s.withPanel(s.panel(States.P2).orElseThrow().withSession("work")));
-        server.resolve(asked.approval(), ApprovalDecision.allowOnce());
-        JsonNode r = call.get();
+        state.set(s.withSession(s.session("reviews").orElseThrow().withStatus(Status.CLOSED, "")));
+        JsonNode r = tool("session_send", "{\"session\":\"reviews\",\"text\":\"again\"}");
         assertThat(r.path("isError").asBoolean()).isTrue();
-        assertThat(text(r)).contains("nothing was sent");
-        assertThat(sink.of(Intent.RunText.class)).isEmpty();
+        assertThat(text(r)).contains("not running");
+        assertThat(sink.of(Intent.RunText.class)).as("nothing runs, so nothing starts the session").isEmpty();
     }
 
     @Test
-    void promptsToItselfAnUnknownSessionOrOneWithoutAnOpenPanelAreRefusedWithoutACard() throws Exception {
+    void promptsToItselfAnUnknownSessionOrOneWithoutAnOpenPanelAreRefused() throws Exception {
         reviewsInPanelTwo();
         assertThat(text(tool("session_send", "{\"session\":\"work\",\"text\":\"x\"}"))).contains("is this session");
         assertThat(text(tool("session_send", "{\"session\":\"nope\",\"text\":\"x\"}"))).contains("no session 'nope'").contains("reviews");
@@ -522,7 +497,7 @@ class McpServerTest {
         t.append(new Block.AssistantText("m1", 1, "still", true, ""));
 
         String first = text(tool("session_read", "{\"session\":\"reviews\",\"after\":0}"));
-        assertThat(first).startsWith("session reviews · closed · 4 blocks, shown from 0 · next read: after 2")
+        assertThat(first).startsWith("session reviews · idle · 4 blocks, shown from 0 · next read: after 2")
                 .contains("[0] prompt from panel two:\n  [from session work]\n  which branch?")
                 .contains("[1] Claude:\n  Checking.")
                 .contains("[2] tool Bash {\"command\":\"git branch --show-current\"} → running")

@@ -7,6 +7,7 @@ import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionInfo;
@@ -198,6 +199,23 @@ public sealed interface Intent {
     }
 
     record SessionActivity(String name, String activity) implements Intent {
+    }
+
+    /**
+     * The background work the session has open now, the whole set as Claude Code reports it at each change: agents and
+     * shell commands left running past their turn. Start times are the reducer's ({@code startedMillis} is ignored).
+     */
+    record SessionTasksChanged(String name, List<BackgroundTask> open) implements Intent {
+        public SessionTasksChanged {
+            open = List.copyOf(open);
+        }
+    }
+
+    /**
+     * The session's process is running a turn: it called the model for the main conversation. A turn comando did not
+     * send (Claude Code starts one when background work it waited on ends) counts as running from here to its result.
+     */
+    record SessionTurnRunning(String name) implements Intent {
     }
 
     /**

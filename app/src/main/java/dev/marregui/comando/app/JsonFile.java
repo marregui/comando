@@ -60,7 +60,9 @@ final class JsonFile<T> {
     }
 
     void write(T value) throws IOException {
-        Files.createDirectories(path.getParent());
+        if (!Files.isDirectory(path.getParent())) {
+            Files.createDirectories(path.getParent()); // on a folder that exists it throws and catches inside the JDK
+        }
         Path tmp = Files.createTempFile(path.getParent(), path.getFileName().toString(), ".tmp");
         try {
             JSON.writeValue(tmp.toFile(), value);

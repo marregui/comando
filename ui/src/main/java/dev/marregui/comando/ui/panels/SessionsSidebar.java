@@ -42,7 +42,9 @@ import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -93,7 +95,11 @@ public final class SessionsSidebar {
     private final Dialogs dialogs;
     private final DefaultListModel<SessionState> sessionModel = new DefaultListModel<>();
     private final DefaultListModel<ConnectionState> connectionModel = new DefaultListModel<>();
-    private final SessionRow sessionRow = new SessionRow();
+    /**
+     * One row component per session: a row's HTML label is parsed again only when its own text changes, where one shared
+     * renderer, filled with each row in turn, parsed every row on every paint of the list.
+     */
+    private final Map<String, SessionRow> rows = new HashMap<>();
     private final JList<SessionState> sessions = emptyText(new SessionList(sessionModel),
             "No sessions yet. + creates one; the import button brings in stored Claude Code conversations.");
     private final JList<ConnectionState> connections = emptyText(new JList<>(connectionModel),
@@ -136,7 +142,7 @@ public final class SessionsSidebar {
         connections.getAccessibleContext().setAccessibleName("Connections");
         sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         connections.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        sessions.setCellRenderer((list, s, index, selected, focus) -> sessionRow.show(s, boundText(s), boundToFocused(s),
+        sessions.setCellRenderer((list, s, index, selected, focus) -> row(s).show(s, boundText(s), boundToFocused(s),
                 state == null ? 0 : state.pendingApprovals(s.name()), selected,
                 selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground()));
         connections.setCellRenderer(new DefaultListCellRenderer() {
@@ -286,6 +292,7 @@ public final class SessionsSidebar {
     public void render(AppState s) {
         state = s;
         sync(sessionModel, s.sessions(), sessions);
+        rows.keySet().retainAll(s.sessions().stream().map(SessionState::name).toList());
         sync(connectionModel, s.connections(), connections);
         panelsTab.render(s);
     }
@@ -294,19 +301,21 @@ public final class SessionsSidebar {
     private Optional<SessionRow.Control> control(SessionState s, MouseEvent e) {
         int i = sessions.locationToIndex(e.getPoint());
         Rectangle cell = sessions.getCellBounds(i, i);
-        layOutRow(s, i);
-        return sessionRow.hit(cell, e.getPoint());
+        return layOutRow(s, i).hit(cell, e.getPoint());
     }
 
-    /** Fills the shared renderer with the row at {@code index}, so its controls sit as they were painted. */
-    private void layOutRow(SessionState s, int index) {
-        sessions.getCellRenderer().getListCellRendererComponent(sessions, s, index, sessions.isSelectedIndex(index), false);
+    private SessionRow row(SessionState s) {
+        return rows.computeIfAbsent(s.name(), name -> new SessionRow());
+    }
+
+    /** The row at {@code index}, filled as it was painted, so its controls sit where they were drawn. */
+    private SessionRow layOutRow(SessionState s, int index) {
+        return (SessionRow) sessions.getCellRenderer().getListCellRendererComponent(sessions, s, index, sessions.isSelectedIndex(index), false);
     }
 
     /** Where a row's control is, in the list's coordinates; for tests. */
     Rectangle controlBounds(int index, SessionRow.Control control) {
-        layOutRow(sessionModel.get(index), index);
-        return sessionRow.bounds(sessions.getCellBounds(index, index), control);
+        return layOutRow(sessionModel.get(index), index).bounds(sessions.getCellBounds(index, index), control);
     }
 
     /** What a click on a row's control does. */
@@ -316,8 +325,7 @@ public final class SessionsSidebar {
         switch (control) {
             case POWER -> intents.dispatch(s.status().isUsable() ? new Intent.StopSession(s.name()) : new Intent.StartSession(s.name()));
             case MODEL, EFFORT -> {
-                layOutRow(s, i);
-                Rectangle at = sessionRow.bounds(cell, control);
+                Rectangle at = layOutRow(s, i).bounds(cell, control);
                 JPopupMenu m = new JPopupMenu();
                 (control == SessionRow.Control.MODEL ? modelItems(s) : effortItems(s)).forEach(m::add);
                 m.show(sessions, at.x, at.y + at.height);
@@ -356,8 +364,7 @@ public final class SessionsSidebar {
                 return null;
             }
             SessionState s = getModel().getElementAt(i);
-            layOutRow(s, i);
-            return Plain.text(sessionRow.tip(getCellBounds(i, i), e.getPoint())
+            return Plain.text(layOutRow(s, i).tip(getCellBounds(i, i), e.getPoint())
                     .orElse(s.spec().workDir() + (s.spec().claudeSessionId().isEmpty() ? "" : " · " + s.spec().claudeSessionId())));
         }
     }

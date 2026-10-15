@@ -290,6 +290,10 @@ public final class EditorPanel extends JPanel {
 
     /** "working · 12 s" while a turn runs; the shell's one-second tick refreshes it. */
     static String busyText(SessionState ss) {
+        if (ss.isWaiting()) {
+            long since = ss.waitingSinceMillis();
+            return "  " + TabStatus.waiting(ss) + (since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "");
+        }
         if (!ss.isBusy()) {
             return "";
         }
@@ -300,10 +304,15 @@ public final class EditorPanel extends JPanel {
                 + (queued > 0 ? " · " + queued + " queued" : "");
     }
 
-    /** Refreshes what changes with time alone: the session chip's elapsed time. */
+    /** Whether the session chip shows a time that the shell's one-second tick moves on: working, or waiting. */
+    static boolean counting(SessionState ss) {
+        return ss.isBusy() || ss.isWaiting();
+    }
+
+    /** Refreshes what changes with time alone: the session chip's elapsed time, working or waiting. */
     public void tick() {
         if (state != null) {
-            state.session(panel.session()).filter(SessionState::isBusy).ifPresent(ss -> {
+            state.session(panel.session()).filter(EditorPanel::counting).ifPresent(ss -> {
                 String branch = ss.branch().isEmpty() ? "" : "  ⎇ " + ss.branch();
                 session.setText(ss.name() + branch + "  " + dot(ss.status()) + busyText(ss));
             });

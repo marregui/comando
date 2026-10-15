@@ -249,7 +249,9 @@ final class PanelFiles {
             throw new IllegalStateException("panel " + id + " has no file");
         }
         Path f = path(name);
-        Files.createDirectories(f.getParent());
+        if (!Files.isDirectory(f.getParent())) {
+            Files.createDirectories(f.getParent()); // on a folder that exists it throws and catches inside the JDK
+        }
         Path tmp = Files.createTempFile(f.getParent(), "." + f.getFileName(), ".tmp");
         try {
             Files.writeString(tmp, text, StandardCharsets.UTF_8);

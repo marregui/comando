@@ -1,11 +1,14 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.testkit.States;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -45,6 +48,19 @@ class PanelTextsTest {
         SessionState x = SessionState.closed(States.WORK).withTurns(2, System.currentTimeMillis() - 5_000);
         assertThat(EditorPanel.busyText(x)).contains("working · ").endsWith(" · 1 queued");
         assertThat(EditorPanel.busyText(SessionState.closed(States.WORK))).isEmpty();
+    }
+
+    @Test
+    void aSessionWaitingOnBackgroundWorkSaysOnWhatAndSinceWhen() {
+        long started = System.currentTimeMillis() - 5_000;
+        BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
+        SessionState one = SessionState.closed(States.WORK).withTasks(List.of(agent), started);
+        assertThat(EditorPanel.busyText(one)).startsWith("  waiting on review agent · ").endsWith(" s");
+        SessionState two = one.withTasks(List.of(agent, new BackgroundTask("b2", "local_bash", "build in the background", 0L)), started);
+        assertThat(EditorPanel.busyText(two)).startsWith("  waiting on 2 background tasks · ");
+        assertThat(StatusBar.sessionText(two)).endsWith(" · waiting on 2 background tasks");
+        assertThat(EditorPanel.counting(one)).as("the tick moves a waiting chip's time on, as a working one's").isTrue();
+        assertThat(EditorPanel.counting(SessionState.closed(States.WORK))).isFalse();
     }
 
     @Test

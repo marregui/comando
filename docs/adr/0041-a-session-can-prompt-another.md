@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-15 | accepted | Miguel (sessions may hand work to each other; the user tracks it and chooses each time), Claude (how) |
+| 2026-10-15 | accepted; consent replaced by [44](0044-sessions-prompt-each-other-without-asking.md) | Miguel (sessions may hand work to each other; the user tracks it and chooses each time), Claude (how) |
 
 ## 1. Context
 

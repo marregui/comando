@@ -17,6 +17,10 @@ abstract class Item {
     private Style style;
     private boolean dirty = true;
     int height;
+    /** The last {@link #guess}, valid for {@link #guessedWidth} and {@link #guessedStyle} until the block changes. */
+    private int guessed;
+    private int guessedWidth = -1;
+    private Style guessedStyle;
 
     Item(Block block) {
         this.block = block;
@@ -28,6 +32,7 @@ abstract class Item {
         block = next;
         changed(previous, next);
         dirty = true;
+        guessedWidth = -1;
     }
 
     void changed(Block previous, Block next) {
@@ -58,15 +63,50 @@ abstract class Item {
     }
 
     /**
-     * A guess of the height at width {@code w} without laying out: wrapped text grows as the width shrinks.
-     * Used for items far from the viewport until the idle pass lays them out.
+     * A guess of the height at width {@code w} without laying out: wrapped text grows as the width shrinks; an item
+     * never laid out guesses from its content. Used for items far from the viewport until the idle pass lays them out.
      */
-    final int estimate(int w) {
-        if (width <= 0 || height <= 0) {
+    final int estimate(int w, Style s) {
+        if (!laidOut()) {
+            if (w != guessedWidth || s != guessedStyle) {
+                guessed = guess(w, s);
+                guessedWidth = w;
+                guessedStyle = s;
+            }
+            return guessed;
+        }
+        if (height <= 0) {
             return 24;
         }
         double h = height * (double) width / w;
         return (int) Math.round(Math.clamp(h, height * 0.5, height * 2.0));
+    }
+
+    /** The height of this item, never laid out, at width {@code w}: one line unless the item knows better. */
+    int guess(int w, Style s) {
+        return 24;
+    }
+
+    /** The height of {@code text} wrapped at {@code w} in the body font, at about half an em per character. */
+    static int guessText(String text, int w, Style s) {
+        float perLine = Math.max(1f, w / (s.body.getSize2D() * 0.5f));
+        int lines = 0;
+        int at = 0;
+        while (true) {
+            int nl = text.indexOf('\n', at);
+            int end = nl < 0 ? text.length() : nl;
+            lines += 1 + (int) ((end - at) / perLine);
+            if (nl < 0) {
+                break;
+            }
+            at = nl + 1;
+        }
+        return 8 + Math.round(lines * s.height(s.body));
+    }
+
+    /** True once the item has been laid out at some width; until then it has no lines, boxes or positions. */
+    final boolean laidOut() {
+        return width >= 0;
     }
 
     final int width() {

@@ -8,6 +8,7 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.PanelTexts;
@@ -185,5 +186,53 @@ class WorkspaceTest {
         SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(session.withTurns(1, 5L))));
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.WORKING);
         assertThat(tabs.getTitleAt(0)).isEqualTo("work");
+    }
+
+    @Test
+    void returnedBackgroundWorkMarksTheTabFinishedOnlyWhenNoReadingTurnFollows() throws Exception {
+        PanelId other = new PanelId("o");
+        SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
+        SessionState waiting = open.withTurns(1, 1_000L).withTasks(List.of(agent), 2_000L).withTurns(0, 3_000L);
+        long[] now = {3_000L};
+        Workspace[] w = new Workspace[1];
+        AppState[] s = new AppState[1];
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> now[0]);
+            w[0].onAttention(() -> { });
+            s[0] = AppState.initial(List.of(new PanelState(P, "work", "", "s"), new PanelState(other, "notes", "", "")), List.of(), List.of(waiting))
+                    .withFocused(other);
+            w[0].render(s[0]);
+        });
+        assertThat(w[0].statuses()).containsEntry(P, TabStatus.WAITING);
+
+        // the work returns; its reading turn has not started a second later
+        now[0] = 61_000L;
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(waiting.withTasks(List.of(), 60_000L))));
+        assertThat(w[0].statuses()).as("not finished before the turn that reads it").doesNotContainEntry(P, TabStatus.DONE);
+
+        // no reading turn within the grace: the tick marks it finished, with no state change to wait for
+        now[0] = 60_000L + TabStatus.REPORT_GRACE_MILLIS;
+        SwingUtilities.invokeAndWait(() -> w[0].tick());
+        assertThat(w[0].statuses()).containsEntry(P, TabStatus.DONE);
+    }
+
+    @Test
+    void aHandOffTurnThatFailsShowsItsErrorWhileItsWorkRunsOn() throws Exception {
+        PanelId other = new PanelId("o");
+        SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
+        Workspace[] w = new Workspace[1];
+        AppState[] s = new AppState[1];
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry());
+            w[0].onAttention(() -> { });
+            s[0] = AppState.initial(List.of(new PanelState(P, "work", "", "s"), new PanelState(other, "notes", "", "")), List.of(),
+                    List.of(open.withTurns(1, 1_000L))).withFocused(other);
+            w[0].render(s[0]);
+            SessionState failed = open.withTurns(1, 1_000L).withTasks(List.of(agent), 1_500L).withTurns(0, 2_000L).withLastTurnError("rate limited");
+            w[0].render(s[0] = s[0].withSession(failed));
+        });
+        assertThat(w[0].statuses()).containsEntry(P, TabStatus.ERROR);
     }
 }

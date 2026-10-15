@@ -284,9 +284,12 @@ public final class StatusBar {
             }
         }
         int busy = 0;
+        int waiting = 0;
         for (SessionState x : s.sessions()) {
             if (x.isBusy()) {
                 busy++;
+            } else if (x.isWaiting()) {
+                waiting++;
             }
         }
         StringBuilder w = new StringBuilder();
@@ -295,6 +298,9 @@ public final class StatusBar {
         }
         if (busy > 0) {
             w.append(w.isEmpty() ? "" : " · ").append(busy).append(busy == 1 ? " session" : " sessions").append(" working");
+        }
+        if (waiting > 0) {
+            w.append(w.isEmpty() ? "" : " · ").append(waiting).append(waiting == 1 ? " session" : " sessions").append(" waiting on background work");
         }
         if (!s.approvals().isEmpty()) {
             w.append(w.isEmpty() ? "" : " · ").append(s.approvals().size()).append(" waiting for approval");
@@ -319,6 +325,8 @@ public final class StatusBar {
         }
         if (x.isBusy()) {
             sb.append(" · ").append(x.activity().isEmpty() ? "working" : x.activity());
+        } else if (x.isWaiting()) {
+            sb.append(" · ").append(TabStatus.waiting(x));
         }
         return sb.toString();
     }

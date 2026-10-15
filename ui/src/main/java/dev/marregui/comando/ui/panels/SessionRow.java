@@ -148,8 +148,9 @@ final class SessionRow extends JPanel {
         String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.WARN) + "'>⚑" + approvals + "</span>";
         String where = "&nbsp;<span style='color:" + Theme.hex(focused ? Theme.ACCENT : Theme.MUTED_STRONG)
                 + "'>· " + MarkdownHtml.escape(clip(bound, 24)) + "</span>";
-        String busy = !s.isBusy() ? "" : "&nbsp;&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>"
-                + MarkdownHtml.escape(s.activity().isEmpty() ? "working" : clip(s.activity(), 30)) + "</span>";
+        String doing = s.isBusy() ? (s.activity().isEmpty() ? "working" : s.activity()) : s.isWaiting() ? TabStatus.waiting(s) : "";
+        String busy = doing.isEmpty() ? "" : "&nbsp;&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>"
+                + MarkdownHtml.escape(clip(doing, 30)) + "</span>";
         String branch = s.branch().isEmpty() ? "" : " ⎇ " + MarkdownHtml.escape(s.branch());
         return "<html><nobr>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(s.name()) + "</b>" + where + badge + busy
                 + "</nobr><br><nobr><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>"

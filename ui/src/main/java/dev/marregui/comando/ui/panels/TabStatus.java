@@ -24,6 +24,8 @@ enum TabStatus {
     DONE,
     /** A turn runs, or a query. */
     WORKING,
+    /** No turn runs, but background work the session started has not ended: an agent, a shell command. */
+    WAITING,
     /** A session is bound and has nothing going on. */
     IDLE,
     /** No session; the panel is text and perhaps a connection. */
@@ -58,12 +60,27 @@ enum TabStatus {
         if (session.map(SessionState::isBusy).orElse(false) || run.map(RunStatus::isActive).orElse(false)) {
             return WORKING;
         }
+        if (session.map(SessionState::isWaiting).orElse(false)) {
+            return WAITING;
+        }
         return session.isPresent() ? IDLE : NONE;
     }
 
-    /** Whether work is going on, for the unread tracking: a change from true to false is an outcome to look at. */
-    static boolean active(PanelState p, AppState s) {
-        boolean session = !p.session().isEmpty() && s.session(p.session()).map(SessionState::isBusy).orElse(false);
+    /**
+     * How long after background work returns its reading turn may take to make its first model call before the work
+     * counts as finished: a large context with a cold cache takes tens of seconds; a return that starts no turn is rare.
+     */
+    static final long REPORT_GRACE_MILLIS = 60_000;
+
+    /**
+     * Whether work is going on at {@code nowMillis}, for the unread tracking: a change from true to false is an outcome to
+     * look at. Waiting on the background work the last turn started is work going on, and so is the moment background
+     * work returns until the turn that reads it starts (at most {@link #REPORT_GRACE_MILLIS}): the turn that handed it
+     * off is not the outcome. A later turn that ends while older work runs on is, and so is a hand-off turn that failed.
+     */
+    static boolean active(PanelState p, AppState s, long nowMillis) {
+        boolean session = !p.session().isEmpty() && s.session(p.session()).map(x -> x.isBusy()
+                || (x.isAwaitingHandOff() || x.isReturning(nowMillis, REPORT_GRACE_MILLIS)) && x.lastTurnError().isEmpty()).orElse(false);
         return session || s.runOf(p.id()).map(r -> r.status().isActive()).orElse(false);
     }
 
@@ -88,7 +105,17 @@ enum TabStatus {
                 long since = session.map(SessionState::turnStartedMillis).orElse(0L);
                 yield " · " + what + (since > 0 ? " " + Labels.elapsed(nowMillis - since) : "");
             }
+            case WAITING -> {
+                SessionState ss = session.orElseThrow();
+                long since = ss.waitingSinceMillis();
+                yield " · " + waiting(ss) + (since > 0 ? " " + Labels.elapsed(nowMillis - since) : "");
+            }
             case IDLE, NONE -> "";
         };
+    }
+
+    /** What a waiting session waits on, for every place that shows it: "waiting on review agent". */
+    static String waiting(SessionState ss) {
+        return "waiting on " + ss.waitingFor();
     }
 }

@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
@@ -22,6 +23,8 @@ final class Scratchpad {
 
     static final int MAX_DEPTH = 12;
 
+    private static final Pattern DAY = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
+
     private Scratchpad() {
     }
 
@@ -30,35 +33,39 @@ final class Scratchpad {
     }
 
     private static List<ViewSpec.TreeNode> children(Path dir, int depth) throws IOException {
-        List<Path> entries;
+        List<Entry> entries;
         try (Stream<Path> list = Files.list(dir)) {
-            entries = list.filter(p -> !p.getFileName().toString().startsWith(".")).sorted(ORDER).toList();
+            entries = list.filter(p -> !p.getFileName().toString().startsWith(".")).map(Entry::of).sorted(ORDER).toList();
         }
         List<ViewSpec.TreeNode> out = new ArrayList<>(entries.size());
-        for (Path p : entries) {
-            String name = p.getFileName().toString();
-            if (isFolder(p)) {
-                List<ViewSpec.TreeNode> kids = depth < MAX_DEPTH ? children(p, depth + 1) : List.of();
-                out.add(new ViewSpec.TreeNode(name, kids.size() == 1 ? "1 entry" : kids.size() + " entries", kids));
+        for (Entry e : entries) {
+            if (e.folder()) {
+                List<ViewSpec.TreeNode> kids = depth < MAX_DEPTH ? children(e.path(), depth + 1) : List.of();
+                out.add(new ViewSpec.TreeNode(e.name(), kids.size() == 1 ? "1 entry" : kids.size() + " entries", kids));
             } else {
-                out.add(new ViewSpec.TreeNode(name, size(p), "comando-file:" + p + "#0", List.of()));
+                out.add(new ViewSpec.TreeNode(e.name(), size(e.path()), "comando-file:" + e.path() + "#0", List.of()));
             }
         }
         return out;
     }
 
-    private static boolean isFolder(Path p) {
-        return Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS);
+    /**
+     * An entry with what the order needs, read once: the tree is read every few seconds and a sort compares each
+     * entry many times, so neither the file system nor a pattern is asked again per comparison.
+     *
+     * @param rank 0 for a folder not named after a date, 1 for a date-named folder, 2 for a file
+     */
+    record Entry(Path path, String name, String lower, boolean folder, int rank) {
+
+        static Entry of(Path p) {
+            String name = p.getFileName().toString();
+            boolean folder = Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS);
+            return new Entry(p, name, name.toLowerCase(Locale.ROOT), folder, !folder ? 2 : DAY.matcher(name).matches() ? 1 : 0);
+        }
     }
 
     /** Folders not named after a date, then date-named folders oldest first, then files; names ignoring case. */
-    static final Comparator<Path> ORDER = Comparator.comparingInt((Path p) -> !isFolder(p) ? 2 : isDay(p) ? 1 : 0)
-            .thenComparing(p -> p.getFileName().toString().toLowerCase(Locale.ROOT))
-            .thenComparing(p -> p.getFileName().toString());
-
-    private static boolean isDay(Path p) {
-        return p.getFileName().toString().matches("\\d{4}-\\d{2}-\\d{2}");
-    }
+    static final Comparator<Entry> ORDER = Comparator.comparingInt(Entry::rank).thenComparing(Entry::lower).thenComparing(Entry::name);
 
     private static String size(Path p) {
         try {

@@ -132,6 +132,11 @@ final class Items {
         }
 
         @Override
+        int guess(int w, Style s) {
+            return TOP + BOTTOM + 2 * IN_Y + guessText(text(), w - 2 * IN_X, s);
+        }
+
+        @Override
         String markdown() {
             return "> " + prompt().text().replace("\n", "\n> ");
         }
@@ -211,6 +216,11 @@ final class Items {
         @Override
         String text() {
             return ((Block.AssistantText) block).text();
+        }
+
+        @Override
+        int guess(int w, Style s) {
+            return guessText(text(), w, s);
         }
     }
 
@@ -691,6 +701,12 @@ final class Items {
             // decoded input values, so find matches text with quotes, backslashes or newlines as shown
             Block.ToolCall c = call();
             return c.name() + '\n' + ToolText.values(ToolText.parse(c.inputJson())) + c.resultText();
+        }
+
+        @Override
+        int guess(int w, Style s) {
+            int closed = 3 + IN_Y + 18 + IN_Y + 3; // the title row of a closed card, as doLayout measures it
+            return fold.isOpen() ? closed + guessText(text(), w - 2 * IN_X, s) : closed;
         }
 
         /** The summary line, the input fenced (a shell command, a diff, or JSON) and the result fenced and clipped. */

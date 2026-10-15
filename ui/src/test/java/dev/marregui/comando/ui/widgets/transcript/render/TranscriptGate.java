@@ -4,6 +4,7 @@ import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.testkit.SyntheticSession;
 
 import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
 import java.awt.Point;
@@ -23,10 +24,15 @@ public final class TranscriptGate {
     private TranscriptGate() {
     }
 
-    public static void main(String[] args) {
+    public static void main(String[] args) throws Exception {
+        int delta = args.length > 0 ? Integer.parseInt(args[0]) : 16;
+        // on the EDT, as the widget runs: the canvas's idle pass is a Swing timer, which would otherwise race the gate
+        SwingUtilities.invokeAndWait(() -> measure(delta));
+    }
+
+    private static void measure(int delta) {
         int width = 1200;
         int height = 800;
-        int delta = args.length > 0 ? Integer.parseInt(args[0]) : 16;
         List<SyntheticSession.Step> steps = SyntheticSession.steps(delta);
         BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB_PRE);
 

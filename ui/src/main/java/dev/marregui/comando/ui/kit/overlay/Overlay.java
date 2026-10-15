@@ -35,7 +35,7 @@ public final class Overlay extends JPanel {
 
     public Overlay(JComponent content) {
         setLayout(cards);
-        progress.setIndeterminate(true);
+        // indeterminate only while loading: an indeterminate bar animates on a 15 ms timer even while hidden
         progress.setVisible(false);
         // the text is a centred block of fixed width: an icon beside it lands far from short messages
         message.setHorizontalTextPosition(SwingConstants.CENTER);
@@ -70,6 +70,7 @@ public final class Overlay extends JPanel {
     }
 
     public void showContent() {
+        loading(false);
         if (!showing.equals(CONTENT)) {
             showing = CONTENT;
             cards.show(this, CONTENT);
@@ -86,6 +87,7 @@ public final class Overlay extends JPanel {
 
     /** The error as selectable text, scrolled to its start. */
     public void showError(String text) {
+        loading(false);
         if (!error.getText().equals(text)) {
             error.setText(text);
             error.setCaretPosition(0);
@@ -109,9 +111,21 @@ public final class Overlay extends JPanel {
         message.setText("<html><div style='text-align:center;width:420px'>" + escape(text) + "</div></html>");
         message.setIcon(icon == null ? null : Icons.get(icon));
         message.setForeground(color);
-        progress.setVisible(loading);
+        loading(loading);
         showing = MESSAGE;
         cards.show(this, MESSAGE);
+    }
+
+    private void loading(boolean on) {
+        if (progress.isIndeterminate() != on) {
+            progress.setIndeterminate(on);
+        }
+        progress.setVisible(on);
+    }
+
+    /** Whether the loading bar animates; for tests. */
+    boolean animating() {
+        return progress.isIndeterminate();
     }
 
     private static String escape(String s) {

@@ -26,6 +26,7 @@ import javax.swing.KeyStroke;
 import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import javax.swing.plaf.basic.BasicHTML;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Point;
@@ -309,6 +310,32 @@ class SessionsSidebarTest {
                 .containsExactly(SessionRow.Control.POWER, SessionRow.Control.MODEL, SessionRow.Control.EFFORT);
         Rectangle power = s[0].controlBounds(1, SessionRow.Control.POWER);
         assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Connected; click to disconnect (stops the session)");
+    }
+
+    @Test
+    void eachSessionKeepsItsOwnRowSoDrawingAnotherDoesNotParseItsLabelAgain() throws Exception {
+        SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
+        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(edge, work));
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intent -> {
+            }, new Dialogs(), () -> {
+            });
+            s[0].render(state);
+        });
+        JList<?> list = find(s[0].component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+        Component first = render(list, 0);
+        Component second = render(list, 1);
+        assertThat(second).isNotSameAs(first);
+        JLabel label = find(second, JLabel.class, l -> l.getText() != null && l.getText().startsWith("<html>"));
+        Object parsed = label.getClientProperty(BasicHTML.propertyKey);
+        assertThat(parsed).isNotNull();
+
+        render(list, 0);
+        assertThat(render(list, 1)).isSameAs(second);
+        assertThat(label.getClientProperty(BasicHTML.propertyKey)).as("its HTML parsed once, not again after another row was drawn")
+                .isSameAs(parsed);
     }
 
     private static Component render(JList<?> list, int index) throws Exception {

@@ -27,6 +27,8 @@ Threads per process: a stdout reader, a stdin writer fed by a queue, a stderr re
 |---|---|
 | `system/init` | an init note; `SessionInit` with the conversation id, model, CLI version, permission mode, capabilities. The id makes the next start a resume. |
 | `system/status`, `task_started`, `task_notification` | `SessionActivity` (requesting, compacting, a task's description) |
+| `system/background_tasks_changed` | `SessionTasksChanged`: the session's open background tasks, the whole set (ambient tasks left out); no turn and an open task is waiting ([record 43](../adr/0043-a-session-waiting-on-background-work-shows-it.md)) |
+| `stream_event` `message_start` without a parent tool call | `SessionTurnRunning`: a turn runs, also one Claude Code started itself after background work ended |
 | `system/compact_boundary` | a compaction note |
 | `system/hook_response` | a hook note with the hook's output; `--include-hook-events` makes every hook event report, not only SessionStart |
 | `system/api_retry` | a retry note with attempt and limit |

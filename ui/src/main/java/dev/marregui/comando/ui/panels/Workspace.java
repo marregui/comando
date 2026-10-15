@@ -36,6 +36,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
+import java.util.function.LongSupplier;
 
 /**
  * The open panels as tabs, in state order; the selected tab is the focused panel. The tabs closed most recently are
@@ -60,6 +61,7 @@ public final class Workspace {
     private final Map<PanelId, EditorPanel> panels = new LinkedHashMap<>();
     private final Deque<ClosedPanel> closed = new ArrayDeque<>();
     /** Whether each panel's session or query was at work when last rendered; a change to false is an outcome. */
+    private final LongSupplier clock;
     private final Map<PanelId, Boolean> lastActive = new HashMap<>();
     /** Panels whose work ended while another tab was in front, until the user looks at them. */
     private final Set<PanelId> unseen = new HashSet<>();
@@ -77,6 +79,12 @@ public final class Workspace {
     private AppState shown;
 
     public Workspace(IntentSink intents, PanelTexts texts, SchemaRegistry schemas) {
+        this(intents, texts, schemas, System::currentTimeMillis);
+    }
+
+    /** With the clock the tab statuses read; tests set it. */
+    Workspace(IntentSink intents, PanelTexts texts, SchemaRegistry schemas, LongSupplier clock) {
+        this.clock = clock;
         this.intents = intents;
         this.texts = texts;
         this.schemas = schemas;
@@ -170,7 +178,10 @@ public final class Workspace {
         attention = run;
     }
 
-    /** Refreshes what changes with time alone in every panel, and the elapsed time in a working tab's tooltip. */
+    /**
+     * Refreshes what changes with time alone in every panel, and every tab's status: the elapsed time in a working or
+     * waiting tab's tooltip, and the end of the grace a returned background task has to start its reading turn.
+     */
     public void tick() {
         panels.values().forEach(EditorPanel::tick);
         if (shown == null) {
@@ -178,13 +189,11 @@ public final class Workspace {
         }
         for (PanelState p : shown.panels()) {
             EditorPanel view = panels.get(p.id());
-            if (view != null && statuses.get(p.id()) == TabStatus.WORKING) {
-                int at = tabs.indexOfComponent(view);
-                if (at >= 0) {
-                    tabs.setToolTipTextAt(at, tooltip(p, shown, TabStatus.WORKING));
-                }
+            if (view != null && tabs.indexOfComponent(view) >= 0) {
+                refreshTab(p, shown, view);
             }
         }
+        spinWhileWorking();
     }
 
     /** One step of the wheel; the spinning tabs are repainted where they are, the editors below are not touched. */
@@ -296,17 +305,7 @@ public final class Workspace {
                     tabs.remove(view);
                     tabs.insertTab(title(p, false), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
                 }
-                TabStatus status = track(p, s);
-                int at = tabs.indexOfComponent(view);
-                String title = title(p, status.marked());
-                if (!tabs.getTitleAt(at).equals(title)) {
-                    tabs.setTitleAt(at, title);
-                }
-                Icon icon = icon(status);
-                if (tabs.getIconAt(at) != icon) {
-                    tabs.setIconAt(at, icon);
-                }
-                tabs.setToolTipTextAt(at, tooltip(p, s, status));
+                refreshTab(p, s, view);
                 view.file(texts.file(p.id()).orElse(null), texts.document(p.id()));
                 view.render(p, s);
             }
@@ -314,14 +313,36 @@ public final class Workspace {
             if (focused != null && tabs.getSelectedComponent() != focused) {
                 tabs.setSelectedComponent(focused);
             }
-            boolean working = statuses.containsValue(TabStatus.WORKING);
-            if (working && !spin.isRunning()) {
-                spin.start();
-            } else if (!working && spin.isRunning()) {
-                spin.stop();
-            }
+            spinWhileWorking();
         } finally {
             rendering = false;
+        }
+    }
+
+    /** The tab's status, icon, title mark and tooltip for {@code p} in {@code s}. */
+    private void refreshTab(PanelState p, AppState s, EditorPanel view) {
+        TabStatus status = track(p, s);
+        int at = tabs.indexOfComponent(view);
+        String title = title(p, status.marked());
+        if (!tabs.getTitleAt(at).equals(title)) {
+            tabs.setTitleAt(at, title);
+        }
+        Icon icon = icon(status);
+        if (tabs.getIconAt(at) != icon) {
+            tabs.setIconAt(at, icon);
+        }
+        String tip = tooltip(p, s, status);
+        if (!tip.equals(tabs.getToolTipTextAt(at))) {
+            tabs.setToolTipTextAt(at, tip);
+        }
+    }
+
+    private void spinWhileWorking() {
+        boolean working = statuses.containsValue(TabStatus.WORKING);
+        if (working && !spin.isRunning()) {
+            spin.start();
+        } else if (!working && spin.isRunning()) {
+            spin.stop();
         }
     }
 
@@ -332,7 +353,7 @@ public final class Workspace {
      */
     private TabStatus track(PanelState p, AppState s) {
         PanelId id = p.id();
-        boolean active = TabStatus.active(p, s);
+        boolean active = TabStatus.active(p, s, clock.getAsLong());
         Boolean before = lastActive.put(id, active);
         if (id.equals(s.focused()) || (active && before != null && !before)) {
             unseen.remove(id);
@@ -353,6 +374,7 @@ public final class Workspace {
             case ERROR -> Icons.get("error");
             case DONE -> Icons.get("check");
             case WORKING -> spinner;
+            case WAITING -> Icons.get("hourglass");
             case IDLE -> Icons.get("claude");
             case NONE -> Icons.get("file");
         };

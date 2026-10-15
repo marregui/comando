@@ -2,9 +2,11 @@ package dev.marregui.comando.ui.widgets.transcript.render;
 
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.testkit.SyntheticSession;
+import dev.marregui.comando.ui.kit.async.OnEdt;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -13,6 +15,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+@ExtendWith(OnEdt.class)
 class TranscriptCanvasTest {
 
     private final List<String> opened = new ArrayList<>();
@@ -136,6 +139,39 @@ class TranscriptCanvasTest {
         assertThat(canvas.contentHeight()).isEqualTo(exact);
         // the guess is in the right range: within a factor of two of the exact height
         assertThat(guessed).isBetween(exact / 2, exact * 2);
+    }
+
+    @Test
+    void aRebuiltViewLaysOutWhatIsVisibleNowAndTheRestWhenIdle() {
+        // a panel switching sessions rebuilds the view from the session's history: no block has been laid out yet
+        load(SyntheticSession.steps(10_000));
+        canvas.setSize(1000, 700);
+        canvas.ensureLayout(1000);
+        List<Item> items = canvas.topLevel();
+        long laid = items.stream().filter(Item::laidOut).count();
+        assertThat(laid).as("only the blocks in view are laid out now").isPositive().isLessThan(items.size() / 2);
+        assertThat(canvas.isEstimated()).isTrue();
+        int guessed = canvas.contentHeight();
+
+        paint(1000, 700);
+        assertThat(items.getLast().laidOut()).as("the end, where the view follows, is laid out when painted").isTrue();
+
+        canvas.refineAll();
+        assertThat(canvas.isEstimated()).isFalse();
+        assertThat(items).as("the idle pass lays out the rest").allMatch(Item::laidOut);
+        int exact = canvas.contentHeight();
+        TranscriptCanvas whole = new TranscriptCanvas(opened::add);
+        int n = 0;
+        for (SyntheticSession.Step st : SyntheticSession.steps(10_000)) {
+            if (st.index() < 0) {
+                whole.append(n++, st.block());
+            } else {
+                whole.update(st.index(), st.block());
+            }
+        }
+        whole.layoutFully(1000);
+        assertThat(exact).as("the same height as laying out everything at once").isEqualTo(whole.contentHeight());
+        assertThat(guessed).as("the first guess is in the right range").isBetween(exact / 2, exact * 2);
     }
 
     @Test

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
@@ -152,9 +153,26 @@ final class StreamMapper {
                     + " after " + e.path("error_status").asText(e.path("error").asText("error")));
             case "task_started" -> sink.dispatch(new Intent.SessionActivity(session, e.path("description").asText("task")));
             case "task_notification" -> sink.dispatch(new Intent.SessionActivity(session, "requesting"));
+            case "background_tasks_changed" -> backgroundTasks(e.path("tasks"));
             case "permission_denied" -> note(Block.NoteKind.DENIED, "Denied: " + e.path("tool_name").asText("tool"));
             default -> LOG.log(System.Logger.Level.DEBUG, "system event ignored [session=" + session + ", subtype=" + subtype + ']');
         }
+    }
+
+    /**
+     * The background set, whole, as Claude Code sends it at each change (2.1.300: an agent or a shell command left
+     * running past its turn; a foreground agent and a background agent's own commands are not in it). A task Claude
+     * Code runs by itself ({@code ambient}) is not the session's work.
+     */
+    private void backgroundTasks(JsonNode tasks) {
+        List<BackgroundTask> open = new ArrayList<>();
+        for (JsonNode t : tasks) {
+            String id = t.path("task_id").asText("");
+            if (!id.isEmpty() && !t.path("ambient").asBoolean(false)) {
+                open.add(new BackgroundTask(id, t.path("task_type").asText(""), t.path("description").asText(""), 0L));
+            }
+        }
+        sink.dispatch(new Intent.SessionTasksChanged(session, open));
     }
 
     private void init(JsonNode e) {
@@ -184,6 +202,14 @@ final class StreamMapper {
         int index = ev.path("index").asInt(-1);
         String key = messageId + ':' + index;
         switch (ev.path("type").asText()) {
+            case "message_start" -> {
+                // the main conversation calls the model: a turn runs, also one Claude Code started itself. Claude Code
+                // 2.1.300 forwards no subagent's stream events and sends a null parent on these; one forwarded with its
+                // parent call would be a subagent's, inside a turn or in the background, and start none
+                if (parent(e).isEmpty()) {
+                    sink.dispatch(new Intent.SessionTurnRunning(session));
+                }
+            }
             case "content_block_start" -> {
                 JsonNode block = ev.path("content_block");
                 String parent = parent(e);

@@ -14,13 +14,14 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.RunStatus;
-import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SessionInfo;
+import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -215,6 +216,80 @@ class ReducerTest {
     }
 
     @Test
+    void aSessionWaitsOnBackgroundWorkUntilItEndsAndTheTurnItStartsCountsAsRunning() {
+        BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
+        apply(new Intent.RunText(P1, "review it in the background", Target.CLAUDE));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.SessionTasksChanged("work", List.of(agent)));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.12, 40_000L, 200_000L, false, ""));
+        SessionState waiting = state.session("work").orElseThrow();
+        assertThat(waiting.isBusy()).isFalse();
+        assertThat(waiting.isWaiting()).isTrue();
+        assertThat(waiting.waitingFor()).isEqualTo("review agent");
+        assertThat(effects).as("handing work to the background finishes nothing").noneMatch(Effect.DesktopNotify.class::isInstance);
+
+        // the agent ends; Claude Code starts a turn of its own to read its report
+        clock.advance(60_000);
+        apply(new Intent.SessionTasksChanged("work", List.of()));
+        SessionState returned = state.session("work").orElseThrow();
+        assertThat(returned.isWaiting()).isFalse();
+        assertThat(returned.isReturning(clock.millis() + 1_000, 15_000)).as("returned, the reading turn not started yet").isTrue();
+        apply(new Intent.SessionTurnRunning("work"));
+        SessionState reading = state.session("work").orElseThrow();
+        assertThat(reading.isBusy()).as("a turn comando did not send runs too").isTrue();
+        assertThat(reading.isReturning(clock.millis(), 15_000)).isFalse();
+        assertThat(reading.turnStartedMillis()).isEqualTo(clock.millis());
+
+        apply(new Intent.SessionTurnEnded("work", 0, 0.20, 50_000L, 200_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().isBusy()).isFalse();
+        assertThat(effects).containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+
+        // Claude Code sends one more result after a background agent's report, with no model call: it finished nothing
+        apply(new Intent.SessionTurnEnded("work", 0, 0.20, 50_000L, 200_000L, false, ""));
+        assertThat(effects).noneMatch(Effect.DesktopNotify.class::isInstance);
+    }
+
+    @Test
+    void aLaterTurnThatEndsWhileOlderBackgroundWorkRunsOnIsFinished() {
+        BackgroundTask build = new BackgroundTask("b1", "local_bash", "build in the background", 0L);
+        apply(new Intent.RunText(P1, "start the build in the background", Target.CLAUDE));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.SessionTasksChanged("work", List.of(build)));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 10_000L, 200_000L, false, ""));
+        assertThat(effects).as("the hand-off turn").noneMatch(Effect.DesktopNotify.class::isInstance);
+
+        // a question while the build runs on: its answer is an outcome of its own
+        apply(new Intent.RunText(P1, "what does the build do?", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.2, 12_000L, 200_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().isWaiting()).as("the build still runs").isTrue();
+        assertThat(state.session("work").orElseThrow().isAwaitingHandOff()).isFalse();
+        assertThat(effects).containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
+    }
+
+    @Test
+    void aCallInARunningTurnLeavesItsCountAndAnExitEndsTheBackgroundWork() {
+        apply(new Intent.RunText(P1, "first", Target.CLAUDE));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "second", Target.CLAUDE));
+        apply(new Intent.SessionTurnRunning("work"));
+        assertThat(state.session("work").orElseThrow().pendingTurns()).isEqualTo(2);
+
+        BackgroundTask build = new BackgroundTask("b1", "local_bash", "build in the background", 0L);
+        long first = clock.millis();
+        apply(new Intent.SessionTasksChanged("work", List.of(build)));
+        clock.advance(5_000);
+        apply(new Intent.SessionTasksChanged("work", List.of(build, new BackgroundTask("b2", "local_bash", "", 0L))));
+        SessionState two = state.session("work").orElseThrow();
+        assertThat(two.tasks()).extracting(BackgroundTask::startedMillis).as("a task keeps the time it was first heard of")
+                .containsExactly(first, first + 5_000);
+        assertThat(two.waitingFor()).isEqualTo("2 background tasks");
+
+        apply(new Intent.SessionExited("work", 0, ""));
+        assertThat(state.session("work").orElseThrow().tasks()).as("the process's tasks end with it").isEmpty();
+        assertThat(state.session("work").orElseThrow().isWaiting()).isFalse();
+    }
+
+    @Test
     void initRecordsTheConversationIdSoTheNextStartResumes() {
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionInit("work", new SessionInfo("abc-123", "claude-haiku-5-5", "/tmp", "2.1.296", "default",
@@ -299,6 +374,19 @@ class ReducerTest {
     }
 
     @Test
+    void aTurnThatEndsWhileBackgroundWorkRunsKeepsEveryCard() {
+        apply(new Intent.RunText(P1, "review the change in the background", Target.CLAUDE));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.SessionTasksChanged("work", List.of(new BackgroundTask("a1", "local_agent", "review agent", 0L))));
+        // the background agent asks to write while the turn that started it ends
+        Approval write = new Approval(9L, "work", ApprovalKind.SQL_WRITE, "db_run_sql", "{}", "DELETE", 1L);
+        apply(new Intent.ApprovalRequested(write));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.40, 30_000L, 200_000L, false, ""));
+        assertThat(state.approvals()).as("the work that may have asked still runs: no card is missed").containsExactly(write);
+        assertThat(effects).noneMatch(Effect.ResolveApproval.class::isInstance);
+    }
+
+    @Test
     void aTurnThatEndsWithNothingQueuedWithdrawsItsCardsAndKeepsKnownUsage() {
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
@@ -309,15 +397,12 @@ class ReducerTest {
         apply(new Intent.ApprovalRequested(a));
         Approval background = new Approval(10L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L);
         apply(new Intent.ApprovalRequested(background));
-        Approval prompt = new Approval(11L, "work", ApprovalKind.SESSION_PROMPT, "session_send", "{}", "Prompt reviews: go", 1L);
-        apply(new Intent.ApprovalRequested(prompt));
 
-        // interrupted: the result arrives with nothing queued while the cards still wait; the statement and prompt
-        // cards go, a tool card may belong to a background agent and stays until Claude Code cancels its call
+        // interrupted: the result arrives with nothing queued while the cards still wait; the statement card goes, a
+        // tool card may belong to a background agent and stays until Claude Code cancels its call
         apply(new Intent.SessionTurnEnded("work", 0, 0.55, 31_000L, 200_000L, true, "interrupted"));
         assertThat(state.approvals()).containsExactly(background);
-        assertThat(effects).contains(new Effect.ResolveApproval(a, new ApprovalDecision.Deny("the turn ended")),
-                new Effect.ResolveApproval(prompt, new ApprovalDecision.Deny("the turn ended")));
+        assertThat(effects).contains(new Effect.ResolveApproval(a, new ApprovalDecision.Deny("the turn ended")));
 
         // a turn end with unknown usage (the process was gone) keeps what was known
         apply(new Intent.SessionTurnEnded("work", 0, -1.0, -1L, 0L, true, "session not running"));

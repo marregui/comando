@@ -1476,6 +1476,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (!busy.isEmpty()) {
             work.add(String.join(", ", busy) + (busy.size() == 1 ? "'s turn" : "' turns"));
         }
+        List<String> waiting = s.sessions().stream().filter(SessionState::isWaiting).map(SessionState::name).toList();
+        if (!waiting.isEmpty()) {
+            work.add(String.join(", ", waiting) + (waiting.size() == 1 ? "'s background work" : "' background work"));
+        }
         int jobs = lower.terminals().runningJobs();
         if (jobs > 0) {
             work.add(jobs + (jobs == 1 ? " shell job" : " shell jobs"));

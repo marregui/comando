@@ -4,9 +4,11 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.testkit.SyntheticSession;
+import dev.marregui.comando.ui.kit.async.OnEdt;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
@@ -17,6 +19,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /** How the transcript reads: what opens and closes by itself, what find and copy see, and the status of running calls. */
+@ExtendWith(OnEdt.class)
 class TranscriptReadingTest {
 
     private static final String CONTEXT_JSON = "{\"hookSpecificOutput\":{\"hookEventName\":\"UserPromptSubmit\","

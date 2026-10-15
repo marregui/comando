@@ -359,7 +359,7 @@
   },
   {
     "name": "session_send",
-    "description": "Sends a prompt to another comando session, once the user allows it on a card in the inbox. The prompt, headed [from session <this session>], is added to that session's panel as a block of its own and run there, so the user sees what was sent and by whom; a busy session takes it after its current turn. Only when the user asked you to hand work to another session. The answer gives the cursor for session_read.",
+    "description": "Sends a prompt to another comando session; nothing is asked of the user. The prompt, headed [from session <this session>], is added to that session's panel as a block of its own and run there, so the user sees what was sent and by whom; a busy session takes it after its current turn. Only when the user asked you to hand work to another session. The answer gives the cursor for session_read.",
     "inputSchema": {
       "type": "object",
       "properties": {
