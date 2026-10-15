@@ -39,8 +39,13 @@ class ResourceKindTest {
     @Test
     void sessionRoundTrip() {
         SessionSpec spec = new SessionSpec("edge", "/Users/x/edge", "opus", "high", "acceptEdits",
-                List.of("/a", "/b"), 15.0, "id-1", StartMode.RESUME);
+                List.of("/a", "/b"), 15.0, "id-1", StartMode.RESUME, "/reflect");
         assertThat(SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(spec))).isEqualTo(spec);
+        SessionSpec silent = new SessionSpec("edge", "/Users/x/edge", "", "", "", List.of(), 0.0, "", StartMode.NEW, "");
+        assertThat(SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(silent)).checkpoint())
+                .as("an emptied checkpoint stays empty: the button is hidden").isEmpty();
+        assertThat(new SessionSpec("edge", "/Users/x/edge", "", "", "", List.of(), 0.0, "", StartMode.NEW, null).checkpoint())
+                .as("a spec read from a file written before the field existed gets the default").isEqualTo("/reflect");
     }
 
     @Test

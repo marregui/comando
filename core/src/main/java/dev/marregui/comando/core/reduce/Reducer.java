@@ -128,6 +128,8 @@ public final class Reducer {
             case Intent.ImportSessions i -> importSessions(s, i.specs());
             case Intent.StartSession i -> startSession(s, i.name());
             case Intent.StopSession i -> stopSession(s, i.name());
+            case Intent.StartFresh i -> startFresh(s, i.name());
+            case Intent.Checkpoint i -> checkpoint(s, i.name());
             case Intent.InterruptSession i -> interruptSession(s, i.name());
             case Intent.SetSessionModel i -> sessionSetting(s, i.name(), i.model(), true);
             case Intent.SetSessionEffort i -> sessionSetting(s, i.name(), i.effort(), false);
@@ -817,6 +819,37 @@ public final class Reducer {
                 .filter(x -> !x.status().isUsable() && x.status() != Status.CLOSING)
                 .map(x -> new Transition(s.withSession(x.withStatus(Status.OPENING, "")), List.of(new Effect.StartClaude(x.spec()))))
                 .orElse(Transition.of(s));
+    }
+
+    /** A stopped session starts on a new conversation; the spec is saved first, so a crash mid-start resumes nothing old. */
+    private Transition startFresh(AppState s, String name) {
+        Optional<SessionState> found = s.session(name).filter(x -> !x.status().isUsable() && x.status() != Status.CLOSING);
+        if (found.isEmpty()) {
+            return Transition.of(s);
+        }
+        SessionState x = found.get();
+        String previous = x.spec().claudeSessionId();
+        SessionState fresh = x.withSpec(x.spec().restarted()).withStatus(Status.OPENING, "");
+        AppState next = s.withSession(fresh);
+        if (!previous.isEmpty()) {
+            next = notice(next, Notice.Level.INFO, "Session " + name + ": new conversation; the previous one (" + previous
+                    + ") can be imported again", Notice.session(name));
+        }
+        return new Transition(next, List.of(new Effect.SaveSessions(sessionSpecs(next)), new Effect.StartClaude(fresh.spec())));
+    }
+
+    /** The checkpoint command runs as a prompt from the session's panel, as if the user had typed it there. */
+    private Transition checkpoint(AppState s, String name) {
+        Optional<SessionState> found = s.session(name);
+        if (found.isEmpty() || found.get().spec().checkpoint().isEmpty() || found.get().status() == Status.CLOSING) {
+            return Transition.of(s);
+        }
+        List<PanelState> panels = s.panelsBoundToSession(name);
+        if (panels.isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "Session " + name + " has no panel; open it to send "
+                    + found.get().spec().checkpoint(), Notice.session(name)));
+        }
+        return runPrompt(s, panels.getFirst(), found.get().spec().checkpoint());
     }
 
     private Transition stopSession(AppState s, String name) {

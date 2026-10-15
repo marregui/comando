@@ -25,19 +25,22 @@ import java.util.Optional;
 /**
  * One session in the sidebar's list: its state, name, the panels it is bound to (or headless) and pending approvals;
  * its folder and branch; and a row of controls: the plug, green while the session runs and grey while it does not, a
- * click on it stopping or starting the session; the model; the effort. The list paints it as a cell renderer, so its
- * buttons are not live: the list finds the control under a click with {@link #hit}.
+ * click on it stopping or starting the session; a fresh start (a stopped session with a conversation starts on a new
+ * one); a checkpoint (the session's checkpoint command sent as a prompt); the model; the effort. The list paints it as
+ * a cell renderer, so its buttons are not live: the list finds the control under a click with {@link #hit}.
  */
 final class SessionRow extends JPanel {
 
     /** The controls of a row, in their order. */
     enum Control {
-        POWER, MODEL, EFFORT
+        POWER, FRESH, CHECKPOINT, MODEL, EFFORT
     }
 
     private final JLabel text = new JLabel();
     private final JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
     private final JButton power = control();
+    private final JButton fresh = control();
+    private final JButton checkpoint = control();
     private final JButton model = control();
     private final JButton effort = control();
 
@@ -50,6 +53,10 @@ final class SessionRow extends JPanel {
         // under the text, past the icon's column
         controls.setBorder(BorderFactory.createEmptyBorder(0, Icons.get("claude").getIconWidth() + 2, 0, 0));
         controls.add(power);
+        controls.add(fresh);
+        controls.add(checkpoint);
+        fresh.setIcon(Icons.get("fresh", 14));
+        checkpoint.setIcon(Icons.get("checkpoint", 14));
         controls.add(model);
         controls.add(effort);
         add(text, BorderLayout.CENTER);
@@ -68,11 +75,15 @@ final class SessionRow extends JPanel {
         boolean running = s.status().isUsable();
         power.setIcon(Icons.get(running ? "plug" : "unplug", 14));
         power.setToolTipText(running ? "Connected; click to disconnect (stops the session)" : "Disconnected; click to connect (starts the session)");
+        fresh.setVisible(EditorPanel.showsFresh(s));
+        fresh.setToolTipText("Start a new conversation; the current one (" + s.spec().claudeSessionId() + ") stays importable");
+        checkpoint.setVisible(EditorPanel.showsCheckpoint(s));
+        checkpoint.setToolTipText("Checkpoint: send " + s.spec().checkpoint() + " to the session");
         model.setText(modelName(s) + " ▾");
         model.setToolTipText("Model: " + modelName(s) + "; click to change");
         effort.setText(effortName(s) + " ▾");
         effort.setToolTipText("Effort: " + effortName(s) + "; click to change");
-        for (JButton b : new JButton[]{power, model, effort}) {
+        for (JButton b : new JButton[]{power, fresh, checkpoint, model, effort}) {
             b.setForeground(selected ? foreground : Theme.MUTED_STRONG);
         }
         return this;
@@ -82,7 +93,8 @@ final class SessionRow extends JPanel {
     Optional<Control> hit(Rectangle cell, Point p) {
         layOut(cell);
         Component c = SwingUtilities.getDeepestComponentAt(this, p.x - cell.x, p.y - cell.y);
-        return c == power ? Optional.of(Control.POWER) : c == model ? Optional.of(Control.MODEL)
+        return c == power ? Optional.of(Control.POWER) : c == fresh ? Optional.of(Control.FRESH)
+                : c == checkpoint ? Optional.of(Control.CHECKPOINT) : c == model ? Optional.of(Control.MODEL)
                 : c == effort ? Optional.of(Control.EFFORT) : Optional.empty();
     }
 
@@ -103,6 +115,8 @@ final class SessionRow extends JPanel {
     private JButton button(Control c) {
         return switch (c) {
             case POWER -> power;
+            case FRESH -> fresh;
+            case CHECKPOINT -> checkpoint;
             case MODEL -> model;
             case EFFORT -> effort;
         };

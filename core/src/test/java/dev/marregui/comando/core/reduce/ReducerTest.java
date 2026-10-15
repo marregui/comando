@@ -411,6 +411,55 @@ class ReducerTest {
     }
 
     @Test
+    void aFreshStartLeavesTheConversationBehindAndSavesThatFirst() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.SessionInit("work", new SessionInfo("conv-1", "opus", "/w", "2.1", "", List.of())));
+        assertThat(state.session("work").orElseThrow().spec().claudeSessionId()).isEqualTo("conv-1");
+
+        apply(new Intent.StartFresh("work"));
+        assertThat(effects).as("a running session keeps its conversation; the button is hidden then").isEmpty();
+
+        apply(new Intent.StopSession("work"));
+        apply(new Intent.SessionExited("work", 0, ""));
+        apply(new Intent.StartFresh("work"));
+        SessionSpec spec = state.session("work").orElseThrow().spec();
+        assertThat(spec.claudeSessionId()).isEmpty();
+        assertThat(spec.startMode()).isEqualTo(StartMode.NEW);
+        assertThat(state.session("work").orElseThrow().status()).isEqualTo(Status.OPENING);
+        assertThat(effects).containsExactly(new Effect.SaveSessions(List.of(spec)), new Effect.StartClaude(spec));
+        assertThat(state.notice().text()).isEqualTo("Session work: new conversation; the previous one (conv-1) can be imported again");
+
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.SessionInit("work", new SessionInfo("conv-2", "opus", "/w", "2.1", "", List.of())));
+        assertThat(state.session("work").orElseThrow().spec().claudeSessionId()).isEqualTo("conv-2");
+        assertThat(state.session("work").orElseThrow().spec().startMode()).isEqualTo(StartMode.RESUME);
+    }
+
+    @Test
+    void aCheckpointRunsTheSessionsCommandAsAPromptFromItsPanel() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.Checkpoint("work"));
+        assertThat(effects).contains(new Effect.SendToClaude("work", "/reflect", state.panel(P1).orElseThrow().title()));
+        assertThat(state.session("work").orElseThrow().pendingTurns()).isEqualTo(1);
+
+        apply(new Intent.BindSession(P1, ""));
+        apply(new Intent.BindSession(P2, ""));
+        apply(new Intent.Checkpoint("work"));
+        assertThat(effects).as("no panel: nowhere to run it").doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
+        assertThat(state.notice().text()).isEqualTo("Session work has no panel; open it to send /reflect");
+
+        apply(new Intent.BindSession(P1, "work"));
+        apply(new Intent.SaveSession("work", state.session("work").orElseThrow().spec().restarted()));
+        SessionSpec silent = new SessionSpec("work", state.session("work").orElseThrow().spec().workDir(), "", "", "", List.of(), 0.0, "",
+                StartMode.NEW, "");
+        apply(new Intent.SaveSession("work", silent));
+        apply(new Intent.Checkpoint("work"));
+        assertThat(effects).as("an emptied command sends nothing").isEmpty();
+    }
+
+    @Test
     void aFailedTurnIsRememberedOnTheSessionUntilTheNextOneStarts() {
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));

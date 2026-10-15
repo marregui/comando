@@ -28,6 +28,8 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                     List.of("", "default", "acceptEdits", "plan", "auto", "dontAsk"), "empty: the CLI's default"),
             Attribute.of("addDirs", "Extra directories", Attribute.Kind.DIRECTORIES, false, "--add-dir, separated by " + File.pathSeparator),
             Attribute.of("budgetUsd", "Budget (USD)", Attribute.Kind.DECIMAL, false, "--max-budget-usd per process; 0 for none"),
+            Attribute.of("checkpoint", "Checkpoint command", Attribute.Kind.TEXT, false,
+                    "the prompt the Checkpoint button sends; empty hides the button"),
             Attribute.of("claudeSessionId", "Claude session id", Attribute.Kind.TEXT, false, "set after the first start; empty for a new session")
                     .inAdvanced(),
             Attribute.choice("startMode", "Next start", List.of("NEW", "RESUME", "FORK"),
@@ -58,6 +60,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
         m.put("budgetUsd", s.budgetUsd() == 0.0 ? "0" : Double.toString(s.budgetUsd()));
         m.put("claudeSessionId", s.claudeSessionId());
         m.put("startMode", s.startMode().name());
+        m.put("checkpoint", s.checkpoint());
         return m;
     }
 
@@ -87,7 +90,8 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                 dirs,
                 budget,
                 id,
-                startMode);
+                startMode,
+                a.getOrDefault("checkpoint", ""));
     }
 
     private static StartMode startMode(String value, String id) {
@@ -125,7 +129,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
             return s;
         }
         return new SessionSpec(name, s.workDir(), s.model(), s.effort(), s.permissionMode(), s.addDirs(), s.budgetUsd(),
-                s.claudeSessionId(), StartMode.FORK);
+                s.claudeSessionId(), StartMode.FORK, s.checkpoint());
     }
 
     @Override

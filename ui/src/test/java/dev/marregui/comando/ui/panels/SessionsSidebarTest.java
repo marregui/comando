@@ -307,7 +307,8 @@ class SessionsSidebarTest {
         SessionRow row = (SessionRow) render(list, 1);
         assertThat(row.tip(new Rectangle(0, 0, 260, 60), new Point(0, 0))).isEmpty();
         assertThat(SessionRow.Control.values()).as("no edit control: the button above the list edits")
-                .containsExactly(SessionRow.Control.POWER, SessionRow.Control.MODEL, SessionRow.Control.EFFORT);
+                .containsExactly(SessionRow.Control.POWER, SessionRow.Control.FRESH, SessionRow.Control.CHECKPOINT,
+                        SessionRow.Control.MODEL, SessionRow.Control.EFFORT);
         Rectangle power = s[0].controlBounds(1, SessionRow.Control.POWER);
         assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Connected; click to disconnect (stops the session)");
     }

@@ -324,6 +324,8 @@ public final class SessionsSidebar {
         Rectangle cell = sessions.getCellBounds(i, i);
         switch (control) {
             case POWER -> intents.dispatch(s.status().isUsable() ? new Intent.StopSession(s.name()) : new Intent.StartSession(s.name()));
+            case FRESH -> intents.dispatch(new Intent.StartFresh(s.name()));
+            case CHECKPOINT -> intents.dispatch(new Intent.Checkpoint(s.name()));
             case MODEL, EFFORT -> {
                 Rectangle at = layOutRow(s, i).bounds(cell, control);
                 JPopupMenu m = new JPopupMenu();

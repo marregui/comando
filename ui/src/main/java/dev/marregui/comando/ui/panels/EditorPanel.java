@@ -53,6 +53,10 @@ public final class EditorPanel extends JPanel {
     private final JButton connectionToggle = iconButton();
     private final JButton session = chip();
     private final JButton sessionToggle = iconButton();
+    /** Starts a stopped session on a new conversation; shown only while there is a conversation to leave. */
+    private final JButton sessionFresh = iconButton();
+    /** Sends the session's checkpoint command; shown only while the session has one. */
+    private final JButton sessionCheckpoint = iconButton();
     private final JButton run = new JButton("Run", Icons.get("play"));
     private final JButton stop = new JButton(Icons.get("stop"));
     /** Names the other view: Preview while the text is edited, Edit while the Markdown shows rendered. */
@@ -81,6 +85,12 @@ public final class EditorPanel extends JPanel {
         // the session first, as a panel is mostly for it; the database second
         left.add(session);
         left.add(sessionToggle);
+        left.add(sessionFresh);
+        left.add(sessionCheckpoint);
+        sessionFresh.setIcon(Icons.get("fresh"));
+        sessionFresh.getAccessibleContext().setAccessibleName("Start a new conversation");
+        sessionCheckpoint.setIcon(Icons.get("checkpoint"));
+        sessionCheckpoint.getAccessibleContext().setAccessibleName("Checkpoint");
         left.add(Box.createHorizontalStrut(Theme.PAD));
         left.add(connection);
         left.add(connectionToggle);
@@ -113,6 +123,8 @@ public final class EditorPanel extends JPanel {
         session.addActionListener(e -> sessionMenu().show(session, 0, session.getHeight()));
         connectionToggle.addActionListener(e -> toggleConnection());
         sessionToggle.addActionListener(e -> toggleSession());
+        sessionFresh.addActionListener(e -> state.session(panel.session()).ifPresent(x -> intents.dispatch(new Intent.StartFresh(x.name()))));
+        sessionCheckpoint.addActionListener(e -> state.session(panel.session()).ifPresent(x -> intents.dispatch(new Intent.Checkpoint(x.name()))));
     }
 
     public CommandEditor editor() {
@@ -255,7 +267,14 @@ public final class EditorPanel extends JPanel {
             sessionToggle.setIcon(Icons.get(ss.status().isUsable() ? "plug" : "unplug"));
             sessionToggle.setToolTipText(ss.status().isUsable() ? "Connected; click to disconnect (stops the session)"
                     : "Disconnected; click to connect (starts the session)");
+            sessionFresh.setVisible(showsFresh(ss));
+            sessionFresh.setToolTipText("Start a new conversation; the current one (" + ss.spec().claudeSessionId() + ") stays importable");
+            sessionCheckpoint.setVisible(showsCheckpoint(ss));
+            sessionCheckpoint.setEnabled(ss.status() != Status.CLOSING);
+            sessionCheckpoint.setToolTipText("Checkpoint: send " + ss.spec().checkpoint() + " to the session");
         } else {
+            sessionFresh.setVisible(false);
+            sessionCheckpoint.setVisible(false);
             session.setIcon(Icons.get("claude"));
             session.setText("no session ▾");
             session.setToolTipText("Bind a session");
@@ -322,6 +341,15 @@ public final class EditorPanel extends JPanel {
     private void toggleConnection() {
         state.connection(panel.connection()).ifPresent(c -> intents.dispatch(c.status().isUsable()
                 ? new Intent.CloseConnection(c.name()) : new Intent.OpenConnection(c.name())));
+    }
+
+    /** The fresh-start button shows while the session is stopped and has a conversation to leave behind. */
+    static boolean showsFresh(SessionState ss) {
+        return !ss.status().isUsable() && ss.status() != Status.CLOSING && !ss.spec().claudeSessionId().isEmpty();
+    }
+
+    static boolean showsCheckpoint(SessionState ss) {
+        return !ss.spec().checkpoint().isEmpty();
     }
 
     private void toggleSession() {

@@ -270,6 +270,10 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                     code -> s.run(() -> onExit(s, run, code)));
             s.current = run;
             s.startFailed = false;
+            if (spec.startMode() == StartMode.NEW) {
+                // the Session tab shows one conversation: the new one starts empty, the old stays in Claude Code's files
+                s.transcript.clear();
+            }
             LOG.log(System.Logger.Level.INFO, "claude started [session=" + s.name + ", pid=" + run.process.pid() + ", mode=" + spec.startMode() + ']');
             s.mapper.note(Block.NoteKind.INFO, switch (spec.startMode()) {
                 case NEW -> "New conversation " + newId;

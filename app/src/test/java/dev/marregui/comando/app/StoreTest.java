@@ -58,6 +58,17 @@ class StoreTest {
     }
 
     @Test
+    void aSessionsFileFromBeforeTheCheckpointFieldLoadsWithTheDefaultCommand() throws Exception {
+        Files.writeString(home.resolve("connections.json"), "[]");
+        Files.writeString(home.resolve("sessions.json"), "[{\"name\":\"old\",\"workDir\":\"/w\",\"model\":\"\",\"effort\":\"\","
+                + "\"permissionMode\":\"\",\"addDirs\":[],\"budgetUsd\":0.0,\"claudeSessionId\":\"\",\"startMode\":\"NEW\"}]");
+        Files.writeString(home.resolve("panels.json"), "[]");
+        try (Store store = new Store(home)) {
+            assertThat(store.load().sessions()).extracting(SessionSpec::checkpoint).containsExactly("/reflect");
+        }
+    }
+
+    @Test
     void bindingsToMissingNamesAreDropped() throws Exception {
         Files.writeString(home.resolve("connections.json"), "[]");
         Files.writeString(home.resolve("sessions.json"), "[]");

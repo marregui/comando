@@ -181,6 +181,14 @@ public sealed interface Intent {
     record StopSession(String name) implements Intent {
     }
 
+    /** Starts a stopped session on a new conversation; the old one stays in Claude Code's files, importable again. */
+    record StartFresh(String name) implements Intent {
+    }
+
+    /** Sends the session's checkpoint command as a prompt from its panel. */
+    record Checkpoint(String name) implements Intent {
+    }
+
     record InterruptSession(String name) implements Intent {
     }
 

@@ -37,7 +37,7 @@ Outside the data root:
 | Thing | Restored as |
 |---|---|
 | connections | closed; a password is read from the keychain when the connection is loaded; when the keychain cannot be asked, the connection loads without it and the stored item is kept |
-| sessions | closed; a session with a conversation id shows its stored transcript, read from Claude Code's file without starting a process |
+| sessions | closed; a session with a conversation id shows its stored transcript, read from Claude Code's file without starting a process; a `sessions.json` written before the checkpoint command existed loads with the default, `/reflect` |
 | panels | their bindings, and their text from their files, edits made there while comando was closed included; a binding to a name that no longer exists is dropped; a file that cannot be read leaves its panel empty and is left alone; with no panel left, one panel named `scratch` with the welcome text |
 | window | size, position, maximised state, dividers, sidebar and side pane visibility, the sidebar's tab; saved a second after each resize or move and at quit; bounds are kept on a screen that still exists, else the window opens centred on the main screen; a side pane divider outside the window is ignored |
 | views, results, terminals | not restored; they belong to one run |
