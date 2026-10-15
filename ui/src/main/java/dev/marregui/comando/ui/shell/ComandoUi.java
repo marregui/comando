@@ -320,7 +320,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 null,
                 Intent.StartSession::new,
                 Intent.StopSession::new,
-                (s, name) -> new Intent.BindSession(s.focused(), name),
+                (s, name) -> new Intent.OpenSession(name, s.focused(), PanelId.random()),
                 "claude", this::openImport, "Import…"), deps.intents());
         importDialog = new ImportSessionsDialog(frame, deps.intents(), deps.catalogue());
 
@@ -707,9 +707,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             cmd("session.effort." + e, e, null, () -> focusedSession().ifPresent(x ->
                     deps.intents().dispatch(new Intent.SetSessionEffort(x.name(), e))), () -> focusedSession().isPresent());
         }
-        cmd("panel.bindSession", "Bind a session…", null, () -> choose("Session for this panel",
+        cmd("panel.bindSession", "Open a session…", null, () -> choose("Session to open",
                 deps.state().get().sessions().stream().map(x -> x.name()).toList(),
-                name -> deps.intents().dispatch(new Intent.BindSession(deps.state().get().focused(), name))));
+                name -> deps.intents().dispatch(new Intent.OpenSession(name, deps.state().get().focused(), PanelId.random()))));
         cmd("session.dialog", "Sessions…", key(KeyEvent.VK_K, CMD | SHIFT), () -> openSessions(""));
         cmd("session.import", "Import conversations…", null, this::openImport);
         // panel: its connection

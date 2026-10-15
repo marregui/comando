@@ -14,9 +14,12 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.RunStatus;
+import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.view.Placement;
@@ -405,15 +408,82 @@ class ReducerTest {
     // ---- panels
 
     @Test
-    void newPanelInheritsTheFocusedBindingsAndTakesFocus() {
+    void newPanelTakesTheFocusedConnectionNoSessionAndFocus() {
         PanelId p3 = new PanelId("p3");
         apply(new Intent.AddPanel(p3, ""));
         assertThat(state.focused()).isEqualTo(p3);
         assertThat(state.panel(p3).orElseThrow()).satisfies(p -> {
             assertThat(p.title()).isEqualTo("panel 3");
             assertThat(p.connection()).isEqualTo("local");
-            assertThat(p.session()).isEqualTo("work");
+            assertThat(p.session()).as("a session has one panel").isEmpty();
         });
+    }
+
+    // ---- a session has one panel
+
+    private static final PanelId P3 = new PanelId("p3");
+
+    /** p1 "one" on work, p2 "two" with no session, a headless session edge. */
+    private static AppState onePanelPerSession() {
+        return AppState.initial(List.of(new PanelState(P1, "one", "local", "work"), new PanelState(P2, "two", "local", "")),
+                List.of(ConnectionState.closed(States.LOCAL)),
+                List.of(SessionState.closed(States.WORK), SessionState.closed(SessionSpec.fresh("edge", "/w/edge"))));
+    }
+
+    @Test
+    void openingASessionThatHasAPanelBringsThatPanelForward() {
+        state = onePanelPerSession();
+        apply(new Intent.OpenSession("work", P2, P3));
+        assertThat(state.focused()).isEqualTo(P1);
+        assertThat(state.panels()).extracting(PanelState::id).containsExactly(P1, P2);
+        assertThat(effects).isEmpty();
+    }
+
+    @Test
+    void openingAHeadlessSessionOnAPanelWithoutOneBindsItThere() {
+        state = onePanelPerSession();
+        apply(new Intent.OpenSession("edge", P2, P3));
+        assertThat(state.panel(P2).orElseThrow().session()).isEqualTo("edge");
+        assertThat(state.focused()).isEqualTo(P2);
+        assertThat(state.panels()).hasSize(2);
+        assertThat(effects).containsExactly(new Effect.SavePanels(state.panels()));
+    }
+
+    @Test
+    void openingAHeadlessSessionOnAPanelWithAnotherOpensANewPanelNamedAfterIt() {
+        state = onePanelPerSession();
+        apply(new Intent.RenamePanel(P2, "edge"));
+        apply(new Intent.OpenSession("edge", P1, P3));
+
+        assertThat(state.panel(P1).orElseThrow().session()).as("the panel keeps its session").isEqualTo("work");
+        assertThat(state.panel(P3).orElseThrow()).isEqualTo(new PanelState(P3, "edge 2", "local", "edge"));
+        assertThat(state.focused()).isEqualTo(P3);
+        assertThat(state.notice().text()).isEqualTo("Opened edge in a new panel; one keeps work");
+        assertThat(effects).containsExactly(new Effect.SavePanels(state.panels()));
+
+        apply(new Intent.OpenSession("gone", P1, new PanelId("p4")));
+        assertThat(state.notice().text()).isEqualTo("No session called gone");
+        assertThat(state.panels()).hasSize(3);
+    }
+
+    @Test
+    void bindingASessionTakesItFromItsOtherPanelAndAnEmptyNameDetaches() {
+        state = onePanelPerSession();
+        apply(new Intent.BindSession(P2, "work"));
+        assertThat(state.panels()).extracting(PanelState::session).containsExactly("", "work");
+
+        apply(new Intent.BindSession(P2, ""));
+        assertThat(state.panels()).extracting(PanelState::session).containsExactly("", "");
+        assertThat(state.session("work")).as("a detached session stays").isPresent();
+    }
+
+    @Test
+    void aReopenedPanelLeavesItsSessionWithThePanelThatTookIt() {
+        state = onePanelPerSession();
+        apply(new Intent.ReopenPanel(P3, "old", "local", "work"));
+        assertThat(state.panel(P3).orElseThrow().session()).isEmpty();
+        apply(new Intent.ReopenPanel(new PanelId("p4"), "older", "local", "edge"));
+        assertThat(state.panel(new PanelId("p4")).orElseThrow().session()).isEqualTo("edge");
     }
 
     @Test

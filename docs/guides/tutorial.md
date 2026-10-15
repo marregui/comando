@@ -181,7 +181,7 @@ Other permission requests, such as a shell command or a file edit, appear as the
 
 1. Press **⌃3** (or **⌘⌥3**, if Mission Control takes ⌃3). The **Terminal** tab starts a login shell in the session's working directory and gives it the keyboard. Type `ls` and press **⏎**.
 2. Back in the editor (**⌘E**), at the end, after an empty line, type `date` and press **⌃⏎**. The line under the caret is typed into the terminal and runs there; a shell that is still starting gets it once it is ready.
-3. Press **⌘T** for a second panel. It starts with the same connection and session as the panel you were in; change either from the chips in its header, or by double-clicking a name in the sidebar. **⌘1**…**⌘9** jump between panels.
+3. Press **⌘T** for a second panel. It starts with the same connection as the panel you were in and no session, since a session has one panel; double-click `tutor` in the sidebar and the first panel comes forward, because it has that session. Change the new panel's connection from the chip in its header. **⌘1**…**⌘9** jump between panels.
 4. Press **⌘W** to close the new panel, then **⌘⇧T**: it comes back with its text and bindings. comando asks first only when the panel's shell is running a program.
 5. Press **⌘Q**. comando stops the session's process and the embedded QuestDB and saves everything. If a query, a turn, a Gradle run or a shell job is running, it asks first; while it closes, the window stays, greyed, titled "closing…".
 6. Start it again with `./gradlew :app:run`.

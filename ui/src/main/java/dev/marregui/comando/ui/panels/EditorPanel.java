@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.schema.Schema;
@@ -30,6 +31,7 @@ import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
 import java.nio.file.Path;
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
@@ -337,18 +339,25 @@ public final class EditorPanel extends JPanel {
         return m;
     }
 
+    /**
+     * A panel with a session offers to detach it: the session keeps running without a panel. A panel without one lists
+     * the sessions; a choice opens it, here unless another panel has it, which then comes forward.
+     */
     private JPopupMenu sessionMenu() {
         JPopupMenu m = new JPopupMenu();
-        for (SessionState x : state.sessions()) {
-            JMenuItem item = new JMenuItem(x.name() + "  " + Labels.shortPath(x.spec().workDir()), Icons.get("claude"));
-            item.addActionListener(e -> intents.dispatch(new Intent.BindSession(panel.id(), x.name())));
-            m.add(item);
-        }
         if (!panel.session().isEmpty()) {
-            m.addSeparator();
-            JMenuItem none = new JMenuItem("Unbind");
-            none.addActionListener(e -> intents.dispatch(new Intent.BindSession(panel.id(), "")));
-            m.add(none);
+            JMenuItem detach = new JMenuItem("Detach " + panel.session());
+            detach.setToolTipText("The session keeps running without a panel; the text stays here");
+            detach.addActionListener(e -> intents.dispatch(new Intent.BindSession(panel.id(), "")));
+            m.add(detach);
+            return m;
+        }
+        for (SessionState x : state.sessions()) {
+            List<PanelState> elsewhere = state.panelsBoundToSession(x.name());
+            String where = elsewhere.isEmpty() ? "" : "  · " + elsewhere.getFirst().title();
+            JMenuItem item = new JMenuItem(x.name() + "  " + Labels.shortPath(x.spec().workDir()) + where, Icons.get("claude"));
+            item.addActionListener(e -> intents.dispatch(new Intent.OpenSession(x.name(), panel.id(), PanelId.random())));
+            m.add(item);
         }
         if (state.sessions().isEmpty()) {
             m.add(new JMenuItem("No sessions; add or import one with Sessions…")).setEnabled(false);

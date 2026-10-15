@@ -160,11 +160,14 @@ class SessionsSidebarTest {
 
         intents.clear();
         click(list, power, 2);
-        assertThat(intents).as("a double click on a control binds nothing").doesNotHaveAnyElementsOfTypes(Intent.BindSession.class);
+        assertThat(intents).as("a double click on a control binds nothing").doesNotHaveAnyElementsOfTypes(Intent.BindSession.class, Intent.OpenSession.class);
         intents.clear();
         Rectangle cell = list.getCellBounds(0, 0);
         click(list, new Rectangle(cell.x + 40, cell.y + 4, 1, 1), 2);
-        assertThat(intents).containsExactly(new Intent.BindSession(new PanelId("p"), "edge"));
+        assertThat(intents).singleElement().isInstanceOfSatisfying(Intent.OpenSession.class, o -> {
+            assertThat(o.session()).isEqualTo("edge");
+            assertThat(o.target()).isEqualTo(new PanelId("p"));
+        });
 
         intents.clear();
         List<JMenuItem> models = sidebar.modelItems(edge);

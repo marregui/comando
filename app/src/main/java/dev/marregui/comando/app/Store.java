@@ -14,6 +14,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -169,6 +170,13 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     + " deleted while comando was closed; " + (gone.size() == 1 ? "its panel is" : "their panels are") + " gone");
         }
         p = validBindings(p, c, s);
+        List<String> unbound = new ArrayList<>();
+        p = oneBindingPerSession(p, unbound);
+        if (!unbound.isEmpty()) {
+            LOG.log(System.Logger.Level.INFO, "sessions bound to several panels keep their first " + unbound);
+            notices.accept("A session has one panel now: " + String.join("; ", unbound));
+            schedulePanels();
+        }
         if (p.isEmpty()) {
             PanelState first = new PanelState(PanelId.random(), "scratch", c.isEmpty() ? "" : c.getFirst().name(), "");
             texts.put(first.id().value(), Welcome.TEXT);
@@ -224,6 +232,27 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             out.add(p.withConnection(cn.contains(p.connection()) ? p.connection() : "")
                     .withSession(sn.contains(p.session()) ? p.session() : ""));
         }
+        return out;
+    }
+
+    /**
+     * A session keeps its first panel, in panel order; a later panel bound to it keeps its text and loses the binding,
+     * told in {@code unbound} as "edge stays in one; two is detached".
+     */
+    static List<PanelState> oneBindingPerSession(List<PanelState> panels, List<String> unbound) {
+        Map<String, String> first = new HashMap<>();
+        Map<String, List<String>> detached = new LinkedHashMap<>();
+        List<PanelState> out = new ArrayList<>(panels.size());
+        for (PanelState p : panels) {
+            if (p.session().isEmpty() || first.putIfAbsent(p.session(), p.title()) == null) {
+                out.add(p);
+            } else {
+                detached.computeIfAbsent(p.session(), k -> new ArrayList<>()).add(p.title());
+                out.add(p.withSession(""));
+            }
+        }
+        detached.forEach((session, titles) -> unbound.add(session + " stays in " + first.get(session) + "; "
+                + String.join(", ", titles) + (titles.size() == 1 ? " is" : " are") + " detached"));
         return out;
     }
 

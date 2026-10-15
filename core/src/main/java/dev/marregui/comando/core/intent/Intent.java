@@ -25,7 +25,10 @@ public sealed interface Intent {
 
     // ---- panels
 
-    /** Adds a panel bound like the focused one; the caller makes the id so the reducer stays deterministic. */
+    /**
+     * Adds a panel bound to the focused one's connection and to no session, as a session has one panel; the caller
+     * makes the id so the reducer stays deterministic.
+     */
     record AddPanel(PanelId panel, String title) implements Intent {
     }
 
@@ -46,8 +49,19 @@ public sealed interface Intent {
     record BindConnection(PanelId panel, String connection) implements Intent {
     }
 
-    /** Binds a session to the panel; an empty name unbinds. */
+    /**
+     * Binds a session to the panel; an empty name unbinds (detaches). A session has at most one panel: a panel bound
+     * to it before loses the binding.
+     */
     record BindSession(PanelId panel, String session) implements Intent {
+    }
+
+    /**
+     * Opens a session in a panel, as a file opens in an editor: the panel bound to it comes forward; else
+     * {@code target} takes it when it has no session; else a new panel {@code newPanel}, titled after the session and
+     * bound to it and to {@code target}'s connection. The caller makes the new id, so the reducer stays deterministic.
+     */
+    record OpenSession(String session, PanelId target, PanelId newPanel) implements Intent {
     }
 
     // ---- running text

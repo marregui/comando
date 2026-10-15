@@ -262,7 +262,9 @@ public final class ResourceDialog<S> {
             hideConfirm();
             toggleOpen();
         });
-        actions.add(button("Assign to panel", "pin", "Saves when needed, then binds the " + noun + " to the focused panel (⌘⏎)",
+        actions.add(button("Assign to panel", "pin", session
+                        ? "Saves when needed, then opens the session in a panel: its own, else the focused one when it has none, else a new one (⌘⏎)"
+                        : "Saves when needed, then binds the " + noun + " to the focused panel (⌘⏎)",
                 this::assign));
         save = button("Save", "check", "Saves the form (⏎)", this::save);
         save.putClientProperty("JButton.buttonType", "default");
@@ -664,7 +666,9 @@ public final class ResourceDialog<S> {
             saved = true;
         }
         intents.dispatch(config.assign().apply(state, editing));
-        say(Theme.MUTED, (saved ? "Saved and assigned " : "Assigned ") + editing + " to panel " + state.focusedPanel().title());
+        // a session opens in its own panel, the focused one or a new one: the reducer decides, and its notice says which
+        say(Theme.MUTED, session ? (saved ? "Saved and opened " : "Opened ") + editing + " in a panel"
+                : (saved ? "Saved and assigned " : "Assigned ") + editing + " to panel " + state.focusedPanel().title());
     }
 
     /** Esc: answers an open question with its safe button; closes the dialog, asking first when the form has unsaved changes. */

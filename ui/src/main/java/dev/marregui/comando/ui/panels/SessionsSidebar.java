@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.resource.ConnectionKind;
 import dev.marregui.comando.core.resource.SessionKind;
@@ -50,8 +51,9 @@ import java.util.Optional;
  * The left column, three tabs: Sessions (every session with its project, branch, state and pending approvals, and
  * controls to connect or disconnect it and change its model or effort), Connections, and Scratchpad (the scratchpad
  * as a tree). Above the sessions and the connections, the same {@link ResourceActions}: add (and, for sessions,
- * import) on the left; edit, clone and remove of the selected row on the right. Double-click on a session or a connection binds it to the focused panel. Hidden, the column
- * collapses to a rail whose button shows it again.
+ * import) on the left; edit, clone and remove of the selected row on the right. Double-click on a session opens it in
+ * a panel ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. Hidden, the column collapses to
+ * a rail whose button shows it again.
  */
 public final class SessionsSidebar {
 
@@ -136,7 +138,7 @@ public final class SessionsSidebar {
                         act(s, control.get());
                     }
                 } else if (e.getClickCount() == 2) {
-                    intents.dispatch(new Intent.BindSession(state.focused(), s.name()));
+                    intents.dispatch(new Intent.OpenSession(s.name(), state.focused(), PanelId.random()));
                 }
             }
 
@@ -376,7 +378,7 @@ public final class SessionsSidebar {
 
     private JPopupMenu sessionMenu(SessionState s) {
         JPopupMenu m = new JPopupMenu();
-        m.add(item("Bind to the focused panel", "claude", () -> intents.dispatch(new Intent.BindSession(state.focused(), s.name()))));
+        m.add(item("Open in a panel", "claude", () -> intents.dispatch(new Intent.OpenSession(s.name(), state.focused(), PanelId.random()))));
         m.addSeparator();
         if (s.status().isUsable()) {
             m.add(item("Stop", "stop", () -> intents.dispatch(new Intent.StopSession(s.name()))));

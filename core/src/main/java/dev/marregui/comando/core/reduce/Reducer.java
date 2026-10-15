@@ -86,6 +86,7 @@ public final class Reducer {
             case Intent.FocusPanel i -> s.panel(i.panel()).isPresent() ? Transition.of(s.withFocused(i.panel())) : Transition.of(s);
             case Intent.BindConnection i -> bindConnection(s, i);
             case Intent.BindSession i -> bindSession(s, i);
+            case Intent.OpenSession i -> openSession(s, i);
 
             case Intent.RunText i -> runText(s, i);
             case Intent.RefreshSql i -> refreshSql(s, i);
@@ -182,7 +183,7 @@ public final class Reducer {
         PanelState current = s.focusedPanel();
         String title = i.title().isBlank() ? "panel " + (s.panels().size() + 1) : i.title().strip();
         List<PanelState> panels = new ArrayList<>(s.panels());
-        panels.add(new PanelState(i.panel(), title, current.connection(), current.session()));
+        panels.add(new PanelState(i.panel(), title, current.connection(), ""));
         AppState next = s.withPanels(panels, i.panel());
         return new Transition(next, List.of(new Effect.SavePanels(next.panels())));
     }
@@ -221,7 +222,8 @@ public final class Reducer {
             return Transition.of(s);
         }
         String connection = s.connection(i.connection()).isPresent() ? i.connection() : "";
-        String session = s.session(i.session()).isPresent() ? i.session() : "";
+        // a session another panel took since this one closed stays there
+        String session = s.session(i.session()).isPresent() && s.panelsBoundToSession(i.session()).isEmpty() ? i.session() : "";
         String title = i.title().isBlank() ? "panel " + (s.panels().size() + 1) : i.title().strip();
         List<PanelState> panels = new ArrayList<>(s.panels());
         int at = s.panels().indexOf(s.focusedPanel()) + 1;
@@ -254,10 +256,51 @@ public final class Reducer {
         if (!i.session().isEmpty() && s.session(i.session()).isEmpty()) {
             return Transition.of(notice(s, Notice.Level.ERROR, "No session called " + i.session()));
         }
-        return s.panel(i.panel())
-                .map(p -> s.withPanel(p.withSession(i.session())))
-                .map(next -> new Transition(next, List.of(new Effect.SavePanels(next.panels()))))
-                .orElse(Transition.of(s));
+        if (s.panel(i.panel()).isEmpty()) {
+            return Transition.of(s);
+        }
+        List<PanelState> panels = new ArrayList<>(s.panels().size());
+        for (PanelState p : s.panels()) {
+            if (p.id().equals(i.panel())) {
+                panels.add(p.withSession(i.session()));
+            } else {
+                // a session has one panel: binding it here takes it from any other
+                panels.add(!i.session().isEmpty() && p.session().equals(i.session()) ? p.withSession("") : p);
+            }
+        }
+        AppState next = s.withPanels(panels, s.focused());
+        return new Transition(next, List.of(new Effect.SavePanels(next.panels())));
+    }
+
+    private Transition openSession(AppState s, Intent.OpenSession i) {
+        if (s.session(i.session()).isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "No session called " + i.session()));
+        }
+        List<PanelState> bound = s.panelsBoundToSession(i.session());
+        if (!bound.isEmpty()) {
+            return Transition.of(s.withFocused(bound.getFirst().id()));
+        }
+        PanelState target = s.panel(i.target()).orElse(s.focusedPanel());
+        if (target.session().isEmpty()) {
+            AppState next = s.withPanel(target.withSession(i.session())).withFocused(target.id());
+            return new Transition(next, List.of(new Effect.SavePanels(next.panels())));
+        }
+        if (s.panel(i.newPanel()).isPresent()) {
+            return Transition.of(s);
+        }
+        String title = i.session();
+        for (int n = 2; titleTaken(s, title); n++) {
+            title = i.session() + " " + n;
+        }
+        List<PanelState> panels = new ArrayList<>(s.panels());
+        panels.add(new PanelState(i.newPanel(), title, target.connection(), i.session()));
+        AppState next = notice(s.withPanels(panels, i.newPanel()), Notice.Level.INFO,
+                "Opened " + i.session() + " in a new panel; " + target.title() + " keeps " + target.session());
+        return new Transition(next, List.of(new Effect.SavePanels(next.panels())));
+    }
+
+    private static boolean titleTaken(AppState s, String title) {
+        return s.panels().stream().anyMatch(p -> p.title().equalsIgnoreCase(title));
     }
 
     // ---- running text

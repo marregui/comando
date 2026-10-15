@@ -10,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -64,6 +65,19 @@ class StoreTest {
         try (Store store = new Store(home)) {
             assertThat(store.load().panels()).containsExactly(new PanelState(new PanelId("p"), "t", "", ""));
         }
+    }
+
+    @Test
+    void aSessionBoundToSeveralPanelsKeepsItsFirstAtTheStart() {
+        List<PanelState> panels = List.of(new PanelState(new PanelId("a"), "one", "", "work"),
+                new PanelState(new PanelId("b"), "two", "", "work"), new PanelState(new PanelId("c"), "three", "", "edge"),
+                new PanelState(new PanelId("d"), "four", "", "work"));
+        List<String> unbound = new ArrayList<>();
+        assertThat(Store.oneBindingPerSession(panels, unbound)).extracting(PanelState::session)
+                .containsExactly("work", "", "edge", "");
+        assertThat(unbound).containsExactly("work stays in one; two, four are detached");
+        assertThat(Store.oneBindingPerSession(panels.subList(0, 3), new ArrayList<>())).extracting(PanelState::session)
+                .containsExactly("work", "", "edge");
     }
 
     @Test

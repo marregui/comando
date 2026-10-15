@@ -42,7 +42,7 @@ Subagent blocks carry `parent_tool_use_id`; the transcript nests them inside the
 
 ## 3. Turns
 
-A prompt sent while a turn runs is not rejected: Claude Code folds it into the running turn and reports what is still queued in the `result`'s `queued_turn_count`. comando counts pending turns per session (one per prompt sent) and sets the count to the reported queue length at each turn end; the session is busy while the count is above zero. Several panels may share a session; they feed the same queue, and each prompt block in the transcript names the panel it came from.
+A prompt sent while a turn runs is not rejected: Claude Code folds it into the running turn and reports what is still queued in the `result`'s `queued_turn_count`. comando counts pending turns per session (one per prompt sent) and sets the count to the reported queue length at each turn end; the session is busy while the count is above zero. A session has at most one panel ([record 38](../adr/0038-a-session-has-one-panel.md)); each prompt block in the transcript names the panel it came from.
 
 When a turn ends and nothing is queued, a desktop notification says so, while the window is not active. An interrupted turn is its own outcome: the transcript's turn end reads muted "interrupted", the status bar says "<session>: interrupted", and no "Turn failed" notification is sent. Any ERROR notice also goes to the desktop notification centre while the window is behind.
 

@@ -288,7 +288,7 @@ class ResourceDialogTest {
             assertThat(i.spec().name()).isEqualTo("fresh");
         });
         assertThat(sink.intents().get(1)).isEqualTo(new Intent.BindSession(States.P1, "fresh"));
-        assertThat(message(d).getText()).isEqualTo("Saved and assigned fresh to panel one");
+        assertThat(message(d).getText()).isEqualTo("Saved and opened fresh in a panel");
     }
 
     @Test
@@ -310,7 +310,7 @@ class ResourceDialogTest {
         d.prepare(States.twoPanels(), "work");
         click(d, "Assign to panel");
         assertThat(sink.intents()).containsExactly(new Intent.BindSession(States.P1, "work"));
-        assertThat(message(d).getText()).isEqualTo("Assigned work to panel one");
+        assertThat(message(d).getText()).isEqualTo("Opened work in a panel");
     }
 
     @Test
