@@ -1,13 +1,20 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.PanelTexts;
+import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -118,5 +125,65 @@ class WorkspaceTest {
         assertThat(intents).doesNotHaveAnyElementsOfTypes(Intent.RemovePanel.class);
         assertThat(intents).filteredOn(Intent.Notify.class::isInstance).extracting(i -> ((Intent.Notify) i).text())
                 .containsExactly("spec.md was deleted outside comando; the panel's unsaved edits write it again");
+    }
+
+    @Test
+    void aTabFollowsItsSessionAndMarksAnOutcomeUntilLookedAt() throws Exception {
+        PanelId other = new PanelId("o");
+        PanelState work = new PanelState(P, "work", "", "s");
+        PanelState notes = new PanelState(other, "notes", "", "");
+        SessionState session = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        AtomicInteger attention = new AtomicInteger();
+        Workspace[] w = new Workspace[1];
+        AppState[] s = new AppState[1];
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(intents::add, new Texts(), new SchemaRegistry());
+            w[0].onAttention(attention::incrementAndGet);
+            s[0] = AppState.initial(List.of(work, notes), List.of(), List.of(session)).withFocused(other);
+            w[0].render(s[0]);
+        });
+        JTabbedPane tabs = (JTabbedPane) w[0].component();
+        assertThat(w[0].statuses()).containsEntry(P, TabStatus.IDLE).containsEntry(other, TabStatus.NONE);
+        assertThat(tabs.getTitleAt(0)).isEqualTo("work");
+
+        // the turn runs while another tab is in front: the tab spins, its title stays
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(session.withTurns(1, 1L))));
+        assertThat(w[0].statuses()).containsEntry(P, TabStatus.WORKING);
+        assertThat(tabs.getIconAt(0)).isInstanceOf(SpinnerIcon.class);
+        assertThat(w[0].spinning()).isTrue();
+        assertThat(tabs.getTitleAt(0)).isEqualTo("work");
+
+        // the session asks: the tab needs the user, and the desktop is asked for attention once
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withApprovals(List.of(
+                new Approval(1L, "s", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)))));
+        assertThat(w[0].statuses()).containsEntry(P, TabStatus.NEEDS_YOU);
+        assertThat(tabs.getTitleAt(0)).isEqualTo("● work");
+        assertThat(attention).hasValue(1);
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0]));
+        assertThat(attention).as("the same need asks once").hasValue(1);
+
+        // answered, the turn ends unseen: done, marked, no spinner, no attention
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withApprovals(List.of()).withSession(session.withTurns(0, 2L))));
+        assertThat(w[0].statuses()).containsEntry(P, TabStatus.DONE);
+        assertThat(tabs.getTitleAt(0)).isEqualTo("● work");
+        assertThat(tabs.getIconAt(0)).isNotInstanceOf(SpinnerIcon.class);
+        assertThat(w[0].spinning()).isFalse();
+        assertThat(attention).hasValue(1);
+
+        // looking at it clears the mark
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withFocused(P)));
+        assertThat(w[0].statuses()).containsEntry(P, TabStatus.IDLE);
+        assertThat(tabs.getTitleAt(0)).isEqualTo("work");
+
+        // a failed turn while away: an error, with attention; a new turn starting supersedes it
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withFocused(other).withSession(session.withTurns(1, 3L))));
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(session.withTurns(1, 3L).withTurns(0, 4L)
+                .withLastTurnError("rate limited"))));
+        assertThat(w[0].statuses()).containsEntry(P, TabStatus.ERROR);
+        assertThat(attention).hasValue(2);
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(session.withTurns(1, 5L))));
+        assertThat(w[0].statuses()).containsEntry(P, TabStatus.WORKING);
+        assertThat(tabs.getTitleAt(0)).isEqualTo("work");
     }
 }

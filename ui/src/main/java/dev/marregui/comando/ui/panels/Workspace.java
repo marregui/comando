@@ -7,18 +7,20 @@ import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
-import dev.marregui.comando.core.state.RunStatus;
-import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.text.Plain;
 
+import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JOptionPane;
 import javax.swing.JTabbedPane;
+import javax.swing.Timer;
+import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
@@ -37,8 +39,10 @@ import java.util.function.IntConsumer;
 
 /**
  * The open panels as tabs, in state order; the selected tab is the focused panel. The tabs closed most recently are
- * remembered for ⌘⇧T: a panel of comando's own by its id (the state keeps it, closed), a document by its file. A panel
- * whose query finished while another was in front is marked until the user looks at it.
+ * remembered for ⌘⇧T: a panel of comando's own by its id (the state keeps it, closed), a document by its file. Each tab
+ * shows its panel's {@link TabStatus} in its icon, and a "● " before its title while the status asks for a look: a turn
+ * or query that finished (or failed) while another tab was in front is marked until the user looks at it; a session
+ * waiting for the user is marked until answered; a running one spins.
  */
 public final class Workspace {
 
@@ -55,8 +59,16 @@ public final class Workspace {
     private final JTabbedPane tabs = named(new JTabbedPane(), "workspace");
     private final Map<PanelId, EditorPanel> panels = new LinkedHashMap<>();
     private final Deque<ClosedPanel> closed = new ArrayDeque<>();
-    private final Map<PanelId, RunStatus> lastRun = new HashMap<>();
+    /** Whether each panel's session or query was at work when last rendered; a change to false is an outcome. */
+    private final Map<PanelId, Boolean> lastActive = new HashMap<>();
+    /** Panels whose work ended while another tab was in front, until the user looks at them. */
     private final Set<PanelId> unseen = new HashSet<>();
+    private final Map<PanelId, TabStatus> statuses = new HashMap<>();
+    /** One wheel for every spinning tab; the timer turns it and repaints only the spinning tabs' bounds. */
+    private final SpinnerIcon spinner = new SpinnerIcon(16);
+    private final Timer spin = new Timer(SpinnerIcon.STEP_MILLIS, e -> spinTabs());
+    private Runnable attention = () -> {
+    };
     private Consumer<PanelId> closer;
     /** Panels removed because their file was deleted outside comando, with the file's name. EDT only. */
     private final Map<PanelId, String> deletedFiles = new HashMap<>();
@@ -153,9 +165,48 @@ public final class Workspace {
         return !closed.isEmpty();
     }
 
-    /** Refreshes what changes with time alone in every panel. */
+    /** What runs when a tab comes to need the user (a request, a failure): the shell asks the desktop for attention. */
+    public void onAttention(Runnable run) {
+        attention = run;
+    }
+
+    /** Refreshes what changes with time alone in every panel, and the elapsed time in a working tab's tooltip. */
     public void tick() {
         panels.values().forEach(EditorPanel::tick);
+        if (shown == null) {
+            return;
+        }
+        for (PanelState p : shown.panels()) {
+            EditorPanel view = panels.get(p.id());
+            if (view != null && statuses.get(p.id()) == TabStatus.WORKING) {
+                int at = tabs.indexOfComponent(view);
+                if (at >= 0) {
+                    tabs.setToolTipTextAt(at, tooltip(p, shown, TabStatus.WORKING));
+                }
+            }
+        }
+    }
+
+    /** One step of the wheel; the spinning tabs are repainted where they are, the editors below are not touched. */
+    private void spinTabs() {
+        spinner.advance();
+        for (int i = 0; i < tabs.getTabCount(); i++) {
+            if (tabs.getIconAt(i) == spinner) {
+                Rectangle r = tabs.getUI().getTabBounds(tabs, i);
+                if (r != null) {
+                    tabs.repaint(r);
+                }
+            }
+        }
+    }
+
+    /** The status each open tab shows, by panel; for tests. */
+    Map<PanelId, TabStatus> statuses() {
+        return Map.copyOf(statuses);
+    }
+
+    boolean spinning() {
+        return spin.isRunning();
     }
 
     public void newPanel() {
@@ -214,8 +265,9 @@ public final class Workspace {
                             closed.removeLast();
                         }
                     }
-                    lastRun.remove(id);
+                    lastActive.remove(id);
                     unseen.remove(id);
+                    statuses.remove(id);
                     tabs.remove(gone);
                     gone.editor().dispose();
                     if (deletedFile != null) {
@@ -244,14 +296,17 @@ public final class Workspace {
                     tabs.remove(view);
                     tabs.insertTab(title(p, false), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
                 }
-                trackRun(p.id(), s);
+                TabStatus status = track(p, s);
                 int at = tabs.indexOfComponent(view);
-                String title = title(p, unseen.contains(p.id()));
+                String title = title(p, status.marked());
                 if (!tabs.getTitleAt(at).equals(title)) {
                     tabs.setTitleAt(at, title);
                 }
-                tabs.setToolTipTextAt(at, Plain.text(tooltip(p) + texts.file(p.id()).map(f -> " · " + Labels.shortPath(f.toString())).orElse("")
-                        + (unseen.contains(p.id()) ? " · a query finished" : "")));
+                Icon icon = icon(status);
+                if (tabs.getIconAt(at) != icon) {
+                    tabs.setIconAt(at, icon);
+                }
+                tabs.setToolTipTextAt(at, tooltip(p, s, status));
                 view.file(texts.file(p.id()).orElse(null), texts.document(p.id()));
                 view.render(p, s);
             }
@@ -259,20 +314,53 @@ public final class Workspace {
             if (focused != null && tabs.getSelectedComponent() != focused) {
                 tabs.setSelectedComponent(focused);
             }
+            boolean working = statuses.containsValue(TabStatus.WORKING);
+            if (working && !spin.isRunning()) {
+                spin.start();
+            } else if (!working && spin.isRunning()) {
+                spin.stop();
+            }
         } finally {
             rendering = false;
         }
     }
 
-    /** Marks a panel whose query ended while another panel was in front; looking at it clears the mark. */
-    private void trackRun(PanelId id, AppState s) {
-        RunStatus now = s.runOf(id).map(SqlRun::status).orElse(null);
-        RunStatus before = lastRun.put(id, now);
-        if (id.equals(s.focused())) {
+    /**
+     * The tab's status now. Work that ends while another panel is in front marks the panel until the user looks at it;
+     * work that starts again drops the mark, its outcome is superseded. A tab that comes to need the user asks the
+     * desktop for attention, once per change.
+     */
+    private TabStatus track(PanelState p, AppState s) {
+        PanelId id = p.id();
+        boolean active = TabStatus.active(p, s);
+        Boolean before = lastActive.put(id, active);
+        if (id.equals(s.focused()) || (active && before != null && !before)) {
             unseen.remove(id);
-        } else if (before != null && before.isActive() && now != null && !now.isActive()) {
+        } else if (before != null && before && !active) {
             unseen.add(id);
         }
+        TabStatus status = TabStatus.of(p, s, unseen.contains(id));
+        TabStatus was = statuses.put(id, status);
+        if (status.wantsAttention() && status != was) {
+            attention.run();
+        }
+        return status;
+    }
+
+    private Icon icon(TabStatus status) {
+        return switch (status) {
+            case NEEDS_YOU -> Icons.get("question");
+            case ERROR -> Icons.get("error");
+            case DONE -> Icons.get("check");
+            case WORKING -> spinner;
+            case IDLE -> Icons.get("claude");
+            case NONE -> Icons.get("file");
+        };
+    }
+
+    private String tooltip(PanelState p, AppState s, TabStatus status) {
+        return Plain.text(tooltip(p) + texts.file(p.id()).map(f -> " · " + Labels.shortPath(f.toString())).orElse("")
+                + TabStatus.describe(p, s, status, System.currentTimeMillis()));
     }
 
     /** The tab's title: plain, clipped, with a dot when a query finished unseen. */

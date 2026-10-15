@@ -87,6 +87,13 @@ val uiTest = tasks.register<Test>("uiTest") {
 // An unsigned macOS disk image with its own Java runtime: ./gradlew :app:dmg (output in build/dmg).
 // The modules are what jdeps reports for every jar, plus locale data, charsets and zipfs, which are
 // reached through services and reflection rather than direct references.
+// The icon is src/main/icon/comando.icns, made from comando.svg; the window and Dock use the same picture as
+// ui/src/main/resources/icons/comando.png. To redraw both after editing the SVG:
+//   rsvg-convert -w 1024 -h 1024 app/src/main/icon/comando.svg -o ui/src/main/resources/icons/comando.png
+//   mkdir -p /tmp/comando.iconset && for s in 16 32 128 256 512; do
+//     sips -z $s $s ui/src/main/resources/icons/comando.png --out /tmp/comando.iconset/icon_${s}x${s}.png
+//     sips -z $((s*2)) $((s*2)) ui/src/main/resources/icons/comando.png --out /tmp/comando.iconset/icon_${s}x${s}@2x.png
+//   done && iconutil -c icns /tmp/comando.iconset -o app/src/main/icon/comando.icns
 tasks.register<Exec>("dmg") {
     group = "distribution"
     description = "Builds an unsigned macOS disk image with a bundled runtime"
@@ -112,6 +119,7 @@ tasks.register<Exec>("dmg") {
         "--input", lib.get().asFile.absolutePath,
         "--main-jar", mainJar,
         "--main-class", "dev.marregui.comando.app.Main",
+        "--icon", layout.projectDirectory.file("src/main/icon/comando.icns").asFile.absolutePath,
         "--add-modules", "java.base,java.desktop,java.logging,java.naming,java.prefs,java.security.jgss,java.sql,jdk.httpserver,jdk.jfr," +
                 "jdk.management,jdk.unsupported,jdk.localedata,jdk.charsets,jdk.zipfs",
         "--java-options", "--enable-native-access=ALL-UNNAMED",

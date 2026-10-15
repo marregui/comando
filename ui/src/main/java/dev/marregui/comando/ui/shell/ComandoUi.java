@@ -248,9 +248,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }));
         }
         notifier = new Notifier(frame);
+        AppIcon.install(frame);
         livePlots = new LivePlots(deps.intents(), deps.results());
         Thread.ofVirtual().name("pty-preload").start(TerminalWidget::preload);
         workspace = new Workspace(deps.intents(), deps.texts(), deps.schemas());
+        workspace.onAttention(notifier::attention);
         workspace.onClose(this::closePanel);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);

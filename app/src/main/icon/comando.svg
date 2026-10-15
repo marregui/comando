@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!-- comando: a command prompt on a dark glass tile; the chevron in phosphor green with its glow, the cursor in Claude's colour -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34383E"/>
+      <stop offset="0.55" stop-color="#1F2226"/>
+      <stop offset="1" stop-color="#121417"/>
+    </linearGradient>
+    <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/>
+      <stop offset="0.25" stop-color="#FFFFFF" stop-opacity="0.04"/>
+      <stop offset="1" stop-color="#000000" stop-opacity="0.35"/>
+    </linearGradient>
+    <radialGradient id="sheen" cx="0.5" cy="0" r="0.9">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.10"/>
+      <stop offset="0.6" stop-color="#FFFFFF" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#A6F0B1"/>
+      <stop offset="0.5" stop-color="#5FD27A"/>
+      <stop offset="1" stop-color="#2F9A4F"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#F3A484"/>
+      <stop offset="1" stop-color="#C9633F"/>
+    </linearGradient>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="22"/>
+    </filter>
+    <filter id="softglow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10"/>
+    </filter>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="18"/>
+    </filter>
+    <clipPath id="clip"><rect x="100" y="100" width="824" height="824" rx="186"/></clipPath>
+  </defs>
+  <!-- drop shadow, tile, rim light, top sheen -->
+  <rect x="100" y="124" width="824" height="824" rx="186" fill="#000" opacity="0.45" filter="url(#shadow)"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#tile)"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#sheen)"/>
+  <rect x="104" y="104" width="816" height="816" rx="182" fill="none" stroke="url(#rim)" stroke-width="8"/>
+  <g clip-path="url(#clip)">
+    <path d="M 330 300 L 560 512 L 330 724" fill="none" stroke="#5FD27A" stroke-width="150" stroke-linecap="round" stroke-linejoin="round" opacity="0.45" filter="url(#glow)"/>
+    <path d="M 330 300 L 560 512 L 330 724" fill="none" stroke="url(#green)" stroke-width="96" stroke-linecap="round" stroke-linejoin="round"/>
+    <rect x="610" y="612" width="128" height="112" rx="18" fill="#E58A62" opacity="0.6" filter="url(#softglow)"/>
+    <rect x="610" y="612" width="128" height="112" rx="18" fill="url(#orange)"/>
+  </g>
+</svg>

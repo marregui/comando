@@ -889,6 +889,8 @@ public final class Reducer {
         List<Effect> effects = new ArrayList<>();
         // the user's own interrupt is an outcome, not a failure
         boolean interrupted = i.error() && INTERRUPTED.equals(i.message());
+        x = x.withLastTurnError(i.error() && !interrupted ? i.message() : "");
+        next = next.withSession(x);
         if (interrupted) {
             next = notice(next, Notice.Level.INFO, i.name() + ": interrupted", Notice.session(i.name()));
         } else if (i.error()) {

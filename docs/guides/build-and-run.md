@@ -20,7 +20,7 @@
 | `./gradlew build` | compiles every module with warnings as errors, runs every test |
 | `./gradlew :app:run` | starts comando on the default data root, from a copy of the build output made at launch (in `.gradle/run-stage`, one folder per launch, pruned when no process uses it), so a build while it runs leaves it alone |
 | `./gradlew :app:installDist` | a runnable distribution in `app/build/install/comando`; start it with `bin/comando` |
-| `./gradlew :app:dmg` | an unsigned macOS disk image with its own runtime in `app/build/dmg` |
+| `./gradlew :app:dmg` | an unsigned macOS disk image with its own runtime in `app/build/dmg`, with comando's icon (`app/src/main/icon/comando.icns`, drawn from `comando.svg` next to it; the commands that redraw it after an edit are in `app/build.gradle.kts`) |
 | `./gradlew test -PkeychainTest=true` | also runs the test that writes and deletes one item in the login keychain |
 | `./gradlew :app:uiTest` | replays the recorded intent log against the window; needs a display (`xvfb-run` on Linux) |
 | `./gradlew :ui:transcriptGate` | measures transcript frame times; fails when p99 exceeds 16 ms |

@@ -326,6 +326,23 @@ class ReducerTest {
     }
 
     @Test
+    void aFailedTurnIsRememberedOnTheSessionUntilTheNextOneStarts() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 1_000L, 200_000L, true, "rate limited"));
+        assertThat(state.session("work").orElseThrow().lastTurnError()).isEqualTo("rate limited");
+
+        apply(new Intent.RunText(P1, "again", Target.CLAUDE));
+        assertThat(state.session("work").orElseThrow().lastTurnError()).as("a new turn supersedes the failure").isEmpty();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.2, 1_000L, 200_000L, true, "interrupted"));
+        assertThat(state.session("work").orElseThrow().lastTurnError()).as("the user's interrupt is not a failure").isEmpty();
+        apply(new Intent.RunText(P1, "once more", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.3, 1_000L, 200_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().lastTurnError()).isEmpty();
+    }
+
+    @Test
     void stoppedSessionClosesCleanly() {
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));

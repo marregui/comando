@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.shell;
 
 import java.awt.AWTException;
 import java.awt.SystemTray;
+import java.awt.Taskbar;
 import java.awt.TrayIcon;
 import java.awt.Window;
 import java.awt.image.BufferedImage;
@@ -9,7 +10,8 @@ import java.util.Locale;
 
 /**
  * Desktop notifications for work that finished while the user looked elsewhere: shown only when the
- * window is not active: Notification Center on macOS, a tray balloon where the desktop has a tray.
+ * window is not active: Notification Center on macOS, a tray balloon where the desktop has a tray. And the
+ * desktop's attention when a session needs the user: the Dock icon bounces until the window is activated.
  */
 final class Notifier {
 
@@ -38,6 +40,21 @@ final class Notifier {
                 LOG.log(System.Logger.Level.DEBUG, "notification failed: " + e.getMessage());
             }
         });
+    }
+
+    /** Asks the desktop for attention while the window is not active: the Dock icon bounces until comando is in front. */
+    void attention() {
+        if (window.isActive() || !Taskbar.isTaskbarSupported()) {
+            return;
+        }
+        Taskbar taskbar = Taskbar.getTaskbar();
+        if (taskbar.isSupported(Taskbar.Feature.USER_ATTENTION)) {
+            try {
+                taskbar.requestUserAttention(true, true);
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.DEBUG, "attention request failed: " + e.getMessage());
+            }
+        }
     }
 
     private TrayIcon trayIcon;
