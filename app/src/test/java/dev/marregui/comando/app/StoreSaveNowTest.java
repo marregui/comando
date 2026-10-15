@@ -23,7 +23,7 @@ class StoreSaveNowTest {
         PanelId id = new PanelId("p-1");
         try (Store store = new Store(home)) {
             store.load();
-            store.savePanels(List.of(new PanelState(id, "work", "", "")));
+            store.savePanels(List.of(new PanelState(id, "work", "", "")), List.of());
             store.changed(id, "SELECT 42;");
             assertThat(store.saveNow().get(5, TimeUnit.SECONDS)).isNull();
             assertThat(Files.readString(home.resolve("panels").resolve("work.md"))).isEqualTo("SELECT 42;");

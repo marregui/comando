@@ -36,6 +36,7 @@ import java.util.Set;
 import java.util.function.LongFunction;
 import java.util.function.Predicate;
 import java.util.function.UnaryOperator;
+import java.util.stream.Stream;
 
 /**
  * Applies one intent to the state and lists the effects that follow. Pure apart from the clock, which
@@ -81,6 +82,7 @@ public final class Reducer {
         return switch (intent) {
             case Intent.AddPanel i -> addPanel(s, i);
             case Intent.ClosePanel i -> closePanel(s, i.panel());
+            case Intent.RemovePanel i -> removePanel(s, i.panel());
             case Intent.RenamePanel i -> renamePanel(s, i);
             case Intent.ReopenPanel i -> reopenPanel(s, i);
             case Intent.FocusPanel i -> s.panel(i.panel()).isPresent() ? Transition.of(s.withFocused(i.panel())) : Transition.of(s);
@@ -183,18 +185,35 @@ public final class Reducer {
         PanelState current = s.focusedPanel();
         String title = i.title().isBlank() ? "panel " + (s.panels().size() + 1) : i.title().strip();
         List<PanelState> panels = new ArrayList<>(s.panels());
-        panels.add(new PanelState(i.panel(), title, current.connection(), ""));
+        panels.add(new PanelState(i.panel(), title, current.connection(), "", i.document()));
         AppState next = s.withPanels(panels, i.panel());
-        return new Transition(next, List.of(new Effect.SavePanels(next.panels())));
+        return new Transition(next, List.of(save(next)));
     }
 
+    /** A panel of comando's own closes into the closed list, keeping its file and bindings; a document is dropped. */
     private Transition closePanel(AppState s, PanelId id) {
+        return dropPanel(s, id, false);
+    }
+
+    /** Removes a panel: an open one closes first; either leaves the lists, and its own file is deleted. */
+    private Transition removePanel(AppState s, PanelId id) {
+        Optional<PanelState> closed = s.closedPanel(id);
+        if (closed.isPresent()) {
+            AppState next = notice(s.withClosed(s.closed().stream().filter(p -> !p.id().equals(id)).toList()), Notice.Level.INFO,
+                    "Removed " + closed.get().title());
+            return new Transition(next, List.of(new Effect.DeletePanel(id), save(next)));
+        }
+        return dropPanel(s, id, true);
+    }
+
+    private Transition dropPanel(AppState s, PanelId id, boolean remove) {
         Optional<PanelState> panel = s.panel(id);
         if (panel.isEmpty()) {
             return Transition.of(s);
         }
         if (s.panels().size() == 1) {
-            return Transition.of(notice(s, Notice.Level.WARN, "The last panel cannot be closed"));
+            return Transition.of(notice(s, Notice.Level.WARN, remove ? "The last open panel cannot be removed; open another first"
+                    : "The last panel cannot be closed"));
         }
         List<Effect> effects = new ArrayList<>();
         AppState next = s;
@@ -211,34 +230,52 @@ public final class Reducer {
         panels.remove(idx);
         PanelId focused = s.focused().equals(id) ? panels.get(Math.max(0, idx - 1)).id() : s.focused();
         next = next.withPanels(panels, focused);
-        effects.add(new Effect.ForgetPanel(id));
-        effects.add(new Effect.SavePanels(next.panels()));
+        if (remove) {
+            next = notice(next, Notice.Level.INFO, "Removed " + panel.get().title());
+            effects.add(new Effect.DeletePanel(id));
+        } else {
+            effects.add(new Effect.ForgetPanel(id));
+            if (!panel.get().document()) {
+                List<PanelState> closed = new ArrayList<>(next.closed());
+                closed.add(panel.get());
+                next = next.withClosed(closed);
+            }
+        }
+        effects.add(save(next));
         return new Transition(next, effects);
     }
 
-    /** A closed panel comes back after the focused one, with the bindings that still exist. */
+    private static Effect save(AppState s) {
+        return new Effect.SavePanels(s.panels(), s.closed());
+    }
+
+    /** A closed panel of comando's own comes back after the focused one, with its title, bindings and text. */
     private Transition reopenPanel(AppState s, Intent.ReopenPanel i) {
         if (s.panel(i.panel()).isPresent()) {
-            return Transition.of(s);
+            return Transition.of(s.withFocused(i.panel()));
         }
-        String connection = s.connection(i.connection()).isPresent() ? i.connection() : "";
-        // a session another panel took since this one closed stays there
-        String session = s.session(i.session()).isPresent() && s.panelsBoundToSession(i.session()).isEmpty() ? i.session() : "";
-        String title = i.title().isBlank() ? "panel " + (s.panels().size() + 1) : i.title().strip();
+        return s.closedPanel(i.panel()).map(p -> reopen(s, p)).orElse(Transition.of(s));
+    }
+
+    private Transition reopen(AppState s, PanelState p) {
         List<PanelState> panels = new ArrayList<>(s.panels());
         int at = s.panels().indexOf(s.focusedPanel()) + 1;
-        panels.add(Math.min(at, panels.size()), new PanelState(i.panel(), title, connection, session));
-        AppState next = notice(s.withPanels(panels, i.panel()), Notice.Level.INFO, "Reopened " + title);
-        return new Transition(next, List.of(new Effect.SavePanels(next.panels())));
+        panels.add(Math.min(at, panels.size()), p);
+        AppState next = s.withPanels(panels, p.id()).withClosed(s.closed().stream().filter(c -> !c.id().equals(p.id())).toList());
+        return new Transition(next, List.of(save(next)));
     }
 
     private Transition renamePanel(AppState s, Intent.RenamePanel i) {
         if (i.title().isBlank()) {
             return Transition.of(s);
         }
+        if (s.closedPanel(i.panel()).isPresent()) {
+            AppState next = s.withClosed(s.closed().stream().map(p -> p.id().equals(i.panel()) ? p.withTitle(i.title().strip()) : p).toList());
+            return new Transition(next, List.of(save(next)));
+        }
         return s.panel(i.panel())
                 .map(p -> s.withPanel(p.withTitle(i.title().strip())))
-                .map(next -> new Transition(next, List.of(new Effect.SavePanels(next.panels()))))
+                .map(next -> new Transition(next, List.of(save(next))))
                 .orElse(Transition.of(s));
     }
 
@@ -248,7 +285,7 @@ public final class Reducer {
         }
         return s.panel(i.panel())
                 .map(p -> s.withPanel(p.withConnection(i.connection())))
-                .map(next -> new Transition(next, List.of(new Effect.SavePanels(next.panels()))))
+                .map(next -> new Transition(next, List.of(save(next))))
                 .orElse(Transition.of(s));
     }
 
@@ -268,8 +305,10 @@ public final class Reducer {
                 panels.add(!i.session().isEmpty() && p.session().equals(i.session()) ? p.withSession("") : p);
             }
         }
-        AppState next = s.withPanels(panels, s.focused());
-        return new Transition(next, List.of(new Effect.SavePanels(next.panels())));
+        List<PanelState> closed = s.closed().stream()
+                .map(p -> !i.session().isEmpty() && p.session().equals(i.session()) ? p.withSession("") : p).toList();
+        AppState next = s.withPanels(panels, s.focused()).withClosed(closed);
+        return new Transition(next, List.of(save(next)));
     }
 
     private Transition openSession(AppState s, Intent.OpenSession i) {
@@ -280,10 +319,14 @@ public final class Reducer {
         if (!bound.isEmpty()) {
             return Transition.of(s.withFocused(bound.getFirst().id()));
         }
+        Optional<PanelState> closed = s.closedPanelOfSession(i.session());
+        if (closed.isPresent()) {
+            return reopen(s, closed.get());
+        }
         PanelState target = s.panel(i.target()).orElse(s.focusedPanel());
         if (target.session().isEmpty()) {
             AppState next = s.withPanel(target.withSession(i.session())).withFocused(target.id());
-            return new Transition(next, List.of(new Effect.SavePanels(next.panels())));
+            return new Transition(next, List.of(save(next)));
         }
         if (s.panel(i.newPanel()).isPresent()) {
             return Transition.of(s);
@@ -296,11 +339,11 @@ public final class Reducer {
         panels.add(new PanelState(i.newPanel(), title, target.connection(), i.session()));
         AppState next = notice(s.withPanels(panels, i.newPanel()), Notice.Level.INFO,
                 "Opened " + i.session() + " in a new panel; " + target.title() + " keeps " + target.session());
-        return new Transition(next, List.of(new Effect.SavePanels(next.panels())));
+        return new Transition(next, List.of(save(next)));
     }
 
     private static boolean titleTaken(AppState s, String title) {
-        return s.panels().stream().anyMatch(p -> p.title().equalsIgnoreCase(title));
+        return Stream.concat(s.panels().stream(), s.closed().stream()).anyMatch(p -> p.title().equalsIgnoreCase(title));
     }
 
     // ---- running text
@@ -563,7 +606,7 @@ public final class Reducer {
         effects.add(new Effect.SaveConnections(specs(next)));
         if (renamed) {
             next = rebindConnection(next, i.previousName(), spec.name());
-            effects.add(new Effect.SavePanels(next.panels()));
+            effects.add(save(next));
         }
         return new Transition(next, effects);
     }
@@ -580,7 +623,7 @@ public final class Reducer {
         AppState next = clear(s, Notice.connection(name)).withConnections(s.connections().stream().filter(c -> !c.name().equals(name)).toList());
         next = rebindConnection(next, name, "");
         effects.add(new Effect.SaveConnections(specs(next)));
-        effects.add(new Effect.SavePanels(next.panels()));
+        effects.add(save(next));
         return new Transition(next, effects);
     }
 
@@ -627,7 +670,9 @@ public final class Reducer {
         for (PanelState p : s.panels()) {
             panels.add(p.connection().equals(from) ? p.withConnection(to) : p);
         }
-        return s.withPanels(panels, s.focused());
+        // closed panels keep their bindings, so they follow renames and removals too
+        List<PanelState> closed = s.closed().stream().map(p -> p.connection().equals(from) ? p.withConnection(to) : p).toList();
+        return s.withPanels(panels, s.focused()).withClosed(closed);
     }
 
     private static List<ConnectionSpec> specs(AppState s) {
@@ -674,7 +719,7 @@ public final class Reducer {
         if (renamed) {
             next = rebindSession(next, i.previousName(), spec.name());
             effects.add(new Effect.ForgetSession(i.previousName()));
-            effects.add(new Effect.SavePanels(next.panels()));
+            effects.add(save(next));
             if (!spec.claudeSessionId().isEmpty()) {
                 effects.add(new Effect.LoadHistory(spec));
             }
@@ -699,7 +744,7 @@ public final class Reducer {
         next = next.withSessions(next.sessions().stream().filter(x -> !x.name().equals(name)).toList());
         next = rebindSession(next, name, "");
         effects.add(new Effect.SaveSessions(sessionSpecs(next)));
-        effects.add(new Effect.SavePanels(next.panels()));
+        effects.add(save(next));
         return new Transition(next, effects);
     }
 
@@ -732,7 +777,7 @@ public final class Reducer {
             // the usual "import, then talk": one conversation and a panel waiting for one
             String name = next.sessions().getLast().name();
             next = next.withPanel(focused.withSession(name));
-            effects.add(new Effect.SavePanels(next.panels()));
+            effects.add(save(next));
             return new Transition(notice(next, Notice.Level.INFO, "Imported " + name + " and bound it to " + focused.title()), effects);
         }
         return new Transition(notice(next, Notice.Level.INFO, "Imported " + added + " of " + specs.size() + " sessions"), effects);
@@ -885,7 +930,9 @@ public final class Reducer {
         for (PanelState p : s.panels()) {
             panels.add(p.session().equals(from) ? p.withSession(to) : p);
         }
-        return s.withPanels(panels, s.focused());
+        // closed panels keep their bindings, so they follow renames and removals too
+        List<PanelState> closed = s.closed().stream().map(p -> p.session().equals(from) ? p.withSession(to) : p).toList();
+        return s.withPanels(panels, s.focused()).withClosed(closed);
     }
 
     private static List<SessionSpec> sessionSpecs(AppState s) {

@@ -36,14 +36,14 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
 /**
- * The editor panels as tabs, in state order; the selected tab is the focused panel. A closed panel is kept, with
- * its text and bindings, so it can be reopened; a panel whose query finished while another was in front is marked
- * until the user looks at it.
+ * The open panels as tabs, in state order; the selected tab is the focused panel. The tabs closed most recently are
+ * remembered for ⌘⇧T: a panel of comando's own by its id (the state keeps it, closed), a document by its file. A panel
+ * whose query finished while another was in front is marked until the user looks at it.
  */
 public final class Workspace {
 
-    /** A panel as it was when it closed; {@code file} is null when it had none yet. */
-    public record ClosedPanel(String title, String connection, String session, String text, Path file) {
+    /** A tab as it closed: a panel of comando's own by its id, a document by its file. */
+    public record ClosedPanel(PanelId id, String title, boolean document, Path file) {
     }
 
     static final int CLOSED_KEPT = 10;
@@ -58,9 +58,11 @@ public final class Workspace {
     private final Map<PanelId, RunStatus> lastRun = new HashMap<>();
     private final Set<PanelId> unseen = new HashSet<>();
     private Consumer<PanelId> closer;
-    /** Panels closing because their document was deleted outside comando, with the file's name. EDT only. */
+    /** Panels removed because their file was deleted outside comando, with the file's name. EDT only. */
     private final Map<PanelId, String> deletedFiles = new HashMap<>();
     private boolean rendering;
+    /** The state last rendered, for a deleted file of a closed panel, which has no tab. EDT only. */
+    private AppState shown;
 
     public Workspace(IntentSink intents, PanelTexts texts, SchemaRegistry schemas) {
         this.intents = intents;
@@ -118,14 +120,17 @@ public final class Workspace {
     }
 
     /**
-     * A document's file was deleted outside comando: its panel closes as a tab's close button closes it (asking
-     * first when its shell runs a job), and leaves nothing for ⌘⇧T, since the file is gone.
+     * A panel's file was deleted outside comando: the panel, open or closed, is removed, and leaves nothing for ⌘⇧T.
      */
     void closeDeleted(PanelTexts.Deleted deleted) {
         if (panels.containsKey(deleted.panel())) {
             deletedFiles.put(deleted.panel(), deleted.file());
-            closer.accept(deleted.panel());
+        } else if (shown != null && shown.closedPanel(deleted.panel()).isPresent()) {
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO, deleted.file() + " was deleted outside comando; its closed panel is removed", false));
+        } else {
+            return;
         }
+        intents.dispatch(new Intent.RemovePanel(deleted.panel()));
     }
 
     /** How a tab's close button closes its panel: the shell asks first when the panel's shell runs a job. */
@@ -186,6 +191,7 @@ public final class Workspace {
     }
 
     public void render(AppState s) {
+        shown = s;
         rendering = true;
         try {
             // remove panels the state no longer has
@@ -195,9 +201,9 @@ public final class Workspace {
                     EditorPanel gone = panels.remove(id);
                     PanelState was = gone.panel();
                     String deletedFile = deletedFiles.remove(id);
-                    if (deletedFile == null) {
-                        closed.addFirst(new ClosedPanel(was.title(), was.connection(), was.session(), gone.editor().text(),
-                                texts.file(id).orElse(null)));
+                    boolean kept = s.closedPanel(id).isPresent();
+                    if (deletedFile == null && (kept || was.document())) {
+                        closed.addFirst(new ClosedPanel(id, was.title(), was.document(), texts.file(id).orElse(null)));
                         while (closed.size() > CLOSED_KEPT) {
                             closed.removeLast();
                         }
@@ -206,8 +212,15 @@ public final class Workspace {
                     unseen.remove(id);
                     tabs.remove(gone);
                     gone.editor().dispose();
-                    intents.dispatch(new Intent.Notify(Notice.Level.INFO, deletedFile == null ? "Closed " + was.title() + " — ⌘⇧T reopens it"
-                            : "Closed " + was.title() + ": " + deletedFile + " was deleted outside comando", false));
+                    if (deletedFile != null) {
+                        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Removed " + was.title() + ": " + deletedFile
+                                + " was deleted outside comando", false));
+                    } else if (kept) {
+                        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Closed " + was.title()
+                                + "; ⌘⇧T or the Panels tab reopens it", false));
+                    } else if (was.document()) {
+                        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Closed " + was.title() + " — ⌘⇧T reopens it", false));
+                    }
                 }
             }
             // add new panels at their position, update titles and bindings

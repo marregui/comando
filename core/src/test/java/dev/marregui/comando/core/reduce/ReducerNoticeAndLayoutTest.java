@@ -217,13 +217,17 @@ class ReducerNoticeAndLayoutTest {
     @Test
     void aClosedPanelReopensAfterTheFocusedOneWithTheBindingsThatStillExist() {
         PanelId back = new PanelId("p3");
-        apply(new Intent.ReopenPanel(back, "old", "local", "gone"));
+        apply(new Intent.AddPanel(back, "old"));
+        apply(new Intent.FocusPanel(P1));
+        apply(new Intent.ClosePanel(back));
+        apply(new Intent.RemoveConnection("local"));
+        apply(new Intent.ReopenPanel(back));
 
         assertThat(state.focused()).isEqualTo(back);
         assertThat(state.panels()).extracting(PanelState::id).containsExactly(P1, back, P2);
         PanelState p = state.panel(back).orElseThrow();
-        assertThat(p.connection()).isEqualTo("local");
-        assertThat(p.session()).isEmpty();
+        assertThat(p.connection()).as("removed while it was closed").isEmpty();
+        assertThat(p.title()).isEqualTo("old");
         assertThat(effects).hasSize(1);
     }
 

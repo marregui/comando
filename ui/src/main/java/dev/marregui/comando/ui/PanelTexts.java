@@ -16,7 +16,13 @@ public interface PanelTexts {
     /** The text changed; the store saves it after a quiet period. */
     void changed(PanelId panel, String text);
 
+    /** The panel closed: a panel of comando's own keeps its text and file; a document's file gets its last text. */
     void forget(PanelId panel);
+
+    /** The panel was removed: its own file is deleted, a document's stays. */
+    default void delete(PanelId panel) {
+        forget(panel);
+    }
 
     /**
      * Writes the panels now rather than after the quiet period; completes with null once written, or with the

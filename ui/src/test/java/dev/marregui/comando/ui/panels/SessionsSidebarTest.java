@@ -59,21 +59,22 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void theColumnIsThreeTabsAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
+    void theColumnIsFourTabsAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
         AtomicInteger toggles = new AtomicInteger();
         SessionsSidebar[] s = new SessionsSidebar[1];
         SwingUtilities.invokeAndWait(() -> s[0] = new SessionsSidebar(intent -> {
         }, NO_DIALOGS, toggles::incrementAndGet));
         SessionsSidebar sidebar = s[0];
         JTabbedPane tabs = find(sidebar.component(), JTabbedPane.class, c -> true);
-        assertThat(List.of(tabs.getTitleAt(0), tabs.getTitleAt(1), tabs.getTitleAt(2))).containsExactly("Sessions", "Connections", "Scratchpad");
+        assertThat(List.of(tabs.getTitleAt(0), tabs.getTitleAt(1), tabs.getTitleAt(2), tabs.getTitleAt(3)))
+                .containsExactly("Sessions", "Panels", "Connections", "Scratchpad");
         assertThat(tabs.getTabLayoutPolicy()).as("one row: a wrapped strip moves rows on a click").isEqualTo(JTabbedPane.SCROLL_TAB_LAYOUT);
 
         AbstractButton hide = button(sidebar.component(), "Hide the sidebar (⌘B)");
         AbstractButton show = button(sidebar.component(), "Show the sidebar (⌘B)");
         assertThat(sidebar.isShown()).isTrue();
         assertThat(shows(show, sidebar.component())).as("no rail beside the tabs").isFalse();
-        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.SCRATCHPAD}) {
+        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.PANELS, SessionsSidebar.CONNECTIONS, SessionsSidebar.SCRATCHPAD}) {
             SwingUtilities.invokeAndWait(() -> sidebar.selectTab(tab));
             assertThat(shows(hide, sidebar.component())).as("the hide button on every tab").isTrue();
         }
@@ -296,8 +297,18 @@ class SessionsSidebarTest {
         return c[0];
     }
 
+    /** The row's text, read on the EDT in the same step as the render: the list shares one renderer, which a paint reuses. */
     private static String rowText(JList<?> list, int index) throws Exception {
-        return find(render(list, index), JLabel.class, l -> l.getText() != null && l.getText().startsWith("<html>")).getText();
+        String[] text = new String[1];
+        SwingUtilities.invokeAndWait(() -> {
+            @SuppressWarnings("unchecked")
+            JList<Object> l = (JList<Object>) list;
+            Component row = l.getCellRenderer().getListCellRendererComponent(l, l.getModel().getElementAt(index), index, false, false);
+            JLabel label = search(row, JLabel.class, x -> x.getText() != null && x.getText().startsWith("<html>"));
+            text[0] = label == null ? null : label.getText();
+        });
+        assertThat(text[0]).as("row " + index + " text").isNotNull();
+        return text[0];
     }
 
     @Test

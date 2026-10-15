@@ -73,7 +73,7 @@ class WorkspaceTest {
     }
 
     @Test
-    void aDeletedDocumentClosesItsPanelWithNothingToReopen() throws Exception {
+    void aDeletedFileRemovesItsPanelWithNothingToReopen() throws Exception {
         PanelId doc = new PanelId("d");
         Texts texts = new Texts();
         List<Intent> intents = new CopyOnWriteArrayList<>();
@@ -86,13 +86,19 @@ class WorkspaceTest {
         assertThat(texts.deletions).as("the workspace listens for deleted documents").isNotNull();
 
         SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(doc, "ALPHA.md")));
-        assertThat(intents).containsExactly(new Intent.ClosePanel(doc));
+        assertThat(intents).containsExactly(new Intent.RemovePanel(doc));
         SwingUtilities.invokeAndWait(() -> w[0].render(AppState.initial(List.of(spec), List.of(), List.of())));
         assertThat(w[0].hasClosed()).as("⌘⇧T has nothing to reopen: the file is gone").isFalse();
         assertThat(intents).filteredOn(Intent.Notify.class::isInstance).extracting(i -> ((Intent.Notify) i).text())
-                .containsExactly("Closed ALPHA: ALPHA.md was deleted outside comando");
+                .containsExactly("Removed ALPHA: ALPHA.md was deleted outside comando");
 
         SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(doc, "ALPHA.md")));
-        assertThat(intents).as("a panel already gone is not closed twice").filteredOn(Intent.ClosePanel.class::isInstance).hasSize(1);
+        assertThat(intents).as("a panel already gone is not removed twice").filteredOn(Intent.RemovePanel.class::isInstance).hasSize(1);
+
+        PanelId shut = new PanelId("c");
+        SwingUtilities.invokeAndWait(() -> w[0].render(AppState.initial(List.of(spec), List.of(), List.of())
+                .withClosed(List.of(new PanelState(shut, "old", "", "")))));
+        SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(shut, "old.md")));
+        assertThat(intents).as("a closed panel's file deleted outside removes it too").contains(new Intent.RemovePanel(shut));
     }
 }

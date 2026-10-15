@@ -20,7 +20,8 @@ import java.util.function.Consumer;
 
 /**
  * Each panel's text as a file of its own. A panel's own file is Markdown in one folder, named after the panel's
- * title; it follows the panel's renames and outlives the panel when it holds text. A panel opened on a file elsewhere
+ * title; it is written when the panel is created, follows the panel's renames, stays while the panel is closed, and
+ * goes only when the panel is removed or the file is deleted outside comando. A panel opened on a file elsewhere
  * (a scratchpad document) is bound to that path: comando never renames or deletes it. No file is overwritten after an
  * edit made outside comando: {@link #outside} reports the outside text so the panel can take it, and a write that finds an outside
  * edit nobody took keeps it next to the file under another name. Writes go to a temporary file moved over the old
@@ -56,6 +57,8 @@ final class PanelFiles {
     private final Map<String, Stamp> stamps = new ConcurrentHashMap<>();
     /** Outside versions already reported and not yet taken or overwritten, so each is reported once. */
     private final Map<String, Stamp> reported = new ConcurrentHashMap<>();
+    /** Panels whose file was deleted outside comando and reported: never written again until the panel is removed. */
+    private final Set<String> gone = ConcurrentHashMap.newKeySet();
 
     PanelFiles(Path dir, Consumer<String> notices) {
         this.dir = dir;
@@ -86,7 +89,7 @@ final class PanelFiles {
         return p.isAbsolute() ? p : dir.resolve(name);
     }
 
-    /** A file of the folder, which comando names, renames and deletes when blank; not a file elsewhere. */
+    /** A file of the folder, which comando names, renames and deletes when its panel is removed; not a file elsewhere. */
     private static boolean owned(String name) {
         return !Path.of(name).isAbsolute();
     }
@@ -197,7 +200,10 @@ final class PanelFiles {
         reported.remove(id);
     }
 
-    /** True once when a panel's file that comando wrote or read is gone; the next write creates it again. */
+    /**
+     * True once when a panel's file that comando wrote or read is gone: its panel is removed, so the file is not
+     * written again by {@link #unwritten}; a save of edits made before the deletion was seen still writes it.
+     */
     boolean deleted(String id) {
         String name = names.get(id);
         if (name == null || !stamps.containsKey(id) || Files.exists(path(name))) {
@@ -205,7 +211,26 @@ final class PanelFiles {
         }
         stamps.remove(id);
         reported.remove(id);
+        gone.add(id);
         return true;
+    }
+
+    /** A panel's own file named and never written or read: a new panel's, written at once, empty or not. */
+    boolean unwritten(String id) {
+        String name = names.get(id);
+        return name != null && owned(name) && !stamps.containsKey(id) && !gone.contains(id) && !Files.exists(path(name));
+    }
+
+    /** The panel was removed: its own file is deleted, a file elsewhere stays; comando forgets both. */
+    void remove(String id) throws IOException {
+        String name = names.remove(id);
+        titles.remove(id);
+        stamps.remove(id);
+        reported.remove(id);
+        gone.remove(id);
+        if (name != null && owned(name)) {
+            Files.deleteIfExists(path(name));
+        }
     }
 
     /**
@@ -240,22 +265,6 @@ final class PanelFiles {
         }
         stamps.put(id, stamp(f));
         reported.remove(id);
-    }
-
-    /**
-     * The panel closed: its own file stays when it holds text, and is deleted when blank and unchanged outside; a
-     * file elsewhere always stays.
-     */
-    void closed(String id, String text) throws IOException {
-        String name = names.get(id);
-        if (name == null || !text.isBlank() || !owned(name)) {
-            return;
-        }
-        Path f = path(name);
-        if (Files.exists(f) && stamp(f).equals(stamps.get(id))) {
-            Files.delete(f);
-            stamps.remove(id);
-        }
     }
 
     /** {@code base}, else {@code base 2}, {@code base 3}…: not a file in the folder, nor the name of another open panel. */

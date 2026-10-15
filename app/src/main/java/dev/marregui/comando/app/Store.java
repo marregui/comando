@@ -19,6 +19,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -35,7 +36,9 @@ import java.util.function.Consumer;
 
 /**
  * The store files: {@code connections.json}, {@code sessions.json}, {@code panels.json} (each panel's title,
- * bindings and file name) and one Markdown file per panel under {@code panels/} with its text ({@link PanelFiles}).
+ * bindings and file name, and whether it is closed) and one Markdown file per panel under {@code panels/} with its
+ * text ({@link PanelFiles}). A panel of comando's own is kept, closed or open, until it is removed or its file is
+ * deleted outside comando; its text stays in memory while it is closed, so it reopens at once.
  * Every write runs on one thread from an immutable snapshot, so a save never races an edit; panel text is saved
  * 800 ms after the first unsaved change, so continuous typing saves about every 800 ms, and only the panels that
  * changed are written.
@@ -50,15 +53,19 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     static final long RETRY_MILLIS = 5_000;
 
     /**
-     * A panel as stored: its title, bindings and the name of its file. {@code content} is read only, from a
-     * {@code panels.json} written before panels had files, and moves into the panel's file at the next save.
+     * A panel as stored: its title, bindings and the name of its file; {@code closed} is true for a closed panel of
+     * comando's own, absent for an open one. {@code content} is written only when the panel's file could not be, and
+     * read from a {@code panels.json} written before panels had files; it moves into the file at the next save.
      */
     @JsonInclude(JsonInclude.Include.NON_NULL)
-    record StoredPanel(String id, String title, String connection, String session, String file, String content) {
+    record StoredPanel(String id, String title, String connection, String session, String file, String content, Boolean closed) {
     }
 
-    /** What the store held at start. */
-    record Loaded(List<PanelState> panels, List<ConnectionSpec> connections, List<SessionSpec> sessions) {
+    /** What the store held at start: the open panels, in tab order, and the closed ones. */
+    record Loaded(List<PanelState> panels, List<ConnectionSpec> connections, List<SessionSpec> sessions, List<PanelState> closed) {
+        Loaded(List<PanelState> panels, List<ConnectionSpec> connections, List<SessionSpec> sessions) {
+            this(panels, connections, sessions, List.of());
+        }
     }
 
     private final JsonFile<List<ConnectionSpec>> connections;
@@ -93,6 +100,11 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
      * save, so a panel that never lands comes back at the next start. Writer thread only.
      */
     private final Map<String, StoredPanel> unsaved = new LinkedHashMap<>();
+    /**
+     * Removed panels: a save that still lists one (its list update not yet arrived) neither names nor writes its file
+     * again. Ids are random, so the set only grows by the panels removed in this run.
+     */
+    private final Set<String> removed = ConcurrentHashMap.newKeySet();
     /** Panels bound to a file by {@link #open} and not yet in the panel list. Writer thread only. */
     private final Set<String> opening = new HashSet<>();
     private final PanelFiles files;
@@ -104,6 +116,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     };
     private final AtomicBoolean panelsPending = new AtomicBoolean();
     private volatile List<PanelState> panelMeta = List.of();
+    private volatile List<PanelState> closedMeta = List.of();
     private volatile boolean closed;
     private final Secrets secrets;
     /** Names whose passwords the secret store holds, as of the last save; written by the store-secrets thread only. */
@@ -151,27 +164,43 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         secretNames = new HashSet<>(c.stream().map(ConnectionSpec::name).toList());
         List<SessionSpec> s = orEmpty(sessions.read());
         List<PanelState> p = new ArrayList<>();
+        List<PanelState> shut = new ArrayList<>();
         List<String> gone = new ArrayList<>();
         for (StoredPanel sp : orEmpty(panels.read())) {
             if (sp.id() == null || sp.id().isBlank()) {
                 continue;
             }
-            if (documentGone(sp)) {
+            boolean isClosed = Boolean.TRUE.equals(sp.closed());
+            if (fileGone(sp, isClosed)) {
                 gone.add(Path.of(sp.file()).getFileName().toString());
                 continue;
             }
             String title = nz(sp.title(), "panel");
-            p.add(new PanelState(new PanelId(sp.id()), title, nz(sp.connection(), ""), nz(sp.session(), "")));
+            boolean document = sp.file() != null && Path.of(sp.file()).isAbsolute();
+            PanelState panel = new PanelState(new PanelId(sp.id()), title, nz(sp.connection(), ""), nz(sp.session(), ""), document);
+            (isClosed ? shut : p).add(panel);
             texts.put(sp.id(), textOf(sp, title));
         }
+        List<String> adopted = adoptLooseFiles(orEmpty(panels.read()), shut);
+        if (!adopted.isEmpty()) {
+            LOG.log(System.Logger.Level.INFO, "files in panels/ without a panel, listed as closed panels " + adopted);
+            notices.accept(String.join(", ", adopted) + (adopted.size() == 1 ? " has" : " have")
+                    + " no panel; listed as closed in the Panels tab");
+        }
         if (!gone.isEmpty()) {
-            LOG.log(System.Logger.Level.INFO, "documents deleted while comando was closed, their panels dropped " + gone);
+            LOG.log(System.Logger.Level.INFO, "files deleted while comando was closed, their panels dropped " + gone);
             notices.accept(String.join(", ", gone) + (gone.size() == 1 ? " was" : " were")
                     + " deleted while comando was closed; " + (gone.size() == 1 ? "its panel is" : "their panels are") + " gone");
         }
-        p = validBindings(p, c, s);
+        int openCount = p.size();
+        List<PanelState> all = new ArrayList<>(p);
+        all.addAll(shut);
+        all = validBindings(all, c, s);
         List<String> unbound = new ArrayList<>();
-        p = oneBindingPerSession(p, unbound);
+        // the open panels come first, so a session bound to an open and a closed panel keeps the open one
+        all = oneBindingPerSession(all, unbound);
+        p = new ArrayList<>(all.subList(0, openCount));
+        shut = new ArrayList<>(all.subList(openCount, all.size()));
         if (!unbound.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "sessions bound to several panels keep their first " + unbound);
             notices.accept("A session has one panel now: " + String.join("; ", unbound));
@@ -183,12 +212,12 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             dirty.add(first.id().value());
             p = List.of(first);
         }
-        panelMeta = p;
-        if (!dirty.isEmpty()) {
-            schedulePanels();
-        }
+        panelMeta = List.copyOf(p);
+        closedMeta = List.copyOf(shut);
+        // dirty text, and an open panel whose file is missing (a blank panel of an older comando) gets one now
+        schedulePanels();
         pollFiles();
-        return new Loaded(p, c, s);
+        return new Loaded(p, c, s, shut);
     }
 
     /**
@@ -214,13 +243,55 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         return fromFile;
     }
 
-    /** A document's file deleted while comando was closed, with no unsaved text kept for it: nothing to show. */
-    private static boolean documentGone(StoredPanel sp) {
+    /**
+     * Every file of the panels folder is a panel: one no stored panel names (a closed panel's file from before closed
+     * panels were kept, or a file put there by hand) becomes a closed panel titled after it, with no bindings.
+     * Temporary and hidden files are left alone. Returns the adopted files' names.
+     */
+    private List<String> adoptLooseFiles(List<StoredPanel> stored, List<PanelState> shut) {
+        Set<String> named = new HashSet<>();
+        for (StoredPanel sp : stored) {
+            if (sp.file() != null && !Path.of(sp.file()).isAbsolute()) {
+                named.add(sp.file().toLowerCase(Locale.ROOT));
+            }
+        }
+        List<String> adopted = new ArrayList<>();
+        if (!Files.isDirectory(files.dir())) {
+            return adopted;
+        }
+        try (var listing = Files.list(files.dir())) {
+            for (Path f : listing.sorted().toList()) {
+                String name = f.getFileName().toString();
+                if (name.startsWith(".") || !Files.isRegularFile(f) || named.contains(name.toLowerCase(Locale.ROOT))) {
+                    continue;
+                }
+                PanelId id = PanelId.random();
+                String title = PanelFiles.title(f);
+                try {
+                    texts.put(id.value(), files.read(id.value(), title, name));
+                    shut.add(new PanelState(id, title, "", ""));
+                    adopted.add(name);
+                } catch (IOException | RuntimeException e) {
+                    LOG.log(System.Logger.Level.WARNING, "cannot read a file of panels/, left alone [file=" + f + "]: " + e.getMessage());
+                }
+            }
+        } catch (IOException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot list panels/: " + e.getMessage());
+        }
+        return adopted;
+    }
+
+    /**
+     * A file deleted while comando was closed, with no unsaved text kept for it, leaves nothing to show: a document's,
+     * or a closed panel's. An open panel of comando's own whose file is missing stays, and gets an empty file: an
+     * older comando never wrote a blank panel's file.
+     */
+    private boolean fileGone(StoredPanel sp, boolean isClosed) {
         if (sp.content() != null || sp.file() == null || sp.file().isBlank()) {
             return false;
         }
         Path f = Path.of(sp.file());
-        return f.isAbsolute() && !Files.exists(f);
+        return (f.isAbsolute() || isClosed) && !Files.exists(f.isAbsolute() ? f : files.dir().resolve(f));
     }
 
     /** Drops bindings to names the files no longer have. */
@@ -329,8 +400,9 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     @Override
-    public void savePanels(List<PanelState> panels) {
+    public void savePanels(List<PanelState> panels, List<PanelState> closed) {
         panelMeta = List.copyOf(panels);
+        closedMeta = List.copyOf(closed);
         schedulePanels();
     }
 
@@ -349,12 +421,17 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     /**
-     * The panel closed: its last text reaches its file, which stays unless blank; a panel closed before its first
-     * save gets its file now. The reducer forgets a panel before it drops it from the list, so its title is known.
+     * The panel closed. A panel of comando's own keeps its text here and its file; the save that follows writes what
+     * changed. A document's last text reaches its file, and comando lets go of it. The reducer forgets a panel before it
+     * drops it from the list, so its title is known.
      */
     @Override
     public void forget(PanelId panel) {
         String id = panel.value();
+        if (!files.document(id)) {
+            schedulePanels();
+            return;
+        }
         List<PanelState> meta = panelMeta;
         PanelState was = meta.stream().filter(p -> p.id().value().equals(id)).findFirst()
                 .orElse(new PanelState(panel, "panel", "", ""));
@@ -369,20 +446,40 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     } catch (IOException | RuntimeException e) {
                         // naming (a rename's move, the folder's listing) or writing failed: the text waits in panels.json
                         String name = fileName(id);
-                        unsaved.put(id, new StoredPanel(id, was.title(), was.connection(), was.session(), name, text));
+                        unsaved.put(id, new StoredPanel(id, was.title(), was.connection(), was.session(), name, text, null));
                         LOG.log(System.Logger.Level.ERROR, "cannot save the closed panel's file [panel=" + was.title() + "]: " + e.getMessage(), e);
                         notices.accept("Cannot write " + (name == null ? "the file" : name) + " for the closed panel " + was.title() + ": "
                                 + reason(e) + "; comando keeps trying, and the panel comes back at the next start if it still cannot");
                         return;
                     }
                 }
-                files.closed(id, text);
-            } catch (IOException | RuntimeException e) {
+            } catch (RuntimeException e) {
                 LOG.log(System.Logger.Level.ERROR, "cannot save the closed panel's file [panel=" + id + "]: " + e.getMessage(), e);
             } finally {
                 failing.remove(id);
                 opening.remove(id);
                 texts.remove(id);
+            }
+        });
+        schedulePanels();
+    }
+
+    /** The panel was removed: its own file is deleted, a document's stays; its text and stamps are dropped. */
+    @Override
+    public void delete(PanelId panel) {
+        String id = panel.value();
+        removed.add(id);
+        submit(() -> {
+            dirty.remove(id);
+            failing.remove(id);
+            opening.remove(id);
+            unsaved.remove(id);
+            texts.remove(id);
+            try {
+                files.remove(id);
+            } catch (IOException | RuntimeException e) {
+                LOG.log(System.Logger.Level.ERROR, "cannot delete the removed panel's file [panel=" + id + "]: " + e.getMessage(), e);
+                notices.accept("Cannot delete the removed panel's file: " + reason(e));
             }
         });
         schedulePanels();
@@ -428,16 +525,19 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     /**
-     * Reports each open panel's file written outside comando since comando last wrote, read or took it. A panel
-     * with unsaved edits is skipped: its save keeps the outside version aside, and writes a deleted file again. A
-     * panel's own file deleted outside is reported once and written again on the panel's next save; a document's is
-     * reported for its panel to close.
+     * Reports each panel's file written outside comando since comando last wrote, read or took it. A panel with
+     * unsaved edits is skipped: its save keeps the outside version aside, and writes a deleted file again. A file
+     * deleted outside is reported once, for its panel to be removed. A closed panel takes an outside version at once:
+     * no editor shows it.
      */
     private void checkFiles() {
         if (closed) {
             return;
         }
-        for (PanelState p : panelMeta) {
+        List<PanelState> shut = closedMeta;
+        List<PanelState> all = new ArrayList<>(panelMeta);
+        all.addAll(shut);
+        for (PanelState p : all) {
             String id = p.id().value();
             if (dirty.contains(id)) {
                 continue;
@@ -445,11 +545,14 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             try {
                 String name = files.file(id).map(f -> f.getFileName().toString()).orElse("");
                 if (files.deleted(id)) {
-                    if (files.document(id)) {
-                        deletions.accept(new Deleted(p.id(), name));
-                    } else {
-                        notices.accept(name + " was deleted outside comando; the panel keeps its text and writes the file again on the next edit or ⌘S");
-                    }
+                    deletions.accept(new Deleted(p.id(), name));
+                    continue;
+                }
+                if (shut.contains(p)) {
+                    files.outside(id).ifPresent(o -> {
+                        texts.put(id, o.text());
+                        files.accept(id, o.stamp());
+                    });
                     continue;
                 }
                 files.outside(id).ifPresent(o -> outsideChanges.accept(new Outside(p.id(), name, o.text(), () -> take(id, o))));
@@ -482,6 +585,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     String name = file.getFileName().toString();
                     Set<String> live = new HashSet<>(opening);
                     panelMeta.forEach(p -> live.add(p.id().value()));
+                    closedMeta.forEach(p -> live.add(p.id().value()));
                     // checked and bound on the writer thread, so two opens of one file cannot both bind it
                     for (String other : live) {
                         if (files.file(other).map(f -> samePath(f, file)).orElse(false)) {
@@ -582,25 +686,31 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     /**
-     * Names each open panel's file (a new panel gets one, a renamed one moves it), writes the files whose text
-     * changed, then {@code panels.json}. A panel whose file fails keeps its text in {@code panels.json}, which the
+     * Names each panel's file, open or closed (a new panel gets one, a renamed one moves it), writes the files whose
+     * text changed and a new panel's empty one, then {@code panels.json}. A panel whose file fails keeps its text in {@code panels.json}, which the
      * next start prefers, stays unsaved, and is tried again in 5 s; the user is told once per run of failures. The
      * others are still written; the first failure is thrown at the end.
      */
     private void persistPanels() throws IOException {
         panelsPending.set(false);
-        List<PanelState> meta = panelMeta;
+        List<PanelState> shut = closedMeta;
+        List<PanelState> meta = new ArrayList<>(panelMeta);
+        meta.addAll(shut);
         List<String> open = reserved(meta.stream().map(p -> p.id().value()).toList());
         opening.removeAll(open);
         List<StoredPanel> out = new ArrayList<>(meta.size() + unsaved.size());
         IOException failed = null;
         for (PanelState p : meta) {
             String id = p.id().value();
+            if (removed.contains(id)) {
+                continue;
+            }
+            Boolean isClosed = shut.contains(p) ? Boolean.TRUE : null;
             String name = files.file(id).map(f -> f.getFileName().toString()).orElse(null);
             String content = null;
             try {
                 name = files.name(id, p.title(), open);
-                if (dirty.remove(id)) {
+                if (dirty.remove(id) || files.unwritten(id)) {
                     String text = texts.getOrDefault(id, "");
                     try {
                         files.write(id, text);
@@ -622,7 +732,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 }
                 failed = failed == null ? e : failed;
             }
-            out.add(new StoredPanel(id, p.title(), p.connection(), p.session(), name, content));
+            out.add(new StoredPanel(id, p.title(), p.connection(), p.session(), name, content, isClosed));
         }
         for (Iterator<StoredPanel> it = unsaved.values().iterator(); it.hasNext(); ) {
             StoredPanel u = it.next();
@@ -631,7 +741,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 files.write(u.id(), u.content());
                 it.remove();
             } catch (IOException e) {
-                out.add(new StoredPanel(u.id(), u.title(), u.connection(), u.session(), fileName(u.id()), u.content()));
+                out.add(new StoredPanel(u.id(), u.title(), u.connection(), u.session(), fileName(u.id()), u.content(), null));
                 failed = failed == null ? e : failed;
             }
         }

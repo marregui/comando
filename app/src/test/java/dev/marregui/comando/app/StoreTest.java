@@ -45,7 +45,7 @@ class StoreTest {
             store.load();
             store.saveConnections(List.of(new ConnectionSpec("lab", "10.0.0.2", 8812, "qdb", "admin", "pw", true)));
             store.saveSessions(List.of(SessionSpec.imported("edge", "/w", "abc")));
-            store.savePanels(List.of(new PanelState(id, "work", "lab", "edge")));
+            store.savePanels(List.of(new PanelState(id, "work", "lab", "edge")), List.of());
             store.changed(id, "SELECT 42;");
         }
         try (Store store = new Store(home)) {
@@ -190,7 +190,7 @@ class StoreTest {
             store.load();
             PanelId id = new PanelId("p-wait");
             store.saveConnections(List.of(new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "s3cret", false)));
-            store.savePanels(List.of(new PanelState(id, "work", "", "")));
+            store.savePanels(List.of(new PanelState(id, "work", "", "")), List.of());
             store.changed(id, "SELECT 7;");
             long deadline = System.currentTimeMillis() + 5_000;
             Path file = home.resolve("panels").resolve("work.md");

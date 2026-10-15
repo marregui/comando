@@ -140,8 +140,8 @@ class ResourceActionsTest {
     private ResourceActions<SessionState> actions(JList<SessionState> list, AppState state, JButton... more) throws Exception {
         AtomicReference<ResourceActions<SessionState>> a = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> a.set(new ResourceActions<>(list,
-                new ResourceActions.Rows<>(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop"),
-                () -> state, editor, removed::add, (parent, text, title, options) -> {
+                ResourceActions.Rows.of(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop", () -> state),
+                editor, removed::add, (parent, text, title, options) -> {
                     asked.add(title + ": " + text + " " + List.of(options));
                     return answer.get();
                 }, more)));

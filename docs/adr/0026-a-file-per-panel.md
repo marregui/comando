@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-14 | the file per panel accepted; the rules in 2 proposed, for Miguel to accept or reverse | Miguel (a file per panel), Claude (naming, closing, edits outside comando) |
+| 2026-10-14 | the file per panel and its naming accepted; the close rule replaced by [39](0039-panels-are-kept-until-removed.md), edits outside by [27](0027-panels-reload-files-changed-outside.md) | Miguel (a file per panel), Claude (naming, closing, edits outside comando) |
 
 ## 1. Context
 

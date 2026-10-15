@@ -9,6 +9,7 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
@@ -48,9 +49,9 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * The left column, three tabs: Sessions (every session with its project, branch, state and pending approvals, and
- * controls to connect or disconnect it and change its model or effort), Connections, and Scratchpad (the scratchpad
- * as a tree). Above the sessions and the connections, the same {@link ResourceActions}: add (and, for sessions,
+ * The left column, four tabs: Sessions (every session with its project, branch, state and pending approvals, and
+ * controls to connect or disconnect it and change its model or effort), Panels (comando's own panels, open and
+ * closed), Connections, and Scratchpad (the scratchpad as a tree). Above the sessions and the connections, the same {@link ResourceActions}: add (and, for sessions,
  * import) on the left; edit, clone and remove of the selected row on the right. Double-click on a session opens it in
  * a panel ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. Hidden, the column collapses to
  * a rail whose button shows it again.
@@ -74,6 +75,22 @@ public final class SessionsSidebar {
         void openFile(Path file);
     }
 
+    /** Panel texts kept nowhere, for a sidebar built without the store. */
+    private static final PanelTexts NO_TEXTS = new PanelTexts() {
+        @Override
+        public String load(PanelId panel) {
+            return "";
+        }
+
+        @Override
+        public void changed(PanelId panel, String text) {
+        }
+
+        @Override
+        public void forget(PanelId panel) {
+        }
+    };
+
     private final IntentSink intents;
     private final Dialogs dialogs;
     private final DefaultListModel<SessionState> sessionModel = new DefaultListModel<>();
@@ -84,11 +101,13 @@ public final class SessionsSidebar {
     private final JList<ConnectionState> connections = emptyText(new JList<>(connectionModel),
             "No connections yet. + adds one.");
     public static final int SESSIONS = 0;
-    public static final int CONNECTIONS = 1;
-    public static final int SCRATCHPAD = 2;
+    public static final int PANELS = 1;
+    public static final int CONNECTIONS = 2;
+    public static final int SCRATCHPAD = 3;
 
     private final ResourceActions<SessionState> sessionActions;
     private final ResourceActions<ConnectionState> connectionActions;
+    private final PanelsTab panelsTab;
     private final JTabbedPane tabs = new JTabbedPane();
     private final ScratchpadTab scratchpad;
     private final JPanel rail;
@@ -99,13 +118,22 @@ public final class SessionsSidebar {
     static final List<String> EFFORTS = List.of("low", "medium", "high", "xhigh", "max");
 
     /** {@code toggle} hides or shows the sidebar, as View ▸ Sidebar does; the owner calls {@link #show}. */
-    public SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle) {
-        this(intents, dialogs, toggle, ResourceActions.Questions.MODAL);
+    public SessionsSidebar(IntentSink intents, Dialogs dialogs, PanelTexts texts, Runnable toggle) {
+        this(intents, dialogs, texts, toggle, ResourceActions.Questions.MODAL);
+    }
+
+    SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle) {
+        this(intents, dialogs, NO_TEXTS, toggle, ResourceActions.Questions.MODAL);
     }
 
     SessionsSidebar(IntentSink intents, Dialogs dialogs, Runnable toggle, ResourceActions.Questions questions) {
+        this(intents, dialogs, NO_TEXTS, toggle, questions);
+    }
+
+    SessionsSidebar(IntentSink intents, Dialogs dialogs, PanelTexts texts, Runnable toggle, ResourceActions.Questions questions) {
         this.intents = intents;
         this.dialogs = dialogs;
+        this.panelsTab = new PanelsTab(intents, texts, questions);
         sessions.getAccessibleContext().setAccessibleName("Sessions");
         connections.getAccessibleContext().setAccessibleName("Connections");
         sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -196,13 +224,15 @@ public final class SessionsSidebar {
         });
         scratchpad = new ScratchpadTab(dialogs::openFile);
         sessionActions = new ResourceActions<>(sessions,
-                new ResourceActions.Rows<>(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop"),
-                () -> state, dialogs.sessions(), name -> intents.dispatch(new Intent.RemoveSession(name)), questions,
+                ResourceActions.Rows.of(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop", () -> state),
+                dialogs.sessions(), name -> intents.dispatch(new Intent.RemoveSession(name)), questions,
                 ToolButton.of("import", "Import stored conversations…", dialogs::importSessions));
         connectionActions = new ResourceActions<>(connections,
-                new ResourceActions.Rows<>(ConnectionKind.INSTANCE, ConnectionState::name, ConnectionState::status, "Disconnect"),
-                () -> state, dialogs.connections(), name -> intents.dispatch(new Intent.RemoveConnection(name)), questions);
+                ResourceActions.Rows.of(ConnectionKind.INSTANCE, ConnectionState::name, ConnectionState::status, "Disconnect", () -> state),
+                dialogs.connections(), name -> intents.dispatch(new Intent.RemoveConnection(name)), questions);
         tabs.addTab("Sessions", section(new JScrollPane(sessions), sessionActions.component()));
+        tabs.addTab("Panels", section(new JScrollPane(panelsTab.list()), panelsTab.actions()));
+        tabs.setToolTipTextAt(PANELS, "comando's own panels, open and closed; double-click opens one");
         tabs.addTab("Connections", section(new JScrollPane(connections), connectionActions.component()));
         JPanel refresh = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
         refresh.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
@@ -268,6 +298,7 @@ public final class SessionsSidebar {
         state = s;
         sync(sessionModel, s.sessions(), sessions);
         sync(connectionModel, s.connections(), connections);
+        panelsTab.render(s);
     }
 
     /** The row control under a mouse event on {@code s}'s cell, if any. */
@@ -448,7 +479,7 @@ public final class SessionsSidebar {
         return list;
     }
 
-    /** Where a session is bound: the titles of its panels, the focused one first; "headless" when it has none. */
+    /** Where a session is bound: its panel's title, "(closed)" after it when closed; "headless" when it has none. */
     private String boundText(SessionState s) {
         if (state == null) {
             return "headless";
@@ -456,7 +487,10 @@ public final class SessionsSidebar {
         List<String> titles = state.panels().stream().filter(p -> p.session().equals(s.name()))
                 .sorted((a, b) -> Boolean.compare(b.id().equals(state.focused()), a.id().equals(state.focused())))
                 .map(p -> p.title()).toList();
-        return titles.isEmpty() ? "headless" : String.join(", ", titles);
+        if (!titles.isEmpty()) {
+            return String.join(", ", titles);
+        }
+        return state.closedPanelOfSession(s.name()).map(p -> p.title() + " (closed)").orElse("headless");
     }
 
     private boolean boundToFocused(SessionState s) {

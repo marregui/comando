@@ -13,5 +13,6 @@ public interface PersistencePort {
 
     void saveSessions(List<SessionSpec> specs);
 
-    void savePanels(List<PanelState> panels);
+    /** The open panels, in tab order, and the closed panels of comando's own, which keep their files. */
+    void savePanels(List<PanelState> panels, List<PanelState> closed);
 }

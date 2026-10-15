@@ -16,8 +16,11 @@ import java.util.function.UnaryOperator;
  * lookups scan.
  *
  * <p>Invariants the reducer keeps: at least one panel; {@code focused} names a panel; names are unique
- * within connections and within sessions; at most one run per panel.</p>
+ * within connections and within sessions; at most one run per panel; a session is bound to at most one panel, open
+ * or closed.</p>
  *
+ * @param closed  comando's own panels that are closed, most recently closed last: each keeps its file, title and
+ *                bindings until it is removed; documents are not kept here
  * @param notice  the notice the status bar shows: an error stands until the user dismisses it, a newer error
  *                replaces it, or an event about the same subject clears it
  * @param notices the most recent notices, oldest first, at most {@link #NOTICE_HISTORY}, including those that did
@@ -25,6 +28,7 @@ import java.util.function.UnaryOperator;
  */
 public record AppState(
         List<PanelState> panels,
+        List<PanelState> closed,
         PanelId focused,
         List<ConnectionState> connections,
         List<SessionState> sessions,
@@ -38,6 +42,7 @@ public record AppState(
 
     public AppState {
         panels = List.copyOf(panels);
+        closed = closed == null ? List.of() : List.copyOf(closed);
         Objects.requireNonNull(focused, "focused");
         connections = List.copyOf(connections);
         sessions = List.copyOf(sessions);
@@ -59,7 +64,7 @@ public record AppState(
     public static final int NOTICE_HISTORY = 50;
 
     public static AppState initial(List<PanelState> panels, List<ConnectionState> connections, List<SessionState> sessions) {
-        return new AppState(panels, panels.getFirst().id(), connections, sessions, List.of(), List.of(), List.of(),
+        return new AppState(panels, List.of(), panels.getFirst().id(), connections, sessions, List.of(), List.of(), List.of(),
                 LowerTab.SESSION, Notice.NONE, List.of(), 1L);
     }
 
@@ -114,7 +119,21 @@ public record AppState(
     // ---- copies
 
     public AppState withPanels(List<PanelState> newPanels, PanelId newFocused) {
-        return new AppState(newPanels, newFocused, connections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId);
+        return new AppState(newPanels, closed, newFocused, connections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId);
+    }
+
+    public AppState withClosed(List<PanelState> newClosed) {
+        return new AppState(panels, newClosed, focused, connections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId);
+    }
+
+    /** A closed panel of comando's own, by id. */
+    public Optional<PanelState> closedPanel(PanelId id) {
+        return find(closed, p -> p.id().equals(id));
+    }
+
+    /** The closed panel bound to the session, if any. */
+    public Optional<PanelState> closedPanelOfSession(String session) {
+        return session.isEmpty() ? Optional.empty() : find(closed, p -> p.session().equals(session));
     }
 
     public AppState withPanel(PanelState panel) {
@@ -126,11 +145,11 @@ public record AppState(
         if (id.equals(focused)) {
             return this;
         }
-        return new AppState(panels, id, connections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, id, connections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId);
     }
 
     public AppState withConnections(List<ConnectionState> newConnections) {
-        return new AppState(panels, focused, newConnections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, newConnections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId);
     }
 
     public AppState withConnection(ConnectionState connection) {
@@ -138,7 +157,7 @@ public record AppState(
     }
 
     public AppState withSessions(List<SessionState> newSessions) {
-        return new AppState(panels, focused, connections, newSessions, runs, approvals, views, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, newSessions, runs, approvals, views, lowerTab, notice, notices, nextId);
     }
 
     public AppState withSession(SessionState session) {
@@ -150,7 +169,7 @@ public record AppState(
     }
 
     public AppState withRuns(List<SqlRun> newRuns) {
-        return new AppState(panels, focused, connections, sessions, newRuns, approvals, views, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, newRuns, approvals, views, lowerTab, notice, notices, nextId);
     }
 
     /** Puts {@code run} as the panel's run, replacing the previous one. */
@@ -166,11 +185,11 @@ public record AppState(
     }
 
     public AppState withApprovals(List<Approval> newApprovals) {
-        return new AppState(panels, focused, connections, sessions, runs, newApprovals, views, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, runs, newApprovals, views, lowerTab, notice, notices, nextId);
     }
 
     public AppState withViews(List<ViewState> newViews) {
-        return new AppState(panels, focused, connections, sessions, runs, approvals, newViews, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, runs, approvals, newViews, lowerTab, notice, notices, nextId);
     }
 
     /** This state when {@code tab} is already selected. */
@@ -178,22 +197,22 @@ public record AppState(
         if (tab.equals(lowerTab)) {
             return this;
         }
-        return new AppState(panels, focused, connections, sessions, runs, approvals, views, tab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, runs, approvals, views, tab, notice, notices, nextId);
     }
 
     /** The standing notice only; the history is unchanged. */
     public AppState withNotice(Notice newNotice) {
-        return new AppState(panels, focused, connections, sessions, runs, approvals, views, lowerTab, newNotice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, runs, approvals, views, lowerTab, newNotice, notices, nextId);
     }
 
     /** The standing notice and the history. */
     public AppState withNotices(Notice newNotice, List<Notice> newNotices) {
-        return new AppState(panels, focused, connections, sessions, runs, approvals, views, lowerTab, newNotice, newNotices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, runs, approvals, views, lowerTab, newNotice, newNotices, nextId);
     }
 
     /** Returns this state with the id counter advanced; the id handed out is {@link #nextId()} of the receiver. */
     public AppState withIdTaken() {
-        return new AppState(panels, focused, connections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId + 1);
+        return new AppState(panels, closed, focused, connections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId + 1);
     }
 
     // ---- list helpers

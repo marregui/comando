@@ -121,6 +121,11 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     }
 
     @Override
+    public void deletePanel(PanelId panel) {
+        record("ui.delete " + panel);
+    }
+
+    @Override
     public void showFile(String session, String path, String baseDir, int line) {
         record("ui.file " + baseDir + ' ' + path + ':' + line);
     }
@@ -188,7 +193,7 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     }
 
     @Override
-    public void savePanels(List<PanelState> panels) {
+    public void savePanels(List<PanelState> panels, List<PanelState> closed) {
         record("save.panels " + panels.size());
     }
 }

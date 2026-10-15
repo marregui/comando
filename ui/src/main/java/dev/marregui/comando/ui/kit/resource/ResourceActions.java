@@ -19,14 +19,15 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
- * The buttons above a list of resources (sessions, connections), in two groups: on the left, add and whatever else
+ * The buttons above a list of resources (sessions, connections, panels), in two groups: on the left, add and whatever else
  * brings resources in; on the right, edit, clone and remove, which act on the list's selected row and are off while
- * none is selected. Remove asks first, naming what removal does: a resource in use (neither closed nor failed) offers
- * "Stop and remove" (or "Disconnect and remove") or "Leave it", one not in use "Remove" or "Cancel". The safe answer is
- * the default, and closing the question gives it.
+ * none is selected. Remove asks first, naming what removal does: a resource in use (a running session, an open
+ * connection or panel) offers "Stop and remove" ("Disconnect and remove", "Close and remove") or "Leave it", one not
+ * in use "Remove" or "Cancel". The safe answer is the default, and closing the question gives it.
  *
  * @param <T> the list's rows
  */
@@ -52,17 +53,26 @@ public final class ResourceActions<T> {
     /**
      * The rows of the list as resources.
      *
-     * @param kind      the kind: its noun names the buttons, its removal question is asked
-     * @param name      a row's resource name
-     * @param status    a row's status: in use unless closed or failed
-     * @param closeVerb what ends the use ("Stop", "Disconnect"), for the removal of a resource in use
+     * @param noun      names the buttons ("session", "panel")
+     * @param name      what identifies a row to the editor and to remove
+     * @param label     a row as the user knows it, in the removal question's title
+     * @param inUse     whether removing a row ends a use first, which the question then offers
+     * @param closeVerb what ends the use ("Stop", "Disconnect", "Close")
+     * @param question  the removal question, naming what removal does
      */
-    public record Rows<T>(ResourceKind<?> kind, Function<T, String> name, Function<T, Status> status, String closeVerb) {
+    public record Rows<T>(String noun, Function<T, String> name, Function<T, String> label, Predicate<T> inUse,
+                          String closeVerb, Function<T, String> question) {
+
+        /** Rows of a resource kind: named by their resource name, in use unless closed or failed, asked the kind's question. */
+        public static <T> Rows<T> of(ResourceKind<?> kind, Function<T, String> name, Function<T, Status> status, String closeVerb,
+                                     Supplier<AppState> state) {
+            return new Rows<>(kind.noun(), name, name, t -> status.apply(t) != Status.CLOSED && status.apply(t) != Status.FAILED,
+                    closeVerb, t -> kind.removalQuestion(state.get(), name.apply(t)));
+        }
     }
 
     private final JList<T> list;
     private final Rows<T> rows;
-    private final Supplier<AppState> state;
     private final Consumer<String> remove;
     private final Questions questions;
     private final List<JButton> onSelection = new ArrayList<>();
@@ -72,14 +82,13 @@ public final class ResourceActions<T> {
      * @param remove    removes the named resource, once the user said so
      * @param moreLeft  buttons after add, in the left group (import)
      */
-    public ResourceActions(JList<T> list, Rows<T> rows, Supplier<AppState> state, Editor editor, Consumer<String> remove,
-                           Questions questions, JButton... moreLeft) {
+    public ResourceActions(JList<T> list, Rows<T> rows, Editor editor, Consumer<String> remove, Questions questions,
+                           JButton... moreLeft) {
         this.list = list;
         this.rows = rows;
-        this.state = state;
         this.remove = remove;
         this.questions = questions;
-        String noun = rows.kind().noun();
+        String noun = rows.noun();
         List<JButton> left = new ArrayList<>();
         left.add(ToolButton.of("add", "New " + noun + "…", editor::add));
         left.addAll(List.of(moreLeft));
@@ -100,16 +109,9 @@ public final class ResourceActions<T> {
 
     /** Removes {@code row} after asking; the context menu's Remove does the same. */
     public void remove(T row) {
-        AppState s = state.get();
-        if (s == null) {
-            return;
-        }
-        String name = rows.name().apply(row);
-        Status st = rows.status().apply(row);
-        boolean inUse = st != Status.CLOSED && st != Status.FAILED;
-        Object[] options = inUse ? new Object[]{rows.closeVerb() + " and remove", "Leave it"} : new Object[]{"Remove", "Cancel"};
-        if (questions.ask(list, Plain.text(rows.kind().removalQuestion(s, name)), "Remove " + Plain.text(name), options) == 0) {
-            remove.accept(name);
+        Object[] options = rows.inUse().test(row) ? new Object[]{rows.closeVerb() + " and remove", "Leave it"} : new Object[]{"Remove", "Cancel"};
+        if (questions.ask(list, Plain.text(rows.question().apply(row)), "Remove " + Plain.text(rows.label().apply(row)), options) == 0) {
+            remove.accept(rows.name().apply(row));
         }
     }
 

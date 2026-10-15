@@ -15,6 +15,9 @@ public interface UiPort {
 
     void forgetPanel(PanelId panel);
 
+    /** A panel was removed: its own file goes, a document's stays; its terminal ends. */
+    void deletePanel(PanelId panel);
+
     /** Reads {@code path} (relative to {@code baseDir}) and shows it in the side pane at {@code line}. */
     void showFile(String session, String path, String baseDir, int line);
 

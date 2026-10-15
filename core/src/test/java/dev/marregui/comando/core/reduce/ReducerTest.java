@@ -446,7 +446,7 @@ class ReducerTest {
         assertThat(state.panel(P2).orElseThrow().session()).isEqualTo("edge");
         assertThat(state.focused()).isEqualTo(P2);
         assertThat(state.panels()).hasSize(2);
-        assertThat(effects).containsExactly(new Effect.SavePanels(state.panels()));
+        assertThat(effects).containsExactly(new Effect.SavePanels(state.panels(), state.closed()));
     }
 
     @Test
@@ -459,7 +459,7 @@ class ReducerTest {
         assertThat(state.panel(P3).orElseThrow()).isEqualTo(new PanelState(P3, "edge 2", "local", "edge"));
         assertThat(state.focused()).isEqualTo(P3);
         assertThat(state.notice().text()).isEqualTo("Opened edge in a new panel; one keeps work");
-        assertThat(effects).containsExactly(new Effect.SavePanels(state.panels()));
+        assertThat(effects).containsExactly(new Effect.SavePanels(state.panels(), state.closed()));
 
         apply(new Intent.OpenSession("gone", P1, new PanelId("p4")));
         assertThat(state.notice().text()).isEqualTo("No session called gone");
@@ -478,12 +478,46 @@ class ReducerTest {
     }
 
     @Test
-    void aReopenedPanelLeavesItsSessionWithThePanelThatTookIt() {
+    void aClosedPanelKeepsItsSessionAndOpeningTheSessionReopensIt() {
         state = onePanelPerSession();
-        apply(new Intent.ReopenPanel(P3, "old", "local", "work"));
-        assertThat(state.panel(P3).orElseThrow().session()).isEmpty();
-        apply(new Intent.ReopenPanel(new PanelId("p4"), "older", "local", "edge"));
-        assertThat(state.panel(new PanelId("p4")).orElseThrow().session()).isEqualTo("edge");
+        apply(new Intent.ClosePanel(P1));
+        assertThat(state.panels()).extracting(PanelState::id).containsExactly(P2);
+        assertThat(state.closed()).containsExactly(new PanelState(P1, "one", "local", "work"));
+        assertThat(effects).containsExactly(new Effect.ForgetPanel(P1), new Effect.SavePanels(state.panels(), state.closed()));
+
+        apply(new Intent.OpenSession("work", P2, P3));
+        assertThat(state.panels()).as("its own panel, not a new one").extracting(PanelState::id).containsExactly(P2, P1);
+        assertThat(state.focused()).isEqualTo(P1);
+        assertThat(state.closed()).isEmpty();
+
+        apply(new Intent.ClosePanel(P1));
+        apply(new Intent.BindSession(P2, "work"));
+        assertThat(state.closed()).as("a session has one panel, open or closed").containsExactly(new PanelState(P1, "one", "local", ""));
+    }
+
+    @Test
+    void aDocumentClosesForGoodAndARemovedPanelLosesItsFile() {
+        state = onePanelPerSession();
+        PanelId doc = new PanelId("doc");
+        apply(new Intent.AddPanel(doc, "PLAN.md", true));
+        apply(new Intent.ClosePanel(doc));
+        assertThat(state.closed()).as("a document is not kept").isEmpty();
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.DeletePanel.class);
+
+        apply(new Intent.ClosePanel(P1));
+        apply(new Intent.RemovePanel(P1));
+        assertThat(state.closed()).isEmpty();
+        assertThat(state.notice().text()).isEqualTo("Removed one");
+        assertThat(effects).containsExactly(new Effect.DeletePanel(P1), new Effect.SavePanels(state.panels(), state.closed()));
+
+        apply(new Intent.RemovePanel(P2));
+        assertThat(state.panels()).as("the last open panel stays").extracting(PanelState::id).containsExactly(P2);
+        assertThat(state.notice().text()).isEqualTo("The last open panel cannot be removed; open another first");
+
+        apply(new Intent.AddPanel(P3, "three"));
+        apply(new Intent.RemovePanel(P2));
+        assertThat(state.panels()).extracting(PanelState::id).containsExactly(P3);
+        assertThat(effects).containsExactly(new Effect.DeletePanel(P2), new Effect.SavePanels(state.panels(), state.closed()));
     }
 
     @Test

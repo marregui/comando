@@ -14,7 +14,7 @@ A macOS desktop workbench where SQL and Claude Code sessions share one editor. A
 | Window tools for Claude | an MCP server in the app: show a table, a plot, a diff, a file; set the layout; run SQL and describe tables; read the window's state |
 | Databases | PostgreSQL and QuestDB over the PostgreSQL wire protocol; one lane per connection with fast cancel; results stored by column, millions of rows; plots, live plots, `EXPLAIN` trees, a schema explorer; production connections framed in red and refused to Claude for writes |
 | Development | a terminal per panel; Gradle runs with test results as a tree and failures sent to Claude; JFR recordings as tables and plots; jfrq; the scratchpad browser |
-| Persistence | panels, bindings, text, prompt history and the window layout survive restarts; while comando runs, ⌘⇧T reopens the last ten closed panels; passwords in the macOS keychain; atomic store files |
+| Persistence | panels, open and closed, with their bindings and text, prompt history and the window layout survive restarts; a panel is a Markdown file kept until you remove it; ⌘⇧T reopens the last closed; passwords in the macOS keychain; atomic store files |
 
 ## Quick start
 

@@ -27,19 +27,29 @@ public sealed interface Intent {
 
     /**
      * Adds a panel bound to the focused one's connection and to no session, as a session has one panel; the caller
-     * makes the id so the reducer stays deterministic.
+     * makes the id so the reducer stays deterministic. {@code document} marks a file opened from outside comando's
+     * panels folder.
      */
-    record AddPanel(PanelId panel, String title) implements Intent {
+    record AddPanel(PanelId panel, String title, boolean document) implements Intent {
+        /** A panel of comando's own. */
+        public AddPanel(PanelId panel, String title) {
+            this(panel, title, false);
+        }
     }
 
+    /** Closes a panel: one of comando's own is kept, closed, with its file and bindings; a document is dropped. */
     record ClosePanel(PanelId panel) implements Intent {
+    }
+
+    /** Removes a panel, open or closed: it leaves the list, and a panel of comando's own loses its file. */
+    record RemovePanel(PanelId panel) implements Intent {
     }
 
     record RenamePanel(PanelId panel, String title) implements Intent {
     }
 
-    /** Opens a closed panel again with its title and bindings; its text is already back in the panel store. */
-    record ReopenPanel(PanelId panel, String title, String connection, String session) implements Intent {
+    /** Opens a closed panel of comando's own again, after the focused one, with its title, bindings and text. */
+    record ReopenPanel(PanelId panel) implements Intent {
     }
 
     record FocusPanel(PanelId panel) implements Intent {
@@ -51,15 +61,15 @@ public sealed interface Intent {
 
     /**
      * Binds a session to the panel; an empty name unbinds (detaches). A session has at most one panel: a panel bound
-     * to it before loses the binding.
+     * to it before, open or closed, loses the binding.
      */
     record BindSession(PanelId panel, String session) implements Intent {
     }
 
     /**
-     * Opens a session in a panel, as a file opens in an editor: the panel bound to it comes forward; else
-     * {@code target} takes it when it has no session; else a new panel {@code newPanel}, titled after the session and
-     * bound to it and to {@code target}'s connection. The caller makes the new id, so the reducer stays deterministic.
+     * Opens a session in a panel, as a file opens in an editor: the panel bound to it comes forward, reopened when
+     * closed; else {@code target} takes it when it has no session; else a new panel {@code newPanel}, titled after the
+     * session and bound to it and to {@code target}'s connection. The caller makes the new id, so the reducer stays deterministic.
      */
     record OpenSession(String session, PanelId target, PanelId newPanel) implements Intent {
     }

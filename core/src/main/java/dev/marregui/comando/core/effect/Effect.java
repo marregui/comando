@@ -86,6 +86,10 @@ public sealed interface Effect {
     record ForgetPanel(PanelId panel) implements Effect {
     }
 
+    /** A panel was removed: its own file is deleted (a document's never is) and what comando held for it dropped. */
+    record DeletePanel(PanelId panel) implements Effect {
+    }
+
     record Arrange(Layout layout) implements Effect {
     }
 
@@ -136,9 +140,11 @@ public sealed interface Effect {
         }
     }
 
-    record SavePanels(List<PanelState> panels) implements Effect {
+    /** The open panels, in tab order, and the closed panels of comando's own. */
+    record SavePanels(List<PanelState> panels, List<PanelState> closed) implements Effect {
         public SavePanels {
             panels = List.copyOf(panels);
+            closed = List.copyOf(closed);
         }
     }
 }

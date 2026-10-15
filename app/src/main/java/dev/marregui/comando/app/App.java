@@ -68,7 +68,7 @@ public final class App implements AutoCloseable {
             Store.Loaded loaded = store.load();
             AppState initial = AppState.initial(loaded.panels(),
                     loaded.connections().stream().map(ConnectionState::closed).toList(),
-                    loaded.sessions().stream().map(SessionState::closed).toList());
+                    loaded.sessions().stream().map(SessionState::closed).toList()).withClosed(loaded.closed());
 
             TranscriptRegistry transcripts = new TranscriptRegistry();
             ResultRegistry results = new ResultRegistry();

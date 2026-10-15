@@ -47,6 +47,7 @@ public final class EffectRouter implements StateLoop.EffectHandler {
             case Effect.EditPanelText e -> ui.editPanel(e.panel(), e.text(), e.mode());
             case Effect.DesktopNotify e -> ui.notifyDesktop(e.title(), e.text());
             case Effect.ForgetPanel e -> ui.forgetPanel(e.panel());
+            case Effect.DeletePanel e -> ui.deletePanel(e.panel());
             case Effect.Arrange e -> ui.arrange(e.layout());
             case Effect.ShowFile e -> ui.showFile(e.session(), e.path(), e.baseDir(), e.line());
             case Effect.ShowScratchpad e -> ui.showScratchpad(e.root());
@@ -59,7 +60,7 @@ public final class EffectRouter implements StateLoop.EffectHandler {
             case Effect.BrowseScratchpad e -> tools.browseScratchpad();
             case Effect.SaveConnections e -> persistence.saveConnections(e.specs());
             case Effect.SaveSessions e -> persistence.saveSessions(e.specs());
-            case Effect.SavePanels e -> persistence.savePanels(e.panels());
+            case Effect.SavePanels e -> persistence.savePanels(e.panels(), e.closed());
         }
     }
 }

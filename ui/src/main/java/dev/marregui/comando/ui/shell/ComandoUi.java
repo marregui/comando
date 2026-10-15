@@ -280,7 +280,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             public void openFile(Path file) {
                 ComandoUi.this.openFile(file);
             }
-        }, () -> actions.run("view.sidebar"));
+        }, deps.texts(), () -> actions.run("view.sidebar"));
         status = new StatusBar(deps.intents());
         findBar = new FindBar();
         top = new JPanel(new BorderLayout());
@@ -513,6 +513,16 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     @Override
     public void forgetPanel(PanelId panel) {
         deps.texts().forget(panel);
+        forgetTerminal(panel);
+    }
+
+    @Override
+    public void deletePanel(PanelId panel) {
+        deps.texts().delete(panel);
+        forgetTerminal(panel);
+    }
+
+    private void forgetTerminal(PanelId panel) {
         Edt.run(() -> {
             if (lower != null) {
                 lower.terminals().forget(panel);
@@ -935,22 +945,22 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /**
-     * Opens the most recently closed panel again after the focused one, with its title and bindings, on its own file
-     * when that is still there, else with the text it had. The file is read off the EDT, after the closing panel's
-     * last write to it.
+     * Opens the most recently closed tab again: a panel of comando's own, still closed, comes back with its text and
+     * bindings; a document opens on its file again. A panel removed since is skipped.
      */
     private void reopenPanel() {
-        workspace.popClosed().ifPresent(c -> {
-            PanelId id = PanelId.random();
-            CompletableFuture<String> opened = c.file() == null ? CompletableFuture.completedFuture("no file")
-                    : deps.texts().open(id, c.file());
-            opened.thenAccept(refused -> {
-                if (!refused.isEmpty()) {
-                    deps.texts().changed(id, c.text());
+        while (workspace.hasClosed()) {
+            Workspace.ClosedPanel c = workspace.popClosed().orElseThrow();
+            if (!c.document()) {
+                if (deps.state().get().closedPanel(c.id()).isPresent()) {
+                    deps.intents().dispatch(new Intent.ReopenPanel(c.id()));
+                    return;
                 }
-                deps.intents().dispatch(new Intent.ReopenPanel(id, c.title(), c.connection(), c.session()));
-            });
-        });
+            } else if (c.file() != null) {
+                openFile(c.file());
+                return;
+            }
+        }
     }
 
     /** File ▸ Open file…: a file chosen anywhere, starting in the panels' folder. */
@@ -977,6 +987,13 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 return;
             }
         }
+        // the file of a closed panel: the panel comes back, with its bindings
+        for (PanelState p : deps.state().get().closed()) {
+            if (deps.texts().file(p.id()).map(f -> samePath(f, file)).orElse(false)) {
+                deps.intents().dispatch(new Intent.ReopenPanel(p.id()));
+                return;
+            }
+        }
         if (!openingFiles.add(file)) {
             return;
         }
@@ -992,7 +1009,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             String title = (name.toLowerCase(Locale.ROOT).endsWith(".md") ? name.substring(0, name.length() - 3) : name).strip();
             deps.texts().open(id, file).thenAccept(refused -> {
                 if (refused.isEmpty()) {
-                    deps.intents().dispatch(new Intent.AddPanel(id, title));
+                    deps.intents().dispatch(new Intent.AddPanel(id, title, deps.texts().document(id)));
                 } else if (!refused.endsWith("is already open")) {
                     // already open: a click racing the first one's panel, which comes forward on its own
                     deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, refused, false));
