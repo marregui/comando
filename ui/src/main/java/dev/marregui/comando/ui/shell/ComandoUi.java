@@ -376,10 +376,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
     }
 
-    /** Once a second: elapsed times on the panels and the results. */
+    /** Once a second: elapsed times on the panels and the results, uptimes on the session rows. */
     private void tick() {
         workspace.tick();
         lower.results().tick();
+        sidebar.tick();
     }
 
     private static Map<String, Status> statuses(List<Map.Entry<String, Status>> entries) {

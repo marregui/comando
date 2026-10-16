@@ -1,13 +1,18 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.testkit.States;
 import org.junit.jupiter.api.Test;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -41,6 +46,28 @@ class PanelTextsTest {
         assertThat(EditorPanel.errorPosition("ERROR: table does not exist [table=nope]\n  Position: 38")).isEqualTo(38);
         assertThat(EditorPanel.errorPosition("ERROR: boom")).isZero();
         assertThat(EditorPanel.errorPosition(null)).isZero();
+    }
+
+    @Test
+    void aRunningSessionRowSaysWhenItStartedAndForHowLong() {
+        ZoneId utc = ZoneOffset.UTC;
+        long started = Instant.parse("2026-10-16T09:12:30Z").toEpochMilli();
+        SessionState running = SessionState.closed(States.WORK).withStatus(Status.OPEN, "").withStarted(started);
+        assertThat(SessionRow.uptimeText(running, started + 30_000, utc)).isEqualTo("since 09:12 · under a minute");
+        assertThat(SessionRow.uptimeText(running, started + (3 * 60 + 5) * 60_000L, utc)).isEqualTo("since 09:12 · 3 h 05 min");
+        assertThat(SessionRow.uptimeText(running, started + 26 * 3_600_000L, utc)).isEqualTo("since Oct 16 09:12 · 1 d 2 h");
+        assertThat(SessionRow.uptimeText(running.withStatus(Status.CLOSED, ""), started + 60_000, utc)).as("stopped").isEmpty();
+        assertThat(SessionRow.uptimeText(SessionState.closed(States.WORK), started, utc)).isEmpty();
+    }
+
+    @Test
+    void theCheckpointButtonIsPurpleOnlyWhenDue() {
+        SessionState x = SessionState.closed(States.WORK);
+        assertThat(EditorPanel.checkpointIcon(x)).isEqualTo("checkpoint");
+        assertThat(EditorPanel.checkpointTip(x)).isEqualTo("Checkpoint: send /reflect to the session");
+        SessionState due = x.withReflection(Reflection.FRESH.afterTurn(700_000L, 1_000_000L));
+        assertThat(EditorPanel.checkpointIcon(due)).isEqualTo("checkpoint-due");
+        assertThat(EditorPanel.checkpointTip(due)).startsWith("Checkpoint due: the context passed 60% of the window");
     }
 
     @Test

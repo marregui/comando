@@ -42,6 +42,7 @@ import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
+import java.time.ZoneId;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -295,6 +296,27 @@ public final class SessionsSidebar {
         rows.keySet().retainAll(s.sessions().stream().map(SessionState::name).toList());
         sync(connectionModel, s.connections(), connections);
         panelsTab.render(s);
+    }
+
+    /** The uptimes the session rows last showed, so the shell's one-second tick repaints them only when one moved on. */
+    private String uptimes = "";
+
+    /** Once a second, from the shell: the running sessions' uptimes, which move on by the minute. */
+    public void tick() {
+        if (state == null) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        ZoneId zone = ZoneId.systemDefault();
+        StringBuilder sb = new StringBuilder();
+        for (SessionState x : state.sessions()) {
+            sb.append(SessionRow.uptimeText(x, now, zone)).append('\n');
+        }
+        String next = sb.toString();
+        if (!next.equals(uptimes)) {
+            uptimes = next;
+            sessions.repaint();
+        }
     }
 
     /** The row control under a mouse event on {@code s}'s cell, if any. */

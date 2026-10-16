@@ -261,7 +261,7 @@ class TranscriptReadingTest {
                 .contains("**Edit** · /a/B.java\n\n```diff\n")
                 .contains("-int x = 1;\n+int x = 2;")
                 .contains("**Grep** · cancel  in core\n\n```json\n{\n  \"pattern\" : \"cancel\"")
-                .contains("_12.0 s · $0.120 total_")
+                .contains("_12.0 s_")
                 .doesNotContain("private reasoning");
     }
 
@@ -271,7 +271,7 @@ class TranscriptReadingTest {
         add(new Block.TurnEnd(0.12, 12_000, 1, false, ""));
         paint(900, 400);
         canvas.selectAll();
-        assertThat(canvas.selectionText()).contains("Done.").endsWith("12.0 s · $0.120 total");
+        assertThat(canvas.selectionText()).contains("Done.").endsWith("12.0 s");
     }
 
     @Test
@@ -289,7 +289,7 @@ class TranscriptReadingTest {
         Style s = Style.of(0);
         Items.TurnItem interrupted = (Items.TurnItem) canvas.itemAt(stopped);
         Items.TurnItem failure = (Items.TurnItem) canvas.itemAt(failed);
-        assertThat(interrupted.summary()).isEqualTo("interrupted · 12.0 s · $0.120 total");
+        assertThat(interrupted.summary()).isEqualTo("interrupted · 12.0 s");
         assertThat(interrupted.color(s)).isEqualTo(Theme.MUTED);
         assertThat(failure.color(s)).isEqualTo(Theme.DANGER);
     }

@@ -192,6 +192,10 @@ public sealed interface Intent {
     record InterruptSession(String name) implements Intent {
     }
 
+    /** Empties the session's Session tab; the conversation is untouched. Refused while a turn runs. */
+    record ClearTranscript(String name) implements Intent {
+    }
+
     /** Changes the model; a running session also receives {@code /model <model>}. */
     record SetSessionModel(String name, String model) implements Intent {
     }

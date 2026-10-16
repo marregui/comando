@@ -63,6 +63,10 @@ public sealed interface Effect {
     record InterruptClaude(String name) implements Effect {
     }
 
+    /** Drops the blocks of the session's transcript, as shown on the Session tab. */
+    record ClearTranscript(String name) implements Effect {
+    }
+
     /** Loads a stored conversation's transcript for display, without starting a process. */
     record LoadHistory(SessionSpec spec) implements Effect {
     }

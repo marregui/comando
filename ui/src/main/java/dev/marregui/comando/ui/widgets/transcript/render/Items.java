@@ -1075,7 +1075,10 @@ final class Items {
             return turn().error() && turn().text().equals("interrupted");
         }
 
-        /** {@code 12.4 s · $0.120 total}, after the error text when the turn failed or was interrupted. */
+        /**
+         * {@code 12.4 s}, after the error text when the turn failed or was interrupted. No spend: a subscription's limits
+         * are the plan usage the status bar shows, not money per turn.
+         */
         String summary() {
             Block.TurnEnd t = turn();
             StringBuilder sb = new StringBuilder();
@@ -1083,7 +1086,6 @@ final class Items {
                 sb.append(t.text()).append(" · ");
             }
             Formats.appendMillis(sb, t.durationMillis());
-            sb.append(" · ").append(Labels.usd(t.costUsd())).append(" total");
             return sb.toString();
         }
 

@@ -91,6 +91,11 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     }
 
     @Override
+    public void clearTranscript(String name) {
+        record("claude.clearTranscript " + name);
+    }
+
+    @Override
     public void loadHistory(SessionSpec spec) {
         record("claude.history " + spec.name());
     }

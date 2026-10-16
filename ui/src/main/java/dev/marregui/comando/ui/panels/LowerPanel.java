@@ -6,6 +6,7 @@ import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
@@ -18,17 +19,21 @@ import dev.marregui.comando.ui.widgets.approval.ApprovalInbox;
 import dev.marregui.comando.ui.widgets.transcript.TranscriptView;
 import dev.marregui.comando.ui.widgets.transcript.TranscriptWidget;
 
+import javax.swing.JButton;
 import javax.swing.JComponent;
+import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
+import java.awt.FlowLayout;
 import java.util.HashMap;
 import java.util.Map;
 
 /**
  * The lower panel: Session (the focused panel's transcript), Approvals (every session), Terminal (the focused
  * panel's shell), Results, then one tab per view placed below. The selected tab follows the state, and selecting a tab updates the state.
- * Results and Session carry a dot when something new arrived while another tab was in front.
+ * Results and Session carry a dot when something new arrived while another tab was in front. While Session is in front,
+ * a Clear button at the end of the tab strip empties it; the conversation goes on, whole in Claude Code's files.
  */
 public final class LowerPanel {
 
@@ -48,6 +53,8 @@ public final class LowerPanel {
     private final ApprovalInbox inbox;
     private final ViewTabs views;
     private final TerminalTabs terminals = new TerminalTabs();
+    private final JButton clearSession = new JButton(Icons.get("clear"));
+    private AppState state;
     private boolean rendering;
     private String transcriptSession = "";
     /** The transcript version the user last saw on the Session tab, by session. */
@@ -68,6 +75,17 @@ public final class LowerPanel {
         tabs.putClientProperty("JTabbedPane.tabType", "underlined");
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         views = new ViewTabs(tabs, FIXED_TABS, Placement.LOWER, registry, context);
+        clearSession.setFocusable(false);
+        clearSession.getAccessibleContext().setAccessibleName("Clear the Session tab");
+        clearSession.addActionListener(e -> {
+            if (!transcriptSession.isEmpty()) {
+                context.intents().dispatch(new Intent.ClearTranscript(transcriptSession));
+            }
+        });
+        JPanel trailing = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
+        trailing.setOpaque(false);
+        trailing.add(clearSession);
+        tabs.putClientProperty("JTabbedPane.trailingComponent", trailing);
         tabs.addChangeListener(e -> {
             if (rendering) {
                 return;
@@ -169,6 +187,8 @@ public final class LowerPanel {
             terminals.render(s, s.lowerTab().kind() == LowerTab.Kind.TERMINAL);
             markResults(s);
             markSession();
+            state = s;
+            showClear();
         } finally {
             rendering = false;
         }
@@ -214,6 +234,26 @@ public final class LowerPanel {
         transcriptSession = session;
         transcript.render(session.isEmpty() ? null : new TranscriptView(session, transcripts.of(session)));
         markSession();
+        showClear();
+    }
+
+    /**
+     * Clear shows while Session is in front with a session's transcript, and acts once there are blocks and no turn
+     * writes more.
+     */
+    private void showClear() {
+        boolean shown = tabs.getSelectedIndex() == SESSION && !transcriptSession.isEmpty();
+        boolean busy = state != null && state.session(transcriptSession).map(SessionState::isBusy).orElse(false);
+        Transcript t = transcriptSession.isEmpty() ? null : transcripts.of(transcriptSession);
+        clearSession.setVisible(shown);
+        clearSession.setEnabled(shown && !busy && t != null && t.size() > 0);
+        clearSession.setToolTipText(busy ? "Clear the Session tab once the turn has ended"
+                : "Clear the Session tab; the conversation goes on, and Claude Code keeps it whole");
+    }
+
+    /** For tests: whether Clear is shown and acts. */
+    boolean clearOffered() {
+        return clearSession.isVisible() && clearSession.isEnabled();
     }
 
     private static JTabbedPane named(JTabbedPane tabs, String name) {

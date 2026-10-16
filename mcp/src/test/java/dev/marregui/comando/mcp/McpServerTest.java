@@ -510,7 +510,7 @@ class McpServerTest {
         assertThat(second).contains("next read: after 5")
                 .contains("[2] tool Bash {\"command\":\"git branch --show-current\"} → done:\n  main")
                 .contains("[3] Claude:\n  On main.")
-                .contains("[4] turn ended: 2 turns, 1.5 s, $0.01")
+                .contains("[4] turn ended: 2 turns, 1.5 s")
                 .doesNotContain("[1]");
     }
 

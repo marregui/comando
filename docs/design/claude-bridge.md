@@ -37,7 +37,7 @@ Threads per process: a stdout reader, a stdin writer fed by a queue, a stderr re
 | `assistant` | the final form of each block; one event arrives per content block |
 | `user` with `tool_result` | the result attached to its tool card by tool-use id; the card turns done or failed |
 | `user` with text | the compaction summary, local command output, or the interrupt marker, as notes |
-| `result` | a turn-end block (duration, cost); `SessionTurnEnded` with the queued turn count, cost, the context size, and the model's context window from `modelUsage`. The context size is the input of the turn's last main-thread API call (`result.usage` sums every call of the turn); after `compact_boundary` it is the compacted size until the next call reports one |
+| `result` | a turn-end block (duration; the cost it carries is not shown); `SessionTurnEnded` with the queued turn count, cost, the context size, and the model's context window from `modelUsage`. The context size is the input of the turn's last main-thread API call (`result.usage` sums every call of the turn); after `compact_boundary` it is the compacted size until the next call reports one |
 | `rate_limit_event` | a note when its status is not `allowed` |
 
 Subagent blocks carry `parent_tool_use_id`; the transcript nests them inside the card of the call that started them. Text is clipped per block (tool results to 400 lines in the view) so one runaway tool output cannot stall rendering.

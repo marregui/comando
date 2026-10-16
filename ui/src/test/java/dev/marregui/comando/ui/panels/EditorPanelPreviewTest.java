@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.ui.widgets.editor.CommandEditor;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.junit.jupiter.api.Test;
 
@@ -31,6 +32,27 @@ class EditorPanelPreviewTest {
             setUp.accept(p[0]);
         });
         return p[0];
+    }
+
+    @Test
+    void clearEmptiesThePanelsOwnTextButNeverADocument() throws Exception {
+        EditorPanel own = panel("notes", p -> {
+            p.editor().load("select 1;\n");
+            p.file(Path.of("/home/.comando/panels/notes.md"), false);
+        });
+        assertThat(own.clearOffered()).isTrue();
+        SwingUtilities.invokeAndWait(own::clickClear);
+        assertThat(own.editor().text()).isEmpty();
+        assertThat(own.clearOffered()).as("nothing left to clear").isFalse();
+        SwingUtilities.invokeAndWait(() -> own.editor().area().undoLastAction());
+        assertThat(own.editor().text()).isEqualTo("select 1;\n");
+        assertThat(own.clearOffered()).isTrue();
+
+        EditorPanel document = panel("PLAN", p -> {
+            p.editor().load("# Plan\n");
+            p.file(Path.of("/s/PLAN.md"), true);
+        });
+        assertThat(document.clearOffered()).as("a file of its own is not emptied from the panel").isFalse();
     }
 
     @Test
@@ -66,7 +88,7 @@ class EditorPanelPreviewTest {
         assertThat(panel.previewOffered()).isTrue();
         assertThat(panel.previewing()).isFalse();
         assertThat(panel.modeLabel()).isEqualTo("Preview");
-        assertThat(panel.editor().area().getSyntaxEditingStyle()).isEqualTo(SyntaxConstants.SYNTAX_STYLE_SQL);
+        assertThat(panel.editor().area().getSyntaxEditingStyle()).isEqualTo(CommandEditor.PANEL_STYLE);
 
         SwingUtilities.invokeAndWait(() -> panel.file(Path.of("/home/.comando/panels/spec 2.md"), false));
         assertThat(panel.previewing()).as("a renamed panel's file is still its own").isFalse();

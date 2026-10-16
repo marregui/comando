@@ -19,6 +19,7 @@ import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
@@ -131,10 +132,11 @@ public final class Reducer {
             case Intent.StartFresh i -> startFresh(s, i.name());
             case Intent.Checkpoint i -> checkpoint(s, i.name());
             case Intent.InterruptSession i -> interruptSession(s, i.name());
+            case Intent.ClearTranscript i -> clearTranscript(s, i.name());
             case Intent.SetSessionModel i -> sessionSetting(s, i.name(), i.model(), true);
             case Intent.SetSessionEffort i -> sessionSetting(s, i.name(), i.effort(), false);
-            case Intent.SessionStarted i -> Transition.of(clear(s.withSession(i.name(), x -> x.withStatus(Status.OPEN, "").withoutTasks()),
-                    Notice.session(i.name())));
+            case Intent.SessionStarted i -> Transition.of(clear(s.withSession(i.name(),
+                    x -> x.withStatus(Status.OPEN, "").withoutTasks().withStarted(clock.millis())), Notice.session(i.name())));
             case Intent.SessionInit i -> sessionInit(s, i);
             case Intent.SessionActivity i -> Transition.of(s.withSession(i.name(), x -> x.withActivity(i.activity(), clock.millis())));
             case Intent.SessionTasksChanged i -> Transition.of(s.withSession(i.name(), x -> x.withTasks(i.open(), clock.millis())));
@@ -472,6 +474,10 @@ public final class Reducer {
         effects.add(new Effect.SendToClaude(session.name(), prompt, panel.title()));
         long now = clock.millis();
         session = session.withTurns(session.pendingTurns() + 1, now).withActivity("sending", now);
+        if (isCheckpoint(prompt, session.spec().checkpoint())) {
+            // typed, sent by the button or by another session alike: the session is no longer due
+            session = session.withReflection(Reflection.checkpointed(session.contextTokens(), session.contextWindow()));
+        }
         AppState next = clear(s.withSession(session), subject);
         // the Session tab follows a prompt run from the panel the user looks at; one another session sends to a panel
         // in the background leaves the user's lower panel alone
@@ -479,6 +485,13 @@ public final class Reducer {
             next = next.withLowerTab(LowerTab.SESSION);
         }
         return new Transition(next, effects);
+    }
+
+    /** The prompt is the checkpoint command, alone or followed by arguments ({@code /reflect now}). */
+    static boolean isCheckpoint(String prompt, String checkpoint) {
+        String p = prompt.strip();
+        String c = checkpoint.strip();
+        return !c.isEmpty() && p.startsWith(c) && (p.length() == c.length() || Character.isWhitespace(p.charAt(c.length())));
     }
 
     private Transition cancelRun(AppState s, PanelId id) {
@@ -829,7 +842,8 @@ public final class Reducer {
         }
         SessionState x = found.get();
         String previous = x.spec().claudeSessionId();
-        SessionState fresh = x.withSpec(x.spec().restarted()).withStatus(Status.OPENING, "");
+        // a new conversation has nothing to reflect on yet
+        SessionState fresh = x.withSpec(x.spec().restarted()).withStatus(Status.OPENING, "").withReflection(Reflection.FRESH);
         AppState next = s.withSession(fresh);
         if (!previous.isEmpty()) {
             next = notice(next, Notice.Level.INFO, "Session " + name + ": new conversation; the previous one (" + previous
@@ -850,6 +864,22 @@ public final class Reducer {
                     + found.get().spec().checkpoint(), Notice.session(name)));
         }
         return runPrompt(s, panels.getFirst(), found.get().spec().checkpoint());
+    }
+
+    /**
+     * Empties the session's Session tab; the conversation itself is untouched. Refused while a turn runs: its blocks are
+     * still being written.
+     */
+    private Transition clearTranscript(AppState s, String name) {
+        Optional<SessionState> found = s.session(name);
+        if (found.isEmpty()) {
+            return Transition.of(s);
+        }
+        if (found.get().isBusy()) {
+            return Transition.of(notice(s, Notice.Level.WARN, "Session " + name + " is working; clear it once the turn has ended",
+                    Notice.session(name)));
+        }
+        return new Transition(s, List.of(new Effect.ClearTranscript(name)));
     }
 
     private Transition stopSession(AppState s, String name) {
@@ -925,6 +955,7 @@ public final class Reducer {
                         i.contextTokens() >= 0 ? i.contextTokens() : found.get().contextTokens(),
                         i.contextWindow() > 0 ? i.contextWindow() : found.get().contextWindow(), now)
                 .withActivity("", now);
+        x = x.withReflection(x.reflection().afterTurn(x.contextTokens(), x.contextWindow()));
         AppState next = s.withSession(x);
         List<Effect> effects = new ArrayList<>();
         // the user's own interrupt is an outcome, not a failure

@@ -1,8 +1,13 @@
 package dev.marregui.comando.ui.kit.format;
 
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.Locale;
 
-/** Short human labels for status lines: elapsed time, money, token counts. */
+/** Short human labels for status lines: elapsed time, start times, token counts. */
 public final class Labels {
 
     private Labels() {
@@ -40,12 +45,30 @@ public final class Labels {
         return String.format(Locale.ROOT, "%d h %02d min", s / 3600, (s % 3600) / 60);
     }
 
-    public static String usd(double usd) {
-        if (usd <= 0) {
-            return "$0";
+    /** How long something has run, to the minute: "under a minute", "12 min", "3 h 05 min", "2 d 4 h". */
+    public static String uptime(long millis) {
+        long m = Math.max(0, millis / 60_000);
+        if (m < 1) {
+            return "under a minute";
         }
-        return usd < 1 ? String.format(Locale.ROOT, "$%.3f", usd) : String.format(Locale.ROOT, "$%.2f", usd);
+        if (m < 60) {
+            return m + " min";
+        }
+        if (m < 24 * 60) {
+            return String.format(Locale.ROOT, "%d h %02d min", m / 60, m % 60);
+        }
+        return String.format(Locale.ROOT, "%d d %d h", m / (24 * 60), (m % (24 * 60)) / 60);
     }
+
+    /** The wall-clock time of {@code millis}: "09:12" today, "Oct 15 09:12" on an earlier day. */
+    public static String startedAt(long millis, long nowMillis, ZoneId zone) {
+        LocalDateTime at = LocalDateTime.ofInstant(Instant.ofEpochMilli(millis), zone);
+        LocalDate today = LocalDateTime.ofInstant(Instant.ofEpochMilli(nowMillis), zone).toLocalDate();
+        return at.format(at.toLocalDate().equals(today) ? TIME : DAY_TIME);
+    }
+
+    private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT);
+    private static final DateTimeFormatter DAY_TIME = DateTimeFormatter.ofPattern("MMM d HH:mm", Locale.ROOT);
 
     public static String tokens(long tokens) {
         if (tokens < 1000) {

@@ -183,6 +183,23 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         });
     }
 
+    /**
+     * On the session's strand, so no line of the stream lands between the clear and the mapper forgetting where its
+     * blocks were: a result for a call made before the clear finds no block and is dropped.
+     */
+    @Override
+    public void clearTranscript(String name) {
+        Session s = sessions.get(name);
+        if (s == null) {
+            return;
+        }
+        s.run(() -> {
+            s.transcript.clear();
+            s.mapper.forgetBlocks();
+            s.transcript.changed();
+        });
+    }
+
     @Override
     public void loadHistory(SessionSpec spec) {
         if (spec.claudeSessionId().isEmpty()) {
@@ -273,6 +290,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             if (spec.startMode() == StartMode.NEW) {
                 // the Session tab shows one conversation: the new one starts empty, the old stays in Claude Code's files
                 s.transcript.clear();
+                s.mapper.forgetBlocks();
             }
             LOG.log(System.Logger.Level.INFO, "claude started [session=" + s.name + ", pid=" + run.process.pid() + ", mode=" + spec.startMode() + ']');
             s.mapper.note(Block.NoteKind.INFO, switch (spec.startMode()) {

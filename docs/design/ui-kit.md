@@ -12,9 +12,10 @@
 | `resource` | `ResourceActions` | the bar above a list of resources (sessions, connections): add and what brings resources in on the left; edit, clone and remove of the selected row on the right, off while none is selected; removal asks the kind's question and offers to stop a resource in use or leave it ([record 37](../adr/0037-session-actions-act-on-the-selected-row.md)) |
 | `overlay` | `Overlay` | the empty, loading and error states; a widget wraps its content once and switches state |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` | thread hand-off and paint pacing (§3) |
-| `format` | `Labels` | short labels: time since, dollars, token counts, counts, shortened paths |
+| `format` | `Labels` | short labels: time since, uptimes and start times, token counts, counts, shortened paths |
 | `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `MermaidDiagrams`, `SourceLinks`, `Plain` | text areas and text rendering (§4) |
 | `tree` | `TreeView` | the one tree over `ViewSpec.TreeNode` |
+| `layout` | `ShrinkingRow` | a row whose labelled chips give up width, ending in "…", before the icon buttons beside them do; the editor panel's header |
 | `tabs` | `FixedRowTabs` | tabs whose headers sit in fixed rows: a click selects and nothing moves; the sidebar's two rows |
 | `desktop` | `ExternalEditor`, `FileChoosers` | opens a file at a line in IntelliJ IDEA, else in the system's default application, on a virtual thread; folder, open and save choosers, the native `FileDialog` on macOS |
 

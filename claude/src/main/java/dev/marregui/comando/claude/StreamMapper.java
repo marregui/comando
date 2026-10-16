@@ -122,6 +122,15 @@ final class StreamMapper {
         closedBlocks.clear();
     }
 
+    /**
+     * The transcript was emptied: every index into it is gone. A delta or a result for a block written before arrives
+     * to no block and is dropped, or, for a finished message, appended as a block of its own.
+     */
+    void forgetBlocks() {
+        resetStreams();
+        toolIndex.clear();
+    }
+
     // ---- system
 
     private void system(JsonNode e) {

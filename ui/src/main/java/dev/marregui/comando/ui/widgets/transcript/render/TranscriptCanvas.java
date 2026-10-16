@@ -1099,7 +1099,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     /**
      * All blocks as Markdown, in order: prompts quoted, text as written, a tool call as its summary line with its
-     * input and result fenced, notes in italics, each turn's duration and cost as an italic footer; thinking stays out.
+     * input and result fenced, notes in italics, each turn's duration as an italic footer; thinking stays out.
      */
     public String markdown() {
         StringBuilder sb = new StringBuilder();

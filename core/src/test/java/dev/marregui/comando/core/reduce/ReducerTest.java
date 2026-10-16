@@ -19,6 +19,7 @@ import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.state.SessionState;
@@ -457,6 +458,89 @@ class ReducerTest {
         apply(new Intent.SaveSession("work", silent));
         apply(new Intent.Checkpoint("work"));
         assertThat(effects).as("an emptied command sends nothing").isEmpty();
+    }
+
+    @Test
+    void aSessionIsDueItsCheckpointPastTheThresholdUntilTheCommandIsSent() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 500_000L, 1_000_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().reflection().due()).as("50 % of the window").isFalse();
+
+        apply(new Intent.RunText(P1, "more", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 610_000L, 1_000_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().reflection().due()).as("61 %").isTrue();
+
+        // typed in the panel, it counts as the button would
+        apply(new Intent.RunText(P1, "/reflect", Target.AUTO));
+        assertThat(state.session("work").orElseThrow().reflection().due()).isFalse();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 620_000L, 1_000_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().reflection().due()).as("already past it at the checkpoint").isFalse();
+
+        apply(new Intent.RunText(P1, "/compact", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 30_000L, 1_000_000L, false, ""));
+        apply(new Intent.RunText(P1, "a long task", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 650_000L, 1_000_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().reflection().due()).as("crossed again after the compaction").isTrue();
+
+        apply(new Intent.Checkpoint("work"));
+        assertThat(state.session("work").orElseThrow().reflection().due()).isFalse();
+    }
+
+    @Test
+    void aCheckpointIsTheCommandAloneOrWithArguments() {
+        assertThat(Reducer.isCheckpoint("/reflect", "/reflect")).isTrue();
+        assertThat(Reducer.isCheckpoint("  /reflect now\n", "/reflect")).isTrue();
+        assertThat(Reducer.isCheckpoint("/reflections", "/reflect")).isFalse();
+        assertThat(Reducer.isCheckpoint("please /reflect", "/reflect")).isFalse();
+        assertThat(Reducer.isCheckpoint("/reflect", "")).isFalse();
+    }
+
+    @Test
+    void aFreshStartLeavesNothingDue() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 700_000L, 1_000_000L, false, ""));
+        apply(new Intent.StopSession("work"));
+        apply(new Intent.SessionExited("work", 0, ""));
+        assertThat(state.session("work").orElseThrow().reflection().due()).as("a stopped session stays due").isTrue();
+        apply(new Intent.StartFresh("work"));
+        assertThat(state.session("work").orElseThrow().reflection()).isEqualTo(Reflection.FRESH);
+    }
+
+    @Test
+    void aRunningSessionKnowsWhenItStarted() {
+        clock.advance(10_000);
+        apply(new Intent.StartSession("work"));
+        assertThat(state.session("work").orElseThrow().startedMillis()).as("not yet").isZero();
+        apply(new Intent.SessionStarted("work"));
+        long started = clock.millis();
+        assertThat(state.session("work").orElseThrow().startedMillis()).isEqualTo(started);
+        clock.advance(5_000);
+        apply(new Intent.SessionStarted("work"));
+        assertThat(state.session("work").orElseThrow().startedMillis()).as("reported again for the same process").isEqualTo(started);
+        apply(new Intent.StopSession("work"));
+        assertThat(state.session("work").orElseThrow().startedMillis()).as("still stopping").isEqualTo(started);
+        apply(new Intent.SessionExited("work", 0, ""));
+        assertThat(state.session("work").orElseThrow().startedMillis()).isZero();
+    }
+
+    @Test
+    void theSessionTabIsClearedOnlyBetweenTurns() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+        apply(new Intent.ClearTranscript("work"));
+        assertThat(effects).isEmpty();
+        assertThat(state.notice().text()).isEqualTo("Session work is working; clear it once the turn has ended");
+
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 1_000L, 200_000L, false, ""));
+        apply(new Intent.ClearTranscript("work"));
+        assertThat(effects).containsExactly(new Effect.ClearTranscript("work"));
+        apply(new Intent.ClearTranscript("nobody"));
+        assertThat(effects).isEmpty();
     }
 
     @Test

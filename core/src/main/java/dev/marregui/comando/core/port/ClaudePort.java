@@ -13,6 +13,9 @@ public interface ClaudePort {
 
     void interrupt(String name);
 
+    /** Drops the blocks of the session's transcript; the conversation, in Claude Code's files, is untouched. */
+    void clearTranscript(String name);
+
     /** Fills the session's transcript from its stored conversation, without starting a process. */
     void loadHistory(SessionSpec spec);
 

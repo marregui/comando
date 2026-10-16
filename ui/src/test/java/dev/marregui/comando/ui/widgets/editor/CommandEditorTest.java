@@ -273,21 +273,39 @@ class CommandEditorTest {
         });
     }
 
-    /** Completion opens on its own in SQL being typed, not on the first word of a prompt. */
+    /** Completion opens on its own in SQL being typed, not on the first word of a prompt, nor with no database open. */
     @Test
     void completionOpensInSqlBeingTypedNotInProse() {
         onEdt(() -> {
             for (String sql : new String[] {"UPDATE tr", "update tr", "WITH x", "select * From trades t where t.", "SELECT"}) {
-                assertThat(inSql(sql)).as(sql).isTrue();
+                assertThat(inSql(sql, true)).as(sql).isTrue();
+                assertThat(inSql(sql, false)).as(sql + ", no database open").isFalse();
             }
             for (String prose : new String[] {"Show", "Explain", "Update", "Explain why the", "show me the log"}) {
-                assertThat(inSql(prose)).as(prose).isFalse();
+                assertThat(inSql(prose, true)).as(prose).isFalse();
             }
         });
     }
 
-    private static boolean inSql(String text) {
+    @Test
+    void clearEmptiesTheTextInOneStepThatUndoBringsBack() {
+        onEdt(() -> {
+            CommandEditor e = new CommandEditor();
+            e.load(TEXT);
+            List<String> changes = new ArrayList<>();
+            e.onChange(changes::add);
+            e.clear();
+            assertThat(e.text()).isEmpty();
+            assertThat(changes).as("the panel's file is saved empty").last().isEqualTo("");
+            e.area().undoLastAction();
+            assertThat(e.text()).isEqualTo(TEXT);
+            e.dispose();
+        });
+    }
+
+    private static boolean inSql(String text, boolean live) {
         CommandEditor c = new CommandEditor();
+        c.sqlLive(live);
         c.load(text);
         c.area().setCaretPosition(text.length());
         boolean in = c.caretInSql();
@@ -327,7 +345,7 @@ class CommandEditorTest {
             assertThat(e.marked()).as("the gutter marks no targets in source code").isZero();
             e.area().setCaretPosition(2);
             assertThat(e.caretInSql()).as("no SQL completion pops up in Java").isFalse();
-            e.syntax(SyntaxConstants.SYNTAX_STYLE_SQL);
+            e.syntax(CommandEditor.PANEL_STYLE);
             assertThat(e.marked()).isEqualTo(2);
             e.dispose();
         });

@@ -10,10 +10,12 @@ import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.layout.ShrinkingRow;
 import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -26,6 +28,8 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -35,6 +39,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -58,7 +63,9 @@ public final class EditorPanel extends JPanel {
     /** Sends the session's checkpoint command; shown only while the session has one. */
     private final JButton sessionCheckpoint = iconButton();
     private final JButton run = new JButton("Run", Icons.get("play"));
-    private final JButton stop = new JButton(Icons.get("stop"));
+    private final JButton stop = new JButton("Stop", Icons.get("stop"));
+    /** Empties the panel's own text in one step ⌘Z takes back; a document, a file of its own, is never emptied from here. */
+    private final JButton clear = new JButton(Icons.get("clear"));
     /** Names the other view: Preview while the text is edited, Edit while the Markdown shows rendered. */
     private final JButton mode = new JButton();
     private boolean previewing;
@@ -77,11 +84,13 @@ public final class EditorPanel extends JPanel {
         this.schemas = schemas;
         run.getAccessibleContext().setAccessibleName("Run");
         stop.getAccessibleContext().setAccessibleName("Stop");
+        clear.getAccessibleContext().setAccessibleName("Clear");
         connectionToggle.getAccessibleContext().setAccessibleName("Connect or disconnect");
         sessionToggle.getAccessibleContext().setAccessibleName("Start or stop the session");
         JPanel header = new JPanel(new BorderLayout());
         header.setBorder(BorderFactory.createEmptyBorder(4, Theme.GAP, 4, Theme.GAP));
-        JPanel left = new JPanel(new FlowLayout(FlowLayout.LEFT, 2, 0));
+        // on a narrow panel the chips' names give way, ending in "…"; the plugs and buttons beside them stay whole
+        JPanel left = new JPanel(new ShrinkingRow(2, 64, Set.of(session, connection)));
         // the session first, as a panel is mostly for it; the database second
         left.add(session);
         left.add(sessionToggle);
@@ -97,17 +106,20 @@ public final class EditorPanel extends JPanel {
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
         run.setToolTipText("Run the selection or the block under the caret (⌘⏎); ⌘⇧⏎ sends to Claude, ⌥⏎ runs as SQL");
         stop.setToolTipText("Stop the running SQL or interrupt the session (⌘.)");
-        stop.putClientProperty("JButton.buttonType", "toolBarButton");
+        clear.setToolTipText("Clear the text (⌘Z brings it back)");
         // a click leaves the keyboard in the editor, ready for the next edit or run
         run.setFocusable(false);
         stop.setFocusable(false);
+        clear.setFocusable(false);
         mode.setFocusable(false);
         showMode();
         mode.addActionListener(e -> showPreview(!previewing));
         right.add(mode);
         right.add(run);
         right.add(stop);
-        header.add(left, BorderLayout.WEST);
+        right.add(clear);
+        // the chips take what the buttons leave, never drawn under them
+        header.add(left, BorderLayout.CENTER);
         header.add(right, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
         rendered.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD * 2, Theme.PAD, Theme.PAD * 2));
@@ -119,6 +131,27 @@ public final class EditorPanel extends JPanel {
 
         run.addActionListener(e -> runSelection(Target.AUTO));
         stop.addActionListener(e -> intents.dispatch(new Intent.CancelRun(this.panel.id())));
+        clear.addActionListener(e -> {
+            editor.clear();
+            editor.requestFocus();
+        });
+        editor.area().getDocument().addDocumentListener(new DocumentListener() {
+            @Override
+            public void insertUpdate(DocumentEvent e) {
+                showClear();
+            }
+
+            @Override
+            public void removeUpdate(DocumentEvent e) {
+                showClear();
+            }
+
+            @Override
+            public void changedUpdate(DocumentEvent e) {
+                // attributes only: the text is the same
+            }
+        });
+        showClear();
         connection.addActionListener(e -> connectionMenu().show(connection, 0, connection.getHeight()));
         session.addActionListener(e -> sessionMenu().show(session, 0, session.getHeight()));
         connectionToggle.addActionListener(e -> toggleConnection());
@@ -146,7 +179,8 @@ public final class EditorPanel extends JPanel {
         boolean opened = document && !(this.document && Objects.equals(file, this.file));
         this.file = file;
         this.document = document;
-        editor.syntax(document && file != null ? Editors.styleFor(file) : Editors.styleFor("sql"));
+        editor.syntax(document && file != null ? Editors.styleFor(file) : CommandEditor.PANEL_STYLE);
+        showClear();
         boolean markdown = isMarkdown();
         mode.setVisible(markdown);
         if (!markdown && previewing()) {
@@ -194,9 +228,26 @@ public final class EditorPanel extends JPanel {
             rendered.setCaretPosition(0);
         }
         ((CardLayout) center.getLayout()).show(center, on ? PREVIEW : EDIT);
+        showClear();
         if (!on) {
             editor.requestFocus();
         }
+    }
+
+    /** Clear is offered for the panel's own text while it is edited, and does something only when there is text. */
+    private void showClear() {
+        clear.setVisible(!document);
+        clear.setEnabled(!previewing && editor.area().getDocument().getLength() > 0);
+    }
+
+    /** For tests. */
+    boolean clearOffered() {
+        return clear.isVisible() && clear.isEnabled();
+    }
+
+    /** For tests: the Clear button's click. */
+    void clickClear() {
+        clear.doClick();
     }
 
     private void showMode() {
@@ -271,7 +322,8 @@ public final class EditorPanel extends JPanel {
             sessionFresh.setToolTipText("Start a new conversation; the current one (" + ss.spec().claudeSessionId() + ") stays importable");
             sessionCheckpoint.setVisible(showsCheckpoint(ss));
             sessionCheckpoint.setEnabled(ss.status() != Status.CLOSING);
-            sessionCheckpoint.setToolTipText("Checkpoint: send " + ss.spec().checkpoint() + " to the session");
+            sessionCheckpoint.setIcon(Icons.get(checkpointIcon(ss)));
+            sessionCheckpoint.setToolTipText(checkpointTip(ss));
         } else {
             sessionFresh.setVisible(false);
             sessionCheckpoint.setVisible(false);
@@ -281,6 +333,8 @@ public final class EditorPanel extends JPanel {
             sessionToggle.setVisible(false);
         }
         editor.setSchema(p.connection().isEmpty() ? Schema.EMPTY : schemas.of(p.connection()));
+        // with no open database, the text is prompts and notes: nothing is coloured as SQL
+        editor.sqlLive(c.map(cs -> cs.status().isUsable()).orElse(false));
         boolean running = s.runOf(p.id()).map(r -> r.status().isActive()).orElse(false) || x.map(SessionState::isBusy).orElse(false);
         stop.setEnabled(running);
         s.runOf(p.id()).filter(r -> r.status() == RunStatus.FAILED && r.requestId() != errorMarked).ifPresent(r -> {
@@ -350,6 +404,17 @@ public final class EditorPanel extends JPanel {
 
     static boolean showsCheckpoint(SessionState ss) {
         return !ss.spec().checkpoint().isEmpty();
+    }
+
+    /** Grey, purple once the session is due its checkpoint: the context filled past the threshold since the last one. */
+    static String checkpointIcon(SessionState ss) {
+        return ss.reflection().due() ? "checkpoint-due" : "checkpoint";
+    }
+
+    static String checkpointTip(SessionState ss) {
+        String send = "send " + ss.spec().checkpoint() + " to the session";
+        return ss.reflection().due() ? "Checkpoint due: the context passed " + Math.round(Reflection.THRESHOLD * 100) + "% of the window; " + send
+                : "Checkpoint: " + send;
     }
 
     private void toggleSession() {

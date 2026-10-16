@@ -30,7 +30,7 @@ Swing's HTML renderer (`HTMLEditorKit`) supports HTML 3.2, lays out the whole do
 | tool card | an icon for running, done or failed; a one-line summary of the input; "running · 12 s" while it runs (a 1 s repaint, only while a card runs and the tab shows), "waiting for your approval · ⌃2" in the warn colour while an approval card holds the call; open: the input (shell command, edit as a diff, write as a diff from empty, subagent prompt), the result clipped to 400 lines, and the subagent's blocks. A card opens by itself for edits, errors and running subagents, and never closes by itself |
 | note | an icon by kind (error, denial, retry, interrupt, command) and the first line with ▸; a click opens the full text, up to 400 lines; error notes start open |
 | hook group | consecutive hook outputs as one closed line, "hooks · UserPromptSubmit, SessionStart (3)" ("hook · SessionStart" for one); open, each hook's text; a JSON reply that only adds context shows as `name: additionalContext`, any other reply raw |
-| turn end | duration and cost, selectable; an interrupted turn reads muted, "interrupted · 12.0 s · $0.120 total" |
+| turn end | duration, selectable; no spend ([record 46](../adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)); an interrupted turn reads muted, "interrupted · 12.0 s" |
 
 Layout of the canvas at a width:
 

@@ -41,7 +41,14 @@ import java.util.function.Consumer;
  */
 public final class CommandEditor implements Searchable, Zoomable {
 
-    private final RSyntaxTextArea area = Editors.command();
+    /**
+     * The style of a panel's own text: each block coloured as what it is, SQL while the panel's database is open, a
+     * prompt or a note otherwise (see {@link PanelTokenMaker}).
+     */
+    public static final String PANEL_STYLE = "text/comando-panel";
+
+    private final PanelDocument doc = new PanelDocument();
+    private final RSyntaxTextArea area = panelArea(doc);
     private final RTextScrollPane scroll = Editors.scroll(area, true);
     private final TextSearch search = new TextSearch(area);
     private final Debouncer markers = new Debouncer(250, this::refreshMarkers);
@@ -100,9 +107,17 @@ public final class CommandEditor implements Searchable, Zoomable {
         return area;
     }
 
+    private static RSyntaxTextArea panelArea(PanelDocument doc) {
+        RSyntaxTextArea a = Editors.command();
+        a.setDocument(doc);
+        a.setSyntaxEditingStyle(PANEL_STYLE);
+        return a;
+    }
+
     /**
-     * The syntax the text is coloured as: SQL for a panel's own text, where blocks run on a database or go to Claude;
-     * a file's own language for a file opened in a panel, where the gutter marks no targets and nothing reads as SQL.
+     * The syntax the text is coloured as: {@link #PANEL_STYLE} for a panel's own text, where blocks run on a database
+     * or go to Claude; a file's own language for a file opened in a panel, where the gutter marks no targets and
+     * nothing reads as SQL.
      */
     public void syntax(String style) {
         if (style.equals(area.getSyntaxEditingStyle())) {
@@ -114,7 +129,28 @@ public final class CommandEditor implements Searchable, Zoomable {
     }
 
     private boolean sqlStyle() {
-        return SyntaxConstants.SYNTAX_STYLE_SQL.equals(area.getSyntaxEditingStyle());
+        return PANEL_STYLE.equals(area.getSyntaxEditingStyle());
+    }
+
+    /**
+     * Whether the panel's database is open: only then are SQL blocks coloured as SQL and completed as they are typed;
+     * without one, the text is prompts and notes.
+     */
+    public void sqlLive(boolean on) {
+        if (on != doc.sqlLive()) {
+            doc.sqlLive(on);
+            refreshOccurrences();
+        }
+    }
+
+    /** Whether SQL blocks are coloured as SQL; for tests. */
+    boolean sqlLive() {
+        return doc.sqlLive();
+    }
+
+    /** Empties the text as one step ⌘Z undoes. */
+    public void clear() {
+        replaceAll("");
     }
 
     /** Completes SQL keywords and the tables and columns of {@code schema}; Ctrl+Space, or after a pause in a word. */
@@ -423,7 +459,7 @@ public final class CommandEditor implements Searchable, Zoomable {
      * up on its own and repeated words light up.
      */
     boolean caretInSql() {
-        if (!sqlStyle()) {
+        if (!sqlStyle() || !doc.sqlLive()) {
             return false;
         }
         String text = area.getText();

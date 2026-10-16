@@ -19,6 +19,7 @@ import java.awt.FlowLayout;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.time.ZoneId;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -26,8 +27,9 @@ import java.util.Optional;
  * One session in the sidebar's list: its state, name, the panels it is bound to (or headless) and pending approvals;
  * its folder and branch; and a row of controls: the plug, green while the session runs and grey while it does not, a
  * click on it stopping or starting the session; a fresh start (a stopped session with a conversation starts on a new
- * one); a checkpoint (the session's checkpoint command sent as a prompt); the model; the effort. The list paints it as
- * a cell renderer, so its buttons are not live: the list finds the control under a click with {@link #hit}.
+ * one); a checkpoint (the session's checkpoint command sent as a prompt), purple once the session is due one; the model;
+ * the effort. While the session runs, a line under its folder says when it started and for how long. The list paints it
+ * as a cell renderer, so its buttons are not live: the list finds the control under a click with {@link #hit}.
  */
 final class SessionRow extends JPanel {
 
@@ -71,14 +73,15 @@ final class SessionRow extends JPanel {
         setOpaque(true);
         setBackground(background);
         text.setForeground(foreground);
-        text.setText(html(s, bound, focused, approvals));
+        text.setText(html(s, bound, focused, approvals, uptimeText(s, System.currentTimeMillis(), ZoneId.systemDefault())));
         boolean running = s.status().isUsable();
         power.setIcon(Icons.get(running ? "plug" : "unplug", 14));
         power.setToolTipText(running ? "Connected; click to disconnect (stops the session)" : "Disconnected; click to connect (starts the session)");
         fresh.setVisible(EditorPanel.showsFresh(s));
         fresh.setToolTipText("Start a new conversation; the current one (" + s.spec().claudeSessionId() + ") stays importable");
         checkpoint.setVisible(EditorPanel.showsCheckpoint(s));
-        checkpoint.setToolTipText("Checkpoint: send " + s.spec().checkpoint() + " to the session");
+        checkpoint.setIcon(Icons.get(EditorPanel.checkpointIcon(s), 14));
+        checkpoint.setToolTipText(EditorPanel.checkpointTip(s));
         model.setText(modelName(s) + " ▾");
         model.setToolTipText("Model: " + modelName(s) + "; click to change");
         effort.setText(effortName(s) + " ▾");
@@ -87,6 +90,15 @@ final class SessionRow extends JPanel {
             b.setForeground(selected ? foreground : Theme.MUTED_STRONG);
         }
         return this;
+    }
+
+    /** "since 09:12 · 3 h 05 min" while the session runs, empty while it does not. */
+    static String uptimeText(SessionState s, long nowMillis, ZoneId zone) {
+        long started = s.startedMillis();
+        if (started <= 0L || !s.status().isUsable()) {
+            return "";
+        }
+        return "since " + Labels.startedAt(started, nowMillis, zone) + " · " + Labels.uptime(nowMillis - started);
     }
 
     /** The control at {@code p}, a point in the cell whose bounds this row was laid out to. */
@@ -156,8 +168,8 @@ final class SessionRow extends JPanel {
         return s.spec().effort().isBlank() ? "default" : s.spec().effort();
     }
 
-    /** Two lines that never wrap: a narrow sidebar clips them at its edge. */
-    private static String html(SessionState s, String bound, boolean focused, int approvals) {
+    /** Lines that never wrap: a narrow sidebar clips them at its edge. The third, the uptime, only while it runs. */
+    private static String html(SessionState s, String bound, boolean focused, int approvals, String uptime) {
         String dot = "<span style='color:" + Theme.hex(EditorPanel.color(s.status())) + "'>" + EditorPanel.dot(s.status()) + "</span>";
         String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.WARN) + "'>⚑" + approvals + "</span>";
         String where = "&nbsp;<span style='color:" + Theme.hex(focused ? Theme.ACCENT : Theme.MUTED_STRONG)
@@ -168,7 +180,9 @@ final class SessionRow extends JPanel {
         String branch = s.branch().isEmpty() ? "" : " ⎇ " + MarkdownHtml.escape(s.branch());
         return "<html><nobr>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(s.name()) + "</b>" + where + badge + busy
                 + "</nobr><br><nobr><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>"
-                + MarkdownHtml.escape(clip(Labels.shortPath(s.spec().workDir()), 34)) + branch + "</span></nobr></html>";
+                + MarkdownHtml.escape(clip(Labels.shortPath(s.spec().workDir()), 34)) + branch + "</span></nobr>"
+                + (uptime.isEmpty() ? "" : "<br><nobr><span style='color:" + Theme.hex(Theme.MUTED) + "'>" + MarkdownHtml.escape(uptime) + "</span></nobr>")
+                + "</html>";
     }
 
     private static String clip(String s, int max) {
