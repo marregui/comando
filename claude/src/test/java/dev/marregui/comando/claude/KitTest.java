@@ -576,14 +576,26 @@ class KitTest {
         assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(10));
     }
 
+    /**
+     * A process the run started that keeps the output open must not hold the run. On Linux the JDK stops reading a
+     * process's pipe once it exits, so the run returns its output; elsewhere the drain bound ends it with a failure.
+     */
     @Test
     void aProcessLeftHoldingTheOutputDoesNotHoldTheRun(@TempDir Path tmp) throws Exception {
         Path claude = script(tmp, "sleep 30 &\necho started");
+        List<Kit.Cli.Output> out = new ArrayList<>();
         long t0 = System.nanoTime();
 
-        assertThatThrownBy(() -> Kit.Cli.process(claude.toString()).run(List.of("plugin", "list")))
-                .isInstanceOf(IOException.class).hasMessage("claude plugin list ended, but a process it started kept its output open");
+        Throwable failure = catchThrowable(() -> out.add(Kit.Cli.process(claude.toString()).run(List.of("plugin", "list"))));
+
         assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(10));
+        if (failure == null) {
+            assertThat(out.getFirst().exit()).isZero();
+            assertThat(out.getFirst().text()).isEqualTo("started\n");
+        } else {
+            assertThat(failure).isInstanceOf(IOException.class)
+                    .hasMessage("claude plugin list ended, but a process it started kept its output open");
+        }
     }
 
     @Test
