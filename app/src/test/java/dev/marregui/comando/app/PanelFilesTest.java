@@ -173,7 +173,7 @@ class PanelFilesTest {
         Files.writeString(home.resolve("connections.json"), "[]");
         Files.writeString(home.resolve("sessions.json"), "[]");
         Files.writeString(home.resolve("panels.json"), """
-                [{"id":"m","title":"main","connection":"","session":"","file":"MAIN.md"}]""");
+                [{"id":"m","title":"main","connection":"","session":"","file":"main.md"}]""");
         List<String> notices = new CopyOnWriteArrayList<>();
         try (Store store = new Store(home)) {
             store.onNotice(notices::add);
