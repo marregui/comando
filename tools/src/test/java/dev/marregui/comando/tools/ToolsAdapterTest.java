@@ -3,6 +3,7 @@ package dev.marregui.comando.tools;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingSink;
@@ -19,6 +20,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -322,6 +324,48 @@ class ToolsAdapterTest {
                 .extracting(ViewSpec.TreeNode::label).containsExactly("deeper.md");
         assertThat(root.children().getLast().link()).isEqualTo("comando-file:" + dir.resolve("PLAN.md") + "#0");
         assertThat(root.children().getFirst().link()).as("a folder has no link").isEmpty();
+    }
+
+    @Test
+    void aFileIsCopiedNeverOverAnotherAndTheOpenFoldersShowIt(@TempDir Path dir) throws Exception {
+        Path notes = Files.writeString(dir.resolve("notes.md"), "# notes");
+        ToolsAdapter tools = adapter(dir.resolve("none"));
+        tools.watchFolders(List.of(folder("Notes", dir)));
+        sink.await(Intent.FolderLoaded.class, WAIT);
+        tools.copyFile(notes.toString(), dir.resolve("notes copy.md").toString());
+        assertThat(sink.await(Intent.Notify.class, n -> n.text().startsWith("Copied"), WAIT).text()).isEqualTo("Copied notes.md to notes copy.md");
+        assertThat(dir.resolve("notes copy.md")).hasContent("# notes");
+        sink.await(Intent.FolderLoaded.class, l -> l.tree().children().size() == 2, WAIT);
+
+        Files.writeString(dir.resolve("other.md"), "other");
+        tools.copyFile(notes.toString(), dir.resolve("other.md").toString());
+        assertThat(sink.await(Intent.Notify.class, n -> n.level() == Notice.Level.ERROR, WAIT).text()).isEqualTo("Cannot copy notes.md: other.md exists");
+        assertThat(dir.resolve("other.md")).hasContent("other");
+    }
+
+    @Test
+    void aFileGoesToTheTrashOnlyWhereThereIsOneAndIsDeletedForGoodOnlyWhenAsked(@TempDir Path dir) throws Exception {
+        Path a = Files.writeString(dir.resolve("a.md"), "a");
+        Path b = Files.writeString(dir.resolve("b.md"), "b");
+        Files.createDirectories(dir.resolve("sub"));
+        List<Path> trashed = new CopyOnWriteArrayList<>();
+        ToolsAdapter withTrash = new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), Optional.empty(), "", ""),
+                file -> trashed.add(file));
+        withTrash.deleteFile(a.toString(), true);
+        assertThat(sink.await(Intent.Notify.class, n -> n.text().startsWith("Moved"), WAIT).text()).isEqualTo("Moved a.md to the Trash");
+        assertThat(trashed).containsExactly(a);
+
+        ToolsAdapter noTrash = adapter(dir.resolve("none"));
+        noTrash.deleteFile(b.toString(), true);
+        assertThat(sink.await(Intent.Notify.class, n -> n.level() == Notice.Level.ERROR, WAIT).text())
+                .isEqualTo("Cannot delete b.md: this desktop has no Trash");
+        assertThat(b).as("a Trash asked for and missing: never deleted for good instead").exists();
+        noTrash.deleteFile(b.toString(), false);
+        assertThat(sink.await(Intent.Notify.class, n -> n.text().equals("Deleted b.md"), WAIT)).isNotNull();
+        assertThat(b).doesNotExist();
+        noTrash.deleteFile(dir.resolve("sub").toString(), false);
+        assertThat(sink.await(Intent.Notify.class, n -> n.text().startsWith("Cannot delete sub"), WAIT).text()).isEqualTo("Cannot delete sub: not a file");
+        assertThat(dir.resolve("sub")).isDirectory();
     }
 
     @Test

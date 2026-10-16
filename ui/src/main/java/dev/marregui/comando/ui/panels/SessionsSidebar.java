@@ -13,6 +13,7 @@ import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.ToolButton;
+import dev.marregui.comando.ui.kit.desktop.DesktopTrash;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.tabs.FixedRowTabs;
@@ -79,6 +80,11 @@ public final class SessionsSidebar {
 
         /** Opens a file in a panel, or brings forward the panel that has it. */
         void openFile(Path file);
+
+        /** As {@link #openFile}, showing the file's text to edit rather than rendered. */
+        default void editFile(Path file) {
+            openFile(file);
+        }
     }
 
     /** Panel texts kept nowhere, for a sidebar built without the store. */
@@ -232,7 +238,8 @@ public final class SessionsSidebar {
                 }
             }
         });
-        files = new FilesTab(intents, dialogs::openFile, dialogs.folders(), questions, () -> state);
+        files = new FilesTab(intents, dialogs::openFile, dialogs::editFile, dialogs.folders(), questions, FilesTab.Names.MODAL,
+                DesktopTrash::available, () -> state);
         sessionActions = new ResourceActions<>(sessions,
                 ResourceActions.Rows.of(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop", () -> state),
                 dialogs.sessions(), name -> intents.dispatch(new Intent.RemoveSession(name)), questions,

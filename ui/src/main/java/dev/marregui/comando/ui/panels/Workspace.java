@@ -14,13 +14,18 @@ import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JOptionPane;
+import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.Timer;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
+import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -76,6 +81,8 @@ public final class Workspace {
     /** Panels removed because their file was deleted outside comando, with the file's name. EDT only. */
     private final Map<PanelId, String> deletedFiles = new HashMap<>();
     private boolean rendering;
+    /** Files asked for to edit: the panel that holds one, now or once it opens, shows its text rather than rendered. */
+    private final Set<Path> toEdit = new HashSet<>();
     /** The state last rendered, for a deleted file of a closed panel, which has no tab. EDT only. */
     private AppState shown;
 
@@ -106,7 +113,16 @@ public final class Workspace {
         add.getAccessibleContext().setAccessibleName("New panel");
         add.putClientProperty("JButton.buttonType", "toolBarButton");
         add.addActionListener(e -> newPanel());
-        tabs.putClientProperty("JTabbedPane.trailingComponent", add);
+        // the look stretches the trailing component over the space the tabs leave: the button sits at its right end,
+        // centred in the tabs' height, rather than in the middle of that space
+        JPanel trailing = new JPanel(new GridBagLayout());
+        trailing.setOpaque(false);
+        GridBagConstraints at = new GridBagConstraints();
+        at.weightx = 1;
+        at.anchor = GridBagConstraints.EAST;
+        at.insets = new Insets(0, 0, 0, Theme.GAP);
+        trailing.add(add, at);
+        tabs.putClientProperty("JTabbedPane.trailingComponent", trailing);
         tabs.addChangeListener(e -> {
             if (!rendering && tabs.getSelectedComponent() instanceof EditorPanel p) {
                 intents.dispatch(new Intent.FocusPanel(p.panel().id()));
@@ -219,6 +235,20 @@ public final class Workspace {
         return spin.isRunning();
     }
 
+    /**
+     * The panel that holds {@code file} shows its text to edit: an open one now, one that opens or reopens at the render
+     * that shows it. Called on the EDT.
+     */
+    public void editWhenOpen(Path file) {
+        for (Map.Entry<PanelId, EditorPanel> e : panels.entrySet()) {
+            if (texts.file(e.getKey()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
+                e.getValue().edit();
+                return;
+            }
+        }
+        toEdit.add(file);
+    }
+
     public void newPanel() {
         intents.dispatch(new Intent.AddPanel(PanelId.random(), ""));
     }
@@ -309,6 +339,9 @@ public final class Workspace {
                 refreshTab(p, s, view);
                 Path file = texts.file(p.id()).orElse(null);
                 view.file(file, texts.document(p.id()), file != null && s.folders().stream().anyMatch(f -> f.readOnly() && f.contains(file)));
+                if (file != null && toEdit.removeIf(f -> PanelTexts.samePath(f, file))) {
+                    view.edit();
+                }
                 view.render(p, s);
             }
             EditorPanel focused = panels.get(s.focused());

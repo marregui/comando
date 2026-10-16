@@ -61,7 +61,7 @@ class ResourceKindTest {
         assertThat(FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(skills))).isEqualTo(skills);
         assertThat(FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p")).icon()).as("none set").isEqualTo(FolderRoot.FOLDER);
         assertThatThrownBy(() -> FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p", "icon", "rocket")))
-                .hasMessage("the icon must be one of folder, memory, knowledge, skills, plugin: rocket");
+                .hasMessage("the icon must be one of folder, scratchpad, memory, knowledge, skills, plugin: rocket");
         assertThat(FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(skills.withReadOnly(true))).readOnly())
                 .as("read-only is not the dialog's to set").isFalse();
     }

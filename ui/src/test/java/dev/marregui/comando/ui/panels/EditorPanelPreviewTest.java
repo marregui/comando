@@ -80,6 +80,10 @@ class EditorPanelPreviewTest {
         SwingUtilities.invokeAndWait(() -> notes.file(Path.of("/s/notes.md"), true, false));
         assertThat(notes.editable()).isTrue();
         assertThat(notes.previewOffered()).isTrue();
+        SwingUtilities.invokeAndWait(notes::edit);
+        assertThat(notes.previewing()).as("asked to edit: the text").isFalse();
+        SwingUtilities.invokeAndWait(memory::edit);
+        assertThat(memory.previewing()).as("a read-only document stays rendered").isTrue();
         EditorPanel own = panel("own", p -> p.file(Path.of("/m/own.md"), false, true));
         assertThat(own.editable()).as("a panel's own text is never read-only").isTrue();
     }

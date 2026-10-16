@@ -14,8 +14,12 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -33,9 +37,19 @@ import java.util.function.Supplier;
 /**
  * Runs the development tools. Each run is a child process on a virtual thread that copies its output
  * into the run's console and sends {@link Intent.CommandFinished} at the end; nothing blocks the caller.
- * Reading a recording or a folder also happens on a virtual thread and ends in a view.
+ * Reading a recording or a folder also happens on a virtual thread and ends in a view, and so do the Files tab's
+ * copies and deletions, which end in a notice and a read of the open folders.
  */
 public final class ToolsAdapter implements ToolPort, AutoCloseable {
+
+    /** Moves a file to the desktop's Trash; false when the desktop has none. */
+    @FunctionalInterface
+    public interface Trash {
+        /** A desktop without a Trash, as in tests and on a server. */
+        Trash NONE = file -> false;
+
+        boolean moveToTrash(Path file) throws IOException;
+    }
 
     private static final System.Logger LOG = System.getLogger(ToolsAdapter.class.getName());
 
@@ -43,6 +57,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     private final ConsoleRegistry consoles;
     /** Read at each run, so a change to the user's settings applies to the next run. */
     private final Supplier<ToolSettings> settings;
+    private final Trash trash;
     private final Map<Long, Process> running = new ConcurrentHashMap<>();
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
     private final Set<Long> forgotten = ConcurrentHashMap.newKeySet();
@@ -55,9 +70,14 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     static final long DRAIN_MILLIS = 2_000;
 
     public ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, Supplier<ToolSettings> settings) {
+        this(sink, consoles, settings, Trash.NONE);
+    }
+
+    public ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, Supplier<ToolSettings> settings, Trash trash) {
         this.sink = sink;
         this.consoles = consoles;
         this.settings = settings;
+        this.trash = trash;
     }
 
     @Override
@@ -411,6 +431,64 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             // under the lock, so two sends of one folder reach the state loop in the order their reads were ticketed
             sink.dispatch(new Intent.FolderLoaded(folder, tree));
         }
+    }
+
+    /** Copies one file, never over another: a copy onto an existing name is refused, as is a source that is not a file. */
+    @Override
+    public void copyFile(String from, String to) {
+        Path source = Path.of(from);
+        Path target = Path.of(to);
+        Thread.ofVirtual().name("file-copy").start(() -> fileOp("Cannot copy " + source.getFileName(), () -> {
+            if (!Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("not a file");
+            }
+            Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES);
+            return "Copied " + source.getFileName() + " to " + target.getFileName();
+        }));
+    }
+
+    /**
+     * Deletes one file, never a folder: to the Trash when asked, and then never for good when the desktop has none, so
+     * the user's answer to "Move to the Trash?" is never taken as consent to delete.
+     */
+    @Override
+    public void deleteFile(String file, boolean toTrash) {
+        Path path = Path.of(file);
+        Thread.ofVirtual().name("file-delete").start(() -> fileOp("Cannot delete " + path.getFileName(), () -> {
+            if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
+                throw new IOException("not a file");
+            }
+            if (!toTrash) {
+                Files.delete(path);
+                return "Deleted " + path.getFileName();
+            }
+            if (!trash.moveToTrash(path)) {
+                throw new IOException("this desktop has no Trash");
+            }
+            return "Moved " + path.getFileName() + " to the Trash";
+        }));
+    }
+
+    /** One copy or deletion, on the calling thread: what it did as a notice, or why it failed; then the open folders read again. */
+    private void fileOp(String failure, FileOp op) {
+        try {
+            sink.dispatch(new Intent.Notify(Notice.Level.INFO, op.run(), false));
+        } catch (FileAlreadyExistsException e) {
+            sink.dispatch(new Intent.Notify(Notice.Level.ERROR, failure + ": " + Path.of(e.getFile()).getFileName() + " exists", false));
+        } catch (NoSuchFileException e) {
+            sink.dispatch(new Intent.Notify(Notice.Level.ERROR, failure + ": no such file or folder", false));
+        } catch (IOException | RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, failure, e);
+            sink.dispatch(new Intent.Notify(Notice.Level.ERROR, failure + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()), false));
+        }
+        // the tab shows the change now rather than at the next poll
+        watchedFolders.forEach(f -> readFolder(f, true));
+    }
+
+    @FunctionalInterface
+    private interface FileOp {
+        /** Does the work; answers what was done. */
+        String run() throws IOException;
     }
 
     /** Stops every run; called at exit. */

@@ -245,6 +245,13 @@ public final class EditorPanel extends JPanel {
         return previewing;
     }
 
+    /** Shows the text to edit, when it shows rendered and may be edited. */
+    public void edit() {
+        if (mode.isVisible() && previewing) {
+            showPreview(false);
+        }
+    }
+
     /** Switches between the text to edit and the Markdown rendered; a file that is not Markdown stays as text. */
     public void togglePreview() {
         if (mode.isVisible()) {

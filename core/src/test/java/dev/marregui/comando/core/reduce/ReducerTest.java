@@ -123,6 +123,15 @@ class ReducerTest {
         apply(new Intent.RemoveFolder("Memory"));
         assertThat(state.folders()).containsExactly(memory);
         assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.SaveFolders.class);
+        apply(new Intent.CopyFile("/kb/a.md", "/m/a.md"));
+        assertThat(effects).as("nothing written into a read-only folder").doesNotHaveAnyElementsOfTypes(Effect.CopyFile.class);
+        assertThat(state.notice().text()).isEqualTo("a.md is in folder Memory, which is read-only");
+        apply(new Intent.DeleteFile("/m/MEMORY.md", true));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.DeleteFile.class);
+        apply(new Intent.CopyFile("/m/MEMORY.md", "/kb/MEMORY.md"));
+        assertThat(effects).as("a copy out of it is not a write to it").containsExactly(new Effect.CopyFile("/m/MEMORY.md", "/kb/MEMORY.md"));
+        apply(new Intent.DeleteFile("/kb/a.md", false));
+        assertThat(effects).containsExactly(new Effect.DeleteFile("/kb/a.md", false));
     }
 
     @Test

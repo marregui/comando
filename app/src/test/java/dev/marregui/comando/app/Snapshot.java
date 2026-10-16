@@ -31,6 +31,8 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
 import java.awt.Graphics2D;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -105,7 +107,7 @@ public final class Snapshot {
         loop.dispatch(new Intent.Arrange(new Layout(Layout.Toggle.SHOW, Layout.Toggle.KEEP, Double.NaN)));
         Thread.sleep(2800);
         // the focused panel's Markdown preview, switched on with its header's Preview button, and back with Edit; before
-        // the Files tab, whose folder opens its index in a panel of its own and focuses it
+        // the Files tab
         click("Preview");
         Thread.sleep(800);
         shoot(out.resolve("02d-markdown-preview.png"));
@@ -118,15 +120,14 @@ public final class Snapshot {
                 files.expandRow(0);
             }
         });
-        // opening the row opens the folder's index in a panel; its tree is read meanwhile
-        await(loop, st -> st.panels().stream().anyMatch(p -> p.title().equals("ALPHA")), 10_000);
-        SwingUtilities.invokeAndWait(() -> { });
+        // opening the row opens no panel; its tree is read meanwhile
+        await(loop, st -> rowShown("Files", "ALPHA.md"), 10_000);
         shoot(out.resolve("02c-sidebar-files.png"));
         // its filter, typed as a user would, then cleared; it applies on the event thread: done when the call returns
         SwingUtilities.invokeAndWait(() -> filesFilter().setText("lane"));
         shoot(out.resolve("02c2-sidebar-files-filter.png"));
         SwingUtilities.invokeAndWait(() -> filesFilter().setText(""));
-        // the read-only memory, opened as by a click: its index leads it, and opens rendered with no Edit switch
+        // the read-only memory: its index leads it, and a double click opens it rendered with no Edit switch
         SwingUtilities.invokeAndWait(() -> {
             JTree files = tree("Files");
             if (files != null) {
@@ -135,7 +136,16 @@ public final class Snapshot {
                 files.setSelectionRow(1);
             }
         });
-        await(loop, st -> st.panels().stream().anyMatch(p -> p.title().equals("MEMORY")) && rowShown("Files", "MEMORY.md"), 10_000);
+        await(loop, st -> rowShown("Files", "MEMORY.md"), 10_000);
+        SwingUtilities.invokeAndWait(() -> {
+            JTree files = tree("Files");
+            if (files != null) {
+                Rectangle row = files.getRowBounds(2);
+                files.dispatchEvent(new MouseEvent(files, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0,
+                        row.x + 4, row.y + row.height / 2, 2, false, MouseEvent.BUTTON1));
+            }
+        });
+        await(loop, st -> st.panels().stream().anyMatch(p -> p.title().equals("MEMORY")), 10_000);
         shoot(out.resolve("02c3-sidebar-files-memory.png"));
         selectSidebarTab("Sessions");
         // files opened from the Files tab: a Markdown document opens rendered, its code in the editors' colours,
@@ -260,7 +270,7 @@ public final class Snapshot {
         Files.writeString(Files.createDirectories(root.resolve("skills").resolve("reflect")).resolve("SKILL.md"), "# reflect\n");
         Files.writeString(Files.createDirectories(root.resolve("plugin").resolve("bin")).resolve("gradle-serial"), "#!/bin/sh\n");
         Files.writeString(home.resolve("folders.json"), JsonFile.JSON.writeValueAsString(List.of(
-                new FolderRoot("Scratchpad", pad.toString(), "ALPHA.md", List.of()),
+                new FolderRoot("Scratchpad", pad.toString(), "ALPHA.md", List.of(), "scratchpad", false),
                 new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory", true),
                 new FolderRoot("KB", kb.toString(), "ALPHA.md", List.of(), "knowledge", false),
                 new FolderRoot("Skills", root.resolve("skills").toString(), "", List.of(), "skills", false),

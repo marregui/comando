@@ -296,6 +296,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             public void openFile(Path file) {
                 ComandoUi.this.openFile(file);
             }
+
+            @Override
+            public void editFile(Path file) {
+                workspace.editWhenOpen(file.toAbsolutePath().normalize());
+                ComandoUi.this.openFile(file);
+            }
         }, deps.texts(), () -> actions.run("view.sidebar"));
         status = new StatusBar(deps.intents());
         findBar = new FindBar();

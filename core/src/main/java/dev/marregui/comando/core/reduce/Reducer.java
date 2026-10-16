@@ -31,6 +31,7 @@ import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -181,6 +182,10 @@ public final class Reducer {
                     List.of(new Effect.OpenRecording(i.path())));
             case Intent.BrowseFolders i -> new Transition(s, List.of(new Effect.ReadFolders(folders(s, i.names()))));
             case Intent.WatchFolders i -> new Transition(s, List.of(new Effect.WatchFolders(folders(s, i.names()))));
+            case Intent.CopyFile i -> inReadOnlyFolder(s, i.to()).map(f -> refuseReadOnly(s, f, i.to()))
+                    .orElseGet(() -> new Transition(s, List.of(new Effect.CopyFile(i.from(), i.to()))));
+            case Intent.DeleteFile i -> inReadOnlyFolder(s, i.file()).map(f -> refuseReadOnly(s, f, i.file()))
+                    .orElseGet(() -> new Transition(s, List.of(new Effect.DeleteFile(i.file(), i.toTrash()))));
             // a tree read with settings since edited, or of a folder since removed, is dropped: the tab shows only current folders
             case Intent.FolderLoaded i -> s.folders().contains(i.folder())
                     ? new Transition(s, List.of(new Effect.ShowFolder(i.folder(), i.tree()))) : Transition.of(s);
@@ -712,6 +717,17 @@ public final class Reducer {
         }
         AppState next = s.withFolders(folders);
         return new Transition(next, List.of(new Effect.SaveFolders(next.folders())));
+    }
+
+    /** The read-only folder {@code file} is in, if any: no file is written or deleted there. */
+    private static Optional<FolderRoot> inReadOnlyFolder(AppState s, String file) {
+        Path p = Path.of(file);
+        return s.folders().stream().filter(f -> f.readOnly() && f.contains(p)).findFirst();
+    }
+
+    private Transition refuseReadOnly(AppState s, FolderRoot folder, String file) {
+        return Transition.of(notice(s, Notice.Level.ERROR, Path.of(file).getFileName() + " is in folder " + folder.name()
+                + ", which is read-only", Notice.folder(folder.name())));
     }
 
     /** Why a read-only folder is neither edited nor removed, and where it is changed. */

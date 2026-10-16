@@ -27,7 +27,7 @@ public record FolderRoot(String name, String path, String index, List<String> ex
     /** The plain folder icon, the default. */
     public static final String FOLDER = "folder";
     /** The icons a folder's row may have, as the dialog offers them. */
-    public static final List<String> ICONS = List.of(FOLDER, "memory", "knowledge", "skills", "plugin");
+    public static final List<String> ICONS = List.of(FOLDER, "scratchpad", "memory", "knowledge", "skills", "plugin");
 
     /** Build output and dependencies, left out of every folder: large, generated, and never a document. */
     public static final Set<String> ALWAYS_EXCLUDED = Set.of("node_modules", "build", "target", "__pycache__", "out");

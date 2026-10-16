@@ -374,6 +374,14 @@ public sealed interface Intent {
     record FolderLoaded(FolderRoot folder, ViewSpec.TreeNode tree) implements Intent {
     }
 
+    /** Copies a file of the Files tab to {@code to}, a file that must not exist yet; both full paths. */
+    record CopyFile(String from, String to) implements Intent {
+    }
+
+    /** Deletes a file of the Files tab: to the desktop's Trash when {@code toTrash}, for good otherwise. */
+    record DeleteFile(String file, boolean toTrash) implements Intent {
+    }
+
     /** The plan's usage limits as read from Claude Code, every few minutes. */
     record PlanUsageRead(PlanUsage usage) implements Intent {
     }

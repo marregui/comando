@@ -444,7 +444,7 @@ public final class Kit {
     public List<FolderRoot> folders() {
         return List.of(new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory", true),
                 new FolderRoot("Knowledge base", claudeDir.resolve("KB").toString(), "ALPHA.md", List.of(), "knowledge", false),
-                new FolderRoot("Scratchpad", claudeDir.resolve("SCRATCHPAD").toString(), "README.md", List.of()));
+                new FolderRoot("Scratchpad", claudeDir.resolve("SCRATCHPAD").toString(), "README.md", List.of(), "scratchpad", false));
     }
 
     /** The skeleton's files, relative to Claude Code's folder. */

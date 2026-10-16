@@ -31,4 +31,10 @@ public interface ToolPort {
 
     /** Reads {@code folders} every few seconds from now on, and stops reading any other. */
     void watchFolders(List<FolderRoot> folders);
+
+    /** Copies the file {@code from} to {@code to}, which must not exist; says how it went, and the open folders show it. */
+    void copyFile(String from, String to);
+
+    /** Deletes the file: to the Trash when {@code toTrash}, for good otherwise; says how it went, as {@link #copyFile}. */
+    void deleteFile(String file, boolean toTrash);
 }

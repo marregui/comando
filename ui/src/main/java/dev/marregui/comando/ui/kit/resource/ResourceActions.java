@@ -27,7 +27,8 @@ import java.util.function.Supplier;
  * The buttons above a list of resources (sessions, connections, panels, folders), in two groups: on the left, add and
  * whatever else brings resources in; on the right, edit, clone and remove, which act on the selected row and are off
  * while none is selected. A bar whose list holds other rows besides the resources (the Files tab's files) keeps both
- * groups together at the left edge ({@link #leftAligned}), so the buttons read as one set acting on the resources. Remove asks first, naming what removal does: a resource in use (a running session, an open
+ * groups together at the left edge ({@link #leftAligned}), and its selection may decide what the buttons do and say
+ * ({@link Target}), so each tip names what its button affects. Remove asks first, naming what removal does: a resource in use (a running session, an open
  * connection or panel) offers "Stop and remove" ("Disconnect and remove", "Close and remove") or "Leave it", one not
  * in use "Remove" or "Cancel". The safe answer is the default, and closing the question gives it.
  *
@@ -62,6 +63,16 @@ public final class ResourceActions<T> {
 
         /** What the removal question is shown over. */
         Component component();
+
+        /** Whether add applies to what is selected; always, but for a list holding other rows (a file in the Files tab). */
+        default boolean canAdd() {
+            return true;
+        }
+
+        /** What edit, clone and remove do to the selection and say, when the list decides it; null for its resources. */
+        default Target target() {
+            return null;
+        }
 
         static <T> Selection<T> of(JList<T> list) {
             return new Selection<>() {
@@ -104,6 +115,13 @@ public final class ResourceActions<T> {
         }
     }
 
+    /**
+     * What edit, clone and remove do to the selected row, and the tip of each, naming what it affects ("Edit file
+     * notes.md"). A null action leaves its button off, its tip saying why.
+     */
+    public record Target(String editTip, Runnable edit, String cloneTip, Runnable cloneOf, String removeTip, Runnable remove) {
+    }
+
     /** Between the groups of a {@link #leftAligned} bar: apart, still one set. */
     private static final int GROUP_GAP = 8;
 
@@ -111,6 +129,13 @@ public final class ResourceActions<T> {
     private final Rows<T> rows;
     private final Consumer<String> remove;
     private final Questions questions;
+    private final JButton add;
+    private final JButton edit;
+    private final JButton cloneOf;
+    private final JButton removal;
+    private final String editTip;
+    private final String cloneTip;
+    private final String removeTip;
     private final List<JButton> left = new ArrayList<>();
     private final List<JButton> onSelection = new ArrayList<>();
     private final JPanel bar = new JPanel(new BorderLayout());
@@ -131,11 +156,20 @@ public final class ResourceActions<T> {
         this.remove = remove;
         this.questions = questions;
         String noun = rows.noun();
-        left.add(ToolButton.of("add", "New " + noun + "…", editor::add));
+        add = ToolButton.of("add", "New " + noun + "…", () -> {
+            if (selection.canAdd()) {
+                editor.add();
+            }
+        });
+        left.add(add);
         left.addAll(List.of(moreLeft));
-        onSelection.add(ToolButton.of("edit", "Edit the selected " + noun + "…", () -> selected(t -> editor.edit(rows.name().apply(t)))));
-        onSelection.add(ToolButton.of("copy", "Clone the selected " + noun + "…", () -> selected(t -> editor.cloneOf(rows.name().apply(t)))));
-        onSelection.add(ToolButton.of("close", "Remove the selected " + noun + "…", () -> selected(this::remove)));
+        editTip = "Edit the selected " + noun + "…";
+        cloneTip = "Clone the selected " + noun + "…";
+        removeTip = "Remove the selected " + noun + "…";
+        edit = ToolButton.of("edit", editTip, () -> act(Target::edit, t -> editor.edit(rows.name().apply(t))));
+        cloneOf = ToolButton.of("copy", cloneTip, () -> act(Target::cloneOf, t -> editor.cloneOf(rows.name().apply(t))));
+        removal = ToolButton.of("close", removeTip, () -> act(Target::remove, this::remove));
+        onSelection.addAll(List.of(edit, cloneOf, removal));
         bar.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         bar.add(group(FlowLayout.LEFT, left), BorderLayout.WEST);
         bar.add(group(FlowLayout.RIGHT, onSelection), BorderLayout.EAST);
@@ -166,16 +200,48 @@ public final class ResourceActions<T> {
         }
     }
 
-    private void selected(Consumer<T> action) {
+    /** A button's click: what the selection's target says, else {@code onRow} on the selected resource. */
+    private void act(Function<Target, Runnable> ofTarget, Consumer<T> onRow) {
+        Target target = selection.target();
+        if (target != null) {
+            Runnable r = ofTarget.apply(target);
+            if (r != null) {
+                r.run();
+            }
+            return;
+        }
         T t = selection.selected();
         if (t != null) {
-            action.accept(t);
+            onRow.accept(t);
         }
     }
 
     private void enable() {
-        boolean any = selection.selected() != null;
-        onSelection.forEach(b -> b.setEnabled(any));
+        Target target = selection.target();
+        if (target == null) {
+            boolean any = selection.selected() != null;
+            show(edit, editTip, any);
+            show(cloneOf, cloneTip, any);
+            show(removal, removeTip, any);
+        } else {
+            show(edit, target.editTip(), target.edit() != null);
+            show(cloneOf, target.cloneTip(), target.cloneOf() != null);
+            show(removal, target.removeTip(), target.remove() != null);
+        }
+        add.setEnabled(selection.canAdd());
+    }
+
+    /** {@code tip} on the button, as its accessible name too, and the button on or off. */
+    private static void show(JButton b, String tip, boolean on) {
+        b.setToolTipText(tip);
+        b.getAccessibleContext().setAccessibleName(tip);
+        b.setEnabled(on);
+    }
+
+    /** The add button's tip, when "New <noun>…" does not say what it adds. */
+    public ResourceActions<T> addTip(String tip) {
+        show(add, tip, add.isEnabled());
+        return this;
     }
 
     private static JPanel group(int align, List<JButton> buttons) {

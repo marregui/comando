@@ -122,7 +122,7 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void theFilesTabShowsOneRowPerFolderAndOpensAFileWithOneClick() throws Exception {
+    void theFilesTabShowsOneRowPerFolderAndOpensAFileWithADoubleClick() throws Exception {
         List<Path> opened = new CopyOnWriteArrayList<>();
         SessionsSidebar.Dialogs dialogs = new Dialogs() {
             @Override
@@ -161,6 +161,12 @@ class SessionsSidebarTest {
             tree.doLayout();
             Rectangle row = tree.getRowBounds(2);
             tree.dispatchEvent(new MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0, row.x + 4, row.y + row.height / 2, 1, false,
+                    MouseEvent.BUTTON1));
+        });
+        assertThat(opened).as("one click selects, opens nothing").isEmpty();
+        SwingUtilities.invokeAndWait(() -> {
+            Rectangle row = tree.getRowBounds(2);
+            tree.dispatchEvent(new MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0, row.x + 4, row.y + row.height / 2, 2, false,
                     MouseEvent.BUTTON1));
         });
         assertThat(opened).containsExactly(Path.of("/s/2026-10-14/READ-01-X.md"));

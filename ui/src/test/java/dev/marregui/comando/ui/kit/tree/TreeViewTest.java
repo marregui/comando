@@ -7,6 +7,9 @@ import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreePath;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
+import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -40,6 +43,34 @@ class TreeViewTest {
 
         SwingUtilities.invokeAndWait(() -> view.update(dir("root", dir("a/", leaf("a1"), leaf("a2")))));
         assertThat(view.selected()).as("a node that is gone leaves nothing selected").isNull();
+    }
+
+    @Test
+    void onlyADoubleClickOpensALeafOrAFolder() throws Exception {
+        TreeView view = new TreeView();
+        JTree tree = view.tree();
+        List<String> opened = new ArrayList<>();
+        view.onActivate(n -> opened.add(n.label()));
+        SwingUtilities.invokeAndWait(() -> {
+            view.setRoot(dir("root", dir("a/", leaf("a1")), leaf("notes.md")), 1);
+            tree.setSize(300, 200);
+            tree.doLayout();
+            click(tree, 2, 1);
+        });
+        assertThat(opened).as("one click opens nothing").isEmpty();
+        SwingUtilities.invokeAndWait(() -> {
+            click(tree, 2, 2);
+            click(tree, 1, 2);
+        });
+        assertThat(opened).as("a folder is not activated: the tree opens it").containsExactly("notes.md");
+        assertThat(tree.getToggleClickCount()).as("a folder opens on a double click").isEqualTo(2);
+    }
+
+    /** A left click of {@code count} on row {@code row}; the press before it needs a display, which tests do without. */
+    private static void click(JTree tree, int row, int count) {
+        Rectangle r = tree.getRowBounds(row);
+        tree.dispatchEvent(new MouseEvent(tree, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, r.x + r.width / 2,
+                r.y + r.height / 2, count, false, MouseEvent.BUTTON1));
     }
 
     private static TreePath path(JTree tree, String... labels) {
