@@ -7,6 +7,8 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,7 +22,7 @@ class EdtWatchdogTest {
         try {
             assertThat(w.awaitFirstAnswer(5, TimeUnit.SECONDS)).isTrue();
             assertThat(reported).isEmpty();
-            SwingUtilities.invokeAndWait(() -> sleep(800));
+            SwingUtilities.invokeAndWait(() -> holdEdtUntil(() -> !reported.isEmpty()));
             assertThat(done.await(5, TimeUnit.SECONDS)).as("the stall's end is reported").isTrue();
         } finally {
             w.close();
@@ -45,7 +47,8 @@ class EdtWatchdogTest {
         }, EdtWatchdog::drawingOnly, 2_000, 2_000);
         try {
             assertThat(w.awaitFirstAnswer(5, TimeUnit.SECONDS)).isTrue();
-            SwingUtilities.invokeAndWait(() -> sleep(500));
+            // past the 200 ms threshold three times over, so the watchdog's 100 ms checks see it however late they run
+            SwingUtilities.invokeAndWait(() -> holdEdtUntil(() -> w.probeWaitMillis() >= 600));
             assertThat(done.await(5, TimeUnit.SECONDS)).as("the stall's end is reported").isTrue();
         } finally {
             w.close();
@@ -65,7 +68,7 @@ class EdtWatchdogTest {
         EdtWatchdog w = new EdtWatchdog(stall -> { }, (stall, millis) -> ended.add(millis));
         try {
             Thread.sleep(300);
-            SwingUtilities.invokeAndWait(() -> sleep(1_300));
+            SwingUtilities.invokeAndWait(() -> holdEdtUntil(() -> w.probeWaitMillis() >= 1_100));
             Thread.sleep(300);
         } finally {
             w.close();
@@ -96,11 +99,14 @@ class EdtWatchdogTest {
         List<EdtWatchdog.Stall> ended = new CopyOnWriteArrayList<>();
         CountDownLatch done = new CountDownLatch(1);
         SwingUtilities.invokeAndWait(() -> { }); // the EDT exists before the probes start
-        SwingUtilities.invokeLater(() -> sleep(500)); // the window's build, before the watchdog's first probe
+        AtomicReference<EdtWatchdog> watching = new AtomicReference<>();
+        // the window's build, before the watchdog's first probe, held until the probe has waited well past the threshold
+        SwingUtilities.invokeLater(() -> holdEdtUntil(() -> watching.get() != null && watching.get().probeWaitMillis() >= 600));
         EdtWatchdog w = new EdtWatchdog(stall -> { }, (stall, millis) -> {
             ended.add(stall);
             done.countDown();
         });
+        watching.set(w);
         try {
             assertThat(done.await(5, TimeUnit.SECONDS)).as("the stall's end is reported").isTrue();
         } finally {
@@ -124,7 +130,7 @@ class EdtWatchdogTest {
         }, frames -> true, 400, 2_000);
         try {
             assertThat(w.awaitFirstAnswer(5, TimeUnit.SECONDS)).isTrue();
-            SwingUtilities.invokeAndWait(() -> sleep(600));
+            SwingUtilities.invokeAndWait(() -> holdEdtUntil(() -> w.probeWaitMillis() >= 700));
             assertThat(done.await(5, TimeUnit.SECONDS)).as("the stall's end is reported").isTrue();
         } finally {
             w.close();
@@ -143,7 +149,7 @@ class EdtWatchdogTest {
         EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> done.countDown(), frames -> true, 300, 500);
         try {
             assertThat(w.awaitFirstAnswer(5, TimeUnit.SECONDS)).isTrue();
-            SwingUtilities.invokeAndWait(() -> sleep(900));
+            SwingUtilities.invokeAndWait(() -> holdEdtUntil(() -> !reported.isEmpty()));
             assertThat(done.await(5, TimeUnit.SECONDS)).as("the stall's end is reported").isTrue();
         } finally {
             w.close();
@@ -192,6 +198,17 @@ class EdtWatchdogTest {
     private static StackTraceElement frame(String module, String type, String method, int line) {
         String file = type.substring(type.lastIndexOf('.') + 1).replaceAll("\\$.*", "") + ".java";
         return new StackTraceElement(null, module, null, type, method, file, line);
+    }
+
+    /**
+     * Holds the EDT until {@code seen}, at most 10 s: a fixed sleep assumes the watchdog's thread runs on time, which a
+     * loaded CI runner does not promise.
+     */
+    private static void holdEdtUntil(BooleanSupplier seen) {
+        long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(10);
+        while (!seen.getAsBoolean() && System.nanoTime() < end) {
+            sleep(10);
+        }
     }
 
     private static void sleep(long millis) {

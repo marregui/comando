@@ -124,6 +124,12 @@ public final class EdtWatchdog implements AutoCloseable {
         this.thread = Thread.ofPlatform().daemon(true).name("edt-watchdog").start(this::watch);
     }
 
+    /** How long the latest probe has waited for the EDT, 0 once answered; for tests, which hold the EDT until it is seen. */
+    long probeWaitMillis() {
+        long p = posted;
+        return p == 0 || answered == p ? 0 : (System.nanoTime() - p) / 1_000_000;
+    }
+
     /** Waits until the EDT has answered a probe, so the watchdog knows it; for tests. */
     boolean awaitFirstAnswer(long timeout, TimeUnit unit) throws InterruptedException {
         return firstAnswer.await(timeout, unit);

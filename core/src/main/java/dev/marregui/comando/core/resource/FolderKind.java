@@ -20,7 +20,7 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
             Attribute.of("name", "Name", Attribute.Kind.TEXT, true, "unique; the folder's name in the Files tab"),
             Attribute.of("path", "Folder", Attribute.Kind.DIRECTORY, true, ""),
             Attribute.of("index", "Index file", Attribute.Kind.TEXT, false,
-                    "relative to the folder, such as ALPHA.md; opens when the folder is opened in the tab"),
+                    "a file in the folder, such as ALPHA.md; opened with the folder"),
             Attribute.of("excludes", "Leave out", Attribute.Kind.TEXT, false,
                     "folder and file names, comma-separated; build output is always left out"));
 
