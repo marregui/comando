@@ -25,6 +25,7 @@
 | `./gradlew :app:uiTest` | replays the recorded intent log against the window; needs a display (`xvfb-run` on Linux) |
 | `./gradlew :ui:transcriptGate` | measures transcript frame times; fails when p99 exceeds 16 ms |
 | `./gradlew :app:snapshot -Pout=<dir>` | drives comando on a scratch data root and paints the window to PNG files; `-Plive=true` adds a real Claude session (haiku) whose approvals are allowed, `-Phistory=<conversation id>` loads a stored conversation, `-Ptools=true` adds a Gradle run, a JFR recording with jfrq on it, and the scratchpad |
+| `./gradlew :app:hero -Pout=<dir>` | paints the README's picture to `hero.png`: starts the embedded QuestDB from the menu, connects, and runs a real Claude turn (haiku) that queries and plots through comando's tools; approvals are allowed; the turn is live, so when it shows a failed tool call, run the task again |
 
 Tests run headless, with the data root in each module's `build/test-home` and window preferences under a separate node, so they never read or change the user's data.
 

@@ -259,7 +259,7 @@ public final class Snapshot {
         await(loop, st -> st.session("comando").map(x -> x.status() == Status.CLOSED).orElse(true), 15_000);
     }
 
-    private static AppState await(StateLoop loop, Predicate<AppState> done, long millis) throws InterruptedException {
+    static AppState await(StateLoop loop, Predicate<AppState> done, long millis) throws InterruptedException {
         long deadline = System.currentTimeMillis() + millis;
         while (System.currentTimeMillis() < deadline) {
             AppState s = loop.state();
@@ -302,7 +302,7 @@ public final class Snapshot {
     }
 
     /** Waits until the panel titled {@code title} is in front, then for the window to render that state. */
-    private static void showing(StateLoop loop, String title) throws Exception {
+    static void showing(StateLoop loop, String title) throws Exception {
         if (await(loop, st -> st.focusedPanel().title().equals(title), 10_000) == null) {
             throw new IllegalStateException("no panel " + title + " within 10 s");
         }
@@ -312,26 +312,34 @@ public final class Snapshot {
         });
     }
 
-    /** Clicks an item of a menu of the window's menu bar, as a user would. */
-    private static void menuItem(String menu, String item) throws Exception {
+    /** Clicks the item at {@code path} in the window's menu bar ("Help", "Tutorial"), as a user would. */
+    static void menuItem(String... path) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             for (Frame f : Frame.getFrames()) {
                 if (f instanceof JFrame jf && f.isVisible() && jf.getJMenuBar() != null) {
                     for (int i = 0; i < jf.getJMenuBar().getMenuCount(); i++) {
                         JMenu m = jf.getJMenuBar().getMenu(i);
-                        if (m != null && menu.equals(m.getText())) {
-                            for (Component c : m.getMenuComponents()) {
-                                if (c instanceof JMenuItem mi && item.equals(mi.getText())) {
-                                    mi.doClick();
-                                    return;
-                                }
-                            }
+                        if (m != null && path[0].equals(m.getText()) && click(m, path, 1)) {
+                            return;
                         }
                     }
                 }
             }
-            throw new IllegalStateException("no menu item " + menu + " ▸ " + item);
+            throw new IllegalStateException("no menu item " + String.join(" ▸ ", path));
         });
+    }
+
+    private static boolean click(JMenu menu, String[] path, int depth) {
+        for (Component c : menu.getMenuComponents()) {
+            if (c instanceof JMenuItem mi && path[depth].equals(mi.getText())) {
+                if (depth == path.length - 1) {
+                    mi.doClick();
+                    return true;
+                }
+                return mi instanceof JMenu sub && click(sub, path, depth + 1);
+            }
+        }
+        return false;
     }
 
     /** Brings a tab of the sidebar to the front by clicking its header, as a user would. */
@@ -363,7 +371,7 @@ public final class Snapshot {
         return null;
     }
 
-    private static void shoot(Path file) throws Exception {
+    static void shoot(Path file) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             for (Frame f : Frame.getFrames()) {
                 if (f instanceof JFrame jf && f.isVisible()) {

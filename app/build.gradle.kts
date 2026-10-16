@@ -70,6 +70,17 @@ tasks.register<JavaExec>("snapshot") {
     )
 }
 
+// Paints the README's picture: QuestDB started and connected, a real haiku turn that queries and plots: ./gradlew :app:hero -Pout=<dir>
+tasks.register<JavaExec>("hero") {
+    group = "verification"
+    description = "Paints comando at work, with a live Claude Code turn, to hero.png"
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass = "dev.marregui.comando.app.Hero"
+    javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-hero")
+    args((project.findProperty("out") ?: layout.buildDirectory.dir("snapshots").get().asFile.path).toString())
+}
+
 // Replays recorded intent logs against the Swing shell; needs a display (xvfb-run on Linux): ./gradlew :app:uiTest
 val uiTest = tasks.register<Test>("uiTest") {
     group = "verification"
