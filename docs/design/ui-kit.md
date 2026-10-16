@@ -32,7 +32,7 @@ A command appears in at most one menu and carries at most one key stroke; the la
 | `Edt.assertEdt` | a Java `assert` that the caller is on the EDT; active only with `-ea` (tests) |
 | `Coalescer` | many requests from any thread become at most one pending run on the EDT; the run reads the latest data, so nothing is lost and the EDT is not flooded. State renders, transcript updates and console output go through one each |
 | `Debouncer` | runs once requests stop for a delay; the editor's gutter uses 250 ms |
-| `EdtWatchdog` | every 100 ms posts a probe to the EDT; a probe still waiting after 200 ms logs the EDT's stack once, and the answer records a `comando.EdtBlocked` JFR event with the blocked time. A stall spent in the JDK's drawing (a `sun.java2d` frame and no comando frame, as when Java2D waits for its lock while macOS's Metal pipeline flushes to the GPU) logs one INFO line when it ends instead; past 2 s it is reported with its stack like any other |
+| `EdtWatchdog` | every 100 ms posts a probe to the EDT; a probe still waiting after 200 ms is a stall: the EDT is looked at once to tell its kind (`startup` before the first probe, `drawing` when it waits on Java2D's render queue or is in Java2D with no comando frame, as when macOS's Metal pipeline flushes to the GPU, `comando` with a comando frame, `jdk` otherwise) and where (`in=` the first frame outside `java.base`, `comando=` the first comando frame and its line). When it ends, one INFO line carries length, kind and where, and a `comando.EdtBlocked` JFR event records it. A stall that lasts 1 s (2 s for `drawing`) is a hang: a WARNING with the EDT's stack, taken at that moment, then one when it answers |
 
 ## 4. Text
 

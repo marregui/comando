@@ -26,7 +26,9 @@ tasks.jar {
 application {
     mainClass = "dev.marregui.comando.app.Main"
     applicationName = "comando"
-    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Xms256m", "-Xmx4g", "-Dfile.encoding=UTF-8", "-Dapple.awt.application.name=comando",
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Dfile.encoding=UTF-8", "-Dapple.awt.application.name=comando",
+        // the live heap is about 50 MB: start small, and let G1 give back what an idle minute leaves unused
+        "-Xms64m", "-Xmx4g", "-XX:G1PeriodicGCInterval=60000",
         // AppKit reads the appearance when it starts, before any Java code of ours: comando's palette is dark only
         "-Dapple.awt.application.appearance=NSAppearanceNameDarkAqua")
 }
@@ -134,8 +136,9 @@ tasks.register<Exec>("dmg") {
         "--add-modules", "java.base,java.desktop,java.logging,java.naming,java.prefs,java.security.jgss,java.sql,jdk.httpserver,jdk.jfr," +
                 "jdk.management,jdk.unsupported,jdk.localedata,jdk.charsets,jdk.zipfs",
         "--java-options", "--enable-native-access=ALL-UNNAMED",
-        "--java-options", "-Xms256m",
+        "--java-options", "-Xms64m",
         "--java-options", "-Xmx4g",
+        "--java-options", "-XX:G1PeriodicGCInterval=60000",
         "--java-options", "-Dfile.encoding=UTF-8",
         "--java-options", "-Dapple.awt.application.name=comando",
         "--java-options", "-Dapple.awt.application.appearance=NSAppearanceNameDarkAqua",

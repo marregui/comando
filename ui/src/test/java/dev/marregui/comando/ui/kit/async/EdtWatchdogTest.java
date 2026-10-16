@@ -13,19 +13,49 @@ import static org.assertj.core.api.Assertions.assertThat;
 class EdtWatchdogTest {
 
     @Test
-    void aBlockedEdtIsReportedOnceWithItsStack() throws Exception {
-        List<String> stacks = new CopyOnWriteArrayList<>();
-        EdtWatchdog w = new EdtWatchdog(stall -> stacks.add(stall.millis() + " " + stall.stack()));
+    void aHangIsReportedOnceAtItsLimitWithItsStack() throws Exception {
+        List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
+        CountDownLatch done = new CountDownLatch(1);
+        EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> done.countDown(), EdtWatchdog::drawingOnly, 400, 2_000);
         try {
-            Thread.sleep(300); // the first probes find a free EDT
-            assertThat(stacks).isEmpty();
-            SwingUtilities.invokeAndWait(() -> sleep(700));
-            Thread.sleep(300);
+            assertThat(w.awaitFirstAnswer(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(reported).isEmpty();
+            SwingUtilities.invokeAndWait(() -> sleep(800));
+            assertThat(done.await(5, TimeUnit.SECONDS)).as("the stall's end is reported").isTrue();
         } finally {
             w.close();
         }
-        assertThat(stacks).hasSize(1);
-        assertThat(stacks.getFirst()).contains("EdtWatchdogTest").contains("sleep");
+        assertThat(reported).singleElement().satisfies(s -> {
+            assertThat(s.reported()).isTrue();
+            assertThat(s.millis()).isGreaterThanOrEqualTo(400L);
+            assertThat(s.kind()).isEqualTo(EdtWatchdog.Kind.COMANDO);
+            assertThat(s.stack()).contains("EdtWatchdogTest").contains("sleep");
+        });
+    }
+
+    /** A stall below its limit leaves no stack: one line when it ends, saying what held the EDT and where. */
+    @Test
+    void aShortStallIsToldOnlyWhenItEndsWithItsKindAndWhere() throws Exception {
+        List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
+        List<EdtWatchdog.Stall> ended = new CopyOnWriteArrayList<>();
+        CountDownLatch done = new CountDownLatch(1);
+        EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> {
+            ended.add(stall);
+            done.countDown();
+        }, EdtWatchdog::drawingOnly, 2_000, 2_000);
+        try {
+            assertThat(w.awaitFirstAnswer(5, TimeUnit.SECONDS)).isTrue();
+            SwingUtilities.invokeAndWait(() -> sleep(500));
+            assertThat(done.await(5, TimeUnit.SECONDS)).as("the stall's end is reported").isTrue();
+        } finally {
+            w.close();
+        }
+        assertThat(reported).isEmpty();
+        assertThat(ended).singleElement().satisfies(s -> {
+            assertThat(s.reported()).isFalse();
+            assertThat(s.kind()).isEqualTo(EdtWatchdog.Kind.COMANDO);
+            assertThat(s.where()).startsWith("in=").contains("comando=EdtWatchdogTest.sleep:");
+        });
     }
 
     /** The stall notice needs the whole length: the threshold report comes at about 200 ms, the end one after it. */
@@ -62,6 +92,28 @@ class EdtWatchdogTest {
     }
 
     @Test
+    void aStallBeforeTheFirstProbeIsStartup() throws Exception {
+        List<EdtWatchdog.Stall> ended = new CopyOnWriteArrayList<>();
+        CountDownLatch done = new CountDownLatch(1);
+        SwingUtilities.invokeAndWait(() -> { }); // the EDT exists before the probes start
+        SwingUtilities.invokeLater(() -> sleep(500)); // the window's build, before the watchdog's first probe
+        EdtWatchdog w = new EdtWatchdog(stall -> { }, (stall, millis) -> {
+            ended.add(stall);
+            done.countDown();
+        });
+        try {
+            assertThat(done.await(5, TimeUnit.SECONDS)).as("the stall's end is reported").isTrue();
+        } finally {
+            w.close();
+        }
+        assertThat(ended).singleElement().satisfies(s -> {
+            assertThat(s.kind()).isEqualTo(EdtWatchdog.Kind.STARTUP);
+            assertThat(s.where()).isEmpty();
+        });
+    }
+
+    /** Drawing has a limit of its own, past the hang limit: Java2D waiting on macOS's GPU flush is not comando's. */
+    @Test
     void aStallInTheJdksDrawingIsReportedOnlyWhenItEndsMarkedAsDrawing() throws Exception {
         List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
         List<EdtWatchdog.Stall> ended = new CopyOnWriteArrayList<>();
@@ -69,7 +121,7 @@ class EdtWatchdogTest {
         EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> {
             ended.add(stall);
             done.countDown();
-        }, frames -> true, 2_000);
+        }, frames -> true, 400, 2_000);
         try {
             assertThat(w.awaitFirstAnswer(5, TimeUnit.SECONDS)).isTrue();
             SwingUtilities.invokeAndWait(() -> sleep(600));
@@ -77,15 +129,18 @@ class EdtWatchdogTest {
         } finally {
             w.close();
         }
-        assertThat(reported).as("no warning with a stack at the threshold").isEmpty();
-        assertThat(ended).singleElement().satisfies(s -> assertThat(s.drawing()).isTrue());
+        assertThat(reported).as("no stack below the drawing limit, though past the hang limit").isEmpty();
+        assertThat(ended).singleElement().satisfies(s -> {
+            assertThat(s.drawing()).isTrue();
+            assertThat(s.reported()).isFalse();
+        });
     }
 
     @Test
     void aDrawingStallPastItsLimitIsReportedLikeAHang() throws Exception {
         List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
         CountDownLatch done = new CountDownLatch(1);
-        EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> done.countDown(), frames -> true, 500);
+        EdtWatchdog w = new EdtWatchdog(reported::add, (stall, millis) -> done.countDown(), frames -> true, 300, 500);
         try {
             assertThat(w.awaitFirstAnswer(5, TimeUnit.SECONDS)).isTrue();
             SwingUtilities.invokeAndWait(() -> sleep(900));
@@ -94,22 +149,49 @@ class EdtWatchdogTest {
             w.close();
         }
         assertThat(reported).singleElement().satisfies(s -> {
-            assertThat(s.drawing()).isFalse();
+            assertThat(s.drawing()).isTrue();
+            assertThat(s.reported()).isTrue();
             assertThat(s.millis()).isGreaterThanOrEqualTo(500L);
             assertThat(s.stack()).contains("EdtWatchdogTest");
         });
     }
 
     @Test
-    void onlyAStackInJava2dWithNoComandoFrameIsDrawing() {
-        StackTraceElement lock = new StackTraceElement("sun.awt.SunToolkit", "awtLock", "SunToolkit.java", 233);
-        StackTraceElement queue = new StackTraceElement("sun.java2d.pipe.RenderQueue", "lock", "RenderQueue.java", 112);
-        StackTraceElement repaint = new StackTraceElement("javax.swing.RepaintManager", "paint", "RepaintManager.java", 1279);
-        StackTraceElement ours = new StackTraceElement("dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas", "paint",
-                "TranscriptCanvas.java", 470);
-        assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{lock, queue, repaint})).isTrue();
-        assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{lock, queue, ours, repaint})).as("comando painting").isFalse();
-        assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{lock, repaint})).as("no Java2D frame").isFalse();
+    void waitingOnJava2dsRenderQueueIsDrawingWhoeverPaints() {
+        assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{PARK, LOCK, QUEUE, REPAINT})).isTrue();
+        assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{PARK, LOCK, QUEUE, FILL, OURS, REPAINT}))
+                .as("comando's paint waiting on the queue").isTrue();
+        assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{WAIT, FLUSH, OURS, REPAINT}))
+                .as("comando's paint waiting for a flush").isTrue();
+        assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{MARLIN, FILL, OURS, REPAINT}))
+                .as("Java2D working for comando, not waiting").isFalse();
+        assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{MARLIN, REPAINT})).as("Java2D alone").isTrue();
+        assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{PARK, LOCK, REPAINT})).as("the AWT lock without Java2D").isFalse();
+        assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{CREATE, REPAINT})).as("Swing alone").isFalse();
+    }
+
+    @Test
+    void whereNamesTheFirstFrameOutsideJavaBaseAndTheFirstComandoFrame() {
+        assertThat(EdtWatchdog.where(new StackTraceElement[]{PARK, LOCK, QUEUE, FILL, OURS, REPAINT}))
+                .isEqualTo("in=SunToolkit.awtLock comando=Items.fillRound:77");
+        assertThat(EdtWatchdog.where(new StackTraceElement[]{CREATE, REPAINT})).isEqualTo("in=Graphics.create comando=-");
+        assertThat(EdtWatchdog.where(new StackTraceElement[]{PARK, OURS})).isEqualTo("in=Items.fillRound comando=Items.fillRound:77");
+    }
+
+    private static final StackTraceElement PARK = frame("java.base", "jdk.internal.misc.Unsafe", "park", -2);
+    private static final StackTraceElement WAIT = frame("java.base", "java.lang.Object", "wait0", -2);
+    private static final StackTraceElement LOCK = frame("java.desktop", "sun.awt.SunToolkit", "awtLock", 233);
+    private static final StackTraceElement QUEUE = frame("java.desktop", "sun.java2d.pipe.RenderQueue", "lock", 112);
+    private static final StackTraceElement FLUSH = frame("java.desktop", "sun.java2d.metal.MTLRenderQueue$QueueFlusher", "flushNow", 179);
+    private static final StackTraceElement MARLIN = frame("java.desktop", "sun.java2d.marlin.Renderer", "_endRendering", 1277);
+    private static final StackTraceElement FILL = frame("java.desktop", "sun.java2d.SunGraphics2D", "fillRoundRect", 2276);
+    private static final StackTraceElement CREATE = frame("java.desktop", "java.awt.Graphics", "create", 161);
+    private static final StackTraceElement REPAINT = frame("java.desktop", "javax.swing.RepaintManager", "paint", 1279);
+    private static final StackTraceElement OURS = frame(null, "dev.marregui.comando.ui.widgets.transcript.render.Items", "fillRound", 77);
+
+    private static StackTraceElement frame(String module, String type, String method, int line) {
+        String file = type.substring(type.lastIndexOf('.') + 1).replaceAll("\\$.*", "") + ".java";
+        return new StackTraceElement(null, module, null, type, method, file, line);
     }
 
     private static void sleep(long millis) {

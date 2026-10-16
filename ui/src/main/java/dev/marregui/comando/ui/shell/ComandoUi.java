@@ -357,24 +357,28 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
         // started last: a probe posted during the build waits for the rest of it and reports the build itself
         watchdog = new EdtWatchdog(stall -> LOG.log(System.Logger.Level.WARNING,
-                "the EDT has not answered for " + stall.millis() + " ms:\n" + stall.stack()), this::stalled);
+                "the EDT has not answered for " + stall.millis() + " ms " + label(stall) + ":\n" + stall.stack()), this::stalled);
     }
 
     /**
-     * A stall of the EDT ended after {@code millis}: one spent in the JDK's drawing is a line of its own, any other
-     * a warning after the stack; the user hears of one that lasted a second or more.
+     * A stall of the EDT ended after {@code millis}: a short one is a line with its kind and where the EDT was, a
+     * hang a warning after the stack logged at its limit; the user hears of one that lasted a second or more.
      */
     private void stalled(EdtWatchdog.Stall stall, long millis) {
-        if (stall.drawing()) {
-            LOG.log(System.Logger.Level.INFO, "the window's drawing held the EDT for " + millis
-                    + " ms (Java2D waiting for its lock while the GPU flushes; no comando code on the stack)");
-        } else {
+        if (stall.reported()) {
             LOG.log(System.Logger.Level.WARNING, "the EDT answered again after " + millis + " ms");
+        } else {
+            LOG.log(System.Logger.Level.INFO, "the EDT was busy for " + millis + " ms " + label(stall));
         }
         if (millis >= 1_000) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN,
                     "The window stopped responding for " + Labels.elapsed(millis) + "; the log has where (Help ▸ Show the log)", false));
         }
+    }
+
+    /** {@code [kind] in=… comando=…}, the part of a stall's line that groups stalls of one cause. */
+    private static String label(EdtWatchdog.Stall stall) {
+        return stall.where().isEmpty() ? "[" + stall.kind() + "]" : "[" + stall.kind() + "] " + stall.where();
     }
 
     /** The tutorial's file exists from the start, to be opened as any file, not only from Help. */

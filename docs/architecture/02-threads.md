@@ -22,7 +22,7 @@
 | `store` | platform | atomic writes of `sessions.json`, `panels.json` and the panel files in `panels/`; panel text 800 ms after the first unsaved change; a check of the open panels' files for outside changes every second; the read of a file that Open spec or ⌘⇧T binds to a panel | those files |
 | `store-secrets` | platform | keychain calls and `connections.json`, apart so an unanswered unlock prompt never holds back panel text | `connections.json` |
 | `mermaid` | platform, daemon | runs `mmdc` for a Mermaid diagram a preview shows, one at a time; stopped after 30 s and at exit | `cache/mermaid/` |
-| `edt-watchdog` | platform, daemon | posts a probe to the EDT every 100 ms and reports one that waits 200 ms | — |
+| `edt-watchdog` | platform, daemon | posts a probe to the EDT every 100 ms; one that waits 200 ms is a stall, told when it ends, and one that waits 1 s a hang, reported with the EDT's stack | — |
 | `show-file`, `show-log`, `reveal`, `notify`, `open-link`, `external-editor`, `terminal-exit`, `claude-version`, `questdb-toggle`, `pty-preload`, `export` | virtual | one blocking call each, off the EDT | — |
 | `exit`, `shutdown` | platform | close the application after Quit, or from the JVM's shutdown hook ([Ownership](04-ownership.md#2-exit)) | — |
 | `keychain-output` | virtual | reads the `security` tool's output, so the call's 10 s bound holds even while an unlock prompt is open | — |

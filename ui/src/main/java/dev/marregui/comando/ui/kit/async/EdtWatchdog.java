@@ -9,6 +9,7 @@ import jdk.jfr.StackTrace;
 import jdk.jfr.Timespan;
 
 import javax.swing.SwingUtilities;
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -16,30 +17,56 @@ import java.util.function.ObjLongConsumer;
 import java.util.function.Predicate;
 
 /**
- * Reports an event dispatch thread that does not answer for {@link #THRESHOLD_MILLIS}: every
- * {@link #PERIOD_MILLIS} a probe is posted to the EDT; a probe still waiting past the threshold reports the EDT's
- * stack once, and a JFR event records how long the EDT was blocked when it answers.
+ * Watches the event dispatch thread: every {@link #PERIOD_MILLIS} a probe is posted to it, and a probe still waiting
+ * past {@link #THRESHOLD_MILLIS} is a stall. The EDT is looked at once then, to tell what kind of stall it is and
+ * where; the stall is told once it ends, with its whole length, and a JFR event records it.
  * <p>
- * A stall spent in the JDK's drawing with no comando frame on the stack (Java2D waiting for its lock while macOS's
- * Metal pipeline flushes to the GPU) is not comando's: it is reported only when it ends, marked as drawing, unless it
- * lasts {@link #DRAWING_LIMIT_MILLIS}, when it is reported like any other, so a hang in drawing still shows.
+ * A stall that reaches its limit is a hang: it is reported with the EDT's stack, taken again at the limit, while the
+ * EDT is still held. The limit is {@link #HANG_LIMIT_MILLIS}, and {@link #DRAWING_LIMIT_MILLIS} for a stall in the
+ * JDK's drawing (Java2D waiting for its lock while macOS's Metal pipeline flushes to the GPU), which is not comando's.
  */
 public final class EdtWatchdog implements AutoCloseable {
 
     public static final long PERIOD_MILLIS = 100;
     public static final long THRESHOLD_MILLIS = 200;
+    /** A stall this long is reported with its stack. */
+    public static final long HANG_LIMIT_MILLIS = 1_000;
     /** A drawing stall this long is reported with its stack, as a hang would be. */
     public static final long DRAWING_LIMIT_MILLIS = 2_000;
     private static final System.Logger LOG = System.getLogger(EdtWatchdog.class.getName());
 
+    /** What held the EDT, from one look at its stack. */
+    public enum Kind {
+        /** the EDT had not run a probe yet: the window is being built */
+        STARTUP,
+        /** the JDK's drawing, waiting on Java2D's render queue or with no comando frame on the stack */
+        DRAWING,
+        /** comando's code is on the stack */
+        COMANDO,
+        /** only the JDK's code is on the stack, outside Java2D */
+        JDK;
+
+        @Override
+        public String toString() {
+            return name().toLowerCase(Locale.ROOT);
+        }
+    }
+
     /**
      * A stall as the watchdog saw it.
      *
-     * @param millis  how long the EDT had not answered when the stall was reported
-     * @param stack   the EDT's stack then
-     * @param drawing true when every look found the EDT in the JDK's drawing, with no comando frame
+     * @param millis   how long the EDT had not answered when it was looked at
+     * @param kind     what held it
+     * @param where    one line for grouping stalls: {@code in=} the first frame outside {@code java.base} and
+     *                 {@code comando=} the first comando frame with its line, {@code -} when there is none
+     * @param stack    the EDT's stack then
+     * @param reported true when the stall reached its limit and was reported with its stack
      */
-    public record Stall(long millis, String stack, boolean drawing) {
+    public record Stall(long millis, Kind kind, String where, String stack, boolean reported) {
+
+        public boolean drawing() {
+            return kind == Kind.DRAWING;
+        }
     }
 
     @Name("comando.EdtBlocked")
@@ -52,18 +79,22 @@ public final class EdtWatchdog implements AutoCloseable {
         @Timespan(Timespan.MILLISECONDS)
         long blockedMillis;
 
+        @Label("Kind")
+        String kind;
+
+        @Label("Where")
+        String where;
+
         @Label("EDT stack")
         String stack;
-
-        @Label("Drawing")
-        boolean drawing;
     }
 
     private final Thread thread;
     private final Consumer<Stall> report;
-    /** Receives a stall that was reported, or a drawing stall, with its whole length once it ends. */
+    /** Receives every stall with its whole length once it ends. */
     private final ObjLongConsumer<Stall> ended;
     private final Predicate<StackTraceElement[]> drawing;
+    private final long hangLimitMillis;
     private final long drawingLimitMillis;
     private volatile Thread edt;
     private volatile long posted;
@@ -71,31 +102,34 @@ public final class EdtWatchdog implements AutoCloseable {
     private volatile boolean running = true;
     private final CountDownLatch firstAnswer = new CountDownLatch(1);
 
-    /** Starts watching; {@code report} receives each stall that is not the JDK's drawing, on the watchdog thread. */
+    /** Starts watching; {@code report} receives each hang, on the watchdog thread. */
     public EdtWatchdog(Consumer<Stall> report) {
         this(report, (stall, millis) -> { });
     }
 
     /**
-     * Starts watching; {@code report} receives a stall at the threshold, and {@code ended} its whole length when it
-     * ends; a drawing stall reaches only {@code ended}. Both run on the watchdog thread.
+     * Starts watching; {@code report} receives a hang at its limit, and {@code ended} every stall with its whole
+     * length when it ends. Both run on the watchdog thread.
      */
     public EdtWatchdog(Consumer<Stall> report, ObjLongConsumer<Stall> ended) {
-        this(report, ended, EdtWatchdog::drawingOnly, DRAWING_LIMIT_MILLIS);
+        this(report, ended, EdtWatchdog::drawingOnly, HANG_LIMIT_MILLIS, DRAWING_LIMIT_MILLIS);
     }
 
-    EdtWatchdog(Consumer<Stall> report, ObjLongConsumer<Stall> ended, Predicate<StackTraceElement[]> drawing, long drawingLimitMillis) {
+    EdtWatchdog(Consumer<Stall> report, ObjLongConsumer<Stall> ended, Predicate<StackTraceElement[]> drawing,
+                long hangLimitMillis, long drawingLimitMillis) {
         this.report = report;
         this.ended = ended;
         this.drawing = drawing;
+        this.hangLimitMillis = hangLimitMillis;
         this.drawingLimitMillis = drawingLimitMillis;
         this.thread = Thread.ofPlatform().daemon(true).name("edt-watchdog").start(this::watch);
     }
 
-    /** Logs a warning with the EDT's stack. */
+    /** Logs a warning with the EDT's stack for each hang. */
     public static EdtWatchdog logging() {
         return new EdtWatchdog(stall -> LOG.log(System.Logger.Level.WARNING,
-                "the EDT has not answered for " + stall.millis() + " ms:\n" + stall.stack()));
+                "the EDT has not answered for " + stall.millis() + " ms [" + stall.kind() + "] " + stall.where() + ":\n"
+                        + stall.stack()));
     }
 
     /** Waits until the EDT has answered a probe, so the watchdog knows it; for tests. */
@@ -103,16 +137,50 @@ public final class EdtWatchdog implements AutoCloseable {
         return firstAnswer.await(timeout, unit);
     }
 
-    /** The EDT is in the JDK's drawing (Java2D) and nowhere in comando's code. */
+    /**
+     * The EDT is in the JDK's drawing: waiting on Java2D's render queue (its lock, or a flush to finish) before any
+     * comando frame, whoever called the drawing; or in Java2D with no comando frame on the stack at all.
+     */
     static boolean drawingOnly(StackTraceElement[] frames) {
         boolean java2d = false;
+        boolean comando = false;
         for (StackTraceElement f : frames) {
-            if (f.getClassName().startsWith("dev.marregui.")) {
-                return false;
+            String c = f.getClassName();
+            if (c.startsWith("dev.marregui.")) {
+                comando = true;
+            } else if (!comando && renderQueueWait(f)) {
+                return true;
             }
-            java2d |= f.getClassName().startsWith("sun.java2d.");
+            java2d |= c.startsWith("sun.java2d.");
         }
-        return java2d;
+        return java2d && !comando;
+    }
+
+    private static boolean renderQueueWait(StackTraceElement f) {
+        String c = f.getClassName();
+        return (c.equals("sun.java2d.pipe.RenderQueue") && f.getMethodName().equals("lock"))
+                || (c.endsWith("RenderQueue$QueueFlusher") && f.getMethodName().equals("flushNow"));
+    }
+
+    /** {@code in=} the first frame outside {@code java.base}, {@code comando=} the first comando frame with its line. */
+    static String where(StackTraceElement[] frames) {
+        String in = "-";
+        String comando = "-";
+        for (StackTraceElement f : frames) {
+            if (in.equals("-") && !"java.base".equals(f.getModuleName())) {
+                in = shortName(f);
+            }
+            if (f.getClassName().startsWith("dev.marregui.")) {
+                comando = shortName(f) + ":" + f.getLineNumber();
+                break;
+            }
+        }
+        return "in=" + in + " comando=" + comando;
+    }
+
+    private static String shortName(StackTraceElement f) {
+        String c = f.getClassName();
+        return c.substring(c.lastIndexOf('.') + 1) + "." + f.getMethodName();
     }
 
     private void watch() {
@@ -124,40 +192,62 @@ public final class EdtWatchdog implements AutoCloseable {
                 answered = probe;
                 firstAnswer.countDown();
             });
-            Stall reported = null;
-            Stall drawn = null;
+            Stall stall = null;
             long blockedSince = probe;
             while (running && answered != probe) {
                 sleep(PERIOD_MILLIS);
                 if (answered == probe) {
-                    break; // answered during the sleep: the wait ended below the threshold, or was already reported
+                    break; // answered during the sleep: the wait ended below the threshold, or was already looked at
                 }
                 long waited = (System.nanoTime() - blockedSince) / 1_000_000;
-                if (reported == null && waited >= THRESHOLD_MILLIS) {
-                    StackTraceElement[] frames = framesOf(edt);
-                    String stack = format(frames);
-                    if (frames.length > 0 && drawing.test(frames) && waited < drawingLimitMillis) {
-                        drawn = new Stall(waited, stack, true); // the JDK's drawing: wait and see whether it ends
-                    } else {
-                        reported = new Stall(waited, stack, false);
-                        report.accept(reported);
-                    }
+                if (stall == null && waited >= THRESHOLD_MILLIS) {
+                    stall = look(waited, false);
+                }
+                if (stall != null && !stall.reported() && waited >= limitOf(stall)) {
+                    stall = look(waited, true); // a hang: the stack where the EDT is held now
+                    report.accept(stall);
                 }
             }
-            Stall stall = reported != null ? reported : drawn;
             if (stall != null) {
                 long total = (System.nanoTime() - blockedSince) / 1_000_000;
                 ended.accept(stall, total);
                 EdtBlockedEvent e = new EdtBlockedEvent();
                 if (e.shouldCommit()) {
                     e.blockedMillis = total;
+                    e.kind = stall.kind().toString();
+                    e.where = stall.where();
                     e.stack = stall.stack();
-                    e.drawing = stall.drawing();
                     e.commit();
                 }
             }
             sleep(PERIOD_MILLIS);
         }
+    }
+
+    private Stall look(long waited, boolean reported) {
+        StackTraceElement[] frames = framesOf(edt);
+        Kind kind;
+        if (frames.length == 0) {
+            kind = Kind.STARTUP;
+        } else if (drawing.test(frames)) {
+            kind = Kind.DRAWING;
+        } else {
+            kind = comandoFrame(frames) ? Kind.COMANDO : Kind.JDK;
+        }
+        return new Stall(waited, kind, frames.length == 0 ? "" : where(frames), format(frames), reported);
+    }
+
+    private long limitOf(Stall stall) {
+        return stall.drawing() ? drawingLimitMillis : hangLimitMillis;
+    }
+
+    private static boolean comandoFrame(StackTraceElement[] frames) {
+        for (StackTraceElement f : frames) {
+            if (f.getClassName().startsWith("dev.marregui.")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static StackTraceElement[] framesOf(Thread t) {

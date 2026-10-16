@@ -172,7 +172,7 @@ public final class Snapshot {
         Files.writeString(log, String.join("\n",
                 "2026-10-16 08:40:01.120 INFO  [main] dev.marregui.comando.app.App comando starting [version=snapshot]",
                 "2026-10-16 08:40:01.410 INFO  [main] dev.marregui.comando.mcp.McpServer mcp server listening [url=http://127.0.0.1:50200/mcp]",
-                "2026-10-16 08:40:02.003 WARNING [edt-watchdog] dev.marregui.comando.ui.shell.ComandoUi the EDT has not answered for 240 ms",
+                "2026-10-16 08:40:02.003 INFO  [edt-watchdog] dev.marregui.comando.ui.shell.ComandoUi the EDT was busy for 310 ms [drawing] in=SunToolkit.awtLock comando=Items.fillRound:77",
                 "2026-10-16 08:40:05.871 INFO  [claude-comando] dev.marregui.comando.claude.ClaudeAdapter claude started [session=comando, pid=4242, mode=RESUME]",
                 ""));
         menuItem("Help", "Show the log");

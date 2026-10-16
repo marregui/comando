@@ -43,7 +43,7 @@ With `-Dcomando.recordIntents=true` comando writes every intent it applies to `l
 | Gate | Command | Budget | Latest |
 |---|---|---|---|
 | transcript frame time | `./gradlew :ui:transcriptGate` | p99 ≤ 16 ms | 2026-10-13: frame p50 1.15 ms, p99 3.39 ms, max 9.43 ms, 0 frames over 16 ms; open thinking streamed p99 1.40 ms ([Transcript renderer](transcript-renderer.md#5-the-frame-time-gate)) |
-| EDT responsiveness | always on: `EdtWatchdog` | probe answered within 200 ms | a stack in the log and a `comando.EdtBlocked` event when exceeded; a stall inside the JDK's drawing, one INFO line (with a stack past 2 s) |
+| EDT responsiveness | always on: `EdtWatchdog` | probe answered within 200 ms | when exceeded, one INFO line as the stall ends (its length, kind and where) and a `comando.EdtBlocked` event; a stack in the log only for a hang, 1 s (2 s in the JDK's drawing) |
 
 ## 5. JFR events
 
@@ -55,7 +55,7 @@ comando records its own events in any JFR recording of the process (`-XX:StartFl
 | `comando.SqlRun` | connection, request id, SQL, outcome; duration = dequeue to last row | the connection's lane |
 | `comando.ClaudeTurn` | session, turn time, cost, context tokens, error | the session strand at each turn end |
 | `comando.McpCall` | session, tool, error; duration = the call | the MCP server |
-| `comando.EdtBlocked` | blocked time, the EDT's stack, whether it was the JDK's drawing | the EDT watchdog |
+| `comando.EdtBlocked` | blocked time, kind (`startup`, `drawing`, `comando`, `jdk`), where, the EDT's stack | the EDT watchdog |
 
 `jfrq` reads them like any other event.
 
