@@ -8,14 +8,14 @@ A port is an interface in `core` that names an outside system. Every port method
 |---|---|---|---|
 | `IntentSink` | `dispatch(intent)` | `StateLoop` | `core` |
 | `Clock` | `millis()` | `Clock.SYSTEM` | `core` |
-| `DatabasePort` | `open`, `close`, `test`, `execute`, `cancel`, `release`, `loadSchema` | `DbAdapter` | `db` |
+| `DatabasePort` | `open`, `close`, `forgetSchema`, `test`, `execute`, `cancel`, `release`, `loadSchema` | `DbAdapter` | `db` |
 | `QueryPort` | `query`, `describe` (futures of text rows, for Claude) | `DbAdapter` | `db` |
-| `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `loadHistory`, `forget` | `ClaudeAdapter` | `claude` |
+| `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `clearTranscript`, `loadHistory`, `forget` | `ClaudeAdapter` | `claude` |
 | `McpGateway` | `register(session)` returns the URL and bearer token a session's CLI uses; `unregister` | `McpServer` | `mcp` |
 | `ApprovalPort` | `resolve(approval, decision)` | `McpServer` | `mcp` |
-| `ToolPort` | `runGradle`, `runJfrq`, `cancelRun`, `forgetRun`, `openRecording`, `browseScratchpad` | `ToolsAdapter` | `tools` |
-| `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `showFile`, `arrange`, `showScratchpad` | `ComandoUi` | `ui` |
-| `PersistencePort` | `saveConnections`, `saveSessions`, `savePanels` | `Store` | `app` |
+| `ToolPort` | `runGradle`, `runJfrq`, `cancelRun`, `forgetRun`, `openRecording`, `readFolders`, `watchFolders` | `ToolsAdapter` | `tools` |
+| `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showPlanUsage` | `ComandoUi` | `ui` |
+| `PersistencePort` | `saveConnections`, `saveSessions`, `saveFolders`, `savePanels` | `Store` | `app` |
 
 `ClaudeAdapter` receives the `McpGateway` at construction: starting a session registers it with the MCP server and writes the ticket into the session's MCP configuration. `McpGateway.NONE` starts sessions without comando's tools; the adapter tests use a gateway that records each registration instead.
 

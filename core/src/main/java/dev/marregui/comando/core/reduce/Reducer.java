@@ -9,6 +9,8 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
@@ -24,6 +26,7 @@ import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.state.ViewState;
+import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -41,7 +44,8 @@ import java.util.stream.Stream;
 
 /**
  * Applies one intent to the state and lists the effects that follow. Pure apart from the clock, which
- * only stamps notices and activity: the same state, intent and time always give the same transition.
+ * only stamps notices and activity, and the home folder, where a file link or a Gradle run without a session starts: the same state,
+ * intent, time and home always give the same transition.
  *
  * <p>Request identity closes the stale-result class of defects: every SQL run gets an id from the state's
  * counter, a panel holds one run, and an event for an id that is no longer a panel's run is dropped.</p>
@@ -104,6 +108,8 @@ public final class Reducer {
 
             case Intent.SaveConnection i -> saveConnection(s, i);
             case Intent.RemoveConnection i -> removeConnection(s, i.name());
+            case Intent.SaveFolder i -> saveFolder(s, i);
+            case Intent.RemoveFolder i -> removeFolder(s, i.name());
             case Intent.OpenConnection i -> openConnection(s, i.name());
             case Intent.CloseConnection i -> closeConnection(s, i.name());
             case Intent.TestConnection i -> new Transition(notice(s, Notice.Level.INFO, "Testing " + i.spec().label(), Notice.connection(i.spec().name())),
@@ -173,11 +179,14 @@ public final class Reducer {
             case Intent.CancelCommand i -> new Transition(s, List.of(new Effect.CancelCommand(i.runId())));
             case Intent.OpenRecording i -> new Transition(notice(s, Notice.Level.INFO, "Reading " + fileName(i.path())),
                     List.of(new Effect.OpenRecording(i.path())));
-            case Intent.BrowseScratchpad i -> new Transition(s, List.of(new Effect.BrowseScratchpad()));
-            case Intent.ScratchpadLoaded i -> new Transition(s, List.of(new Effect.ShowScratchpad(i.root())));
+            case Intent.BrowseFolders i -> new Transition(s, List.of(new Effect.ReadFolders(folders(s, i.names()))));
+            case Intent.WatchFolders i -> new Transition(s, List.of(new Effect.WatchFolders(folders(s, i.names()))));
+            // a tree read with settings since edited, or of a folder since removed, is dropped: the tab shows only current folders
+            case Intent.FolderLoaded i -> s.folders().contains(i.folder())
+                    ? new Transition(s, List.of(new Effect.ShowFolder(i.folder(), i.tree()))) : Transition.of(s);
             case Intent.PlanUsageRead i -> new Transition(s, List.of(new Effect.ShowPlanUsage(i.usage())));
             case Intent.OpenFile i -> new Transition(s, List.of(new Effect.ShowFile(i.session(), i.path(),
-                    s.session(i.session()).map(x -> x.spec().workDir()).orElse(System.getProperty("user.home")), i.line())));
+                    s.session(i.session()).map(x -> x.spec().workDir()).orElse(HomeDir.home()), i.line())));
             case Intent.Notify i -> new Transition(notice(s, i.level(), i.text(), i.subject()),
                     i.desktop() ? List.of(new Effect.DesktopNotify("comando", i.text())) : List.of());
             case Intent.DismissNotice i -> Transition.of(s.withNotice(Notice.NONE));
@@ -642,6 +651,9 @@ public final class Reducer {
             effects.add(new Effect.CloseDb(old.name()));
             updated = ConnectionState.closed(spec);
         }
+        if (!old.spec().equals(spec)) {
+            effects.add(new Effect.ForgetSchema(old.name()));
+        }
         List<ConnectionState> conns = new ArrayList<>(s.connections().size());
         for (ConnectionState c : s.connections()) {
             conns.add(c.name().equals(i.previousName()) ? updated : c);
@@ -664,11 +676,47 @@ public final class Reducer {
         if (conn.get().status() != Status.CLOSED) {
             effects.add(new Effect.CloseDb(name));
         }
+        effects.add(new Effect.ForgetSchema(name));
         AppState next = clear(s, Notice.connection(name)).withConnections(s.connections().stream().filter(c -> !c.name().equals(name)).toList());
         next = rebindConnection(next, name, "");
         effects.add(new Effect.SaveConnections(specs(next)));
         effects.add(save(next));
         return new Transition(next, effects);
+    }
+
+    // ---- the Files tab's folders
+
+    /** The configured folders named, in the configuration's order; a name no folder has is skipped. */
+    private static List<FolderRoot> folders(AppState s, List<String> names) {
+        return s.folders().stream().filter(f -> names.contains(f.name())).toList();
+    }
+
+    private Transition saveFolder(AppState s, Intent.SaveFolder i) {
+        FolderRoot spec = i.spec();
+        boolean isNew = i.previousName().isEmpty();
+        if ((isNew || !i.previousName().equals(spec.name())) && s.folder(spec.name()).isPresent()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "A folder called " + spec.name() + " exists", Notice.folder(spec.name())));
+        }
+        if (!isNew && s.folder(i.previousName()).isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "No folder called " + i.previousName(), Notice.folder(i.previousName())));
+        }
+        List<FolderRoot> folders = new ArrayList<>(s.folders().size() + 1);
+        for (FolderRoot f : s.folders()) {
+            folders.add(f.name().equals(i.previousName()) ? spec : f);
+        }
+        if (isNew) {
+            folders.add(spec);
+        }
+        AppState next = s.withFolders(folders);
+        return new Transition(next, List.of(new Effect.SaveFolders(next.folders())));
+    }
+
+    private Transition removeFolder(AppState s, String name) {
+        if (s.folder(name).isEmpty()) {
+            return Transition.of(s);
+        }
+        AppState next = clear(s, Notice.folder(name)).withFolders(s.folders().stream().filter(f -> !f.name().equals(name)).toList());
+        return new Transition(next, List.of(new Effect.SaveFolders(next.folders())));
     }
 
     private Transition openConnection(AppState s, String name) {
@@ -1081,7 +1129,7 @@ public final class Reducer {
 
     private Transition showView(AppState s, Intent.ShowView shown) {
         Intent.ShowView i = shown.title().length() <= VIEW_TITLE_CHARS ? shown
-                : new Intent.ShowView(shown.session(), shown.title().substring(0, VIEW_TITLE_CHARS - 1) + "…", shown.spec(), shown.placement());
+                : new Intent.ShowView(shown.session(), Clip.keepStart(shown.title(), VIEW_TITLE_CHARS), shown.spec(), shown.placement());
         for (ViewState v : s.views()) {
             if (!v.pinned() && v.title().equals(i.title()) && v.session().equals(i.session()) && v.placement() == i.placement()) {
                 // the user's own command (session "") shows its view again; a session's update in place does not move the user
@@ -1177,7 +1225,7 @@ public final class Reducer {
             return Transition.of(notice(s, Notice.Level.WARN, "No Gradle tasks given"));
         }
         String dir = s.panel(panel).flatMap(p -> s.session(p.session())).map(x -> x.spec().workDir())
-                .orElse(System.getProperty("user.home"));
+                .orElse(HomeDir.home());
         return runCommand(s, "gradle " + tasks, panel == null ? "" : panel.value(), id -> new Effect.RunGradle(id, dir, tasks));
     }
 

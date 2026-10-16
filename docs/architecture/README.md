@@ -4,7 +4,7 @@
 
 comando is a desktop application in Java Swing for working with Claude Code and SQL databases in one window. It runs Claude Code headless (`claude -p` with stream-JSON on standard input and output) and shows each session as a structured transcript with tool cards, diffs and approval cards, instead of a terminal. The same editor holds SQL and prompts: a block of text runs on the panel's database connection when it is SQL and goes to the panel's Claude session otherwise. Claude Code reaches back into the window through an MCP server that comando runs on `127.0.0.1`: its tools open tables, plots, diffs and trees, put text in the editor, run SQL under a policy, and answer Claude Code's permission prompts through cards the user answers with one key.
 
-The rest of the window replaces what a terminal was used for: a shell per panel, Gradle runs with their test results as a tree, JFR recordings and `jfrq`, and a browser for the scratchpad's documents.
+The rest of the window replaces what a terminal was used for: a shell per panel, Gradle runs with their test results as a tree, JFR recordings and `jfrq`, and a browser for the folders of documents the user chooses.
 
 ## 2. Modules
 
@@ -13,9 +13,9 @@ The rest of the window replaces what a terminal was used for: a shell per panel,
 | `core` | the state, intents, reducer, effects, ports, the stores that live outside the state, the SQL-or-prompt classifier | JDK only |
 | `testkit` | fakes for every port, fixtures (recorded Claude streams, a synthetic session), a recording intent sink | `core` |
 | `db` | JDBC lanes (one thread per connection), cancel, columnar results, schema reading, queries for Claude | `core`, pgjdbc |
-| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored-conversation loading, the session catalogue | `core`, Jackson |
+| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored-conversation loading, the session catalogue, the Claude Code kit and its install (`Kit`) | `core`, Jackson |
 | `mcp` | the MCP server over HTTP on loopback, the tools, the SQL policy, the audit log | `core`, Jackson |
-| `tools` | Gradle and jfrq runs, JFR summaries, the scratchpad tree | `core` |
+| `tools` | Gradle and jfrq runs, JFR summaries, the Files tab's folder trees | `core` |
 | `ui` | the Swing shell, panels, dialogs, the widget kit, the widgets | `core`, FlatLaf, RSyntaxTextArea and AutoComplete, CommonMark, java-diff-utils, Jackson, JediTerm, pty4j |
 | `app` | wiring, configuration, the store files, the keychain, the intent log, the embedded QuestDB, `main` | all, Jackson, QuestDB |
 

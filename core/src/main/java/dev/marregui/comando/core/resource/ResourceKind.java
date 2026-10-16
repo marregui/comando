@@ -7,13 +7,13 @@ import java.util.Map;
 
 /**
  * The generic part of a configurable resource: its attributes and the conversion between a spec and the
- * attribute map a form edits. Connections and sessions are the two kinds.
+ * attribute map a form edits. Connections, sessions and the Files tab's folders are its kinds.
  *
  * @param <S> the spec record
  */
 public interface ResourceKind<S> {
 
-    /** "connection", "session". */
+    /** "connection", "session", "folder". */
     String noun();
 
     List<Attribute> attributes();

@@ -9,9 +9,9 @@
 | Docker | the PostgreSQL adapter tests | optional; those tests are skipped without it |
 | macOS | the keychain, the DMG, IntelliJ links | everything else runs on Linux |
 | IntelliJ IDEA's `idea` launcher | "Open in IntelliJ" | optional; files open in the default application without it |
-| jfrq | "Run jfrq on a recording" | optional; built from `~/workspace/jfr` |
-| a scratchpad folder at `~/.claude/SCRATCHPAD` | the sidebar's Scratchpad tab | optional; the location is fixed; without it the tab says it cannot be read |
-| `gradle-serial` at `~/.claude/plugins/local-acme/bin/gradle-serial` | "Run Gradle tasks" | optional; used instead of `./gradlew` when present |
+| jfrq | "Run jfrq on a recording" | optional; its path in `tools.json` (Panel ▸ Tools ▸ Tool settings), `COMANDO_JFRQ`, or on the `PATH` |
+| folders of documents | the sidebar's Files tab | optional; `~/.claude` until you add your own; a folder that is missing says so in its row |
+| `lockf` (macOS) or `flock` (Linux) | "Run Gradle tasks" through the kit's `gradle-serial` | the kit's wrapper takes a per-checkout lock with one of them |
 
 ## 2. Gradle tasks
 
@@ -36,7 +36,9 @@ Tests run headless, with the data root in each module's `build/test-home` and wi
 | `comando.home` | system property | — | the data root; wins over `COMANDO_HOME` |
 | `COMANDO_HOME` | environment | `~/.comando` | the data root |
 | `COMANDO_CLAUDE` | environment | search above | the Claude Code executable |
-| `COMANDO_JFRQ` | environment | `~/workspace/jfr/cli/build/install/jfrq/bin/jfrq` | the jfrq launcher |
+| `COMANDO_JFRQ` | environment | `jfrq` on the `PATH` | the jfrq launcher, when `tools.json` sets none |
+| `comando.offerKit` | system property | on for the default data root | offer the Claude Code kit at start |
+| `COMANDO_KIT_LIVE` | environment | unset | `true` runs `KitLiveTest`, which installs, disables and re-enables the kit with the real Claude Code in a throwaway `CLAUDE_CONFIG_DIR` |
 | `comando.keychain` | system property | `true` for `~/.comando`, else `false` | keep connection passwords in the login keychain |
 | `comando.recordIntents` | system property | `false` | write the intent log to `logs/` in the data root |
 | `comando.prefsNode` | system property | `dev/marregui/comando` | the Java preferences node for window layout |

@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
@@ -173,20 +174,16 @@ final class SessionRow extends JPanel {
         String dot = "<span style='color:" + Theme.hex(EditorPanel.color(s.status())) + "'>" + EditorPanel.dot(s.status()) + "</span>";
         String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.WARN) + "'>⚑" + approvals + "</span>";
         String where = "&nbsp;<span style='color:" + Theme.hex(focused ? Theme.ACCENT : Theme.MUTED_STRONG)
-                + "'>· " + MarkdownHtml.escape(clip(bound, 24)) + "</span>";
+                + "'>· " + MarkdownHtml.escape(Clip.keepEnd(bound, 24)) + "</span>";
         String doing = s.isBusy() ? (s.activity().isEmpty() ? "working" : s.activity()) : s.isWaiting() ? TabStatus.waiting(s) : "";
         String busy = doing.isEmpty() ? "" : "&nbsp;&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>"
-                + MarkdownHtml.escape(clip(doing, 30)) + "</span>";
+                + MarkdownHtml.escape(Clip.keepEnd(doing, 30)) + "</span>";
         String branch = s.branch().isEmpty() ? "" : " ⎇ " + MarkdownHtml.escape(s.branch());
         return "<html><nobr>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(s.name()) + "</b>" + where + badge + busy
                 + "</nobr><br><nobr><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>"
-                + MarkdownHtml.escape(clip(Labels.shortPath(s.spec().workDir()), 34)) + branch + "</span></nobr>"
+                + MarkdownHtml.escape(Clip.keepEnd(Labels.shortPath(s.spec().workDir()), 34)) + branch + "</span></nobr>"
                 + (uptime.isEmpty() ? "" : "<br><nobr><span style='color:" + Theme.hex(Theme.MUTED) + "'>" + MarkdownHtml.escape(uptime) + "</span></nobr>")
                 + "</html>";
-    }
-
-    private static String clip(String s, int max) {
-        return s.length() <= max ? s : "…" + s.substring(s.length() - max + 1);
     }
 
     private static JButton control() {

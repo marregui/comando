@@ -1,5 +1,6 @@
 package dev.marregui.comando.tools;
 
+import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -218,7 +219,7 @@ record TestReports(ViewSpec.TreeNode tree, Map<String, String> failures) {
                 break;
             }
         }
-        return "comando-file:" + src + "#" + line;
+        return ViewSpec.TreeNode.fileLink(src.toString(), line);
     }
 
     private static String simple(String className) {
@@ -230,7 +231,7 @@ record TestReports(ViewSpec.TreeNode tree, Map<String, String> failures) {
         String t = s.strip();
         int nl = t.indexOf('\n');
         t = nl < 0 ? t : t.substring(0, nl);
-        return t.length() > 160 ? t.substring(0, 160) + "…" : t;
+        return Clip.keepStart(t, 160);
     }
 
     private static String clip(String s) {

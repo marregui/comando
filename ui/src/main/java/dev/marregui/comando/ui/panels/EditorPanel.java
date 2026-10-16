@@ -45,7 +45,7 @@ import java.util.regex.Pattern;
 
 /**
  * One editor panel: a header with its session and connection, and the command editor. A panel's own text is SQL and
- * prompts; a panel opened on a file, a scratchpad document, is coloured as the file's language, and a Markdown one
+ * prompts; a panel opened on a file, such as a document from the Files tab, is coloured as the file's language, and a Markdown one
  * opens rendered. Any Markdown panel switches between the editor and the rendered text with its header button, which
  * names the other view: Preview while editing, Edit while previewing. A
  * production connection frames the panel in red.

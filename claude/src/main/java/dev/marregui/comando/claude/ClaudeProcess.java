@@ -7,6 +7,7 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.List;
 import java.util.Map;
@@ -18,17 +19,24 @@ import java.util.function.IntConsumer;
 /**
  * One headless {@code claude -p} process and its three threads: stdout lines go to {@code onLine},
  * stdin lines come from a queue, stderr is kept as a tail for error messages. {@code onExit} runs after
- * the last stdout line was handed over.
+ * the last stdout line was handed over, or {@link #DRAIN_MILLIS} after the process exited when a child of it still
+ * holds stdout open; lines after that are dropped.
  */
 final class ClaudeProcess {
 
     private static final System.Logger LOG = System.getLogger(ClaudeProcess.class.getName());
     private static final String END = new String("end-of-input");
     private static final int STDERR_LINES = 40;
+    /** How long the exit waits for the rest of stdout after the process exited. */
+    static final long DRAIN_MILLIS = 2_000;
 
     private final Process process;
     private final LinkedBlockingQueue<String> stdin = new LinkedBlockingQueue<>();
     private final ArrayDeque<String> stderrTail = new ArrayDeque<>();
+    /** Set when the exit stopped waiting for stdout: a line read later is not handed over. Guarded by {@link #handOver}. */
+    private boolean drained;
+    /** Held while a line is handed over and while {@link #drained} is set, so no line is handed over after the exit. */
+    private final Object handOver = new Object();
 
     private ClaudeProcess(Process process) {
         this.process = process;
@@ -46,7 +54,14 @@ final class ClaudeProcess {
             int code;
             try {
                 code = p.process.waitFor();
-                reader.join();
+                if (!reader.join(Duration.ofMillis(DRAIN_MILLIS))) {
+                    // under the hand-over's lock: a line being handed over finishes first, and none follows the exit
+                    synchronized (p.handOver) {
+                        p.drained = true;
+                    }
+                    LOG.log(System.Logger.Level.WARNING, "claude exited but a child still holds its output open; stopped reading it [session="
+                            + name + ", exit=" + code + ']');
+                }
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 return;
@@ -60,7 +75,13 @@ final class ClaudeProcess {
         try (BufferedReader in = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8), 1 << 16)) {
             String line;
             while ((line = in.readLine()) != null) {
-                if (!line.isBlank()) {
+                if (line.isBlank()) {
+                    continue;
+                }
+                synchronized (handOver) {
+                    if (drained) {
+                        return;
+                    }
                     onLine.accept(line);
                 }
             }

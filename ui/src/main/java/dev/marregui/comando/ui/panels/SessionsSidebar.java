@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.resource.ConnectionKind;
@@ -8,6 +9,7 @@ import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.ToolButton;
@@ -37,7 +39,6 @@ import javax.swing.event.ListDataListener;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Cursor;
-import java.awt.FlowLayout;
 import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -50,10 +51,11 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * The left column, four tabs in two fixed rows (Panels and Scratchpad, then Sessions and Connections): Sessions (every session with its project, branch, state and pending approvals, and
+ * The left column, four tabs in two fixed rows (Panels and Files, then Sessions and Connections): Sessions (every session with its project, branch, state and pending approvals, and
  * controls to connect or disconnect it and change its model or effort), Panels (comando's own panels, open and
- * closed), Connections, and Scratchpad (the scratchpad as a tree). Above the sessions and the connections, the same {@link ResourceActions}: add (and, for sessions,
- * import) on the left; edit, clone and remove of the selected row on the right. Double-click on a session opens it in
+ * closed), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). Above the sessions, the
+ * connections and the folders, the same {@link ResourceActions}: add (and, for sessions, import) on the left; edit,
+ * clone and remove of the selected row on the right. Double-click on a session opens it in
  * a panel ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. Hidden, the column collapses to
  * a rail whose button shows it again.
  */
@@ -68,6 +70,9 @@ public final class SessionsSidebar {
 
         /** The connection dialog, as {@link #sessions()}. */
         ResourceActions.Editor connections();
+
+        /** The folder dialog, as {@link #sessions()}. */
+        ResourceActions.Editor folders();
 
         /** Shows the connection's schema explorer, as Panel ▸ Connection ▸ Explore the schema does. */
         void exploreSchema(String connection);
@@ -108,13 +113,13 @@ public final class SessionsSidebar {
     public static final int SESSIONS = 0;
     public static final int PANELS = 1;
     public static final int CONNECTIONS = 2;
-    public static final int SCRATCHPAD = 3;
+    public static final int FILES = 3;
 
     private final ResourceActions<SessionState> sessionActions;
     private final ResourceActions<ConnectionState> connectionActions;
     private final PanelsTab panelsTab;
     private final FixedRowTabs tabs = new FixedRowTabs("Sidebar");
-    private final ScratchpadTab scratchpad;
+    private final FilesTab files;
     private final JPanel rail;
     private final JPanel root = new JPanel(new BorderLayout());
     private AppState state;
@@ -227,7 +232,7 @@ public final class SessionsSidebar {
                 }
             }
         });
-        scratchpad = new ScratchpadTab(dialogs::openFile);
+        files = new FilesTab(intents, dialogs::openFile, dialogs.folders(), questions, () -> state);
         sessionActions = new ResourceActions<>(sessions,
                 ResourceActions.Rows.of(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop", () -> state),
                 dialogs.sessions(), name -> intents.dispatch(new Intent.RemoveSession(name)), questions,
@@ -239,12 +244,10 @@ public final class SessionsSidebar {
         tabs.add("Panels", "text", "comando's own panels, open and closed; double-click opens one",
                 section(new JScrollPane(panelsTab.list()), panelsTab.actions()));
         tabs.add("Connections", "database", "database connections", section(new JScrollPane(connections), connectionActions.component()));
-        JPanel refresh = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
-        refresh.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
-        refresh.add(ToolButton.of("refresh", "Read the scratchpad again", () -> intents.dispatch(new Intent.BrowseScratchpad())));
-        tabs.add("Scratchpad", "folder-work", "~/.claude/SCRATCHPAD; click a file to open it in a panel", section(scratchpad.component(), refresh));
+        tabs.add("Files", "folder", "the folders you chose; opening a folder opens its index file, a click on a file opens it in a panel",
+                section(files.component(), files.actions()));
         // two fixed rows (Miguel, 2026-10-15): the documents on top, the resources below; a click moves nothing
-        tabs.arrange(new int[][]{{PANELS, SCRATCHPAD}, {SESSIONS, CONNECTIONS}}, ToolButton.of("more", "Hide the sidebar (⌘B)", toggle));
+        tabs.arrange(new int[][]{{PANELS, FILES}, {SESSIONS, CONNECTIONS}}, ToolButton.of("more", "Hide the sidebar (⌘B)", toggle));
         rail = new JPanel(new BorderLayout());
         rail.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(4, 1, 0, 1)));
@@ -271,7 +274,7 @@ public final class SessionsSidebar {
         root.repaint();
     }
 
-    /** The tab in front: {@link #SESSIONS}, {@link #CONNECTIONS} or {@link #SCRATCHPAD}. */
+    /** The tab in front: {@link #SESSIONS}, {@link #PANELS}, {@link #CONNECTIONS} or {@link #FILES}. */
     public int selectedTab() {
         return tabs.selectedIndex();
     }
@@ -280,9 +283,14 @@ public final class SessionsSidebar {
         tabs.select(tab);
     }
 
-    /** The scratchpad as read; a refresh keeps the tree as the user left it. */
-    public void showScratchpad(ViewSpec.TreeNode root) {
-        scratchpad.show(root);
+    /** A folder of the Files tab as read; a later read keeps the tree as the user left it. */
+    public void showFolder(FolderRoot folder, ViewSpec.TreeNode tree) {
+        files.show(folder, tree);
+    }
+
+    /** Puts the keyboard in the Files tab's filter. */
+    public void focusFilesFilter() {
+        files.filter().requestFocusInWindow();
     }
 
     /** The width the hidden sidebar takes: the rail's. */
@@ -296,6 +304,7 @@ public final class SessionsSidebar {
         rows.keySet().retainAll(s.sessions().stream().map(SessionState::name).toList());
         sync(connectionModel, s.connections(), connections);
         panelsTab.render(s);
+        files.render(s);
     }
 
     /** The uptimes the session rows last showed, so the shell's one-second tick repaints them only when one moved on. */
@@ -424,7 +433,7 @@ public final class SessionsSidebar {
         String dot = "<span style='color:" + Theme.hex(EditorPanel.color(c.status())) + "'>" + EditorPanel.dot(c.status()) + "</span>";
         String prod = c.spec().prod() ? "&nbsp;<span style='color:" + Theme.hex(Theme.DANGER) + "'>prod</span>" : "";
         return "<html>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(c.name()) + "</b>" + prod
-                + "<br><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>" + MarkdownHtml.escape(clip(c.spec().label(), 36)) + "</span></html>";
+                + "<br><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>" + MarkdownHtml.escape(Clip.keepEnd(c.spec().label(), 36)) + "</span></html>";
     }
 
     private JPopupMenu sessionMenu(SessionState s) {
@@ -538,9 +547,5 @@ public final class SessionsSidebar {
         JMenuItem i = new JMenuItem(text, Icons.get(icon));
         i.addActionListener(e -> r.run());
         return i;
-    }
-
-    private static String clip(String s, int max) {
-        return s.length() <= max ? s : "…" + s.substring(s.length() - max + 1);
     }
 }

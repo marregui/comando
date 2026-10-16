@@ -4,6 +4,7 @@ import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -48,6 +49,11 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     @Override
     public void close(String name) {
         record("db.close " + name);
+    }
+
+    @Override
+    public void forgetSchema(String name) {
+        record("db.forgetSchema " + name);
     }
 
     @Override
@@ -141,8 +147,8 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     }
 
     @Override
-    public void showScratchpad(ViewSpec.TreeNode root) {
-        record("ui.scratchpad " + root.label());
+    public void showFolder(FolderRoot folder, ViewSpec.TreeNode tree) {
+        record("ui.folder " + folder.name());
     }
 
     @Override
@@ -183,8 +189,17 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     }
 
     @Override
-    public void browseScratchpad() {
-        record("tools.scratchpad");
+    public void readFolders(List<FolderRoot> folders) {
+        record("tools.readFolders " + names(folders));
+    }
+
+    @Override
+    public void watchFolders(List<FolderRoot> folders) {
+        record("tools.watchFolders " + names(folders));
+    }
+
+    private static String names(List<FolderRoot> folders) {
+        return String.join(",", folders.stream().map(FolderRoot::name).toList());
     }
 
     @Override
@@ -195,6 +210,11 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     @Override
     public void saveSessions(List<SessionSpec> specs) {
         record("save.sessions " + specs.size());
+    }
+
+    @Override
+    public void saveFolders(List<FolderRoot> folders) {
+        record("save.folders " + folders.size());
     }
 
     @Override

@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.kit.icon;
 
+import dev.marregui.comando.ui.kit.theme.Theme;
+
 import javax.swing.Icon;
 import java.awt.Color;
 import java.awt.Component;
@@ -48,8 +50,7 @@ public final class SpinnerIcon implements Icon {
             bar.transform(AffineTransform.getRotateInstance(2.0 * Math.PI / BAR_COUNT * i, c, c));
             bars[i] = bar;
             // the original's shades of blue: the head bar deep, the tail lighter with every step
-            int g = 0xFF - 0x7F / (i + 1);
-            colors[i] = new Color(g >>> 2, g, 0xFF);
+            colors[i] = Theme.spinnerShade(i);
         }
     }
 

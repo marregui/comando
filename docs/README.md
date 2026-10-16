@@ -26,7 +26,7 @@ Reference for how comando is built and why. The [repository README](../README.md
 | [Transcript renderer](design/transcript-renderer.md) | the painted transcript: block model, layout, virtualisation, streaming, the frame-time gate |
 | [Approvals and safety](design/approvals-and-safety.md) | approval cards, SQL policy, production connections, caps, audit log, credentials |
 | [Persistence](design/persistence.md) | the data root, atomic store files, passwords in the keychain, session restore |
-| [Development tools](design/dev-tools.md) | terminal, Gradle runs and test trees, JFR recordings and jfrq, the scratchpad tab |
+| [Development tools](design/dev-tools.md) | terminal, Gradle runs and test trees, JFR recordings and jfrq, the Files tab |
 | [Database workbench](design/database-workbench.md) | lanes and cancel, columnar results, plots, kept results, plans, schema explorer, completion, TLS |
 | [Quality](design/quality.md) | the test suites, fixtures, replay tests, the renderer gate, the EDT watchdog, JFR events, CI, the DMG |
 

@@ -98,6 +98,8 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
         try {
             out.write(line(intent));
             out.write('\n');
+            // to the operating system at once: the log is for diagnosing a crash or a kill, which loses a buffer
+            out.flush();
         } catch (IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "intent log write failed [type=" + intent.getClass().getSimpleName() + "]: " + e.getMessage());
         }

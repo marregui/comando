@@ -1,12 +1,18 @@
 package dev.marregui.comando.ui.shell;
 
+import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.kit.desktop.Platform;
+
 import java.awt.AWTException;
 import java.awt.SystemTray;
 import java.awt.Taskbar;
 import java.awt.TrayIcon;
 import java.awt.Window;
 import java.awt.image.BufferedImage;
-import java.util.Locale;
+import java.io.IOException;
+import java.time.Duration;
+import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Desktop notifications for work that finished while the user looked elsewhere: shown only when the
@@ -16,7 +22,9 @@ import java.util.Locale;
 final class Notifier {
 
     private static final System.Logger LOG = System.getLogger(Notifier.class.getName());
-    private static final boolean MAC = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
+    /** How long {@code osascript} may take to post a notification before it is stopped. */
+    static final Duration TIMEOUT = Duration.ofSeconds(10);
+    private static final int MAX_CHARS = 200;
 
     private final Window window;
 
@@ -28,18 +36,36 @@ final class Notifier {
         if (window.isActive()) {
             return;
         }
-        if (!MAC) {
+        if (!Platform.isMac()) {
             tray(title, text);
             return;
         }
         String script = "display notification \"" + escape(text) + "\" with title \"comando\" subtitle \"" + escape(title) + "\"";
-        Thread.ofVirtual().name("notify").start(() -> {
-            try {
-                new ProcessBuilder("osascript", "-e", script).redirectErrorStream(true).start().waitFor();
-            } catch (Exception e) {
-                LOG.log(System.Logger.Level.DEBUG, "notification failed: " + e.getMessage());
+        Thread.ofVirtual().name("notify").start(() -> run(List.of("osascript", "-e", script), TIMEOUT));
+    }
+
+    /**
+     * Runs {@code command} with no input and its output discarded, for at most {@code bound}; stops it after that.
+     *
+     * @return true when it ended within the bound
+     */
+    static boolean run(List<String> command, Duration bound) {
+        try {
+            Process p = new ProcessBuilder(command).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
+            p.getOutputStream().close();
+            if (!p.waitFor(bound.toMillis(), TimeUnit.MILLISECONDS)) {
+                p.destroyForcibly();
+                LOG.log(System.Logger.Level.DEBUG, "notification not posted within " + bound.toSeconds() + " s");
+                return false;
             }
-        });
+            return true;
+        } catch (IOException e) {
+            LOG.log(System.Logger.Level.DEBUG, "notification failed: " + e.getMessage());
+            return false;
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
     }
 
     /** Asks the desktop for attention while the window is not active: the Dock icon bounces until comando is in front. */
@@ -71,15 +97,13 @@ final class Notifier {
                 trayIcon.setImageAutoSize(true);
                 SystemTray.getSystemTray().add(trayIcon);
             }
-            String clipped = text.length() > 200 ? text.substring(0, 200) + "…" : text;
-            trayIcon.displayMessage(title, clipped, TrayIcon.MessageType.INFO);
+            trayIcon.displayMessage(title, Clip.keepStart(text, MAX_CHARS), TrayIcon.MessageType.INFO);
         } catch (AWTException | RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "notification failed: " + e.getMessage());
         }
     }
 
     static String escape(String s) {
-        String clipped = s.length() > 200 ? s.substring(0, 200) + "…" : s;
-        return clipped.replace("\\", "\\\\").replace("\"", "\\\"").replace('\n', ' ');
+        return Clip.keepStart(s, MAX_CHARS).replace("\\", "\\\\").replace("\"", "\\\"").replace('\n', ' ');
     }
 }

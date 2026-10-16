@@ -8,7 +8,9 @@ import dev.marregui.comando.core.resource.ResourceKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -28,7 +30,6 @@ import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.Scrollable;
-import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
@@ -39,12 +40,9 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
-import java.awt.HeadlessException;
 import java.awt.Insets;
 import java.awt.Rectangle;
-import java.awt.Toolkit;
 import java.awt.Window;
-import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -53,7 +51,6 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
@@ -62,7 +59,7 @@ import java.util.function.Function;
 /**
  * The one dialog for configurable resources: the form of one resource, generated from the kind's attributes, with
  * Test, Open/Close, Assign and Save. It edits the resource the caller names, or a new one, or an unsaved copy of one;
- * the sidebar's lists add, pick, clone and remove resources. Connections and sessions are two configurations of it.
+ * the sidebar's lists add, pick, clone and remove resources. Connections, sessions and folders are configurations of it.
  *
  * <p>⏎ saves, ⌘⏎ saves and assigns to the focused panel, Esc or the window's close button closes and asks
  * first when the form has unsaved changes, so a closed dialog never holds an edit that was not saved. Opening the
@@ -77,7 +74,10 @@ public final class ResourceDialog<S> {
     /** The content's size when the dialog first opens: every control is visible at this size. */
     static final Dimension DEFAULT_SIZE = new Dimension(600, 520);
 
-    /** What differs between connections and sessions. */
+    /**
+     * What differs between connections, sessions and folders. {@code test}, {@code open} (with {@code close}) and
+     * {@code assign} are null for a kind without them, and the dialog then has no such button: a folder has Save only.
+     */
     public record Config<S>(
             ResourceKind<S> kind,
             Function<AppState, List<S>> specs,
@@ -204,15 +204,19 @@ public final class ResourceDialog<S> {
         if (config.test() != null) {
             actions.add(button("Test", "check", "Tries the form's values without saving them", this::testForm));
         }
-        actions.add(openClose);
-        openClose.addActionListener(e -> {
-            hideConfirm();
-            toggleOpen();
-        });
-        actions.add(button("Assign to panel", "pin", session
-                        ? "Saves when needed, then opens the session in a panel: its own, else the focused one when it has none, else a new one (⌘⏎)"
-                        : "Saves when needed, then binds the " + noun + " to the focused panel (⌘⏎)",
-                this::assign));
+        if (config.open() != null) {
+            actions.add(openClose);
+            openClose.addActionListener(e -> {
+                hideConfirm();
+                toggleOpen();
+            });
+        }
+        if (config.assign() != null) {
+            actions.add(button("Assign to panel", "pin", session
+                            ? "Saves when needed, then opens the session in a panel: its own, else the focused one when it has none, else a new one (⌘⏎)"
+                            : "Saves when needed, then binds the " + noun + " to the focused panel (⌘⏎)",
+                    this::assign));
+        }
         save = button("Save", "check", "Saves the form (⏎)", this::save);
         save.putClientProperty("JButton.buttonType", "default");
         actions.add(save);
@@ -317,10 +321,12 @@ public final class ResourceDialog<S> {
         root = rootPane;
         rootPane.setDefaultButton(save);
         rootPane.registerKeyboardAction(e -> escape(), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_IN_FOCUSED_WINDOW);
-        rootPane.registerKeyboardAction(e -> {
-            hideConfirm();
-            assign();
-        }, KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, menuMask()), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        if (config.assign() != null) {
+            rootPane.registerKeyboardAction(e -> {
+                hideConfirm();
+                assign();
+            }, KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, Platform.menuShortcutMask()), JComponent.WHEN_IN_FOCUSED_WINDOW);
+        }
     }
 
     JComponent content() {
@@ -460,7 +466,7 @@ public final class ResourceDialog<S> {
         if (first instanceof JTextComponent t) {
             t.selectAll();
         }
-        SwingUtilities.invokeLater(first::requestFocusInWindow);
+        Edt.later(first::requestFocusInWindow);
     }
 
     /**
@@ -540,7 +546,7 @@ public final class ResourceDialog<S> {
 
     /** Opens the resource, saving the form first when it is new or changed; closes it when open. */
     private void toggleOpen() {
-        if (state == null) {
+        if (state == null || config.open() == null) {
             return;
         }
         if (!editing.isEmpty() && config.statuses().apply(state).getOrDefault(editing, Status.CLOSED).isUsable()) {
@@ -566,7 +572,7 @@ public final class ResourceDialog<S> {
 
     /** Binds the resource to the focused panel, saving the form first when it is new or changed. */
     private void assign() {
-        if (state == null) {
+        if (state == null || config.assign() == null) {
             return;
         }
         boolean saved = false;
@@ -664,6 +670,9 @@ public final class ResourceDialog<S> {
     }
 
     private void updateOpenClose() {
+        if (config.open() == null) {
+            return;
+        }
         Status st = editing.isEmpty() || state == null ? Status.CLOSED : config.statuses().apply(state).getOrDefault(editing, Status.CLOSED);
         boolean open = st.isUsable();
         openClose.setText(open ? (session ? "Stop" : "Disconnect") : (session ? "Start" : "Connect"));
@@ -876,14 +885,6 @@ public final class ResourceDialog<S> {
             r.run();
         });
         return b;
-    }
-
-    private static int menuMask() {
-        try {
-            return Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
-        } catch (HeadlessException e) {
-            return System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac") ? InputEvent.META_DOWN_MASK : InputEvent.CTRL_DOWN_MASK;
-        }
     }
 
     /** A form panel that takes the scroll pane's width, so its fields stretch and only its height scrolls. */

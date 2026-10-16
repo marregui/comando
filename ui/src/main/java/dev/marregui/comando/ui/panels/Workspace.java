@@ -7,6 +7,7 @@ import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.format.Labels;
@@ -387,8 +388,7 @@ public final class Workspace {
 
     /** The tab's title: plain, clipped, with a dot when a query finished unseen. */
     static String title(PanelState p, boolean marked) {
-        String t = p.title().length() > TITLE_CHARS ? p.title().substring(0, TITLE_CHARS - 1) + "…" : p.title();
-        return Plain.text((marked ? "● " : "") + t);
+        return Plain.text((marked ? "● " : "") + Clip.keepStart(p.title(), TITLE_CHARS));
     }
 
     private static String tooltip(PanelState p) {

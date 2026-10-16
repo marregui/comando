@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sed -e \"s#@KIT@#${CLAUDE_PLUGIN_ROOT}#g\" -e \"s#@CLAUDE@#${CLAUDE_CONFIG_DIR:-$HOME/.claude}#g\" \"${CLAUDE_PLUGIN_ROOT}/hooks/method.md\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/hooks/mermaid-check.py\"",
+            "timeout": 120
+          }
+        ]
+      }
+    ]
+  }
+}

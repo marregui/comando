@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.kit.action;
 
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.BorderFactory;
@@ -63,9 +64,9 @@ public final class CommandPalette {
                 JLabel label = (JLabel) super.getListCellRendererComponent(l, c.label(), index, selected, focus);
                 label.setIcon(c.icon() == null ? null : Icons.get(c.icon()));
                 String key = c.key() == null ? "" : keyText(c.key());
-                label.setText("<html>" + escape(c.label()) + (key.isEmpty() ? "" : "&nbsp;&nbsp;<span style='color:"
+                label.setText("<html>" + MarkdownHtml.escape(c.label()) + (key.isEmpty() ? "" : "&nbsp;&nbsp;<span style='color:"
                         + Theme.hex(Theme.MUTED) + "'>" + key + "</span>") + (c.group().isEmpty() ? "" : "&nbsp;&nbsp;<span style='color:"
-                        + Theme.hex(Theme.MUTED) + "'>" + escape(c.group()) + "</span>") + "</html>");
+                        + Theme.hex(Theme.MUTED) + "'>" + MarkdownHtml.escape(c.group()) + "</span>") + "</html>");
                 label.setBorder(BorderFactory.createEmptyBorder(4, 8, 4, 8));
                 return label;
             }
@@ -219,9 +220,5 @@ public final class CommandPalette {
             case KeyEvent.VK_DOWN -> "↓";
             default -> KeyEvent.getKeyText(k.getKeyCode());
         }).toString();
-    }
-
-    private static String escape(String s) {
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

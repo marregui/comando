@@ -2,6 +2,7 @@ package dev.marregui.comando.mcp;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.marregui.comando.core.view.Clip;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -39,7 +40,7 @@ public final class AuditLog {
         line.put("session", session);
         line.put("event", event);
         line.put("tool", tool);
-        line.put("detail", detail.length() > MAX_FIELD ? detail.substring(0, MAX_FIELD) + "…" : detail);
+        line.put("detail", Clip.keepStart(detail, MAX_FIELD));
         line.put("outcome", outcome);
         try {
             Files.createDirectories(dir);

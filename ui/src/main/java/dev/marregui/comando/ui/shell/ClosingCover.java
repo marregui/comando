@@ -1,7 +1,8 @@
 package dev.marregui.comando.ui.shell;
 
+import dev.marregui.comando.ui.kit.theme.Theme;
+
 import javax.swing.JComponent;
-import java.awt.Color;
 import java.awt.Cursor;
 import java.awt.Graphics;
 import java.awt.event.KeyAdapter;
@@ -13,8 +14,6 @@ import java.awt.event.MouseAdapter;
  * while the application closes is lost without the user seeing it refused.
  */
 final class ClosingCover extends JComponent {
-
-    private static final Color VEIL = new Color(0, 0, 0, 110);
 
     ClosingCover() {
         setOpaque(false);
@@ -46,7 +45,7 @@ final class ClosingCover extends JComponent {
 
     @Override
     protected void paintComponent(Graphics g) {
-        g.setColor(VEIL);
+        g.setColor(Theme.VEIL);
         g.fillRect(0, 0, getWidth(), getHeight());
     }
 }

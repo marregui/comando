@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.kit.theme;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLaf;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 
 import javax.swing.UIManager;
 import java.awt.Color;
@@ -34,6 +35,8 @@ public final class Theme {
     public static final Color CARD = new Color(0x2B2D30);
     public static final Color CARD_BORDER = new Color(0x3C3F41);
     public static final Color USER_BUBBLE = new Color(0x2E3A4A);
+    /** Laid over a window that is closing: it greys what is under it. */
+    public static final Color VEIL = new Color(0, 0, 0, 110);
     /** Series colours, chosen to stay apart on a dark background. */
     public static final Color[] SERIES = {
             new Color(0x389FD6), new Color(0xD97757), new Color(0x59A869), new Color(0xB99BF8),
@@ -62,8 +65,7 @@ public final class Theme {
         UIManager.put("Table.showHorizontalLines", true);
         UIManager.put("Table.intercellSpacing", new Dimension(0, 1));
         UIManager.put("SplitPane.dividerSize", 5);
-        boolean mac = System.getProperty("os.name", "").toLowerCase().contains("mac");
-        boolean ok = mac ? FlatMacDarkLaf.setup() : FlatDarkLaf.setup();
+        boolean ok = Platform.isMac() ? FlatMacDarkLaf.setup() : FlatDarkLaf.setup();
         if (!ok) {
             FlatDarkLaf.setup();
         }
@@ -88,6 +90,17 @@ public final class Theme {
             }
         }
         return new Font(Font.MONOSPACED, Font.PLAIN, 13);
+    }
+
+    /** {@code c} with {@code alpha} (0 to 255): a tint laid over text, such as the accent behind a statement that ran. */
+    public static Color withAlpha(Color c, int alpha) {
+        return new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha);
+    }
+
+    /** The spinner's bar {@code behindHead} bars behind its head: deep blue at the head, lighter with each bar behind. */
+    public static Color spinnerShade(int behindHead) {
+        int g = 0xFF - 0x7F / (behindHead + 1);
+        return new Color(g >>> 2, g, 0xFF);
     }
 
     public static String hex(Color c) {

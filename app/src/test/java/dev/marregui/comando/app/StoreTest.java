@@ -1,6 +1,7 @@
 package dev.marregui.comando.app;
 
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.PanelState;
@@ -15,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.stream.Stream;
 
@@ -54,6 +56,66 @@ class StoreTest {
             assertThat(loaded.sessions()).singleElement().extracting(SessionSpec::claudeSessionId).isEqualTo("abc");
             assertThat(loaded.panels()).containsExactly(new PanelState(id, "work", "lab", "edge"));
             assertThat(store.load(id)).isEqualTo("SELECT 42;");
+        }
+    }
+
+    @Test
+    void theFilesTabsFoldersHaveADefaultAndAreKeptAsSavedEvenEmpty() throws Exception {
+        try (Store store = new Store(home)) {
+            assertThat(store.loadFolders("/home/u")).as("no folders.json: the default").isEqualTo(FolderRoot.defaults("/home/u"));
+            store.saveFolders(List.of(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools"))));
+        }
+        assertThat(Files.readString(home.resolve("folders.json"))).contains("\"index\" : \"ALPHA.md\"", "\"tools\"");
+        try (Store store = new Store(home)) {
+            assertThat(store.loadFolders("/home/u")).containsExactly(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")));
+            store.saveFolders(List.of());
+        }
+        try (Store store = new Store(home)) {
+            assertThat(store.loadFolders("/home/u")).as("no folder is a choice").isEmpty();
+        }
+        Files.writeString(home.resolve("folders.json"), "[{\"name\":\"KB\",\"path\":\"/kb\"}]");
+        try (Store store = new Store(home)) {
+            assertThat(store.loadFolders("/home/u")).as("a hand-written entry without index or excludes")
+                    .containsExactly(new FolderRoot("KB", "/kb", "", List.of()));
+        }
+        Files.writeString(home.resolve("folders.json"), "{not json");
+        try (Store store = new Store(home)) {
+            assertThat(store.loadFolders("/home/u")).as("unreadable: the default").isEqualTo(FolderRoot.defaults("/home/u"));
+        }
+        try (var aside = Files.list(home)) {
+            assertThat(aside.map(p -> p.getFileName().toString())).anyMatch(n -> n.startsWith("folders.json.corrupt-"));
+        }
+    }
+
+    @Test
+    void aHandEditedFoldersFileMeetsTheDialogsRulesAndSaysWhatItLeftOut() throws Exception {
+        Files.writeString(home.resolve("folders.json"), """
+                [ {"name":"KB","path":"/kb"}, {"name":"KB","path":"/other"}, {"name":"Rel","path":"../other"},
+                  {"name":"","path":"/x"}, {"name":"Out","path":"/o","index":"../up.md"}, {"name":"Home","path":"~/notes"}, {"name":"NoPath"}, null ]
+                """);
+        List<String> told = new CopyOnWriteArrayList<>();
+        try (Store store = new Store(home)) {
+            List<FolderRoot> loaded = store.loadFolders("/home/u");
+            store.onNotice(told::add);
+            assertThat(loaded).extracting(FolderRoot::name).containsExactly("KB", "Home");
+            assertThat(loaded.getFirst().path()).isEqualTo("/kb");
+            assertThat(loaded.get(1).path()).isEqualTo(System.getProperty("user.home") + "/notes");
+        }
+        assertThat(told).singleElement().asString().startsWith("folders.json: left out KB (the name is used by another folder); Rel (")
+                .contains("a folder without a name (", "Out (the index file must be inside the folder", "NoPath (choose the folder to show)");
+    }
+
+    @Test
+    void whatTheStartFoundIsToldWhenTheListenerComesLater() throws Exception {
+        Files.writeString(home.resolve("connections.json"), "[]");
+        Files.writeString(home.resolve("sessions.json"), "[]");
+        Files.writeString(home.resolve("panels.json"), "[ {\"id\":\"a\",\"title\":\"notes\",\"file\":\"notes.md\",\"closed\":true} ]");
+        List<String> told = new CopyOnWriteArrayList<>();
+        try (Store store = new Store(home)) {
+            store.load();
+            store.onNotice(told::add);
+            assertThat(told).singleElement().asString().contains("deleted while comando was closed");
+            store.saveFolders(List.of());
         }
     }
 

@@ -7,8 +7,9 @@ import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
-import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
@@ -21,7 +22,9 @@ import javax.swing.AbstractButton;
 import javax.swing.JFrame;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
+import javax.swing.JTextField;
 import javax.swing.JToggleButton;
+import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
@@ -53,6 +56,7 @@ public final class Snapshot {
         boolean live = args.length > 1 && Boolean.parseBoolean(args[1]);
         Files.createDirectories(out);
         Path home = Files.createTempDirectory("comando-snapshot");
+        sampleFolders(home);
         AppConfig config = new AppConfig(home, ClaudeSettings.findExecutable(),
                 ClaudeSettings.defaultProjectsDir(), true);
         App app = new App(config, "snapshot", () -> {
@@ -99,17 +103,30 @@ public final class Snapshot {
         shoot(out.resolve("02b-sidebar-collapsed.png"));
         loop.dispatch(new Intent.Arrange(new Layout(Layout.Toggle.SHOW, Layout.Toggle.KEEP, Double.NaN)));
         Thread.sleep(2800);
-        // the sidebar's Scratchpad tab, clicked as a user would: the scratchpad as a tree
-        selectSidebarTab("Scratchpad");
-        Thread.sleep(2000);
-        shoot(out.resolve("02c-sidebar-scratchpad.png"));
-        selectSidebarTab("Sessions");
-        // the focused panel's Markdown preview, switched on with its header's Preview button, and back with Edit
+        // the focused panel's Markdown preview, switched on with its header's Preview button, and back with Edit; before
+        // the Files tab, whose folder opens its index in a panel of its own and focuses it
         click("Preview");
         Thread.sleep(800);
         shoot(out.resolve("02d-markdown-preview.png"));
         click("Edit");
-        // files opened from the scratchpad: a Markdown document opens rendered, its code in the editors' colours,
+        // the sidebar's Files tab, clicked as a user would: the folders as rows, the first opened as by a click
+        selectSidebarTab("Files");
+        SwingUtilities.invokeAndWait(() -> {
+            JTree files = tree("Files");
+            if (files != null) {
+                files.expandRow(0);
+            }
+        });
+        // opening the row opens the folder's index in a panel; its tree is read meanwhile
+        await(loop, st -> st.panels().stream().anyMatch(p -> p.title().equals("ALPHA")), 10_000);
+        SwingUtilities.invokeAndWait(() -> { });
+        shoot(out.resolve("02c-sidebar-files.png"));
+        // its filter, typed as a user would, then cleared; it applies on the event thread: done when the call returns
+        SwingUtilities.invokeAndWait(() -> filesFilter().setText("lane"));
+        shoot(out.resolve("02c2-sidebar-files-filter.png"));
+        SwingUtilities.invokeAndWait(() -> filesFilter().setText(""));
+        selectSidebarTab("Sessions");
+        // files opened from the Files tab: a Markdown document opens rendered, its code in the editors' colours,
         // and a source file opens as text coloured as its language
         Path docs = Files.createTempDirectory("comando-snapshot-docs");
         Path plan = Files.writeString(docs.resolve("LANE-PLAN.md"), """
@@ -205,7 +222,72 @@ public final class Snapshot {
         System.exit(0);
     }
 
-    /** A Gradle run, a JFR recording read into a table and plots, jfrq on it, and the scratchpad tree. */
+    /**
+     * Sample folders for the Files tab, written as {@code folders.json} before the start: a scratchpad of two days
+     * whose index is {@code ALPHA.md}, and a knowledge base with build output the tab leaves out.
+     */
+    private static void sampleFolders(Path home) throws Exception {
+        Path root = Files.createTempDirectory("comando-snapshot-files");
+        Path pad = root.resolve("SCRATCHPAD");
+        for (String day : List.of("2026-10-15", "2026-10-16")) {
+            Path d = Files.createDirectories(pad.resolve(day));
+            Files.writeString(d.resolve("ALPHA.md"), "# " + day + "\n");
+            Files.writeString(d.resolve("READ-01-LANE-REVIEW.md"), "# Lane review\n");
+            Files.writeString(Files.createDirectories(d.resolve("work")).resolve("LANE-SPEC.md"), "# spec\n");
+        }
+        Files.writeString(pad.resolve("ALPHA.md"), "# Scratchpad\n");
+        Path kb = root.resolve("KB");
+        Files.writeString(Files.createDirectories(kb.resolve("architecture")).resolve("00_START_HERE.md"), "# Architecture\n");
+        Files.writeString(Files.createDirectories(kb.resolve("build")).resolve("generated.html"), "x");
+        Files.writeString(kb.resolve("ALPHA.md"), "# KB\n");
+        Files.writeString(home.resolve("folders.json"), JsonFile.JSON.writeValueAsString(List.of(
+                new FolderRoot("Scratchpad", pad.toString(), "ALPHA.md", List.of()),
+                new FolderRoot("KB", kb.toString(), "ALPHA.md", List.of()),
+                new FolderRoot("Notes", root.resolve("notes").toString(), "", List.of()))));
+    }
+
+    /** The Files tab's filter field in the visible window. */
+    private static JTextField filesFilter() {
+        for (Frame f : Frame.getFrames()) {
+            if (f instanceof JFrame jf && f.isVisible()) {
+                JTextField t = find(jf.getContentPane(), JTextField.class, x -> "Filter files".equals(x.getAccessibleContext().getAccessibleName()));
+                if (t != null) {
+                    return t;
+                }
+            }
+        }
+        throw new IllegalStateException("no Files filter");
+    }
+
+    /** The visible window's tree named {@code name}, or null. */
+    private static JTree tree(String name) {
+        for (Frame f : Frame.getFrames()) {
+            if (f instanceof JFrame jf && f.isVisible()) {
+                JTree t = find(jf.getContentPane(), JTree.class, x -> name.equals(x.getAccessibleContext().getAccessibleName()));
+                if (t != null) {
+                    return t;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static <T extends Component> T find(Component c, Class<T> type, Predicate<T> match) {
+        if (type.isInstance(c) && match.test(type.cast(c))) {
+            return type.cast(c);
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                T found = find(child, type, match);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** A Gradle run, a JFR recording read into a table and plots, and jfrq on it. */
     private static void tools(StateLoop loop, Path out) throws Exception {
         String jfr = System.getProperty("user.home") + "/workspace/jfr";
         loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("jfr", jfr)));

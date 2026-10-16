@@ -23,7 +23,6 @@ import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import java.awt.BorderLayout;
-import java.awt.Color;
 import java.awt.Rectangle;
 import java.nio.file.Path;
 
@@ -77,7 +76,7 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
             try {
                 int offset = area.getLineStartOffset(line - 1);
                 area.setCaretPosition(offset);
-                area.addLineHighlight(line - 1, new Color(Theme.ACCENT.getRed(), Theme.ACCENT.getGreen(), Theme.ACCENT.getBlue(), 60));
+                area.addLineHighlight(line - 1, Theme.withAlpha(Theme.ACCENT, 60));
                 SwingUtilities.invokeLater(() -> {
                     try {
                         Rectangle r = area.modelToView2D(offset).getBounds();

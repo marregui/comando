@@ -3,6 +3,7 @@ package dev.marregui.comando.ui;
 import dev.marregui.comando.core.model.PanelId;
 
 import java.nio.file.Path;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
@@ -10,6 +11,20 @@ import java.util.function.Consumer;
 
 /** Where editor text lives between runs of comando: one file per panel, in one folder. */
 public interface PanelTexts {
+
+    /**
+     * Whether two paths name one file, as the store decides it: absolute, normalised, ignoring case (macOS's default
+     * volume). The one rule for "this file is already open", in the store and in the window.
+     */
+    static boolean samePath(Path a, Path b) {
+        return a.toAbsolutePath().normalize().toString().equalsIgnoreCase(b.toAbsolutePath().normalize().toString());
+    }
+
+    /** The title a file gives a panel opened on it: its name without a {@code .md} extension. */
+    static String titleOf(Path file) {
+        String name = file.getFileName().toString();
+        return (name.toLowerCase(Locale.ROOT).endsWith(".md") ? name.substring(0, name.length() - 3) : name).strip();
+    }
 
     String load(PanelId panel);
 
@@ -38,7 +53,7 @@ public interface PanelTexts {
     }
 
     /**
-     * True when the panel was opened on a file outside the panels' folder, a scratchpad document or any file opened:
+     * True when the panel was opened on a file outside the panels' folder, a document from the Files tab or any file opened:
      * it shows as that file's language, not as the panel's own SQL and prompts.
      */
     default boolean document(PanelId panel) {
@@ -79,8 +94,8 @@ public interface PanelTexts {
     }
 
     /**
-     * Where deleted documents are reported, from the store's thread: the panel shows a file that is gone. A panel's
-     * own file deleted outside is not reported here; its panel writes it again on the next save.
+     * Where deleted panel files are reported, from the store's thread: a document's file or a panel's own, deleted
+     * outside comando while the panel had no unsaved edits; the window then removes the panel.
      */
     default void onDeleted(Consumer<Deleted> listener) {
     }

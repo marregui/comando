@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.widgets.transcript.render;
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.marregui.comando.core.result.Formats;
 import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.ui.kit.format.Json;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Diffs;
@@ -483,7 +484,7 @@ final class Items {
             Block.ToolCall c = call();
             if (built != s) {
                 built = s;
-                JsonNode in = ToolText.parse(c.inputJson());
+                JsonNode in = Json.parse(c.inputJson());
                 String summary = ToolText.summary(c.name(), in);
                 Rich t = new Rich(s.body, s.text).append(ToolText.displayName(c.name()), s.bold, s.text);
                 if (!summary.isEmpty()) {
@@ -551,7 +552,7 @@ final class Items {
                 case "Bash" -> new Rich(s.monoSmall, s.accent).append("$ " + in.path("command").asText(""));
                 case "Agent", "Task" -> new Rich(s.monoSmall, s.text).append(in.path("prompt").asText(""));
                 default -> in.isObject() && !in.isEmpty()
-                        ? new Rich(s.monoSmall, s.text).append(clipLines(ToolText.pretty(in), MAX_INPUT_LINES))
+                        ? new Rich(s.monoSmall, s.text).append(clipLines(Json.pretty(in), MAX_INPUT_LINES))
                         : new Rich(s.monoSmall, s.text);
             };
         }
@@ -700,7 +701,7 @@ final class Items {
         String text() {
             // decoded input values, so find matches text with quotes, backslashes or newlines as shown
             Block.ToolCall c = call();
-            return c.name() + '\n' + ToolText.values(ToolText.parse(c.inputJson())) + c.resultText();
+            return c.name() + '\n' + ToolText.values(Json.parse(c.inputJson())) + c.resultText();
         }
 
         @Override
@@ -713,7 +714,7 @@ final class Items {
         @Override
         String markdown() {
             Block.ToolCall c = call();
-            JsonNode in = ToolText.parse(c.inputJson());
+            JsonNode in = Json.parse(c.inputJson());
             StringBuilder sb = new StringBuilder("**").append(ToolText.displayName(c.name())).append("**");
             String summary = ToolText.summary(c.name(), in);
             if (!summary.isEmpty()) {
@@ -733,7 +734,7 @@ final class Items {
             } else if (c.name().equals("Bash")) {
                 sb.append("\n\n").append(fence("bash", in.path("command").asText("")));
             } else if (in.isObject() && !in.isEmpty()) {
-                sb.append("\n\n").append(fence("json", clipLines(ToolText.pretty(in), MAX_INPUT_LINES)));
+                sb.append("\n\n").append(fence("json", clipLines(Json.pretty(in), MAX_INPUT_LINES)));
             }
             if (!c.resultText().isEmpty()) {
                 sb.append("\n\n").append(fence("", clipLines(c.resultText(), MAX_RESULT_LINES)));
@@ -813,7 +814,7 @@ final class Items {
             if (!t.startsWith("{")) {
                 return null;
             }
-            JsonNode root = ToolText.parse(t);
+            JsonNode root = Json.parse(t);
             JsonNode specific = root.path("hookSpecificOutput");
             if (root.size() != 1 || !specific.isObject() || !specific.path("additionalContext").isTextual()) {
                 return null;

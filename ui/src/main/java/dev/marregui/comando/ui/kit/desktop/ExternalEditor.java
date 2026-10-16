@@ -1,6 +1,5 @@
 package dev.marregui.comando.ui.kit.desktop;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -26,14 +25,7 @@ public final class ExternalEditor {
                 Path.of(home, "Library/Application Support/JetBrains/Toolbox/scripts/idea"),
                 Path.of("/usr/local/bin/idea"),
                 Path.of("/opt/homebrew/bin/idea")));
-        String path = System.getenv("PATH");
-        if (path != null) {
-            for (String dir : path.split(File.pathSeparator)) {
-                if (!dir.isEmpty()) {
-                    candidates.add(Path.of(dir, "idea"));
-                }
-            }
-        }
+        candidates.addAll(Platform.onPath("idea"));
         return candidates.stream().filter(Files::isExecutable).findFirst();
     }
 

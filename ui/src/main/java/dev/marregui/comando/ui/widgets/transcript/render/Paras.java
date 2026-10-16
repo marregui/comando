@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
 import dev.marregui.comando.ui.kit.text.Highlighter;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.transcript.doc.Para;
 import dev.marregui.comando.ui.widgets.transcript.doc.Span;
 
@@ -116,7 +117,7 @@ final class Paras {
             }
             paintBox(g, box, x + indent, y + top, clip, marks);
             if (para.kind() == Para.Kind.HEADING && para.level() <= 2) {
-                g.setColor(new Color(s.muted.getRed(), s.muted.getGreen(), s.muted.getBlue(), 80));
+                g.setColor(Theme.withAlpha(s.muted, 80));
                 g.fillRect(x, y + top + box.height() + 3, width, 1);
             }
         }

@@ -19,6 +19,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -54,6 +55,31 @@ class DbAdapterTest {
     @AfterEach
     void tearDown() {
         db.close();
+    }
+
+    @Test
+    void aSchemaLoadOvertakenByACloseNeitherReopensTheConnectionNorKeepsItsTables() throws Exception {
+        SchemaRegistry schemas = new SchemaRegistry();
+        db.close();
+        db = new DbAdapter(sink, results, schemas, new DbSettings(0, 1_000, 500, 60, 1_000L));
+        db.query(spec, "CREATE TABLE IF NOT EXISTS overtaken_probe (ts TIMESTAMP, v DOUBLE) TIMESTAMP(ts)", 1).get();
+        db.close("local");
+        sink.await(Intent.ConnectionClosed.class, WAIT);
+        sink.clear();
+
+        db.open(spec);
+        db.loadSchema(spec, true);
+        Thread lane = laneThread("local").orElseThrow();
+        // the user points the connection elsewhere at once: the reducer sends CloseDb, then ForgetSchema
+        db.close("local");
+        db.forgetSchema("local");
+        sink.await(Intent.ConnectionClosed.class, WAIT);
+
+        assertThat(lane.join(WAIT)).as("what the load left on the lane does not open the connection again: the lane ends").isTrue();
+        assertThat(sink.of(Intent.ConnectionOpened.class)).as("the user's Connect only").hasSize(1);
+        assertThat(sink.of(Intent.ShowView.class)).as("the overtaken load shows nothing").isEmpty();
+        assertThat(sink.of(Intent.Notify.class)).as("nor reports an error the user caused").isEmpty();
+        assertThat(schemas.of("local").tables()).as("nor keeps the tables").isEmpty();
     }
 
     @Test
@@ -233,6 +259,55 @@ class DbAdapterTest {
         sink.await(Intent.ConnectionOpened.class, WAIT);
         db.close("local");
         sink.await(Intent.ConnectionClosed.class, WAIT);
+    }
+
+    @Test
+    void testAndOpenAgreeOnTheConnectionsTlsMode() {
+        // the embedded server has no TLS: a connection that requires it must fail both ways
+        ConnectionSpec tls = new ConnectionSpec("tls", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "quest", false, "require");
+        db.open(tls);
+        Intent.ConnectionFailed failed = sink.await(Intent.ConnectionFailed.class, f -> f.name().equals("tls"), WAIT);
+
+        db.test(tls);
+        Intent.ConnectionTested tested = sink.await(Intent.ConnectionTested.class, WAIT);
+        assertThat(tested.ok()).as("the test must fail where open fails: " + failed.error()).isFalse();
+    }
+
+    @Test
+    void closingAConnectionStopsItsLaneAndTheNameOpensAgain() throws Exception {
+        ConnectionSpec released = new ConnectionSpec("released", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "quest", false);
+        db.open(released);
+        sink.await(Intent.ConnectionOpened.class, o -> o.name().equals("released"), WAIT);
+        Thread lane = laneThread("released").orElseThrow();
+
+        db.close("released");
+        sink.await(Intent.ConnectionClosed.class, c -> c.name().equals("released"), WAIT);
+        assertThat(lane.join(WAIT)).as("the closed connection's lane thread ends").isTrue();
+        assertThat(db.laneCount()).isZero();
+
+        sink.clear();
+        db.open(released);
+        sink.await(Intent.ConnectionOpened.class, o -> o.name().equals("released"), WAIT);
+        assertThat(db.query(released, "SELECT 1 x", 1).get().rows()).containsExactly(List.of("1"));
+    }
+
+    @Test
+    void aConnectionThatFailsToOpenKeepsNoLaneAndStillReportsItsClose() throws Exception {
+        ConnectionSpec nowhere = new ConnectionSpec("unreachable", "127.0.0.1", 1, "qdb", "admin", "quest", false);
+        db.open(nowhere);
+        sink.await(Intent.ConnectionFailed.class, f -> f.name().equals("unreachable"), WAIT);
+        Optional<Thread> lane = laneThread("unreachable");
+        if (lane.isPresent()) {
+            assertThat(lane.get().join(WAIT)).as("the failed connection's lane thread ends").isTrue();
+        }
+        assertThat(db.laneCount()).isZero();
+
+        db.close("unreachable");
+        sink.await(Intent.ConnectionClosed.class, c -> c.name().equals("unreachable"), WAIT);
+    }
+
+    private static Optional<Thread> laneThread(String connection) {
+        return Thread.getAllStackTraces().keySet().stream().filter(t -> t.getName().equals("db-" + connection)).findFirst();
     }
 
     private static void sleep(long millis) {

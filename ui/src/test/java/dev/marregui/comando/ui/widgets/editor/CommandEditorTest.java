@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.widgets.editor;
 
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.junit.jupiter.api.Test;
+
 import javax.swing.SwingUtilities;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;

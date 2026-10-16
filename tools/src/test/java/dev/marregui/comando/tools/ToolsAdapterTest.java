@@ -2,6 +2,7 @@ package dev.marregui.comando.tools;
 
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingSink;
@@ -13,9 +14,13 @@ import org.junit.jupiter.api.io.TempDir;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -26,8 +31,12 @@ class ToolsAdapterTest {
     private final RecordingSink sink = new RecordingSink();
     private final ConsoleRegistry consoles = new ConsoleRegistry();
 
-    private ToolsAdapter adapter(Path scratchpad, Path jfrq) {
-        return new ToolsAdapter(sink, consoles, new ToolSettings(Optional.empty(), jfrq, scratchpad, System.getProperty("java.home")));
+    private ToolsAdapter adapter(Path jfrq) {
+        return new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), Optional.of(jfrq), System.getProperty("java.home"), ""));
+    }
+
+    private static FolderRoot folder(String name, Path path, String... excludes) {
+        return new FolderRoot(name, path.toString(), "", List.of(excludes));
     }
 
     private static final String REPORT = """
@@ -60,7 +69,7 @@ class ToolsAdapterTest {
     @Test
     void gradleRunsInTheBuildRootAndReportsFailedTests(@TempDir Path dir) throws Exception {
         fakeBuild(dir);
-        adapter(dir, dir.resolve("none")).runGradle(7L, dir.resolve("db/sub").toString(), ":db:test --tests 'Lane*'");
+        adapter(dir.resolve("none")).runGradle(7L, dir.resolve("db/sub").toString(), ":db:test --tests 'Lane*'");
         Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
         assertThat(end.runId()).isEqualTo(7L);
         assertThat(end.exitCode()).isEqualTo(1);
@@ -82,7 +91,7 @@ class ToolsAdapterTest {
         Path locked = Files.createDirectories(dir.resolve("db/build/test-results/locked"));
         Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("---------"));
         try {
-            adapter(dir, dir.resolve("none")).runGradle(4L, dir.toString(), "test");
+            adapter(dir.resolve("none")).runGradle(4L, dir.toString(), "test");
             Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
             assertThat(end.runId()).isEqualTo(4L);
             assertThat(end.tests().label()).as("the readable reports still count").isEqualTo("1 of 2 tests failed");
@@ -102,7 +111,7 @@ class ToolsAdapterTest {
 
     @Test
     void noBuildAboveTheDirectoryIsReported(@TempDir Path dir) throws Exception {
-        adapter(dir, dir.resolve("none")).runGradle(3L, dir.toString(), "build");
+        adapter(dir.resolve("none")).runGradle(3L, dir.toString(), "build");
         assertThat(sink.await(Intent.CommandFinished.class, WAIT).exitCode()).isEqualTo(2);
         assertThat(consoles.of(3L).text(0)).contains("No gradlew");
     }
@@ -112,7 +121,7 @@ class ToolsAdapterTest {
         Path gradlew = dir.resolve("gradlew");
         Files.writeString(gradlew, "#!/bin/sh\necho started\nsleep 30 &\nwait\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
-        ToolsAdapter tools = adapter(dir, dir.resolve("none"));
+        ToolsAdapter tools = adapter(dir.resolve("none"));
         tools.runGradle(5L, dir.toString(), "build");
         long deadline = System.currentTimeMillis() + 10_000;
         while (!consoles.of(5L).text(0).contains("started") && System.currentTimeMillis() < deadline) {
@@ -130,7 +139,7 @@ class ToolsAdapterTest {
         Path gradlew = dir.resolve("gradlew");
         Files.writeString(gradlew, "#!/bin/sh\necho started\nsleep 1\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
-        ToolsAdapter tools = adapter(dir, dir.resolve("none"));
+        ToolsAdapter tools = adapter(dir.resolve("none"));
         tools.runGradle(3L, dir.toString(), "build");
         long deadline = System.currentTimeMillis() + 10_000;
         while (!consoles.of(3L).text(0).contains("started") && System.currentTimeMillis() < deadline) {
@@ -147,7 +156,7 @@ class ToolsAdapterTest {
         Path gradlew = dir.resolve("gradlew");
         Files.writeString(gradlew, "#!/bin/sh\ntrap '' TERM\necho started\nsleep 30\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
-        ToolsAdapter tools = adapter(dir, dir.resolve("none"));
+        ToolsAdapter tools = adapter(dir.resolve("none"));
         tools.runGradle(6L, dir.toString(), "build");
         long deadline = System.currentTimeMillis() + 10_000;
         while (!consoles.of(6L).text(0).contains("started") && System.currentTimeMillis() < deadline) {
@@ -168,7 +177,7 @@ class ToolsAdapterTest {
         Files.writeString(gradlew, "#!/bin/sh\necho done\nsleep 8 &\nexit 0\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
         long t0 = System.nanoTime();
-        adapter(dir, dir.resolve("none")).runGradle(8L, dir.toString(), "build");
+        adapter(dir.resolve("none")).runGradle(8L, dir.toString(), "build");
         Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
         assertThat(end.exitCode()).isZero();
         assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(6));
@@ -180,9 +189,41 @@ class ToolsAdapterTest {
         Path jfrq = dir.resolve("jfrq");
         Files.writeString(jfrq, "#!/bin/sh\necho \"jfrq $* java=$JAVA_HOME\"\n");
         Files.setPosixFilePermissions(jfrq, PosixFilePermissions.fromString("rwxr-xr-x"));
-        adapter(dir, jfrq).runJfrq(9L, "/r/app.jfr", "health --top 5");
+        adapter(jfrq).runJfrq(9L, "/r/app.jfr", "health --top 5");
         assertThat(sink.await(Intent.CommandFinished.class, WAIT).exitCode()).isZero();
         assertThat(consoles.of(9L).text(0)).contains("jfrq health /r/app.jfr --top 5 java=" + System.getProperty("java.home"));
+    }
+
+    @Test
+    void eachRunReadsTheSettingsAndShowsWhatWasWrongWithThemFirst(@TempDir Path dir) throws Exception {
+        fakeBuild(dir);
+        Path serial = dir.resolve("serial");
+        Files.writeString(serial, "#!/bin/sh\necho \"serial $*\"\n");
+        Files.setPosixFilePermissions(serial, PosixFilePermissions.fromString("rwxr-xr-x"));
+        List<ToolSettings> settings = new ArrayList<>(List.of(
+                new ToolSettings(Optional.empty(), Optional.empty(), System.getProperty("java.home"), "tools.json: not JSON; using the defaults"),
+                new ToolSettings(Optional.of(serial), Optional.empty(), System.getProperty("java.home"), "")));
+        ToolsAdapter tools = new ToolsAdapter(sink, consoles, settings::removeFirst);
+
+        tools.runGradle(1L, dir.toString(), "build");
+        sink.await(Intent.CommandFinished.class, e -> e.runId() == 1L, WAIT);
+        tools.runGradle(2L, dir.toString(), "build");
+        sink.await(Intent.CommandFinished.class, e -> e.runId() == 2L, WAIT);
+
+        assertThat(consoles.of(1L).text(0)).startsWith("tools.json: not JSON; using the defaults\n$ " + dir.resolve("gradlew"));
+        assertThat(consoles.of(2L).text(0)).as("the settings changed between runs").startsWith("$ " + serial + " " + dir + " build")
+                .contains("serial " + dir + " build");
+    }
+
+    @Test
+    void jfrqNotFoundSaysWhereToSetIt(@TempDir Path dir) throws Exception {
+        new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), Optional.empty(), "", "")).runJfrq(4L, "/r/a.jfr", "");
+        assertThat(sink.await(Intent.CommandFinished.class, WAIT).exitCode()).isEqualTo(2);
+        assertThat(consoles.of(4L).text(0)).isEqualTo("jfrq not found on the PATH; set its path as \"jfrq\" in tools.json (Panel ▸ Tools ▸ Tool settings)\n");
+
+        adapter(dir.resolve("missing")).runJfrq(5L, "/r/a.jfr", "");
+        sink.await(Intent.CommandFinished.class, e -> e.runId() == 5L, WAIT);
+        assertThat(consoles.of(5L).text(0)).startsWith("jfrq not found at " + dir.resolve("missing") + "; set its path");
     }
 
     @Test
@@ -203,7 +244,7 @@ class ToolsAdapterTest {
             r.stop();
             r.dump(file);
         }
-        adapter(dir, dir.resolve("none")).openRecording(file.toString());
+        adapter(dir.resolve("none")).openRecording(file.toString());
         Intent.ShowView table = sink.await(Intent.ShowView.class, v -> v.title().startsWith("jfr · "), WAIT);
         assertThat(((ViewSpec.Table) table.spec()).rows()).extracting(List::getFirst).contains("jdk.CPULoad", "jdk.GCHeapSummary");
         Intent.ShowView cpu = sink.await(Intent.ShowView.class, v -> v.title().startsWith("cpu · "), WAIT);
@@ -213,29 +254,55 @@ class ToolsAdapterTest {
     }
 
     @Test
-    void theScratchpadIsSentOnlyWhenItChangedAndAnUnreadableOneSaysSoInTheTree(@TempDir Path dir) throws Exception {
-        Files.writeString(dir.resolve("PLAN.md"), "# plan");
-        ToolsAdapter tools = adapter(dir, dir.resolve("none"));
-        tools.browseScratchpad();
-        sink.await(Intent.ScratchpadLoaded.class, WAIT);
-        tools.browseScratchpad();
-        Thread.sleep(500);
-        assertThat(sink.of(Intent.ScratchpadLoaded.class)).as("unchanged: nothing sent").hasSize(1);
-        Files.writeString(dir.resolve("NEW.md"), "new");
-        tools.browseScratchpad();
-        sink.await(Intent.ScratchpadLoaded.class, l -> l.root().children().size() == 2, WAIT);
+    void aReadSendsEveryTreeAndAWatchSendsAnOpenFolderOnlyWhenItChanged(@TempDir Path dir) throws Exception {
+        FolderRoot a = folder("A", Files.createDirectories(dir.resolve("a")));
+        FolderRoot b = folder("B", Files.createDirectories(dir.resolve("b")));
+        Files.writeString(dir.resolve("a").resolve("PLAN.md"), "# plan");
+        try (ToolsAdapter tools = adapter(dir.resolve("none"))) {
+            tools.readFolders(List.of(a, b));
+            sink.await(Intent.FolderLoaded.class, l -> l.folder().name().equals("B"), WAIT);
+            sink.await(Intent.FolderLoaded.class, l -> l.folder().name().equals("A"), WAIT);
+            tools.readFolders(List.of(a));
+            sink.await(Intent.FolderLoaded.class, l -> l.folder().name().equals("A") && sink.of(Intent.FolderLoaded.class).size() == 3, WAIT);
+            assertThat(sink.of(Intent.FolderLoaded.class)).as("a read sends even an unchanged tree").hasSize(3);
 
-        sink.clear();
-        adapter(dir.resolve("missing"), dir.resolve("none")).browseScratchpad();
-        ViewSpec.TreeNode unreadable = sink.await(Intent.ScratchpadLoaded.class, WAIT).root();
-        assertThat(unreadable.detail()).startsWith("cannot be read");
+            sink.clear();
+            tools.watchFolders(List.of(a));
+            Intent.FolderLoaded first = sink.await(Intent.FolderLoaded.class, WAIT);
+            assertThat(first.folder()).as("a folder newly watched is read at once").isEqualTo(a);
+            tools.pollFolders(Duration.ofMillis(20));
+            Files.createDirectory(dir.resolve("b").resolve("unwatched"));
+            Files.createDirectory(dir.resolve("a").resolve("changed"));
+            sink.await(Intent.FolderLoaded.class, l -> l.tree().children().size() == 2, WAIT);
+            assertThat(sink.of(Intent.FolderLoaded.class)).as("unchanged polls send nothing; a folder not watched is not read")
+                    .extracting(l -> l.folder().name()).containsExactly("A", "A");
+
+            sink.clear();
+            tools.watchFolders(List.of(folder("A", dir.resolve("a"), "changed")));
+            Intent.FolderLoaded edited = sink.await(Intent.FolderLoaded.class, WAIT);
+            assertThat(edited.tree().children()).as("a folder watched with new settings is read with them at once")
+                    .extracting(ViewSpec.TreeNode::label).containsExactly("PLAN.md");
+        }
+    }
+
+    @Test
+    void aFolderThatCannotBeReadSaysSoInItsTreeWithoutANotice(@TempDir Path dir) throws Exception {
+        adapter(dir.resolve("none")).readFolders(List.of(folder("Gone", dir.resolve("missing"))));
+        ViewSpec.TreeNode tree = sink.await(Intent.FolderLoaded.class, WAIT).tree();
+        assertThat(tree.label()).isEqualTo("Gone");
+        assertThat(tree.children()).singleElement().extracting(ViewSpec.TreeNode::label).isEqualTo("✗ cannot be read: no such folder");
+        assertThat(FolderTree.isUnreadable(tree)).isTrue();
         assertThat(sink.of(Intent.Notify.class)).as("no notice at every refresh").isEmpty();
     }
 
     @Test
-    void scratchpadTreeOrdersDaysAndDocuments(@TempDir Path dir) throws Exception {
+    void aFolderTreeOrdersDaysAndDocumentsAndLeavesOutHiddenBuildAndExcludedEntries(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("PLAN.md"), "# plan");
         Files.createDirectories(dir.resolve("datahub"));
+        for (String left : List.of(".git", "build", "node_modules", "Tools")) {
+            Files.createDirectories(dir.resolve(left));
+        }
+        Files.writeString(dir.resolve(".DS_Store"), "x");
         for (String day : List.of("2026-10-11", "2026-10-12")) {
             Path d = Files.createDirectories(dir.resolve(day));
             Files.writeString(d.resolve("ALPHA.md"), "a");
@@ -243,8 +310,9 @@ class ToolsAdapterTest {
             Files.createDirectories(d.resolve("work")).resolve("spec.md").toFile().createNewFile();
             Files.writeString(Files.createDirectories(d.resolve("work").resolve("deep")).resolve("deeper.md"), "d");
         }
-        adapter(dir, dir.resolve("none")).browseScratchpad();
-        ViewSpec.TreeNode root = sink.await(Intent.ScratchpadLoaded.class, WAIT).root();
+        adapter(dir.resolve("none")).readFolders(List.of(folder("Scratchpad", dir, "tools")));
+        ViewSpec.TreeNode root = sink.await(Intent.FolderLoaded.class, WAIT).tree();
+        assertThat(root.label()).isEqualTo("Scratchpad");
         assertThat(root.children()).extracting(ViewSpec.TreeNode::label).containsExactly("datahub", "2026-10-11", "2026-10-12", "PLAN.md");
         assertThat(root.children().get(2).children()).as("folders first, then files by name").extracting(ViewSpec.TreeNode::label)
                 .containsExactly("work", "ALPHA.md", "READ-01-X.md");
@@ -254,5 +322,95 @@ class ToolsAdapterTest {
                 .extracting(ViewSpec.TreeNode::label).containsExactly("deeper.md");
         assertThat(root.children().getLast().link()).isEqualTo("comando-file:" + dir.resolve("PLAN.md") + "#0");
         assertThat(root.children().getFirst().link()).as("a folder has no link").isEmpty();
+    }
+
+    @Test
+    void aLargeFolderIsReadUpToTheBoundAndEndsSayingSo(@TempDir Path dir) throws Exception {
+        for (int i = 0; i < FolderTree.MAX_ENTRIES + 10; i++) {
+            Files.createFile(dir.resolve("f" + i + ".md"));
+        }
+        Files.createDirectories(dir.resolve("sub")).resolve("x.md").toFile().createNewFile();
+        ViewSpec.TreeNode tree = FolderTree.tree(folder("Big", dir));
+        assertThat(tree.children()).hasSize(FolderTree.MAX_ENTRIES + 1);
+        assertThat(tree.children().getLast().label()).isEqualTo(ViewSpec.TreeNode.MORE);
+    }
+
+    @Test
+    void aFolderOfAMillionNamesIsListedOnlyUpToTheBoundShownOrHidden(@TempDir Path dir) throws Exception {
+        for (String prefix : List.of("note", ".hidden")) {
+            AtomicInteger pulled = new AtomicInteger();
+            FolderTree.Lister million = d -> IntStream.range(0, 1_000_000).mapToObj(i -> d.resolve(prefix + i)).peek(p -> pulled.incrementAndGet());
+            ViewSpec.TreeNode tree = FolderTree.tree(folder("Big", dir), million);
+            assertThat(pulled.get()).as(prefix + ": one past the bound is listed, to know there are more").isEqualTo(FolderTree.MAX_LISTED + 1);
+            assertThat(tree.children().getLast().label()).isEqualTo(ViewSpec.TreeNode.MORE);
+            assertThat(tree.children()).hasSize(prefix.startsWith(".") ? 1 : FolderTree.MAX_ENTRIES + 1);
+        }
+    }
+
+    @Test
+    void onceTheBoundIsSpentNoFurtherFolderIsListed(@TempDir Path dir) throws Exception {
+        for (int i = 0; i < 50; i++) {
+            Files.createDirectories(dir.resolve(String.format("d%02d", i)));
+        }
+        AtomicInteger listedAfter = new AtomicInteger();
+        FolderTree.Lister lister = d -> {
+            if (d.equals(dir)) {
+                return Files.list(d);
+            }
+            if (d.getFileName().toString().equals("d00")) {
+                return IntStream.range(0, 1_000_000).mapToObj(i -> d.resolve(".hidden" + i));
+            }
+            listedAfter.incrementAndGet();
+            return Files.list(d);
+        };
+        ViewSpec.TreeNode tree = FolderTree.tree(folder("Many", dir), lister);
+        assertThat(listedAfter).as("the first folder spent the bound: none after it is listed").hasValue(0);
+        assertThat(tree.children().get(1).children()).singleElement().extracting(ViewSpec.TreeNode::label).isEqualTo(ViewSpec.TreeNode.MORE);
+    }
+
+    @Test
+    void aSubfolderThatCannotBeReadSaysSoAndTheRestStands(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("README.md"), "r");
+        Path locked = Files.createDirectories(dir.resolve("locked"));
+        Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("---------"));
+        try {
+            ViewSpec.TreeNode tree = FolderTree.tree(folder("Notes", dir));
+            assertThat(tree.children()).extracting(ViewSpec.TreeNode::label).containsExactly("locked", "README.md");
+            ViewSpec.TreeNode lockedNode = tree.children().getFirst();
+            assertThat(lockedNode.detail()).isEqualTo("cannot be read");
+            assertThat(lockedNode.children()).singleElement().extracting(ViewSpec.TreeNode::label).isEqualTo("✗ cannot be read: permission denied");
+            assertThat(FolderTree.isUnreadable(tree)).isFalse();
+        } finally {
+            Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("rwx------"));
+        }
+    }
+
+    @Test
+    void aFolderPastTheDepthBoundIsListedAndSaysItWasNotRead(@TempDir Path dir) throws Exception {
+        Path deep = dir;
+        for (int i = 0; i < FolderTree.MAX_DEPTH + 1; i++) {
+            deep = Files.createDirectories(deep.resolve("d" + i));
+        }
+        Files.writeString(deep.resolve("deep.md"), "d");
+        ViewSpec.TreeNode node = FolderTree.tree(folder("Deep", dir));
+        for (int i = 0; i < FolderTree.MAX_DEPTH; i++) {
+            node = node.children().getFirst();
+        }
+        assertThat(node.label()).isEqualTo("d" + (FolderTree.MAX_DEPTH - 1));
+        assertThat(node.detail()).isEqualTo("not read: " + FolderTree.MAX_DEPTH + " levels deep");
+        assertThat(node.children()).singleElement().extracting(ViewSpec.TreeNode::label).isEqualTo(ViewSpec.TreeNode.MORE);
+    }
+
+    @Test
+    void aLinkToAFolderIsListedAsAFolderAndNotFollowed(@TempDir Path dir) throws Exception {
+        Path target = Files.createDirectories(dir.resolve("target"));
+        Files.writeString(target.resolve("inside.md"), "i");
+        Path root = Files.createDirectories(dir.resolve("root"));
+        Files.createSymbolicLink(root.resolve("docs"), target);
+        ViewSpec.TreeNode docs = FolderTree.tree(folder("Root", root)).children().getFirst();
+        assertThat(docs.label()).isEqualTo("docs");
+        assertThat(docs.link()).as("not offered as a file").isEmpty();
+        assertThat(docs.children()).as("not followed").isEmpty();
+        assertThat(docs.detail()).isEqualTo("link to a folder, not followed");
     }
 }

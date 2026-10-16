@@ -9,6 +9,9 @@ public interface DatabasePort {
 
     void close(String name);
 
+    /** Drops what is known of a connection removed, renamed or pointed elsewhere: its tables, kept for completion. */
+    void forgetSchema(String name);
+
     void test(ConnectionSpec spec);
 
     /** Runs {@code sql}, opening the connection first when needed; rows go to the result registry. */

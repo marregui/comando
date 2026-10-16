@@ -10,8 +10,6 @@ import dev.marregui.comando.ui.widget.capability.Zoomable;
 import javax.imageio.ImageIO;
 import javax.swing.JComponent;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
-import java.nio.file.Path;
 
 /** Series plotted over shared axes; drag to zoom, double-click to reset, export as PNG. */
 public final class PlotWidget implements Widget<ViewSpec.Plot>, Zoomable, Exportable {

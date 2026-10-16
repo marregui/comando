@@ -1,5 +1,7 @@
 package dev.marregui.comando.app;
 
+import dev.marregui.comando.ui.kit.desktop.Platform;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -66,7 +68,7 @@ interface Secrets {
 
     static Secrets forPlatform() {
         Path tool = Path.of("/usr/bin/security");
-        return System.getProperty("os.name", "").toLowerCase().contains("mac") && Files.isExecutable(tool) ? new Keychain(tool, "comando") : NONE;
+        return Platform.isMac() && Files.isExecutable(tool) ? new Keychain(tool, "comando") : NONE;
     }
 
     /**

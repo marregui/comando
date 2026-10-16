@@ -10,9 +10,7 @@ import dev.marregui.comando.ui.widget.capability.Exportable;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 
 import javax.swing.JComponent;
-import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 
 /** A unified diff of two versions of a text. */
 public final class DiffWidget implements Widget<ViewSpec.Diff>, Searchable, Copyable, Exportable {

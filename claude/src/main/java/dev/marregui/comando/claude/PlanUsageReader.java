@@ -3,6 +3,7 @@ package dev.marregui.comando.claude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.model.PlanUsage;
+import dev.marregui.comando.core.view.Clip;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -118,6 +119,6 @@ final class PlanUsageReader {
         String s = text == null ? "" : text.strip();
         int nl = s.indexOf('\n');
         s = nl < 0 ? s : s.substring(0, nl);
-        return s.isEmpty() ? otherwise : s.length() > 200 ? s.substring(0, 200) + "…" : s;
+        return s.isEmpty() ? otherwise : Clip.keepStart(s, 200);
     }
 }

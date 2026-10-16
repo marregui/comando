@@ -32,6 +32,7 @@ public final class EffectRouter implements StateLoop.EffectHandler {
         switch (effect) {
             case Effect.OpenDb e -> db.open(e.spec());
             case Effect.CloseDb e -> db.close(e.name());
+            case Effect.ForgetSchema e -> db.forgetSchema(e.name());
             case Effect.TestDb e -> db.test(e.spec());
             case Effect.ExecuteSql e -> db.execute(e.requestId(), e.spec(), e.sql());
             case Effect.CancelSql e -> db.cancel(e.requestId());
@@ -51,15 +52,17 @@ public final class EffectRouter implements StateLoop.EffectHandler {
             case Effect.DeletePanel e -> ui.deletePanel(e.panel());
             case Effect.Arrange e -> ui.arrange(e.layout());
             case Effect.ShowFile e -> ui.showFile(e.session(), e.path(), e.baseDir(), e.line());
-            case Effect.ShowScratchpad e -> ui.showScratchpad(e.root());
+            case Effect.ShowFolder e -> ui.showFolder(e.folder(), e.tree());
             case Effect.ShowPlanUsage e -> ui.showPlanUsage(e.usage());
             case Effect.RunGradle e -> tools.runGradle(e.runId(), e.workDir(), e.tasks());
             case Effect.RunJfrq e -> tools.runJfrq(e.runId(), e.recording(), e.args());
             case Effect.CancelCommand e -> tools.cancelRun(e.runId());
             case Effect.ForgetCommand e -> tools.forgetRun(e.runId());
             case Effect.OpenRecording e -> tools.openRecording(e.path());
-            case Effect.BrowseScratchpad e -> tools.browseScratchpad();
+            case Effect.ReadFolders e -> tools.readFolders(e.folders());
+            case Effect.WatchFolders e -> tools.watchFolders(e.folders());
             case Effect.SaveConnections e -> persistence.saveConnections(e.specs());
+            case Effect.SaveFolders e -> persistence.saveFolders(e.folders());
             case Effect.SaveSessions e -> persistence.saveSessions(e.specs());
             case Effect.SavePanels e -> persistence.savePanels(e.panels(), e.closed());
         }

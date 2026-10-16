@@ -8,6 +8,7 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -87,17 +88,61 @@ class ReducerTest {
     }
 
     @Test
-    void theScratchpadIsReadThenShownInTheSidebarWithoutTouchingTheState() {
+    void foldersAreReadAndWatchedByNameInTheirOrderAndShownWithoutTouchingTheState() {
+        FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
+        FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
+        state = state.withFolders(List.of(kb, notes));
         AppState before = state;
-        apply(new Intent.BrowseScratchpad());
-        assertThat(effects).containsExactly(new Effect.BrowseScratchpad());
-        ViewSpec.TreeNode root = new ViewSpec.TreeNode("SCRATCHPAD", "", List.of());
-        apply(new Intent.ScratchpadLoaded(root));
-        assertThat(effects).containsExactly(new Effect.ShowScratchpad(root));
+        apply(new Intent.BrowseFolders(List.of("Notes", "gone", "KB")));
+        assertThat(effects).as("configured order; an unknown name is dropped").containsExactly(new Effect.ReadFolders(List.of(kb, notes)));
+        apply(new Intent.WatchFolders(List.of("Notes")));
+        assertThat(effects).containsExactly(new Effect.WatchFolders(List.of(notes)));
+        apply(new Intent.WatchFolders(List.of()));
+        assertThat(effects).as("none open: none watched").containsExactly(new Effect.WatchFolders(List.of()));
+        ViewSpec.TreeNode tree = new ViewSpec.TreeNode("KB", "/kb", List.of());
+        apply(new Intent.FolderLoaded(kb, tree));
+        assertThat(effects).containsExactly(new Effect.ShowFolder(kb, tree));
+        apply(new Intent.FolderLoaded(new FolderRoot("KB", "/old", "ALPHA.md", List.of()), tree));
+        assertThat(effects).as("read with settings since edited: dropped").isEmpty();
+        apply(new Intent.FolderLoaded(new FolderRoot("Gone", "/g", "", List.of()), tree));
+        assertThat(effects).as("a folder since removed: dropped").isEmpty();
         PlanUsage usage = new PlanUsage(List.of(new PlanUsage.Window("Session", 5, "Oct 14 at 7:19pm")), 1L, "");
         apply(new Intent.PlanUsageRead(usage));
         assertThat(effects).containsExactly(new Effect.ShowPlanUsage(usage));
         assertThat(state).isSameAs(before);
+    }
+
+    @Test
+    void aFolderIsAddedRenamedInPlaceAndRemovedAndEachChangeIsSaved() {
+        FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
+        FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
+        apply(new Intent.SaveFolder("", kb));
+        apply(new Intent.SaveFolder("", notes));
+        assertThat(state.folders()).containsExactly(kb, notes);
+        assertThat(effects).containsExactly(new Effect.SaveFolders(List.of(kb, notes)));
+
+        FolderRoot renamed = new FolderRoot("Knowledge", "/kb", "ALPHA.md", List.of("tools"));
+        apply(new Intent.SaveFolder("KB", renamed));
+        assertThat(state.folders()).as("renamed in place, order kept").containsExactly(renamed, notes);
+
+        apply(new Intent.SaveFolder("", notes.withName("Knowledge")));
+        assertThat(state.folders()).containsExactly(renamed, notes);
+        assertThat(effects).as("refused: nothing saved").doesNotHaveAnyElementsOfTypes(Effect.SaveFolders.class);
+        assertThat(state.notice().level()).isEqualTo(Notice.Level.ERROR);
+        assertThat(state.notice().text()).isEqualTo("A folder called Knowledge exists");
+        apply(new Intent.SaveFolder("Notes", notes.withName("Knowledge")));
+        assertThat(state.notice().text()).as("a rename onto another folder's name").isEqualTo("A folder called Knowledge exists");
+        apply(new Intent.SaveFolder("gone", notes.withName("New")));
+        assertThat(state.notice().text()).isEqualTo("No folder called gone");
+        assertThat(state.folders()).containsExactly(renamed, notes);
+
+        apply(new Intent.RemoveFolder("Knowledge"));
+        assertThat(state.folders()).containsExactly(notes);
+        assertThat(effects).containsExactly(new Effect.SaveFolders(List.of(notes)));
+        AppState before = state;
+        apply(new Intent.RemoveFolder("Knowledge"));
+        assertThat(state).isSameAs(before);
+        assertThat(effects).isEmpty();
     }
 
     @Test
@@ -643,6 +688,18 @@ class ReducerTest {
         apply(new Intent.CloseConnection("local"));
         assertThat(effects).containsExactly(new Effect.CancelSql(1L), new Effect.CloseDb("local"));
         assertThat(run(P1).status()).isEqualTo(RunStatus.CANCELLED);
+    }
+
+    @Test
+    void aConnectionRemovedRenamedOrPointedElsewhereHasItsSchemaForgottenAndAnUnchangedSaveKeepsIt() {
+        apply(new Intent.SaveConnection("local", States.LOCAL));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ForgetSchema.class);
+        apply(new Intent.SaveConnection("local", new ConnectionSpec("local", "lab-host", 8812, "qdb", "admin", "quest", false)));
+        assertThat(effects).contains(new Effect.ForgetSchema("local"));
+        apply(new Intent.SaveConnection("local", state.connection("local").orElseThrow().spec().withName("lab")));
+        assertThat(effects).contains(new Effect.ForgetSchema("local"));
+        apply(new Intent.RemoveConnection("lab"));
+        assertThat(effects).contains(new Effect.ForgetSchema("lab"));
     }
 
     @Test

@@ -11,7 +11,7 @@ dev.marregui.comando.ui
 │   ├── approval/   ApprovalInbox (rules from core's PermissionRules)
 │   ├── console/    ConsoleWidget
 │   ├── diff/       DiffWidget
-│   ├── editor/     CommandEditor, SqlCompletion
+│   ├── editor/     CommandEditor, PanelDocument, PanelTokenMaker, SqlCompletion
 │   ├── markdown/   MarkdownWidget
 │   ├── plot/       PlotWidget, PlotCanvas
 │   ├── table/      TableViewWidget, GridTable, TableSource
@@ -19,12 +19,13 @@ dev.marregui.comando.ui
 │   ├── text/       TextWidget
 │   ├── transcript/ TranscriptWidget, TranscriptView, ToolText; doc/ (Markdown to paragraphs), render/ (layout, paint, Fold)
 │   └── tree/       TreeWidget
-├── panels/         the window's regions: Workspace, EditorPanel, LowerPanel, ResultsView, PlanTree,
-│                   SessionsSidebar, ScratchpadTab, SidePane, StatusBar, TerminalTabs, ViewTabs
+├── panels/         the window's regions: Workspace, EditorPanel, TabStatus, LowerPanel, ResultsView, PlanTree,
+│                   SessionsSidebar, SessionRow, PanelsTab, FilesTab, SidePane, StatusBar, TerminalTabs, ViewTabs
 ├── dialogs/
-│   ├── resource/   ResourceDialog<S>, the one dialog for connections and sessions
+│   ├── resource/   ResourceDialog<S>, the one dialog for connections, sessions and folders
 │   └── sessions/   ImportSessionsDialog
-├── shell/          ComandoUi (the frame and the UI port), Keys, LivePlots, ResultViews, Notifier, ServerToggle, Attachments, ClosingCover
+├── shell/          ComandoUi (the frame and the UI port), Menus, Keys, LivePlots, ResultViews, Notifier, ServerToggle,
+│                   Attachments, ClosingCover, AppIcon, HelpFiles, OpenFiles
 └── PanelTexts      editor text between runs, written by the store
 ```
 

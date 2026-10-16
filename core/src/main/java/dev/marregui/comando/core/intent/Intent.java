@@ -4,6 +4,7 @@ import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -121,6 +122,14 @@ public sealed interface Intent {
     }
 
     record RemoveConnection(String name) implements Intent {
+    }
+
+    /** Adds a folder to the Files tab ({@code previousName} empty) or changes one. */
+    record SaveFolder(String previousName, FolderRoot spec) implements Intent {
+    }
+
+    /** Takes a folder off the Files tab; its files stay on disk. */
+    record RemoveFolder(String name) implements Intent {
     }
 
     record OpenConnection(String name) implements Intent {
@@ -344,12 +353,25 @@ public sealed interface Intent {
     record OpenRecording(String path) implements Intent {
     }
 
-    /** Reads the scratchpad for the sidebar's Scratchpad tab. */
-    record BrowseScratchpad() implements Intent {
+    /** Reads the named folders of the Files tab once, now: a refresh, or a filter over folders that are not open. */
+    record BrowseFolders(List<String> names) implements Intent {
+        public BrowseFolders {
+            names = List.copyOf(names);
+        }
     }
 
-    /** The scratchpad as read, for the sidebar; sent only when it changed since the last read. */
-    record ScratchpadLoaded(ViewSpec.TreeNode root) implements Intent {
+    /** The Files tab's open folders: these are read every few seconds, the others not at all. */
+    record WatchFolders(List<String> names) implements Intent {
+        public WatchFolders {
+            names = List.copyOf(names);
+        }
+    }
+
+    /**
+     * A folder of the Files tab as read, with the settings it was read with: a tree read with settings since edited
+     * is not shown under the edited folder.
+     */
+    record FolderLoaded(FolderRoot folder, ViewSpec.TreeNode tree) implements Intent {
     }
 
     /** The plan's usage limits as read from Claude Code, every few minutes. */

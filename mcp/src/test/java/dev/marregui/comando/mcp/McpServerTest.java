@@ -3,24 +3,24 @@ package dev.marregui.comando.mcp;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.dispatch.Target;
-import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.model.Status;
-import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.core.transcript.Block;
-import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.ViewState;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
@@ -378,6 +378,13 @@ class McpServerTest {
         assertThat(text(tool("ui_set_layout", "{}"))).contains("nothing to change");
     }
 
+    @Test
+    void layoutNamesAPanelInAnyCaseAsTheEditorToolsDo() throws Exception {
+        JsonNode r = tool("ui_set_layout", "{\"panel\":\"TWO\"}");
+        assertThat(r.path("isError").asBoolean()).as(text(r)).isFalse();
+        assertThat(sink.await(Intent.SessionLayout.class, WAIT).panel()).isEqualTo(States.P2);
+    }
+
     /** A file the session opens is titled with its folder, so two READMEs get two tabs. */
     @Test
     void anOpenedFileIsTitledWithItsFolder(@TempDir Path dir) throws Exception {
@@ -385,6 +392,49 @@ class McpServerTest {
         Path readme = Files.writeString(docs.resolve("README.md"), "# hi\n");
         assertThat(text(tool("ui_open_file", "{\"path\":\"" + readme + "\"}"))).contains("opened");
         assertThat(sink.await(Intent.ShowView.class, WAIT).title()).isEqualTo("docs/README.md");
+    }
+
+    /** {@code ui_open_file} reads a file as the user's click on its link does: the same path forms, views and refusals. */
+    @Test
+    void anOpenedFileIsReadAsTheUsersClickReadsIt(@TempDir Path dir) throws Exception {
+        Path docs = Files.createDirectories(dir.resolve("docs"));
+        Files.writeString(docs.resolve("README.md"), "# hi\n");
+        Files.write(docs.resolve("logo.png"), new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0d, 0x0a, 0x1a, 0x0a, (byte) 0xff, (byte) 0xfe});
+        state.set(state.get().withSessions(List.of(SessionState.closed(SessionSpec.fresh("work", dir.toString())))));
+
+        // relative to the session's directory; Markdown at no line is rendered
+        assertThat(text(tool("ui_open_file", "{\"path\":\"docs/README.md\"}"))).contains("opened " + docs.resolve("README.md"));
+        Intent.ShowView rendered = sink.await(Intent.ShowView.class, WAIT);
+        assertThat(rendered.spec()).isEqualTo(new ViewSpec.Markdown("# hi\n"));
+        assertThat(rendered.placement()).isEqualTo(Placement.SIDE);
+        assertThat(rendered.session()).isEqualTo("work");
+
+        // at a line it is text at that line
+        sink.clear();
+        tool("ui_open_file", "{\"path\":\"docs/README.md\",\"line\":1}");
+        assertThat(sink.await(Intent.ShowView.class, WAIT).spec()).isInstanceOf(ViewSpec.Text.class);
+
+        // under the home folder as typed
+        sink.clear();
+        String underHome = "~/" + Path.of(System.getProperty("user.home")).relativize(docs.resolve("README.md"));
+        JsonNode home = tool("ui_open_file", "{\"path\":\"" + underHome + "\"}");
+        assertThat(home.path("isError").asBoolean()).as(text(home)).isFalse();
+        assertThat(sink.await(Intent.ShowView.class, WAIT).title()).isEqualTo("docs/README.md");
+
+        // a binary file is said to be one
+        sink.clear();
+        tool("ui_open_file", "{\"path\":\"docs/logo.png\"}");
+        assertThat(((ViewSpec.Text) sink.await(Intent.ShowView.class, WAIT).spec()).text()).contains("is a binary file of 10 bytes");
+
+        // a folder or a missing file is a tool error, and nothing is shown
+        sink.clear();
+        JsonNode folder = tool("ui_open_file", "{\"path\":\"docs\"}");
+        assertThat(folder.path("isError").asBoolean()).isTrue();
+        assertThat(text(folder)).isEqualTo("cannot open " + docs + ": not a file");
+        JsonNode missing = tool("ui_open_file", "{\"path\":\"docs/nope.md\"}");
+        assertThat(missing.path("isError").asBoolean()).isTrue();
+        assertThat(text(missing)).isEqualTo("cannot open " + docs.resolve("nope.md") + ": no such file");
+        assertThat(sink.of(Intent.ShowView.class)).isEmpty();
     }
 
     // ---- database tools
@@ -546,6 +596,22 @@ class McpServerTest {
         state.set(state.get().withSession("reviews", x -> x.withTurns(0, 0L)));
         String read = text(call.get());
         assertThat(read).startsWith("session reviews · idle").contains("[2] turn ended");
+    }
+
+    @Test
+    void aCursorPastATranscriptClearedSinceReadsAtOnceAndSaysItRestarted() throws Exception {
+        reviewsInPanelTwo();
+        Transcript t = transcripts.of("reviews");
+        t.append(new Block.UserPrompt("go", "two", ""));
+        t.append(new Block.AssistantText("m", 0, "done", false, ""));
+        t.append(new Block.TurnEnd(0.0, 10, 1, false, "done"));
+        t.clear();
+        t.append(new Block.Note(Block.NoteKind.INFO, "after the clear", ""));
+
+        CompletableFuture<JsonNode> call = async("session_read", "{\"session\":\"reviews\",\"after\":3,\"wait_seconds\":60}");
+        String read = text(call.get(WAIT.toSeconds(), TimeUnit.SECONDS));
+        assertThat(read).startsWith("session reviews · idle · 1 blocks").doesNotContain("still working")
+                .contains("restarted").contains("[0] note info: after the clear");
     }
 
     @Test

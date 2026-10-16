@@ -9,15 +9,15 @@
 | `theme` | `Theme` | FlatLaf dark (`FlatMacDarkLaf` on macOS); design tokens: accent, Claude, ok, warn, danger, muted, muted strong (secondary text on lists, for contrast), thinking, diff added and removed, card, card border, user bubble, the plot series palette; spacing `GAP` 6, `PAD` 10, `RADIUS` 8; the monospaced font (JetBrains Mono when installed, else the platform's) |
 | `icon` | `Icons`, `SpinnerIcon` | one SVG icon set under `/icons`, scaled for HiDPI, drawn in the colours of the SVG files (no theme filter); `SpinnerIcon` is the bar wheel of the original SQL client as an icon, advanced by its owner's timer and painted wherever it is set, so every spinning place turns in step |
 | `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority`, `ToolButton` | every user action is a `Command` (id, label, icon, key, menu path, action, enablement); the menu bar is built from a `MenuEntry` layout (menus, submenus, separators, command ids), and key bindings and the palette from the registry; `ToolButton` is the flat icon button of the bars above lists and tabs |
-| `resource` | `ResourceActions` | the bar above a list of resources (sessions, connections): add and what brings resources in on the left; edit, clone and remove of the selected row on the right, off while none is selected; removal asks the kind's question and offers to stop a resource in use or leave it ([record 37](../adr/0037-session-actions-act-on-the-selected-row.md)) |
+| `resource` | `ResourceActions` | the bar above a list of resources (sessions, connections, panels, folders; a list or a tree's top-level rows): add and what brings resources in on the left; edit, clone and remove of the selected row on the right, off while none is selected; removal asks the kind's question and offers to stop a resource in use or leave it ([record 37](../adr/0037-session-actions-act-on-the-selected-row.md)) |
 | `overlay` | `Overlay` | the empty, loading and error states; a widget wraps its content once and switches state |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` | thread hand-off and paint pacing (§3) |
-| `format` | `Labels` | short labels: time since, uptimes and start times, token counts, counts, shortened paths |
+| `format` | `Labels`, `Json` | short labels: time since, uptimes and start times, token counts, counts, shortened paths (`~/x`, from core's `HomeDir`); JSON parsed and pretty-printed for tool input. Text cut to a length is core's `Clip`, the ellipsis counted, keeping its start or its end, everywhere in comando |
 | `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `MermaidDiagrams`, `SourceLinks`, `Plain` | text areas and text rendering (§4) |
 | `tree` | `TreeView` | the one tree over `ViewSpec.TreeNode` |
 | `layout` | `ShrinkingRow` | a row whose labelled chips give up width, ending in "…", before the icon buttons beside them do; the editor panel's header |
 | `tabs` | `FixedRowTabs` | tabs whose headers sit in fixed rows: a click selects and nothing moves; the sidebar's two rows |
-| `desktop` | `ExternalEditor`, `FileChoosers` | opens a file at a line in IntelliJ IDEA, else in the system's default application, on a virtual thread; folder, open and save choosers, the native `FileDialog` on macOS |
+| `desktop` | `ExternalEditor`, `FileChoosers`, `Platform`, `Browser` | opens a file at a line in IntelliJ IDEA, else in the system's default application, on a virtual thread; folder, open and save choosers, the native `FileDialog` on macOS; `Platform`: whether this is macOS, the menu shortcut modifier (⌘ on macOS, Ctrl elsewhere, also without a display) and a program's places on `PATH`; `Browser`: which links are web links, opened in the browser off the EDT |
 
 ## 2. Commands
 
@@ -28,8 +28,7 @@ A command appears in at most one menu and carries at most one key stroke; the la
 | Class | Behaviour |
 |---|---|
 | `Edt.run` | runs now when on the EDT, else posts |
-| `Edt.runAndWait` | runs on the EDT and waits; used only when closing |
-| `Edt.assertEdt` | a Java `assert` that the caller is on the EDT; active only with `-ea` (tests) |
+| `Edt.runAndWait` | runs on the EDT and waits; with a bound, gives up after it and the task never starts late; closing uses the bounded one |
 | `Coalescer` | many requests from any thread become at most one pending run on the EDT; the run reads the latest data, so nothing is lost and the EDT is not flooded. State renders, transcript updates and console output go through one each |
 | `Debouncer` | runs once requests stop for a delay; the editor's gutter uses 250 ms |
 | `EdtWatchdog` | every 100 ms posts a probe to the EDT; a probe still waiting after 200 ms is a stall: the EDT is looked at once to tell its kind (`startup` before the first probe, `drawing` when it waits on Java2D's render queue or is in Java2D with no comando frame, as when macOS's Metal pipeline flushes to the GPU, `comando` with a comando frame, `jdk` otherwise) and where (`in=` the first frame outside `java.base`, `comando=` the first comando frame and its line). When it ends, one INFO line carries length, kind and where, and a `comando.EdtBlocked` JFR event records it. A stall that lasts 1 s (2 s for `drawing`) is a hang: a WARNING with the EDT's stack, taken at that moment, then one when it answers |

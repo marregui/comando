@@ -1,0 +1,85 @@
+#!/usr/bin/env bash
+# Structural checks of the memory directory, the knowledge base and the scratchpad. Read-only. Prints only defects;
+# exit 1 if any.
+#
+#   index-check [<memory directory>]      default: the autoMemoryDirectory in Claude Code's settings, else MEMORY in
+#                                         Claude Code's folder, where the comando kit keeps it
+#
+# The memory directory is Claude Code's auto-memory directory. MEMORY.md past its budget (160 lines, 20 KB; Claude Code
+# loads 200 lines or 25 KB) is a warning: printed, not a defect.
+# Env: KB and SCRATCHPAD, by default those folders in Claude Code's folder ($CLAUDE_CONFIG_DIR, else ~/.claude).
+set -uo pipefail
+shopt -s nullglob
+IFS=$'\n'
+C=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+K=${KB:-$C/KB}
+S=${SCRATCHPAD:-$C/SCRATCHPAD}
+bad=0
+say() { printf '%s\n' "$1"; bad=1; }
+
+# --- memory ---
+configured=$(python3 - "$C/settings.json" 2>/dev/null <<'PY'
+import json, os, sys
+try:
+    v = json.load(open(sys.argv[1], encoding="utf-8-sig")).get("autoMemoryDirectory", "")
+except Exception:
+    v = ""
+print(os.path.expanduser(v) if isinstance(v, str) and v.strip() else "")
+PY
+)
+M=${1:-${configured:-$C/MEMORY}}
+if [[ $# -ge 1 || -n $configured || -d $M ]]; then
+  if [[ ! -f $M/MEMORY.md ]]; then
+    say "memory: no MEMORY.md in $M"
+  else
+    cd "$M" || exit 2
+    for f in *.md; do
+      [[ $f == MEMORY.md ]] && continue
+      grep -qF "($f)" MEMORY.md || say "memory: $f is not in MEMORY.md"
+      [[ $(head -1 "$f") == --- ]] || say "memory: $f has no frontmatter"
+    done
+    for f in $(grep -oE '\([A-Za-z0-9_.-]+\.md\)' MEMORY.md | tr -d '()' | sort -u); do
+      [[ -f $f ]] || say "memory: MEMORY.md points at missing $f"
+    done
+    bytes=$(wc -c < MEMORY.md | tr -d ' ')
+    lines=$(wc -l < MEMORY.md | tr -d ' ')
+    if (( bytes > 20480 || lines > 160 )); then
+      printf 'warn: MEMORY.md is %s bytes, %s lines: past its budget of 20480 bytes, 160 lines (Claude Code loads 25600, 200)\n' "$bytes" "$lines"
+    fi
+  fi
+fi
+
+# --- knowledge base ---
+if [[ -d $K ]]; then
+  cd "$K" || exit 2
+  [[ -f ALPHA.md ]] || say "KB: no ALPHA.md"
+  for f in $(find . -name '*.md' -not -path './README.md' -not -path './ALPHA.md' | sed 's#^\./##'); do
+    grep -qF "($f)" ALPHA.md 2>/dev/null || say "KB: $f is not in ALPHA.md"
+  done
+  for f in $(find . -name '*.md' | sed 's#^\./##'); do
+    head -8 "$f" | grep -q 'Status:' || say "KB: $f has no Status header"
+    grep -qE '\.(java|kt|kts|py|ts|tsx|js|go|rs|sh|xml|yaml|yml|gradle|toml|json|md|proto):[0-9]' "$f" \
+      && say "KB: $f has a file:line anchor"
+    d=$(dirname "$f")
+    for l in $(grep -oE '\]\([^)#: ]+\.md' "$f" | sed 's/](//'); do
+      [[ -e $d/$l ]] || say "KB: dead link $f -> $l"
+    done
+  done
+fi
+
+# --- scratchpad ---
+if [[ -d $S ]]; then
+  cd "$S" || exit 2
+  for d in *; do
+    [[ $d == README.md ]] && continue
+    [[ -d $d && $d =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { say "scratchpad: $d is not a YYYY-MM-DD folder"; continue; }
+    [[ -f $d/ALPHA.md ]] || { say "scratchpad: $d has no ALPHA.md"; continue; }
+    for a in "$d"/*; do
+      a=${a#"$d"/}
+      [[ $a == ALPHA.md ]] && continue
+      [[ $a == work || $a =~ ^READ-[0-9]{2}-.*\.md$ ]] || say "scratchpad: $d/$a is neither a READ-NN- document nor work/"
+      grep -qF "\`$a" "$d/ALPHA.md" || say "scratchpad: $d/$a is not in its ALPHA.md"
+    done
+  done
+fi
+exit $bad

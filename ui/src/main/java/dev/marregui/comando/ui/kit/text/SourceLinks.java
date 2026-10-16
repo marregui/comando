@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.kit.text;
 
+import dev.marregui.comando.core.view.ViewSpec;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -11,7 +13,7 @@ import java.util.regex.Pattern;
  */
 public final class SourceLinks {
 
-    public static final String SCHEME = "comando-file:";
+    public static final String SCHEME = ViewSpec.TreeNode.FILE_SCHEME;
     static final Pattern REF = Pattern.compile(
             "(?<![\\w/.\\-])((?:/|~/)?(?:[\\w.\\-]+/)*[\\w\\-]+(?:\\.[\\w\\-]+)*\\.[A-Za-z][A-Za-z0-9]{0,7}):(\\d{1,6})(?![\\w])");
 

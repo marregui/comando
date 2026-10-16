@@ -6,15 +6,16 @@
 
 | Order created | Part | Closing it |
 |---|---|---|
-| 1 | `Store` | writes the panel files with pending text and `panels.json`, then lets the queued writes of `sessions.json` and `connections.json` finish; a delayed write or retry still waiting is dropped, as that write covers it; waits up to 5 s for panels and sessions and up to 11 s for connections (one keychain call's bound) |
-| 2 | `StateLoop` | stops the reducer thread after the intents already queued |
-| 3 | `IntentLog` (when recording) | flushes and closes the log file |
+| 1 | `Store` | writes the panel files with pending text and `panels.json`, then lets the queued writes of `sessions.json`, `folders.json` and `connections.json` finish; a delayed write or retry still waiting is dropped, as that write covers it; waits up to 5 s for panels and sessions and up to 11 s for connections (one keychain call's bound) |
+| 2 | `IntentLog` (when recording) | closes the log file, after the loop: the intents of the shutdown are recorded; each line reaches the file as it is written, so a crash or a kill loses none |
+| 3 | `StateLoop` | stops the reducer thread after the intents already queued |
 | 4 | `DbAdapter` | closes every lane: cancels the running statement, closes the connection |
-| 5 | `McpServer` | denies every waiting approval, stops the HTTP server |
-| 6 | `ClaudeAdapter` | SIGTERM to every process, SIGKILL to those alive 2 s later; deletes every MCP configuration file and revokes its token; stops the strands |
-| 7 | `ToolsAdapter` | SIGTERM to every Gradle and jfrq run and its child processes, SIGKILL to what is alive 2 s later |
-| 8 | `EmbeddedQuestDb` (closes after 1) | stops the embedded QuestDB server when it runs; it closes after the lanes that may use it |
-| 9 | `ComandoUi` (closes last) | ends the terminals' shells and the live plots, stops the EDT watchdog, disposes the window |
+| 5 | `MermaidDiagrams` | stops a running `mmdc` and its child processes, and the drawing thread |
+| 6 | `McpServer` | denies every waiting approval, stops the HTTP server |
+| 7 | `ClaudeAdapter` | SIGTERM to every process, SIGKILL to those alive 2 s later; deletes every MCP configuration file and revokes its token; stops the strands |
+| 8 | `ToolsAdapter` | SIGTERM to every Gradle and jfrq run and its child processes, SIGKILL to what is alive 2 s later; stops the folder poll |
+| 9 | `EmbeddedQuestDb` (closes after 1) | stops the embedded QuestDB server when it runs; it closes after the lanes that may use it |
+| 10 | `ComandoUi` (closes last) | ends the terminals' shells and the live plots, stops the EDT watchdog, disposes the window |
 
 If a constructor step fails, `App` closes what it has built so far and rethrows.
 

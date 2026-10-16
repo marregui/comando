@@ -68,12 +68,21 @@ final class ViewTabs {
                 tabs.setTabComponentAt(tabs.getTabCount() - 1, header);
                 changed = true;
             } else if (t.view().version() != v.version() || t.view().pinned() != v.pinned()) {
-                if (t.view().version() != v.version()) {
-                    t.widget().render(v.spec());
-                }
-                Tab updated = new Tab(v, t.widget(), header(v));
-                open.put(v.id(), updated);
                 int at = tabs.indexOfComponent(t.widget().component());
+                Widget<ViewSpec> w = t.widget();
+                if (!t.view().spec().type().equals(v.spec().type())) {
+                    // Replaced in place by a view of another type: a new widget in the same tab, selection kept.
+                    w.unmount();
+                    w = registry.create(v.spec().type(), context);
+                    w.render(v.spec());
+                    if (at >= 0) {
+                        tabs.setComponentAt(at, w.component());
+                    }
+                } else if (t.view().version() != v.version()) {
+                    w.render(v.spec());
+                }
+                Tab updated = new Tab(v, w, header(v));
+                open.put(v.id(), updated);
                 if (at >= 0) {
                     tabs.setTabComponentAt(at, updated.header());
                 }

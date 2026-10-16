@@ -4,9 +4,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
+import java.util.ArrayList;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,6 +32,23 @@ class HelpFilesTest {
         Files.writeString(file, "edited", StandardCharsets.UTF_8);
         HelpFiles.writeTutorial(home);
         assertThat(Files.readString(file, StandardCharsets.UTF_8)).as("the build's tutorial wins").isEqualTo(text);
+        try (var left = Files.list(file.getParent())) {
+            assertThat(left).containsExactly(file);
+        }
+    }
+
+    @Test
+    void onAFileSystemWithoutAtomicRenameTheTutorialIsStillWritten(@TempDir Path home) throws Exception {
+        List<List<CopyOption>> moves = new ArrayList<>();
+        Path file = HelpFiles.writeTutorial(home, (from, to, options) -> {
+            moves.add(List.of(options));
+            if (List.of(options).contains(StandardCopyOption.ATOMIC_MOVE)) {
+                throw new AtomicMoveNotSupportedException(from.toString(), to.toString(), "no atomic rename here");
+            }
+            Files.move(from, to, options);
+        });
+        assertThat(Files.readString(file, StandardCharsets.UTF_8)).startsWith("#");
+        assertThat(moves).hasSize(2);
         try (var left = Files.list(file.getParent())) {
             assertThat(left).containsExactly(file);
         }

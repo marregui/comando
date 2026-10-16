@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# One Gradle invocation per checkout at a time. Parallel writers in one checkout break each
+# other's runs (vanishing test-results/binary files, jacoco exec files), so every agent runs
+# Gradle through this; callers queue on a per-checkout lock.
+#
+#   gradle-serial <checkout> <gradle args...>     e.g. gradle-serial ~/src/app :core:compileJava
+#
+# The lock is a kernel lock (lockf(1) on macOS, flock(1) on Linux) held by this shell on fd 9, so it
+# is released when this process exits for any reason; there is no stale lock to reclaim. Gradle
+# itself runs with fd 9 closed. JAVA_HOME and the rest of the environment pass through unchanged.
+# Exit status is Gradle's. Env: GRADLE_SERIAL_WAIT (max seconds to wait for the lock, default 3600).
+set -uo pipefail
+
+die() { echo "gradle-serial: $*" >&2; exit 2; }
+[[ $# -ge 2 ]] || die "usage: gradle-serial <checkout> <gradle args...>"
+DIR=$(cd "$1" 2>/dev/null && pwd) || die "not a directory: $1"
+shift
+[[ -x "$DIR/gradlew" ]] || die "no gradlew in $DIR"
+
+ROOT=/tmp/gradle-serial
+mkdir -p "$ROOT"
+if command -v shasum >/dev/null; then SUM=shasum; else SUM=sha1sum; fi
+L="$ROOT/$(printf '%s' "$DIR" | $SUM | cut -c1-16).lock"
+WAIT=${GRADLE_SERIAL_WAIT:-3600}
+exec 9>>"$L"
+if command -v lockf >/dev/null; then
+  try() { lockf -s -t 0 9; }
+  wait_lock() { lockf -s -t "$WAIT" 9; }
+elif command -v flock >/dev/null; then
+  try() { flock -n 9; }
+  wait_lock() { flock -w "$WAIT" 9; }
+else
+  die "neither lockf nor flock is installed"
+fi
+if ! try; then
+  echo "gradle-serial: waiting for another Gradle run on $DIR" >&2
+  wait_lock || die "lock on $DIR not acquired within ${WAIT}s"
+fi
+
+cd "$DIR" && ./gradlew --console=plain "$@" 9>&-

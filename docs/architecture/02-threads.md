@@ -16,14 +16,14 @@
 | MCP server | virtual per request | MCP JSON-RPC over HTTP; an `approve` call waits for its card | pending approvals |
 | `gradle-<run>`, `jfrq-<run>` | virtual | run the child process, copy its output to the console, collect test reports | the run's `Console` |
 | `tool-output-<run>`, `tool-kill-<run>` | virtual | copy a run's output while it is open; SIGKILL what a stop left alive after 2 s | — |
-| `recording`, `scratchpad` | virtual | read a JFR file, then send a view; read the scratchpad folder at once (refresh button, View ▸ Scratchpad), then send its tree when it changed | — |
-| `scratchpad-watch` | platform, daemon | reads the whole scratchpad every 2 s and sends its tree when it changed; one read at a time with the virtual reads | — |
+| `recording`, `folder-read` | virtual | read a JFR file, then send a view; read folders of the Files tab at once (a row opened, the refresh button, the filter), then send each tree | — |
+| `folder-poll` | platform, daemon | every 2 s reads the Files tab's open folders and sends a tree when it changed; reads are ticketed so an older read never sends over a newer one | — |
 | `open-file` | virtual | checks whether a file chosen for a panel is text, before the store binds it | — |
-| `store` | platform | atomic writes of `sessions.json`, `panels.json` and the panel files in `panels/`; panel text 800 ms after the first unsaved change; a check of the open panels' files for outside changes every second; the read of a file that Open spec or ⌘⇧T binds to a panel | those files |
+| `store` | platform | atomic writes of `sessions.json`, `folders.json`, `panels.json` and the panel files in `panels/`; panel text 800 ms after the first unsaved change; a check of the open panels' files for outside changes every second; the read of a file that Open spec or ⌘⇧T binds to a panel | those files |
 | `store-secrets` | platform | keychain calls and `connections.json`, apart so an unanswered unlock prompt never holds back panel text | `connections.json` |
 | `mermaid` | platform, daemon | runs `mmdc` for a Mermaid diagram a preview shows, one at a time; stopped after 30 s and at exit | `cache/mermaid/` |
 | `edt-watchdog` | platform, daemon | posts a probe to the EDT every 100 ms; one that waits 200 ms is a stall, told when it ends, and one that waits 1 s a hang, reported with the EDT's stack | — |
-| `show-file`, `show-log`, `reveal`, `notify`, `open-link`, `external-editor`, `terminal-exit`, `claude-version`, `questdb-toggle`, `pty-preload`, `export` | virtual | one blocking call each, off the EDT | — |
+| `show-file`, `show-tutorial`, `write-tutorial`, `open-index`, `read-conversations`, `reveal`, `notify`, `open-link`, `external-editor`, `terminal-exit`, `claude-version`, `kit`, `kit-install`, `tool-settings`, `questdb-toggle`, `pty-preload`, `export` | virtual | one blocking call each, off the EDT | — |
 | `exit`, `shutdown` | platform | close the application after Quit, or from the JVM's shutdown hook ([Ownership](04-ownership.md#2-exit)) | — |
 | `keychain-output` | virtual | reads the `security` tool's output, so the call's 10 s bound holds even while an unlock prompt is open | — |
 
@@ -51,8 +51,11 @@ Every wait has a deadline. A wait that can be cut short by shutdown also checks 
 | Tool run stop | SIGTERM to the process tree; SIGKILL 2 s later | the run ends as stopped |
 | Tool output after the process exits | 2 s | a note in the console; a child holding the pipe no longer keeps the run open |
 | `claude --version` | 5 s | a warning in the status bar |
+| A desktop notification (`osascript`) | 10 s | the process is killed; the notification is not shown |
+| Claude's output after the process exits | 2 s | the exit is reported; a child still holding the pipe no longer keeps the session running, and its later lines are dropped |
+| Closing the window at quit | 5 s | a warning in the log; comando quits without it, so a stuck event thread never keeps the process (and its lock) alive |
 | Keychain calls | 10 s | the tool is killed; a password not stored stays in the file, a password not read is kept in the keychain and the connection loads without it |
-| The EDT | probe answered within 200 ms | a stack in the log and a `comando.EdtBlocked` JFR event; a stall inside the JDK's drawing logs one INFO line, with a stack only past 2 s |
+| The EDT | probe answered within 200 ms | a longer wait is a stall: one INFO line when it ends, and a `comando.EdtBlocked` JFR event; a wait past 1 s (2 s inside the JDK's drawing) is a hang, logged with the EDT's stack |
 
 ## 4. Publication
 

@@ -1,7 +1,5 @@
 package dev.marregui.comando.mcp;
 
-import dev.marregui.comando.core.model.PermissionRules;
-
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -15,6 +13,8 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.model.PermissionRules;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.QueryPort;
@@ -28,14 +28,14 @@ import dev.marregui.comando.core.state.ViewState;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.core.view.FileView;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
@@ -61,7 +61,6 @@ public final class McpTools {
     static final String APPROVE = "approve";
     static final int MAX_SQL_ROWS = 200;
     static final int MAX_RESULT_CHARS = 64 * 1024;
-    static final long MAX_FILE_BYTES = 4L * 1024 * 1024;
     /** Blocks {@code session_read} shows without a cursor: the end of the transcript. */
     static final int READ_TAIL = 40;
     static final int MAX_WAIT_SECONDS = 600;
@@ -325,13 +324,8 @@ public final class McpTools {
     private PanelState targetPanel(String session, String name) {
         AppState s = state.get();
         if (!name.isBlank()) {
-            for (PanelState p : s.panels()) {
-                if (p.title().equalsIgnoreCase(name) || p.id().value().equals(name)) {
-                    return p;
-                }
-            }
-            throw new IllegalArgumentException("no panel '" + name + "'; panels: "
-                    + String.join(", ", s.panels().stream().map(PanelState::title).toList()));
+            return panelNamed(s, name).orElseThrow(() -> new IllegalArgumentException("no panel '" + name + "'; panels: "
+                    + String.join(", ", s.panels().stream().map(PanelState::title).toList())));
         }
         PanelState focused = s.focusedPanel();
         if (focused.session().equals(session)) {
@@ -348,39 +342,29 @@ public final class McpTools {
         return mine.getFirst();
     }
 
+    /** The panel with id {@code name}, or titled {@code name} in any case: the one lookup every tool naming a panel uses. */
+    private static Optional<PanelState> panelNamed(AppState s, String name) {
+        return s.panels().stream().filter(p -> p.id().value().equals(name) || p.title().equalsIgnoreCase(name)).findFirst();
+    }
+
+    /** Shows a file in the side pane, read as the user's click on a link reads it ({@link FileView}). */
     private Outcome openFile(String session, JsonNode args) {
         String p = args.path("path").asText("");
         if (p.isBlank()) {
             return Outcome.fail("path is required");
         }
-        Path path = Path.of(p);
-        if (!path.isAbsolute()) {
-            String base = state.get().session(session).map(x -> x.spec().workDir()).orElse(System.getProperty("user.home"));
-            path = Path.of(base).resolve(path);
-        }
+        String base = state.get().session(session).map(x -> x.spec().workDir()).orElse(HomeDir.home());
+        Path path = FileView.resolve(p, base);
+        int line = args.path("line").asInt(0);
+        FileView file;
         try {
-            if (!Files.isRegularFile(path)) {
-                return Outcome.fail("not a file: " + path);
-            }
-            if (Files.size(path) > MAX_FILE_BYTES) {
-                return Outcome.fail("file larger than " + MAX_FILE_BYTES / (1024 * 1024) + " MB: " + path);
-            }
-            String text = Files.readString(path, StandardCharsets.UTF_8);
-            int line = args.path("line").asInt(0);
-            // titled with the parent folder, as a link the user clicks: two files with one name get two tabs
-            Path folder = path.getParent() == null ? null : path.getParent().getFileName();
-            sink.dispatch(new Intent.ShowView(session, (folder == null ? "" : folder + "/") + path.getFileName(),
-                    new ViewSpec.Text(path.toString(), text, syntaxOf(path), line), Placement.SIDE));
-            return Outcome.ok("opened " + path + (line > 0 ? " at line " + line : ""));
+            file = FileView.read(path, line);
         } catch (IOException e) {
-            return Outcome.fail("cannot read " + path + ": " + e.getMessage());
+            return Outcome.fail("cannot open " + path + ": " + e.getMessage());
         }
-    }
-
-    static String syntaxOf(Path path) {
-        String n = path.getFileName().toString().toLowerCase(Locale.ROOT);
-        int dot = n.lastIndexOf('.');
-        return dot < 0 ? "" : n.substring(dot + 1);
+        sink.dispatch(new Intent.ShowView(session, file.title(), file.spec(), Placement.SIDE));
+        return Outcome.ok(file.binary() ? "opened " + path + ": a binary file, so the view says so instead of showing it"
+                : "opened " + path + " (" + file.spec().type() + ")" + (line > 0 ? " at line " + line : ""));
     }
 
     /**
@@ -392,8 +376,7 @@ public final class McpTools {
         String panel = args.path("panel").asText("");
         PanelState target = null;
         if (!panel.isEmpty()) {
-            target = s.panels().stream().filter(x -> x.id().value().equals(panel) || x.title().equals(panel)).findFirst()
-                    .orElseThrow(() -> new IllegalArgumentException("no panel with id or title '" + panel + "'"));
+            target = panelNamed(s, panel).orElseThrow(() -> new IllegalArgumentException("no panel with id or title '" + panel + "'"));
         }
         String tab = args.path("lower_tab").asText("");
         LowerTab lower = null;
@@ -609,7 +592,9 @@ public final class McpTools {
 
     /**
      * Waits until the session has blocks after {@code after}, none of them still streaming or running, and its turns
-     * are over (a turn end last, or the session no longer running); false at the deadline.
+     * are over (a turn end last, or the session no longer running); false at the deadline. A transcript shorter than
+     * the cursor was cleared since: the read returns at once and says it restarted, rather than wait for blocks past a
+     * cursor that no longer applies.
      */
     private boolean awaitTurnEnd(String session, Transcript t, int after, int seconds) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(seconds);
@@ -619,6 +604,9 @@ public final class McpTools {
                 return true;
             }
             int size = t.size();
+            if (size < after) {
+                return true;
+            }
             if (!x.get().isBusy() && settled(t, after, size) && (t.get(size - 1) instanceof Block.TurnEnd || !x.get().status().isUsable())) {
                 return true;
             }
@@ -779,7 +767,7 @@ public final class McpTools {
         if (s == null) {
             return "";
         }
-        return s.length() <= max ? s : s.substring(0, max) + "…";
+        return Clip.keepStart(s, max);
     }
 
     /** For tests: approvals waiting for an answer. */

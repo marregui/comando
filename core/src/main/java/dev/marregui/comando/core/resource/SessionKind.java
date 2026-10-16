@@ -1,5 +1,6 @@
 package dev.marregui.comando.core.resource;
 
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.model.Status;
@@ -76,14 +77,14 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
         List<String> dirs = new ArrayList<>();
         for (String d : a.getOrDefault("addDirs", "").split(File.pathSeparator)) {
             if (!d.isBlank()) {
-                dirs.add(d.strip());
+                dirs.add(HomeDir.expand(d.strip()));
             }
         }
         String id = a.getOrDefault("claudeSessionId", "").strip();
         StartMode startMode = startMode(a.getOrDefault("startMode", ""), id);
         return new SessionSpec(
                 a.getOrDefault("name", "").strip(),
-                a.getOrDefault("workDir", "").strip(),
+                HomeDir.expand(a.getOrDefault("workDir", "").strip()),
                 a.getOrDefault("model", "").strip(),
                 a.getOrDefault("effort", "").strip(),
                 a.getOrDefault("permissionMode", "").strip(),
@@ -134,7 +135,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
 
     @Override
     public SessionSpec template(String name) {
-        return SessionSpec.fresh(name, System.getProperty("user.home"));
+        return SessionSpec.fresh(name, HomeDir.home());
     }
 
     @Override

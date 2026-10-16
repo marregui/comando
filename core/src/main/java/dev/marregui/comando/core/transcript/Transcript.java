@@ -62,13 +62,17 @@ public final class Transcript {
         return size;
     }
 
-    /** The block at {@code index}; null only when a concurrent {@link #clear()} emptied the log. */
+    /**
+     * The block at {@code index}; null at or past the end, which a reader holding a size from before a
+     * {@link #clear()} reaches, so it stops rather than fails.
+     */
     public Block get(int index) {
-        int n = size;
-        if (index < 0 || index >= n) {
-            throw new IndexOutOfBoundsException("index " + index + ", size " + n);
+        if (index < 0) {
+            throw new IndexOutOfBoundsException("index " + index);
         }
-        return blocks[index];
+        int n = size;
+        Block[] a = blocks;
+        return index < n && index < a.length ? a[index] : null;
     }
 
     public long version() {

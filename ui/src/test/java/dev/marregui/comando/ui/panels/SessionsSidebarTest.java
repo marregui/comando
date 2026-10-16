@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.panels;
 import com.formdev.flatlaf.FlatDarkLaf;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
@@ -22,7 +23,6 @@ import javax.swing.JList;
 import javax.swing.JMenuItem;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
-import javax.swing.KeyStroke;
 import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -31,8 +31,6 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.Point;
 import java.awt.Rectangle;
-import java.awt.event.ActionEvent;
-import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.util.HashMap;
@@ -72,18 +70,18 @@ class SessionsSidebarTest {
         SwingUtilities.invokeAndWait(() -> {
             sidebar.component().setSize(280, 500);
             layout(sidebar.component());
-            for (String t : List.of("Sessions", "Panels", "Connections", "Scratchpad")) {
+            for (String t : List.of("Sessions", "Panels", "Connections", "Files")) {
                 JToggleButton h = find(sidebar.component(), JToggleButton.class, b -> t.equals(b.getText()));
                 at.put(t, SwingUtilities.convertRectangle(h.getParent(), h.getBounds(), sidebar.component()));
             }
         });
-        assertThat(at.get("Panels").y).as("Panels and Scratchpad on the top row").isEqualTo(at.get("Scratchpad").y)
+        assertThat(at.get("Panels").y).as("Panels and Files on the top row").isEqualTo(at.get("Files").y)
                 .isLessThan(at.get("Sessions").y);
         assertThat(at.get("Sessions").y).as("Sessions and Connections below").isEqualTo(at.get("Connections").y);
-        assertThat(at.get("Panels").x).isLessThan(at.get("Scratchpad").x).isEqualTo(at.get("Sessions").x);
+        assertThat(at.get("Panels").x).isLessThan(at.get("Files").x).isEqualTo(at.get("Sessions").x);
         assertThat(at.get("Sessions").x).isLessThan(at.get("Connections").x);
 
-        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.PANELS, SessionsSidebar.CONNECTIONS, SessionsSidebar.SCRATCHPAD}) {
+        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.PANELS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES}) {
             SwingUtilities.invokeAndWait(() -> sidebar.selectTab(tab));
             assertThat(sidebar.selectedTab()).isEqualTo(tab);
         }
@@ -101,7 +99,7 @@ class SessionsSidebarTest {
         AbstractButton show = button(sidebar.component(), "Show the sidebar (⌘B)");
         assertThat(sidebar.isShown()).isTrue();
         assertThat(shows(show, sidebar.component())).as("no rail beside the tabs").isFalse();
-        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.PANELS, SessionsSidebar.CONNECTIONS, SessionsSidebar.SCRATCHPAD}) {
+        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.PANELS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES}) {
             SwingUtilities.invokeAndWait(() -> sidebar.selectTab(tab));
             assertThat(shows(hide, sidebar.component())).as("the hide button on every tab").isTrue();
         }
@@ -124,7 +122,7 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void theScratchpadIsANavigatorWithoutARootRowWhoseFilesOpenWithOneClick() throws Exception {
+    void theFilesTabShowsOneRowPerFolderAndOpensAFileWithOneClick() throws Exception {
         List<Path> opened = new CopyOnWriteArrayList<>();
         SessionsSidebar.Dialogs dialogs = new Dialogs() {
             @Override
@@ -133,28 +131,35 @@ class SessionsSidebarTest {
             }
         };
         List<Intent> intents = new CopyOnWriteArrayList<>();
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "spec", "", "")), List.of(), List.of(),
+                List.of(new FolderRoot("Scratchpad", "/s", "", List.of()), new FolderRoot("Notes", "/n", "", List.of())));
         SessionsSidebar[] s = new SessionsSidebar[1];
-        SwingUtilities.invokeAndWait(() -> s[0] = new SessionsSidebar(intents::add, dialogs, () -> {
-        }));
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intents::add, dialogs, () -> {
+            });
+            s[0].render(state);
+        });
         SessionsSidebar sidebar = s[0];
-        SwingUtilities.invokeAndWait(() -> sidebar.selectTab(SessionsSidebar.SCRATCHPAD));
-        assertThat(intents).as("the tools adapter keeps the tree in sync; a tab switch reads nothing").isEmpty();
+        SwingUtilities.invokeAndWait(() -> sidebar.selectTab(SessionsSidebar.FILES));
+        assertThat(intents).as("no folder open: none is watched, and a tab switch reads nothing").isEmpty();
+
+        JTree tree = find(sidebar.component(), JTree.class, t -> "Files".equals(t.getAccessibleContext().getAccessibleName()));
+        assertThat(tree.isRootVisible()).isFalse();
+        assertThat(tree.getRowCount()).as("one row per folder").isEqualTo(2);
+        SwingUtilities.invokeAndWait(() -> tree.expandRow(0));
+        assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Scratchpad")));
 
         ViewSpec.TreeNode doc = new ViewSpec.TreeNode("READ-01-X.md", "1 kB", "comando-file:/s/2026-10-14/READ-01-X.md#0", List.of());
-        ViewSpec.TreeNode root = new ViewSpec.TreeNode("SCRATCHPAD", "/s", List.of(
-                new ViewSpec.TreeNode("notes", "0 entries", List.of()),
-                new ViewSpec.TreeNode("2026-10-13", "0 entries", List.of()),
+        ViewSpec.TreeNode read = new ViewSpec.TreeNode("Scratchpad", "/s", List.of(
                 new ViewSpec.TreeNode("2026-10-14", "1 entry", List.of(doc)),
                 new ViewSpec.TreeNode("PLAN.md", "2 kB", "comando-file:/s/PLAN.md#0", List.of())));
-        SwingUtilities.invokeAndWait(() -> sidebar.showScratchpad(root));
-        JTree tree = find(sidebar.component(), JTree.class, t -> "Scratchpad".equals(t.getAccessibleContext().getAccessibleName()));
-        assertThat(tree.isRootVisible()).isFalse();
-        assertThat(tree.getRowCount()).as("the four entries and the newest day open").isEqualTo(5);
+        SwingUtilities.invokeAndWait(() -> sidebar.showFolder(state.folder("Scratchpad").orElseThrow(), read));
+        assertThat(tree.getRowCount()).as("Scratchpad, its day open with its file, PLAN.md, Notes").isEqualTo(5);
 
         SwingUtilities.invokeAndWait(() -> {
             tree.setSize(260, 400);
             tree.doLayout();
-            Rectangle row = tree.getRowBounds(3);
+            Rectangle row = tree.getRowBounds(2);
             tree.dispatchEvent(new MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0, row.x + 4, row.y + row.height / 2, 1, false,
                     MouseEvent.BUTTON1));
         });
@@ -403,6 +408,11 @@ class SessionsSidebarTest {
         @Override
         public ResourceActions.Editor connections() {
             return recording("connection", new CopyOnWriteArrayList<>());
+        }
+
+        @Override
+        public ResourceActions.Editor folders() {
+            return recording("folder", new CopyOnWriteArrayList<>());
         }
 
         @Override

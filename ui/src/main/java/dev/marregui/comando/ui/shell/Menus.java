@@ -29,17 +29,18 @@ final class Menus {
      * Items with an icon: the same action is a button with that icon (Run and Stop in the panel header, the tab
      * strip's + and ✕, the plug of a session row and of the header's session and connection); and the Help items.
      */
-    static final Map<String, String> ICONS = Map.of(
-            "run", "play",
-            "run.stop", "stop",
-            "panel.new", "add",
-            "file.close", "close",
-            "session.toggle", "plug",
-            "connection.toggle", "plug",
-            "help.tutorial", "tutorial",
-            "help.keys", "keyboard",
-            "help.log", "log",
-            "help.dataRoot", "comando-folder");
+    static final Map<String, String> ICONS = Map.ofEntries(
+            Map.entry("run", "play"),
+            Map.entry("run.stop", "stop"),
+            Map.entry("panel.new", "add"),
+            Map.entry("file.close", "close"),
+            Map.entry("session.toggle", "plug"),
+            Map.entry("connection.toggle", "plug"),
+            Map.entry("help.tutorial", "tutorial"),
+            Map.entry("help.keys", "keyboard"),
+            Map.entry("help.kit", "kit"),
+            Map.entry("help.log", "log"),
+            Map.entry("help.dataRoot", "comando-folder"));
 
     private Menus() {
     }
@@ -85,11 +86,11 @@ final class Menus {
                                 "run.insertResult", "run.keep",
                                 SEPARATOR,
                                 "run.plot", "run.plotLive", "run.plotStop"),
-                        menu("Tools", "tool", "tools.gradle", "tools.jfrq", "terminal.restart")),
+                        menu("Tools", "tool", "tools.gradle", "tools.jfrq", "terminal.restart", SEPARATOR, "tools.settings")),
                 menu("View", null,
                         "view.palette", "focus.editor",
                         SEPARATOR,
-                        "view.sidebar", "view.sidePane", "tools.scratchpad", "view.restoreLayout",
+                        "view.sidebar", "view.sidePane", "view.files", "view.restoreLayout",
                         SEPARATOR,
                         menu("Lower panel", null,
                                 "view.session", "view.approvals", "view.terminal", "view.results",
@@ -101,6 +102,8 @@ final class Menus {
                         "view.notices"),
                 menu("Help", null,
                         "help.tutorial", "help.keys",
+                        SEPARATOR,
+                        "help.kit",
                         SEPARATOR,
                         "help.log", "help.dataRoot"));
     }

@@ -4,6 +4,7 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
+import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -22,10 +23,8 @@ import javax.swing.JScrollBar;
 import javax.swing.JScrollPane;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
-import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.event.HierarchyEvent;
-import java.net.URI;
 import java.util.List;
 
 /**
@@ -228,15 +227,8 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     private void openLink(String href) {
         if (href.startsWith(SourceLinks.SCHEME)) {
             context.intents().dispatch(new Intent.OpenFile(session, SourceLinks.path(href), SourceLinks.line(href)));
-        } else if ((href.startsWith("https://") || href.startsWith("http://")) && Desktop.isDesktopSupported()) {
-            Thread.ofVirtual().name("open-link").start(() -> {
-                try {
-                    Desktop.getDesktop().browse(URI.create(href));
-                } catch (Exception e) {
-                    System.getLogger(TranscriptWidget.class.getName()).log(System.Logger.Level.WARNING,
-                            "cannot open " + href + ": " + e.getMessage());
-                }
-            });
+        } else {
+            Browser.open(href);
         }
     }
 

@@ -4,7 +4,7 @@ comando speaks to PostgreSQL and to QuestDB over the PostgreSQL wire protocol, t
 
 ## 1. Lanes
 
-A JDBC connection runs one statement at a time, so each connection name has a lane: one connection and one thread that runs every open, close, statement and health check of that connection in order. The user's runs and Claude's `db_run_sql` calls on the same connection queue on the same lane.
+A JDBC connection runs one statement at a time, so each connection name has a lane: one connection and one thread that runs every open, close, statement and health check of that connection in order. The user's runs and Claude's `db_run_sql` calls on the same connection queue on the same lane. A lane lives while it holds a connection or has work queued: once its last task ends with no connection (closed, lost, or an open that failed) its thread stops, so a closed, removed or renamed connection keeps none; the next work starts a new lane, after every task of the old one has ended, so the connection's order holds. Removing, renaming or repointing a connection also forgets its schema, so completion never offers another server's tables. The connection test builds its driver properties as the lane does, TLS mode included, so Test and Connect agree.
 
 | Property | Value |
 |---|---|

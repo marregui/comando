@@ -1,6 +1,7 @@
 package dev.marregui.comando.core.state;
 
 import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 
 import java.util.ArrayList;
@@ -19,6 +20,7 @@ import java.util.function.UnaryOperator;
  * within connections and within sessions; at most one run per panel; a session is bound to at most one panel, open
  * or closed.</p>
  *
+ * @param folders the folders the Files tab shows at its top level, in the user's order
  * @param closed  comando's own panels that are closed, most recently closed last: each keeps its file, title and
  *                bindings until it is removed; documents are not kept here
  * @param notice  the notice the status bar shows: an error stands until the user dismisses it, a newer error
@@ -32,6 +34,7 @@ public record AppState(
         PanelId focused,
         List<ConnectionState> connections,
         List<SessionState> sessions,
+        List<FolderRoot> folders,
         List<SqlRun> runs,
         List<Approval> approvals,
         List<ViewState> views,
@@ -46,6 +49,7 @@ public record AppState(
         Objects.requireNonNull(focused, "focused");
         connections = List.copyOf(connections);
         sessions = List.copyOf(sessions);
+        folders = folders == null ? List.of() : List.copyOf(folders);
         runs = List.copyOf(runs);
         approvals = List.copyOf(approvals);
         views = List.copyOf(views);
@@ -64,7 +68,12 @@ public record AppState(
     public static final int NOTICE_HISTORY = 50;
 
     public static AppState initial(List<PanelState> panels, List<ConnectionState> connections, List<SessionState> sessions) {
-        return new AppState(panels, List.of(), panels.getFirst().id(), connections, sessions, List.of(), List.of(), List.of(),
+        return initial(panels, connections, sessions, List.of());
+    }
+
+    public static AppState initial(List<PanelState> panels, List<ConnectionState> connections, List<SessionState> sessions,
+                                   List<FolderRoot> folders) {
+        return new AppState(panels, List.of(), panels.getFirst().id(), connections, sessions, folders, List.of(), List.of(), List.of(),
                 LowerTab.SESSION, Notice.NONE, List.of(), 1L);
     }
 
@@ -119,11 +128,11 @@ public record AppState(
     // ---- copies
 
     public AppState withPanels(List<PanelState> newPanels, PanelId newFocused) {
-        return new AppState(newPanels, closed, newFocused, connections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId);
+        return new AppState(newPanels, closed, newFocused, connections, sessions, folders, runs, approvals, views, lowerTab, notice, notices, nextId);
     }
 
     public AppState withClosed(List<PanelState> newClosed) {
-        return new AppState(panels, newClosed, focused, connections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId);
+        return new AppState(panels, newClosed, focused, connections, sessions, folders, runs, approvals, views, lowerTab, notice, notices, nextId);
     }
 
     /** A closed panel of comando's own, by id. */
@@ -145,19 +154,27 @@ public record AppState(
         if (id.equals(focused)) {
             return this;
         }
-        return new AppState(panels, closed, id, connections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, id, connections, sessions, folders, runs, approvals, views, lowerTab, notice, notices, nextId);
     }
 
     public AppState withConnections(List<ConnectionState> newConnections) {
-        return new AppState(panels, closed, focused, newConnections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, newConnections, sessions, folders, runs, approvals, views, lowerTab, notice, notices, nextId);
     }
 
     public AppState withConnection(ConnectionState connection) {
         return withConnections(replace(connections, c -> c.name().equals(connection.name()), connection));
     }
 
+    public AppState withFolders(List<FolderRoot> newFolders) {
+        return new AppState(panels, closed, focused, connections, sessions, newFolders, runs, approvals, views, lowerTab, notice, notices, nextId);
+    }
+
+    public Optional<FolderRoot> folder(String name) {
+        return find(folders, f -> f.name().equals(name));
+    }
+
     public AppState withSessions(List<SessionState> newSessions) {
-        return new AppState(panels, closed, focused, connections, newSessions, runs, approvals, views, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, newSessions, folders, runs, approvals, views, lowerTab, notice, notices, nextId);
     }
 
     public AppState withSession(SessionState session) {
@@ -169,7 +186,7 @@ public record AppState(
     }
 
     public AppState withRuns(List<SqlRun> newRuns) {
-        return new AppState(panels, closed, focused, connections, sessions, newRuns, approvals, views, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, folders, newRuns, approvals, views, lowerTab, notice, notices, nextId);
     }
 
     /** Puts {@code run} as the panel's run, replacing the previous one. */
@@ -185,11 +202,11 @@ public record AppState(
     }
 
     public AppState withApprovals(List<Approval> newApprovals) {
-        return new AppState(panels, closed, focused, connections, sessions, runs, newApprovals, views, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, folders, runs, newApprovals, views, lowerTab, notice, notices, nextId);
     }
 
     public AppState withViews(List<ViewState> newViews) {
-        return new AppState(panels, closed, focused, connections, sessions, runs, approvals, newViews, lowerTab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, newViews, lowerTab, notice, notices, nextId);
     }
 
     /** This state when {@code tab} is already selected. */
@@ -197,22 +214,22 @@ public record AppState(
         if (tab.equals(lowerTab)) {
             return this;
         }
-        return new AppState(panels, closed, focused, connections, sessions, runs, approvals, views, tab, notice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, views, tab, notice, notices, nextId);
     }
 
     /** The standing notice only; the history is unchanged. */
     public AppState withNotice(Notice newNotice) {
-        return new AppState(panels, closed, focused, connections, sessions, runs, approvals, views, lowerTab, newNotice, notices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, views, lowerTab, newNotice, notices, nextId);
     }
 
     /** The standing notice and the history. */
     public AppState withNotices(Notice newNotice, List<Notice> newNotices) {
-        return new AppState(panels, closed, focused, connections, sessions, runs, approvals, views, lowerTab, newNotice, newNotices, nextId);
+        return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, views, lowerTab, newNotice, newNotices, nextId);
     }
 
     /** Returns this state with the id counter advanced; the id handed out is {@link #nextId()} of the receiver. */
     public AppState withIdTaken() {
-        return new AppState(panels, closed, focused, connections, sessions, runs, approvals, views, lowerTab, notice, notices, nextId + 1);
+        return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, views, lowerTab, notice, notices, nextId + 1);
     }
 
     // ---- list helpers

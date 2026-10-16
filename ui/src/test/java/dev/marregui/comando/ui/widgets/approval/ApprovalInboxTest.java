@@ -6,12 +6,12 @@ import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.PermissionRules;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.AbstractButton;
-import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
@@ -21,7 +21,6 @@ import javax.swing.SwingUtilities;
 import javax.swing.text.JTextComponent;
 import java.awt.Component;
 import java.awt.Container;
-import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -158,7 +157,8 @@ class ApprovalInboxTest {
         inbox.render(List.of(bash(1, "ls -la")));
         JTextField note = (JTextField) named(cards().getFirst(), "note");
         note.setText("not now");
-        press(note, KeyEvent.VK_ENTER, InputEvent.META_DOWN_MASK);
+        // the menu key of the platform the test runs on: ⌘ on macOS, Ctrl on the Linux build
+        press(note, KeyEvent.VK_ENTER, Platform.menuShortcutMask());
         assertThat(decision()).isEqualTo(new ApprovalDecision.Deny("not now"));
     }
 

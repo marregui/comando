@@ -6,6 +6,8 @@ import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -13,6 +15,7 @@ import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.UiPort;
 import dev.marregui.comando.core.resource.ConnectionKind;
+import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.result.ResultView;
@@ -27,6 +30,8 @@ import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.core.view.FileView;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -42,6 +47,7 @@ import dev.marregui.comando.ui.kit.async.Coalescer;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.EdtWatchdog;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -100,20 +106,18 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.beans.PropertyChangeListener;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -127,8 +131,11 @@ import java.util.prefs.Preferences;
 public final class ComandoUi implements UiPort, AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(ComandoUi.class.getName());
-    private static final int CMD = Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
-    private static final long MAX_FILE_BYTES = 4L * 1024 * 1024;
+    private static final int CMD = Platform.menuShortcutMask();
+    /** How long closing waits for the event thread to close the window. */
+    private static final Duration CLOSE_BOUND = Duration.ofSeconds(5);
+    /** False once the user said not to offer the kit when comando starts. */
+    static final String KIT_OFFER = "kit.offer";
 
     /** What the shell needs from the application. */
     public record Dependencies(
@@ -142,6 +149,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             PanelTexts texts,
             Supplier<List<StoredConversation>> catalogue,
             ServerToggle server,
+            Setup setup,
             String version,
             Path home,
             Path logDir,
@@ -170,6 +178,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private Notifier notifier;
     private ResourceDialog<ConnectionSpec> connectionsDialog;
     private ResourceDialog<SessionSpec> sessionsDialog;
+    private ResourceDialog<FolderRoot> foldersDialog;
     private ImportSessionsDialog importDialog;
     private Transcript watched;
     private final Runnable transcriptListener = transcriptRender::request;
@@ -238,7 +247,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // same quit as closing the window; when the user cancels it the response cancels a pending logout too, and
         // when it goes ahead the response stays unanswered because the exit ends the process.
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
-            Desktop.getDesktop().setQuitHandler((event, response) -> SwingUtilities.invokeLater(() -> {
+            Desktop.getDesktop().setQuitHandler((event, response) -> Edt.later(() -> {
                 // a trigger that arrives while the question is open is answered with it
                 pendingQuits.add(response);
                 if (!confirmingQuit && !quit()) {
@@ -271,6 +280,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             @Override
             public ResourceActions.Editor connections() {
                 return editor(() -> connectionsDialog);
+            }
+
+            @Override
+            public ResourceActions.Editor folders() {
+                return editor(() -> foldersDialog);
             }
 
             @Override
@@ -320,6 +334,15 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 Intent.StartSession::new,
                 Intent.StopSession::new,
                 (s, name) -> new Intent.OpenSession(name, s.focused(), PanelId.random())), deps.intents());
+        foldersDialog = new ResourceDialog<>(frame, new ResourceDialog.Config<>(
+                FolderKind.INSTANCE,
+                AppState::folders,
+                s -> Map.of(),
+                Intent.SaveFolder::new,
+                null,
+                null,
+                null,
+                null), deps.intents());
         importDialog = new ImportSessionsDialog(frame, deps.intents(), deps.catalogue());
 
         registerCommands();
@@ -443,6 +466,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         status.render(s);
         connectionsDialog.render(s);
         sessionsDialog.render(s);
+        foldersDialog.render(s);
         watchTranscript(s.focusedPanel().session());
         if (focusAfterRender != null && focusAfterRender.shown().isShowing()) {
             Runnable focus = focusAfterRender.focus();
@@ -465,7 +489,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             editorAndSide.setRightComponent(side.component());
             top.add(editorAndSide, BorderLayout.CENTER);
             // place the divider once the split has a size; a stored position that would hide either side is ignored
-            SwingUtilities.invokeLater(() -> {
+            Edt.later(() -> {
                 int width = editorAndSide.getWidth();
                 int saved = prefs.getInt("divider.side", -1);
                 if (width > 0 && saved >= 200 && saved <= width - 200) {
@@ -552,27 +576,14 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     @Override
     public void showFile(String session, String path, String baseDir, int line) {
         Thread.ofVirtual().name("show-file").start(() -> {
-            Path p = path.startsWith("~/") ? Path.of(System.getProperty("user.home"), path.substring(2)) : Path.of(path);
-            if (!p.isAbsolute()) {
-                p = Path.of(baseDir).resolve(p);
-            }
+            Path p = FileView.resolve(path, baseDir);
             try {
-                if (Files.size(p) > MAX_FILE_BYTES) {
-                    deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "File larger than 4 MB: " + p, false));
-                    return;
-                }
-                String text = Files.readString(p, StandardCharsets.UTF_8);
-                // titled with the parent folder, so two files with one name (two READMEs) get two tabs
-                Path parent = p.getParent() == null ? null : p.getParent().getFileName();
-                String name = (parent == null ? "" : parent + "/") + p.getFileName();
-                int dot = name.lastIndexOf('.');
-                String ext = dot < 0 || name.lastIndexOf('/') > dot ? "" : name.substring(dot + 1).toLowerCase(Locale.ROOT);
-                ViewSpec spec = ext.equals("md") && line <= 0 ? new ViewSpec.Markdown(text) : new ViewSpec.Text(p.toString(), text, ext, line);
+                FileView file = FileView.read(p, line);
                 // a file opens on the user's click only: it shows even in a side pane the user hid earlier, and even when
                 // it replaces the same file's view in place
                 Edt.run(() -> {
                     sidePaneHidden = false;
-                    deps.intents().dispatch(new Intent.ShowView(session, name, spec, Placement.SIDE));
+                    deps.intents().dispatch(new Intent.ShowView(session, file.title(), file.spec(), Placement.SIDE));
                     render.request();
                 });
             } catch (IOException e) {
@@ -587,8 +598,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     @Override
-    public void showScratchpad(ViewSpec.TreeNode root) {
-        Edt.run(() -> sidebar.showScratchpad(root));
+    public void showFolder(FolderRoot folder, ViewSpec.TreeNode tree) {
+        Edt.run(() -> sidebar.showFolder(folder, tree));
     }
 
     @Override
@@ -769,6 +780,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // panel: tools that run in its project
         cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, CMD | ALT), this::runGradle, () -> focusedSession().isPresent());
         cmd("tools.jfrq", "Run jfrq on a recording…", null, this::runJfrq);
+        cmd("tools.settings", "Tool settings", null, this::openToolSettings);
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         // view
         cmd("view.palette", "Command palette", key(KeyEvent.VK_P, CMD | SHIFT), () -> new CommandPalette(actions).show(frame));
@@ -783,15 +795,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             sidePaneHidden = sidePaneShown;
             render();
         }, () -> sidePaneShown || side.component().getComponentCount() > 0);
-        cmd("tools.scratchpad", "Scratchpad", null, () -> {
+        cmd("view.files", "Files", null, () -> {
             if (!sidebar.isShown()) {
                 toggleSidebar();
             }
-            if (sidebar.selectedTab() == SessionsSidebar.SCRATCHPAD) {
-                deps.intents().dispatch(new Intent.BrowseScratchpad());
-            } else {
-                sidebar.selectTab(SessionsSidebar.SCRATCHPAD);
-            }
+            sidebar.selectTab(SessionsSidebar.FILES);
+            sidebar.focusFilesFilter();
         });
         cmd("view.restoreLayout", "Restore layout", null, this::restoreArranged, () -> beforeArrange != null);
         // ⌃1–⌃4 follow the lower tabs' order: Session, Approvals, Terminal, Results
@@ -836,10 +845,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("help.tutorial", "Tutorial", null, this::showTutorial, () -> deps.home() != null);
         // ⌘/ stays the editor's comment toggle; ⌘⇧/ is the Mac's Help key
         cmd("help.keys", "Keyboard shortcuts", key(KeyEvent.VK_SLASH, CMD | SHIFT), this::showKeys);
+        cmd("help.kit", "Claude Code kit…", null, this::showKit);
         cmd("help.log", "Show the log", null, this::showLog, () -> deps.logDir() != null);
         cmd("help.dataRoot", "Reveal comando folder", null, () -> reveal(deps.home()), () -> deps.home() != null);
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice
-        boolean mac = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
+        boolean mac = Platform.isMac();
         cmd("app.quit", "Quit comando", mac ? null : key(KeyEvent.VK_Q, CMD), this::quit);
     }
 
@@ -996,20 +1006,21 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     /**
      * Opens a file in a new panel bound to it, or brings forward the panel that has it. The check and the read run
-     * off the EDT; a file that is binary or over {@link OpenFiles#MAX_PANEL_BYTES} shows read-only in the side pane.
+     * off the EDT; a file that is binary or over {@link OpenFiles#MAX_PANEL_BYTES} goes to the side pane, read as
+     * {@link FileView} reads it (a binary file said to be one, a file over {@link FileView#MAX_BYTES} refused).
      * Called on the EDT.
      */
     public void openFile(Path chosen) {
         Path file = chosen.toAbsolutePath().normalize();
         for (PanelState p : deps.state().get().panels()) {
-            if (deps.texts().file(p.id()).map(f -> samePath(f, file)).orElse(false)) {
+            if (deps.texts().file(p.id()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
                 deps.intents().dispatch(new Intent.FocusPanel(p.id()));
                 return;
             }
         }
         // the file of a closed panel: the panel comes back, with its bindings
         for (PanelState p : deps.state().get().closed()) {
-            if (deps.texts().file(p.id()).map(f -> samePath(f, file)).orElse(false)) {
+            if (deps.texts().file(p.id()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
                 deps.intents().dispatch(new Intent.ReopenPanel(p.id()));
                 return;
             }
@@ -1024,9 +1035,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 return;
             }
             PanelId id = PanelId.random();
-            String name = file.getFileName().toString();
             // the title the store gives a panel opened on a file, so the file keeps its name
-            String title = (name.toLowerCase(Locale.ROOT).endsWith(".md") ? name.substring(0, name.length() - 3) : name).strip();
+            String title = PanelTexts.titleOf(file);
             deps.texts().open(id, file).thenAccept(refused -> {
                 if (refused.isEmpty()) {
                     deps.intents().dispatch(new Intent.AddPanel(id, title, deps.texts().document(id)));
@@ -1037,10 +1047,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 Edt.later(() -> openingFiles.remove(file));
             });
         });
-    }
-
-    private static boolean samePath(Path a, Path b) {
-        return a.toAbsolutePath().normalize().toString().equalsIgnoreCase(b.toAbsolutePath().normalize().toString());
     }
 
     /** Panels save as they change; ⌘S saves now and says so, for the habit. */
@@ -1112,6 +1118,81 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot show the tutorial: " + e.getMessage(), false));
             }
         });
+    }
+
+    /** Opens {@code tools.json} in a panel, as any document, written with its defaults first when missing. */
+    private void openToolSettings() {
+        Thread.ofVirtual().name("tool-settings").start(() -> {
+            try {
+                Path file = deps.setup().toolSettings();
+                Edt.later(() -> openFile(file));
+            } catch (IOException | RuntimeException e) {
+                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open the tool settings: " + e.getMessage(), false));
+            }
+        });
+    }
+
+    /** Help ▸ Claude Code kit: what the kit is here, and an install when there is anything to install. */
+    private void showKit() {
+        Thread.ofVirtual().name("kit").start(() -> {
+            try {
+                Setup.KitOffer offer = deps.setup().kit();
+                Edt.later(() -> askKit(offer, false));
+            } catch (IOException | RuntimeException e) {
+                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot read the Claude Code kit's state: " + e.getMessage(), false));
+            }
+        });
+    }
+
+    /**
+     * Offers the kit when comando starts: once the window shows, and unless the user said not to ask again. Any
+     * thread.
+     */
+    public void offerKit(Setup.KitOffer offer) {
+        Edt.later(() -> {
+            if (frame != null && prefs.getBoolean(KIT_OFFER, true)) {
+                askKit(offer, true);
+            }
+        });
+    }
+
+    private void askKit(Setup.KitOffer found, boolean atStart) {
+        Setup.KitOffer offer = found.withFolders(Setup.missingFolders(deps.state().get().folders(), deps.setup().kitFolders()).stream()
+                .map(f -> "Add " + f.name() + " (" + HomeDir.shorten(f.path()) + ") to the Files tab").toList());
+        Object[] options = offer.buttons(atStart).toArray();
+        int pick = JOptionPane.showOptionDialog(frame, Plain.text(offer.message()), "Claude Code kit", JOptionPane.DEFAULT_OPTION,
+                offer.pending() ? JOptionPane.QUESTION_MESSAGE : JOptionPane.INFORMATION_MESSAGE, null, options,
+                options[atStart && options.length > 1 ? 1 : 0]);
+        if (atStart && pick == Setup.DONT_ASK) {
+            prefs.putBoolean(KIT_OFFER, false);
+        }
+        if (!offer.pending() || pick != Setup.DO) {
+            return;
+        }
+        Thread.ofVirtual().name("kit-install").start(() -> {
+            try {
+                List<String> said = new ArrayList<>(deps.setup().installKit());
+                List<String> added = addKitFolders();
+                if (!added.isEmpty()) {
+                    said.add("added " + String.join(" and ", added) + " to the Files tab");
+                }
+                deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, said.isEmpty()
+                        ? "The Claude Code kit was already in place"
+                        : "Claude Code kit: " + String.join("; ", said) + ". New Claude sessions load it.", false));
+            } catch (IOException | RuntimeException e) {
+                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "The Claude Code kit install stopped: " + e.getMessage(), false));
+            }
+        });
+    }
+
+    /** Adds the kit's folders the Files tab lacks; their names. */
+    private List<String> addKitFolders() {
+        List<String> added = new ArrayList<>();
+        for (FolderRoot f : Setup.missingFolders(deps.state().get().folders(), deps.setup().kitFolders())) {
+            deps.intents().dispatch(new Intent.SaveFolder("", f));
+            added.add(f.name());
+        }
+        return added;
     }
 
     /** Every command with a key, by menu, as a table in the side pane. */
@@ -1318,7 +1399,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             return;
         }
         String sql = run.sql().replace('\n', ' ').strip();
-        String title = "result · " + (sql.length() > 40 ? sql.substring(0, 40) + "…" : sql) + " #" + run.requestId();
+        String title = "result · " + Clip.keepStart(sql, 41) + " #" + run.requestId();
         deps.intents().dispatch(new Intent.ShowView("", title, ResultViews.table(r), Placement.LOWER));
     }
 
@@ -1432,7 +1513,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** Ends the shells and live plots and closes the window, without quitting the application. */
     @Override
     public void close() {
-        Edt.runAndWait(() -> {
+        // bounded: an event thread stuck at quit must not keep the process, and comando's lock, alive forever
+        boolean closed = Edt.runAndWait(() -> {
             if (frame == null) {
                 return;
             }
@@ -1450,7 +1532,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 watched = null;
             }
             frame.dispose();
-        });
+        }, CLOSE_BOUND);
+        if (!closed) {
+            LOG.log(System.Logger.Level.WARNING, "the window did not close within " + CLOSE_BOUND.toSeconds()
+                    + " s: the event thread is busy; quitting without it");
+        }
     }
 
     /** Asks for one of {@code names}; nothing happens when there are none or the user cancels. */

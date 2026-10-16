@@ -4,8 +4,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Splits a block of SQL into its statements at the semicolons outside quotes ({@code '…'}, {@code "…"}) and
- * comments ({@code --…}, {@code /* … *}{@code /}). A statement that holds only comments or blanks is dropped.
+ * Splits a block of SQL into its statements at the semicolons outside quotes ({@code '…'}, {@code "…"}), PostgreSQL
+ * escape strings ({@code E'…\'…'}), dollar quotes ({@code $$…$$}, {@code $tag$…$tag$}) and comments ({@code --…},
+ * {@code /* … *}{@code /}), so the count matches the statements the server runs. A statement that holds only comments
+ * or blanks is dropped.
  */
 public final class Statements {
 
@@ -24,8 +26,13 @@ public final class Statements {
         while (i < n) {
             char c = sql.charAt(i);
             if (c == '\'' || c == '"') {
+                boolean escapes = c == '\'' && isEscapePrefix(sql, i);
                 int j = i + 1;
                 while (j < n) {
+                    if (escapes && sql.charAt(j) == '\\') {
+                        j += 2; // a backslash escape inside E'…'
+                        continue;
+                    }
                     if (sql.charAt(j) == c) {
                         if (j + 1 < n && sql.charAt(j + 1) == c) {
                             j += 2; // a doubled quote inside the literal
@@ -36,6 +43,14 @@ public final class Statements {
                     j++;
                 }
                 i = Math.min(n, j + 1);
+            } else if (c == '$') {
+                int tagEnd = dollarTagEnd(sql, i);
+                if (tagEnd < 0) {
+                    i++;
+                } else {
+                    int close = sql.indexOf(sql.substring(i, tagEnd), tagEnd);
+                    i = close < 0 ? n : close + tagEnd - i;
+                }
             } else if (c == '-' && i + 1 < n && sql.charAt(i + 1) == '-') {
                 int eol = sql.indexOf('\n', i);
                 i = eol < 0 ? n : eol + 1;
@@ -52,6 +67,36 @@ public final class Statements {
         }
         add(out, sql.substring(start));
         return out;
+    }
+
+    /** An {@code E} or {@code e} right before the quote at {@code quote} that starts a word: an escape string. */
+    private static boolean isEscapePrefix(String sql, int quote) {
+        if (quote < 1) {
+            return false;
+        }
+        char e = sql.charAt(quote - 1);
+        return (e == 'E' || e == 'e') && (quote < 2 || !isIdentifierPart(sql.charAt(quote - 2)));
+    }
+
+    /**
+     * The index after the opening dollar quote at {@code at} ({@code $$} or {@code $tag$}, the tag an identifier
+     * that does not start with a digit), or -1: {@code $1} is a parameter and {@code a$b} an identifier.
+     */
+    private static int dollarTagEnd(String sql, int at) {
+        if (at > 0 && isIdentifierPart(sql.charAt(at - 1))) {
+            return -1;
+        }
+        int j = at + 1;
+        if (j < sql.length() && (Character.isLetter(sql.charAt(j)) || sql.charAt(j) == '_')) {
+            while (j < sql.length() && (Character.isLetterOrDigit(sql.charAt(j)) || sql.charAt(j) == '_')) {
+                j++;
+            }
+        }
+        return j < sql.length() && sql.charAt(j) == '$' ? j + 1 : -1;
+    }
+
+    private static boolean isIdentifierPart(char c) {
+        return Character.isLetterOrDigit(c) || c == '_' || c == '$';
     }
 
     private static void add(List<String> out, String statement) {

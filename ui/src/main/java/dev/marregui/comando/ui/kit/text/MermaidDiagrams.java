@@ -1,8 +1,12 @@
 package dev.marregui.comando.ui.kit.text;
 
+import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.kit.desktop.Platform;
+
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
+import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -40,6 +44,7 @@ public final class MermaidDiagrams {
     /** Part of every cache key: a change of how diagrams are drawn draws them again. */
     private static final String STYLE = "dark|transparent|" + SCALE;
     static final Duration TIMEOUT = Duration.ofSeconds(30);
+    private static final int MAX_REASON_CHARS = 200;
 
     /** What the preview can show for a diagram. */
     public sealed interface Diagram {
@@ -60,6 +65,7 @@ public final class MermaidDiagrams {
 
     private final Path cache;
     private final Path mmdc;
+    private final Duration timeout;
     private final Map<String, String> failures = new ConcurrentHashMap<>();
     private final Map<String, int[]> sizes = new ConcurrentHashMap<>();
     /** Keys being drawn, with who waits for each. */
@@ -68,8 +74,13 @@ public final class MermaidDiagrams {
     private volatile Process drawing;
 
     MermaidDiagrams(Path cache, Path mmdc) {
+        this(cache, mmdc, TIMEOUT);
+    }
+
+    MermaidDiagrams(Path cache, Path mmdc, Duration timeout) {
         this.cache = cache;
         this.mmdc = mmdc;
+        this.timeout = timeout;
         this.drawer = cache == null || mmdc == null ? null
                 : Executors.newSingleThreadExecutor(r -> Thread.ofPlatform().name("mermaid").daemon(true).unstarted(r));
     }
@@ -115,6 +126,8 @@ public final class MermaidDiagrams {
             if (size[0] > 0) {
                 return new Diagram.Ready(png, Math.max(1, size[0] / SCALE), Math.max(1, size[1] / SCALE));
             }
+            // drawn, but not a picture: shown as a failure, not drawn and announced again and again
+            return new Diagram.Unavailable(unreadable(key, png));
         }
         boolean[] first = new boolean[1];
         waiting.compute(key, (k, list) -> {
@@ -152,13 +165,14 @@ public final class MermaidDiagrams {
                         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                         .redirectError(err.toFile());
                 // mmdc is a node script: an app started from Finder has no node on its PATH, so its own folder goes first
-                pb.environment().put("PATH", mmdc.getParent() + ":" + System.getenv().getOrDefault("PATH", "/usr/bin:/bin"));
+                pb.environment().put("PATH", mmdc.getParent() + File.pathSeparator + System.getenv().getOrDefault("PATH", "/usr/bin:/bin"));
                 Process p = pb.start();
                 drawing = p;
                 p.getOutputStream().close();
-                if (!p.waitFor(TIMEOUT.toMillis(), TimeUnit.MILLISECONDS)) {
-                    p.destroyForcibly();
-                    failures.put(key, "mmdc did not finish within " + TIMEOUT.toSeconds() + " s");
+                if (!p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                    // mmdc drives a headless Chromium; stopping node alone would leave the browser running
+                    stop(p);
+                    failures.put(key, "mmdc did not finish within " + timeout.toSeconds() + " s");
                 } else if (p.exitValue() != 0 || !Files.isRegularFile(out)) {
                     failures.put(key, "mmdc cannot draw it: " + firstLine(Files.readString(err, StandardCharsets.UTF_8)));
                 } else {
@@ -188,6 +202,20 @@ public final class MermaidDiagrams {
         finish(key);
     }
 
+    /** Records that the cached picture of {@code key} cannot be read and removes it; returns why. */
+    private String unreadable(String key, Path png) {
+        String why = "mmdc drew a picture that cannot be read";
+        failures.put(key, why);
+        sizes.remove(key);
+        try {
+            Files.deleteIfExists(png);
+        } catch (IOException e) {
+            LOG.log(System.Logger.Level.DEBUG, "cannot remove " + png + ": " + e.getMessage());
+        }
+        LOG.log(System.Logger.Level.WARNING, "Mermaid diagram not shown [key=" + key + "]: " + why);
+        return why;
+    }
+
     /** Tells whoever waits for {@code key} that it is drawn or rejected. */
     private void finish(String key) {
         List<Runnable> callbacks = waiting.remove(key);
@@ -201,10 +229,15 @@ public final class MermaidDiagrams {
             drawer.shutdownNow();
             Process p = drawing;
             if (p != null) {
-                p.descendants().forEach(ProcessHandle::destroyForcibly);
-                p.destroyForcibly();
+                stop(p);
             }
         }
+    }
+
+    /** Stops {@code p} and every process it started; the children first, as they leave its tree when it ends. */
+    private static void stop(Process p) {
+        p.descendants().forEach(ProcessHandle::destroyForcibly);
+        p.destroyForcibly();
     }
 
     /** The cache file name of a diagram: its text and how it is drawn, hashed. */
@@ -244,12 +277,7 @@ public final class MermaidDiagrams {
      * {@code /usr/local}'s, as an app started from Finder has a short PATH.
      */
     static Optional<Path> findMmdc() {
-        List<Path> candidates = new ArrayList<>();
-        for (String dir : System.getenv().getOrDefault("PATH", "").split(":")) {
-            if (!dir.isBlank()) {
-                candidates.add(Path.of(dir, "mmdc"));
-            }
-        }
+        List<Path> candidates = new ArrayList<>(Platform.onPath("mmdc"));
         Path nvm = Path.of(System.getProperty("user.home"), ".nvm", "versions", "node");
         if (Files.isDirectory(nvm)) {
             try (Stream<Path> versions = Files.list(nvm)) {
@@ -289,7 +317,7 @@ public final class MermaidDiagrams {
         String s = text == null ? "" : text.strip();
         for (String line : s.split("\\R")) {
             if (!line.isBlank()) {
-                return line.length() > 200 ? line.substring(0, 200) + "…" : line.strip();
+                return Clip.keepStart(line.strip(), MAX_REASON_CHARS);
             }
         }
         return "no reason given";

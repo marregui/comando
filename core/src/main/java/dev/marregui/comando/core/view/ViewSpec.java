@@ -116,10 +116,15 @@ public sealed interface ViewSpec {
     }
 
     /**
-     * A tree node; {@code link} is what activating the node opens ({@code comando-file:} path and line),
-     * empty for none.
+     * A tree node; {@code link} is what activating the node opens ({@link #fileLink} path and line), empty for none.
      */
     record TreeNode(String label, String detail, String link, List<TreeNode> children) {
+
+        /** The scheme of a link that opens a file at a line, read by every view that opens files. */
+        public static final String FILE_SCHEME = "comando-file:";
+        /** The label of the entry that ends a folder read only in part. */
+        public static final String MORE = "…";
+
         public TreeNode {
             Objects.requireNonNull(label, "label");
             Objects.requireNonNull(detail, "detail");
@@ -132,6 +137,11 @@ public sealed interface ViewSpec {
         }
 
         public static final TreeNode NONE = new TreeNode("", "", "", List.of());
+
+        /** The link that opens {@code path} at {@code line} (0 for none). */
+        public static String fileLink(String path, int line) {
+            return FILE_SCHEME + path + "#" + line;
+        }
     }
 
     /** A labelled tree: test results, a schema, a call tree. */

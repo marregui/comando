@@ -3,6 +3,7 @@ package dev.marregui.comando.core.resource;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
@@ -15,6 +16,7 @@ import dev.marregui.comando.core.state.SessionState;
 import org.assertj.core.groups.Tuple;
 import org.junit.jupiter.api.Test;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -34,6 +36,44 @@ class ResourceKindTest {
         assertThat(new ConnectionSpec("a", "h", 1, "d", "u", "p", false).sslMode()).isEqualTo("prefer");
         assertThat(new ConnectionSpec("a", "h", 1, "d", "u", "p", false, null).sslMode()).isEqualTo("prefer");
         assertThatThrownBy(() -> new ConnectionSpec("a", "h", 1, "d", "u", "p", false, "maybe")).hasMessageContaining("sslMode is one of");
+    }
+
+    @Test
+    void folderRoundTripAndItsFormIsChecked() {
+        FolderRoot spec = new FolderRoot("Plugin", "/Users/x/.claude/plugins/p", "README.md", List.of("tools", "bin"));
+        assertThat(FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(spec))).isEqualTo(spec);
+        assertThat(FolderKind.INSTANCE.toAttributes(spec)).containsEntry("excludes", "tools, bin");
+        assertThat(FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p", "excludes", " a ,, b ,")).excludes())
+                .as("blank names are dropped").containsExactly("a", "b");
+        String home = System.getProperty("user.home");
+        assertThat(FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "~/notes")).path()).isEqualTo(home + "/notes");
+        assertThat(FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "~")).path()).isEqualTo(home);
+        assertThatThrownBy(() -> FolderKind.INSTANCE.fromAttributes(Map.of("name", " ", "path", "/p"))).hasMessage("the folder needs a name");
+        assertThatThrownBy(() -> FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", ""))).hasMessage("choose the folder to show");
+        assertThatThrownBy(() -> FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "notes")))
+                .hasMessage("the folder must be a full path, such as ~/notes: notes");
+        for (String outside : List.of("/etc/passwd", "../x.md", "a/../../x.md")) {
+            assertThatThrownBy(() -> FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p", "index", outside)))
+                    .as(outside).hasMessageStartingWith("the index file must be inside the folder");
+        }
+        assertThat(FolderKind.INSTANCE.removalQuestion(null, "KB")).isEqualTo("Remove folder KB from the Files tab? Its files stay on disk.");
+    }
+
+    @Test
+    void aFolderLeavesOutBuildOutputAndItsOwnNamesIgnoringCase() {
+        FolderRoot f = new FolderRoot("p", "/p", null, List.of("Tools"));
+        assertThat(f.index()).isEmpty();
+        assertThat(f.indexFile()).isEmpty();
+        assertThat(f.excludes("tools")).isTrue();
+        assertThat(f.excludes("node_modules")).isTrue();
+        assertThat(f.excludes("Build")).isTrue();
+        assertThat(f.excludes("skills")).isFalse();
+        assertThat(new FolderRoot("p", "/p", "docs/ALPHA.md", null).indexFile()).contains(Path.of("/p/docs/ALPHA.md"));
+        assertThat(FolderRoot.defaults("/home/u")).singleElement().satisfies(d -> {
+            assertThat(d.path()).isEqualTo("/home/u/.claude");
+            assertThat(d.index()).isEqualTo("CLAUDE.md");
+            assertThat(d.excludes("projects")).as("Claude Code's transcripts are not documents").isTrue();
+        });
     }
 
     @Test

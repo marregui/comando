@@ -1,11 +1,10 @@
 package dev.marregui.comando.ui.widget.capability;
 
+import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.JComponent;
-import javax.swing.JOptionPane;
-import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.KeyboardFocusManager;
@@ -98,15 +97,6 @@ public final class Capabilities {
         return false;
     }
 
-    /** Asks for a file and exports to it; failures show in a dialog. */
-    public static void export(Component parent, Exportable e) {
-        export(parent, e, Path.of(System.getProperty("user.home")), (file, error) -> {
-            if (error != null) {
-                JOptionPane.showMessageDialog(parent, "Cannot save " + file + ": " + error, "Export", JOptionPane.ERROR_MESSAGE);
-            }
-        });
-    }
-
     /**
      * Asks for a file, starting in {@code dir}, takes the widget's snapshot on the EDT, and writes it on a virtual
      * thread; {@code outcome} then gets the file and null, or the file and the error, on the EDT. Nothing happens when
@@ -127,7 +117,7 @@ public final class Capabilities {
                 error = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
             }
             String failed = error;
-            SwingUtilities.invokeLater(() -> outcome.accept(file, failed));
+            Edt.later(() -> outcome.accept(file, failed));
         });
     }
 

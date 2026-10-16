@@ -6,7 +6,8 @@ import java.util.Objects;
  * A message for the status bar.
  *
  * @param subject what the notice is about, so a later event about the same thing can replace or clear it: one of
- *                {@link #panel}, {@link #connection}, {@link #session}, {@link #approval}, or empty for a general notice
+ *                {@link #panel}, {@link #connection}, {@link #session}, {@link #folder}, {@link #approval}, or empty for a
+ *                general notice
  */
 public record Notice(Level level, String text, long atMillis, String subject) {
 
@@ -41,6 +42,11 @@ public record Notice(Level level, String text, long atMillis, String subject) {
     /** About a session: start, turn errors, exit. */
     public static String session(String name) {
         return "session:" + name;
+    }
+
+    /** About a folder of the Files tab: saving it, reading it. */
+    public static String folder(String name) {
+        return "folder:" + name;
     }
 
     /** About an approval card while it waits. */

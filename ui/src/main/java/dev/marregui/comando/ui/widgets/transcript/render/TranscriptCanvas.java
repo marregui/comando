@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.widgets.transcript.render;
 
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.AbstractAction;
@@ -11,13 +12,11 @@ import javax.swing.KeyStroke;
 import javax.swing.Scrollable;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Dimension;
-import java.awt.Graphics2D;
 import java.awt.Graphics;
-import java.awt.GraphicsEnvironment;
+import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
@@ -25,7 +24,6 @@ import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
 import java.awt.event.HierarchyEvent;
-import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -129,7 +127,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
                 updateTicker();
             }
         });
-        int menu = GraphicsEnvironment.isHeadless() ? InputEvent.META_DOWN_MASK : Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+        int menu = Platform.menuShortcutMask();
         getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_C, menu), "copy-selection");
         getActionMap().put("copy-selection", new AbstractAction() {
             @Override
@@ -660,7 +658,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
                 }
                 item.paint(g, PAD_X, top, clip, this);
                 if (item == flashing) {
-                    g.setColor(new Color(Theme.ACCENT.getRed(), Theme.ACCENT.getGreen(), Theme.ACCENT.getBlue(), 50));
+                    g.setColor(Theme.withAlpha(Theme.ACCENT, 50));
                     g.fillRoundRect(PAD_X - 4, top, laidWidth + 8, heights[i], Theme.RADIUS, Theme.RADIUS);
                 }
             }

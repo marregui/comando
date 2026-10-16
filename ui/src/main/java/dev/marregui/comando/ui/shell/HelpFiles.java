@@ -3,6 +3,8 @@ package dev.marregui.comando.ui.shell;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -36,6 +38,15 @@ final class HelpFiles {
      * @throws IOException when the build carries no tutorial, or the file cannot be written
      */
     static Path writeTutorial(Path home) throws IOException {
+        return writeTutorial(home, Files::move);
+    }
+
+    /** How a file is moved into place: {@link Files#move}, or a stand-in in tests. */
+    interface Move {
+        void move(Path from, Path to, CopyOption... options) throws IOException;
+    }
+
+    static Path writeTutorial(Path home, Move move) throws IOException {
         String text;
         try (InputStream in = HelpFiles.class.getResourceAsStream(TUTORIAL_RESOURCE)) {
             if (in == null) {
@@ -51,7 +62,11 @@ final class HelpFiles {
         Path tmp = Files.createTempFile(file.getParent(), "tutorial", ".tmp");
         try {
             Files.writeString(tmp, text, StandardCharsets.UTF_8);
-            Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            try {
+                move.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                move.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+            }
         } finally {
             Files.deleteIfExists(tmp);
         }

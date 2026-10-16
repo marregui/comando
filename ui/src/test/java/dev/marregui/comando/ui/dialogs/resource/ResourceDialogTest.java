@@ -3,10 +3,12 @@ package dev.marregui.comando.ui.dialogs.resource;
 import com.formdev.flatlaf.FlatDarkLaf;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.resource.ConnectionKind;
+import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
@@ -15,12 +17,14 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.testkit.RecordingSink;
 import dev.marregui.comando.testkit.States;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.AbstractButton;
+import javax.swing.InputMap;
 import javax.swing.JButton;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
@@ -99,6 +103,32 @@ class ResourceDialogTest {
         assertEveryButtonVisible(connections.content(), "Test", "Connect", "Assign to panel", "Save");
     }
 
+    @Test
+    void aFolderHasSaveOnlyAndItsFormIsChecked() {
+        RecordingSink sink = new RecordingSink();
+        ResourceDialog<FolderRoot> d = folders(sink);
+        AppState state = States.twoPanels().withFolders(List.of(new FolderRoot("KB", "/kb", "ALPHA.md", List.of())));
+        d.render(state);
+        d.prepare(state, "KB");
+        assertEveryButtonVisible(d.content(), "Save");
+        assertThat(all(d.content(), AbstractButton.class, b -> List.of("Test", "Connect", "Start", "Assign to panel").contains(b.getText())))
+                .as("a folder is neither tested, opened nor assigned").isEmpty();
+        JRootPane root = new JRootPane();
+        d.install(root);
+        assertThat(registered(root)).as("Esc only, no ⌘⏎: nothing to assign").containsExactly(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
+
+        text(d, "index").setText("../outside.md");
+        click(d, "Save");
+        assertThat(sink.intents()).isEmpty();
+        assertThat(message(d).getText()).isEqualTo("the index file must be inside the folder: ../outside.md");
+
+        text(d, "index").setText("docs/ALPHA.md");
+        text(d, "excludes").setText("tools, bin");
+        click(d, "Save");
+        assertThat(sink.intents()).containsExactly(new Intent.SaveFolder("KB", new FolderRoot("KB", "/kb", "docs/ALPHA.md", List.of("tools", "bin"))));
+        assertThat(message(d).getText()).isEqualTo("Saved KB");
+    }
+
     // ---- keys
 
     @Test
@@ -107,10 +137,9 @@ class ResourceDialogTest {
         JRootPane root = new JRootPane();
         d.install(root);
         assertThat(root.getDefaultButton().getText()).isEqualTo("Save");
-        boolean modifiedEnter = Stream.of(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).allKeys())
-                .anyMatch(k -> k.getKeyCode() == KeyEvent.VK_ENTER && k.getModifiers() != 0);
-        assertThat(modifiedEnter).isTrue();
-        assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0))).isNotNull();
+        assertThat(registered(root)).as("the look's own ⌃⏎ presses the default button; comando adds Esc and ⌘⏎")
+                .containsExactlyInAnyOrder(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0),
+                        KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, Platform.menuShortcutMask()));
     }
 
     @Test
@@ -401,6 +430,18 @@ class ResourceDialogTest {
                 Intent.StartSession::new,
                 Intent.StopSession::new,
                 (s, name) -> new Intent.BindSession(s.focused(), name)), sink);
+    }
+
+    /** The keys bound with {@link JComponent#registerKeyboardAction}: the look binds action names, that call binds actions. */
+    private static List<KeyStroke> registered(JRootPane root) {
+        InputMap map = root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
+        KeyStroke[] keys = map.keys();
+        return keys == null ? List.of() : Stream.of(keys).filter(k -> !(map.get(k) instanceof String)).toList();
+    }
+
+    private static ResourceDialog<FolderRoot> folders(RecordingSink sink) {
+        return new ResourceDialog<>(null, new ResourceDialog.Config<>(
+                FolderKind.INSTANCE, AppState::folders, s -> Map.of(), Intent.SaveFolder::new, null, null, null, null), sink);
     }
 
     private static ResourceDialog<ConnectionSpec> connections(RecordingSink sink) {

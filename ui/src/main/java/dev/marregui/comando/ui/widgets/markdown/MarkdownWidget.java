@@ -11,9 +11,7 @@ import dev.marregui.comando.ui.widget.capability.Exportable;
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JScrollPane;
-import java.io.IOException;
 import java.nio.file.Files;
-import java.nio.file.Path;
 
 /** Rendered Markdown: READ- documents, ALPHA.md, Claude's notes. */
 public final class MarkdownWidget implements Widget<ViewSpec.Markdown>, Copyable, Exportable {

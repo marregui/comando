@@ -14,7 +14,7 @@ import javax.swing.JComponent;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 
-/** A labelled tree: test results, a schema, the scratchpad. A node with a file link opens the file. */
+/** A labelled tree: test results, a schema, a folder. A node with a file link opens the file. */
 public final class TreeWidget implements Widget<ViewSpec.Tree>, Copyable {
 
     private final TreeView tree = new TreeView();

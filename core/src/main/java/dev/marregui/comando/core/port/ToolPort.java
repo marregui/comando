@@ -1,8 +1,12 @@
 package dev.marregui.comando.core.port;
 
+import dev.marregui.comando.core.model.FolderRoot;
+
+import java.util.List;
+
 /**
  * Development tools run outside the JVM or read from disk: Gradle builds, jfrq on a recording, JFR
- * summaries, the scratchpad. Calls return at once; output goes to the run's console and results come
+ * summaries, the Files tab's folders. Calls return at once; output goes to the run's console and results come
  * back as intents.
  */
 public interface ToolPort {
@@ -22,6 +26,9 @@ public interface ToolPort {
     /** Reads a JFR recording and shows its event summary and its CPU and heap series. */
     void openRecording(String path);
 
-    /** Shows the scratchpad's day folders and documents as a tree. */
-    void browseScratchpad();
+    /** Reads {@code folders} once, now, each as a tree. */
+    void readFolders(List<FolderRoot> folders);
+
+    /** Reads {@code folders} every few seconds from now on, and stops reading any other. */
+    void watchFolders(List<FolderRoot> folders);
 }

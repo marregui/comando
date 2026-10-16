@@ -1,5 +1,7 @@
 package dev.marregui.comando.app;
 
+import dev.marregui.comando.ui.PanelTexts;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
@@ -22,13 +24,13 @@ import java.util.function.Consumer;
  * Each panel's text as a file of its own. A panel's own file is Markdown in one folder, named after the panel's
  * title; it is written when the panel is created, follows the panel's renames, stays while the panel is closed, and
  * goes only when the panel is removed or the file is deleted outside comando. A panel opened on a file elsewhere
- * (a scratchpad document) is bound to that path: comando never renames or deletes it. No file is overwritten after an
+ * (a document from the Files tab) is bound to that path: comando never renames or deletes it. No file is overwritten after an
  * edit made outside comando: {@link #outside} reports the outside text so the panel can take it, and a write that finds an outside
  * edit nobody took keeps it next to the file under another name. Writes go to a temporary file moved over the old
  * one, as the store files do.
  * <p>
- * The store's writer thread calls every method that writes; {@link #bind} and {@link #file} are called from the
- * EDT, and only read or claim a file that already exists, which a new name never takes.
+ * The store's writer thread calls every method that writes, and {@link #bind}; {@link #file} is called from the EDT,
+ * and only reads a binding, which a new name never takes.
  */
 final class PanelFiles {
 
@@ -138,8 +140,7 @@ final class PanelFiles {
 
     /** The title a file gives a panel opened on it: its name without the extension. */
     static String title(Path file) {
-        String name = file.getFileName().toString();
-        return (name.toLowerCase(Locale.ROOT).endsWith(EXTENSION) ? name.substring(0, name.length() - EXTENSION.length()) : name).strip();
+        return PanelTexts.titleOf(file);
     }
 
     /** Text read for a panel, or the reason it could not be. */

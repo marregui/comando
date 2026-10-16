@@ -5,10 +5,9 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 
 import javax.swing.SwingUtilities;
 import java.nio.file.Files;

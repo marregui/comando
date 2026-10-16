@@ -33,7 +33,6 @@ public final class EdtWatchdog implements AutoCloseable {
     public static final long HANG_LIMIT_MILLIS = 1_000;
     /** A drawing stall this long is reported with its stack, as a hang would be. */
     public static final long DRAWING_LIMIT_MILLIS = 2_000;
-    private static final System.Logger LOG = System.getLogger(EdtWatchdog.class.getName());
 
     /** What held the EDT, from one look at its stack. */
     public enum Kind {
@@ -123,13 +122,6 @@ public final class EdtWatchdog implements AutoCloseable {
         this.hangLimitMillis = hangLimitMillis;
         this.drawingLimitMillis = drawingLimitMillis;
         this.thread = Thread.ofPlatform().daemon(true).name("edt-watchdog").start(this::watch);
-    }
-
-    /** Logs a warning with the EDT's stack for each hang. */
-    public static EdtWatchdog logging() {
-        return new EdtWatchdog(stall -> LOG.log(System.Logger.Level.WARNING,
-                "the EDT has not answered for " + stall.millis() + " ms [" + stall.kind() + "] " + stall.where() + ":\n"
-                        + stall.stack()));
     }
 
     /** Waits until the EDT has answered a probe, so the watchdog knows it; for tests. */

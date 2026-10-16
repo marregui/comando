@@ -1,19 +1,19 @@
 package dev.marregui.comando.ui.panels;
 
+import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PlanUsage;
+import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
+import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
-
-import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.port.IntentSink;
 
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -46,8 +46,6 @@ import java.util.regex.Pattern;
  * panel's session, connection and running work on the right.
  */
 public final class StatusBar {
-
-    /** Context window size assumed for the percentage; Claude Code reports tokens, not the window. */
 
     private final JPanel root = new JPanel(new BorderLayout());
     private final JLabel notice = new JLabel(" ");
@@ -244,8 +242,7 @@ public final class StatusBar {
     }
 
     static String historyLine(Notice n) {
-        String text = n.text().length() > 160 ? n.text().substring(0, 159) + "…" : n.text();
-        return (n.atMillis() > 0 ? TIME.format(Instant.ofEpochMilli(n.atMillis())) + "  " : "") + text;
+        return (n.atMillis() > 0 ? TIME.format(Instant.ofEpochMilli(n.atMillis())) + "  " : "") + Clip.keepStart(n.text(), 160);
     }
 
     private static Color color(Notice.Level level) {

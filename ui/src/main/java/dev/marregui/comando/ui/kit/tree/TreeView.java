@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.kit.tree;
 
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -50,11 +51,11 @@ public final class TreeView {
             public Component getTreeCellRendererComponent(JTree t, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean focus) {
                 JLabel l = (JLabel) super.getTreeCellRendererComponent(t, value, sel, expanded, leaf, row, focus);
                 if (value instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof ViewSpec.TreeNode node) {
-                    String label = node.label().startsWith("✗ ") ? "<span style='color:" + Theme.hex(Theme.DANGER) + "'>" + esc(node.label()) + "</span>"
-                            : esc(node.label());
+                    String label = node.label().startsWith("✗ ") ? "<span style='color:" + Theme.hex(Theme.DANGER) + "'>" + MarkdownHtml.escape(node.label()) + "</span>"
+                            : MarkdownHtml.escape(node.label());
                     l.setText(node.detail().isEmpty() && !node.label().startsWith("✗ ") ? Plain.text(node.label())
                             : "<html>" + label + (node.detail().isEmpty() ? "" : "&nbsp;&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>"
-                            + esc(node.detail()) + "</span>") + "</html>");
+                            + MarkdownHtml.escape(node.detail()) + "</span>") + "</html>");
                     l.setToolTipText(node.link().isEmpty() ? null : activateClicks == 1 ? "Click to open" : "Double-click to open");
                     Icon icon = icons.apply(node);
                     if (icon != null) {
@@ -268,9 +269,5 @@ public final class TreeView {
         for (int i = 0; i < n.getChildCount(); i++) {
             append(sb, (DefaultMutableTreeNode) n.getChildAt(i), depth + 1);
         }
-    }
-
-    private static String esc(String s) {
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 }

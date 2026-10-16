@@ -23,9 +23,9 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
- * The buttons above a list of resources (sessions, connections, panels), in two groups: on the left, add and whatever else
- * brings resources in; on the right, edit, clone and remove, which act on the list's selected row and are off while
- * none is selected. Remove asks first, naming what removal does: a resource in use (a running session, an open
+ * The buttons above a list of resources (sessions, connections, panels, folders), in two groups: on the left, add and
+ * whatever else brings resources in; on the right, edit, clone and remove, which act on the selected row and are off
+ * while none is selected. Remove asks first, naming what removal does: a resource in use (a running session, an open
  * connection or panel) offers "Stop and remove" ("Disconnect and remove", "Close and remove") or "Leave it", one not
  * in use "Remove" or "Cancel". The safe answer is the default, and closing the question gives it.
  *
@@ -50,6 +50,37 @@ public final class ResourceActions<T> {
         int ask(Component parent, String text, String title, Object[] options);
     }
 
+    /** Where the selected row comes from: a list, or the top level of a tree. */
+    public interface Selection<T> {
+        /** The selected row, or null. */
+        T selected();
+
+        /** Calls {@code listener} whenever the selection may have changed. */
+        void onChange(Runnable listener);
+
+        /** What the removal question is shown over. */
+        Component component();
+
+        static <T> Selection<T> of(JList<T> list) {
+            return new Selection<>() {
+                @Override
+                public T selected() {
+                    return list.getSelectedValue();
+                }
+
+                @Override
+                public void onChange(Runnable listener) {
+                    list.addListSelectionListener(e -> listener.run());
+                }
+
+                @Override
+                public Component component() {
+                    return list;
+                }
+            };
+        }
+    }
+
     /**
      * The rows of the list as resources.
      *
@@ -71,7 +102,7 @@ public final class ResourceActions<T> {
         }
     }
 
-    private final JList<T> list;
+    private final Selection<T> selection;
     private final Rows<T> rows;
     private final Consumer<String> remove;
     private final Questions questions;
@@ -84,7 +115,12 @@ public final class ResourceActions<T> {
      */
     public ResourceActions(JList<T> list, Rows<T> rows, Editor editor, Consumer<String> remove, Questions questions,
                            JButton... moreLeft) {
-        this.list = list;
+        this(Selection.of(list), rows, editor, remove, questions, moreLeft);
+    }
+
+    public ResourceActions(Selection<T> selection, Rows<T> rows, Editor editor, Consumer<String> remove, Questions questions,
+                           JButton... moreLeft) {
+        this.selection = selection;
         this.rows = rows;
         this.remove = remove;
         this.questions = questions;
@@ -98,7 +134,7 @@ public final class ResourceActions<T> {
         bar.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         bar.add(group(FlowLayout.LEFT, left), BorderLayout.WEST);
         bar.add(group(FlowLayout.RIGHT, onSelection), BorderLayout.EAST);
-        list.addListSelectionListener(e -> enable());
+        selection.onChange(this::enable);
         enable();
     }
 
@@ -110,20 +146,20 @@ public final class ResourceActions<T> {
     /** Removes {@code row} after asking; the context menu's Remove does the same. */
     public void remove(T row) {
         Object[] options = rows.inUse().test(row) ? new Object[]{rows.closeVerb() + " and remove", "Leave it"} : new Object[]{"Remove", "Cancel"};
-        if (questions.ask(list, Plain.text(rows.question().apply(row)), "Remove " + Plain.text(rows.label().apply(row)), options) == 0) {
+        if (questions.ask(selection.component(), Plain.text(rows.question().apply(row)), "Remove " + Plain.text(rows.label().apply(row)), options) == 0) {
             remove.accept(rows.name().apply(row));
         }
     }
 
     private void selected(Consumer<T> action) {
-        T t = list.getSelectedValue();
+        T t = selection.selected();
         if (t != null) {
             action.accept(t);
         }
     }
 
     private void enable() {
-        boolean any = list.getSelectedValue() != null;
+        boolean any = selection.selected() != null;
         onSelection.forEach(b -> b.setEnabled(any));
     }
 

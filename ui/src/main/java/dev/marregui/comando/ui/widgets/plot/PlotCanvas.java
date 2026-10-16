@@ -8,8 +8,8 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.FontMetrics;
-import java.awt.Graphics2D;
 import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.event.MouseAdapter;
@@ -269,7 +269,7 @@ final class PlotCanvas extends JComponent {
         BufferedImage img = new BufferedImage(Math.max(getWidth(), 800), Math.max(getHeight(), 500), BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
         try {
-            g.setColor(getBackground() == null ? Color.DARK_GRAY : getBackground());
+            g.setColor(getBackground() == null ? Theme.CARD : getBackground());
             g.fillRect(0, 0, img.getWidth(), img.getHeight());
             int saved = hoverX;
             hoverX = -1;
@@ -338,7 +338,7 @@ final class PlotCanvas extends JComponent {
         }
         // zoom box and crosshair
         if (dragStart >= 0 && dragNow >= 0) {
-            g.setColor(new Color(Theme.ACCENT.getRed(), Theme.ACCENT.getGreen(), Theme.ACCENT.getBlue(), 50));
+            g.setColor(Theme.withAlpha(Theme.ACCENT, 50));
             g.fillRect(Math.min(dragStart, dragNow), a.y, Math.abs(dragNow - dragStart), a.height);
         } else if (hoverX >= a.x && hoverX <= a.x + a.width) {
             paintCrosshair(g, a, fm);

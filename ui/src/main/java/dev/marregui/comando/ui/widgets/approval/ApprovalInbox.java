@@ -1,14 +1,13 @@
 package dev.marregui.comando.ui.widgets.approval;
 
-import dev.marregui.comando.core.model.PermissionRules;
-
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
+import dev.marregui.comando.core.model.PermissionRules;
+import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.format.Json;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
@@ -53,14 +52,11 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.GraphicsEnvironment;
 import java.awt.KeyboardFocusManager;
 import java.awt.Rectangle;
-import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.FocusAdapter;
 import java.awt.event.FocusEvent;
-import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -92,8 +88,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     /** How long a first L waits for the second. */
     static final long CONFIRM_MILLIS = 3_000;
     private static final int AGE_TICK_MILLIS = 30_000;
-    private static final ObjectMapper JSON = new ObjectMapper();
-    private static final int MENU = GraphicsEnvironment.isHeadless() ? InputEvent.META_DOWN_MASK : Toolkit.getDefaultToolkit().getMenuShortcutKeyMaskEx();
+    private static final int MENU = Platform.menuShortcutMask();
     private static final String EMPTY = "No approvals waiting. Permission requests from every session arrive here.";
 
     /** Where the keyboard focus is and how to move it: the window's focus manager, or a fake in tests. */
@@ -309,7 +304,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
 
         Card(Approval a) {
             this.approval = a;
-            JsonNode in = parse(a.inputJson());
+            JsonNode in = Json.parse(a.inputJson());
             this.rules = a.kind() == ApprovalKind.TOOL ? ruleSource.apply(a.toolName(), k -> in.path(k).asText("")) : null;
             setLayout(new BorderLayout(0, Theme.GAP));
             setBorder(border(Theme.CARD_BORDER));
@@ -357,7 +352,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                     case "Bash" -> code(in.path("command").asText("") + describe(in), "sh", 10);
                     case "Edit" -> diff(in.path("file_path").asText(""), in.path("old_string").asText(""), in.path("new_string").asText(""));
                     case "Write" -> diff(in.path("file_path").asText(""), "", in.path("content").asText(""));
-                    default -> code(pretty(in), "json", 12);
+                    default -> code(Json.pretty(in), "json", 12);
                 };
             };
         }
@@ -752,7 +747,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             case PLAN -> "presents a plan";
             case SQL_WRITE -> {
                 // the connection the statement would change is part of the question, not only of the status bar
-                String connection = parse(a.inputJson()).path("connection").asText("");
+                String connection = Json.parse(a.inputJson()).path("connection").asText("");
                 yield connection.isEmpty() ? "wants to run a statement" : "wants to run a statement on " + connection;
             }
             case TOOL -> "wants to use " + a.toolName() + ": " + a.summary();
@@ -786,22 +781,6 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         JComponent c = d.component();
         c.setPreferredSize(new Dimension(400, Math.min(320, d.area().getLineCount() * d.area().getLineHeight() + 12)));
         return c;
-    }
-
-    private static JsonNode parse(String json) {
-        try {
-            return JSON.readTree(json);
-        } catch (JsonProcessingException e) {
-            return JSON.createObjectNode();
-        }
-    }
-
-    private static String pretty(JsonNode n) {
-        try {
-            return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(n);
-        } catch (JsonProcessingException e) {
-            return n.toString();
-        }
     }
 
     private static final class ListPanel extends JPanel implements Scrollable {

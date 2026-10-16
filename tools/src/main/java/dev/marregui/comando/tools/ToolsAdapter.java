@@ -3,6 +3,7 @@ package dev.marregui.comando.tools;
 import dev.marregui.comando.core.console.Console;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.ToolPort;
 import dev.marregui.comando.core.state.Notice;
@@ -26,13 +27,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 
 /**
  * Runs the development tools. Each run is a child process on a virtual thread that copies its output
  * into the run's console and sends {@link Intent.CommandFinished} at the end; nothing blocks the caller.
- * Reading a recording or the scratchpad also happens on a virtual thread and ends in a view.
+ * Reading a recording or a folder also happens on a virtual thread and ends in a view.
  */
 public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
@@ -40,7 +41,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
     private final IntentSink sink;
     private final ConsoleRegistry consoles;
-    private final ToolSettings settings;
+    /** Read at each run, so a change to the user's settings applies to the next run. */
+    private final Supplier<ToolSettings> settings;
     private final Map<Long, Process> running = new ConcurrentHashMap<>();
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
     private final Set<Long> forgotten = ConcurrentHashMap.newKeySet();
@@ -52,7 +54,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     /** How long a run waits for its output after the process exited. */
     static final long DRAIN_MILLIS = 2_000;
 
-    public ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, ToolSettings settings) {
+    public ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, Supplier<ToolSettings> settings) {
         this.sink = sink;
         this.consoles = consoles;
         this.settings = settings;
@@ -63,6 +65,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         active.add(runId);
         Thread.ofVirtual().name("gradle-" + runId).start(() -> guarded(runId, () -> {
             Console out = consoles.of(runId);
+            ToolSettings tools = settings(out);
             Optional<Path> root = GradleBuild.root(Path.of(workDir));
             if (root.isEmpty()) {
                 out.append("No gradlew at or above " + workDir + "\n");
@@ -71,7 +74,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                 return;
             }
             long start = System.currentTimeMillis();
-            int exit = run(runId, GradleBuild.command(root.get(), tasks, settings.gradleSerial()), root.get(), out);
+            int exit = run(runId, GradleBuild.command(root.get(), tasks, tools.gradleSerial()), root.get(), out, tools);
             TestReports reports = exit == Integer.MIN_VALUE ? TestReports.NONE : TestReports.collect(root.get(), start);
             finish(runId, exit, start, reports);
         }));
@@ -82,21 +85,32 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         active.add(runId);
         Thread.ofVirtual().name("jfrq-" + runId).start(() -> guarded(runId, () -> {
             Console out = consoles.of(runId);
-            if (!Files.isExecutable(settings.jfrq())) {
-                out.append("jfrq not found at " + settings.jfrq() + "; build it with ./gradlew :cli:installDist in ~/workspace/jfr, "
-                        + "or set COMANDO_JFRQ\n");
+            ToolSettings tools = settings(out);
+            if (tools.jfrq().map(j -> !Files.isExecutable(j)).orElse(true)) {
+                out.append(tools.jfrq().map(j -> "jfrq not found at " + j).orElse("jfrq not found on the PATH")
+                        + "; set its path as \"jfrq\" in tools.json (Panel ▸ Tools ▸ Tool settings)\n");
                 ended(runId);
                 sink.dispatch(new Intent.CommandFinished(runId, 2, 0L, false, ViewSpec.TreeNode.NONE, Map.of()));
                 return;
             }
             List<String> words = new ArrayList<>(Args.split(args));
-            List<String> cmd = new ArrayList<>(List.of(settings.jfrq().toString(), words.isEmpty() ? "info" : words.removeFirst(), recording));
+            String jfrq = tools.jfrq().orElseThrow().toString();
+            List<String> cmd = new ArrayList<>(List.of(jfrq, words.isEmpty() ? "info" : words.removeFirst(), recording));
             cmd.addAll(words);
             long start = System.currentTimeMillis();
             Path dir = Path.of(recording).toAbsolutePath().getParent();
-            int exit = run(runId, cmd, dir != null && Files.isDirectory(dir) ? dir : Path.of(System.getProperty("user.home")), out);
+            int exit = run(runId, cmd, dir != null && Files.isDirectory(dir) ? dir : Path.of(System.getProperty("user.home")), out, tools);
             finish(runId, exit, start, TestReports.NONE);
         }));
+    }
+
+    /** The settings for one run; what was wrong with the user's goes to the run's console first. */
+    private ToolSettings settings(Console out) {
+        ToolSettings tools = settings.get();
+        if (!tools.problem().isEmpty()) {
+            out.append(tools.problem() + "\n");
+        }
+        return tools;
     }
 
     /** Runs a run's body so that it always ends with {@link Intent.CommandFinished}, even when the body fails. */
@@ -118,12 +132,12 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * being stopped, or re-parented) can hold the output pipe open; the run then stops waiting for output
      * {@link #DRAIN_MILLIS} after the process exits, instead of waiting for that child.
      */
-    private int run(long runId, List<String> cmd, Path dir, Console out) {
+    private int run(long runId, List<String> cmd, Path dir, Console out, ToolSettings tools) {
         out.append("$ " + String.join(" ", cmd) + "\n");
         ProcessBuilder pb = new ProcessBuilder(cmd).directory(dir.toFile()).redirectErrorStream(true);
-        pb.environment().putIfAbsent("JAVA_HOME", settings.javaHome());
-        if (cmd.getFirst().equals(settings.jfrq().toString())) {
-            pb.environment().put("JAVA_HOME", settings.javaHome()); // jfrq's launcher needs JDK 25, which runs comando
+        pb.environment().putIfAbsent("JAVA_HOME", tools.javaHome());
+        if (tools.jfrq().map(j -> cmd.getFirst().equals(j.toString())).orElse(false)) {
+            pb.environment().put("JAVA_HOME", tools.javaHome()); // jfrq's launcher needs JDK 25, which runs comando
         }
         Process p;
         try {
@@ -309,60 +323,100 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         });
     }
 
-    /** The scratchpad as last sent, so a read that finds it unchanged sends nothing. */
-    private final AtomicReference<ViewSpec.TreeNode> scratchpad = new AtomicReference<>();
-    /** One read at a time: an older read finishing last would send a stale tree, and a slow disk would pile reads up. */
-    private final AtomicBoolean readingScratchpad = new AtomicBoolean();
+    /** A folder's tree as last sent, and the ticket of the read that produced it. */
+    private record Sent(long ticket, ViewSpec.TreeNode tree) {
+    }
 
-    /** Reads the scratchpad for the sidebar now, off the caller's thread; see {@link #readScratchpad}. */
+    /** Orders reads of the same folder: a read finishing after a newer one has sent never sends. */
+    private final AtomicLong readTickets = new AtomicLong();
+    /**
+     * The last tree sent per folder, keyed by its settings, not its name: a read with settings since edited is ordered
+     * apart from the reads with the new ones. Guarded by itself; a send happens under that lock so sends keep order.
+     */
+    private final Map<FolderRoot, Sent> sentFolders = new HashMap<>();
+    /** The folders the Files tab has open: the poll reads these and no others. */
+    private volatile List<FolderRoot> watchedFolders = List.of();
+
+    private final ScheduledExecutorService folderPoll =
+            Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("folder-poll").daemon(true).unstarted(r));
+
+    /** Reads {@code folders} now, off the caller's thread, and sends each tree even when it did not change. */
     @Override
-    public void browseScratchpad() {
-        Thread.ofVirtual().name("scratchpad").start(this::readScratchpad);
+    public void readFolders(List<FolderRoot> folders) {
+        List<FolderRoot> copy = List.copyOf(folders);
+        Thread.ofVirtual().name("folder-read").start(() -> copy.forEach(f -> readFolder(f, true)));
     }
 
-    private final ScheduledExecutorService scratchpadWatch =
-            Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("scratchpad-watch").daemon(true).unstarted(r));
-
-    /**
-     * Keeps the sidebar's scratchpad in sync whether it shows or not: reads the whole folder every {@code every},
-     * on a thread of its own, and sends the tree when something was added, removed, renamed or resized.
-     */
-    public void watchScratchpad(Duration every) {
-        scratchpadWatch.scheduleWithFixedDelay(this::readScratchpad, 0, every.toMillis(), TimeUnit.MILLISECONDS);
-    }
-
-    /**
-     * Reads the scratchpad and sends it only when it changed since the last read. A folder that cannot be read
-     * becomes a tree that says so, not a notice at every read. A read while another runs is dropped: that one
-     * returns what is on disk, and an older read finishing last would send a stale tree.
-     */
-    private void readScratchpad() {
-        if (!readingScratchpad.compareAndSet(false, true)) {
-            return;
+    /** From now on the poll reads {@code folders} only; a folder newly watched is read at once. */
+    @Override
+    public void watchFolders(List<FolderRoot> folders) {
+        List<FolderRoot> before = watchedFolders;
+        watchedFolders = List.copyOf(folders);
+        synchronized (sentFolders) {
+            // a folder no longer watched sends at its next read whatever it holds: what was sent of it is not needed
+            sentFolders.keySet().retainAll(watchedFolders);
         }
-        try {
-            ViewSpec.TreeNode root;
+        List<FolderRoot> added = folders.stream().filter(f -> !before.contains(f)).toList();
+        if (!added.isEmpty()) {
+            readFolders(added);
+        }
+    }
+
+    /**
+     * Keeps the Files tab's open folders in sync: every {@code every}, on a thread of its own, reads each watched folder
+     * and sends its tree when something was added, removed, renamed or resized. Folders that are not open cost nothing.
+     */
+    public void pollFolders(Duration every) {
+        folderPoll.scheduleWithFixedDelay(() -> {
             try {
-                root = Scratchpad.tree(settings.scratchpad());
-            } catch (IOException | RuntimeException e) {
-                root = new ViewSpec.TreeNode(settings.scratchpad().toString(), "cannot be read: " + e.getMessage(), List.of());
+                watchedFolders.forEach(f -> readFolder(f, false));
+            } catch (RuntimeException e) {
+                // a task that throws is never run again: log and keep polling
+                LOG.log(System.Logger.Level.WARNING, "folder poll failed: " + e, e);
             }
-            ViewSpec.TreeNode before = scratchpad.getAndSet(root);
-            if (!root.equals(before)) {
-                if (root.detail().startsWith("cannot be read")) {
-                    LOG.log(System.Logger.Level.WARNING, "cannot read the scratchpad at " + settings.scratchpad() + ": " + root.detail());
-                }
-                sink.dispatch(new Intent.ScratchpadLoaded(root));
+        }, every.toMillis(), every.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Reads {@code folder} and sends its tree when it changed since the last send, or always when {@code force}. A
+     * folder that cannot be read becomes a tree that says so, logged once per change rather than at every read. The
+     * read takes a ticket first: when a newer read of the same folder has already sent, this one sends nothing; nor
+     * does a poll's read of a folder closed or edited since the poll began.
+     */
+    private void readFolder(FolderRoot folder, boolean force) {
+        long ticket = readTickets.incrementAndGet();
+        ViewSpec.TreeNode tree;
+        try {
+            tree = FolderTree.tree(folder);
+        } catch (IOException | RuntimeException e) {
+            tree = FolderTree.unreadable(folder, e);
+        }
+        synchronized (sentFolders) {
+            Sent before = sentFolders.get(folder);
+            if (before != null && before.ticket() > ticket) {
+                return;
             }
-        } finally {
-            readingScratchpad.set(false);
+            if (!force && !watchedFolders.contains(folder)) {
+                // a poll that began before the folder was closed or edited: what it read is no longer asked for
+                return;
+            }
+            sentFolders.put(folder, new Sent(ticket, tree));
+            if (!force && before != null && before.tree().equals(tree)) {
+                return;
+            }
+            if (FolderTree.isUnreadable(tree) && (before == null || !before.tree().equals(tree))) {
+                LOG.log(System.Logger.Level.WARNING, "cannot read the folder " + folder.name() + " at " + folder.path() + ": "
+                        + tree.children().getFirst().label());
+            }
+            // under the lock, so two sends of one folder reach the state loop in the order their reads were ticketed
+            sink.dispatch(new Intent.FolderLoaded(folder, tree));
         }
     }
 
     /** Stops every run; called at exit. */
     @Override
     public void close() {
-        scratchpadWatch.shutdownNow();
+        folderPoll.shutdownNow();
         Map<Process, List<ProcessHandle>> trees = new HashMap<>();
         for (Process p : List.copyOf(running.values())) {
             trees.put(p, terminate(p, false));

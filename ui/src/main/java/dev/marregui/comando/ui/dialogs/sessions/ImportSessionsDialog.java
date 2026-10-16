@@ -5,6 +5,7 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -22,7 +23,6 @@ import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
 import javax.swing.ListSelectionModel;
-import javax.swing.SwingWorker;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.table.AbstractTableModel;
@@ -146,27 +146,22 @@ public final class ImportSessionsDialog {
             dialog.setLocationRelativeTo(dialog.getOwner());
         }
         dialog.setVisible(true);
-        new SwingWorker<List<StoredConversation>, Void>() {
-            @Override
-            protected List<StoredConversation> doInBackground() {
-                return catalogue.get();
-            }
-
-            @Override
-            protected void done() {
-                try {
-                    all = get();
+        Thread.ofVirtual().name("read-conversations").start(() -> {
+            try {
+                List<StoredConversation> read = catalogue.get();
+                Edt.later(() -> {
+                    all = read;
                     applyFilter();
                     if (all.isEmpty()) {
                         overlay.showEmpty("No stored conversations found under ~/.claude/projects.");
                     } else {
                         overlay.showContent();
                     }
-                } catch (Exception e) {
-                    overlay.showError("Cannot read the conversations: " + e.getMessage());
-                }
+                });
+            } catch (RuntimeException e) {
+                Edt.later(() -> overlay.showError("Cannot read the conversations: " + e.getMessage()));
             }
-        }.execute();
+        });
     }
 
     private void applyFilter() {

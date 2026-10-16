@@ -15,4 +15,20 @@ class StatementsTest {
         assertThat(Statements.split("-- only a comment;\n")).isEmpty();
         assertThat(Statements.split(null)).isEmpty();
     }
+
+    @Test
+    void semicolonsInsideDollarQuotesDoNotSplit() {
+        assertThat(Statements.split("CREATE FUNCTION f() RETURNS int AS $$ SELECT 1; $$ LANGUAGE sql")).hasSize(1);
+        assertThat(Statements.split("DO $body$ BEGIN PERFORM 1; PERFORM $$x;$$; END $body$; SELECT 2"))
+                .containsExactly("DO $body$ BEGIN PERFORM 1; PERFORM $$x;$$; END $body$", "SELECT 2");
+        assertThat(Statements.split("SELECT $1; SELECT a$b$ FROM t; SELECT 3")).hasSize(3);
+    }
+
+    @Test
+    void semicolonsInsideEscapeStringsDoNotSplit() {
+        assertThat(Statements.split("SELECT E'it\\'s; x'")).containsExactly("SELECT E'it\\'s; x'");
+        assertThat(Statements.split("SELECT e'a\\\\'; SELECT 2")).containsExactly("SELECT e'a\\\\'", "SELECT 2");
+        // a backslash in a standard string is a plain character, and a word ending in E is no escape prefix
+        assertThat(Statements.split("SELECT 'a\\'; SELECT type'x\\'; SELECT 3")).hasSize(3);
+    }
 }

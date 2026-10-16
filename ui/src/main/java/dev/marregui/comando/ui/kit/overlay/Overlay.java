@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.kit.overlay;
 
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.BorderFactory;
@@ -129,6 +130,6 @@ public final class Overlay extends JPanel {
     }
 
     private static String escape(String s) {
-        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>");
+        return MarkdownHtml.escape(s).replace("\n", "<br>");
     }
 }

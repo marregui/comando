@@ -1,23 +1,14 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.marregui.comando.core.view.Clip;
 
-/** Reads a tool call's JSON input for display: its one-line summary and its pretty form. */
+/** Reads a tool call's JSON input for display: its one-line summary and its values. */
 public final class ToolText {
 
-    private static final ObjectMapper JSON = new ObjectMapper();
+    private static final int SUMMARY_CHARS = 140;
 
     private ToolText() {
-    }
-
-    public static JsonNode parse(String json) {
-        try {
-            return JSON.readTree(json);
-        } catch (JsonProcessingException e) {
-            return JSON.createObjectNode();
-        }
     }
 
     /** Every string, number and boolean in {@code node}, decoded and one per line: what an open card shows. */
@@ -32,14 +23,6 @@ public final class ToolText {
             node.forEach(child -> values(child, out));
         } else if (!node.isNull() && !node.isMissingNode()) {
             out.append(node.asText()).append('\n');
-        }
-    }
-
-    public static String pretty(JsonNode node) {
-        try {
-            return JSON.writerWithDefaultPrettyPrinter().writeValueAsString(node);
-        } catch (JsonProcessingException e) {
-            return node.toString();
         }
     }
 
@@ -73,7 +56,7 @@ public final class ToolText {
         if (eol >= 0) {
             s = s.substring(0, eol) + " …";
         }
-        return s.length() > 140 ? s.substring(0, 140) + "…" : s;
+        return Clip.keepStart(s, SUMMARY_CHARS);
     }
 
     private static String firstValue(JsonNode in) {

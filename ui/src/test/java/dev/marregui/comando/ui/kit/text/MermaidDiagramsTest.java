@@ -7,8 +7,12 @@ import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -77,6 +81,72 @@ class MermaidDiagramsTest {
             assertThat(diagrams.diagram("flowchart LR\n  A -->", () -> { }))
                     .isEqualTo(new MermaidDiagrams.Diagram.Unavailable("mmdc cannot draw it: Error: Parse error on line 2:"));
             assertThat(runs()).isEqualTo(1);
+        } finally {
+            diagrams.close();
+        }
+    }
+
+    /** A stand-in for mmdc that runs {@code body} as a shell script. */
+    private Path script(String body) throws Exception {
+        Path exe = dir.resolve("bin").resolve("mmdc");
+        Files.createDirectories(exe.getParent());
+        Files.writeString(exe, "#!/bin/sh\n" + body);
+        exe.toFile().setExecutable(true);
+        return exe;
+    }
+
+    @Test
+    void aPictureThatCannotBeReadIsShownAsAFailureNotAnnouncedAgainAndAgain() throws Exception {
+        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
+                out=""
+                while [ $# -gt 0 ]; do
+                  if [ "$1" = "-o" ]; then out="$2"; fi
+                  shift
+                done
+                printf 'not a png' > "$out"
+                """));
+        try {
+            AtomicInteger told = new AtomicInteger();
+            AtomicReference<MermaidDiagrams.Diagram> afterReady = new AtomicReference<>();
+            CountDownLatch ready = new CountDownLatch(1);
+            // as the preview does: told it is ready, it asks again
+            Runnable redraw = () -> {
+                told.incrementAndGet();
+                afterReady.set(diagrams.diagram(FLOW, () -> told.incrementAndGet()));
+                ready.countDown();
+            };
+            assertThat(diagrams.diagram(FLOW, redraw)).isInstanceOf(MermaidDiagrams.Diagram.Pending.class);
+            assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(afterReady.get()).isEqualTo(new MermaidDiagrams.Diagram.Unavailable("mmdc drew a picture that cannot be read"));
+            assertThat(diagrams.diagram(FLOW, () -> told.incrementAndGet())).isInstanceOf(MermaidDiagrams.Diagram.Unavailable.class);
+            assertThat(told).as("told once; no drawing queued after it").hasValue(1);
+            assertThat(dir.resolve("cache").resolve(MermaidDiagrams.key(FLOW) + ".png")).as("the unreadable picture is removed").doesNotExist();
+        } finally {
+            diagrams.close();
+        }
+    }
+
+    @Test
+    void mmdcThatDoesNotFinishIsStoppedWithWhatItStarted() throws Exception {
+        Path child = dir.resolve("child.pid");
+        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
+                sleep 60 &
+                echo $! > '%s'
+                wait
+                """.formatted(child)), Duration.ofMillis(500));
+        try {
+            CountDownLatch done = new CountDownLatch(1);
+            diagrams.diagram(FLOW, done::countDown);
+            assertThat(done.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(diagrams.diagram(FLOW, () -> { })).isInstanceOfSatisfying(MermaidDiagrams.Diagram.Unavailable.class,
+                    u -> assertThat(u.why()).startsWith("mmdc did not finish within"));
+            long pid = Long.parseLong(Files.readString(child).strip());
+            Optional<ProcessHandle> sleeper = ProcessHandle.of(pid);
+            if (sleeper.isPresent()) {
+                sleeper.get().onExit().get(5, TimeUnit.SECONDS);
+            }
+            assertThat(ProcessHandle.of(pid).map(ProcessHandle::isAlive)).as("the process mmdc started is stopped too")
+                    .isNotEqualTo(Optional.of(true));
         } finally {
             diagrams.close();
         }

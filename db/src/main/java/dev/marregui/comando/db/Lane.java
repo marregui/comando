@@ -5,6 +5,7 @@ import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.result.ResultRegistry;
+import dev.marregui.comando.core.view.Clip;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -22,6 +23,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 /**
  * One connection and the single thread that uses it. A JDBC connection runs one statement at a time,
@@ -32,8 +35,20 @@ import java.util.concurrent.TimeUnit;
  * mark before running, or the caller sees the statement and cancels it. A statement still running
  * {@code abortAfterMillis} after its cancel has its connection aborted, which unblocks a socket read
  * the server ignores.</p>
+ *
+ * <p>A lane lives while it holds a connection or has work queued: once its last task ends with no connection
+ * (closed, lost, never opened), it stops its thread and leaves the adapter, so a closed, removed or renamed
+ * connection keeps no thread. A task offered to a stopped lane is refused, and the adapter starts a new lane for
+ * it; every task the old lane accepted has ended by then, so a connection's intents keep their order.</p>
  */
 final class Lane implements AutoCloseable {
+
+    /** Work the connection's close, removal or change overtook before its turn came: it did not run. */
+    static final class Overtaken extends IllegalStateException {
+        Overtaken(String connection) {
+            super("connection " + connection + " was closed or changed before this ran");
+        }
+    }
 
     private static final System.Logger LOG = System.getLogger(Lane.class.getName());
 
@@ -48,24 +63,29 @@ final class Lane implements AutoCloseable {
     private final ScheduledExecutorService timer;
     private final ExecutorService cancellers;
     private final ExecutorService thread;
+    private final Consumer<Lane> onRetired;
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
     private volatile Running running;
     private volatile boolean closed;
+    private int pending; // guarded by this: tasks accepted and not yet ended
+    private boolean retired; // guarded by this
     private Connection connection; // lane thread only
 
     Lane(String name, IntentSink sink, ResultRegistry results, DbSettings settings, ScheduledExecutorService timer,
-         ExecutorService cancellers) {
+         ExecutorService cancellers, Consumer<Lane> onRetired) {
         this.name = name;
         this.sink = sink;
         this.results = results;
         this.settings = settings;
         this.timer = timer;
         this.cancellers = cancellers;
+        this.onRetired = onRetired;
         this.thread = Executors.newSingleThreadExecutor(r -> Thread.ofPlatform().name("db-" + name).daemon(true).unstarted(r));
     }
 
-    void open(ConnectionSpec spec) {
-        submit(() -> {
+    /** False when the lane has stopped; so for every method that queues work. */
+    boolean open(ConnectionSpec spec) {
+        return submit(() -> {
             try {
                 ensureOpen(spec);
             } catch (SQLException e) {
@@ -74,15 +94,23 @@ final class Lane implements AutoCloseable {
         });
     }
 
-    void execute(long requestId, ConnectionSpec spec, String sql) {
-        submit(() -> run(requestId, spec, sql));
+    boolean execute(long requestId, ConnectionSpec spec, String sql) {
+        return submit(() -> run(requestId, spec, sql));
     }
 
-    /** Runs {@code sql} for Claude on this lane, after the runs already queued; rows come back as text. */
-    void query(ConnectionSpec spec, String sql, int maxRows, CompletableFuture<QueryPort.Rows> out) {
-        submit(() -> {
+    /**
+     * Runs {@code sql} on this lane, after the runs already queued; rows come back as text. {@code wanted} is asked
+     * when the turn comes: false (the work was overtaken, such as a schema load the user's Disconnect followed) ends
+     * it with {@link Overtaken} without opening the connection again.
+     */
+    boolean query(ConnectionSpec spec, String sql, int maxRows, CompletableFuture<QueryPort.Rows> out, BooleanSupplier wanted) {
+        boolean accepted = submit(() -> {
             if (out.isDone()) {
                 return; // the caller gave up while this waited behind other runs: it must not run later
+            }
+            if (!wanted.getAsBoolean()) {
+                out.completeExceptionally(new Overtaken(name));
+                return;
             }
             try {
                 ensureOpen(spec);
@@ -103,17 +131,22 @@ final class Lane implements AutoCloseable {
                 out.completeExceptionally(e);
             }
         });
-        if (closed) {
+        if (accepted && closed) {
             out.completeExceptionally(new IllegalStateException("connection " + name + " is closed"));
         }
+        return accepted;
     }
 
     /**
      * Lists the columns of {@code table}: QuestDB's {@code SHOW COLUMNS} first, then the driver's metadata,
      * whose query QuestDB does not accept.
      */
-    void describe(ConnectionSpec spec, String table, CompletableFuture<QueryPort.Rows> out) {
-        submit(() -> {
+    boolean describe(ConnectionSpec spec, String table, CompletableFuture<QueryPort.Rows> out, BooleanSupplier wanted) {
+        return submit(() -> {
+            if (!wanted.getAsBoolean()) {
+                out.completeExceptionally(new Overtaken(name));
+                return;
+            }
             try {
                 ensureOpen(spec);
             } catch (SQLException e) {
@@ -185,8 +218,8 @@ final class Lane implements AutoCloseable {
         }
     }
 
-    void disconnect() {
-        submit(() -> {
+    boolean disconnect() {
+        return submit(() -> {
             closeConnection();
             sink.dispatch(new Intent.ConnectionClosed(name));
         });
@@ -213,19 +246,51 @@ final class Lane implements AutoCloseable {
         });
     }
 
-    private void submit(Runnable task) {
+    /**
+     * Queues {@code task}; false when the lane has stopped and the caller must use a new lane. A task offered after
+     * {@link #close()} is dropped and counts as accepted.
+     */
+    private synchronized boolean submit(Runnable task) {
+        if (retired) {
+            return false;
+        }
+        pending++;
         try {
-            thread.execute(task);
+            thread.execute(() -> {
+                try {
+                    task.run();
+                } finally {
+                    ended();
+                }
+            });
         } catch (RejectedExecutionException e) {
+            pending--;
             LOG.log(System.Logger.Level.DEBUG, "lane closed, task dropped [connection=" + name + ']');
+        }
+        return true;
+    }
+
+    /** On the lane thread, after each task: the last task to end with no connection stops the lane. */
+    private void ended() {
+        boolean retire;
+        synchronized (this) {
+            pending--;
+            retire = pending == 0 && connection == null && !closed;
+            if (retire) {
+                retired = true;
+                thread.shutdown();
+            }
+        }
+        if (retire) {
+            onRetired.accept(this);
         }
     }
 
-    private void ensureOpen(ConnectionSpec spec) throws SQLException {
-        if (connection != null && !connection.isClosed()) {
-            return;
-        }
-        LOG.log(System.Logger.Level.INFO, "connecting [connection=" + name + ", url=" + spec.jdbcUrl() + ']');
+    /**
+     * The driver properties of {@code spec}, the one place they are built: the connection test must reach the server
+     * the way the lane does, TLS mode included.
+     */
+    static Properties driverProperties(ConnectionSpec spec) {
         Properties props = new Properties();
         props.setProperty("user", spec.user());
         props.setProperty("password", spec.password());
@@ -234,8 +299,16 @@ final class Lane implements AutoCloseable {
         props.setProperty("tcpKeepAlive", "true");
         props.setProperty("sslmode", spec.sslMode());
         props.setProperty("cancelSignalTimeout", "2");
+        return props;
+    }
+
+    private void ensureOpen(ConnectionSpec spec) throws SQLException {
+        if (connection != null && !connection.isClosed()) {
+            return;
+        }
+        LOG.log(System.Logger.Level.INFO, "connecting [connection=" + name + ", url=" + spec.jdbcUrl() + ']');
         try {
-            connection = DriverManager.getConnection(spec.jdbcUrl(), props);
+            connection = DriverManager.getConnection(spec.jdbcUrl(), driverProperties(spec));
         } catch (SQLException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot connect [connection=" + name + ", sqlState=" + e.getSQLState() + "]: " + e.getMessage());
             throw e;
@@ -256,7 +329,7 @@ final class Lane implements AutoCloseable {
             if (event.shouldCommit()) {
                 event.connection = name;
                 event.requestId = requestId;
-                event.sql = sql.length() > 200 ? sql.substring(0, 200) + "…" : sql;
+                event.sql = Clip.keepStart(sql, 200);
                 event.outcome = outcome;
                 event.commit();
             }

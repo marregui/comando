@@ -4,6 +4,7 @@ import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -25,6 +26,10 @@ public sealed interface Effect {
     }
 
     record CloseDb(String name) implements Effect {
+    }
+
+    /** The connection was removed, renamed or changed: its schema no longer describes a server it reaches. */
+    record ForgetSchema(String name) implements Effect {
     }
 
     record TestDb(ConnectionSpec spec) implements Effect {
@@ -119,11 +124,22 @@ public sealed interface Effect {
     record OpenRecording(String path) implements Effect {
     }
 
-    record BrowseScratchpad() implements Effect {
+    /** Reads these folders once, now. */
+    record ReadFolders(List<FolderRoot> folders) implements Effect {
+        public ReadFolders {
+            folders = List.copyOf(folders);
+        }
     }
 
-    /** Shows the scratchpad's tree in the sidebar's Scratchpad tab. */
-    record ShowScratchpad(ViewSpec.TreeNode root) implements Effect {
+    /** Reads these folders every few seconds, and no others. */
+    record WatchFolders(List<FolderRoot> folders) implements Effect {
+        public WatchFolders {
+            folders = List.copyOf(folders);
+        }
+    }
+
+    /** Shows a folder's tree in the sidebar's Files tab, when the folder still has the settings it was read with. */
+    record ShowFolder(FolderRoot folder, ViewSpec.TreeNode tree) implements Effect {
     }
 
     /** Shows the plan's usage limits in the status bar. */
@@ -141,6 +157,12 @@ public sealed interface Effect {
     record SaveSessions(List<SessionSpec> specs) implements Effect {
         public SaveSessions {
             specs = List.copyOf(specs);
+        }
+    }
+
+    record SaveFolders(List<FolderRoot> folders) implements Effect {
+        public SaveFolders {
+            folders = List.copyOf(folders);
         }
     }
 

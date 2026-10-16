@@ -8,6 +8,7 @@ The data root is the directory in `-Dcomando.home`, else the environment variabl
 |---|---|---|
 | `connections.json` | connection specs; passwords empty when the keychain holds them | `Store` |
 | `sessions.json` | session specs, including the conversation id that makes the next start a resume | `Store` |
+| `folders.json` | the Files tab's folders: name, path, index file, names left out; absent, the default `~/.claude`; an empty list stays empty; an unreadable file is moved aside and the default shows | `Store` |
 | `panels.json` | each panel's id, title, connection and session binding, and the name of its file | `Store` |
 | `panels/<title>.md` | each panel's editor text, one Markdown file per panel ([A file per panel](../adr/0026-a-file-per-panel.md)) | `Store` (`PanelFiles`) |
 | `comando.lock` | a file lock held while comando runs, so a second comando on the same data root says so and exits; the operating system releases it, also after a crash | `Main` |
@@ -18,14 +19,18 @@ The data root is the directory in `-Dcomando.home`, else the environment variabl
 | `help/tutorial.md` | the tutorial Help ▸ Tutorial opens in a panel, written at start from the build's copy, and again whenever the file differs from it ([ADR 47](../adr/0047-help-opens-its-files-as-documents.md)) | `HelpFiles` |
 | `questdb/` | the embedded QuestDB's data, when the user starts it | `EmbeddedQuestDb` |
 | `cache/mermaid/<hash>.png` | Mermaid diagrams `mmdc` drew for the previews, one per diagram text; safe to delete ([ADR 35](../adr/0035-mermaid-diagrams-drawn-by-mmdc.md)) | `MermaidDiagrams` |
+| `tools.json` | the Gradle wrapper and jfrq paths, edited by the user as a document and read at each run; an unreadable one is left in place and the run says why | `ToolsFile` |
+| `kit/` | comando's copy of its Claude Code kit, made equal to the build's at every start; the installed plugin loads from it ([ADR 50](../adr/0050-comando-ships-a-claude-code-kit.md)) | `Kit` |
 
 Outside the data root:
 
 | Location | Holds |
 |---|---|
 | macOS login keychain, service `comando` | connection passwords, one item per connection name ([Approvals and safety](approvals-and-safety.md#5-credentials)) |
-| Java preferences, node `dev/marregui/comando` | window size, position and maximised state, divider positions, whether the sidebar shows and which of its tabs is in front, whether the side pane is hidden, the last Gradle tasks, recording, jfrq arguments and export directory; tests use another node through `comando.prefsNode` |
+| Java preferences, node `dev/marregui/comando` | window size, position and maximised state, divider positions, whether the sidebar shows and which of its tabs is in front, whether the side pane is hidden, the last Gradle tasks, recording, jfrq arguments and export directory, whether to offer the Claude Code kit at start; tests use another node through `comando.prefsNode` |
 | `~/.claude/projects/` | Claude Code's conversations; comando reads them and never writes them |
+| `KB/README.md`, `KB/ALPHA.md`, `SCRATCHPAD/README.md` in Claude Code's folder (`CLAUDE_CONFIG_DIR`, else `~/.claude`) | written by the kit's install when missing, never over an existing file; the plugin's entries in that folder's `settings.json` are written by Claude Code's own `claude plugin` commands; `autoMemoryDirectory` is the one key comando writes there, with the user's consent and never over their value |
+| `MEMORY/MEMORY.md` in Claude Code's folder (or the folder the user's `autoMemoryDirectory` names) | the memory index's header, written by the kit's install when missing |
 
 ## 2. Atomic store files
 
@@ -39,6 +44,7 @@ Outside the data root:
 |---|---|
 | connections | closed; a password is read from the keychain when the connection is loaded; when the keychain cannot be asked, the connection loads without it and the stored item is kept |
 | sessions | closed; a session with a conversation id shows its stored transcript, read from Claude Code's file without starting a process; a `sessions.json` written before the checkpoint command existed loads with the default, `/reflect` |
+| folders | as stored; none open, so none is read until its row is opened ([Development tools](dev-tools.md#4-the-files-tab)) |
 | panels | their bindings, and their text from their files, edits made there while comando was closed included; a binding to a name that no longer exists is dropped; a file that cannot be read leaves its panel empty and is left alone; with no panel left, one panel named `scratch` with the welcome text |
 | window | size, position, maximised state, dividers, sidebar and side pane visibility, the sidebar's tab; saved a second after each resize or move and at quit; bounds are kept on a screen that still exists, else the window opens centred on the main screen; a side pane divider outside the window is ignored |
 | views, results, terminals | not restored; they belong to one run |
@@ -62,8 +68,8 @@ Each panel's text is a Markdown file of its own in `panels/`, so a panel can be 
 | remove | the panel leaves `panels.json` and its own file is deleted; a document's file never is |
 | a file that cannot be written | the panel's text goes into `panels.json` as `content`, which the next start prefers; the status bar says so once; comando tries again every 5 s and on every save |
 | `panels.json` that cannot be written | the status bar says so once; comando tries again every 5 s; the panels' files are written regardless |
-| File ▸ Open file… (⌘O), a click in the Scratchpad tab | the file opens as a new panel titled after it (a `.md` name without its extension), read on the store's thread rather than the EDT; a file of `panels/` is bound by its name, a file elsewhere by its absolute path; a file already open brings its panel forward; a file another panel holds or is opening, or one gone, is refused, checked on the store's thread with the binding; a binary file or one over 2 MB shows read-only in the side pane |
-| a panel on a file elsewhere (a scratchpad document) | saved, reloaded and kept aside like a panel's own file; never renamed when the panel is, never deleted when blank; comes back on that path after a restart (`panels.json` holds the absolute path) |
+| File ▸ Open file… (⌘O), a click in the Files tab | the file opens as a new panel titled after it (a `.md` name without its extension), read on the store's thread rather than the EDT; a file of `panels/` is bound by its name, a file elsewhere by its absolute path; a file already open brings its panel forward; a file another panel holds or is opening, or one gone, is refused, checked on the store's thread with the binding; a binary file shows a view in the side pane saying so; a text file over 2 MB shows read-only there, up to 4 MB, and a larger one is refused with a notice |
+| a panel on a file elsewhere (a document from the Files tab) | saved, reloaded and kept aside like a panel's own file; never renamed when the panel is, never deleted when blank; comes back on that path after a restart (`panels.json` holds the absolute path) |
 | ⌘⇧T | a closed panel of comando's own comes back with its text and bindings; a document opens on its file again |
 | a file of `panels/` that no panel names, at the start | becomes a closed panel titled after it, with no bindings, and a notice names it; also when `connections.json`, `sessions.json` and `panels.json` are gone. A stored name names a file only when it is the same file on the volume |
 | a document whose last write fails at close | kept in `panels.json` with its text and its absolute path; it comes back as an open document at the next start, never as a file of `panels/` |

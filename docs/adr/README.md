@@ -34,7 +34,7 @@ A decision is changed by a new record that names the one it replaces; the old re
 | [26](0026-a-file-per-panel.md) | A file per panel | Miguel, Claude | file per panel and naming accepted; outside edits replaced by 27, close by 39 |
 | [27](0027-panels-reload-files-changed-outside.md) | Panels reload files changed outside | Miguel, Claude | accepted; deleted documents replaced by 34 |
 | [28](0028-the-sidebar-has-three-tabs.md) | The sidebar has three tabs | Miguel, Claude | accepted; reading rules replaced by 29; a fourth tab, Panels, by 39; one row replaced by two, 40 |
-| [29](0029-the-scratchpad-is-a-navigator.md) | The scratchpad is a navigator | Miguel, Claude | accepted; Markdown row replaced by 30, deletion by 34 |
+| [29](0029-the-scratchpad-is-a-navigator.md) | The scratchpad is a navigator | Miguel, Claude | accepted; Markdown row replaced by 30, deletion by 34; fixed folder and always-on read by 49 |
 | [30](0030-documents-open-rendered-and-coloured.md) | Documents open rendered and coloured | Miguel, Claude | accepted |
 | [31](0031-the-status-bar-shows-plan-usage.md) | The status bar shows the plan's usage | Miguel, Claude | accepted |
 | [32](0032-session-rows-carry-their-controls.md) | Session rows carry their controls | Miguel, Claude | accepted; edit control and plug icons replaced by 37 |
@@ -45,12 +45,14 @@ A decision is changed by a new record that names the one it replaces; the old re
 | [37](0037-session-actions-act-on-the-selected-row.md) | Session and connection actions act on the selected row | Miguel, Claude | accepted |
 | [38](0038-a-session-has-one-panel.md) | A session has one panel | Miguel, Claude | accepted |
 | [39](0039-panels-are-kept-until-removed.md) | Panels are kept until removed | Miguel, Claude | accepted |
-| [40](0040-one-resource-per-dialog-and-two-tab-rows.md) | One resource per dialog, and the sidebar's tabs in two rows | Miguel, Claude | accepted |
+| [40](0040-one-resource-per-dialog-and-two-tab-rows.md) | One resource per dialog, and the sidebar's tabs in two rows | Miguel, Claude | accepted; the Scratchpad tab became Files, 49 |
 | [41](0041-a-session-can-prompt-another.md) | A session can prompt another | Miguel, Claude | accepted; consent replaced by 44 |
 | [42](0042-tabs-show-their-sessions-state.md) | Tabs show their session's state, and comando has its own icon | Miguel, Claude | accepted; a waiting status added by 43 |
 | [43](0043-a-session-waiting-on-background-work-shows-it.md) | A session waiting on background work shows it | Miguel, Claude | accepted |
 | [44](0044-sessions-prompt-each-other-without-asking.md) | Sessions prompt each other without asking | Miguel, Claude | accepted |
 | [45](0045-fresh-start-and-checkpoint-buttons.md) | A fresh start and a checkpoint, as buttons | Miguel, Claude | accepted; the checkpoint says when it is due since 46 |
-| [46](0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md) | Clear buttons, text coloured by its kind, a checkpoint that says when it is due | Miguel, Claude | accepted |
+| [46](0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md) | Clear buttons, text coloured by its kind, a checkpoint that says when it is due | Miguel, Claude | accepted; its rule on the user's setup replaced by 50 |
 | [47](0047-help-opens-its-files-as-documents.md) | Help opens its files as documents, with icons of its own | Miguel, Claude | accepted |
 | [48](0048-stalls-are-a-line-hangs-a-stack-the-heap-starts-small.md) | Stalls are a line, hangs a stack; the heap starts small | Miguel, Claude | accepted |
+| [49](0049-the-files-tab-shows-folders-the-user-chooses.md) | The Files tab shows folders the user chooses | Miguel, Claude | accepted |
+| [50](0050-comando-ships-a-claude-code-kit.md) | comando ships a Claude Code kit, and relies only on what it installed | Miguel, Claude | accepted |

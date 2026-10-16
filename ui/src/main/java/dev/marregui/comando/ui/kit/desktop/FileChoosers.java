@@ -21,7 +21,6 @@ import java.util.Optional;
  */
 public final class FileChoosers {
 
-    private static final boolean MAC = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
     private static final String FOLDERS = "apple.awt.fileDialogForDirectories";
 
     private FileChoosers() {
@@ -30,7 +29,7 @@ public final class FileChoosers {
     /** A folder, starting at {@code start} (a folder, or a file whose folder is used). */
     public static Optional<Path> directory(Component owner, String title, Path start) {
         Path dir = startDirectory(start);
-        if (MAC) {
+        if (Platform.isMac()) {
             FileDialog d = dialog(owner, title, FileDialog.LOAD);
             d.setDirectory(dir.toString());
             String previous = System.getProperty(FOLDERS);
@@ -58,7 +57,7 @@ public final class FileChoosers {
      */
     public static Optional<Path> open(Component owner, String title, Path start, String... extensions) {
         Path dir = startDirectory(start);
-        if (MAC) {
+        if (Platform.isMac()) {
             FileDialog d = dialog(owner, title, FileDialog.LOAD);
             d.setDirectory(dir.toString());
             if (start != null && Files.isRegularFile(start)) {
@@ -84,7 +83,7 @@ public final class FileChoosers {
     /** A file to write, starting at {@code start} with {@code name} proposed. */
     public static Optional<Path> save(Component owner, String title, Path start, String name) {
         Path dir = startDirectory(start);
-        if (MAC) {
+        if (Platform.isMac()) {
             FileDialog d = dialog(owner, title, FileDialog.SAVE);
             d.setDirectory(dir.toString());
             d.setFile(name);

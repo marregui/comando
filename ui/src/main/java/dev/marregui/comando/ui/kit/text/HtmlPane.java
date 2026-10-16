@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.kit.text;
 
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.JEditorPane;
@@ -10,12 +12,9 @@ import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.View;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
-import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.Point;
-import java.net.URI;
-import java.util.Locale;
 
 /** A read-only HTML pane styled from the theme, for rendered Markdown. Links open in the browser. */
 public class HtmlPane extends JEditorPane {
@@ -67,8 +66,8 @@ public class HtmlPane extends JEditorPane {
             if (href == null) {
                 return;
             }
-            if (href.startsWith("http://") || href.startsWith("https://") || href.startsWith("HTTP")) {
-                open(href);
+            if (Browser.isWebLink(href)) {
+                Browser.open(href);
             } else {
                 links.open(href);
             }
@@ -86,7 +85,7 @@ public class HtmlPane extends JEditorPane {
 
     private String diagram(String source) {
         String shown = markdown;
-        MermaidDiagrams.Diagram d = MermaidDiagrams.current().diagram(source, () -> SwingUtilities.invokeLater(() -> redraw(shown)));
+        MermaidDiagrams.Diagram d = MermaidDiagrams.current().diagram(source, () -> Edt.later(() -> redraw(shown)));
         Insets in = getInsets();
         return diagramHtml(source, d, getWidth() - in.left - in.right - 8);
     }
@@ -161,19 +160,5 @@ public class HtmlPane extends JEditorPane {
     @Override
     public Dimension getMaximumSize() {
         return fitWidth ? new Dimension(Integer.MAX_VALUE, getPreferredSize().height) : super.getMaximumSize();
-    }
-
-    static void open(String url) {
-        String u = url.toLowerCase(Locale.ROOT);
-        if (!(u.startsWith("http://") || u.startsWith("https://"))) {
-            return;
-        }
-        try {
-            if (Desktop.isDesktopSupported()) {
-                Desktop.getDesktop().browse(URI.create(url));
-            }
-        } catch (Exception e) {
-            System.getLogger(HtmlPane.class.getName()).log(System.Logger.Level.WARNING, "cannot open " + url + ": " + e.getMessage());
-        }
     }
 }

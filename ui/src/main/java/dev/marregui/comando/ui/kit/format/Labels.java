@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.kit.format;
 
+import dev.marregui.comando.core.model.HomeDir;
+
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -84,8 +86,8 @@ public final class Labels {
         return String.format(Locale.ROOT, "%,d", n);
     }
 
+    /** {@code ~/x} for a path under the home folder. */
     public static String shortPath(String path) {
-        String home = System.getProperty("user.home");
-        return path.startsWith(home) ? "~" + path.substring(home.length()) : path;
+        return HomeDir.shorten(path);
     }
 }

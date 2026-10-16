@@ -14,6 +14,7 @@ import com.jediterm.terminal.ui.TerminalPanel;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import com.jediterm.terminal.ui.settings.SettingsProvider;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -557,8 +558,6 @@ public final class TerminalWidget implements Zoomable, Searchable {
     /** Colours from the theme; the font is the theme's monospaced font at the terminal's own size. */
     static final class Settings extends DefaultSettingsProvider {
 
-        private static final boolean MAC = System.getProperty("os.name", "").startsWith("Mac");
-
         private final DoubleSupplier size;
 
         Settings(DoubleSupplier size) {
@@ -598,7 +597,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
          */
         @Override
         public TerminalActionPresentation getSelectAllActionPresentation() {
-            return MAC ? new TerminalActionPresentation("Select All",
+            return Platform.isMac() ? new TerminalActionPresentation("Select All",
                     KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.META_DOWN_MASK))
                     : super.getSelectAllActionPresentation();
         }

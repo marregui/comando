@@ -3,9 +3,11 @@ package dev.marregui.comando.app;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.type.TypeReference;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.PersistencePort;
+import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.PanelTexts.Outside;
@@ -34,7 +36,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
- * The store files: {@code connections.json}, {@code sessions.json}, {@code panels.json} (each panel's title,
+ * The store files: {@code connections.json}, {@code sessions.json}, {@code folders.json} (the Files tab's folders),
+ * {@code panels.json} (each panel's title,
  * bindings and file name, and whether it is closed) and one Markdown file per panel under {@code panels/} with its
  * text ({@link PanelFiles}). A panel of comando's own is kept, closed or open, until it is removed or its file is
  * deleted outside comando; its text stays in memory while it is closed, so it reopens at once.
@@ -69,6 +72,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     private final JsonFile<List<ConnectionSpec>> connections;
     private final JsonFile<List<SessionSpec>> sessions;
+    private final JsonFile<List<FolderRoot>> folders;
     private final JsonFile<List<StoredPanel>> panels;
     private final ScheduledExecutorService writer = writer();
     /**
@@ -109,8 +113,11 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     /** Panels bound to a file by {@link #open} and not yet in the panel list. Writer thread only. */
     private final Set<String> opening = new HashSet<>();
     private final PanelFiles files;
-    private volatile Consumer<String> notices = text -> {
-    };
+    /** Notices raised before {@link #onNotice} is called, at the start, kept until a listener takes them. */
+    private final List<String> early = new ArrayList<>();
+    /** Whether {@link #onNotice} was called; guarded by {@link #early}. */
+    private boolean listening;
+    private volatile Consumer<String> notices = this::keep;
     private volatile Consumer<Outside> outsideChanges = change -> {
     };
     private volatile Consumer<Deleted> deletions = deleted -> {
@@ -135,14 +142,37 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         });
         sessions = new JsonFile<>(home.resolve("sessions.json"), new TypeReference<>() {
         });
+        folders = new JsonFile<>(home.resolve("folders.json"), new TypeReference<>() {
+        });
         panels = new JsonFile<>(home.resolve("panels.json"), new TypeReference<>() {
         });
         files = new PanelFiles(home.resolve("panels"), text -> notices.accept(text));
     }
 
-    /** Where the store reports what the user should know, such as a panel file changed outside comando. */
+    /**
+     * Where the store reports what the user should know, such as a panel file changed outside comando. What the start
+     * found before there was anyone to tell (a panel whose file was deleted while comando was closed) is told now.
+     */
     void onNotice(Consumer<String> notices) {
-        this.notices = notices;
+        List<String> told;
+        synchronized (early) {
+            this.notices = notices;
+            listening = true;
+            told = List.copyOf(early);
+            early.clear();
+        }
+        told.forEach(notices);
+    }
+
+    /** The first listener: keeps a notice until {@link #onNotice}, or hands it on when a reader saw it late. */
+    private void keep(String text) {
+        synchronized (early) {
+            if (!listening) {
+                early.add(text);
+                return;
+            }
+        }
+        notices.accept(text);
     }
 
     /** Reads the files; a fresh data root gets the defaults: a local QuestDB and a scratch panel with the welcome text. */
@@ -414,6 +444,44 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         submit(() -> write(sessions, List.copyOf(specs)));
     }
 
+    /**
+     * The Files tab's folders; without a readable {@code folders.json}, the default under {@code userHome} (an
+     * unreadable file is moved aside). A list the user emptied stays empty: no folder is a choice.
+     */
+    List<FolderRoot> loadFolders(String userHome) {
+        List<FolderRoot> read = folders.read();
+        if (read == null) {
+            return FolderRoot.defaults(userHome);
+        }
+        // a hand-edited file meets the dialog's rules: a name used once, a full path, an index inside the folder
+        List<FolderRoot> valid = new ArrayList<>();
+        List<String> dropped = new ArrayList<>();
+        for (FolderRoot f : read) {
+            if (f == null) {
+                continue;
+            }
+            try {
+                FolderRoot checked = FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(f));
+                if (valid.stream().anyMatch(v -> v.name().equals(checked.name()))) {
+                    throw new IllegalArgumentException("the name is used by another folder");
+                }
+                valid.add(checked);
+            } catch (IllegalArgumentException e) {
+                dropped.add((f.name().isBlank() ? "a folder without a name" : f.name()) + " (" + e.getMessage() + ")");
+            }
+        }
+        if (!dropped.isEmpty()) {
+            LOG.log(System.Logger.Level.WARNING, "folders.json entries left out " + dropped);
+            notices.accept("folders.json: left out " + String.join("; ", dropped));
+        }
+        return List.copyOf(valid);
+    }
+
+    @Override
+    public void saveFolders(List<FolderRoot> specs) {
+        submit(() -> write(folders, List.copyOf(specs)));
+    }
+
     @Override
     public void savePanels(List<PanelState> panels, List<PanelState> closed) {
         panelMeta = List.copyOf(panels);
@@ -613,7 +681,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     closedMeta.forEach(p -> live.add(p.id().value()));
                     // checked and bound on the writer thread, so two opens of one file cannot both bind it
                     for (String other : live) {
-                        if (files.file(other).map(f -> samePath(f, file)).orElse(false)) {
+                        if (files.file(other).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
                             done.complete(name + " is already open");
                             return;
                         }
@@ -690,10 +758,6 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     /** One file, whatever the spelling: absolute, normalised, ignoring case as APFS does by default. */
-    static boolean samePath(Path a, Path b) {
-        return a.toAbsolutePath().normalize().toString().equalsIgnoreCase(b.toAbsolutePath().normalize().toString());
-    }
-
     private static String reason(Exception e) {
         return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
     }
