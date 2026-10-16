@@ -78,6 +78,11 @@ class StoreTest {
             assertThat(store.loadFolders("/home/u")).as("a hand-written entry without index or excludes")
                     .containsExactly(new FolderRoot("KB", "/kb", "", List.of()));
         }
+        Files.writeString(home.resolve("folders.json"), "[{\"name\":\"Memory\",\"path\":\"/m\",\"icon\":\"memory\",\"readOnly\":true}]");
+        try (Store store = new Store(home)) {
+            assertThat(store.loadFolders("/home/u")).as("icon and read-only kept through the dialog's rules")
+                    .containsExactly(new FolderRoot("Memory", "/m", "", List.of(), "memory", true));
+        }
         Files.writeString(home.resolve("folders.json"), "{not json");
         try (Store store = new Store(home)) {
             assertThat(store.loadFolders("/home/u")).as("unreadable: the default").isEqualTo(FolderRoot.defaults("/home/u"));

@@ -700,6 +700,9 @@ public final class Reducer {
         if (!isNew && s.folder(i.previousName()).isEmpty()) {
             return Transition.of(notice(s, Notice.Level.ERROR, "No folder called " + i.previousName(), Notice.folder(i.previousName())));
         }
+        if (!isNew && s.folder(i.previousName()).get().readOnly()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, readOnly(i.previousName()), Notice.folder(i.previousName())));
+        }
         List<FolderRoot> folders = new ArrayList<>(s.folders().size() + 1);
         for (FolderRoot f : s.folders()) {
             folders.add(f.name().equals(i.previousName()) ? spec : f);
@@ -711,9 +714,17 @@ public final class Reducer {
         return new Transition(next, List.of(new Effect.SaveFolders(next.folders())));
     }
 
+    /** Why a read-only folder is neither edited nor removed, and where it is changed. */
+    private static String readOnly(String name) {
+        return "Folder " + name + " is read-only; folders.json changes it";
+    }
+
     private Transition removeFolder(AppState s, String name) {
         if (s.folder(name).isEmpty()) {
             return Transition.of(s);
+        }
+        if (s.folder(name).get().readOnly()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, readOnly(name), Notice.folder(name)));
         }
         AppState next = clear(s, Notice.folder(name)).withFolders(s.folders().stream().filter(f -> !f.name().equals(name)).toList());
         return new Transition(next, List.of(new Effect.SaveFolders(next.folders())));

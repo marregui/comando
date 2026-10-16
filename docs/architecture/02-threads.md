@@ -16,8 +16,8 @@
 | MCP server | virtual per request | MCP JSON-RPC over HTTP; an `approve` call waits for its card | pending approvals |
 | `gradle-<run>`, `jfrq-<run>` | virtual | run the child process, copy its output to the console, collect test reports | the run's `Console` |
 | `tool-output-<run>`, `tool-kill-<run>` | virtual | copy a run's output while it is open; SIGKILL what a stop left alive after 2 s | — |
-| `recording`, `folder-read` | virtual | read a JFR file, then send a view; read folders of the Files tab at once (a row opened, the refresh button, the filter), then send each tree | — |
-| `folder-poll` | platform, daemon | every 2 s reads the Files tab's open folders and sends a tree when it changed; reads are ticketed so an older read never sends over a newer one | — |
+| `recording`, `folder-read` | virtual | read a JFR file, then send a view; read folders of the Files tab at once (a row opened, the filter), then send each tree | — |
+| `folder-poll` | platform, daemon | every 5 s reads the Files tab's open folders and sends a tree when it changed; reads are ticketed so an older read never sends over a newer one | — |
 | `open-file` | virtual | checks whether a file chosen for a panel is text, before the store binds it | — |
 | `store` | platform | atomic writes of `sessions.json`, `folders.json`, `panels.json` and the panel files in `panels/`; panel text 800 ms after the first unsaved change; a check of the open panels' files for outside changes every second; the read of a file that Open spec or ⌘⇧T binds to a panel | those files |
 | `store-secrets` | platform | keychain calls and `connections.json`, apart so an unanswered unlock prompt never holds back panel text | `connections.json` |

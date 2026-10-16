@@ -6,7 +6,6 @@ import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
@@ -52,12 +51,14 @@ import java.util.function.Supplier;
  * of their folders and files. One click opens a file or a folder; each kind of file has its icon. Opening a folder's
  * row by hand opens its index file, when it has one. Only the folders whose rows are open are read and kept in sync
  * ({@link Intent.WatchFolders}), so a closed folder costs nothing; the tree follows them as the tools adapter reads
- * them, keeping what the user opened and selected, and the newest day folder is open at a folder's first read.
+ * them, keeping what the user opened and selected, and the newest day folder is open at a folder's first read. A
+ * folder's row has the icon it was configured with; a read-only one says so in its detail.
  *
  * <p>The filter above the tree finds files and folders by name across every folder: while it has text, a second tree
  * shows the matches with the folders leading to them, and every folder is read once so the closed ones are searched
- * too. Clearing it (Esc) brings back the tree as the user left it. The bar above adds a folder, reads the open ones
- * again, and edits, clones or removes the selected top-level row, with the same dialog as connections.</p>
+ * too. Clearing it (Esc) brings back the tree as the user left it. The bar above, at its left edge, adds a folder and
+ * edits, clones or removes the selected top-level row, with the same dialog as connections; a read-only folder is
+ * never edited, cloned nor removed, and its files open to read.</p>
  */
 final class FilesTab {
 
@@ -115,7 +116,7 @@ final class FilesTab {
             t.tree().setRootVisible(false);
             t.singleClick();
             t.icons(n -> {
-                String icon = iconName(n, indexNames());
+                String icon = rowIcon(n).orElseGet(() -> iconName(n, indexNames()));
                 return icon.isEmpty() ? null : Icons.get(icon);
             });
             t.onActivate(this::activate);
@@ -176,7 +177,8 @@ final class FilesTab {
         actions = new ResourceActions<>(new ResourceActions.Selection<>() {
             @Override
             public FolderRoot selected() {
-                return selectedFolder();
+                FolderRoot f = selectedFolder();
+                return f == null || f.readOnly() ? null : f;
             }
 
             @Override
@@ -190,8 +192,7 @@ final class FilesTab {
             }
         }, new ResourceActions.Rows<>(FolderKind.INSTANCE.noun(), FolderRoot::name, FolderRoot::name, f -> false, "",
                 f -> FolderKind.INSTANCE.removalQuestion(state.get(), f.name())),
-                editor, name -> intents.dispatch(new Intent.RemoveFolder(name)), questions,
-                ToolButton.of("refresh", "Read the open folders again", this::readAgain));
+                editor, name -> intents.dispatch(new Intent.RemoveFolder(name)), questions).leftAligned();
 
         center.add(tree.component(), "tree");
         center.add(found.component(), "found");
@@ -207,7 +208,7 @@ final class FilesTab {
         return body;
     }
 
-    /** Add and refresh on the left; edit, clone and remove of the selected folder on the right. */
+    /** Add, then edit, clone and remove of the selected folder, together at the left edge. */
     JComponent actions() {
         return actions.component();
     }
@@ -327,7 +328,7 @@ final class FilesTab {
             ViewSpec.TreeNode t = read.get(f.name());
             List<ViewSpec.TreeNode> children = t == null ? List.of(placeholder(READING))
                     : t.children().isEmpty() ? List.of(placeholder(EMPTY)) : t.children();
-            rows.add(new ViewSpec.TreeNode(f.name(), Labels.shortPath(f.path()), children));
+            rows.add(new ViewSpec.TreeNode(f.name(), rowDetail(f), children));
         }
         ViewSpec.TreeNode root = new ViewSpec.TreeNode("Files", "",
                 rows.isEmpty() ? List.of(placeholder("No folders yet. + adds one.")) : rows);
@@ -343,6 +344,30 @@ final class FilesTab {
             restoring = false;
         }
         selectionListeners.forEach(Runnable::run);
+    }
+
+    /** A folder's row's detail: its path, and whether it is read-only. */
+    private static String rowDetail(FolderRoot f) {
+        return Labels.shortPath(f.path()) + (f.readOnly() ? " · read-only" : "");
+    }
+
+    /**
+     * The icon of a folder's top-level row, as configured; empty for any other node. A row is known by its name and
+     * its detail, which no entry inside a folder has (theirs count entries), so a subfolder named as a folder keeps the
+     * folder icon.
+     */
+    Optional<String> rowIcon(ViewSpec.TreeNode n) {
+        for (FolderRoot f : folders) {
+            if (f.name().equals(n.label()) && rowDetail(f).equals(n.detail())) {
+                return Optional.of(rowIconName(f));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /** {@code folder} for the plain icon, else {@code folder-<icon>}. */
+    static String rowIconName(FolderRoot f) {
+        return f.icon().equals(FolderRoot.FOLDER) ? "folder" : "folder-" + f.icon();
     }
 
     private static ViewSpec.TreeNode placeholder(String label) {
@@ -418,13 +443,6 @@ final class FilesTab {
         return p == null || p.getPathCount() != 2 ? null : folderOf(p).orElse(null);
     }
 
-    private void readAgain() {
-        List<String> names = searching() ? folders.stream().map(FolderRoot::name).toList() : watched;
-        if (!names.isEmpty()) {
-            intents.dispatch(new Intent.BrowseFolders(names));
-        }
-    }
-
     private void activate(ViewSpec.TreeNode n) {
         if (n.link().startsWith(SourceLinks.SCHEME)) {
             open.accept(Path.of(SourceLinks.path(n.link())));
@@ -438,7 +456,10 @@ final class FilesTab {
         }
     }
 
-    /** The context menu of {@code n}, selected in the tree in front: a file's, a folder row's, or none. */
+    /**
+     * The context menu of {@code n}, selected in the tree in front: a file's, a folder row's, or none. A read-only
+     * folder's offers its index file only.
+     */
     JPopupMenu menuFor(ViewSpec.TreeNode n) {
         JPopupMenu menu = new JPopupMenu();
         if (n.link().startsWith(SourceLinks.SCHEME)) {
@@ -447,7 +468,9 @@ final class FilesTab {
             FolderRoot f = selectedFolder();
             // asked for by name: a missing index says so in the status bar, as any file that cannot be opened
             f.indexFile().ifPresent(index -> menu.add(item("Open " + f.index(), "index", () -> open.accept(index))));
-            menu.add(item("Read again", "refresh", () -> intents.dispatch(new Intent.BrowseFolders(List.of(f.name())))));
+            if (f.readOnly()) {
+                return menu;
+            }
             menu.add(item("Edit…", "edit", () -> editor.edit(f.name())));
             menu.add(item("Clone…", "copy", () -> editor.cloneOf(f.name())));
             menu.add(item("Remove…", "close", () -> actions.remove(f)));
@@ -500,7 +523,7 @@ final class FilesTab {
             if (t != null) {
                 List<ViewSpec.TreeNode> kids = matches(t.children(), q);
                 if (!kids.isEmpty()) {
-                    rows.add(new ViewSpec.TreeNode(f.name(), Labels.shortPath(f.path()), kids));
+                    rows.add(new ViewSpec.TreeNode(f.name(), rowDetail(f), kids));
                 }
             }
         }

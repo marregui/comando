@@ -325,6 +325,21 @@ class ToolsAdapterTest {
     }
 
     @Test
+    void theIndexFileLeadsItsFolderThenFoldersThenFiles(@TempDir Path dir) throws Exception {
+        Files.writeString(dir.resolve("feedback.md"), "f");
+        Files.writeString(dir.resolve("MEMORY.md"), "m");
+        Files.writeString(dir.resolve("agent.md"), "a");
+        Files.createDirectories(dir.resolve("archive")).resolve("MEMORY.md").toFile().createNewFile();
+        Files.writeString(dir.resolve("archive").resolve("a.md"), "a");
+        ViewSpec.TreeNode root = FolderTree.tree(new FolderRoot("Memory", dir.toString(), "MEMORY.md", List.of()));
+        assertThat(root.children()).extracting(ViewSpec.TreeNode::label).containsExactly("MEMORY.md", "archive", "agent.md", "feedback.md");
+        assertThat(root.children().get(1).children()).as("a file named as the index deeper down is any file")
+                .extracting(ViewSpec.TreeNode::label).containsExactly("a.md", "MEMORY.md");
+        assertThat(FolderTree.tree(folder("Memory", dir)).children()).as("no index set: folders first")
+                .extracting(ViewSpec.TreeNode::label).containsExactly("archive", "agent.md", "feedback.md", "MEMORY.md");
+    }
+
+    @Test
     void aLargeFolderIsReadUpToTheBoundAndEndsSayingSo(@TempDir Path dir) throws Exception {
         for (int i = 0; i < FolderTree.MAX_ENTRIES + 10; i++) {
             Files.createFile(dir.resolve("f" + i + ".md"));

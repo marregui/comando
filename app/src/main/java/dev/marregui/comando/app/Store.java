@@ -461,7 +461,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 continue;
             }
             try {
-                FolderRoot checked = FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(f));
+                // read-only is not an attribute, so the check does not carry it
+                FolderRoot checked = FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(f)).withReadOnly(f.readOnly());
                 if (valid.stream().anyMatch(v -> v.name().equals(checked.name()))) {
                     throw new IllegalArgumentException("the name is used by another folder");
                 }

@@ -73,6 +73,8 @@ public final class EditorPanel extends JPanel {
     private final JPanel center = new JPanel(new CardLayout());
     private Path file;
     private boolean document;
+    /** A document in a read-only folder: shown, never edited; Markdown stays rendered. */
+    private boolean readOnly;
     private final SchemaRegistry schemas;
     private PanelState panel;
     private AppState state;
@@ -173,26 +175,42 @@ public final class EditorPanel extends JPanel {
      * own text stays SQL and prompts, in the editor. A Markdown file offers the Edit switch, any other file does not.
      */
     public void file(Path file, boolean document) {
-        if (Objects.equals(file, this.file) && document == this.document) {
+        file(file, document, false);
+    }
+
+    /**
+     * As {@link #file(Path, boolean)}; a {@code readOnly} document, one in a read-only folder, is never edited here: its
+     * text cannot be changed, and Markdown shows rendered without the Edit switch.
+     */
+    public void file(Path file, boolean document, boolean readOnly) {
+        readOnly &= document;
+        if (Objects.equals(file, this.file) && document == this.document && readOnly == this.readOnly) {
             return;
         }
         boolean opened = document && !(this.document && Objects.equals(file, this.file));
+        boolean lockedNow = readOnly && !this.readOnly;
         this.file = file;
         this.document = document;
+        this.readOnly = readOnly;
         editor.syntax(document && file != null ? Editors.styleFor(file) : CommandEditor.PANEL_STYLE);
-        // a log belongs to the program writing it: read here, never written
-        editor.area().setEditable(!isLog());
+        // a log belongs to the program writing it, a read-only folder's file to another: read here, never written
+        editor.area().setEditable(!isLog() && !readOnly);
         if (opened && isLog()) {
             followEnd();
         }
         showClear();
         boolean markdown = isMarkdown();
-        mode.setVisible(markdown);
+        mode.setVisible(markdown && !readOnly);
         if (!markdown && previewing()) {
             showPreview(false);
-        } else if (markdown && opened) {
+        } else if (markdown && (opened || lockedNow)) {
             showPreview(true);
         }
+    }
+
+    /** For tests. */
+    boolean editable() {
+        return editor.area().isEditable();
     }
 
     /** A document ending in {@code .log}: read-only, and it follows its end as it grows. */

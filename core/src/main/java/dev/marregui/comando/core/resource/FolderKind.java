@@ -11,7 +11,10 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** The Files tab's folders as a resource kind: a name, a folder, an index file and what to leave out. */
+/**
+ * The Files tab's folders as a resource kind: a name, a folder, an index file, what to leave out and the row's icon.
+ * Whether a folder is read-only is not an attribute: the dialog never edits a read-only folder.
+ */
 public final class FolderKind implements ResourceKind<FolderRoot> {
 
     public static final FolderKind INSTANCE = new FolderKind();
@@ -22,7 +25,8 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
             Attribute.of("index", "Index file", Attribute.Kind.TEXT, false,
                     "a file in the folder, such as ALPHA.md; opened with the folder"),
             Attribute.of("excludes", "Leave out", Attribute.Kind.TEXT, false,
-                    "folder and file names, comma-separated; build output is always left out"));
+                    "folder and file names, comma-separated; build output is always left out"),
+            Attribute.choice("icon", "Icon", FolderRoot.ICONS, "the icon of the folder's row in the Files tab"));
 
     private FolderKind() {
     }
@@ -44,6 +48,7 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
         m.put("path", f.path());
         m.put("index", f.index());
         m.put("excludes", String.join(", ", f.excludes()));
+        m.put("icon", f.icon());
         return m;
     }
 
@@ -65,11 +70,17 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
         if (Path.of(index).isAbsolute() || Path.of(index).normalize().startsWith("..")) {
             throw new IllegalArgumentException("the index file must be inside the folder: " + index);
         }
+        String icon = a.getOrDefault("icon", "").strip();
+        if (!icon.isEmpty() && !FolderRoot.ICONS.contains(icon)) {
+            throw new IllegalArgumentException("the icon must be one of " + String.join(", ", FolderRoot.ICONS) + ": " + icon);
+        }
         return new FolderRoot(
                 name,
                 path,
                 index,
-                Arrays.asList(a.getOrDefault("excludes", "").split(",")));
+                Arrays.asList(a.getOrDefault("excludes", "").split(",")),
+                icon,
+                false);
     }
 
     @Override

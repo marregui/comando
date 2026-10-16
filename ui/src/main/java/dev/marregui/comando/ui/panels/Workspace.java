@@ -307,7 +307,8 @@ public final class Workspace {
                     tabs.insertTab(title(p, false), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
                 }
                 refreshTab(p, s, view);
-                view.file(texts.file(p.id()).orElse(null), texts.document(p.id()));
+                Path file = texts.file(p.id()).orElse(null);
+                view.file(file, texts.document(p.id()), file != null && s.folders().stream().anyMatch(f -> f.readOnly() && f.contains(file)));
                 view.render(p, s);
             }
             EditorPanel focused = panels.get(s.focused());

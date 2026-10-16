@@ -113,6 +113,19 @@ class ReducerTest {
     }
 
     @Test
+    void aReadOnlyFolderIsNeitherEditedNorRemoved() {
+        FolderRoot memory = new FolderRoot("Memory", "/m", "MEMORY.md", List.of(), "memory", true);
+        state = state.withFolders(List.of(memory));
+        apply(new Intent.SaveFolder("Memory", new FolderRoot("Memory", "/elsewhere", "", List.of())));
+        assertThat(state.folders()).containsExactly(memory);
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.SaveFolders.class);
+        assertThat(state.notice().text()).isEqualTo("Folder Memory is read-only; folders.json changes it");
+        apply(new Intent.RemoveFolder("Memory"));
+        assertThat(state.folders()).containsExactly(memory);
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.SaveFolders.class);
+    }
+
+    @Test
     void aFolderIsAddedRenamedInPlaceAndRemovedAndEachChangeIsSaved() {
         FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
         FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());

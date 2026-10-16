@@ -8,7 +8,7 @@ The data root is the directory in `-Dcomando.home`, else the environment variabl
 |---|---|---|
 | `connections.json` | connection specs; passwords empty when the keychain holds them | `Store` |
 | `sessions.json` | session specs, including the conversation id that makes the next start a resume | `Store` |
-| `folders.json` | the Files tab's folders: name, path, index file, names left out; absent, the default `~/.claude`; an empty list stays empty; an unreadable file is moved aside and the default shows | `Store` |
+| `folders.json` | the Files tab's folders: name, path, index file, names left out, icon, read-only; absent, the default `~/.claude`; an empty list stays empty; an unreadable file is moved aside and the default shows | `Store` |
 | `panels.json` | each panel's id, title, connection and session binding, and the name of its file | `Store` |
 | `panels/<title>.md` | each panel's editor text, one Markdown file per panel ([A file per panel](../adr/0026-a-file-per-panel.md)) | `Store` (`PanelFiles`) |
 | `comando.lock` | a file lock held while comando runs, so a second comando on the same data root says so and exits; the operating system releases it, also after a crash | `Main` |

@@ -26,6 +26,7 @@ import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
+import javax.swing.tree.DefaultMutableTreeNode;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
@@ -125,6 +126,17 @@ public final class Snapshot {
         SwingUtilities.invokeAndWait(() -> filesFilter().setText("lane"));
         shoot(out.resolve("02c2-sidebar-files-filter.png"));
         SwingUtilities.invokeAndWait(() -> filesFilter().setText(""));
+        // the read-only memory, opened as by a click: its index leads it, and opens rendered with no Edit switch
+        SwingUtilities.invokeAndWait(() -> {
+            JTree files = tree("Files");
+            if (files != null) {
+                files.collapseRow(0);
+                files.expandRow(1);
+                files.setSelectionRow(1);
+            }
+        });
+        await(loop, st -> st.panels().stream().anyMatch(p -> p.title().equals("MEMORY")) && rowShown("Files", "MEMORY.md"), 10_000);
+        shoot(out.resolve("02c3-sidebar-files-memory.png"));
         selectSidebarTab("Sessions");
         // files opened from the Files tab: a Markdown document opens rendered, its code in the editors' colours,
         // and a source file opens as text coloured as its language
@@ -224,7 +236,8 @@ public final class Snapshot {
 
     /**
      * Sample folders for the Files tab, written as {@code folders.json} before the start: a scratchpad of two days
-     * whose index is {@code ALPHA.md}, and a knowledge base with build output the tab leaves out.
+     * whose index is {@code ALPHA.md}, a knowledge base with build output the tab leaves out, a read-only memory whose
+     * index leads it, and a folder of skills and one of a plugin, so every folder icon shows.
      */
     private static void sampleFolders(Path home) throws Exception {
         Path root = Files.createTempDirectory("comando-snapshot-files");
@@ -240,10 +253,36 @@ public final class Snapshot {
         Files.writeString(Files.createDirectories(kb.resolve("architecture")).resolve("00_START_HERE.md"), "# Architecture\n");
         Files.writeString(Files.createDirectories(kb.resolve("build")).resolve("generated.html"), "x");
         Files.writeString(kb.resolve("ALPHA.md"), "# KB\n");
+        Path memory = root.resolve("MEMORY");
+        Files.writeString(Files.createDirectories(memory.resolve("archive")).resolve("session_log_2026-09.md"), "# September\n");
+        Files.writeString(memory.resolve("agent_ledger.md"), "# Agent ledger\n");
+        Files.writeString(memory.resolve("MEMORY.md"), "# Memory\n");
+        Files.writeString(Files.createDirectories(root.resolve("skills").resolve("reflect")).resolve("SKILL.md"), "# reflect\n");
+        Files.writeString(Files.createDirectories(root.resolve("plugin").resolve("bin")).resolve("gradle-serial"), "#!/bin/sh\n");
         Files.writeString(home.resolve("folders.json"), JsonFile.JSON.writeValueAsString(List.of(
                 new FolderRoot("Scratchpad", pad.toString(), "ALPHA.md", List.of()),
-                new FolderRoot("KB", kb.toString(), "ALPHA.md", List.of()),
+                new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory", true),
+                new FolderRoot("KB", kb.toString(), "ALPHA.md", List.of(), "knowledge", false),
+                new FolderRoot("Skills", root.resolve("skills").toString(), "", List.of(), "skills", false),
+                new FolderRoot("Plugin", root.resolve("plugin").toString(), "", List.of(), "plugin", false),
                 new FolderRoot("Notes", root.resolve("notes").toString(), "", List.of()))));
+    }
+
+    /** Whether the visible window's tree named {@code name} shows a row labelled {@code label}; asked on the event thread. */
+    private static boolean rowShown(String name, String label) {
+        boolean[] shown = new boolean[1];
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                JTree t = tree(name);
+                for (int i = 0; t != null && i < t.getRowCount(); i++) {
+                    shown[0] |= t.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
+                            && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals(label);
+                }
+            });
+        } catch (Exception e) {
+            return false;
+        }
+        return shown[0];
     }
 
     /** The Files tab's filter field in the visible window. */

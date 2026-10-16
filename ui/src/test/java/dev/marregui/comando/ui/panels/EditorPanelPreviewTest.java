@@ -56,6 +56,35 @@ class EditorPanelPreviewTest {
     }
 
     @Test
+    void aDocumentOfAReadOnlyFolderIsShownAndNeverEdited() throws Exception {
+        EditorPanel memory = panel("MEMORY", p -> {
+            p.editor().load("# Memory\n");
+            p.file(Path.of("/m/MEMORY.md"), true, true);
+        });
+        assertThat(memory.editable()).isFalse();
+        assertThat(memory.previewing()).as("Markdown opens rendered").isTrue();
+        assertThat(memory.previewOffered()).as("no Edit switch").isFalse();
+        SwingUtilities.invokeAndWait(memory::togglePreview);
+        assertThat(memory.previewing()).as("⌘⇧M does not switch to the editor either").isTrue();
+
+        EditorPanel json = panel("agents", p -> p.file(Path.of("/m/agents.json"), true, true));
+        assertThat(json.editable()).isFalse();
+
+        EditorPanel notes = panel("notes", p -> p.file(Path.of("/s/notes.md"), true));
+        SwingUtilities.invokeAndWait(() -> {
+            notes.togglePreview();
+            notes.file(Path.of("/s/notes.md"), true, true);
+        });
+        assertThat(notes.editable()).as("a folder made read-only while its file is open").isFalse();
+        assertThat(notes.previewing()).isTrue();
+        SwingUtilities.invokeAndWait(() -> notes.file(Path.of("/s/notes.md"), true, false));
+        assertThat(notes.editable()).isTrue();
+        assertThat(notes.previewOffered()).isTrue();
+        EditorPanel own = panel("own", p -> p.file(Path.of("/m/own.md"), false, true));
+        assertThat(own.editable()).as("a panel's own text is never read-only").isTrue();
+    }
+
+    @Test
     void clearEmptiesThePanelsOwnTextButNeverADocument() throws Exception {
         EditorPanel own = panel("notes", p -> {
             p.editor().load("select 1;\n");

@@ -7,6 +7,7 @@ import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.text.Plain;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JList;
@@ -25,7 +26,8 @@ import java.util.function.Supplier;
 /**
  * The buttons above a list of resources (sessions, connections, panels, folders), in two groups: on the left, add and
  * whatever else brings resources in; on the right, edit, clone and remove, which act on the selected row and are off
- * while none is selected. Remove asks first, naming what removal does: a resource in use (a running session, an open
+ * while none is selected. A bar whose list holds other rows besides the resources (the Files tab's files) keeps both
+ * groups together at the left edge ({@link #leftAligned}), so the buttons read as one set acting on the resources. Remove asks first, naming what removal does: a resource in use (a running session, an open
  * connection or panel) offers "Stop and remove" ("Disconnect and remove", "Close and remove") or "Leave it", one not
  * in use "Remove" or "Cancel". The safe answer is the default, and closing the question gives it.
  *
@@ -102,10 +104,14 @@ public final class ResourceActions<T> {
         }
     }
 
+    /** Between the groups of a {@link #leftAligned} bar: apart, still one set. */
+    private static final int GROUP_GAP = 8;
+
     private final Selection<T> selection;
     private final Rows<T> rows;
     private final Consumer<String> remove;
     private final Questions questions;
+    private final List<JButton> left = new ArrayList<>();
     private final List<JButton> onSelection = new ArrayList<>();
     private final JPanel bar = new JPanel(new BorderLayout());
 
@@ -125,7 +131,6 @@ public final class ResourceActions<T> {
         this.remove = remove;
         this.questions = questions;
         String noun = rows.noun();
-        List<JButton> left = new ArrayList<>();
         left.add(ToolButton.of("add", "New " + noun + "…", editor::add));
         left.addAll(List.of(moreLeft));
         onSelection.add(ToolButton.of("edit", "Edit the selected " + noun + "…", () -> selected(t -> editor.edit(rows.name().apply(t)))));
@@ -138,9 +143,19 @@ public final class ResourceActions<T> {
         enable();
     }
 
-    /** The bar: the left group at the left edge, the right group at the right edge. */
+    /** The bar: the left group at the left edge, the right group at the right edge, unless {@link #leftAligned}. */
     public JComponent component() {
         return bar;
+    }
+
+    /** Both groups at the left edge, the selection's after a gap. */
+    public ResourceActions<T> leftAligned() {
+        bar.removeAll();
+        JPanel g = group(FlowLayout.LEFT, left);
+        g.add(Box.createHorizontalStrut(GROUP_GAP));
+        onSelection.forEach(g::add);
+        bar.add(g, BorderLayout.WEST);
+        return this;
     }
 
     /** Removes {@code row} after asking; the context menu's Remove does the same. */

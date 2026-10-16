@@ -19,7 +19,8 @@ import java.util.stream.Stream;
 
 /**
  * A folder of the Files tab as a tree, every level ordered the same way: folders not named after a date first, by
- * name; then date-named folders ({@code yyyy-MM-dd}) oldest first; then files by name, ignoring case. A file links to
+ * name; then date-named folders ({@code yyyy-MM-dd}) oldest first; then files by name, ignoring case. The folder's
+ * index file, when it sits at the top level, comes before everything else there. A file links to
  * itself; a folder has no link and its label has no trailing slash. Hidden entries and the folder's excluded names
  * are left out; a symbolic link to a folder is listed as a folder and not followed into. A subfolder that cannot be
  * read says so and the rest of the tree stands. The depth and the number of entries are bounded, and so is the read:
@@ -107,7 +108,8 @@ final class FolderTree {
         }).toList();
         int canShow = Math.min(shown.size(), Math.max(budget.entries, 0));
         more |= shown.size() > canShow;
-        List<Entry> entries = shown.subList(0, canShow).stream().map(Entry::of).sorted(ORDER).toList();
+        String index = depth == 1 ? folder.index() : "";
+        List<Entry> entries = shown.subList(0, canShow).stream().map(p -> Entry.of(p, index)).sorted(ORDER).toList();
         budget.entries -= entries.size();
         List<ViewSpec.TreeNode> out = new ArrayList<>(entries.size() + 1);
         for (Entry e : entries) {
@@ -153,19 +155,26 @@ final class FolderTree {
      * An entry with what the order needs, read once: the tree is read every few seconds and a sort compares each
      * entry many times, so neither the file system nor a pattern is asked again per comparison.
      *
-     * @param rank 0 for a folder not named after a date, 1 for a date-named folder, 2 for a file
+     * @param rank -1 for the index file, 0 for a folder not named after a date, 1 for a date-named folder, 2 for any
+     *             other file
      */
     record Entry(Path path, String name, String lower, Kind kind, int rank) {
 
         static Entry of(Path p) {
+            return of(p, "");
+        }
+
+        /** {@code index} names the folder's index file when {@code p} is at its top level, else empty. */
+        static Entry of(Path p, String index) {
             String name = p.getFileName().toString();
             Kind kind = Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS) ? Kind.FOLDER
                     : Files.isSymbolicLink(p) && Files.isDirectory(p) ? Kind.LINKED_FOLDER : Kind.FILE;
-            return new Entry(p, name, name.toLowerCase(Locale.ROOT), kind, kind == Kind.FILE ? 2 : DAY.matcher(name).matches() ? 1 : 0);
+            int rank = kind != Kind.FILE ? (DAY.matcher(name).matches() ? 1 : 0) : name.equals(index) ? -1 : 2;
+            return new Entry(p, name, name.toLowerCase(Locale.ROOT), kind, rank);
         }
     }
 
-    /** Folders not named after a date, then date-named folders oldest first, then files; names ignoring case. */
+    /** The index file, then folders not named after a date, then date-named folders oldest first, then files; names ignoring case. */
     static final Comparator<Entry> ORDER = Comparator.comparingInt(Entry::rank).thenComparing(Entry::lower).thenComparing(Entry::name);
 
     private static String size(Path p) {

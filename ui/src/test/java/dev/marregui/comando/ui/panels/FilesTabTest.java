@@ -15,6 +15,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.tree.DefaultMutableTreeNode;
+import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
 import java.nio.file.Files;
@@ -162,12 +163,16 @@ class FilesTabTest {
     }
 
     @Test
-    void theBarEditsAndRemovesTheSelectedFolderAndReadsTheOpenOnesAgain() throws Exception {
+    void theBarEditsAndRemovesTheSelectedFolderFromOneGroupAtTheLeftEdge() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of()), new FolderRoot("KB", "/kb", "", List.of()));
         AbstractButton edit = f.button("Edit the selected folder…");
         AbstractButton remove = f.button("Remove the selected folder…");
-        AbstractButton refresh = f.button("Read the open folders again");
         assertThat(edit.isEnabled()).isFalse();
+        assertThat(f.button("Read the open folders again")).as("open folders follow the disk on their own").isNull();
+        BorderLayout bar = (BorderLayout) ((Container) f.tab.actions()).getLayout();
+        assertThat(bar.getLayoutComponent(BorderLayout.EAST)).as("nothing at the right edge").isNull();
+        assertThat(SwingUtilities.isDescendingFrom(remove, bar.getLayoutComponent(BorderLayout.WEST))).isTrue();
+        assertThat(SwingUtilities.isDescendingFrom(f.button("New folder…"), bar.getLayoutComponent(BorderLayout.WEST))).isTrue();
 
         f.edt(() -> f.tree().expandRow(0));
         f.edt(() -> f.show("Scratchpad", folder("Scratchpad", file("notes.md"))));
@@ -182,10 +187,32 @@ class FilesTabTest {
         f.edt(remove::doClick);
         assertThat(f.asked).singleElement().asString().contains("Remove folder KB from the Files tab? Its files stay on disk.");
         assertThat(f.intents).containsExactly(new Intent.RemoveFolder("KB"));
+    }
 
-        f.intents.clear();
-        f.edt(refresh::doClick);
-        assertThat(f.intents).containsExactly(new Intent.BrowseFolders(List.of("Scratchpad")));
+    @Test
+    void aReadOnlyFolderIsNeitherEditedClonedNorRemovedAndSaysSo() throws Exception {
+        Fixture f = new Fixture(new FolderRoot("Memory", "/m", "MEMORY.md", List.of(), "memory", true),
+                new FolderRoot("KB", "/kb", "", List.of(), "knowledge", false));
+        f.edt(() -> f.tree().setSelectionRow(0));
+        for (String tip : List.of("Edit the selected folder…", "Clone the selected folder…", "Remove the selected folder…")) {
+            assertThat(f.button(tip).isEnabled()).as(tip).isFalse();
+        }
+        f.edt(() -> assertThat(f.tab.menuFor(new ViewSpec.TreeNode("Memory", "/m · read-only", List.of())).getComponents())
+                .extracting(c -> ((JMenuItem) c).getText()).containsExactly("Open MEMORY.md"));
+        f.edt(() -> f.tree().setSelectionRow(1));
+        assertThat(f.button("Edit the selected folder…").isEnabled()).isTrue();
+
+        assertThat(f.tab.rowIcon(new ViewSpec.TreeNode("Memory", "/m · read-only", List.of()))).as("its row says so").contains("folder-memory");
+        assertThat(f.tab.rowIcon(new ViewSpec.TreeNode("KB", "/kb", List.of()))).contains("folder-knowledge");
+        assertThat(f.tab.rowIcon(folder("Memory"))).as("a subfolder named as a folder").isEmpty();
+    }
+
+    @Test
+    void everyIconAFolderMayHaveIsDrawn() {
+        for (String icon : FolderRoot.ICONS) {
+            String name = FilesTab.rowIconName(new FolderRoot("F", "/f", "", List.of(), icon, false));
+            assertThat(FilesTab.class.getResource("/icons/" + name + ".svg")).as(name).isNotNull();
+        }
     }
 
     @Test
@@ -230,7 +257,7 @@ class FilesTabTest {
                 items.add(((JMenuItem) c).getText());
             }
         });
-        assertThat(items).containsExactly("Open ALPHA.md", "Read again", "Edit…", "Clone…", "Remove…");
+        assertThat(items).containsExactly("Open ALPHA.md", "Edit…", "Clone…", "Remove…");
         f.edt(() -> f.tab.found().tree().setSelectionRow(3));
         f.edt(() -> {
             assertThat(f.tab.menuFor(file("notes.md")).getComponents()).extracting(c -> ((JMenuItem) c).getText()).containsExactly("Open in a panel");

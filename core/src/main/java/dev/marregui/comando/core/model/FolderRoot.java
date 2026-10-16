@@ -8,7 +8,8 @@ import java.util.Set;
 
 /**
  * A folder the Files tab shows at its top level, configured like a connection: a name, the folder, the file its name
- * opens (its index, such as {@code ALPHA.md}), and the names of entries left out besides {@link #ALWAYS_EXCLUDED}.
+ * opens (its index, such as {@code ALPHA.md}), the names of entries left out besides {@link #ALWAYS_EXCLUDED}, the
+ * icon of its row, and whether it is read-only.
  *
  * <p>The record takes any name and path, as read from a hand-edited {@code folders.json}; {@link
  * dev.marregui.comando.core.resource.FolderKind} holds the rules (a name, a full path, an index inside the folder), and
@@ -16,8 +17,17 @@ import java.util.Set;
  *
  * @param index    a path relative to the folder, empty when none
  * @param excludes folder or file names left out wherever they appear, matched ignoring case
+ * @param icon     one of {@link #ICONS}; {@link #FOLDER} when none is set
+ * @param readOnly a folder another program writes, such as Claude Code's memory: its files open to read, and the
+ *                 Files tab neither edits, clones nor removes it; set by the kit or in {@code folders.json}, not in
+ *                 the dialog
  */
-public record FolderRoot(String name, String path, String index, List<String> excludes) {
+public record FolderRoot(String name, String path, String index, List<String> excludes, String icon, boolean readOnly) {
+
+    /** The plain folder icon, the default. */
+    public static final String FOLDER = "folder";
+    /** The icons a folder's row may have, as the dialog offers them. */
+    public static final List<String> ICONS = List.of(FOLDER, "memory", "knowledge", "skills", "plugin");
 
     /** Build output and dependencies, left out of every folder: large, generated, and never a document. */
     public static final Set<String> ALWAYS_EXCLUDED = Set.of("node_modules", "build", "target", "__pycache__", "out");
@@ -28,6 +38,12 @@ public record FolderRoot(String name, String path, String index, List<String> ex
         path = path == null ? "" : path;
         index = index == null ? "" : index.strip();
         excludes = excludes == null ? List.of() : excludes.stream().map(String::strip).filter(e -> !e.isEmpty()).toList();
+        icon = icon == null || icon.isBlank() ? FOLDER : icon.strip();
+    }
+
+    /** A writable folder with the plain icon. */
+    public FolderRoot(String name, String path, String index, List<String> excludes) {
+        this(name, path, index, excludes, FOLDER, false);
     }
 
     /**
@@ -54,7 +70,16 @@ public record FolderRoot(String name, String path, String index, List<String> ex
         return index.isEmpty() ? Optional.empty() : Optional.of(Path.of(path).resolve(index));
     }
 
+    /** Whether {@code file}, a full path, is in this folder. */
+    public boolean contains(Path file) {
+        return !path.isEmpty() && file.normalize().startsWith(Path.of(path).normalize());
+    }
+
     public FolderRoot withName(String newName) {
-        return new FolderRoot(newName, path, index, excludes);
+        return new FolderRoot(newName, path, index, excludes, icon, readOnly);
+    }
+
+    public FolderRoot withReadOnly(boolean on) {
+        return new FolderRoot(name, path, index, excludes, icon, on);
     }
 }

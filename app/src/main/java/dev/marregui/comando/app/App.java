@@ -50,8 +50,8 @@ public final class App implements AutoCloseable {
     static final Duration APPROVAL_TIMEOUT = Duration.ofMinutes(55);
 
     private final Deque<AutoCloseable> owned = new ArrayDeque<>();
-    /** How often the Files tab's open folders are read for changes. */
-    static final Duration FOLDERS_EVERY = Duration.ofSeconds(2);
+    /** How often the Files tab's open folders are read for changes: often enough to follow a session writing. */
+    static final Duration FOLDERS_EVERY = Duration.ofSeconds(5);
     /** How often the status bar's plan usage is read; each read is one local {@code claude -p /usage}, about a second. */
     static final Duration PLAN_USAGE_EVERY = Duration.ofMinutes(5);
     private final StateLoop loop;
