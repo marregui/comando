@@ -13,8 +13,9 @@ The data root is the directory in `-Dcomando.home`, else the environment variabl
 | `comando.lock` | a file lock held while comando runs, so a second comando on the same data root says so and exits; the operating system releases it, also after a crash | `Main` |
 | `run/` | one MCP configuration per running session, mode `0600`, deleted when the process exits | `ClaudeAdapter` |
 | `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision | `AuditLog` |
-| `logs/comando-<n>.log` | the application log, 5 files of 5 MB, rotated | `Logging` |
+| `logs/comando-<n>.log` | the application log, 10 files of 1 MiB, rotated; Help ▸ Show the log opens `comando-0.log` in a read-only panel | `Logging` |
 | `logs/intents-<epoch ms>.jsonl` | the intent log, when recording is on ([Quality](quality.md)) | `IntentLog` |
+| `help/tutorial.md` | the tutorial Help ▸ Tutorial opens in a panel, written at start from the build's copy, and again whenever the file differs from it ([ADR 47](../adr/0047-help-opens-its-files-as-documents.md)) | `HelpFiles` |
 | `questdb/` | the embedded QuestDB's data, when the user starts it | `EmbeddedQuestDb` |
 | `cache/mermaid/<hash>.png` | Mermaid diagrams `mmdc` drew for the previews, one per diagram text; safe to delete ([ADR 35](../adr/0035-mermaid-diagrams-drawn-by-mmdc.md)) | `MermaidDiagrams` |
 

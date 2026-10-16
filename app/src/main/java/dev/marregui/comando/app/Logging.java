@@ -32,7 +32,8 @@ final class Logging {
         Formatter format = new Line();
         try {
             Files.createDirectories(dir);
-            FileHandler file = new FileHandler(dir.resolve("comando-%g.log").toString(), 5 * 1024 * 1024, 5, true);
+            // 1 MiB a file, so the log always opens in a panel (Help ▸ Show the log), whose limit is 2 MiB
+            FileHandler file = new FileHandler(dir.resolve("comando-%g.log").toString(), 1024 * 1024, 10, true);
             file.setFormatter(format);
             file.setLevel(Level.INFO);
             root.addHandler(file);

@@ -350,6 +350,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
         tickTimer = new Timer(1_000, e -> tick());
         tickTimer.start();
+        writeTutorial();
         EditorPanel p = workspace.focused();
         if (p != null) {
             p.editor().requestFocus();
@@ -374,6 +375,21 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN,
                     "The window stopped responding for " + Labels.elapsed(millis) + "; the log has where (Help ▸ Show the log)", false));
         }
+    }
+
+    /** The tutorial's file exists from the start, to be opened as any file, not only from Help. */
+    private void writeTutorial() {
+        Path home = deps.home();
+        if (home == null) {
+            return;
+        }
+        Thread.ofVirtual().name("write-tutorial").start(() -> {
+            try {
+                HelpFiles.writeTutorial(home);
+            } catch (IOException | RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot write the tutorial into " + home + ": " + e.getMessage());
+            }
+        });
     }
 
     /** Once a second: elapsed times on the panels and the results, uptimes on the session rows. */
@@ -813,11 +829,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }, () -> capability(Zoomable.class) != null);
         cmd("view.notices", "Recent notices", null, () -> status.showHistory());
         // help
-        cmd("help.tutorial", "Tutorial", null, this::showTutorial);
+        cmd("help.tutorial", "Tutorial", null, this::showTutorial, () -> deps.home() != null);
         // ⌘/ stays the editor's comment toggle; ⌘⇧/ is the Mac's Help key
         cmd("help.keys", "Keyboard shortcuts", key(KeyEvent.VK_SLASH, CMD | SHIFT), this::showKeys);
         cmd("help.log", "Show the log", null, this::showLog, () -> deps.logDir() != null);
-        cmd("help.dataRoot", "Reveal the data folder", null, () -> reveal(deps.home()), () -> deps.home() != null);
+        cmd("help.dataRoot", "Reveal comando folder", null, () -> reveal(deps.home()), () -> deps.home() != null);
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice
         boolean mac = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("mac");
         cmd("app.quit", "Quit comando", mac ? null : key(KeyEvent.VK_Q, CMD), this::quit);
@@ -1081,21 +1097,17 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         deps.intents().dispatch(new Intent.ExploreSchema(connection));
     }
 
+    /** The tutorial in a panel, as a document: its file in comando's folder, written from this build's copy first. */
     private void showTutorial() {
-        sidePaneHidden = false;
-        try (var in = ComandoUi.class.getResourceAsStream("/dev/marregui/comando/ui/help/tutorial.md")) {
-            if (in == null) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "The tutorial is not in this build", false));
-                return;
+        Path home = deps.home();
+        Thread.ofVirtual().name("show-tutorial").start(() -> {
+            try {
+                Path file = HelpFiles.writeTutorial(home);
+                Edt.later(() -> openFile(file));
+            } catch (IOException | RuntimeException e) {
+                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot show the tutorial: " + e.getMessage(), false));
             }
-            // links to other docs are relative to the repository, which the app does not ship, and the view does not
-            // follow in-page anchors: keep their text only
-            String text = new String(in.readAllBytes(), StandardCharsets.UTF_8)
-                    .replaceAll("\\[([^\\]]+)\\]\\((\\.\\./[^)]+|[a-z-]+\\.md[^)]*|#[^)]+)\\)", "$1");
-            deps.intents().dispatch(new Intent.ShowView("", "Tutorial", new ViewSpec.Markdown(text), Placement.SIDE));
-        } catch (IOException e) {
-            deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot read the tutorial: " + e.getMessage(), false));
-        }
+        });
     }
 
     /** Every command with a key, by menu, as a table in the side pane. */
@@ -1114,21 +1126,14 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
     }
 
-    /** The newest log file, last lines, in the side pane with the caret at the end. */
+    /** The log comando writes now, in a panel, as a document: read-only, following its end, reloaded as it grows. */
     private void showLog() {
-        sidePaneHidden = false;
-        Path file = deps.logDir().resolve("comando-0.log");
-        Thread.ofVirtual().name("show-log").start(() -> {
-            try {
-                List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
-                List<String> tail = lines.subList(Math.max(0, lines.size() - 2_000), lines.size());
-                String text = String.join("\n", tail);
-                deps.intents().dispatch(new Intent.ShowView("", "comando log", new ViewSpec.Text(file.toString(), text, "log", tail.size()),
-                        Placement.SIDE));
-            } catch (IOException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot read " + file + ": " + e.getMessage(), false));
-            }
-        });
+        Path log = HelpFiles.log(deps.logDir());
+        if (Files.isRegularFile(log)) {
+            openFile(log);
+        } else {
+            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "No log yet at " + log, false));
+        }
     }
 
     private void sendCommand(String command) {

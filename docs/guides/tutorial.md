@@ -188,7 +188,7 @@ Other permission requests, such as a shell command or a file edit, appear as the
    *You should see* your panels, their text and their bindings as you left them. Sessions come back stopped, with their transcripts, and the next prompt resumes the same conversation: type `What was the first question I asked you?` in the editor and press **⌘⇧⏎**.
    Connections come back closed, and the embedded QuestDB does not start by itself: start it again from the palette (step 2) before you connect. The window comes back where it was, with the sidebar shown or hidden as you left it. Views (plots, files, kept results) belong to one run: the side pane comes back empty.
 
-Your data lives in `~/.comando`: `connections.json`, `sessions.json`, `panels.json`, and each panel's text as its own Markdown file in `panels/`, named after the panel (**⌘O** opens one as a panel; edit one in another editor and its panel shows the change within a second), the embedded QuestDB's data in `questdb/`, and the logs in `logs/`. Connection passwords are kept in the macOS keychain, not in the files.
+Your data lives in `~/.comando`: `connections.json`, `sessions.json`, `panels.json`, and each panel's text as its own Markdown file in `panels/`, named after the panel (**⌘O** opens one as a panel; edit one in another editor and its panel shows the change within a second), the embedded QuestDB's data in `questdb/`, this tutorial in `help/`, and the logs in `logs/`; Help ▸ Reveal comando folder opens it. Connection passwords are kept in the macOS keychain, not in the files.
 
 ## Cheat sheet
 

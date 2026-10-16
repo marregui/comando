@@ -35,6 +35,27 @@ class EditorPanelPreviewTest {
     }
 
     @Test
+    void aLogIsReadOnlyAndFollowsItsEnd() throws Exception {
+        EditorPanel log = panel("comando-0.log", p -> {
+            p.editor().load("one\ntwo\n");
+            p.file(Path.of("/home/.comando/logs/comando-0.log"), true);
+        });
+        assertThat(log.isLog()).isTrue();
+        assertThat(log.editor().area().isEditable()).isFalse();
+        assertThat(log.editor().area().getCaretPosition()).as("opens at its end").isEqualTo(8);
+        SwingUtilities.invokeAndWait(() -> log.reload("one\ntwo\nthree\n"));
+        assertThat(log.editor().area().getCaretPosition()).as("follows what was appended").isEqualTo(14);
+        SwingUtilities.invokeAndWait(() -> {
+            log.editor().area().setCaretPosition(0);
+            log.reload("one\ntwo\nthree\nfour\n");
+        });
+        assertThat(log.editor().area().getCaretPosition()).as("a reader scrolled up stays there").isZero();
+
+        EditorPanel notes = panel("notes", p -> p.file(Path.of("/s/notes.md"), true));
+        assertThat(notes.editor().area().isEditable()).isTrue();
+    }
+
+    @Test
     void clearEmptiesThePanelsOwnTextButNeverADocument() throws Exception {
         EditorPanel own = panel("notes", p -> {
             p.editor().load("select 1;\n");

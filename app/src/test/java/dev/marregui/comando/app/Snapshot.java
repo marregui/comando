@@ -19,6 +19,8 @@ import dev.marregui.comando.core.view.ViewSpec;
 import javax.imageio.ImageIO;
 import javax.swing.AbstractButton;
 import javax.swing.JFrame;
+import javax.swing.JMenu;
+import javax.swing.JMenuItem;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
@@ -160,6 +162,22 @@ public final class Snapshot {
         SwingUtilities.invokeAndWait(() -> app.ui().openFile(source));
         Thread.sleep(1500);
         shoot(out.resolve("02f-source-colours.png"));
+        // Help's tutorial and log open as documents from their files: the tutorial rendered, the log read-only at its end
+        menuItem("Help", "Tutorial");
+        showing(loop, "tutorial");
+        shoot(out.resolve("02g-help-tutorial.png"));
+        // the snapshot logs to the console only: a log file as comando writes one
+        Path log = config.logDir().resolve("comando-0.log");
+        Files.createDirectories(log.getParent());
+        Files.writeString(log, String.join("\n",
+                "2026-10-16 08:40:01.120 INFO  [main] dev.marregui.comando.app.App comando starting [version=snapshot]",
+                "2026-10-16 08:40:01.410 INFO  [main] dev.marregui.comando.mcp.McpServer mcp server listening [url=http://127.0.0.1:50200/mcp]",
+                "2026-10-16 08:40:02.003 WARNING [edt-watchdog] dev.marregui.comando.ui.shell.ComandoUi the EDT has not answered for 240 ms",
+                "2026-10-16 08:40:05.871 INFO  [claude-comando] dev.marregui.comando.claude.ClaudeAdapter claude started [session=comando, pid=4242, mode=RESUME]",
+                ""));
+        menuItem("Help", "Show the log");
+        showing(loop, "comando-0.log");
+        shoot(out.resolve("02h-help-log.png"));
         loop.dispatch(new Intent.FocusPanel(first));
         Thread.sleep(500);
         long plotId = loop.state().views().stream().filter(v -> v.title().equals("delay")).findFirst().orElseThrow().id();
@@ -281,6 +299,39 @@ public final class Snapshot {
             }
         }
         return null;
+    }
+
+    /** Waits until the panel titled {@code title} is in front, then for the window to render that state. */
+    private static void showing(StateLoop loop, String title) throws Exception {
+        if (await(loop, st -> st.focusedPanel().title().equals(title), 10_000) == null) {
+            throw new IllegalStateException("no panel " + title + " within 10 s");
+        }
+        SwingUtilities.invokeAndWait(() -> {
+        });
+        SwingUtilities.invokeAndWait(() -> {
+        });
+    }
+
+    /** Clicks an item of a menu of the window's menu bar, as a user would. */
+    private static void menuItem(String menu, String item) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            for (Frame f : Frame.getFrames()) {
+                if (f instanceof JFrame jf && f.isVisible() && jf.getJMenuBar() != null) {
+                    for (int i = 0; i < jf.getJMenuBar().getMenuCount(); i++) {
+                        JMenu m = jf.getJMenuBar().getMenu(i);
+                        if (m != null && menu.equals(m.getText())) {
+                            for (Component c : m.getMenuComponents()) {
+                                if (c instanceof JMenuItem mi && item.equals(mi.getText())) {
+                                    mi.doClick();
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            throw new IllegalStateException("no menu item " + menu + " ▸ " + item);
+        });
     }
 
     /** Brings a tab of the sidebar to the front by clicking its header, as a user would. */

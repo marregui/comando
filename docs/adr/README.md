@@ -41,7 +41,7 @@ A decision is changed by a new record that names the one it replaces; the old re
 | [33](0033-thinking-gives-way-and-the-conclusion-is-gold.md) | Thinking gives way, and the conclusion is gold | Miguel, Claude | accepted |
 | [34](0034-a-deleted-document-closes-its-panel.md) | A deleted document closes its panel | Miguel, Claude | accepted |
 | [35](0035-mermaid-diagrams-drawn-by-mmdc.md) | Mermaid diagrams drawn by mmdc | Miguel, Claude | accepted |
-| [36](0036-five-menus-by-subject.md) | Five menus, by subject | Miguel, Claude | accepted |
+| [36](0036-five-menus-by-subject.md) | Five menus, by subject | Miguel, Claude | accepted; Help items carry icons since 47 |
 | [37](0037-session-actions-act-on-the-selected-row.md) | Session and connection actions act on the selected row | Miguel, Claude | accepted |
 | [38](0038-a-session-has-one-panel.md) | A session has one panel | Miguel, Claude | accepted |
 | [39](0039-panels-are-kept-until-removed.md) | Panels are kept until removed | Miguel, Claude | accepted |
@@ -52,3 +52,4 @@ A decision is changed by a new record that names the one it replaces; the old re
 | [44](0044-sessions-prompt-each-other-without-asking.md) | Sessions prompt each other without asking | Miguel, Claude | accepted |
 | [45](0045-fresh-start-and-checkpoint-buttons.md) | A fresh start and a checkpoint, as buttons | Miguel, Claude | accepted; the checkpoint says when it is due since 46 |
 | [46](0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md) | Clear buttons, text coloured by its kind, a checkpoint that says when it is due | Miguel, Claude | accepted |
+| [47](0047-help-opens-its-files-as-documents.md) | Help opens its files as documents, with icons of its own | Miguel, Claude | accepted |

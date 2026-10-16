@@ -15,8 +15,9 @@ import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
  * the tools that run in its project); View for the window. Commands in no menu (Go to panel 1–9, the ⌘⌥1–4
  * alternates, the second key for completion) keep their keys and the palette.
  * <p>
- * Icons follow two rules, so each icon means one thing: a submenu of Panel carries the icon of its subject; an item
- * carries an icon only when comando shows the same action as a button with that icon. Every other entry has none.
+ * Icons follow three rules, so each icon means one thing: a submenu of Panel carries the icon of its subject; an item
+ * carries an icon when comando shows the same action as a button with that icon; and the Help items carry icons of
+ * their own, which nothing else uses. Every other entry has none.
  */
 final class Menus {
 
@@ -26,7 +27,7 @@ final class Menus {
 
     /**
      * Items with an icon: the same action is a button with that icon (Run and Stop in the panel header, the tab
-     * strip's + and ✕, the plug of a session row and of the header's session and connection).
+     * strip's + and ✕, the plug of a session row and of the header's session and connection); and the Help items.
      */
     static final Map<String, String> ICONS = Map.of(
             "run", "play",
@@ -34,7 +35,11 @@ final class Menus {
             "panel.new", "add",
             "file.close", "close",
             "session.toggle", "plug",
-            "connection.toggle", "plug");
+            "connection.toggle", "plug",
+            "help.tutorial", "tutorial",
+            "help.keys", "keyboard",
+            "help.log", "log",
+            "help.dataRoot", "comando-folder");
 
     private Menus() {
     }

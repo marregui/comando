@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-14 | accepted | Miguel (fewer menus, submenus, consistent icons; the proposal), Claude (layout and icon rule) |
+| 2026-10-14 | accepted; Help items carry icons since [47](0047-help-opens-its-files-as-documents.md) | Miguel (fewer menus, submenus, consistent icons; the proposal), Claude (layout and icon rule) |
 
 ## 1. Context
 

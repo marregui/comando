@@ -180,6 +180,11 @@ public final class EditorPanel extends JPanel {
         this.file = file;
         this.document = document;
         editor.syntax(document && file != null ? Editors.styleFor(file) : CommandEditor.PANEL_STYLE);
+        // a log belongs to the program writing it: read here, never written
+        editor.area().setEditable(!isLog());
+        if (opened && isLog()) {
+            followEnd();
+        }
         showClear();
         boolean markdown = isMarkdown();
         mode.setVisible(markdown);
@@ -188,6 +193,15 @@ public final class EditorPanel extends JPanel {
         } else if (markdown && opened) {
             showPreview(true);
         }
+    }
+
+    /** A document ending in {@code .log}: read-only, and it follows its end as it grows. */
+    boolean isLog() {
+        return document && file != null && file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".log");
+    }
+
+    private void followEnd() {
+        editor.area().setCaretPosition(editor.area().getDocument().getLength());
     }
 
     private boolean isMarkdown() {
@@ -258,9 +272,16 @@ public final class EditorPanel extends JPanel {
         mode.getAccessibleContext().setAccessibleName(label);
     }
 
-    /** The file changed outside comando: the editor takes the text, and the preview shows it when it is on. */
+    /**
+     * The file changed outside comando: the editor takes the text, and the preview shows it when it is on. A log whose
+     * caret was at its end stays at the end.
+     */
     public void reload(String text) {
+        boolean atEnd = isLog() && editor.area().getCaretPosition() >= editor.area().getDocument().getLength();
         editor.reload(text);
+        if (atEnd) {
+            followEnd();
+        }
         if (previewing()) {
             int at = rendered.getCaretPosition();
             rendered.setMarkdown(text);

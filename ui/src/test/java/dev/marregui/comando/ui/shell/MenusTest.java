@@ -57,7 +57,7 @@ class MenusTest {
 
     @Test
     void eachIconMeansOneThing() {
-        // items: an icon only where the same action is a button with it
+        // items: an icon where the same action is a button with it, and the Help items' own
         Map<String, Set<String>> byIcon = Menus.ICONS.entrySet().stream()
                 .collect(Collectors.groupingBy(Map.Entry::getValue, Collectors.mapping(Map.Entry::getKey, Collectors.toSet())));
         assertThat(byIcon).containsOnly(
@@ -65,7 +65,11 @@ class MenusTest {
                 Map.entry("stop", Set.of("run.stop")),
                 Map.entry("add", Set.of("panel.new")),
                 Map.entry("close", Set.of("file.close")),
-                Map.entry("plug", Set.of("session.toggle", "connection.toggle")));
+                Map.entry("plug", Set.of("session.toggle", "connection.toggle")),
+                Map.entry("tutorial", Set.of("help.tutorial")),
+                Map.entry("keyboard", Set.of("help.keys")),
+                Map.entry("log", Set.of("help.log")),
+                Map.entry("comando-folder", Set.of("help.dataRoot")));
         assertThat(ids(Menus.bar(true))).containsAll(Menus.ICONS.keySet());
 
         // menus: the Panel menu's submenus carry their subject's icon, and no other menu does
