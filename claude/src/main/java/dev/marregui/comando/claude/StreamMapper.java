@@ -62,6 +62,12 @@ final class StreamMapper {
             case "user" -> user(e, false);
             case "result" -> result(e);
             case "rate_limit_event" -> rateLimit(e);
+            case "conversation_reset" -> {
+                // /clear: a system/init with the new conversation's id follows; the old context no longer applies, and
+                // the clear's turn makes no model call to report the new one
+                contextTokens = 0L;
+                note(Block.NoteKind.INFO, "Conversation cleared (" + e.path("trigger").asText("clear") + "); a new one starts");
+            }
             default -> LOG.log(System.Logger.Level.DEBUG, "event ignored [session=" + session + ", type=" + type + ']');
         }
         return type;

@@ -14,4 +14,4 @@ The grid and the plot are comando's own: the grid over the columnar result, the 
 
 ## 3. Consequences
 
-See [Widgets](../design/widgets.md) and [Database workbench](../design/database-workbench.md). Diffs use java-diff-utils behind the kit's `Diffs`.
+See [Widgets](../ui.md#3-widgets) and [Database workbench](../workbench.md#3-the-database). Diffs use java-diff-utils behind the kit's `Diffs`.

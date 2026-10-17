@@ -445,13 +445,13 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     /**
-     * The Files tab's folders; without a readable {@code folders.json}, the default under {@code userHome} (an
-     * unreadable file is moved aside). A list the user emptied stays empty: no folder is a choice.
+     * The Files tab's folders; without a readable {@code folders.json}, the default: Claude Code's folder {@code
+     * claudeDir} (an unreadable file is moved aside). A list the user emptied stays empty: no folder is a choice.
      */
-    List<FolderRoot> loadFolders(String userHome) {
+    List<FolderRoot> loadFolders(Path claudeDir) {
         List<FolderRoot> read = folders.read();
         if (read == null) {
-            return FolderRoot.defaults(userHome);
+            return FolderRoot.defaults(claudeDir);
         }
         // a hand-edited file meets the dialog's rules: a name used once, a full path, an index inside the folder
         List<FolderRoot> valid = new ArrayList<>();

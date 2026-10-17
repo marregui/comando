@@ -63,6 +63,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     private final Set<Long> forgotten = ConcurrentHashMap.newKeySet();
     /** Runs from their start until {@link Intent.CommandFinished} is sent; their consoles must outlive a closed view. */
     private final Set<Long> active = ConcurrentHashMap.newKeySet();
+    /** Set by {@link #close}: no process starts after it, so none outlives comando. */
+    private volatile boolean closed;
 
     /** A stopped run's processes still alive this long after SIGTERM get SIGKILL. */
     static final long KILL_AFTER_MILLIS = 2_000;
@@ -159,6 +161,10 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         if (tools.jfrq().map(j -> cmd.getFirst().equals(j.toString())).orElse(false)) {
             pb.environment().put("JAVA_HOME", tools.javaHome()); // jfrq's launcher needs JDK 25, which runs comando
         }
+        if (closed) {
+            out.append("Not started: comando is closing\n");
+            return Integer.MIN_VALUE;
+        }
         Process p;
         try {
             p = pb.start();
@@ -167,8 +173,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             return Integer.MIN_VALUE;
         }
         running.put(runId, p);
-        if (cancelled.contains(runId)) {
-            cancelRun(runId); // the stop came while the process was starting
+        if (cancelled.contains(runId) || closed) {
+            cancelRun(runId); // the stop, or comando's close, came while the process was starting
         }
         Output output = new Output(out);
         Thread reader = Thread.ofVirtual().name("tool-output-" + runId).start(() -> output.copy(p));
@@ -494,6 +500,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     /** Stops every run; called at exit. */
     @Override
     public void close() {
+        closed = true;
         folderPoll.shutdownNow();
         Map<Process, List<ProcessHandle>> trees = new HashMap<>();
         for (Process p : List.copyOf(running.values())) {

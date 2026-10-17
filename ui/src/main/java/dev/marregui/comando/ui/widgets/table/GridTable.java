@@ -31,12 +31,13 @@ import java.util.Locale;
 
 /**
  * A grid over a {@link TableSource}. JTable paints only the visible rows; cells format into one reused
- * buffer. Sorting keeps a permutation of row indices instead of a sorter over boxed values, and is offered
- * up to {@link #MAX_SORT_ROWS}. A growing source adds rows without rebuilding the columns.
+ * buffer. Sorting keeps a permutation of row indices instead of a sorter over boxed values. Sort and find run on the
+ * event thread, so both are bounded to {@link #MAX_EDT_ROWS} rows, a few tens of milliseconds: a larger result is not
+ * sorted, and find looks at its first rows. A growing source adds rows without rebuilding the columns.
  */
 public final class GridTable implements Searchable, Copyable, Exportable {
 
-    static final int MAX_SORT_ROWS = 1_000_000;
+    static final int MAX_EDT_ROWS = 200_000;
     private static final int MAX_COPY_ROWS = 200_000;
 
     final Model model = new Model(); // package-visible for tests
@@ -179,7 +180,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
         }
 
         void toggleSort(int modelColumn) {
-            if (modelColumn == 0 || source == null || rows > MAX_SORT_ROWS) {
+            if (modelColumn == 0 || source == null || rows > MAX_EDT_ROWS) {
                 return;
             }
             int c = modelColumn - 1;
@@ -257,7 +258,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
             return 0;
         }
         String needle = text.toLowerCase(Locale.ROOT);
-        int rows = model.rows;
+        int rows = Math.min(model.rows, MAX_EDT_ROWS);
         int cols = s.columnCount();
         long cells = (long) rows * cols;
         int matches = 0;

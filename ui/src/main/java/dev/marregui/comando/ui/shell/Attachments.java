@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.core.result.ResultView;
 
+import java.util.List;
 import java.util.stream.IntStream;
 
 /**
@@ -17,7 +18,9 @@ final class Attachments {
     }
 
     static String error(String sql, String error) {
-        return "Error from `" + oneLine(sql) + "`:\n```\n" + String.join("\n", error.strip().lines().filter(l -> !l.isBlank()).toList()) + "\n```\n";
+        List<String> lines = error.strip().lines().filter(l -> !l.isBlank()).toList();
+        // an error without text would leave the fence empty: a blank line, which ends the block
+        return "Error from `" + oneLine(sql) + "`:\n```\n" + (lines.isEmpty() ? "(no message)" : String.join("\n", lines)) + "\n```\n";
     }
 
     /** The selected rows, or the first {@link #DEFAULT_ROWS} when {@code selected} is empty. */

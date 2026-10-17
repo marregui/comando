@@ -119,8 +119,13 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
     }
 
+    /** The session, made on first use; one made during or after {@link #close} takes no task, so no process starts then. */
     private Session session(String name) {
-        return sessions.computeIfAbsent(name, Session::new);
+        Session s = sessions.computeIfAbsent(name, Session::new);
+        if (closed) {
+            s.strand.shutdown();
+        }
+        return s;
     }
 
     // ---- port

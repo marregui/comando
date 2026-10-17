@@ -14,4 +14,4 @@ An HTTP MCP server on `127.0.0.1`, an ephemeral port, a bearer token per session
 
 ## 3. Consequences
 
-The token names the calling session, so tools act on that session's panels. Origin checks keep browsers out ([Approvals and safety](../design/approvals-and-safety.md#4-the-mcp-server)).
+The token names the calling session, so tools act on that session's panels. Origin checks keep browsers out ([Approvals and safety](../claude.md#21-the-server)).

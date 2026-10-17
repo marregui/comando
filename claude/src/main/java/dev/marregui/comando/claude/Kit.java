@@ -218,12 +218,6 @@ public final class Kit {
         this.memory = this.claudeDir.resolve("MEMORY");
     }
 
-    /** Claude Code's folder: {@code CLAUDE_CONFIG_DIR} when set, else {@code ~/.claude}. */
-    public static Path claudeDir() {
-        String env = System.getenv("CLAUDE_CONFIG_DIR");
-        return env != null && !env.isBlank() ? Path.of(HomeDir.expand(env.strip())) : Path.of(System.getProperty("user.home"), ".claude");
-    }
-
     /** comando's copy of the kit. */
     public Path dir() {
         return dir;

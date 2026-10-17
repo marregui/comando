@@ -54,9 +54,9 @@ public record FolderRoot(String name, String path, String index, List<String> ex
     public static final List<String> CLAUDE_STATE = List.of("projects", "file-history", "shell-snapshots", "session-env", "sessions",
             "todos", "statsig", "telemetry", "debug", "cache", "paste-cache", "backups", "ide", "downloads");
 
-    /** A user who never configured a folder sees Claude Code's own, {@code ~/.claude}, opening its {@code CLAUDE.md}. */
-    public static List<FolderRoot> defaults(String home) {
-        return List.of(new FolderRoot("Claude", Path.of(home, ".claude").toString(), "CLAUDE.md", CLAUDE_STATE));
+    /** A user who never configured a folder sees Claude Code's own ({@link HomeDir#claudeDir}), opening its {@code CLAUDE.md}. */
+    public static List<FolderRoot> defaults(Path claudeDir) {
+        return List.of(new FolderRoot("Claude", claudeDir.toString(), "CLAUDE.md", CLAUDE_STATE));
     }
 
     /** Whether an entry called {@code entry} is left out of the tree. */

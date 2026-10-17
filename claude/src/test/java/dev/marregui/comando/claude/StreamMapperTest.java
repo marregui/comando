@@ -93,6 +93,20 @@ class StreamMapperTest {
     }
 
     @Test
+    void clearRecordingStartsANewConversationWithAnEmptyContext() {
+        Fixtures.stream("clear").forEach(mapper::accept);
+        List<String> conversations = sink.of(Intent.SessionInit.class).stream().map(i -> i.info().claudeSessionId()).distinct().toList();
+        assertThat(conversations).as("the clear's init names a new conversation").hasSize(2);
+        // one, then the clear's turn (no model call), then two in the new conversation
+        List<Long> context = sink.of(Intent.SessionTurnEnded.class).stream().map(Intent.SessionTurnEnded::contextTokens).toList();
+        assertThat(context).hasSize(3);
+        assertThat(context.get(0)).isPositive();
+        assertThat(context.get(1)).as("cleared").isZero();
+        assertThat(context.get(2)).isPositive();
+        assertThat(blocks(Block.Note.class)).extracting(Block.Note::text).contains("Conversation cleared (clear); a new one starts");
+    }
+
+    @Test
     void streamedTextGrowsInPlaceAndTheFinalMessageReplacesIt() {
         mapper.accept("""
                 {"type":"stream_event","api_message_id":"m1","parent_tool_use_id":null,"event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}""");

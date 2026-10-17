@@ -284,6 +284,8 @@ class McpServerTest {
         assertThat(text(r)).contains("row 0 must be an array of 2 values");
         JsonNode p = tool("ui_plot", "{\"title\":\"p\",\"series\":[{\"x\":[1,2],\"y\":[1]}]}");
         assertThat(text(p)).contains("x has 2 points, y has 1");
+        JsonNode t = tool("ui_show_view", "{\"type\":\"text\",\"title\":\"t\",\"data\":{\"path\":\"/a\\u0000b\",\"text\":\"x\"}}");
+        assertThat(text(t)).as("a path no file system can name never reaches the window").contains("path is not a file path");
         assertThat(sink.of(Intent.ShowView.class)).isEmpty();
     }
 

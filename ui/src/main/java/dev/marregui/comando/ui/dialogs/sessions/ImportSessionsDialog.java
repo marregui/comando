@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.dialogs.sessions;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
@@ -153,7 +154,8 @@ public final class ImportSessionsDialog {
                     all = read;
                     applyFilter();
                     if (all.isEmpty()) {
-                        overlay.showEmpty("No stored conversations found under ~/.claude/projects.");
+                        overlay.showEmpty("No stored conversations found under "
+                                + HomeDir.shorten(HomeDir.claudeDir().resolve("projects").toString()) + ".");
                     } else {
                         overlay.showContent();
                     }

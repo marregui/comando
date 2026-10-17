@@ -14,4 +14,4 @@ Sessions are configured with the same dialog and interaction as connections, and
 
 ## 3. Consequences
 
-One `ResourceKind<S>` model and one `ResourceDialog<S>` serve both ([Resources and panels](../design/resources-and-panels.md)).
+One `ResourceKind<S>` model and one `ResourceDialog<S>` serve both ([Resources and panels](../workbench.md#1-panels-and-resources)).

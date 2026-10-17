@@ -19,7 +19,7 @@ dependencies {
 
 // Help ▸ Tutorial shows the tutorial from the docs, so the app and the docs never disagree.
 tasks.processResources {
-    from(rootProject.file("docs/guides/tutorial.md")) {
+    from(rootProject.file("docs/tutorial.md")) {
         into("dev/marregui/comando/ui/help")
     }
 }

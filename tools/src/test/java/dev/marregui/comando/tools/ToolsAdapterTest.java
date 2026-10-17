@@ -69,6 +69,17 @@ class ToolsAdapterTest {
     }
 
     @Test
+    void aRunAskedForAfterCloseStartsNoProcess(@TempDir Path dir) throws Exception {
+        fakeBuild(dir);
+        ToolsAdapter tools = adapter(dir.resolve("none"));
+        tools.close();
+        tools.runGradle(8L, dir.toString(), "test");
+        Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
+        assertThat(end.runId()).isEqualTo(8L);
+        assertThat(consoles.of(8L).text(0)).contains("Not started: comando is closing").doesNotContain("args:");
+    }
+
+    @Test
     void gradleRunsInTheBuildRootAndReportsFailedTests(@TempDir Path dir) throws Exception {
         fakeBuild(dir);
         adapter(dir.resolve("none")).runGradle(7L, dir.resolve("db/sub").toString(), ":db:test --tests 'Lane*'");

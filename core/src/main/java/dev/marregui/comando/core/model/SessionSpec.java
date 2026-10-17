@@ -46,8 +46,9 @@ public record SessionSpec(
         if (workDir.isBlank()) {
             throw new IllegalArgumentException("workDir is empty");
         }
-        if (budgetUsd < 0.0) {
-            throw new IllegalArgumentException("budgetUsd is negative [budgetUsd=" + budgetUsd + ']');
+        if (!Double.isFinite(budgetUsd) || budgetUsd < 0.0) {
+            // NaN or Infinity would pass a sign check and leave the session without its spending cap
+            throw new IllegalArgumentException("budgetUsd must be a finite amount, 0 or more [budgetUsd=" + budgetUsd + ']');
         }
         if (startMode != StartMode.NEW && claudeSessionId.isEmpty()) {
             throw new IllegalArgumentException("startMode " + startMode + " needs a claudeSessionId");

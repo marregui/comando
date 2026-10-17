@@ -4,7 +4,7 @@ import java.util.Arrays;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * The block log of one session: one writer thread (the session's stream reader), any number of readers.
+ * The block log of one session: one writer thread (the session's strand), any number of readers.
  *
  * <p>Publication: the writer stores an element, then writes the volatile {@code version} (and {@code size}
  * for an append). A reader that reads {@code version} or {@code size} first sees every element written

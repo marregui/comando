@@ -24,6 +24,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
+import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -35,30 +36,42 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
+import javax.swing.TransferHandler;
 import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Cursor;
+import java.awt.Graphics;
+import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.Toolkit;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.Transferable;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
- * The left column, four tabs in two fixed rows (Panels and Files, then Sessions and Connections): Sessions (every session with its project, branch, state and pending approvals, and
- * controls to connect or disconnect it and change its model or effort), Panels (comando's own panels, open and
- * closed), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). Above the sessions, the
- * connections and the folders, the same {@link ResourceActions}: add (and, for sessions, import) on the left; edit,
- * clone and remove of the selected row on the right. Double-click on a session opens it in
- * a panel ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. Hidden, the column collapses to
- * a rail whose button shows it again.
+ * The left column, four tabs in two fixed rows (Panels and Files, then Sessions and Connections): Sessions (every
+ * session with its project, branch, state, context, conversation and pending approvals, and controls to connect or
+ * disconnect it, compact or clear its conversation and change its model or effort), Panels (comando's own panels, open
+ * and closed), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). Above the sessions, the
+ * connections and the folders, the same {@link ResourceActions}: add (and, for sessions, import and sort) on the left;
+ * edit, clone and remove of the selected row on the right. Double-click on a session opens it in a panel
+ * ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. Sessions are listed running first, then
+ * by name, until the user drags one: from then on in the order the user left them, until the sort button. Hidden, the
+ * column collapses to a rail whose button shows it again.
  */
 public final class SessionsSidebar {
 
@@ -129,6 +142,11 @@ public final class SessionsSidebar {
     private final JPanel rail;
     private final JPanel root = new JPanel(new BorderLayout());
     private AppState state;
+    /** The sessions are listed in their stored order, which a drag sets, rather than running first, then by name. */
+    private boolean manualOrder;
+    private final JButton sort;
+    /** Where copied details go; the system clipboard, or a test's list. */
+    Consumer<String> clipboard = text -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
     /** The models and efforts the row's menus offer, as the palette and the session dialog do. */
     static final List<String> MODELS = List.of("fable", "opus", "sonnet", "haiku");
     static final List<String> EFFORTS = List.of("low", "medium", "high", "xhigh", "max");
@@ -155,8 +173,21 @@ public final class SessionsSidebar {
         sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         connections.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         sessions.setCellRenderer((list, s, index, selected, focus) -> row(s).show(s, boundText(s), boundToFocused(s),
-                state == null ? 0 : state.pendingApprovals(s.name()), selected,
+                state == null ? 0 : state.pendingApprovals(s.name()), selected, index == ((SessionList) list).hover,
                 selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground()));
+        // ⌘C, and Edit ▸ Copy, which forwards it, copy the selected session's details
+        sessions.setTransferHandler(new TransferHandler() {
+            @Override
+            public int getSourceActions(JComponent c) {
+                return COPY;
+            }
+
+            @Override
+            protected Transferable createTransferable(JComponent c) {
+                SessionState s = sessions.getSelectedValue();
+                return s == null ? null : new StringSelection(details(s));
+            }
+        });
         connections.setCellRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected, boolean focus) {
@@ -196,6 +227,11 @@ public final class SessionsSidebar {
                 popup(e);
             }
 
+            @Override
+            public void mouseExited(MouseEvent e) {
+                ((SessionList) sessions).hover(-1);
+            }
+
             private void popup(MouseEvent e) {
                 SessionState s = at(sessions, e);
                 if (e.isPopupTrigger() && s != null) {
@@ -208,6 +244,7 @@ public final class SessionsSidebar {
             @Override
             public void mouseMoved(MouseEvent e) {
                 SessionState s = at(sessions, e);
+                ((SessionList) sessions).hover(s == null ? -1 : sessions.locationToIndex(e.getPoint()));
                 sessions.setCursor(s != null && control(s, e).isPresent() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
             }
         });
@@ -240,10 +277,13 @@ public final class SessionsSidebar {
         });
         files = new FilesTab(intents, dialogs::openFile, dialogs::editFile, dialogs.folders(), questions, FilesTab.Names.MODAL,
                 DesktopTrash::available, () -> state);
+        sort = ToolButton.of("sort", SORT_TIP, () -> order(false));
+        sort.getAccessibleContext().setAccessibleName("Sort the sessions");
         sessionActions = new ResourceActions<>(sessions,
                 ResourceActions.Rows.of(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop", () -> state),
                 dialogs.sessions(), name -> intents.dispatch(new Intent.RemoveSession(name)), questions,
-                ToolButton.of("import", "Import stored conversations…", dialogs::importSessions));
+                ToolButton.of("import", "Import stored conversations…", dialogs::importSessions), sort);
+        order(false);
         connectionActions = new ResourceActions<>(connections,
                 ResourceActions.Rows.of(ConnectionKind.INSTANCE, ConnectionState::name, ConnectionState::status, "Disconnect", () -> state),
                 dialogs.connections(), name -> intents.dispatch(new Intent.RemoveConnection(name)), questions);
@@ -251,7 +291,7 @@ public final class SessionsSidebar {
         tabs.add("Panels", "text", "comando's own panels, open and closed; double-click opens one",
                 section(new JScrollPane(panelsTab.list()), panelsTab.actions()));
         tabs.add("Connections", "database", "database connections", section(new JScrollPane(connections), connectionActions.component()));
-        tabs.add("Files", "folder", "the folders you chose; opening a folder opens its index file, a click on a file opens it in a panel",
+        tabs.add("Files", "folder", "the folders you chose; a double click on a file opens it in a panel",
                 section(files.component(), files.actions()));
         // two fixed rows (Miguel, 2026-10-15): the documents on top, the resources below; a click moves nothing
         tabs.arrange(new int[][]{{PANELS, FILES}, {SESSIONS, CONNECTIONS}}, ToolButton.of("more", "Hide the sidebar (⌘B)", toggle));
@@ -307,11 +347,64 @@ public final class SessionsSidebar {
 
     public void render(AppState s) {
         state = s;
-        sync(sessionModel, s.sessions(), sessions);
+        sync(sessionModel, ordered(s.sessions(), manualOrder), sessions);
         rows.keySet().retainAll(s.sessions().stream().map(SessionState::name).toList());
         sync(connectionModel, s.connections(), connections);
         panelsTab.render(s);
         files.render(s);
+    }
+
+    private static final String SORT_TIP = "Sort the sessions: running first, then by name";
+
+    /** Whether the user's order stands (a drag set it) rather than running first, then by name; kept across restarts by the owner. */
+    public boolean manualOrder() {
+        return manualOrder;
+    }
+
+    /** Lists the sessions in their stored order, or running first, then by name. */
+    public void manualOrder(boolean manual) {
+        order(manual);
+    }
+
+    private void order(boolean manual) {
+        manualOrder = manual;
+        sort.setEnabled(manual);
+        sort.setToolTipText(manual ? SORT_TIP + "; a drag orders them by hand again"
+                : "Sorted: running first, then by name; drag a session to order them by hand");
+        if (state != null) {
+            sync(sessionModel, ordered(state.sessions(), manual), sessions);
+        }
+    }
+
+    /** {@code stored} as the list shows it: as stored, or running first, then by name. */
+    static List<SessionState> ordered(List<SessionState> stored, boolean manual) {
+        return manual ? stored : stored.stream()
+                .sorted(Comparator.comparing((SessionState x) -> !x.status().isUsable())
+                        .thenComparing(SessionState::name, String.CASE_INSENSITIVE_ORDER))
+                .toList();
+    }
+
+    /**
+     * The session at {@code from} dropped into the gap before {@code gap} (the list's size for after the last): the list
+     * as shown, with that move, becomes the stored order, and the user's order stands from then on.
+     */
+    void drop(int from, int gap) {
+        if (from < 0 || from >= sessionModel.size() || gap < 0 || gap > sessionModel.size() || gap == from || gap == from + 1) {
+            return;
+        }
+        List<SessionState> shown = new ArrayList<>(Collections.list(sessionModel.elements()));
+        SessionState moved = shown.remove(from);
+        shown.add(gap > from ? gap - 1 : gap, moved);
+        order(true);
+        // shown at once; the stored order follows when the state comes back
+        sync(sessionModel, shown, sessions);
+        sessions.setSelectedValue(moved, true);
+        intents.dispatch(new Intent.OrderSessions(shown.stream().map(SessionState::name).toList()));
+    }
+
+    /** What a session's copy puts on the clipboard. */
+    private String details(SessionState s) {
+        return SessionRow.details(s, System.currentTimeMillis(), ZoneId.systemDefault());
     }
 
     /** The uptimes the session rows last showed, so the shell's one-second tick repaints them only when one moved on. */
@@ -323,10 +416,9 @@ public final class SessionsSidebar {
             return;
         }
         long now = System.currentTimeMillis();
-        ZoneId zone = ZoneId.systemDefault();
         StringBuilder sb = new StringBuilder();
         for (SessionState x : state.sessions()) {
-            sb.append(SessionRow.uptimeText(x, now, zone)).append('\n');
+            sb.append(SessionRow.uptimeText(x, now)).append('\n');
         }
         String next = sb.toString();
         if (!next.equals(uptimes)) {
@@ -364,6 +456,9 @@ public final class SessionsSidebar {
             case POWER -> intents.dispatch(s.status().isUsable() ? new Intent.StopSession(s.name()) : new Intent.StartSession(s.name()));
             case FRESH -> intents.dispatch(new Intent.StartFresh(s.name()));
             case CHECKPOINT -> intents.dispatch(new Intent.Checkpoint(s.name()));
+            case COMPACT -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionRow.COMPACT_COMMAND));
+            case CLEAR -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionRow.CLEAR_COMMAND));
+            case COPY -> clipboard.accept(details(s));
             case MODEL, EFFORT -> {
                 Rectangle at = layOutRow(s, i).bounds(cell, control);
                 JPopupMenu m = new JPopupMenu();
@@ -390,11 +485,124 @@ public final class SessionsSidebar {
         return i;
     }
 
-    /** The session list, whose tooltips name the control under the mouse, else the session's folder and conversation. */
+    /**
+     * The session list: its tooltips name the control under the mouse, else the session's folder and conversation; it
+     * knows the row under the mouse, which shows its copy button; and a row dragged by its text moves, a line marking
+     * where it will land.
+     */
     private final class SessionList extends JList<SessionState> {
+        /** How far the mouse moves with the button down before a press becomes a drag. */
+        private static final int DRAG_SLOP = 5;
+        int hover = -1;
+        private int pressed = -1;
+        private Point pressedAt;
+        /** The gap a drag would drop into, -1 while no drag runs. */
+        private int gap = -1;
+        /** A drop just ended: the click the platform may send for the same press and release is not a click on a control. */
+        private boolean dropped;
+
         SessionList(DefaultListModel<SessionState> model) {
             super(model);
             setToolTipText("");
+        }
+
+        /** As wide as the tab: a row's lines clip at its edge, and its right-hand controls stay in view. */
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        void hover(int index) {
+            if (index != hover) {
+                repaintRow(hover);
+                hover = index;
+                repaintRow(hover);
+            }
+        }
+
+        private void repaintRow(int index) {
+            if (index >= 0 && index < getModel().getSize()) {
+                Rectangle r = getCellBounds(index, index);
+                if (r != null) {
+                    repaint(r);
+                }
+            }
+        }
+
+        @Override
+        protected void processMouseEvent(MouseEvent e) {
+            if (e.getID() == MouseEvent.MOUSE_CLICKED && dropped) {
+                dropped = false;
+                e.consume();
+                return;
+            }
+            if (e.getID() == MouseEvent.MOUSE_PRESSED) {
+                dropped = false;
+                SessionState s = at(this, e);
+                boolean onText = s != null && SwingUtilities.isLeftMouseButton(e) && !e.isPopupTrigger() && control(s, e).isEmpty();
+                pressed = onText ? locationToIndex(e.getPoint()) : -1;
+                pressedAt = e.getPoint();
+            } else if (e.getID() == MouseEvent.MOUSE_RELEASED) {
+                int from = pressed;
+                int to = gap;
+                pressed = -1;
+                if (to >= 0) {
+                    endDrag();
+                    dropped = true;
+                    drop(from, to);
+                }
+            }
+            // a release reaches the list after a drop too: its press left the selection adjusting
+            super.processMouseEvent(e);
+        }
+
+        @Override
+        protected void processMouseMotionEvent(MouseEvent e) {
+            if (e.getID() == MouseEvent.MOUSE_DRAGGED && pressed >= 0) {
+                if (gap < 0 && e.getPoint().distance(pressedAt) < DRAG_SLOP) {
+                    return;
+                }
+                int next = gapAt(e.getPoint().y);
+                if (next != gap) {
+                    gap = next;
+                    setCursor(Cursor.getPredefinedCursor(Cursor.MOVE_CURSOR));
+                    repaint();
+                }
+                // the list's own drag would move the selection along: the drag is the row's
+                return;
+            }
+            super.processMouseMotionEvent(e);
+        }
+
+        private void endDrag() {
+            gap = -1;
+            setCursor(null);
+            repaint();
+        }
+
+        /** The gap nearest {@code y}: before the row whose upper half holds it, after the last row below them all. */
+        private int gapAt(int y) {
+            int n = getModel().getSize();
+            for (int i = 0; i < n; i++) {
+                Rectangle r = getCellBounds(i, i);
+                if (y < r.y + r.height / 2) {
+                    return i;
+                }
+            }
+            return n;
+        }
+
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            int n = getModel().getSize();
+            if (gap < 0 || n == 0) {
+                return;
+            }
+            Rectangle r = getCellBounds(Math.min(gap, n - 1), Math.min(gap, n - 1));
+            int y = gap < n ? r.y : r.y + r.height;
+            g.setColor(Theme.ACCENT);
+            g.fillRect(0, Math.max(0, y - 1), getWidth(), 2);
         }
 
         @Override
@@ -455,12 +663,18 @@ public final class SessionsSidebar {
         } else {
             m.add(item("Start", "play", () -> intents.dispatch(new Intent.StartSession(s.name()))));
         }
+        if (s.status().isUsable()) {
+            m.add(item("Compact the conversation", "compact", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionRow.COMPACT_COMMAND))));
+            m.add(item("Clear the conversation", "clear-conversation", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionRow.CLEAR_COMMAND))));
+        }
         JMenu models = new JMenu("Model");
         modelItems(s).forEach(models::add);
         m.add(models);
         JMenu efforts = new JMenu("Effort");
         effortItems(s).forEach(efforts::add);
         m.add(efforts);
+        m.addSeparator();
+        m.add(item("Copy details", "copy", () -> clipboard.accept(details(s))));
         m.addSeparator();
         m.add(item("Edit…", "edit", () -> dialogs.sessions().edit(s.name())));
         m.add(item("Clone…", "copy", () -> dialogs.sessions().cloneOf(s.name())));

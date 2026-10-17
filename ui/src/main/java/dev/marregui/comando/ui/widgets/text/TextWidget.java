@@ -24,6 +24,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import java.awt.BorderLayout;
 import java.awt.Rectangle;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 
 /** A file or text, read-only, highlighted by type, scrolled to a line. */
@@ -61,9 +62,18 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
         return root;
     }
 
+    /** The view's path; null for none, or for text no file system can name, which then shows without its header. */
+    private static Path path(String path) {
+        try {
+            return path.isEmpty() ? null : Path.of(path);
+        } catch (InvalidPathException e) {
+            return null;
+        }
+    }
+
     @Override
     public void render(ViewSpec.Text view) {
-        Path p = view.path().isEmpty() ? null : Path.of(view.path());
+        Path p = path(view.path());
         file = p != null && p.isAbsolute() ? p : null;
         line = view.line();
         header.setVisible(file != null);

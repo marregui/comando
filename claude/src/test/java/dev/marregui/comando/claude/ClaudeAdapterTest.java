@@ -130,6 +130,13 @@ class ClaudeAdapterTest {
             assertThat(files).isEmpty();
         }
         assertThat(registered).containsExactly("+work", "-work");
+
+        a.start(SessionSpec.fresh("late", tmp.toString()));
+        a.send("late", "hello", "scratch");
+        assertThat(registered).as("a session asked for after close never starts").containsExactly("+work", "-work");
+        try (Stream<Path> files = Files.list(runDir)) {
+            assertThat(files).isEmpty();
+        }
     }
 
     @Test

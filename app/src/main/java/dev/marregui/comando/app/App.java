@@ -11,6 +11,7 @@ import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.effect.EffectRouter;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.reduce.Reducer;
@@ -41,7 +42,7 @@ import java.util.List;
 
 /**
  * The ownership tree. Builds every part in dependency order and closes them in reverse, each once: the tool
- * runs, Claude's processes, the MCP server, the database lanes, the intent log, the reducer, the store (which
+ * runs, Claude's processes, the MCP server, the database lanes, the reducer, the intent log, the store (which
  * writes the panels last), the embedded QuestDB, and last the window, which stays up, greyed, until the rest has
  * closed; quitting has already ended its shells and live plots.
  */
@@ -73,7 +74,7 @@ public final class App implements AutoCloseable {
             AppState initial = AppState.initial(loaded.panels(),
                     loaded.connections().stream().map(ConnectionState::closed).toList(),
                     loaded.sessions().stream().map(SessionState::closed).toList(),
-                    store.loadFolders(System.getProperty("user.home"))).withClosed(loaded.closed());
+                    store.loadFolders(HomeDir.claudeDir())).withClosed(loaded.closed());
 
             TranscriptRegistry transcripts = new TranscriptRegistry();
             ResultRegistry results = new ResultRegistry();
@@ -102,7 +103,7 @@ public final class App implements AutoCloseable {
             }
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), config.claudeProjects(), UiInstructions.TEXT)));
-            kit = new Kit(Kit.Bundle.resources(), Kit.Cli.process(config.claudeExecutable()), config.kitDir(), Kit.claudeDir());
+            kit = new Kit(Kit.Bundle.resources(), Kit.Cli.process(config.claudeExecutable()), config.kitDir(), HomeDir.claudeDir());
             ToolsFile toolsFile = new ToolsFile(config.home(), kit.gradleSerial());
             ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, toolsFile::read, DesktopTrash::moveToTrash));
             tools = devTools;

@@ -27,4 +27,11 @@ class AttachmentsTest {
         assertThat(Blocks.all(text)).hasSize(1);
         assertThat(text).contains("ERROR: boom\n  Hint: none");
     }
+
+    @Test
+    void anErrorWithoutTextStaysOneBlock() {
+        String text = Attachments.error("SELECT 1", "  \n") + "what went wrong?";
+        assertThat(Blocks.all(text)).hasSize(1);
+        assertThat(text).contains("```\n(no message)\n```");
+    }
 }

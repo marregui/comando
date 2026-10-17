@@ -24,6 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class StoreTest {
 
+    private static final Path CLAUDE_DIR = Path.of("/home/u/.claude");
+
     @TempDir
     Path home;
 
@@ -62,30 +64,30 @@ class StoreTest {
     @Test
     void theFilesTabsFoldersHaveADefaultAndAreKeptAsSavedEvenEmpty() throws Exception {
         try (Store store = new Store(home)) {
-            assertThat(store.loadFolders("/home/u")).as("no folders.json: the default").isEqualTo(FolderRoot.defaults("/home/u"));
+            assertThat(store.loadFolders(CLAUDE_DIR)).as("no folders.json: the default").isEqualTo(FolderRoot.defaults(CLAUDE_DIR));
             store.saveFolders(List.of(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools"))));
         }
         assertThat(Files.readString(home.resolve("folders.json"))).contains("\"index\" : \"ALPHA.md\"", "\"tools\"");
         try (Store store = new Store(home)) {
-            assertThat(store.loadFolders("/home/u")).containsExactly(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")));
+            assertThat(store.loadFolders(CLAUDE_DIR)).containsExactly(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")));
             store.saveFolders(List.of());
         }
         try (Store store = new Store(home)) {
-            assertThat(store.loadFolders("/home/u")).as("no folder is a choice").isEmpty();
+            assertThat(store.loadFolders(CLAUDE_DIR)).as("no folder is a choice").isEmpty();
         }
         Files.writeString(home.resolve("folders.json"), "[{\"name\":\"KB\",\"path\":\"/kb\"}]");
         try (Store store = new Store(home)) {
-            assertThat(store.loadFolders("/home/u")).as("a hand-written entry without index or excludes")
+            assertThat(store.loadFolders(CLAUDE_DIR)).as("a hand-written entry without index or excludes")
                     .containsExactly(new FolderRoot("KB", "/kb", "", List.of()));
         }
         Files.writeString(home.resolve("folders.json"), "[{\"name\":\"Memory\",\"path\":\"/m\",\"icon\":\"memory\",\"readOnly\":true}]");
         try (Store store = new Store(home)) {
-            assertThat(store.loadFolders("/home/u")).as("icon and read-only kept through the dialog's rules")
+            assertThat(store.loadFolders(CLAUDE_DIR)).as("icon and read-only kept through the dialog's rules")
                     .containsExactly(new FolderRoot("Memory", "/m", "", List.of(), "memory", true));
         }
         Files.writeString(home.resolve("folders.json"), "{not json");
         try (Store store = new Store(home)) {
-            assertThat(store.loadFolders("/home/u")).as("unreadable: the default").isEqualTo(FolderRoot.defaults("/home/u"));
+            assertThat(store.loadFolders(CLAUDE_DIR)).as("unreadable: the default").isEqualTo(FolderRoot.defaults(CLAUDE_DIR));
         }
         try (var aside = Files.list(home)) {
             assertThat(aside.map(p -> p.getFileName().toString())).anyMatch(n -> n.startsWith("folders.json.corrupt-"));
@@ -100,7 +102,7 @@ class StoreTest {
                 """);
         List<String> told = new CopyOnWriteArrayList<>();
         try (Store store = new Store(home)) {
-            List<FolderRoot> loaded = store.loadFolders("/home/u");
+            List<FolderRoot> loaded = store.loadFolders(CLAUDE_DIR);
             store.onNotice(told::add);
             assertThat(loaded).extracting(FolderRoot::name).containsExactly("KB", "Home");
             assertThat(loaded.getFirst().path()).isEqualTo("/kb");

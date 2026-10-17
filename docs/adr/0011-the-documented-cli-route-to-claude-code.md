@@ -14,4 +14,4 @@ The documented route: `claude -p --input-format stream-json --output-format stre
 
 ## 3. Consequences
 
-The bridge is behind `ClaudePort`. The facts it relies on are recorded probes against CLI 2.1.296 ([Claude bridge](../design/claude-bridge.md#8-findings-from-the-probes)); a version outside the tested line is warned about.
+The bridge is behind `ClaudePort`. The facts it relies on are recorded probes against CLI 2.1.296 ([Claude bridge](../claude.md#1-the-claude-bridge)); a version outside the tested line is warned about.

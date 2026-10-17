@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-16 | accepted; its last paragraph replaced by [record 50](0050-comando-ships-a-claude-code-kit.md) | Miguel (60% as the checkpoint threshold, the value his own setup uses; due-ness not saved; no SQL completion without an open database; a Clear button after Stop on the editor panel and the Session tab; Stop with a body; colouring that follows what the text is; the checkpoint grey until due; start time and uptime on the session rows; no money on the turn end), Claude (how) |
+| 2026-10-16 | accepted; its last paragraph replaced by [record 50](0050-comando-ships-a-claude-code-kit.md); the session rows' start time moved to the copied details by [record 53](0053-session-rows-compact-clear-copy-and-an-order-of-your-own.md) | Miguel (60% as the checkpoint threshold, the value his own setup uses; due-ness not saved; no SQL completion without an open database; a Clear button after Stop on the editor panel and the Session tab; Stop with a body; colouring that follows what the text is; the checkpoint grey until due; start time and uptime on the session rows; no money on the turn end), Claude (how) |
 
 ## 1. Context
 

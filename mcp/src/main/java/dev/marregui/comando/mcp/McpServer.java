@@ -52,9 +52,12 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         this.version = version;
     }
 
-    /** Starts on {@code port} of the loopback interface; 0 picks a free port. */
+    /**
+     * Starts on {@code port} of {@code 127.0.0.1}, the address {@link #url} names; 0 picks a free port. Named rather than
+     * the JVM's loopback address, which is {@code ::1} when IPv6 addresses are preferred.
+     */
     public static McpServer start(McpTools tools, int port, String version) throws IOException {
-        HttpServer http = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), port), 64);
+        HttpServer http = HttpServer.create(new InetSocketAddress(InetAddress.ofLiteral("127.0.0.1"), port), 64);
         McpServer server = new McpServer(tools, http, version);
         http.createContext(PATH, server::handle);
         http.setExecutor(server.executor);

@@ -292,6 +292,19 @@ class DbAdapterTest {
     }
 
     @Test
+    void aClosedAdapterMakesNoLaneAndRunsNothing() {
+        db.close();
+        sink.clear();
+        db.open(spec);
+        db.execute(7L, spec, "SELECT 1");
+        db.test(spec);
+        assertThat(db.laneCount()).as("no lane, so no connection, after close").isZero();
+        assertThat(db.query(spec, "SELECT 1", 1)).isCompletedExceptionally();
+        assertThat(db.describe(spec, "t")).isCompletedExceptionally();
+        assertThat(sink.intents()).isEmpty();
+    }
+
+    @Test
     void aConnectionThatFailsToOpenKeepsNoLaneAndStillReportsItsClose() throws Exception {
         ConnectionSpec nowhere = new ConnectionSpec("unreachable", "127.0.0.1", 1, "qdb", "admin", "quest", false);
         db.open(nowhere);

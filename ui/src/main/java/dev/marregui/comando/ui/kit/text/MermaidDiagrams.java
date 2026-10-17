@@ -153,6 +153,7 @@ public final class MermaidDiagrams {
             finish(key);
             return;
         }
+        Process p = null;
         try {
             Files.createDirectories(cache);
             Path in = Files.createTempFile(cache, "." + key, ".mmd");
@@ -166,7 +167,7 @@ public final class MermaidDiagrams {
                         .redirectError(err.toFile());
                 // mmdc is a node script: an app started from Finder has no node on its PATH, so its own folder goes first
                 pb.environment().put("PATH", mmdc.getParent() + File.pathSeparator + System.getenv().getOrDefault("PATH", "/usr/bin:/bin"));
-                Process p = pb.start();
+                p = pb.start();
                 drawing = p;
                 p.getOutputStream().close();
                 if (!p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
@@ -192,6 +193,10 @@ public final class MermaidDiagrams {
             failures.put(key, "cannot draw it: " + e.getMessage());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            if (p != null) {
+                // close interrupted the wait before it could see this process: it would outlive comando
+                stop(p);
+            }
             waiting.remove(key);
             return;
         }

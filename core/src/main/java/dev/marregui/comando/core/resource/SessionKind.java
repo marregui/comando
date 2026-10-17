@@ -163,7 +163,8 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
             q.append(" This ").append(ResourceKind.sentence(parts)).append('.');
         }
         if (session != null && !session.spec().claudeSessionId().isEmpty()) {
-            q.append(" The conversation stays in ~/.claude/projects and can be imported again.");
+            q.append(" The conversation stays in ").append(HomeDir.shorten(HomeDir.claudeDir().resolve("projects").toString()))
+                    .append(" and can be imported again.");
         }
         return q.toString();
     }

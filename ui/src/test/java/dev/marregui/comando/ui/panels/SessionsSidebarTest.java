@@ -29,10 +29,12 @@ import javax.swing.UIManager;
 import javax.swing.plaf.basic.BasicHTML;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.HeadlessException;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
+import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -312,16 +314,160 @@ class SessionsSidebarTest {
             s[0].render(state);
         });
         JList<?> list = find(s[0].component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
-        assertThat(rowText(list, 0)).contains("· headless").doesNotContain("this panel");
-        assertThat(rowText(list, 1)).contains("· main, notes");
+        assertThat(rowText(list, 0)).as("running first").contains("· main, notes");
+        assertThat(rowText(list, 1)).contains("· headless").doesNotContain("this panel");
 
-        SessionRow row = (SessionRow) render(list, 1);
+        SessionRow row = (SessionRow) render(list, 0);
         assertThat(row.tip(new Rectangle(0, 0, 260, 60), new Point(0, 0))).isEmpty();
         assertThat(SessionRow.Control.values()).as("no edit control: the button above the list edits")
                 .containsExactly(SessionRow.Control.POWER, SessionRow.Control.FRESH, SessionRow.Control.CHECKPOINT,
-                        SessionRow.Control.MODEL, SessionRow.Control.EFFORT);
-        Rectangle power = s[0].controlBounds(1, SessionRow.Control.POWER);
+                        SessionRow.Control.COMPACT, SessionRow.Control.CLEAR, SessionRow.Control.MODEL, SessionRow.Control.EFFORT,
+                        SessionRow.Control.COPY);
+        Rectangle power = s[0].controlBounds(0, SessionRow.Control.POWER);
         assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Connected; click to disconnect (stops the session)");
+    }
+
+    @Test
+    void sessionsListRunningFirstThenByNameUntilADragOrdersThemAndSortRestoresIt() throws Exception {
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        SessionState beta = SessionState.closed(SessionSpec.fresh("beta", "/w/b"));
+        SessionState alpha = SessionState.closed(SessionSpec.fresh("Alpha", "/w/a"));
+        SessionState gamma = SessionState.closed(SessionSpec.fresh("gamma", "/w/g")).withStatus(Status.OPEN, "");
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(), List.of(beta, alpha, gamma));
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intents::add, new Dialogs(), () -> {
+            });
+            s[0].render(state);
+        });
+        SessionsSidebar sidebar = s[0];
+        JList<?> list = find(sidebar.component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+        AbstractButton sort = button(sidebar.component(), "Sort the sessions");
+        assertThat(names(list)).containsExactly("gamma", "Alpha", "beta");
+        assertThat(sort.isEnabled()).as("already sorted").isFalse();
+
+        // beta dragged by its text above gamma
+        SwingUtilities.invokeAndWait(() -> {
+            list.setSize(260, 400);
+            list.doLayout();
+        });
+        Rectangle from = cell(list, 2);
+        Rectangle to = cell(list, 0);
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                list.dispatchEvent(mouse(list, MouseEvent.MOUSE_PRESSED, from.x + 60, from.y + 6, MouseEvent.BUTTON1_DOWN_MASK));
+            } catch (HeadlessException e) {
+                // the list's own press handler asks the toolkit for the menu key; the row's drag saw the press first
+            }
+            list.dispatchEvent(mouse(list, MouseEvent.MOUSE_DRAGGED, from.x + 60, from.y - 10, MouseEvent.BUTTON1_DOWN_MASK));
+            list.dispatchEvent(mouse(list, MouseEvent.MOUSE_DRAGGED, to.x + 60, to.y + 2, MouseEvent.BUTTON1_DOWN_MASK));
+            list.dispatchEvent(mouse(list, MouseEvent.MOUSE_RELEASED, to.x + 60, to.y + 2, 0));
+        });
+        assertThat(intents).containsExactly(new Intent.OrderSessions(List.of("beta", "gamma", "Alpha")));
+        assertThat(names(list)).containsExactly("beta", "gamma", "Alpha");
+        assertThat(list.getSelectedValue()).isEqualTo(beta);
+        assertThat(sidebar.manualOrder()).isTrue();
+        assertThat(sort.isEnabled()).isTrue();
+
+        // the stored order comes back from the reducer and stands, a session starting or not
+        SessionState alphaRunning = alpha.withStatus(Status.OPEN, "");
+        SwingUtilities.invokeAndWait(() -> sidebar.render(state.withSessions(List.of(beta, gamma, alphaRunning))));
+        assertThat(names(list)).containsExactly("beta", "gamma", "Alpha");
+
+        SwingUtilities.invokeAndWait(sort::doClick);
+        assertThat(sidebar.manualOrder()).isFalse();
+        assertThat(names(list)).containsExactly("Alpha", "gamma", "beta");
+
+        intents.clear();
+        SwingUtilities.invokeAndWait(() -> sidebar.drop(0, 1));
+        assertThat(intents).as("dropped where it was: nothing moves").isEmpty();
+    }
+
+    @Test
+    void aHoveredRowCopiesItsDetailsAndARunningOneCompactsOrClears() throws Exception {
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        List<String> copied = new CopyOnWriteArrayList<>();
+        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(work));
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intents::add, new Dialogs(), () -> {
+            });
+            s[0].clipboard = copied::add;
+            s[0].render(state);
+        });
+        SessionsSidebar sidebar = s[0];
+        JList<?> list = find(sidebar.component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+        SwingUtilities.invokeAndWait(() -> {
+            list.setSize(260, 400);
+            list.doLayout();
+        });
+        Rectangle[] copy = new Rectangle[1];
+        SwingUtilities.invokeAndWait(() -> copy[0] = sidebar.controlBounds(0, SessionRow.Control.COPY));
+        assertThat(copy[0].width).as("no copy button away from the mouse").isZero();
+
+        Rectangle row = cell(list, 0);
+        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_MOVED, row.x + 60, row.y + 6, 0)));
+        Rectangle copyButton = bounds(sidebar, SessionRow.Control.COPY);
+        assertThat(copyButton.x + copyButton.width).as("at the right").isGreaterThan(row.x + row.width - 30);
+        click(list, copyButton, 1);
+        assertThat(copied).singleElement().asString().startsWith("Session: work\nPath: /w/work\n");
+
+        click(list, bounds(sidebar, SessionRow.Control.COMPACT), 1);
+        click(list, bounds(sidebar, SessionRow.Control.CLEAR), 1);
+        assertThat(intents).containsExactly(new Intent.SessionCommand("work", "/compact"), new Intent.SessionCommand("work", "/clear"));
+        Rectangle compact = bounds(sidebar, SessionRow.Control.COMPACT);
+        Rectangle model = bounds(sidebar, SessionRow.Control.MODEL);
+        assertThat(compact.x).as("the session's controls at the left, its settings at the right").isLessThan(model.x);
+        assertThat(model.x + model.width + bounds(sidebar, SessionRow.Control.EFFORT).width).isGreaterThan(row.width - 80);
+
+        SwingUtilities.invokeAndWait(() -> sidebar.render(state.withSessions(List.of(work.withStatus(Status.CLOSED, "")))));
+        Rectangle[] stopped = new Rectangle[1];
+        SwingUtilities.invokeAndWait(() -> stopped[0] = sidebar.controlBounds(0, SessionRow.Control.CLEAR));
+        assertThat(stopped[0].width).as("a stopped session has nothing to compact or clear").isZero();
+    }
+
+    @Test
+    void theDetailsNameWhatADecisionOnTheSessionNeeds() {
+        long started = 1_760_000_000_000L;
+        SessionState running = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").withModel("opus")
+                        .resumable("e41164bc-160c-4e3e-b43b-3218489da4e1"))
+                .withStatus(Status.OPEN, "").withStarted(started).withBranch("main")
+                .withUsage(0.0, 84_000L, 200_000L, started);
+        String details = SessionRow.details(running, started + (3 * 60 + 5) * 60_000L, ZoneOffset.UTC);
+        assertThat(details).isEqualTo("""
+                Session: edge
+                Path: /w/edge
+                Branch: main
+                Session id: e41164bc-160c-4e3e-b43b-3218489da4e1
+                Status: running
+                Uptime: 3 h 05 min, since 08:53
+                Context: 42% (84.0k of 200.0k tokens)
+                Model: opus, effort default
+                """);
+        assertThat(SessionRow.details(SessionState.closed(SessionSpec.fresh("new", "/w/new")), started, ZoneOffset.UTC))
+                .contains("Session id: none yet\n", "Status: closed\n", "Context: unknown until a turn ends\n").doesNotContain("Uptime");
+    }
+
+    private static List<String> names(JList<?> list) throws Exception {
+        List<String> out = new CopyOnWriteArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            for (int i = 0; i < list.getModel().getSize(); i++) {
+                out.add(((SessionState) list.getModel().getElementAt(i)).name());
+            }
+        });
+        return out;
+    }
+
+    private static Rectangle cell(JList<?> list, int index) throws Exception {
+        Rectangle[] r = new Rectangle[1];
+        SwingUtilities.invokeAndWait(() -> r[0] = list.getCellBounds(index, index));
+        return r[0];
+    }
+
+    private static MouseEvent mouse(Component c, int id, int x, int y, int modifiers) {
+        return new MouseEvent(c, id, System.currentTimeMillis(), modifiers, x, y, id == MouseEvent.MOUSE_PRESSED || id == MouseEvent.MOUSE_RELEASED ? 1 : 0,
+                false, id == MouseEvent.MOUSE_MOVED || id == MouseEvent.MOUSE_DRAGGED ? MouseEvent.NOBUTTON : MouseEvent.BUTTON1);
     }
 
     @Test

@@ -21,7 +21,7 @@ A hands-on first session. You start comando, give it a database and a Claude Cod
 | macOS | — |
 | JDK 25 | `java -version` prints 25 |
 | Claude Code, logged in | `claude --version` works and `claude -p "hi"` answers |
-| the comando repository | `cd ~/workspace/comando` |
+| the comando repository | `cd` into your clone of it |
 
 Create an empty directory for the Claude session you will make in step 5:
 
@@ -44,9 +44,9 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 | Part | What it is |
 |---|---|
 | **Menu bar** | **File** (panels and files), **Edit**, **Panel** (run, then the focused panel's **Session**, **Connection**, **Result** and **Tools** submenus), **View** (the window: sidebar, lower panel, zoom), **Help**. |
-| **Sidebar**, left | four tabs: **Sessions** (Claude Code sessions; each row's controls connect or disconnect it and change its model or effort), **Panels** (comando's own panels, open and closed), **Connections** (databases) and **Files** (folders you choose, one row each; `~/.claude` until you add your own with `+`; a folder's index file comes first in it, the filter above finds files by name in every folder, a click selects, and a double click on a file opens it in a panel: Markdown shows rendered, Mermaid diagrams drawn as pictures; the header's **Edit** button or **⌘⇧M** switches to the text, and **Preview** switches back; source files show in their language's colours). Sessions, Panels, Connections and Files each have a `+` button. ⌘B or the `⋯` button at the end of the tabs hides it to a thin rail on the left edge; the rail's `⋯` brings it back. |
+| **Sidebar**, left | four tabs in two rows: **Panels** (comando's own panels, open and closed) and **Files** (folders you choose, Claude Code's own folder at first; a double click opens a file in a panel), then **Sessions** (Claude Code sessions, running first; each row shows its context, uptime and id, and its controls start or stop it, compact or clear its conversation and change its model or effort; drag a row to order them yourself) and **Connections** (databases). Each tab has a `+` button. ⌘B or the `⋯` button hides the sidebar to a thin rail on the left edge; the rail's `⋯` brings it back. |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one. The tab's icon says what its session is up to: a spinner while it works, an hourglass while it waits on work it left running in the background (an agent, a shell command), a green check when it finished while you were on another tab, a red mark when it failed, a question mark while it waits for your answer; the last three put a `●` before the title until you look (the question mark stays until you answer). Hover for the reason. |
-| **Panel header** | two chips: the panel's **session** and its **connection**, each with a status dot (○ closed, ● open) and a button to start or connect it. Next to the session's plug, while it is stopped: a button that starts it on a **new conversation**; and a **checkpoint** button that sends the session's checkpoint command (`/reflect` by default; change or clear it in the session dialog). **Run** and **Stop** on the right. |
+| **Panel header** | two chips: the panel's **session** and its **connection**, each with a status dot (○ closed, ● open) and a button to start or connect it. Next to the session's plug: a button that starts a stopped session on a **new conversation** (shown when it has one to leave), and a **checkpoint** button that sends the session's checkpoint command (`/reflect` by default; change or clear it in the session dialog). **Run**, **Stop** and **Clear** on the right. |
 | **Editor** | where you write SQL and prompts, mixed in one text. |
 | **Lower tabs** | **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell), **Results** (SQL output). Plots and kept results open more tabs here. |
 | **Status bar**, bottom | the current message on the left (click it for the recent ones); your plan's usage (session, week, Fable; hover for the reset times; read every 5 minutes), the panel's session, connection and running work on the right. |
@@ -131,7 +131,7 @@ When a statement fails, Results shows the database's error as text you can selec
 
 A session is a Claude Code process that comando starts for you in a working directory, with a model and a budget you choose.
 
-1. Click **+** above the list in the sidebar's **Sessions** tab: it opens **Sessions** on a new session. The keyboard is in **Name**, its default selected. Fill in:
+1. Click **+** above the list in the sidebar's **Sessions** tab: it opens the session dialog on a new session, titled **New session**. The keyboard is in **Name**, its default selected. Fill in:
 
    | Field | Value |
    |---|---|
@@ -143,7 +143,7 @@ A session is a Claude Code process that comando starts for you in a working dire
    Leave the rest as it is; the line under each field says what it does. Click **Assign to panel**, then press **Esc**.
    *You should see* `tutor` in the panel header, in the sidebar (marked "· scratch", the title of the panel it is bound to), and in the window title.
 2. At the end of the editor, after an empty line, type `In one sentence, what is QuestDB?` and press **⌘⇧⏎**, which sends the block to the panel's session.
-   *You should see* the session start (its dot turns to `●`), the lower panel switch to **Session**, and the answer stream in. Under the answer: the time it took and the cost so far. While the turn runs, the session chip counts the seconds. If your Claude Code setup has hooks, their output folds into grey "hooks · …" lines, one before the answer and one after it; click one to read it.
+   *You should see* the session start (its dot turns to `●`), the lower panel switch to **Session**, and the answer stream in. Under the answer: the time it took. While the turn runs, the session chip counts the seconds. If your Claude Code setup has hooks, their output folds into grey "hooks · …" lines, one before the answer and one after it; click one to read it.
 3. **⌘⏎** sends a block to Claude as well when the gutter shows the asterisk. At the end of the editor, after an empty line, type this block and press **⌘⏎**:
 
    ```
@@ -234,6 +234,6 @@ These documents describe how comando works. You do not need them to use it.
 
 | Document | Why read it |
 |---|---|
-| [Command dispatch](../design/command-dispatch.md) | the exact rules that decide SQL or prompt, and how to force either with a first line `-- @sql` or `-- @claude` |
-| [Approvals and safety](../design/approvals-and-safety.md) | what Claude may do without asking, what counts as a read-only statement, production connections |
+| [Workbench](workbench.md#2-running-text) | the exact rules that decide SQL or prompt, and how to force either with a first line `-- @sql` or `-- @claude` |
+| [Claude](claude.md#3-approvals-and-safety) | what Claude may do without asking, what counts as a read-only statement, production connections |
 | [Build and run](build-and-run.md) | every Gradle task and setting, including a data root of your own (`COMANDO_HOME`) |

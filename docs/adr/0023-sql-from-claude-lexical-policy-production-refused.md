@@ -10,7 +10,7 @@ Claude may run SQL through `db_run_sql`. Asking for every `SELECT` would make th
 
 ## 2. Decision
 
-A lexical check decides read-only ([Approvals and safety](../design/approvals-and-safety.md#2-sql-from-claude)). Read-only runs; anything else needs a card on an ordinary connection and is refused on a production one.
+A lexical check decides read-only ([Approvals and safety](../claude.md#32-sql-from-claude)). Read-only runs; anything else needs a card on an ordinary connection and is refused on a production one.
 
 ## 3. Consequences
 

@@ -76,11 +76,20 @@ class ResourceKindTest {
         assertThat(f.excludes("Build")).isTrue();
         assertThat(f.excludes("skills")).isFalse();
         assertThat(new FolderRoot("p", "/p", "docs/ALPHA.md", null).indexFile()).contains(Path.of("/p/docs/ALPHA.md"));
-        assertThat(FolderRoot.defaults("/home/u")).singleElement().satisfies(d -> {
+        assertThat(FolderRoot.defaults(Path.of("/home/u/.claude"))).singleElement().satisfies(d -> {
             assertThat(d.path()).isEqualTo("/home/u/.claude");
             assertThat(d.index()).isEqualTo("CLAUDE.md");
             assertThat(d.excludes("projects")).as("Claude Code's transcripts are not documents").isTrue();
         });
+    }
+
+    @Test
+    void aSessionBudgetIsAFiniteAmount() {
+        for (String budget : List.of("NaN", "Infinity", "1e400", "-1")) {
+            assertThatThrownBy(() -> SessionKind.INSTANCE.fromAttributes(Map.of("name", "s", "workDir", "/w", "budgetUsd", budget)))
+                    .as(budget).hasMessageStartingWith("budgetUsd must be a finite amount, 0 or more");
+        }
+        assertThat(SessionKind.INSTANCE.fromAttributes(Map.of("name", "s", "workDir", "/w", "budgetUsd", "0.5")).budgetUsd()).isEqualTo(0.5);
     }
 
     @Test

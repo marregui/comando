@@ -1466,6 +1466,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             frame.setLocationRelativeTo(null);
         }
         sidebar.selectTab(prefs.getInt("sidebar.tab", SessionsSidebar.SESSIONS));
+        sidebar.manualOrder(prefs.getBoolean("sessions.manualOrder", false));
         showSidebar(prefs.getBoolean("sidebar.visible", true));
         vertical.setDividerLocation(prefs.getInt("divider.lower", (int) (h * 0.45)));
         sidePaneHidden = prefs.getBoolean("sidePane.hidden", false);
@@ -1501,6 +1502,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
         prefs.putBoolean("sidebar.visible", sidebar.isShown());
         prefs.putInt("sidebar.tab", sidebar.selectedTab());
+        prefs.putBoolean("sessions.manualOrder", sidebar.manualOrder());
         prefs.putBoolean("sidePane.hidden", sidePaneHidden);
         prefs.putInt("divider.lower", vertical.getDividerLocation());
         if (sidePaneShown) {

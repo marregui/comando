@@ -198,6 +198,17 @@ public sealed interface Intent {
     record Checkpoint(String name) implements Intent {
     }
 
+    /** Sends a Claude Code command ({@code /compact}, {@code /clear}) as a prompt from the session's panel. */
+    record SessionCommand(String name, String command) implements Intent {
+    }
+
+    /** Puts the sessions in this order; a session the list leaves out keeps its place after the named ones. */
+    record OrderSessions(List<String> names) implements Intent {
+        public OrderSessions {
+            names = List.copyOf(names);
+        }
+    }
+
     record InterruptSession(String name) implements Intent {
     }
 

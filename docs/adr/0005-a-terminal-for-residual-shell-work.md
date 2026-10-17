@@ -14,4 +14,4 @@ An embedded terminal, one per editor panel, after M1.
 
 ## 3. Consequences
 
-JediTerm and pty4j are dependencies: JediTerm is LGPL-3.0, pty4j EPL-1.0. Both are used unmodified as libraries. See [Development tools](../design/dev-tools.md#1-terminal).
+JediTerm and pty4j are dependencies: JediTerm is LGPL-3.0, pty4j EPL-1.0. Both are used unmodified as libraries. See [Development tools](../workbench.md#41-terminal).

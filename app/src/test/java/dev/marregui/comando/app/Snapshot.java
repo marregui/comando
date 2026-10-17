@@ -13,6 +13,7 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
+import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -20,6 +21,7 @@ import dev.marregui.comando.core.view.ViewSpec;
 import javax.imageio.ImageIO;
 import javax.swing.AbstractButton;
 import javax.swing.JFrame;
+import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JTextField;
@@ -101,6 +103,25 @@ public final class Snapshot {
         loop.dispatch(new Intent.SelectLowerTab(LowerTab.APPROVALS));
         Thread.sleep(1500);
         shoot(out.resolve("02-approvals-and-side-diff.png"));
+        // the Sessions tab: a running session with its context past the checkpoint's threshold, the mouse over its row
+        loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("edge", repo).withModel("opus").withEffort("high")));
+        loop.dispatch(new Intent.SessionStarted("edge"));
+        loop.dispatch(new Intent.SessionInit("edge", new SessionInfo("e41164bc-160c-4e3e-b43b-3218489da4e1", "claude-opus-5-5", repo,
+                "2.1.302", "default", List.of())));
+        loop.dispatch(new Intent.SessionTurnEnded("edge", 0, 0.0, 128_000L, 200_000L, false, ""));
+        loop.dispatch(new Intent.SessionBranch("edge", "main"));
+        selectSidebarTab("Sessions");
+        await(loop, st -> st.session("edge").map(e -> e.contextWindow() > 0).orElse(false), 5_000);
+        SwingUtilities.invokeAndWait(() -> {
+            JList<?> sessions = list("Sessions");
+            if (sessions != null) {
+                Rectangle row = sessions.getCellBounds(0, 0);
+                sessions.dispatchEvent(new MouseEvent(sessions, MouseEvent.MOUSE_MOVED, System.currentTimeMillis(), 0,
+                        row.x + 80, row.y + 8, 0, false));
+            }
+        });
+        // the shot paints on the event thread, after the hover: nothing to wait for
+        shoot(out.resolve("02a-sidebar-sessions.png"));
         loop.dispatch(new Intent.Arrange(new Layout(Layout.Toggle.HIDE, Layout.Toggle.KEEP, Double.NaN)));
         Thread.sleep(2800);
         shoot(out.resolve("02b-sidebar-collapsed.png"));
@@ -306,6 +327,19 @@ public final class Snapshot {
             }
         }
         throw new IllegalStateException("no Files filter");
+    }
+
+    /** The visible window's list named {@code name}, or null. */
+    private static JList<?> list(String name) {
+        for (Frame f : Frame.getFrames()) {
+            if (f instanceof JFrame jf && f.isVisible()) {
+                JList<?> l = find(jf.getContentPane(), JList.class, x -> name.equals(x.getAccessibleContext().getAccessibleName()));
+                if (l != null) {
+                    return l;
+                }
+            }
+        }
+        return null;
     }
 
     /** The visible window's tree named {@code name}, or null. */

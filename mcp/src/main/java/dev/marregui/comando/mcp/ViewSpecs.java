@@ -3,6 +3,8 @@ package dev.marregui.comando.mcp;
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.marregui.comando.core.view.ViewSpec;
 
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -24,11 +26,21 @@ final class ViewSpecs {
             case "plot" -> plot(data);
             case "diff" -> new ViewSpec.Diff(text(data, "path", false), text(data, "before", true), text(data, "after", true));
             case "markdown" -> new ViewSpec.Markdown(text(data, "markdown", true));
-            case "text" -> new ViewSpec.Text(text(data, "path", false), text(data, "text", true), text(data, "syntax", false),
+            case "text" -> new ViewSpec.Text(path(text(data, "path", false)), text(data, "text", true), text(data, "syntax", false),
                     data.path("line").asInt(0));
             case "tree" -> new ViewSpec.Tree(node(data.path("root"), 0));
             default -> throw new IllegalArgumentException("unknown view type '" + type + "'; use table, plot, diff, markdown, text or tree");
         };
+    }
+
+    /** A text view's path: empty, or one the file system can name, so the view can show it. */
+    private static String path(String path) {
+        try {
+            Path.of(path);
+            return path;
+        } catch (InvalidPathException e) {
+            throw new IllegalArgumentException("path is not a file path: " + e.getReason());
+        }
     }
 
     static ViewSpec.Table table(JsonNode columns, JsonNode rows) {

@@ -23,4 +23,4 @@ A review of comando at `69c0ed9`, run live and in the code, found that the tool'
 
 ## 3. Consequences
 
-Commands carry an enablement, and a disabled command leaves its key to the focused component, so a key acts where the keyboard is. Notices carry a subject, so the event that settles a subject clears its notice, and an error stays until it is settled. The rules are written down in [Command dispatch](../design/command-dispatch.md), [Approvals and safety](../design/approvals-and-safety.md), [MCP UI tools](../design/mcp-ui-tools.md) and [State and intents](../architecture/01-state-and-intents.md).
+Commands carry an enablement, and a disabled command leaves its key to the focused component, so a key acts where the keyboard is. Notices carry a subject, so the event that settles a subject clears its notice, and an error stays until it is settled. The rules are written down in [Command dispatch](../workbench.md#2-running-text), [Approvals and safety](../claude.md#3-approvals-and-safety), [MCP UI tools](../claude.md#2-mcp-tools) and [State and intents](../architecture.md#4-state-intents-effects).

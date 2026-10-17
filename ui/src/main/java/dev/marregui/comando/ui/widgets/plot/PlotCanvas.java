@@ -41,7 +41,7 @@ final class PlotCanvas extends JComponent {
     private static final DateTimeFormatter DATE = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneOffset.UTC);
 
     /** A series with x ascending. */
-    private record Sorted(String name, double[] x, double[] y, Color color) {
+    record Sorted(String name, double[] x, double[] y, Color color) {
     }
 
     private final List<Sorted> series = new ArrayList<>();
@@ -107,68 +107,102 @@ final class PlotCanvas extends JComponent {
         setFocusable(true);
     }
 
-    void setData(ViewSpec.Plot plot) {
-        series.clear();
-        xLabel = plot.xLabel();
-        yLabel = plot.yLabel();
-        timeX = plot.timeX();
+    /**
+     * What a plot shows, ready to paint: each series sorted by x, and the bounds of its finite points. Made by {@link
+     * #prepare}, which touches no Swing state, so a large plot is prepared off the event thread.
+     */
+    record Prepared(String xLabel, String yLabel, boolean timeX, List<Sorted> series, double x0, double x1, double y0, double y1) {
+    }
+
+    /** Sorts each series by x (series sharing one x share one sort) and finds the bounds; any thread. */
+    static Prepared prepare(ViewSpec.Plot plot) {
+        List<Sorted> sorted = new ArrayList<>(plot.series().size());
+        double[] lastX = null;
+        int[] lastOrder = null;
         int i = 0;
         for (ViewSpec.Series s : plot.series()) {
-            series.add(sorted(s, Theme.SERIES[i++ % Theme.SERIES.length]));
+            int[] order = lastX != null && Arrays.equals(lastX, s.x()) ? lastOrder : order(s.x());
+            sorted.add(sorted(s, order, Theme.SERIES[i++ % Theme.SERIES.length]));
+            lastX = s.x();
+            lastOrder = order;
         }
-        dataX0 = Double.POSITIVE_INFINITY;
-        dataX1 = Double.NEGATIVE_INFINITY;
-        dataY0 = Double.POSITIVE_INFINITY;
-        dataY1 = Double.NEGATIVE_INFINITY;
-        for (Sorted s : series) {
+        double x0 = Double.POSITIVE_INFINITY;
+        double x1 = Double.NEGATIVE_INFINITY;
+        double y0 = Double.POSITIVE_INFINITY;
+        double y1 = Double.NEGATIVE_INFINITY;
+        for (Sorted s : sorted) {
             for (int k = 0; k < s.x.length; k++) {
                 if (Double.isFinite(s.x[k]) && Double.isFinite(s.y[k])) {
-                    dataX0 = Math.min(dataX0, s.x[k]);
-                    dataX1 = Math.max(dataX1, s.x[k]);
-                    dataY0 = Math.min(dataY0, s.y[k]);
-                    dataY1 = Math.max(dataY1, s.y[k]);
+                    x0 = Math.min(x0, s.x[k]);
+                    x1 = Math.max(x1, s.x[k]);
+                    y0 = Math.min(y0, s.y[k]);
+                    y1 = Math.max(y1, s.y[k]);
                 }
             }
         }
-        if (!Double.isFinite(dataX0)) {
-            dataX0 = 0;
-            dataX1 = 1;
-            dataY0 = 0;
-            dataY1 = 1;
+        if (!Double.isFinite(x0)) {
+            x0 = 0;
+            x1 = 1;
+            y0 = 0;
+            y1 = 1;
         }
-        if (dataX0 == dataX1) {
+        if (x0 == x1) {
             // one instant: half a minute either side reads as time; a number gets one unit
-            double half = timeX ? 30_000 : 1;
-            dataX0 -= half;
-            dataX1 += half;
+            double half = plot.timeX() ? 30_000 : 1;
+            x0 -= half;
+            x1 += half;
         }
-        if (dataY0 == dataY1) {
-            dataY0 -= 1;
-            dataY1 += 1;
+        if (y0 == y1) {
+            y0 -= 1;
+            y1 += 1;
         }
+        return new Prepared(plot.xLabel(), plot.yLabel(), plot.timeX(), sorted, x0, x1, y0, y1);
+    }
+
+    /** Shows {@code p}, zoomed out to all of it; on the event thread. */
+    void setData(Prepared p) {
+        series.clear();
+        series.addAll(p.series());
+        xLabel = p.xLabel();
+        yLabel = p.yLabel();
+        timeX = p.timeX();
+        dataX0 = p.x0();
+        dataX1 = p.x1();
+        dataY0 = p.y0();
+        dataY1 = p.y1();
         reset();
     }
 
-    private static Sorted sorted(ViewSpec.Series s, Color color) {
-        double[] x = s.x();
-        double[] y = s.y();
+    /** The indices of {@code x} in ascending order; null when it is ascending already. */
+    private static int[] order(double[] x) {
         boolean ascending = true;
         for (int i = 1; i < x.length && ascending; i++) {
             ascending = x[i - 1] <= x[i];
         }
         if (ascending) {
-            return new Sorted(s.name(), x, y, color);
+            return null;
         }
         Integer[] idx = new Integer[x.length];
         for (int i = 0; i < idx.length; i++) {
             idx[i] = i;
         }
         Arrays.sort(idx, (a, b) -> Double.compare(x[a], x[b]));
-        double[] sx = new double[x.length];
-        double[] sy = new double[y.length];
+        int[] order = new int[idx.length];
         for (int i = 0; i < idx.length; i++) {
-            sx[i] = x[idx[i]];
-            sy[i] = y[idx[i]];
+            order[i] = idx[i];
+        }
+        return order;
+    }
+
+    private static Sorted sorted(ViewSpec.Series s, int[] order, Color color) {
+        if (order == null) {
+            return new Sorted(s.name(), s.x(), s.y(), color);
+        }
+        double[] sx = new double[order.length];
+        double[] sy = new double[order.length];
+        for (int i = 0; i < order.length; i++) {
+            sx[i] = s.x()[order[i]];
+            sy[i] = s.y()[order[i]];
         }
         return new Sorted(s.name(), sx, sy, color);
     }

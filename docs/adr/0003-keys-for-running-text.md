@@ -14,4 +14,4 @@ One editor holds SQL and prompts, so one key must run either, and the user needs
 
 ## 3. Consequences
 
-The classifier errs towards prompts for prose that starts with a SQL keyword ([Command dispatch](../design/command-dispatch.md)). ⌃⏎ was added later for the terminal.
+The classifier errs towards prompts for prose that starts with a SQL keyword ([Command dispatch](../workbench.md#2-running-text)). ⌃⏎ was added later for the terminal.

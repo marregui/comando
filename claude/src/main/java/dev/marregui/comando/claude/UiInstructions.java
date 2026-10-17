@@ -16,7 +16,7 @@ public final class UiInstructions {
             - db_run_sql, db_describe: run SQL on the user's database connections; statements that are not \
             read-only need the user's approval, and production connections refuse writes.
             - session_send / session_read: when the user asks you to hand work to another comando session, send it a \
-            prompt (the user allows each one on a card; it runs in that session's panel) and read back what it did.
+            prompt (it runs in that session's panel, with no card to answer) and read back what it did.
             Use a view when a table, plot or diff shows a result better than text. Keep explanations in text.""";
 
     private UiInstructions() {

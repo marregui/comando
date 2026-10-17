@@ -69,13 +69,26 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
         timer.scheduleWithFixedDelay(this::checkHealth, period, period, TimeUnit.SECONDS);
     }
 
-    /** Queues work on the lane of {@code name}; a lane that has stopped refuses it and a new lane takes it. */
-    private void onLane(String name, Predicate<Lane> work) {
+    /**
+     * Queues work on the lane of {@code name}; a lane that has stopped refuses it and a new lane takes it. Once the
+     * adapter is closed no lane is made and nothing is queued: answers false.
+     */
+    private boolean onLane(String name, Predicate<Lane> work) {
+        if (closed) {
+            return false;
+        }
         Lane lane = lanes.computeIfAbsent(name, this::newLane);
         while (!work.test(lane)) {
             lanes.remove(name, lane);
+            if (closed) {
+                return false;
+            }
             lane = lanes.computeIfAbsent(name, this::newLane);
         }
+        if (closed) {
+            lane.close(); // made while close walked the lanes: it would hold a connection nobody closes
+        }
+        return true;
     }
 
     private Lane newLane(String name) {
@@ -111,6 +124,9 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
 
     @Override
     public void test(ConnectionSpec spec) {
+        if (closed) {
+            return;
+        }
         testers.execute(() -> {
             try (Connection c = DriverManager.getConnection(spec.jdbcUrl(), Lane.driverProperties(spec))) {
                 boolean ok = c.isValid(10);
@@ -150,7 +166,9 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
 
     private CompletableFuture<Rows> query(ConnectionSpec spec, String sql, int maxRows, BooleanSupplier wanted) {
         CompletableFuture<Rows> out = new CompletableFuture<>();
-        onLane(spec.name(), lane -> lane.query(spec, sql, maxRows, out, wanted));
+        if (!onLane(spec.name(), lane -> lane.query(spec, sql, maxRows, out, wanted))) {
+            out.completeExceptionally(closedError());
+        }
         return out;
     }
 
@@ -161,8 +179,14 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
 
     private CompletableFuture<Rows> describe(ConnectionSpec spec, String table, BooleanSupplier wanted) {
         CompletableFuture<Rows> out = new CompletableFuture<>();
-        onLane(spec.name(), lane -> lane.describe(spec, table, out, wanted));
+        if (!onLane(spec.name(), lane -> lane.describe(spec, table, out, wanted))) {
+            out.completeExceptionally(closedError());
+        }
         return out;
+    }
+
+    private static IllegalStateException closedError() {
+        return new IllegalStateException("comando is closing; the database is no longer reached");
     }
 
     /** Counts each connection's closes and forgets: a schema load started before one of them is overtaken by it. */

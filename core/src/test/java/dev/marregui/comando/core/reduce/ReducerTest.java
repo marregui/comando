@@ -565,6 +565,55 @@ class ReducerTest {
     }
 
     @Test
+    void aSessionCommandRunsAsAPromptFromTheSessionsPanel() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.SessionCommand("work", "/compact"));
+        assertThat(effects).contains(new Effect.SendToClaude("work", "/compact", state.panel(P1).orElseThrow().title()));
+        assertThat(state.session("work").orElseThrow().pendingTurns()).isEqualTo(1);
+
+        apply(new Intent.BindSession(P1, ""));
+        apply(new Intent.BindSession(P2, ""));
+        apply(new Intent.SessionCommand("work", "/clear"));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
+        assertThat(state.notice().text()).isEqualTo("Session work has no panel; open it to send /clear");
+    }
+
+    @Test
+    void aClearedConversationIsFollowedSavedAndNamedAsImportable() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.SessionInit("work", new SessionInfo("conv-1", "opus", "/w", "2.1", "", List.of())));
+        apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 700_000L, 1_000_000L, false, ""));
+        assertThat(state.session("work").orElseThrow().reflection().due()).isTrue();
+
+        // /clear: the same process reports a new conversation
+        apply(new Intent.SessionInit("work", new SessionInfo("conv-2", "opus", "/w", "2.1", "", List.of())));
+        SessionState x = state.session("work").orElseThrow();
+        assertThat(x.spec().claudeSessionId()).isEqualTo("conv-2");
+        assertThat(x.spec().startMode()).isEqualTo(StartMode.RESUME);
+        assertThat(x.reflection()).as("a new conversation has nothing to reflect on").isEqualTo(Reflection.FRESH);
+        assertThat(effects).singleElement().isInstanceOf(Effect.SaveSessions.class);
+        assertThat(state.notice().text()).isEqualTo("Session work: new conversation; the previous one (conv-1) can be imported again");
+    }
+
+    @Test
+    void sessionsAreOrderedAsToldTheRestKeepingTheirPlaceAfterThem() {
+        apply(new Intent.SaveSession("", SessionSpec.fresh("alpha", "/a")));
+        apply(new Intent.SaveSession("", SessionSpec.fresh("beta", "/b")));
+        assertThat(state.sessions()).extracting(SessionState::name).containsExactly("work", "alpha", "beta");
+
+        apply(new Intent.OrderSessions(List.of("beta", "nobody", "work")));
+        assertThat(state.sessions()).extracting(SessionState::name).containsExactly("beta", "work", "alpha");
+        assertThat(effects).singleElement().isInstanceOfSatisfying(Effect.SaveSessions.class,
+                e -> assertThat(e.specs()).extracting(SessionSpec::name).containsExactly("beta", "work", "alpha"));
+
+        apply(new Intent.OrderSessions(List.of("beta", "work", "alpha")));
+        assertThat(effects).as("the same order saves nothing").isEmpty();
+    }
+
+    @Test
     void aFreshStartLeavesNothingDue() {
         apply(new Intent.StartSession("work"));
         apply(new Intent.SessionStarted("work"));
@@ -773,6 +822,17 @@ class ReducerTest {
         assertThat(state.focused()).isEqualTo(P2);
         assertThat(state.panels()).hasSize(2);
         assertThat(effects).containsExactly(new Effect.SavePanels(state.panels(), state.closed()));
+    }
+
+    @Test
+    void aPanelIsNotRenamedToAnotherPanelsTitle() {
+        String taken = state.panel(P2).orElseThrow().title();
+        apply(new Intent.RenamePanel(P1, taken));
+        assertThat(state.panel(P1).orElseThrow().title()).isNotEqualTo(taken);
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.SavePanels.class);
+        assertThat(state.notice().text()).isEqualTo("A panel called " + taken + " exists");
+        apply(new Intent.RenamePanel(P2, " " + taken + " "));
+        assertThat(state.panel(P2).orElseThrow().title()).as("its own title is not taken").isEqualTo(taken);
     }
 
     @Test

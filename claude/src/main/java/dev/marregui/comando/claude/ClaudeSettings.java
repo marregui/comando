@@ -1,5 +1,7 @@
 package dev.marregui.comando.claude;
 
+import dev.marregui.comando.core.model.HomeDir;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -9,7 +11,7 @@ import java.util.List;
  *
  * @param executable    the {@code claude} binary
  * @param runDir        where per-session MCP config files live while a process runs
- * @param projectsDir   Claude Code's transcripts, {@code ~/.claude/projects}
+ * @param projectsDir   Claude Code's stored conversations: {@code projects} in its folder ({@link HomeDir#claudeDir})
  * @param uiInstructions text passed with {@code --append-system-prompt}; empty for none
  */
 public record ClaudeSettings(String executable, Path runDir, Path projectsDir, String uiInstructions) {
@@ -27,6 +29,6 @@ public record ClaudeSettings(String executable, Path runDir, Path projectsDir, S
     }
 
     public static Path defaultProjectsDir() {
-        return Path.of(System.getProperty("user.home"), ".claude", "projects");
+        return HomeDir.claudeDir().resolve("projects");
     }
 }

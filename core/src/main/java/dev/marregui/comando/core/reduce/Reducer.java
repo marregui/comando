@@ -137,7 +137,9 @@ public final class Reducer {
             case Intent.StartSession i -> startSession(s, i.name());
             case Intent.StopSession i -> stopSession(s, i.name());
             case Intent.StartFresh i -> startFresh(s, i.name());
-            case Intent.Checkpoint i -> checkpoint(s, i.name());
+            case Intent.Checkpoint i -> s.session(i.name()).map(x -> sessionCommand(s, i.name(), x.spec().checkpoint())).orElse(Transition.of(s));
+            case Intent.SessionCommand i -> sessionCommand(s, i.name(), i.command());
+            case Intent.OrderSessions i -> orderSessions(s, i.names());
             case Intent.InterruptSession i -> interruptSession(s, i.name());
             case Intent.ClearTranscript i -> clearTranscript(s, i.name());
             case Intent.SetSessionModel i -> sessionSetting(s, i.name(), i.model(), true);
@@ -301,6 +303,11 @@ public final class Reducer {
     private Transition renamePanel(AppState s, Intent.RenamePanel i) {
         if (i.title().isBlank()) {
             return Transition.of(s);
+        }
+        String title = i.title().strip();
+        // a title names a panel to the tools and keys its plots: two panels never share one
+        if (Stream.concat(s.panels().stream(), s.closed().stream()).anyMatch(p -> !p.id().equals(i.panel()) && p.title().equals(title))) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "A panel called " + title + " exists", Notice.panel(i.panel().value())));
         }
         if (s.closedPanel(i.panel()).isPresent()) {
             AppState next = s.withClosed(s.closed().stream().map(p -> p.id().equals(i.panel()) ? p.withTitle(i.title().strip()) : p).toList());
@@ -927,18 +934,39 @@ public final class Reducer {
         return new Transition(next, List.of(new Effect.SaveSessions(sessionSpecs(next)), new Effect.StartClaude(fresh.spec())));
     }
 
-    /** The checkpoint command runs as a prompt from the session's panel, as if the user had typed it there. */
-    private Transition checkpoint(AppState s, String name) {
+    /**
+     * A command (the checkpoint, {@code /compact}, {@code /clear}) runs as a prompt from the session's panel, as if the
+     * user had typed it there.
+     */
+    private Transition sessionCommand(AppState s, String name, String command) {
         Optional<SessionState> found = s.session(name);
-        if (found.isEmpty() || found.get().spec().checkpoint().isEmpty() || found.get().status() == Status.CLOSING) {
+        if (found.isEmpty() || command.isBlank() || found.get().status() == Status.CLOSING) {
             return Transition.of(s);
         }
         List<PanelState> panels = s.panelsBoundToSession(name);
         if (panels.isEmpty()) {
             return Transition.of(notice(s, Notice.Level.ERROR, "Session " + name + " has no panel; open it to send "
-                    + found.get().spec().checkpoint(), Notice.session(name)));
+                    + command, Notice.session(name)));
         }
-        return runPrompt(s, panels.getFirst(), found.get().spec().checkpoint());
+        return runPrompt(s, panels.getFirst(), command);
+    }
+
+    /** The named sessions first, in the order given; the rest after them as they were. Saved, so a restart keeps it. */
+    private Transition orderSessions(AppState s, List<String> names) {
+        List<SessionState> ordered = new ArrayList<>(s.sessions().size());
+        for (String name : names) {
+            s.session(name).filter(x -> !ordered.contains(x)).ifPresent(ordered::add);
+        }
+        for (SessionState x : s.sessions()) {
+            if (!ordered.contains(x)) {
+                ordered.add(x);
+            }
+        }
+        if (ordered.equals(s.sessions())) {
+            return Transition.of(s);
+        }
+        AppState next = s.withSessions(ordered);
+        return new Transition(next, List.of(new Effect.SaveSessions(sessionSpecs(next))));
     }
 
     /**
@@ -1001,10 +1029,17 @@ public final class Reducer {
         }
         List<Effect> effects = new ArrayList<>();
         String id = i.info().claudeSessionId();
-        if (!id.isEmpty() && (!id.equals(x.spec().claudeSessionId()) || x.spec().startMode() != StartMode.RESUME)) {
+        String previous = x.spec().claudeSessionId();
+        // a resumed conversation that reports another id was left for a new one: /clear, under -p too
+        boolean cleared = !id.isEmpty() && !previous.isEmpty() && !id.equals(previous) && x.spec().startMode() == StartMode.RESUME;
+        if (!id.isEmpty() && (!id.equals(previous) || x.spec().startMode() != StartMode.RESUME)) {
             x = x.withSpec(x.spec().resumable(id));
         }
-        AppState next = s.withSession(x);
+        AppState next = s.withSession(cleared ? x.withReflection(Reflection.FRESH) : x);
+        if (cleared) {
+            next = notice(next, Notice.Level.INFO, "Session " + x.name() + ": new conversation; the previous one (" + previous
+                    + ") can be imported again", Notice.session(x.name()));
+        }
         if (!x.spec().equals(found.get().spec())) {
             effects.add(new Effect.SaveSessions(sessionSpecs(next)));
         }
