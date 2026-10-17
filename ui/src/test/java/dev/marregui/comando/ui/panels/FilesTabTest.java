@@ -52,7 +52,7 @@ class FilesTabTest {
         assertThat(FilesTab.iconName(file("run.sh"), none)).isEqualTo("terminal");
         assertThat(FilesTab.iconName(file("q.sql"), none)).isEqualTo("database");
         assertThat(FilesTab.iconName(file("shot.png"), none)).isEqualTo("image");
-        assertThat(FilesTab.iconName(file("cpu.jfr"), none)).isEqualTo("chart");
+        assertThat(FilesTab.iconName(file("cpu.jfr"), none)).as("a recording is a file like any other").isEqualTo("file");
         assertThat(FilesTab.iconName(file("fix.patch"), none)).isEqualTo("diff");
         assertThat(FilesTab.iconName(file("gradle.log"), none)).isEqualTo("text");
         assertThat(FilesTab.iconName(file("blob"), none)).isEqualTo("file");

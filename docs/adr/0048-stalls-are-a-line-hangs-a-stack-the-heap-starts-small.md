@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-16 | accepted | Miguel (the log less alarming and still useful to an agent; a smaller heap), Claude (how) |
+| 2026-10-16 | accepted; its JFR row removed by [record 54](0054-comando-knows-nothing-of-jfr.md) | Miguel (the log less alarming and still useful to an agent; a smaller heap), Claude (how) |
 
 ## 1. Context
 

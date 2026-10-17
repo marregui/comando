@@ -145,7 +145,7 @@ rules do not settle. Each request is a card in the Approvals tab; the MCP call w
 | Kind | Raised by | Answers |
 |---|---|---|
 | tool | Bash, Edit, Write, an MCP tool | Allow once (⏎ or A), For session (S), Always (L twice; Bash and WebFetch only), Deny (D or Esc) |
-| question | `AskUserQuestion` | Answer (⏎ or A, once every question has one), Skip (D or Esc); answers return in `updatedInput.answers` |
+| question | `AskUserQuestion` | Answer (⏎ or A, once every question has one), Skip (D or Esc); each question's Other answer is a plain text box in the editors' font, five lines of 120 characters (⏎ a new line; undo, redo, cut, copy, paste, select all; only Answer sends it), gone with the card; answers return in `updatedInput.answers` |
 | plan | `ExitPlanMode` | Approve plan (⏎ or A), "Approve, auto-accept edits" (`setMode` `acceptEdits` for the session), Keep planning (D or Esc) |
 | SQL write | `db_run_sql`, not read-only | Run (⏎ or A), Deny (D or Esc); the card names the connection and statement |
 

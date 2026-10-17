@@ -7,7 +7,6 @@ import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.ToolPort;
 import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
 import java.io.IOException;
@@ -21,7 +20,6 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -37,8 +35,8 @@ import java.util.function.Supplier;
 /**
  * Runs the development tools. Each run is a child process on a virtual thread that copies its output
  * into the run's console and sends {@link Intent.CommandFinished} at the end; nothing blocks the caller.
- * Reading a recording or a folder also happens on a virtual thread and ends in a view, and so do the Files tab's
- * copies and deletions, which end in a notice and a read of the open folders.
+ * Reading a folder also happens on a virtual thread and ends in a view, and so do the Files tab's copies and
+ * deletions, which end in a notice and a read of the open folders.
  */
 public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
@@ -102,30 +100,6 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         }));
     }
 
-    @Override
-    public void runJfrq(long runId, String recording, String args) {
-        active.add(runId);
-        Thread.ofVirtual().name("jfrq-" + runId).start(() -> guarded(runId, () -> {
-            Console out = consoles.of(runId);
-            ToolSettings tools = settings(out);
-            if (tools.jfrq().map(j -> !Files.isExecutable(j)).orElse(true)) {
-                out.append(tools.jfrq().map(j -> "jfrq not found at " + j).orElse("jfrq not found on the PATH")
-                        + "; set its path as \"jfrq\" in tools.json (Panel ▸ Tools ▸ Tool settings)\n");
-                ended(runId);
-                sink.dispatch(new Intent.CommandFinished(runId, 2, 0L, false, ViewSpec.TreeNode.NONE, Map.of()));
-                return;
-            }
-            List<String> words = new ArrayList<>(Args.split(args));
-            String jfrq = tools.jfrq().orElseThrow().toString();
-            List<String> cmd = new ArrayList<>(List.of(jfrq, words.isEmpty() ? "info" : words.removeFirst(), recording));
-            cmd.addAll(words);
-            long start = System.currentTimeMillis();
-            Path dir = Path.of(recording).toAbsolutePath().getParent();
-            int exit = run(runId, cmd, dir != null && Files.isDirectory(dir) ? dir : Path.of(System.getProperty("user.home")), out, tools);
-            finish(runId, exit, start, TestReports.NONE);
-        }));
-    }
-
     /** The settings for one run; what was wrong with the user's goes to the run's console first. */
     private ToolSettings settings(Console out) {
         ToolSettings tools = settings.get();
@@ -158,9 +132,6 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         out.append("$ " + String.join(" ", cmd) + "\n");
         ProcessBuilder pb = new ProcessBuilder(cmd).directory(dir.toFile()).redirectErrorStream(true);
         pb.environment().putIfAbsent("JAVA_HOME", tools.javaHome());
-        if (tools.jfrq().map(j -> cmd.getFirst().equals(j.toString())).orElse(false)) {
-            pb.environment().put("JAVA_HOME", tools.javaHome()); // jfrq's launcher needs JDK 25, which runs comando
-        }
         if (closed) {
             out.append("Not started: comando is closing\n");
             return Integer.MIN_VALUE;
@@ -325,28 +296,6 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             consoles.forget(runId);
         }
         // else the run's end releases the console (finish), so a view closed mid-run leaves nothing behind
-    }
-
-    @Override
-    public void openRecording(String path) {
-        Thread.ofVirtual().name("recording").start(() -> {
-            Path file = Path.of(path);
-            String name = file.getFileName().toString();
-            try {
-                Recordings.Summary s = Recordings.read(file);
-                sink.dispatch(new Intent.ShowView("", "jfr · " + name, s.events(), Placement.LOWER));
-                if (s.cpu() != null) {
-                    sink.dispatch(new Intent.ShowView("", "cpu · " + name, s.cpu(), Placement.LOWER));
-                }
-                if (s.heap() != null) {
-                    sink.dispatch(new Intent.ShowView("", "heap · " + name, s.heap(), Placement.LOWER));
-                }
-                sink.dispatch(new Intent.Notify(Notice.Level.INFO, name + ": " + s.events().rows().size() + " event types", false));
-            } catch (IOException | RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot read " + path + ": " + e.getMessage());
-                sink.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot read " + name + ": " + e.getMessage(), false));
-            }
-        });
     }
 
     /** A folder's tree as last sent, and the ticket of the read that produced it. */

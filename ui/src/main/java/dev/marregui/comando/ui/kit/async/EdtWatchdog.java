@@ -1,12 +1,5 @@
 package dev.marregui.comando.ui.kit.async;
 
-import jdk.jfr.Category;
-import jdk.jfr.Description;
-import jdk.jfr.Event;
-import jdk.jfr.Label;
-import jdk.jfr.Name;
-import jdk.jfr.StackTrace;
-import jdk.jfr.Timespan;
 
 import javax.swing.SwingUtilities;
 import java.util.Locale;
@@ -19,7 +12,7 @@ import java.util.function.Predicate;
 /**
  * Watches the event dispatch thread: every {@link #PERIOD_MILLIS} a probe is posted to it, and a probe still waiting
  * past {@link #THRESHOLD_MILLIS} is a stall. The EDT is looked at once then, to tell what kind of stall it is and
- * where; the stall is told once it ends, with its whole length, and a JFR event records it.
+ * where; the stall is told once it ends, with its whole length.
  * <p>
  * A stall that reaches its limit is a hang: it is reported with the EDT's stack, taken again at the limit, while the
  * EDT is still held. The limit is {@link #HANG_LIMIT_MILLIS}, and {@link #DRAWING_LIMIT_MILLIS} for a stall in the
@@ -66,26 +59,6 @@ public final class EdtWatchdog implements AutoCloseable {
         public boolean drawing() {
             return kind == Kind.DRAWING;
         }
-    }
-
-    @Name("comando.EdtBlocked")
-    @Label("EDT blocked")
-    @Category("comando")
-    @Description("The event dispatch thread did not run a posted probe within the threshold")
-    @StackTrace(false)
-    static final class EdtBlockedEvent extends Event {
-        @Label("Blocked")
-        @Timespan(Timespan.MILLISECONDS)
-        long blockedMillis;
-
-        @Label("Kind")
-        String kind;
-
-        @Label("Where")
-        String where;
-
-        @Label("EDT stack")
-        String stack;
     }
 
     private final Thread thread;
@@ -209,14 +182,6 @@ public final class EdtWatchdog implements AutoCloseable {
             if (stall != null) {
                 long total = (System.nanoTime() - blockedSince) / 1_000_000;
                 ended.accept(stall, total);
-                EdtBlockedEvent e = new EdtBlockedEvent();
-                if (e.shouldCommit()) {
-                    e.blockedMillis = total;
-                    e.kind = stall.kind().toString();
-                    e.where = stall.where();
-                    e.stack = stall.stack();
-                    e.commit();
-                }
             }
             sleep(PERIOD_MILLIS);
         }

@@ -1,6 +1,5 @@
 package dev.marregui.comando.core.loop;
 
-import dev.marregui.comando.core.diag.IntentEvent;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.port.IntentSink;
@@ -110,8 +109,6 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     }
 
     private void apply(Intent intent) {
-        IntentEvent event = new IntentEvent();
-        event.begin();
         for (IntentObserver o : observers) {
             o.observe(intent);
         }
@@ -139,13 +136,6 @@ public final class StateLoop implements IntentSink, AutoCloseable {
                     LOG.log(System.Logger.Level.ERROR, "listener failed", e);
                 }
             }
-        }
-        event.end();
-        if (event.shouldCommit()) {
-            event.type = intent.getClass().getSimpleName();
-            event.effects = t.effects().size();
-            event.changed = previous != t.state();
-            event.commit();
         }
     }
 

@@ -14,7 +14,6 @@
 | Docker | the PostgreSQL adapter tests | optional; those tests are skipped without it |
 | macOS | the keychain, the DMG | everything else runs on Linux (IntelliJ links too, with `idea` on the `PATH`) |
 | IntelliJ IDEA's `idea` launcher | "Open in IntelliJ" | optional; files open in the default application without it |
-| jfrq | "Run jfrq on a recording" | optional; its path in `tools.json` (Panel ▸ Tools ▸ Tool settings), `COMANDO_JFRQ`, or on the `PATH` |
 | folders of documents | the sidebar's Files tab | optional; Claude Code's folder (`CLAUDE_CONFIG_DIR`, else `~/.claude`) until you configure your own; a folder that is missing says so in its row |
 | `lockf` (macOS) or `flock` (Linux) | "Run Gradle tasks" through the kit's `gradle-serial` | the kit's wrapper takes a per-checkout lock with one of them |
 
@@ -29,7 +28,7 @@
 | `./gradlew test -PkeychainTest=true` | also runs the test that writes and deletes one item in the login keychain |
 | `./gradlew :app:uiTest` | replays the recorded intent log against the window; needs a display (`xvfb-run` on Linux) |
 | `./gradlew :ui:transcriptGate` | measures transcript frame times; fails when p99 exceeds 16 ms |
-| `./gradlew :app:snapshot -Pout=<dir>` | drives comando on a scratch data root and paints the window to PNG files; `-Plive=true` adds a real Claude session (haiku) whose approvals are allowed, `-Phistory=<conversation id>` loads a stored conversation, `-Ptools=true` adds a Gradle run and a JFR recording with jfrq on it |
+| `./gradlew :app:snapshot -Pout=<dir>` | drives comando on a scratch data root and paints the window to PNG files; `-Plive=true` adds a real Claude session (haiku) whose approvals are allowed, `-Phistory=<conversation id>` loads a stored conversation, `-Ptools=true` adds a Gradle run in a build of its own |
 | `./gradlew :app:hero -Pout=<dir>` | paints the README's picture to `hero.png`: starts the embedded QuestDB from the menu, connects, and runs a real Claude turn (haiku) that queries and plots through comando's tools; approvals are allowed; the turn is live, so when it shows a failed tool call, run the task again |
 
 Tests run headless, with the data root in each module's `build/test-home` and window preferences under a separate node, so they never read or change the user's data.
@@ -41,7 +40,6 @@ Tests run headless, with the data root in each module's `build/test-home` and wi
 | `comando.home` | system property | — | the data root; wins over `COMANDO_HOME` |
 | `COMANDO_HOME` | environment | `~/.comando` | the data root |
 | `COMANDO_CLAUDE` | environment | search above | the Claude Code executable |
-| `COMANDO_JFRQ` | environment | `jfrq` on the `PATH` | the jfrq launcher, when `tools.json` sets none |
 | `comando.offerKit` | system property | on for the default data root | offer the Claude Code kit at start |
 | `COMANDO_KIT_LIVE` | environment | unset | `true` runs `KitLiveTest`, which installs, disables and re-enables the kit with the real Claude Code in a throwaway `CLAUDE_CONFIG_DIR` |
 | `comando.keychain` | system property | `true` for `~/.comando`, else `false` | keep connection passwords in the login keychain |

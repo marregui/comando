@@ -676,8 +676,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // file
         cmd("panel.new", "New panel", key(KeyEvent.VK_T, CMD), () -> workspace.newPanel());
         cmd("panel.openSpec", "Open file…", key(KeyEvent.VK_O, CMD), this::openSpec);
-        cmd("tools.recording", "Open JFR recording…", null, () -> chooseRecording().ifPresent(f ->
-                deps.intents().dispatch(new Intent.OpenRecording(f))));
         cmd("panel.reopen", "Reopen closed panel", key(KeyEvent.VK_T, CMD | SHIFT), this::reopenPanel, () -> workspace.hasClosed());
         // ⌘S saves the focused panel wherever the keyboard is; exporting a view is ⌘⇧S
         cmd("panel.save", "Save", key(KeyEvent.VK_S, CMD), this::savePanel);
@@ -785,7 +783,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("run.plotStop", "Stop refreshing plots", null, livePlots::stopAll, () -> livePlots.size() > 0);
         // panel: tools that run in its project
         cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, CMD | ALT), this::runGradle, () -> focusedSession().isPresent());
-        cmd("tools.jfrq", "Run jfrq on a recording…", null, this::runJfrq);
         cmd("tools.settings", "Tool settings", null, this::openToolSettings);
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         // view
@@ -1242,26 +1239,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
     }
 
-    private Optional<String> chooseRecording() {
-        Path start = Path.of(prefs.get("tools.recording", System.getProperty("user.home")));
-        Optional<Path> file = FileChoosers.open(frame, "Open JFR recording", start, "jfr");
-        file.ifPresent(f -> prefs.put("tools.recording", f.toAbsolutePath().toString()));
-        return file.map(f -> f.toAbsolutePath().toString());
-    }
-
-    private void runJfrq() {
-        Optional<String> file = chooseRecording();
-        if (file.isEmpty()) {
-            return;
-        }
-        String args = (String) JOptionPane.showInputDialog(frame, "jfrq command and options (info, health, alloc, locks, stalls):",
-                "Run jfrq", JOptionPane.PLAIN_MESSAGE, null, null, prefs.get("tools.jfrq", "info"));
-        if (args != null && !args.isBlank()) {
-            prefs.put("tools.jfrq", args.strip());
-            deps.intents().dispatch(new Intent.RunJfrq(file.get(), args.strip()));
-        }
-    }
-
     /** Types the editor's selection, or the line under the caret, into the panel's shell and runs it. */
     private void runInTerminal() {
         EditorPanel p = workspace.focused();
@@ -1588,7 +1565,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (jobs > 0) {
             work.add(jobs + (jobs == 1 ? " shell job" : " shell jobs"));
         }
-        // Gradle and jfrq runs show as console views until they finish
+        // Gradle runs show as console views until they finish
         s.views().stream().filter(v -> v.spec() instanceof ViewSpec.Console c && c.state() == ViewSpec.RunState.RUNNING)
                 .forEach(v -> work.add(v.title()));
         return work;

@@ -111,17 +111,11 @@ public sealed interface Effect {
     record RunGradle(long runId, String workDir, String tasks) implements Effect {
     }
 
-    record RunJfrq(long runId, String recording, String args) implements Effect {
-    }
-
     record CancelCommand(long runId) implements Effect {
     }
 
     /** The run's view was closed; its output can be freed. */
     record ForgetCommand(long runId) implements Effect {
-    }
-
-    record OpenRecording(String path) implements Effect {
     }
 
     /** Reads these folders once, now. */

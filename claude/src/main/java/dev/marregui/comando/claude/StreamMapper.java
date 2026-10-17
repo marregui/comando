@@ -405,15 +405,6 @@ final class StreamMapper {
         }
         sink.dispatch(new Intent.SessionTurnEnded(session, e.path("queued_turn_count").asInt(0), e.path("total_cost_usd").asDouble(),
                 tokens, window, error, message));
-        ClaudeTurnEvent turn = new ClaudeTurnEvent();
-        if (turn.shouldCommit()) {
-            turn.session = session;
-            turn.turnMillis = e.path("duration_ms").asLong();
-            turn.costUsd = e.path("total_cost_usd").asDouble();
-            turn.contextTokens = tokens;
-            turn.error = error;
-            turn.commit();
-        }
     }
 
     private static String errorText(JsonNode e) {

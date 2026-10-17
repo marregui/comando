@@ -213,15 +213,9 @@ the nearest directory at or above its working directory with an executable `grad
   came from.
 - A run of 10 s or more ends with a desktop notification while the window is not active.
 
-### 4.3 JFR and jfrq
-
-Open JFR recording… reads the file in one pass: event counts by type, a CPU plot (`jdk.CPULoad`) and a heap-after-GC
-plot (`jdk.GCHeapSummary`) when the events are there. Run jfrq on a recording… runs `jfrq <command> <recording>
-<options>` (default `info`) in the recording's directory. The launcher is `tools.json`'s `jfrq`, else `COMANDO_JFRQ`,
-else `jfrq` on the `PATH`.
-
-`tools.json` in the data root holds both paths; Panel ▸ Tools ▸ Tool settings opens it (written with empty keys when
-missing). Each run reads it; what is wrong with it is the run's first console line, and the defaults apply.
+`tools.json` in the data root holds the Gradle wrapper's path (`gradleWrapper`); Panel ▸ Tools ▸ Tool settings opens it
+(written with an empty key when missing). Each run reads it; what is wrong with it is the run's first console line, and
+the default applies.
 
 ## 5. The Files tab
 
@@ -262,7 +256,7 @@ The folders the user chose, one top-level row each, as a navigator of their fold
 | a folder row | its icon setting: folder; a pencil, chip, book, bolt or puzzle piece on it |
 | a folder; `work` | folder; folder with a gear |
 | `*plan*.md`; `READ-*`; an index file name; Markdown | plan; book; index; Markdown |
-| code; data (`.json`, `.yaml`, …); shell; `.sql`; `.csv`; images; `.jfr`; diffs; `.txt`, `.log` | code; braces; terminal; database; table; image; chart; diff; text |
+| code; data (`.json`, `.yaml`, …); shell; `.sql`; `.csv`; images; diffs; `.txt`, `.log` | code; braces; terminal; database; table; image; diff; text |
 
 ## 6. Persistence
 
@@ -274,7 +268,7 @@ The folders the user chose, one top-level row each, as a navigator of their fold
 |---|---|
 | `connections.json`, `sessions.json`, `folders.json`, `panels.json` | the specs and panel metadata (bindings, file name, closed) |
 | `panels/<title>.md` | each panel's text ([record 26](adr/0026-a-file-per-panel.md)) |
-| `tools.json` | the Gradle wrapper and jfrq paths |
+| `tools.json` | the Gradle wrapper's path |
 | `comando.lock` | held while comando runs; a second start on the same root refuses |
 | `run/` | MCP configurations of running sessions (`0600`) |
 | `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision |

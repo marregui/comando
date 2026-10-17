@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-14 | accepted; replaces the reading rules of [record 28](0028-the-sidebar-has-three-tabs.md) and the "specs open only from `panels/`" consequence of [record 26](0026-a-file-per-panel.md) | Miguel (layout, order, icons, files open in panels, the preview, sync at all times), Claude (how) |
+| 2026-10-14 | accepted; replaces the reading rules of [record 28](0028-the-sidebar-has-three-tabs.md) and the "specs open only from `panels/`" consequence of [record 26](0026-a-file-per-panel.md); its JFR icon removed by [record 54](0054-comando-knows-nothing-of-jfr.md) | Miguel (layout, order, icons, files open in panels, the preview, sync at all times), Claude (how) |
 
 ## 1. Context
 

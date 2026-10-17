@@ -701,7 +701,6 @@ final class FilesTab {
             case "sql" -> "database";
             case "csv", "tsv", "parquet" -> "table";
             case "png", "jpg", "jpeg", "gif", "svg", "webp" -> "image";
-            case "jfr" -> "chart";
             case "patch", "diff" -> "diff";
             case "txt", "log", "out" -> "text";
             default -> "file";

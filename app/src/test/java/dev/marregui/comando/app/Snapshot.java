@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
 import java.util.function.Predicate;
 
@@ -370,26 +371,18 @@ public final class Snapshot {
         return null;
     }
 
-    /** A Gradle run, a JFR recording read into a table and plots, and jfrq on it. */
+    /** A Gradle run in its console, in a build of its own whose wrapper only prints, so the shot needs no project. */
     private static void tools(StateLoop loop, Path out) throws Exception {
-        String jfr = System.getProperty("user.home") + "/workspace/jfr";
-        loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("jfr", jfr)));
-        loop.dispatch(new Intent.BindSession(loop.state().focused(), "jfr"));
+        Path build = Files.createTempDirectory("comando-snapshot-build");
+        Path gradlew = Files.writeString(build.resolve("gradlew"), "#!/bin/sh\necho \"> Task :help\"\necho\necho \"BUILD SUCCESSFUL in 1s\"\n");
+        Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
+        loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("build", build.toString())));
+        loop.dispatch(new Intent.BindSession(loop.state().focused(), "build"));
         loop.dispatch(new Intent.RunGradle(null, "help --quiet"));
         await(loop, st -> st.views().stream().anyMatch(v -> v.spec() instanceof ViewSpec.Console c
                 && c.command().startsWith("gradle") && c.state() != ViewSpec.RunState.RUNNING), 120_000);
         Thread.sleep(800);
         shoot(out.resolve("08-gradle.png"));
-        String recording = System.getProperty("user.home") + "/jfr-round2/idle0.jfr";
-        loop.dispatch(new Intent.OpenRecording(recording));
-        await(loop, st -> st.views().stream().anyMatch(v -> v.title().startsWith("cpu · ")), 60_000);
-        Thread.sleep(800);
-        shoot(out.resolve("09-recording-cpu.png"));
-        loop.dispatch(new Intent.RunJfrq(recording, "health --top 5"));
-        await(loop, st -> st.views().stream().anyMatch(v -> v.spec() instanceof ViewSpec.Console c
-                && c.command().startsWith("jfrq") && c.state() != ViewSpec.RunState.RUNNING), 120_000);
-        Thread.sleep(800);
-        shoot(out.resolve("10-jfrq.png"));
     }
 
     /** A stored conversation shown in the transcript, scrolled to its end, then a find. */

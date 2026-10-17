@@ -25,8 +25,7 @@ final class ToolsFile {
     static final String NAME = "tools.json";
     static final String TEMPLATE = """
             {
-              "gradleWrapper": "",
-              "jfrq": ""
+              "gradleWrapper": ""
             }
             """;
 
@@ -49,7 +48,6 @@ final class ToolsFile {
     /** The settings now: the file's values over the defaults. */
     ToolSettings read() {
         String wrapper = "";
-        String jfrq = "";
         List<String> problems = new ArrayList<>();
         if (Files.isRegularFile(file)) {
             try {
@@ -58,15 +56,13 @@ final class ToolsFile {
                     problems.add(NAME + ": not a JSON object; using the defaults");
                 } else if (node != null && node.isObject()) {
                     wrapper = text(node, "gradleWrapper", problems);
-                    jfrq = text(node, "jfrq", problems);
                 }
             } catch (IOException e) {
                 String why = e instanceof JsonProcessingException j ? j.getOriginalMessage() : e.getMessage();
                 problems.add(NAME + ": " + String.valueOf(why).lines().findFirst().orElse("unreadable") + "; using the defaults");
             }
         }
-        return ToolSettings.resolve(wrapper, jfrq, kitSerial, System.getenv("COMANDO_JFRQ"), System.getenv("PATH"),
-                String.join("\n", problems));
+        return ToolSettings.resolve(wrapper, kitSerial, String.join("\n", problems));
     }
 
     /** The file, written from {@link #TEMPLATE} first when missing; never over the user's. */

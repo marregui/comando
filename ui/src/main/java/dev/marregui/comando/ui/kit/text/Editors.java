@@ -1,11 +1,21 @@
 package dev.marregui.comando.ui.kit.text;
 
+import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
+import javax.swing.AbstractAction;
+import javax.swing.Action;
+import javax.swing.JTextArea;
+import javax.swing.KeyStroke;
+import javax.swing.text.DefaultEditorKit;
+import javax.swing.undo.UndoManager;
 import java.awt.Color;
+import java.awt.event.ActionEvent;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -97,6 +107,48 @@ public final class Editors {
         a.setTabsEmulated(true);
         a.setTabSize(4);
         return a;
+    }
+
+    /**
+     * A plain text box in the editors' font, {@code rows} by {@code columns} characters, wrapped at words: cut, copy,
+     * paste and select all on the menu key, and an undo (menu key Z) and redo (with Shift) of its own, which a plain
+     * text area lacks. No syntax, no current line: text to read back, not to run.
+     */
+    public static JTextArea plain(int rows, int columns) {
+        JTextArea a = new JTextArea(rows, columns);
+        a.setFont(Theme.mono());
+        a.setLineWrap(true);
+        a.setWrapStyleWord(true);
+        UndoManager undo = new UndoManager();
+        a.getDocument().addUndoableEditListener(undo);
+        int menu = Platform.menuShortcutMask();
+        // on the menu key whatever the look's own map binds, as the Edit menu forwards them
+        a.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_X, menu), DefaultEditorKit.cutAction);
+        a.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_C, menu), DefaultEditorKit.copyAction);
+        a.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_V, menu), DefaultEditorKit.pasteAction);
+        a.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_A, menu), DefaultEditorKit.selectAllAction);
+        a.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_Z, menu), "plain-undo");
+        a.getActionMap().put("plain-undo", action(() -> {
+            if (undo.canUndo()) {
+                undo.undo();
+            }
+        }));
+        a.getInputMap().put(KeyStroke.getKeyStroke(KeyEvent.VK_Z, menu | InputEvent.SHIFT_DOWN_MASK), "plain-redo");
+        a.getActionMap().put("plain-redo", action(() -> {
+            if (undo.canRedo()) {
+                undo.redo();
+            }
+        }));
+        return a;
+    }
+
+    private static Action action(Runnable r) {
+        return new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                r.run();
+            }
+        };
     }
 
     /** A read-only viewer for {@code syntax}, a file extension or a style constant. */

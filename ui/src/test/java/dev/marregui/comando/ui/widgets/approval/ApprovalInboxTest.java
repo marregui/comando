@@ -7,6 +7,7 @@ import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.PermissionRules;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
 import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -16,11 +17,15 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.text.JTextComponent;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.FontMetrics;
+import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -383,15 +388,50 @@ class ApprovalInboxTest {
     }
 
     @Test
-    void enterInTheOtherAnswerFieldAnswersWithIt() {
+    void theOtherAnswerTakesParagraphsAndOnlyTheAnswerButtonSendsIt() throws Exception {
         inbox.render(List.of(question(1)));
         Component card = cards().getFirst();
-        JTextField free = (JTextField) find(card, c -> c instanceof JTextField f && !"note".equals(f.getName()));
-        type(free, 'a');
-        press(free, KeyEvent.VK_A, 0);
-        assertThat(sent).isEmpty();
-        press(free, KeyEvent.VK_ENTER, 0);
-        assertThat(decision()).isEqualTo(new ApprovalDecision.Answer(Map.of("Which approach?", "a")));
+        JTextArea free = (JTextArea) named(card, "other");
+        // on the event thread, where the caret follows what is typed
+        SwingUtilities.invokeAndWait(() -> {
+            type(free, 'a');
+            press(free, KeyEvent.VK_A, 0);
+            press(free, KeyEvent.VK_ENTER, 0);
+            type(free, 'b');
+            press(free, KeyEvent.VK_ENTER, Platform.menuShortcutMask());
+        });
+        assertThat(sent).as("letters type, Enter starts a line, no key sends").isEmpty();
+        assertThat(free.getText()).isEqualTo("a\nb");
+        ((AbstractButton) find(card, c -> c instanceof AbstractButton b && b.getText().startsWith("Answer"))).doClick();
+        assertThat(decision()).isEqualTo(new ApprovalDecision.Answer(Map.of("Which approach?", "a\nb")));
+    }
+
+    @Test
+    void theOtherAnswerIs120CharactersWideInTheEditorsFontWithUndoRedoAndSelectAll() throws Exception {
+        inbox.render(List.of(question(1)));
+        JTextArea free = (JTextArea) named(cards().getFirst(), "other");
+        FontMetrics fm = free.getFontMetrics(free.getFont());
+        JScrollPane box = (JScrollPane) SwingUtilities.getAncestorOfClass(JScrollPane.class, free);
+        assertThat(box.getViewport().getPreferredSize().width).as("120 characters").isEqualTo(120 * fm.charWidth('m'));
+        assertThat(box.getViewport().getPreferredSize().height).as("five lines").isGreaterThanOrEqualTo(5 * fm.getHeight());
+        assertThat(box.getMaximumSize()).as("never wider than that").isEqualTo(box.getPreferredSize());
+        assertThat(free.getFont()).as("the editors' font").isEqualTo(Theme.mono());
+
+        int menu = Platform.menuShortcutMask();
+        for (KeyStroke k : List.of(KeyStroke.getKeyStroke(KeyEvent.VK_Z, menu), KeyStroke.getKeyStroke(KeyEvent.VK_Z, menu | InputEvent.SHIFT_DOWN_MASK),
+                KeyStroke.getKeyStroke(KeyEvent.VK_C, menu), KeyStroke.getKeyStroke(KeyEvent.VK_V, menu),
+                KeyStroke.getKeyStroke(KeyEvent.VK_X, menu), KeyStroke.getKeyStroke(KeyEvent.VK_A, menu))) {
+            Object action = free.getInputMap().get(k);
+            assertThat(action).as(k.toString()).isNotNull();
+            assertThat(free.getActionMap().get(action)).as(k + " runs an action").isNotNull();
+        }
+        SwingUtilities.invokeAndWait(() -> {
+            type(free, 'x');
+            press(free, KeyEvent.VK_Z, menu);
+        });
+        assertThat(free.getText()).as("undone").isEmpty();
+        SwingUtilities.invokeAndWait(() -> press(free, KeyEvent.VK_Z, menu | InputEvent.SHIFT_DOWN_MASK));
+        assertThat(free.getText()).as("redone").isEqualTo("x");
     }
 
     @Test

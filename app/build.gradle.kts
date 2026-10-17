@@ -133,8 +133,10 @@ tasks.register<Exec>("dmg") {
         "--main-jar", mainJar,
         "--main-class", "dev.marregui.comando.app.Main",
         "--icon", layout.projectDirectory.file("src/main/icon/comando.icns").asFile.absolutePath,
+        // jdk.jfr, jdk.management.jfr, jdk.management.agent: no comando code uses them; they let the packaged app be
+        // recorded, and watched over JMX, like any JVM
         "--add-modules", "java.base,java.desktop,java.logging,java.naming,java.prefs,java.security.jgss,java.sql,jdk.httpserver,jdk.jfr," +
-                "jdk.management,jdk.unsupported,jdk.localedata,jdk.charsets,jdk.zipfs",
+                "jdk.management,jdk.management.jfr,jdk.management.agent,jdk.unsupported,jdk.localedata,jdk.charsets,jdk.zipfs",
         "--java-options", "--enable-native-access=ALL-UNNAMED",
         "--java-options", "-Xms64m",
         "--java-options", "-Xmx4g",

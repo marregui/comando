@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-16 | accepted; replaces the last paragraph of [record 46](0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md) ("comando reads nothing from such a setup") | Miguel (comando carries the kit and installs it; through Claude Code's own plugin mechanism, not by copying files into `~/.claude`; a record that replaces 46's rule; one memory for every project is part of the comando flow, warned about and agreed to, or no kit; each `/reflect` leaves recall sharper within the index's budget; agents primed from memory and the KB), Claude (how: what the kit holds, the offer at start, the copy kept equal to the build, `tools.json`) |
+| 2026-10-16 | accepted; replaces the last paragraph of [record 46](0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md) ("comando reads nothing from such a setup"); its `jfrq` key removed by [record 54](0054-comando-knows-nothing-of-jfr.md) | Miguel (comando carries the kit and installs it; through Claude Code's own plugin mechanism, not by copying files into `~/.claude`; a record that replaces 46's rule; one memory for every project is part of the comando flow, warned about and agreed to, or no kit; each `/reflect` leaves recall sharper within the index's budget; agents primed from memory and the KB), Claude (how: what the kit holds, the offer at start, the copy kept equal to the build, `tools.json`) |
 
 ## 1. Context
 

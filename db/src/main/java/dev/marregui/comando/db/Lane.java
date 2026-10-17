@@ -5,7 +5,6 @@ import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.result.ResultRegistry;
-import dev.marregui.comando.core.view.Clip;
 
 import java.sql.Connection;
 import java.sql.DriverManager;
@@ -319,35 +318,17 @@ final class Lane implements AutoCloseable {
     }
 
     private void run(long requestId, ConnectionSpec spec, String sql) {
-        SqlRunEvent event = new SqlRunEvent();
-        event.begin();
-        String outcome = "failed";
-        try {
-            outcome = runMeasured(requestId, spec, sql);
-        } finally {
-            event.end();
-            if (event.shouldCommit()) {
-                event.connection = name;
-                event.requestId = requestId;
-                event.sql = Clip.keepStart(sql, 200);
-                event.outcome = outcome;
-                event.commit();
-            }
-        }
-    }
-
-    private String runMeasured(long requestId, ConnectionSpec spec, String sql) {
         long start = System.nanoTime();
         if (cancelled.remove(requestId)) {
             sink.dispatch(new Intent.SqlCancelled(requestId));
-            return "cancelled";
+            return;
         }
         try {
             ensureOpen(spec);
         } catch (SQLException e) {
             sink.dispatch(new Intent.ConnectionFailed(name, message(e)));
             sink.dispatch(new Intent.SqlFailed(requestId, message(e), millisSince(start)));
-            return "failed";
+            return;
         }
         Statement st = null;
         try {
@@ -357,7 +338,7 @@ final class Lane implements AutoCloseable {
             running = new Running(requestId, st, connection);
             if (cancelled.contains(requestId)) {
                 sink.dispatch(new Intent.SqlCancelled(requestId));
-                return "cancelled";
+                return;
             }
             sink.dispatch(new Intent.SqlStarted(requestId));
             boolean hasRows = st.execute(sql);
@@ -367,13 +348,11 @@ final class Lane implements AutoCloseable {
                 long total = millisSince(start);
                 sink.dispatch(new Intent.SqlCompleted(requestId, 0, updates, false, execMillis, total - execMillis, total));
                 reportMoreResults(requestId, st);
-                return "done";
+                return;
             }
-            String outcome = fetch(requestId, st.getResultSet(), start, execMillis);
-            if (outcome.equals("done")) {
+            if (fetch(requestId, st.getResultSet(), start, execMillis)) {
                 reportMoreResults(requestId, st);
             }
-            return outcome;
         } catch (SQLException e) {
             boolean wasCancelled = cancelled.contains(requestId);
             if (wasCancelled) {
@@ -385,7 +364,6 @@ final class Lane implements AutoCloseable {
                 closeConnection();
                 sink.dispatch(new Intent.ConnectionLost(name, message(e)));
             }
-            return wasCancelled ? "cancelled" : "failed";
         } finally {
             running = null;
             cancelled.remove(requestId);
@@ -418,8 +396,8 @@ final class Lane implements AutoCloseable {
         }
     }
 
-    /** Fetches every row into the result; returns "done" or "cancelled". */
-    private String fetch(long requestId, ResultSet rs, long start, long execMillis) throws SQLException {
+    /** Fetches every row into the result; false when the run was cancelled on the way. */
+    private boolean fetch(long requestId, ResultSet rs, long start, long execMillis) throws SQLException {
         try (rs) {
             ColumnarResult result = ColumnarResult.of(requestId, rs.getMetaData());
             results.put(result);
@@ -437,7 +415,7 @@ final class Lane implements AutoCloseable {
                 if (rows % batch == 0) {
                     if (cancelled.contains(requestId)) {
                         sink.dispatch(new Intent.SqlCancelled(requestId));
-                        return "cancelled";
+                        return false;
                     }
                     batch = Math.min(batch * 2, 50_000);
                     sink.dispatch(new Intent.SqlRows(requestId, rows, execMillis, millisSince(fetchStart), millisSince(start)));
@@ -445,7 +423,7 @@ final class Lane implements AutoCloseable {
             }
             long total = millisSince(start);
             sink.dispatch(new Intent.SqlCompleted(requestId, rows, -1L, truncated, execMillis, millisSince(fetchStart), total));
-            return "done";
+            return true;
         }
     }
 

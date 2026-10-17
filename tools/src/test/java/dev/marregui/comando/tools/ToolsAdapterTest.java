@@ -4,10 +4,8 @@ import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingSink;
-import jdk.jfr.Recording;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -33,8 +31,8 @@ class ToolsAdapterTest {
     private final RecordingSink sink = new RecordingSink();
     private final ConsoleRegistry consoles = new ConsoleRegistry();
 
-    private ToolsAdapter adapter(Path jfrq) {
-        return new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), Optional.of(jfrq), System.getProperty("java.home"), ""));
+    private ToolsAdapter adapter() {
+        return new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), System.getProperty("java.home"), ""));
     }
 
     private static FolderRoot folder(String name, Path path, String... excludes) {
@@ -71,7 +69,7 @@ class ToolsAdapterTest {
     @Test
     void aRunAskedForAfterCloseStartsNoProcess(@TempDir Path dir) throws Exception {
         fakeBuild(dir);
-        ToolsAdapter tools = adapter(dir.resolve("none"));
+        ToolsAdapter tools = adapter();
         tools.close();
         tools.runGradle(8L, dir.toString(), "test");
         Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
@@ -82,7 +80,7 @@ class ToolsAdapterTest {
     @Test
     void gradleRunsInTheBuildRootAndReportsFailedTests(@TempDir Path dir) throws Exception {
         fakeBuild(dir);
-        adapter(dir.resolve("none")).runGradle(7L, dir.resolve("db/sub").toString(), ":db:test --tests 'Lane*'");
+        adapter().runGradle(7L, dir.resolve("db/sub").toString(), ":db:test --tests 'Lane*'");
         Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
         assertThat(end.runId()).isEqualTo(7L);
         assertThat(end.exitCode()).isEqualTo(1);
@@ -104,7 +102,7 @@ class ToolsAdapterTest {
         Path locked = Files.createDirectories(dir.resolve("db/build/test-results/locked"));
         Files.setPosixFilePermissions(locked, PosixFilePermissions.fromString("---------"));
         try {
-            adapter(dir.resolve("none")).runGradle(4L, dir.toString(), "test");
+            adapter().runGradle(4L, dir.toString(), "test");
             Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
             assertThat(end.runId()).isEqualTo(4L);
             assertThat(end.tests().label()).as("the readable reports still count").isEqualTo("1 of 2 tests failed");
@@ -124,7 +122,7 @@ class ToolsAdapterTest {
 
     @Test
     void noBuildAboveTheDirectoryIsReported(@TempDir Path dir) throws Exception {
-        adapter(dir.resolve("none")).runGradle(3L, dir.toString(), "build");
+        adapter().runGradle(3L, dir.toString(), "build");
         assertThat(sink.await(Intent.CommandFinished.class, WAIT).exitCode()).isEqualTo(2);
         assertThat(consoles.of(3L).text(0)).contains("No gradlew");
     }
@@ -134,7 +132,7 @@ class ToolsAdapterTest {
         Path gradlew = dir.resolve("gradlew");
         Files.writeString(gradlew, "#!/bin/sh\necho started\nsleep 30 &\nwait\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
-        ToolsAdapter tools = adapter(dir.resolve("none"));
+        ToolsAdapter tools = adapter();
         tools.runGradle(5L, dir.toString(), "build");
         long deadline = System.currentTimeMillis() + 10_000;
         while (!consoles.of(5L).text(0).contains("started") && System.currentTimeMillis() < deadline) {
@@ -152,7 +150,7 @@ class ToolsAdapterTest {
         Path gradlew = dir.resolve("gradlew");
         Files.writeString(gradlew, "#!/bin/sh\necho started\nsleep 1\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
-        ToolsAdapter tools = adapter(dir.resolve("none"));
+        ToolsAdapter tools = adapter();
         tools.runGradle(3L, dir.toString(), "build");
         long deadline = System.currentTimeMillis() + 10_000;
         while (!consoles.of(3L).text(0).contains("started") && System.currentTimeMillis() < deadline) {
@@ -169,7 +167,7 @@ class ToolsAdapterTest {
         Path gradlew = dir.resolve("gradlew");
         Files.writeString(gradlew, "#!/bin/sh\ntrap '' TERM\necho started\nsleep 30\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
-        ToolsAdapter tools = adapter(dir.resolve("none"));
+        ToolsAdapter tools = adapter();
         tools.runGradle(6L, dir.toString(), "build");
         long deadline = System.currentTimeMillis() + 10_000;
         while (!consoles.of(6L).text(0).contains("started") && System.currentTimeMillis() < deadline) {
@@ -190,21 +188,11 @@ class ToolsAdapterTest {
         Files.writeString(gradlew, "#!/bin/sh\necho done\nsleep 8 &\nexit 0\n");
         Files.setPosixFilePermissions(gradlew, PosixFilePermissions.fromString("rwxr-xr-x"));
         long t0 = System.nanoTime();
-        adapter(dir.resolve("none")).runGradle(8L, dir.toString(), "build");
+        adapter().runGradle(8L, dir.toString(), "build");
         Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
         assertThat(end.exitCode()).isZero();
         assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(6));
         assertThat(consoles.of(8L).text(0)).contains("done", "still holds the output open", "Exit code 0");
-    }
-
-    @Test
-    void jfrqGetsTheCommandTheRecordingAndTheOptions(@TempDir Path dir) throws Exception {
-        Path jfrq = dir.resolve("jfrq");
-        Files.writeString(jfrq, "#!/bin/sh\necho \"jfrq $* java=$JAVA_HOME\"\n");
-        Files.setPosixFilePermissions(jfrq, PosixFilePermissions.fromString("rwxr-xr-x"));
-        adapter(jfrq).runJfrq(9L, "/r/app.jfr", "health --top 5");
-        assertThat(sink.await(Intent.CommandFinished.class, WAIT).exitCode()).isZero();
-        assertThat(consoles.of(9L).text(0)).contains("jfrq health /r/app.jfr --top 5 java=" + System.getProperty("java.home"));
     }
 
     @Test
@@ -214,8 +202,8 @@ class ToolsAdapterTest {
         Files.writeString(serial, "#!/bin/sh\necho \"serial $*\"\n");
         Files.setPosixFilePermissions(serial, PosixFilePermissions.fromString("rwxr-xr-x"));
         List<ToolSettings> settings = new ArrayList<>(List.of(
-                new ToolSettings(Optional.empty(), Optional.empty(), System.getProperty("java.home"), "tools.json: not JSON; using the defaults"),
-                new ToolSettings(Optional.of(serial), Optional.empty(), System.getProperty("java.home"), "")));
+                new ToolSettings(Optional.empty(), System.getProperty("java.home"), "tools.json: not JSON; using the defaults"),
+                new ToolSettings(Optional.of(serial), System.getProperty("java.home"), "")));
         ToolsAdapter tools = new ToolsAdapter(sink, consoles, settings::removeFirst);
 
         tools.runGradle(1L, dir.toString(), "build");
@@ -229,49 +217,11 @@ class ToolsAdapterTest {
     }
 
     @Test
-    void jfrqNotFoundSaysWhereToSetIt(@TempDir Path dir) throws Exception {
-        new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), Optional.empty(), "", "")).runJfrq(4L, "/r/a.jfr", "");
-        assertThat(sink.await(Intent.CommandFinished.class, WAIT).exitCode()).isEqualTo(2);
-        assertThat(consoles.of(4L).text(0)).isEqualTo("jfrq not found on the PATH; set its path as \"jfrq\" in tools.json (Panel ▸ Tools ▸ Tool settings)\n");
-
-        adapter(dir.resolve("missing")).runJfrq(5L, "/r/a.jfr", "");
-        sink.await(Intent.CommandFinished.class, e -> e.runId() == 5L, WAIT);
-        assertThat(consoles.of(5L).text(0)).startsWith("jfrq not found at " + dir.resolve("missing") + "; set its path");
-    }
-
-    @Test
-    void recordingBecomesATableAndPlots(@TempDir Path dir) throws Exception {
-        Path file = dir.resolve("r.jfr");
-        try (Recording r = new Recording()) {
-            r.enable("jdk.CPULoad").withPeriod(Duration.ofMillis(100));
-            r.enable("jdk.GCHeapSummary");
-            r.start();
-            for (int i = 0; i < 5; i++) {
-                byte[][] garbage = new byte[2000][];
-                for (int j = 0; j < garbage.length; j++) {
-                    garbage[j] = new byte[1024];
-                }
-                System.gc();
-                Thread.sleep(150);
-            }
-            r.stop();
-            r.dump(file);
-        }
-        adapter(dir.resolve("none")).openRecording(file.toString());
-        Intent.ShowView table = sink.await(Intent.ShowView.class, v -> v.title().startsWith("jfr · "), WAIT);
-        assertThat(((ViewSpec.Table) table.spec()).rows()).extracting(List::getFirst).contains("jdk.CPULoad", "jdk.GCHeapSummary");
-        Intent.ShowView cpu = sink.await(Intent.ShowView.class, v -> v.title().startsWith("cpu · "), WAIT);
-        assertThat(cpu.placement()).isEqualTo(Placement.LOWER);
-        assertThat(((ViewSpec.Plot) cpu.spec()).series()).hasSize(3);
-        sink.await(Intent.ShowView.class, v -> v.title().startsWith("heap · "), WAIT);
-    }
-
-    @Test
     void aReadSendsEveryTreeAndAWatchSendsAnOpenFolderOnlyWhenItChanged(@TempDir Path dir) throws Exception {
         FolderRoot a = folder("A", Files.createDirectories(dir.resolve("a")));
         FolderRoot b = folder("B", Files.createDirectories(dir.resolve("b")));
         Files.writeString(dir.resolve("a").resolve("PLAN.md"), "# plan");
-        try (ToolsAdapter tools = adapter(dir.resolve("none"))) {
+        try (ToolsAdapter tools = adapter()) {
             tools.readFolders(List.of(a, b));
             sink.await(Intent.FolderLoaded.class, l -> l.folder().name().equals("B"), WAIT);
             sink.await(Intent.FolderLoaded.class, l -> l.folder().name().equals("A"), WAIT);
@@ -300,7 +250,7 @@ class ToolsAdapterTest {
 
     @Test
     void aFolderThatCannotBeReadSaysSoInItsTreeWithoutANotice(@TempDir Path dir) throws Exception {
-        adapter(dir.resolve("none")).readFolders(List.of(folder("Gone", dir.resolve("missing"))));
+        adapter().readFolders(List.of(folder("Gone", dir.resolve("missing"))));
         ViewSpec.TreeNode tree = sink.await(Intent.FolderLoaded.class, WAIT).tree();
         assertThat(tree.label()).isEqualTo("Gone");
         assertThat(tree.children()).singleElement().extracting(ViewSpec.TreeNode::label).isEqualTo("✗ cannot be read: no such folder");
@@ -323,7 +273,7 @@ class ToolsAdapterTest {
             Files.createDirectories(d.resolve("work")).resolve("spec.md").toFile().createNewFile();
             Files.writeString(Files.createDirectories(d.resolve("work").resolve("deep")).resolve("deeper.md"), "d");
         }
-        adapter(dir.resolve("none")).readFolders(List.of(folder("Scratchpad", dir, "tools")));
+        adapter().readFolders(List.of(folder("Scratchpad", dir, "tools")));
         ViewSpec.TreeNode root = sink.await(Intent.FolderLoaded.class, WAIT).tree();
         assertThat(root.label()).isEqualTo("Scratchpad");
         assertThat(root.children()).extracting(ViewSpec.TreeNode::label).containsExactly("datahub", "2026-10-11", "2026-10-12", "PLAN.md");
@@ -340,7 +290,7 @@ class ToolsAdapterTest {
     @Test
     void aFileIsCopiedNeverOverAnotherAndTheOpenFoldersShowIt(@TempDir Path dir) throws Exception {
         Path notes = Files.writeString(dir.resolve("notes.md"), "# notes");
-        ToolsAdapter tools = adapter(dir.resolve("none"));
+        ToolsAdapter tools = adapter();
         tools.watchFolders(List.of(folder("Notes", dir)));
         sink.await(Intent.FolderLoaded.class, WAIT);
         tools.copyFile(notes.toString(), dir.resolve("notes copy.md").toString());
@@ -360,13 +310,13 @@ class ToolsAdapterTest {
         Path b = Files.writeString(dir.resolve("b.md"), "b");
         Files.createDirectories(dir.resolve("sub"));
         List<Path> trashed = new CopyOnWriteArrayList<>();
-        ToolsAdapter withTrash = new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), Optional.empty(), "", ""),
+        ToolsAdapter withTrash = new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), "", ""),
                 file -> trashed.add(file));
         withTrash.deleteFile(a.toString(), true);
         assertThat(sink.await(Intent.Notify.class, n -> n.text().startsWith("Moved"), WAIT).text()).isEqualTo("Moved a.md to the Trash");
         assertThat(trashed).containsExactly(a);
 
-        ToolsAdapter noTrash = adapter(dir.resolve("none"));
+        ToolsAdapter noTrash = adapter();
         noTrash.deleteFile(b.toString(), true);
         assertThat(sink.await(Intent.Notify.class, n -> n.level() == Notice.Level.ERROR, WAIT).text())
                 .isEqualTo("Cannot delete b.md: this desktop has no Trash");

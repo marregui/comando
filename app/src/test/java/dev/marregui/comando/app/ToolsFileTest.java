@@ -50,11 +50,10 @@ class ToolsFileTest {
         ToolsFile file = new ToolsFile(home, serial);
         file.ensure();
 
-        Files.writeString(file.path(), "{\"gradleWrapper\": \"none\", \"jfrq\": \"/opt/jfrq/bin/jfrq\", \"later\": 1}");
+        Files.writeString(file.path(), "{\"gradleWrapper\": \"none\", \"later\": 1}");
 
         ToolSettings s = file.read();
         assertThat(s.gradleSerial()).isEmpty();
-        assertThat(s.jfrq()).contains(Path.of("/opt/jfrq/bin/jfrq"));
         assertThat(s.problem()).as("an unknown key is ignored").isEmpty();
     }
 
@@ -69,14 +68,14 @@ class ToolsFileTest {
         assertThat(s.problem()).startsWith("tools.json: ").endsWith("; using the defaults").doesNotContain("\n");
         assertThat(file.path()).as("the user's text is not moved aside").exists();
 
-        Files.writeString(file.path(), "{\"gradleWrapper\": \"none\"} {\"jfrq\": \"x\"}");
+        Files.writeString(file.path(), "{\"gradleWrapper\": \"none\"} {\"later\": \"x\"}");
         assertThat(file.read().problem()).as("a second document").startsWith("tools.json: ").endsWith("; using the defaults");
         assertThat(file.read().gradleSerial()).contains(serial);
 
         Files.writeString(file.path(), "[\"none\"]");
         assertThat(file.read().problem()).isEqualTo("tools.json: not a JSON object; using the defaults");
 
-        Files.writeString(file.path(), "{\"gradleWrapper\": 5, \"jfrq\": null}");
+        Files.writeString(file.path(), "{\"gradleWrapper\": 5, \"later\": null}");
         assertThat(file.read().problem()).isEqualTo("tools.json: gradleWrapper is not a string; using its default");
         assertThat(file.read().gradleSerial()).contains(serial);
 

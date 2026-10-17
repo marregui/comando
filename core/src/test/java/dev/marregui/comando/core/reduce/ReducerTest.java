@@ -1070,8 +1070,8 @@ class ReducerTest {
 
     @Test
     void closingARunningConsoleStopsItAndFreesItsOutput() {
-        apply(new Intent.RunJfrq("/r/app.jfr", "health"));
-        assertThat(effects).containsExactly(new Effect.RunJfrq(1L, "/r/app.jfr", "health"));
+        apply(new Intent.RunGradle(P1, "build"));
+        assertThat(effects).singleElement().isInstanceOf(Effect.RunGradle.class);
         long view = state.views().getFirst().id();
         apply(new Intent.CloseView(view));
         assertThat(effects).containsExactly(new Effect.CancelCommand(1L), new Effect.ForgetCommand(1L));

@@ -32,7 +32,7 @@ Threads:
 | `Edt.run`, `Edt.runAndWait` | run on the EDT now or posted; the bounded wait gives up and the task never starts late |
 | `Coalescer` | many requests from any thread become at most one pending run on the EDT, which reads the latest data |
 | `Debouncer` | runs once requests stop for a delay (the gutter: 250 ms) |
-| `EdtWatchdog` | probes the EDT every 100 ms. A probe waiting 200 ms is a stall, classified once (`startup`, `drawing` when in Java2D's render queue, `comando`, `jdk`) with where it was; one INFO line and a `comando.EdtBlocked` event when it ends. 1 s (2 s for `drawing`) is a hang, logged with the EDT's stack |
+| `EdtWatchdog` | probes the EDT every 100 ms. A probe waiting 200 ms is a stall, classified once (`startup`, `drawing` when in Java2D's render queue, `comando`, `jdk`) with where it was; one INFO line when it ends. 1 s (2 s for `drawing`) is a hang, logged with the EDT's stack |
 
 Text:
 
@@ -95,7 +95,7 @@ the view closes; a view tab has a pin toggle and a close button.
 | `markdown` | `MarkdownWidget` | rendered Markdown |
 | `text` | `TextWidget` | a file or text, read-only, highlighted, at a line; a header button opens it in IntelliJ |
 | `tree` | `TreeWidget` | test results, a schema; file links open files, insert links fill the editor |
-| `console` | `ConsoleWidget` | a Gradle or jfrq run: output, state, stop, test tree |
+| `console` | `ConsoleWidget` | a Gradle run: output, state, stop, test tree |
 
 Panels build the rest: `CommandEditor` (RSyntaxTextArea; per-block gutter icons; each block coloured as what it is,
 SQL only while the panel's database is open; SQL completion from the bound schema while the database is open; a

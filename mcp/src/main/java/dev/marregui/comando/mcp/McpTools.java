@@ -121,7 +121,7 @@ public final class McpTools {
     Outcome call(String session, String name, JsonNode args, String callKey) {
         CALL.set(callKey);
         try {
-            return measured(session, name, args);
+            return invoke(session, name, args);
         } finally {
             CALL.remove();
         }
@@ -139,21 +139,7 @@ public final class McpTools {
         }
     }
 
-    private Outcome measured(String session, String name, JsonNode args) {
-        McpCallEvent event = new McpCallEvent();
-        event.begin();
-        Outcome out = callMeasured(session, name, args);
-        event.end();
-        if (event.shouldCommit()) {
-            event.session = session;
-            event.tool = name;
-            event.error = out.error();
-            event.commit();
-        }
-        return out;
-    }
-
-    private Outcome callMeasured(String session, String name, JsonNode args) {
+    private Outcome invoke(String session, String name, JsonNode args) {
         Outcome out;
         try {
             out = switch (name) {

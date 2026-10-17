@@ -12,17 +12,10 @@ class FileChoosersTest {
 
     @Test
     void theChooserOpensInTheFolderOfTheStartOrItsNearestExistingParent(@TempDir Path dir) throws Exception {
-        Path file = Files.writeString(dir.resolve("a.jfr"), "x");
+        Path file = Files.writeString(dir.resolve("a.txt"), "x");
         assertThat(FileChoosers.startDirectory(dir)).isEqualTo(dir);
         assertThat(FileChoosers.startDirectory(file)).isEqualTo(dir);
         assertThat(FileChoosers.startDirectory(dir.resolve("missing/deeper"))).isEqualTo(dir);
         assertThat(FileChoosers.startDirectory(null)).isEqualTo(Path.of(System.getProperty("user.home")));
-    }
-
-    @Test
-    void extensionsMatchIgnoringCase() {
-        assertThat(FileChoosers.accepts("rec.JFR", "jfr")).isTrue();
-        assertThat(FileChoosers.accepts("rec.jfr.txt", "jfr")).isFalse();
-        assertThat(FileChoosers.accepts("notes.md", "jfr", "md")).isTrue();
     }
 }

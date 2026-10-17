@@ -169,11 +169,6 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     }
 
     @Override
-    public void runJfrq(long runId, String recording, String args) {
-        record("tools.jfrq " + runId + ' ' + recording + ' ' + args);
-    }
-
-    @Override
     public void cancelRun(long runId) {
         record("tools.cancel " + runId);
     }
@@ -181,11 +176,6 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     @Override
     public void forgetRun(long runId) {
         record("tools.forget " + runId);
-    }
-
-    @Override
-    public void openRecording(String path) {
-        record("tools.recording " + path);
     }
 
     @Override

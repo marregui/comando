@@ -2,7 +2,6 @@ package dev.marregui.comando.ui.kit.desktop;
 
 import javax.swing.JFileChooser;
 import javax.swing.SwingUtilities;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.Component;
 import java.awt.Dialog;
 import java.awt.FileDialog;
@@ -11,7 +10,6 @@ import java.awt.Window;
 import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -51,20 +49,14 @@ public final class FileChoosers {
         return c.showOpenDialog(owner) == JFileChooser.APPROVE_OPTION ? Optional.of(c.getSelectedFile().toPath()) : Optional.empty();
     }
 
-    /**
-     * A file to open, starting at {@code start}; with {@code extensions} (without the dot), only files with
-     * one of them can be chosen.
-     */
-    public static Optional<Path> open(Component owner, String title, Path start, String... extensions) {
+    /** A file to open, starting at {@code start}. */
+    public static Optional<Path> open(Component owner, String title, Path start) {
         Path dir = startDirectory(start);
         if (Platform.isMac()) {
             FileDialog d = dialog(owner, title, FileDialog.LOAD);
             d.setDirectory(dir.toString());
             if (start != null && Files.isRegularFile(start)) {
                 d.setFile(start.getFileName().toString());
-            }
-            if (extensions.length > 0) {
-                d.setFilenameFilter((folder, name) -> accepts(name, extensions));
             }
             d.setVisible(true);
             return chosen(d);
@@ -73,9 +65,6 @@ public final class FileChoosers {
         c.setDialogTitle(title);
         if (start != null && Files.isRegularFile(start)) {
             c.setSelectedFile(start.toFile());
-        }
-        if (extensions.length > 0) {
-            c.setFileFilter(new FileNameExtensionFilter(String.join(", ", extensions), extensions));
         }
         return c.showOpenDialog(owner) == JFileChooser.APPROVE_OPTION ? Optional.of(c.getSelectedFile().toPath()) : Optional.empty();
     }
@@ -108,16 +97,6 @@ public final class FileChoosers {
             }
         }
         return home;
-    }
-
-    static boolean accepts(String name, String... extensions) {
-        String lower = name.toLowerCase(Locale.ROOT);
-        for (String e : extensions) {
-            if (lower.endsWith("." + e.toLowerCase(Locale.ROOT))) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static FileDialog dialog(Component owner, String title, int mode) {

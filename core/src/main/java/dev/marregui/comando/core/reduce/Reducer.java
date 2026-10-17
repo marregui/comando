@@ -176,12 +176,8 @@ public final class Reducer {
             case Intent.EditPanel i -> editPanel(s, i);
             case Intent.Arrange i -> new Transition(s, i.layout().changesNothing() ? List.of() : List.of(new Effect.Arrange(i.layout())));
             case Intent.RunGradle i -> runGradle(s, i);
-            case Intent.RunJfrq i -> runCommand(s, "jfrq " + i.args().strip() + " " + fileName(i.recording()), "",
-                    id -> new Effect.RunJfrq(id, i.recording(), i.args()));
             case Intent.CommandFinished i -> commandFinished(s, i);
             case Intent.CancelCommand i -> new Transition(s, List.of(new Effect.CancelCommand(i.runId())));
-            case Intent.OpenRecording i -> new Transition(notice(s, Notice.Level.INFO, "Reading " + fileName(i.path())),
-                    List.of(new Effect.OpenRecording(i.path())));
             case Intent.BrowseFolders i -> new Transition(s, List.of(new Effect.ReadFolders(folders(s, i.names()))));
             case Intent.WatchFolders i -> new Transition(s, List.of(new Effect.WatchFolders(folders(s, i.names()))));
             case Intent.CopyFile i -> inReadOnlyFolder(s, i.to()).map(f -> refuseReadOnly(s, f, i.to()))
@@ -1331,11 +1327,6 @@ public final class Reducer {
             }
         }
         return Transition.of(s); // the view was closed; nothing shows the result
-    }
-
-    private static String fileName(String path) {
-        int slash = path.lastIndexOf('/');
-        return slash < 0 ? path : path.substring(slash + 1);
     }
 
     // ---- editor

@@ -75,9 +75,11 @@ import java.util.function.LongSupplier;
  * A gives the primary answer, S allows for the session, L twice always allows (only where the rule may be saved;
  * edits and MCP tools are allowed for the session only), D or Escape denies (with the note, if typed), Up and Down
  * move between cards. In a text field of the card the letters type; Enter in the note denies with the note when it
- * holds text and gives the primary answer when it is empty, Enter in another field gives the primary answer, the
- * menu key with Enter denies with the note, Escape returns to the card. Questions show their options with
- * descriptions; a plan shows rendered; an edit shows its diff.
+ * holds text and gives the primary answer when it is empty, the menu key with Enter denies with the note, Escape
+ * returns to the card. A question's Other answer is a plain text box in the editors' font ({@link Editors#plain}), 120
+ * characters wide: Enter starts a line, no key in it answers (the Answer button does), Escape returns to the card; it
+ * holds nothing once the card is answered. Questions show their options with descriptions; a plan shows rendered; an edit shows its
+ * diff.
  *
  * <p>When the card that holds the keyboard leaves because the user answered it here, the keyboard moves to the
  * card that took its place. When it leaves for any other reason (withdrawn by Claude Code, its session ended), the
@@ -90,6 +92,9 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     private static final int AGE_TICK_MILLIS = 30_000;
     private static final int MENU = Platform.menuShortcutMask();
     private static final String EMPTY = "No approvals waiting. Permission requests from every session arrive here.";
+    /** The Other answer's size: a paragraph of five lines, 120 characters wide. */
+    static final int OTHER_ROWS = 5;
+    static final int OTHER_COLUMNS = 120;
 
     /** Where the keyboard focus is and how to move it: the window's focus manager, or a fake in tests. */
     interface Focus {
@@ -290,7 +295,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         private final JLabel age = Plain.only(new JLabel());
         /** Each question's option buttons: radio buttons in a group, or check boxes when it allows several. */
         private final Map<String, List<AbstractButton>> questions = new LinkedHashMap<>();
-        private final Map<String, JTextField> other = new LinkedHashMap<>();
+        private final Map<String, JTextComponent> other = new LinkedHashMap<>();
         /** The rules "For session" and "Always" add; null for anything but a tool call. */
         private final PermissionRules.Rules rules;
         private final JPanel confirm = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
@@ -397,8 +402,13 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                         p.add(d);
                     }
                 }
-                JTextField free = new JTextField(16);
-                free.putClientProperty("JTextField.placeholderText", "Other answer");
+                JLabel otherLabel = Plain.only(new JLabel("Other answer"));
+                otherLabel.setForeground(Theme.MUTED);
+                otherLabel.setBorder(BorderFactory.createEmptyBorder(Theme.GAP, 0, 2, 0));
+                otherLabel.setAlignmentX(Component.LEFT_ALIGNMENT);
+                p.add(otherLabel);
+                JTextArea free = Editors.plain(OTHER_ROWS, OTHER_COLUMNS);
+                free.setName("other");
                 free.getDocument().addDocumentListener(new DocumentListener() {
                     @Override
                     public void insertUpdate(DocumentEvent e) {
@@ -415,11 +425,11 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                         updateReady();
                     }
                 });
-                JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 2));
-                row.setOpaque(false);
-                row.setAlignmentX(Component.LEFT_ALIGNMENT);
-                row.add(free);
-                p.add(row);
+                JScrollPane editor = new JScrollPane(free);
+                editor.setAlignmentX(Component.LEFT_ALIGNMENT);
+                // its columns wide and its rows tall, scrolling past them; narrower only when the card is
+                editor.setMaximumSize(editor.getPreferredSize());
+                p.add(editor);
                 questions.put(question, buttons);
                 other.put(question, free);
             }
@@ -664,7 +674,9 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 if (c.isFocusable() && (c == this || c instanceof JTextComponent || c instanceof AbstractButton)) {
                     c.addFocusListener(border);
                 }
-                if (c instanceof JTextComponent t && t.isEditable() && t.isFocusable()) {
+                if (c instanceof JTextComponent t && other.containsValue(t)) {
+                    answerKeys(t);
+                } else if (c instanceof JTextComponent t && t.isEditable() && t.isFocusable()) {
                     fieldKeys(t);
                 } else if (c instanceof JTextComponent t && t.isFocusable()) {
                     InputMap m = t.getInputMap(JComponent.WHEN_FOCUSED);
@@ -677,12 +689,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         }
 
         private void fieldKeys(JTextComponent field) {
-            InputMap m = field.getInputMap(JComponent.WHEN_FOCUSED);
-            field.getActionMap().put("approval-type", keyAction(() -> { }));
-            for (int letter : new int[] {KeyEvent.VK_A, KeyEvent.VK_S, KeyEvent.VK_L, KeyEvent.VK_D}) {
-                // the press stops here, so the card's letter does not fire; the typed character still reaches the field
-                m.put(KeyStroke.getKeyStroke(letter, 0), "approval-type");
-            }
+            InputMap m = typesLetters(field);
             m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, 0), "approval-enter");
             field.getActionMap().put("approval-enter", keyAction(() -> {
                 if (field == note && !note.getText().isBlank()) {
@@ -695,6 +702,28 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             field.getActionMap().put("approval-deny", keyAction(this::deny));
             m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "approval-card");
             field.getActionMap().put("approval-card", keyAction(() -> focus.request(this)));
+        }
+
+        /**
+         * The Other answer keeps its own keys, Enter's new line and the edit keys included; no key in it answers, so
+         * a paragraph is never sent half written. Escape returns to the card.
+         */
+        private void answerKeys(JTextComponent area) {
+            InputMap m = typesLetters(area);
+            // the card's menu key with Enter (deny with the note) does not reach past the box either
+            m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, MENU), "approval-type");
+            m.put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "approval-card");
+            area.getActionMap().put("approval-card", keyAction(() -> focus.request(this)));
+        }
+
+        /** The card's letters type in {@code field}: their press stops there, and the typed character still reaches it. */
+        private InputMap typesLetters(JTextComponent field) {
+            InputMap m = field.getInputMap(JComponent.WHEN_FOCUSED);
+            field.getActionMap().put("approval-type", keyAction(() -> { }));
+            for (int letter : new int[] {KeyEvent.VK_A, KeyEvent.VK_S, KeyEvent.VK_L, KeyEvent.VK_D}) {
+                m.put(KeyStroke.getKeyStroke(letter, 0), "approval-type");
+            }
+            return m;
         }
 
         @Override

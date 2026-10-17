@@ -340,10 +340,6 @@ public sealed interface Intent {
     record RunGradle(PanelId panel, String tasks) implements Intent {
     }
 
-    /** Runs jfrq with {@code args} on a recording. */
-    record RunJfrq(String recording, String args) implements Intent {
-    }
-
     /**
      * A command run ended.
      *
@@ -358,10 +354,6 @@ public sealed interface Intent {
     }
 
     record CancelCommand(long runId) implements Intent {
-    }
-
-    /** Reads a JFR recording into a summary table and plots. */
-    record OpenRecording(String path) implements Intent {
     }
 
     /** Reads the named folders of the Files tab once, now: a refresh, or a filter over folders that are not open. */

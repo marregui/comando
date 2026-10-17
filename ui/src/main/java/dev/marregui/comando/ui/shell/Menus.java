@@ -60,7 +60,7 @@ final class Menus {
         }
         return List.of(
                 menu("File", null,
-                        "panel.new", "panel.openSpec", "tools.recording", "panel.reopen",
+                        "panel.new", "panel.openSpec", "panel.reopen",
                         SEPARATOR,
                         "panel.save", "panel.rename", "file.close",
                         SEPARATOR,
@@ -86,7 +86,7 @@ final class Menus {
                                 "run.insertResult", "run.keep",
                                 SEPARATOR,
                                 "run.plot", "run.plotLive", "run.plotStop"),
-                        menu("Tools", "tool", "tools.gradle", "tools.jfrq", "terminal.restart", SEPARATOR, "tools.settings")),
+                        menu("Tools", "tool", "tools.gradle", "terminal.restart", SEPARATOR, "tools.settings")),
                 menu("View", null,
                         "view.palette", "focus.editor",
                         SEPARATOR,

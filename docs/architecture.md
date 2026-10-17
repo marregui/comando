@@ -22,7 +22,7 @@ tool cards, diffs and approval cards. One editor holds SQL and prompts: a block 
 when it is SQL and goes to the panel's Claude session otherwise. Claude Code reaches back into the window through an
 MCP server comando runs on `127.0.0.1`: tables, plots, diffs and trees, text in the editor, SQL under a policy, and
 permission prompts answered on cards. The rest of the window replaces the terminal: a shell per panel, Gradle runs with
-test trees, JFR recordings, and a browser over folders of documents.
+test trees, and a browser over folders of documents.
 
 ## 2. Modules
 
@@ -33,7 +33,7 @@ test trees, JFR recordings, and a browser over folders of documents.
 | `db` | JDBC lanes (one thread per connection), cancel, columnar results, schema reading, queries for Claude | `core`, pgjdbc |
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, the Claude Code kit (`Kit`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log | `core`, Jackson |
-| `tools` | Gradle and jfrq runs, JFR summaries, the Files tab's folder reads, file copy and delete | `core` |
+| `tools` | Gradle runs, the Files tab's folder reads, file copy and delete | `core` |
 | `ui` | the Swing shell, panels, dialogs, the kit, the widgets | `core`, FlatLaf (and Extras), RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
 | `app` | wiring, the store files, the keychain, the intent log, the embedded QuestDB, `main` | all, QuestDB |
 
@@ -125,7 +125,7 @@ A record of the sealed interface `Intent`; anything that changes the state is on
 | Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
 | Views | `ShowView`, `RefreshView`, `CloseView`, `PinView`, `SelectLowerTab`, `Arrange`, `SessionLayout`, `SessionFocus` |
 | Editor and files | `EditPanel`, `OpenFile` |
-| Tools and folders | `RunGradle`, `RunJfrq`, `CommandFinished`, `CancelCommand`, `OpenRecording`, `SaveFolder`, `RemoveFolder`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `CopyFile`, `DeleteFile` |
+| Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `SaveFolder`, `RemoveFolder`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `CopyFile`, `DeleteFile` |
 | Notices | `Notify`, `DismissNotice` |
 
 A null panel in `RunText`, `RunGradle` or `EditPanel` means the focused panel.
@@ -160,12 +160,11 @@ queues and returns.
 | `ApprovalPort` | `ResolveApproval` |
 | `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `DeletePanel`, `ShowFile`, `Arrange`, `ShowFolder`, `ShowPlanUsage` |
 | `PersistencePort` | `SaveConnections`, `SaveSessions`, `SaveFolders`, `SavePanels` |
-| `ToolPort` | `RunGradle`, `RunJfrq`, `CancelCommand`, `ForgetCommand`, `OpenRecording`, `ReadFolders`, `WatchFolders`, `CopyFile`, `DeleteFile` |
+| `ToolPort` | `RunGradle`, `CancelCommand`, `ForgetCommand`, `ReadFolders`, `WatchFolders`, `CopyFile`, `DeleteFile` |
 
 `StateLoop` runs one intent at a time: observers (the intent log), the reducer, the effects in order, then the state
 listeners (the UI's coalesced render). The reducer, each effect and each listener are guarded, so a failure is logged and
-the loop goes on; an observer must not throw (the intent log catches its own failures). Each applied
-intent is a JFR event `comando.Intent`.
+the loop goes on; an observer must not throw (the intent log catches its own failures).
 
 ### 4.5 Stores outside the state
 
@@ -202,7 +201,7 @@ transcript text.
 | `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `clearTranscript`, `loadHistory`, `forget` | `ClaudeAdapter` |
 | `McpGateway` | `register(session)` gives the URL and bearer token a session's CLI uses; `unregister` | `McpServer` |
 | `ApprovalPort` | `resolve` | `McpServer` |
-| `ToolPort` | `runGradle`, `runJfrq`, `cancelRun`, `forgetRun`, `openRecording`, `readFolders`, `watchFolders`, `copyFile`, `deleteFile` | `ToolsAdapter` |
+| `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `copyFile`, `deleteFile` | `ToolsAdapter` |
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showPlanUsage` | `ComandoUi` |
 | `PersistencePort` | `saveConnections`, `saveSessions`, `saveFolders`, `savePanels` | `Store` |
 
@@ -224,8 +223,8 @@ by delta), `FakeResult`.
 | `claude-timer` | platform | the stop sequence's deadlines |
 | `plan-usage` | platform, daemon | `claude --safe-mode -p /usage` at start and every 5 minutes, stopped after 30 s |
 | MCP requests | virtual, one per request | JSON-RPC; an `approve` call waits for its card |
-| `gradle-<run>`, `jfrq-<run>`, `tool-output-<run>`, `tool-kill-<run>` | virtual | a run's process and output; SIGKILL what a stop left alive after 2 s |
-| `recording`, `folder-read`, `file-copy`, `file-delete` | virtual | a JFR summary; folder reads; the Files tab's copies and deletions |
+| `gradle-<run>`, `tool-output-<run>`, `tool-kill-<run>` | virtual | a run's process and output; SIGKILL what a stop left alive after 2 s |
+| `folder-read`, `file-copy`, `file-delete` | virtual | folder reads; the Files tab's copies and deletions |
 | `folder-poll` | platform, daemon | every 5 s reads the open folders, sends a tree only when it changed |
 | `store`, `store-secrets` | platform | atomic writes of the store files; panel text 800 ms after the first unsaved change; a check of open panels' files every second; keychain calls apart, so an unlock prompt never holds back panel text |
 | `mermaid` | platform, daemon | `mmdc`, one diagram at a time, 30 s bound |
@@ -282,7 +281,7 @@ built and rethrows.
 | 10 | `ComandoUi` | closes last: terminals, live plots, the EDT watchdog, the window |
 
 Quit (window, Dock, menu) first asks when work would stop: a running query, a turn, a shell job in the foreground, a
-Gradle or jfrq run; Cancel is the default. It then saves the layout, ends terminals and live plots, greys the window, and
+Gradle run; Cancel is the default. It then saves the layout, ends terminals and live plots, greys the window, and
 runs `onQuit`, which starts the `exit` thread: `App.close()`, then `System.exit(0)`. A shutdown hook calls `App.close()`
 too; the second call does nothing.
 
@@ -353,15 +352,10 @@ Gates:
 | transcript frame time | `./gradlew :ui:transcriptGate` | p99 ≤ 16 ms ([UI](ui.md#43-the-frame-time-gate)) |
 | EDT responsiveness | always on: `EdtWatchdog` | a probe answered within 200 ms |
 
-JFR events, recorded in any recording of the process:
-
-| Event | Fields |
-|---|---|
-| `comando.Intent` | intent type, effect count, state changed; duration = reducer time |
-| `comando.SqlRun` | connection, request id, SQL, outcome; duration = dequeue to last row |
-| `comando.ClaudeTurn` | session, turn time, cost, context tokens, error |
-| `comando.McpCall` | session, tool, error; duration = the call |
-| `comando.EdtBlocked` | blocked time, kind (`startup`, `drawing`, `comando`, `jdk`), where, the EDT's stack |
+comando has no JFR code. It is profiled from outside like any JVM, with the JDK's own events, and its EDT stalls are
+in its log ([UI §1](ui.md#1-the-kit)); the packaged runtime keeps `jdk.jfr`, `jdk.management.jfr` and
+`jdk.management.agent` so the installed app can be recorded, and watched over JMX, too
+([record 54](adr/0054-comando-knows-nothing-of-jfr.md)).
 
 CI (`.github/workflows/build.yml`, Ubuntu and macOS, Temurin 25, actions pinned by SHA) runs `build`, `:app:uiTest`
 (under `xvfb-run` on Ubuntu), a test summary (`ci/TestReport.java`), the transcript gate (reported, not enforced), and on
