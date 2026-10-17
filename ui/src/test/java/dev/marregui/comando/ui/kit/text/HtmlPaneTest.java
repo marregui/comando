@@ -111,12 +111,15 @@ class HtmlPaneTest {
         LocalImages.install(dir.resolve("cache"));
         try {
             HtmlPane[] pane = new HtmlPane[1];
+            String[] first = new String[1];
             SwingUtilities.invokeAndWait(() -> {
                 pane[0] = new HtmlPane();
                 pane[0].setSize(800, 600);
                 pane[0].setMarkdown(markdown, doc);
+                // read here: once this returns, the EDT may already have drawn the pictures read meanwhile
+                first[0] = pane[0].getText();
             });
-            assertThat(pane[0].getText()).as("read on their own thread: loading first")
+            assertThat(first[0]).as("read on their own thread: loading first")
                     .contains("loading chart.png").contains("loading flow.svg").contains("loading logo.gif");
             // the pane asked first, so its redraw is queued on the EDT before the last of these is heard
             for (Path p : new Path[]{chart, flow, shared}) {
@@ -186,7 +189,9 @@ class HtmlPaneTest {
         SwingUtilities.invokeAndWait(() -> pane[0].fireHyperlinkUpdate(link(pane[0], "#Notes", 0)));
         assertThat(top(scroll[0])).as("from the keyboard, the case aside: as far as the page goes")
                 .isEqualTo(pane[0].getHeight() - scroll[0].getViewport().getHeight());
-        assertThat(pane[0].scrollToHeading("3%2Ddecisions")).as("percent-encoded").isTrue();
+        boolean[] found = new boolean[1];
+        SwingUtilities.invokeAndWait(() -> found[0] = pane[0].scrollToHeading("3%2Ddecisions"));
+        assertThat(found[0]).as("percent-encoded").isTrue();
         assertThat(top(scroll[0])).isEqualTo(decisions);
 
         SwingUtilities.invokeAndWait(() -> pane[0].fireHyperlinkUpdate(link(pane[0], "#no-such-heading", 2)));
