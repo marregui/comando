@@ -198,6 +198,9 @@ class SessionsSidebarTest {
         click(list, power, 1);
         assertThat(intents).containsExactly(new Intent.StartSession("edge"));
         assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Disconnected; click to connect (starts the session)");
+        Rectangle row = cell(list, 0);
+        assertThat(list.getToolTipText(event(list, new Rectangle(row.x + 30, row.y + 4, 4, 4), 0)))
+                .as("over the text: the details as Copy details copies them").isEqualTo(SessionRow.detailsTip(SessionRow.details(edge, 0L, ZoneOffset.UTC)));
 
         intents.clear();
         click(list, power, 2);
@@ -447,6 +450,22 @@ class SessionsSidebarTest {
                 """);
         assertThat(SessionRow.details(SessionState.closed(SessionSpec.fresh("new", "/w/new")), started, ZoneOffset.UTC))
                 .contains("Session id: none yet\n", "Status: closed\n", "Context: unknown until a turn ends\n").doesNotContain("Uptime");
+        assertThat(SessionRow.detailsTip("Session: a<b>\nPath: /w\n")).as("the same lines, as text")
+                .isEqualTo("<html>Session: a&lt;b&gt;<br>Path: /w</html>");
+    }
+
+    @Test
+    void aRowSaysCtxThenUptimeAndTheIdOnALineOfItsOwn() {
+        long started = 1_760_000_000_000L;
+        SessionState running = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").resumable("e41164bc-160c-4e3e-b43b-3218489da4e1"))
+                .withStatus(Status.OPEN, "").withStarted(started).withUsage(0.0, 84_000L, 200_000L, started);
+        String[] lines = SessionRow.bodyHtml(running, started + 65 * 60_000L).split("<br>");
+        assertThat(lines).hasSize(3);
+        assertThat(lines[1]).contains(">ctx 42%<", "up 1 h 05 min").doesNotContain("context", "id ");
+        assertThat(lines[2]).contains(">id e41164bc<");
+        String[] fresh = SessionRow.bodyHtml(SessionState.closed(SessionSpec.fresh("new", "/w/new")), started).split("<br>");
+        assertThat(fresh).as("the same height before anything is known").hasSize(3);
+        assertThat(fresh[2]).contains("new conversation");
     }
 
     private static List<String> names(JList<?> list) throws Exception {

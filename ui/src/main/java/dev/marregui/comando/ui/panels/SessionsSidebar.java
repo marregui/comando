@@ -481,7 +481,7 @@ public final class SessionsSidebar {
     }
 
     /**
-     * The session list: its tooltips name the control under the mouse, else the session's folder and conversation; it
+     * The session list: its tooltips name the control under the mouse, else give the session's details as copied; it
      * knows the row under the mouse, which shows its copy button; and a row dragged by its text moves, a line marking
      * where it will land.
      */
@@ -607,8 +607,9 @@ public final class SessionsSidebar {
                 return null;
             }
             SessionState s = getModel().getElementAt(i);
-            return Plain.text(layOutRow(s, i).tip(getCellBounds(i, i), e.getPoint())
-                    .orElse(s.spec().workDir() + (s.spec().claudeSessionId().isEmpty() ? "" : " · " + s.spec().claudeSessionId())));
+            // over a control its tip; over the text what Copy details copies, line for line
+            return layOutRow(s, i).tip(getCellBounds(i, i), e.getPoint()).map(Plain::text)
+                    .orElseGet(() -> SessionRow.detailsTip(details(s)));
         }
     }
 

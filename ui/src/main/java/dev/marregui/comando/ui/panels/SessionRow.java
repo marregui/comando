@@ -165,6 +165,14 @@ final class SessionRow extends JPanel {
         return sb.toString();
     }
 
+    /**
+     * {@link #details} as a tooltip: the same lines, each escaped, so a name or path is shown as typed and never read
+     * as markup.
+     */
+    static String detailsTip(String details) {
+        return "<html>" + String.join("<br>", details.strip().lines().map(MarkdownHtml::escape).toList()) + "</html>";
+    }
+
     /** The control at {@code p}, a point in the cell whose bounds this row was laid out to. */
     Optional<Control> hit(Rectangle cell, Point p) {
         layOut(cell);
@@ -255,28 +263,30 @@ final class SessionRow extends JPanel {
     }
 
     /**
-     * Two lines that never wrap, clipped at the edge: the folder and branch; then how full the context is (purple from
-     * the checkpoint's threshold), how long it has run and the start of its conversation's id, whatever is known.
+     * Three lines that never wrap, clipped at the edge: the folder and branch; how full the context is (purple from the
+     * checkpoint's threshold) and how long it has run, whatever is known; the start of its conversation's id.
      */
-    private static String bodyHtml(SessionState s, long nowMillis) {
+    static String bodyHtml(SessionState s, long nowMillis) {
         String branch = s.branch().isEmpty() ? "" : " ⎇ " + MarkdownHtml.escape(s.branch());
         String muted = Theme.hex(Theme.MUTED);
-        List<String> facts = new ArrayList<>(3);
+        List<String> facts = new ArrayList<>(2);
         String context = contextText(s);
         if (!context.isEmpty()) {
             boolean full = s.contextTokens() >= Reflection.THRESHOLD * s.contextWindow();
-            facts.add("<span style='color:" + Theme.hex(full ? Theme.THINKING : Theme.MUTED) + "'>context " + context + "</span>");
+            facts.add("<span style='color:" + Theme.hex(full ? Theme.THINKING : Theme.MUTED) + "'>ctx " + context + "</span>");
         }
         String uptime = uptimeText(s, nowMillis);
         if (!uptime.isEmpty()) {
             facts.add("<span style='color:" + muted + "'>" + MarkdownHtml.escape(uptime) + "</span>");
         }
         String id = s.spec().claudeSessionId();
-        facts.add("<span style='color:" + muted + "'>" + (id.isEmpty() ? "new conversation"
-                : "id " + MarkdownHtml.escape(id.substring(0, Math.min(8, id.length())))) + "</span>");
+        String conversation = "<span style='color:" + muted + "'>" + (id.isEmpty() ? "new conversation"
+                : "id " + MarkdownHtml.escape(id.substring(0, Math.min(8, id.length())))) + "</span>";
         return "<html><nobr><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>"
                 + MarkdownHtml.escape(Clip.keepEnd(Labels.shortPath(s.spec().workDir()), 34)) + branch + "</span></nobr>"
-                + "<br><nobr>" + String.join("<span style='color:" + muted + "'> · </span>", facts) + "</nobr></html>";
+                // the line stays when nothing is known yet, so every row has the same height
+                + "<br><nobr>" + (facts.isEmpty() ? "&nbsp;" : String.join("<span style='color:" + muted + "'> · </span>", facts)) + "</nobr>"
+                + "<br><nobr>" + conversation + "</nobr></html>";
     }
 
     /** Buttons side by side with no gap between them. */
