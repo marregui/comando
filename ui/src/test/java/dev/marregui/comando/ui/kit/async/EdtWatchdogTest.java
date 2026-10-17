@@ -31,7 +31,8 @@ class EdtWatchdogTest {
             assertThat(s.reported()).isTrue();
             assertThat(s.millis()).isGreaterThanOrEqualTo(400L);
             assertThat(s.kind()).isEqualTo(EdtWatchdog.Kind.COMANDO);
-            assertThat(s.stack()).contains("EdtWatchdogTest").contains("sleep");
+            // the hold, wherever in its loop the sample finds the EDT: sleeping, or checking whether it may stop
+            assertThat(s.stack()).contains("EdtWatchdogTest.holdEdtUntil");
         });
     }
 
