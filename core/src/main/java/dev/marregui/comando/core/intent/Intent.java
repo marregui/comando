@@ -50,6 +50,10 @@ public sealed interface Intent {
     record RenamePanel(PanelId panel, String title) implements Intent {
     }
 
+    /** Puts an open panel at {@code index} among the open ones, the others keeping their order; an index past either end is the end. */
+    record MovePanel(PanelId panel, int index) implements Intent {
+    }
+
     /** Opens a closed panel of comando's own again, after the focused one, with its title, bindings and text. */
     record ReopenPanel(PanelId panel) implements Intent {
     }

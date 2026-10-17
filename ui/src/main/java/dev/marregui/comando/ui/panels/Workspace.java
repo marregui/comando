@@ -13,6 +13,7 @@ import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
+import dev.marregui.comando.ui.kit.tabs.MovableTabs;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -45,11 +46,11 @@ import java.util.function.IntConsumer;
 import java.util.function.LongSupplier;
 
 /**
- * The open panels as tabs, in state order; the selected tab is the focused panel. The tabs closed most recently are
- * remembered for ⌘⇧T: a panel of comando's own by its id (the state keeps it, closed), a document by its file. Each tab
- * shows its panel's {@link TabStatus} in its icon, and a "● " before its title while the status asks for a look: a turn
- * or query that finished (or failed) while another tab was in front is marked until the user looks at it; a session
- * waiting for the user is marked until answered; a running one spins.
+ * The open panels as tabs, in state order; the selected tab is the focused panel, and a tab dragged along the row moves
+ * its panel. The tabs closed most recently are remembered for ⌘⇧T: a panel of comando's own by its id (the state keeps
+ * it, closed), a document by its file. Each tab shows its panel's {@link TabStatus} in its icon, and a "● " before its
+ * title while the status asks for a look: a turn or query that finished (or failed) while another tab was in front is
+ * marked until the user looks at it; a session waiting for the user is marked until answered; a running one spins.
  */
 public final class Workspace {
 
@@ -63,7 +64,7 @@ public final class Workspace {
     private final IntentSink intents;
     private final PanelTexts texts;
     private final SchemaRegistry schemas;
-    private final JTabbedPane tabs = named(new JTabbedPane(), "workspace");
+    private final MovableTabs tabs = named(new MovableTabs(), "workspace");
     private final Map<PanelId, EditorPanel> panels = new LinkedHashMap<>();
     private final Deque<ClosedPanel> closed = new ArrayDeque<>();
     /** Whether each panel's session or query was at work when last rendered; a change to false is an outcome. */
@@ -128,6 +129,8 @@ public final class Workspace {
                 intents.dispatch(new Intent.FocusPanel(p.panel().id()));
             }
         });
+        // a dragged tab moves its panel; the render that follows puts the tabs in the state's order
+        tabs.onMove((from, to) -> intents.dispatch(new Intent.MovePanel(((EditorPanel) tabs.getComponentAt(from)).panel().id(), to)));
         tabs.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
@@ -429,7 +432,7 @@ public final class Workspace {
         return p.title() + (p.connection().isEmpty() ? "" : " · " + p.connection()) + (p.session().isEmpty() ? "" : " · " + p.session());
     }
 
-    private static JTabbedPane named(JTabbedPane tabs, String name) {
+    private static MovableTabs named(MovableTabs tabs, String name) {
         tabs.setName(name);
         return tabs;
     }

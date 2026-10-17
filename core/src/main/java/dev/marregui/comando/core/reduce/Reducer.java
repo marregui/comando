@@ -90,6 +90,7 @@ public final class Reducer {
             case Intent.ClosePanel i -> closePanel(s, i.panel());
             case Intent.RemovePanel i -> removePanel(s, i.panel());
             case Intent.RenamePanel i -> renamePanel(s, i);
+            case Intent.MovePanel i -> movePanel(s, i);
             case Intent.ReopenPanel i -> reopenPanel(s, i);
             case Intent.FocusPanel i -> s.panel(i.panel()).isPresent() ? Transition.of(s.withFocused(i.panel())) : Transition.of(s);
             case Intent.BindConnection i -> bindConnection(s, i);
@@ -293,6 +294,22 @@ public final class Reducer {
         int at = s.panels().indexOf(s.focusedPanel()) + 1;
         panels.add(Math.min(at, panels.size()), p);
         AppState next = s.withPanels(panels, p.id()).withClosed(s.closed().stream().filter(c -> !c.id().equals(p.id())).toList());
+        return new Transition(next, List.of(save(next)));
+    }
+
+    /** An open panel moves among the open ones; saved, so a restart keeps the order. */
+    private Transition movePanel(AppState s, Intent.MovePanel i) {
+        List<PanelState> panels = new ArrayList<>(s.panels());
+        int from = panels.stream().map(PanelState::id).toList().indexOf(i.panel());
+        if (from < 0) {
+            return Transition.of(s);
+        }
+        int to = Math.clamp(i.index(), 0, panels.size() - 1);
+        if (from == to) {
+            return Transition.of(s);
+        }
+        panels.add(to, panels.remove(from));
+        AppState next = s.withPanels(panels, s.focused());
         return new Transition(next, List.of(save(next)));
     }
 

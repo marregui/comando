@@ -17,6 +17,10 @@ import org.junit.jupiter.api.Test;
 
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
+import java.awt.Component;
+import java.awt.HeadlessException;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -234,5 +238,46 @@ class WorkspaceTest {
             w[0].render(s[0] = s[0].withSession(failed));
         });
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.ERROR);
+    }
+
+    @Test
+    void aTabDraggedAlongTheRowMovesItsPanelAndTheTabsFollowTheStatesOrder() throws Exception {
+        PanelId b = new PanelId("b");
+        PanelId c = new PanelId("c");
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        Workspace[] w = new Workspace[1];
+        AppState[] s = new AppState[1];
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(intents::add, new Texts(), new SchemaRegistry());
+            s[0] = AppState.initial(List.of(new PanelState(P, "one", "", ""), new PanelState(b, "two", "", ""),
+                    new PanelState(c, "three", "", "")), List.of(), List.of()).withFocused(P);
+            w[0].render(s[0]);
+            JTabbedPane tabs = (JTabbedPane) w[0].component();
+            tabs.setSize(900, 400);
+            tabs.doLayout();
+            Rectangle from = tabs.getBoundsAt(0);
+            Rectangle last = tabs.getBoundsAt(2);
+            int y = from.y + from.height / 2;
+            try {
+                tabs.dispatchEvent(mouse(tabs, MouseEvent.MOUSE_PRESSED, from.x + from.width / 2, y));
+            } catch (HeadlessException e) {
+                // the look's own press handler may ask the toolkit for more than headless has; the drag saw the press first
+            }
+            tabs.dispatchEvent(mouse(tabs, MouseEvent.MOUSE_DRAGGED, last.x + last.width + 4, y));
+            tabs.dispatchEvent(mouse(tabs, MouseEvent.MOUSE_RELEASED, last.x + last.width + 4, y));
+        });
+        assertThat(intents).filteredOn(Intent.MovePanel.class::isInstance).containsExactly(new Intent.MovePanel(P, 2));
+
+        SwingUtilities.invokeAndWait(() -> w[0].render(s[0].withPanels(List.of(s[0].panels().get(1), s[0].panels().get(2),
+                s[0].panels().get(0)), s[0].focused())));
+        JTabbedPane tabs = (JTabbedPane) w[0].component();
+        assertThat(List.of(tabs.getTitleAt(0), tabs.getTitleAt(1), tabs.getTitleAt(2))).containsExactly("two", "three", "one");
+        assertThat(w[0].focused().panel().id()).as("the moved panel stays in front").isEqualTo(P);
+    }
+
+    private static MouseEvent mouse(Component c, int id, int x, int y) {
+        boolean button = id == MouseEvent.MOUSE_PRESSED || id == MouseEvent.MOUSE_RELEASED;
+        return new MouseEvent(c, id, System.currentTimeMillis(), MouseEvent.BUTTON1_DOWN_MASK, x, y, button ? 1 : 0, false,
+                button ? MouseEvent.BUTTON1 : MouseEvent.NOBUTTON);
     }
 }

@@ -825,6 +825,29 @@ class ReducerTest {
     }
 
     @Test
+    void aMovedPanelTakesItsNewPlaceTheOthersKeepTheirOrderAndTheOrderIsSaved() {
+        PanelId p3 = new PanelId("p3");
+        apply(new Intent.AddPanel(p3, "three"));
+        apply(new Intent.FocusPanel(P2));
+        assertThat(state.panels()).extracting(PanelState::id).containsExactly(P1, P2, p3);
+
+        apply(new Intent.MovePanel(P1, 2));
+        assertThat(state.panels()).extracting(PanelState::id).containsExactly(P2, p3, P1);
+        assertThat(state.focused()).as("a move keeps the focus").isEqualTo(P2);
+        assertThat(effects).containsExactly(new Effect.SavePanels(state.panels(), state.closed()));
+
+        apply(new Intent.MovePanel(P1, -4));
+        assertThat(state.panels()).as("an index before the start is the start").extracting(PanelState::id).containsExactly(P1, P2, p3);
+        apply(new Intent.MovePanel(P1, 99));
+        assertThat(state.panels()).as("an index past the end is the end").extracting(PanelState::id).containsExactly(P2, p3, P1);
+
+        apply(new Intent.MovePanel(P1, 2));
+        assertThat(effects).as("a panel already in place saves nothing").isEmpty();
+        apply(new Intent.MovePanel(new PanelId("gone"), 0));
+        assertThat(effects).as("an unknown panel moves nothing").isEmpty();
+    }
+
+    @Test
     void aPanelIsNotRenamedToAnotherPanelsTitle() {
         String taken = state.panel(P2).orElseThrow().title();
         apply(new Intent.RenamePanel(P1, taken));
