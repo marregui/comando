@@ -165,6 +165,8 @@ how Claude Code matches them and never allow more than the command could do:
 - A denial carries the note typed on the card. In the note, ⏎ denies once it holds text and gives the primary answer
   while empty; ⌘⏎ denies with the note. ↑ and ↓ move between cards. The keyboard is never taken from outside the tab.
 - While a card waits, its tool call reads "waiting for your approval · ⌃2" in the Session tab.
+- Answering the last card while the Approvals tab is in front brings the Session tab forward, on the panel of the
+  session that asked, with the keyboard; a card withdrawn, or answered from another tab, moves nothing.
 - A card is withdrawn and its call denied when Claude Code cancels the call, the process exits, or the session is
   removed. A SQL card is also withdrawn at a turn end with nothing queued and no background work; while background work
   runs every card stays ([record 43](adr/0043-a-session-waiting-on-background-work-shows-it.md)).

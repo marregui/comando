@@ -209,6 +209,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private FocusAfterRender focusAfterRender;
+    /** The lower tab the last render showed. */
+    private LowerTab renderedLowerTab = LowerTab.SESSION;
     static final long TYPING_PAUSE_MILLIS = 2_000;
 
     private record LayoutSnapshot(boolean sidebar, boolean sidePaneHidden, int lowerDivider) {
@@ -474,6 +476,14 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         sessionsDialog.render(s);
         foldersDialog.render(s);
         watchTranscript(s.focusedPanel().session());
+        // the last card answered: the Session tab came forward, and the keyboard the inbox held goes with it
+        Component owner = focusOwnerInFrame();
+        if (renderedLowerTab.equals(LowerTab.APPROVALS) && s.lowerTab().equals(LowerTab.SESSION)
+                && owner != null && SwingUtilities.isDescendingFrom(owner, lower.inbox().component())) {
+            Component canvas = lower.transcript().canvas();
+            focusAfterRender = new FocusAfterRender(canvas, canvas::requestFocusInWindow);
+        }
+        renderedLowerTab = s.lowerTab();
         if (focusAfterRender != null && focusAfterRender.shown().isShowing()) {
             Runnable focus = focusAfterRender.focus();
             focusAfterRender = null;

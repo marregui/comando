@@ -167,7 +167,7 @@ The session can read your database and draw in your window through tools comando
    - **Deny** (or **D**) refuses it. Type a reason in the note field first, and Claude receives it.
 
    The keys work anywhere in the card. In the note field, letters type; **⏎** denies with the note once you have typed one (on an empty note it runs), **⌘⏎** denies with the note, **Esc** returns to the card. Click **Deny** with the note `just testing`.
-   *You should see* in the Session tab that Claude reports the denial and your note.
+   *You should see* the Session tab come forward, the list being empty, with Claude reporting the denial and your note.
 3. Send it again: put the caret in that block and press **⌘⇧⏎**. Click **Run** on the new card this time. Then run `select * from trades where sym = 'TEST';` yourself to see the row.
 4. Ask for a picture:
    `Call ui_plot with title squares and one series named squares, x=[1,2,3,4,5] and y=[1,4,9,16,25].`

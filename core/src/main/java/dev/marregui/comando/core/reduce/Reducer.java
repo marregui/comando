@@ -1163,12 +1163,21 @@ public final class Reducer {
         return new Transition(next, List.of(new Effect.DesktopNotify(a.session() + " needs approval", a.summary())));
     }
 
+    /**
+     * The user answered a card. When it was the last one and the Approvals tab is in front, the Session tab comes
+     * forward on the panel of the session that asked, where its turn goes on.
+     */
     private Transition approvalAnswered(AppState s, Intent.ApprovalAnswered i) {
         Optional<Approval> a = s.approval(i.id());
         if (a.isEmpty()) {
             return Transition.of(s);
         }
-        AppState next = clear(s.withApprovals(s.approvals().stream().filter(x -> x.id() != i.id()).toList()), Notice.approval(i.id()));
+        List<Approval> rest = s.approvals().stream().filter(x -> x.id() != i.id()).toList();
+        AppState next = clear(s.withApprovals(rest), Notice.approval(i.id()));
+        if (rest.isEmpty() && s.lowerTab().equals(LowerTab.APPROVALS)) {
+            List<PanelState> asking = next.panelsBoundToSession(a.get().session());
+            next = (asking.isEmpty() ? next : next.withFocused(asking.getFirst().id())).withLowerTab(LowerTab.SESSION);
+        }
         return new Transition(next, List.of(new Effect.ResolveApproval(a.get(), i.decision())));
     }
 

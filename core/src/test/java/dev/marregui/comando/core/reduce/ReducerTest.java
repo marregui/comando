@@ -969,6 +969,34 @@ class ReducerTest {
         assertThat(effects).isEmpty();
     }
 
+    @Test
+    void answeringTheLastCardBringsTheSessionTabForwardOnThePanelOfTheSessionThatAsked() {
+        // both panels are bound to work; the user looks at another panel's place: the second
+        apply(new Intent.ApprovalRequested(new Approval(3L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)));
+        apply(new Intent.ApprovalRequested(new Approval(4L, "work", ApprovalKind.TOOL, "Bash", "{}", "pwd", 1L)));
+        apply(new Intent.FocusPanel(P2));
+        apply(new Intent.SelectLowerTab(LowerTab.APPROVALS));
+
+        apply(new Intent.ApprovalAnswered(3L, ApprovalDecision.allowOnce()));
+        assertThat(state.lowerTab()).as("a card still waits").isEqualTo(LowerTab.APPROVALS);
+        apply(new Intent.ApprovalAnswered(4L, new ApprovalDecision.Deny("no")));
+        assertThat(state.lowerTab()).isEqualTo(LowerTab.SESSION);
+        assertThat(state.focused()).as("the session's first panel").isEqualTo(P1);
+    }
+
+    @Test
+    void theLastCardAnsweredOrWithdrawnElsewhereLeavesTheTabsAlone() {
+        apply(new Intent.ApprovalRequested(new Approval(3L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)));
+        apply(new Intent.SelectLowerTab(LowerTab.TERMINAL));
+        apply(new Intent.ApprovalAnswered(3L, ApprovalDecision.allowOnce()));
+        assertThat(state.lowerTab()).as("the user was not on the Approvals tab").isEqualTo(LowerTab.TERMINAL);
+
+        apply(new Intent.ApprovalRequested(new Approval(4L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)));
+        apply(new Intent.SelectLowerTab(LowerTab.APPROVALS));
+        apply(new Intent.ApprovalWithdrawn(4L, "the session ended"));
+        assertThat(state.lowerTab()).as("withdrawn, not answered").isEqualTo(LowerTab.APPROVALS);
+    }
+
     // ---- views
 
     @Test
