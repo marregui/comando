@@ -2,11 +2,12 @@ package dev.marregui.comando.ui.kit.desktop;
 
 import java.awt.Desktop;
 import java.net.URI;
+import java.nio.file.Path;
 import java.util.Locale;
 import java.util.function.Consumer;
 
 /**
- * Opens web links in the user's browser. The browser call can block, so it runs on an {@code open-link} virtual
+ * Opens web links, and files such as HTML pages, in the user's browser. The browser call can block, so it runs on an {@code open-link} virtual
  * thread, never on the caller's (the EDT, for a clicked link).
  */
 public final class Browser {
@@ -26,6 +27,20 @@ public final class Browser {
     public static void open(String href) {
         if (Desktop.isDesktopSupported()) {
             open(href, uri -> {
+                try {
+                    Desktop.getDesktop().browse(uri);
+                } catch (Exception e) {
+                    LOG.log(System.Logger.Level.WARNING, "cannot open " + uri + ": " + e.getMessage());
+                }
+            });
+        }
+    }
+
+    /** Opens a file of this machine, such as an HTML page, in the browser when the desktop can browse; returns at once. */
+    public static void openFile(Path file) {
+        if (Desktop.isDesktopSupported()) {
+            URI uri = file.toAbsolutePath().toUri();
+            Thread.ofVirtual().name("open-link").start(() -> {
                 try {
                     Desktop.getDesktop().browse(uri);
                 } catch (Exception e) {

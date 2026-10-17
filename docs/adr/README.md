@@ -62,3 +62,4 @@ that names the one it replaces; the old record stays as written, and this index'
 | [53](0053-session-rows-compact-clear-copy-and-an-order-of-your-own.md) | Session rows: compact, clear, copy, and an order of the user's own | Miguel, Claude | accepted |
 | [54](0054-comando-knows-nothing-of-jfr.md) | comando knows nothing of JFR | Miguel, Claude | accepted |
 | [55](0055-the-files-tab-only-shows-folders-json-configures-it.md) | The Files tab only shows; folders.json configures it; every file opens to edit | Miguel, Claude | accepted |
+| [56](0056-html-opens-in-the-browser-not-in-comando.md) | HTML opens in the browser, not in comando | Miguel, Claude | accepted |

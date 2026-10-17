@@ -13,6 +13,7 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.layout.ShrinkingRow;
@@ -49,10 +50,11 @@ import java.util.regex.Pattern;
 
 /**
  * One editor panel: a header with its session and connection, and the command editor. A panel's own text is SQL and
- * prompts; a panel opened on a file, such as a document from the Files tab, is coloured as the file's language, and a Markdown one
- * opens rendered. Any Markdown panel switches between the editor and the rendered text with its header button, which
- * names the other view: Preview while editing, Edit while previewing; a link to another Markdown file, double-clicked in
- * the rendered text, opens that file in a panel. A production connection frames the panel in red.
+ * prompts; a panel opened on a file, such as a document from the Files tab, is coloured as the file's language, and a
+ * Markdown one opens rendered. Such a panel switches between the editor and the rendered text with its header button,
+ * which names the other view: Preview while editing, Edit while previewing. An HTML file opens as its text, with a
+ * button that opens it in the browser. A link to another Markdown or HTML file, double-clicked in the rendered text,
+ * opens that file in a panel. A production connection frames the panel in red.
  */
 public final class EditorPanel extends JPanel {
 
@@ -72,6 +74,8 @@ public final class EditorPanel extends JPanel {
     private final JButton clear = new JButton(Icons.get("clear"));
     /** Names the other view: Preview while the text is edited, Edit while the Markdown shows rendered. */
     private final JButton mode = new JButton();
+    /** Opens an HTML document in the browser, which renders it; shown for HTML only. */
+    private final JButton browser = new JButton("Browser", Icons.get("browser"));
     private boolean previewing;
     private final HtmlPane rendered = new HtmlPane();
     private final JPanel center = new JPanel(new CardLayout());
@@ -118,8 +122,18 @@ public final class EditorPanel extends JPanel {
         stop.setFocusable(false);
         clear.setFocusable(false);
         mode.setFocusable(false);
+        browser.setFocusable(false);
+        browser.setToolTipText("Open the page in the browser");
+        browser.getAccessibleContext().setAccessibleName("Open in the browser");
+        browser.setVisible(false);
+        browser.addActionListener(e -> {
+            if (file != null) {
+                Browser.openFile(file);
+            }
+        });
         showMode();
         mode.addActionListener(e -> showPreview(!previewing));
+        right.add(browser);
         right.add(mode);
         right.add(run);
         right.add(stop);
@@ -129,7 +143,7 @@ public final class EditorPanel extends JPanel {
         header.add(right, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
         rendered.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD * 2, Theme.PAD, Theme.PAD * 2));
-        rendered.setLinkHandler(href -> linkedMarkdown(file, href).ifPresent(f -> opener.accept(f)));
+        rendered.setLinkHandler(href -> linkedDocument(file, href).ifPresent(f -> opener.accept(f)));
         JScrollPane renderedScroll = new JScrollPane(rendered);
         renderedScroll.setBorder(null);
         center.add(editor.component(), EDIT);
@@ -193,11 +207,12 @@ public final class EditorPanel extends JPanel {
             followEnd();
         }
         showClear();
-        boolean markdown = isMarkdown();
-        mode.setVisible(markdown);
-        if (!markdown && previewing()) {
+        boolean renders = rendersAsPage();
+        mode.setVisible(renders);
+        browser.setVisible(document && isHtml());
+        if (!renders && previewing()) {
             showPreview(false);
-        } else if (markdown && opened) {
+        } else if (renders && opened) {
             showPreview(true);
         }
     }
@@ -216,14 +231,28 @@ public final class EditorPanel extends JPanel {
         editor.area().setCaretPosition(editor.area().getDocument().getLength());
     }
 
-    private boolean isMarkdown() {
+    /** A panel's own text and a Markdown file show rendered, and switch to the text to edit. */
+    private boolean rendersAsPage() {
         return file == null || markdownName(file);
     }
 
+    private boolean isHtml() {
+        return file != null && htmlName(file);
+    }
+
     private static boolean markdownName(Path file) {
-        Path name = file.getFileName();
-        String n = name == null ? "" : name.toString().toLowerCase(Locale.ROOT);
+        String n = lowerName(file);
         return n.endsWith(".md") || n.endsWith(".markdown");
+    }
+
+    private static boolean htmlName(Path file) {
+        String n = lowerName(file);
+        return n.endsWith(".html") || n.endsWith(".htm");
+    }
+
+    private static String lowerName(Path file) {
+        Path name = file.getFileName();
+        return name == null ? "" : name.toString().toLowerCase(Locale.ROOT);
     }
 
     /** How a followed link opens its file: the shell opens it in a panel, or brings forward the panel that has it. */
@@ -232,11 +261,11 @@ public final class EditorPanel extends JPanel {
     }
 
     /**
-     * The Markdown file a link names, a relative one read from {@code document}'s folder; empty for a link to anything
-     * else: a web page, a heading of the same document, a file that is not Markdown. A heading after the file's name is
-     * dropped: the file opens at its top.
+     * The Markdown or HTML file a link names, a relative one read from {@code document}'s folder; empty for a link to
+     * anything else: a web page, a heading of the same document, a file comando does not render. A heading after the
+     * file's name is dropped: the file opens at its top.
      */
-    static Optional<Path> linkedMarkdown(Path document, String href) {
+    static Optional<Path> linkedDocument(Path document, String href) {
         String path;
         try {
             URI uri = new URI(href);
@@ -265,7 +294,7 @@ public final class EditorPanel extends JPanel {
             }
             target = folder.resolve(target);
         }
-        return markdownName(target) ? Optional.of(target.normalize()) : Optional.empty();
+        return markdownName(target) || htmlName(target) ? Optional.of(target.normalize()) : Optional.empty();
     }
 
     /** The rendered view; for tests. */
@@ -312,6 +341,11 @@ public final class EditorPanel extends JPanel {
         if (!on) {
             editor.requestFocus();
         }
+    }
+
+    /** For tests. */
+    boolean browserOffered() {
+        return browser.isVisible();
     }
 
     /** Clear is offered for the panel's own text while it is edited, and does something only when there is text. */

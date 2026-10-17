@@ -455,17 +455,15 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void aRowSaysCtxThenUptimeAndTheIdOnALineOfItsOwn() {
+    void aRowSaysCtxAndUptimeUnderItsFolderAndLeavesTheIdToTheTooltip() {
         long started = 1_760_000_000_000L;
         SessionState running = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").resumable("e41164bc-160c-4e3e-b43b-3218489da4e1"))
                 .withStatus(Status.OPEN, "").withStarted(started).withUsage(0.0, 84_000L, 200_000L, started);
         String[] lines = SessionRow.bodyHtml(running, started + 65 * 60_000L).split("<br>");
-        assertThat(lines).hasSize(3);
-        assertThat(lines[1]).contains(">ctx 42%<", "up 1 h 05 min").doesNotContain("context", "id ");
-        assertThat(lines[2]).contains(">id e41164bc<");
+        assertThat(lines).hasSize(2);
+        assertThat(lines[1]).contains(">ctx 42%<", "up 1 h 05 min").doesNotContain("context", "e41164bc");
         String[] fresh = SessionRow.bodyHtml(SessionState.closed(SessionSpec.fresh("new", "/w/new")), started).split("<br>");
-        assertThat(fresh).as("the same height before anything is known").hasSize(3);
-        assertThat(fresh[2]).contains("new conversation");
+        assertThat(fresh).as("the same height before anything is known").hasSize(2);
     }
 
     private static List<String> names(JList<?> list) throws Exception {

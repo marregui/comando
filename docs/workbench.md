@@ -42,15 +42,18 @@ either empty. Several panels may share a connection; a session has at most one p
   session, with the focused panel's connection. Detach (header chip) leaves the session running headless.
 - **A new panel** (⌘T) gets the focused panel's connection and no session.
 - **Moving** a tab: drag it along the row; a line marks where it lands. The order is saved and kept across restarts.
-- **Links** in rendered Markdown: a web link opens in the browser at a click; a link to another Markdown file, beside
-  the document or by its full path, opens that file in a panel at a double click, or brings forward the panel that has it.
+- **HTML files** open as text, to edit; the Browser button opens the page in the desktop's browser
+  ([record 56](adr/0056-html-opens-in-the-browser-not-in-comando.md)).
+- **Links** in rendered Markdown: a web link opens in the browser at a click; a link to another Markdown or HTML
+  file, beside the document or by its full path, opens that file in a panel at a double click, or brings forward the
+  panel that has it.
 - **Running** SQL opens the panel's connection when closed; a prompt starts its session when stopped.
 - **The header** shows the session, then the connection, as chips with a status dot and a plug (green when running or
   connected) that starts or stops, connects or disconnects. Next to the session's plug: a fresh start (while stopped
   with a conversation: a new conversation; the old one stays importable) and a checkpoint (sends the session's
   checkpoint command, `/reflect` by default; purple once a turn ended with the context at 60% of the window or more and
   the command was not sent since) ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)).
-  On the right: Preview or Edit (Markdown), Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A
+  On the right: Browser (HTML: the page in the browser), Preview or Edit (Markdown), Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A
   production connection frames the panel in red.
 - **The tab icon** shows the first that applies ([records 42 and 43](adr/0043-a-session-waiting-on-background-work-shows-it.md)):
   a question mark while a request waits; a red mark when the last turn or query failed, or the session died, out of view; a green
@@ -75,8 +78,8 @@ left, edit, clone and remove of the selected row on the right, off while nothing
 **Stop and remove**, **Disconnect and remove** or **Close and remove**, or **Leave it**.
 
 - **Sessions:** name, where it is bound ("headless" when nowhere), status, current activity or what it waits on,
-  pending approvals; directory and branch; `ctx` and the context % (purple from 60%), how long it has run; the session
-  id's first 8 characters. Over the row's text the tooltip shows the details Copy details copies. At the left a plug, fresh start, checkpoint, and while running compact and clear (`/compact`, `/clear`
+  pending approvals; directory and branch; `ctx` and the context % (purple from 60%), how long it has run. Over the
+  row's text the tooltip shows the details Copy details copies, the full session id among them. At the left a plug, fresh start, checkpoint, and while running compact and clear (`/compact`, `/clear`
   sent from the session's panel); at the right the model and effort as menus (a change saves and, on a running session,
   sends `/model` or `/effort`). A copy button at the row's top right under the mouse, Copy details in its menu and ⌘C
   copy name, path, branch, full id, status, uptime and start, context with tokens, model and effort. Listed running

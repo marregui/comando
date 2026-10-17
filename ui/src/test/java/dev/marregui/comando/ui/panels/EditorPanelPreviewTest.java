@@ -77,6 +77,23 @@ class EditorPanelPreviewTest {
     }
 
     @Test
+    void anHtmlDocumentOpensAsTextWithTheBrowserAtHand() throws Exception {
+        EditorPanel page = panel("report", p -> {
+            p.editor().load("<html><body><h1>Tests</h1></body></html>");
+            p.file(Path.of("/build/reports/index.html"), true);
+        });
+        assertThat(page.previewing()).as("comando does not render HTML").isFalse();
+        assertThat(page.previewOffered()).isFalse();
+        assertThat(page.browserOffered()).isTrue();
+        assertThat(page.editable()).isTrue();
+
+        EditorPanel notes = panel("notes", p -> p.file(Path.of("/s/notes.md"), true));
+        assertThat(notes.browserOffered()).as("Markdown has no browser button").isFalse();
+        EditorPanel own = panel("own", p -> p.file(Path.of("/home/.comando/panels/own.html"), false));
+        assertThat(own.browserOffered()).as("a panel's own text is never a page").isFalse();
+    }
+
+    @Test
     void clearEmptiesThePanelsOwnTextButNeverADocument() throws Exception {
         EditorPanel own = panel("notes", p -> {
             p.editor().load("select 1;\n");
@@ -154,21 +171,23 @@ class EditorPanelPreviewTest {
     }
 
     @Test
-    void aLinkToAnotherMarkdownFileNamesThatFileBesideTheDocument() {
+    void aLinkToAnotherMarkdownOrHtmlFileNamesThatFileBesideTheDocument() {
         Path doc = Path.of("/kb/claude/INTERNALS.md");
-        assertThat(EditorPanel.linkedMarkdown(doc, "EXT.md")).contains(Path.of("/kb/claude/EXT.md"));
-        assertThat(EditorPanel.linkedMarkdown(doc, "../ALPHA.md#claude")).as("the heading is dropped").contains(Path.of("/kb/ALPHA.md"));
-        assertThat(EditorPanel.linkedMarkdown(doc, "notes/My%20Notes.markdown")).contains(Path.of("/kb/claude/notes/My Notes.markdown"));
-        assertThat(EditorPanel.linkedMarkdown(doc, "my notes.md#top")).as("an angle-bracket destination keeps its spaces")
+        assertThat(EditorPanel.linkedDocument(doc, "EXT.md")).contains(Path.of("/kb/claude/EXT.md"));
+        assertThat(EditorPanel.linkedDocument(doc, "../ALPHA.md#claude")).as("the heading is dropped").contains(Path.of("/kb/ALPHA.md"));
+        assertThat(EditorPanel.linkedDocument(doc, "notes/My%20Notes.markdown")).contains(Path.of("/kb/claude/notes/My Notes.markdown"));
+        assertThat(EditorPanel.linkedDocument(doc, "my notes.md#top")).as("an angle-bracket destination keeps its spaces")
                 .contains(Path.of("/kb/claude/my notes.md"));
-        assertThat(EditorPanel.linkedMarkdown(doc, "/abs/README.MD")).contains(Path.of("/abs/README.MD"));
-        assertThat(EditorPanel.linkedMarkdown(doc, "file:///abs/a.md")).contains(Path.of("/abs/a.md"));
+        assertThat(EditorPanel.linkedDocument(doc, "/abs/README.MD")).contains(Path.of("/abs/README.MD"));
+        assertThat(EditorPanel.linkedDocument(doc, "file:///abs/a.md")).contains(Path.of("/abs/a.md"));
 
-        assertThat(EditorPanel.linkedMarkdown(doc, "#a-heading")).as("a heading of the same document").isEmpty();
-        assertThat(EditorPanel.linkedMarkdown(doc, "https://example.com/x.md")).isEmpty();
-        assertThat(EditorPanel.linkedMarkdown(doc, "mailto:a@b.c")).isEmpty();
-        assertThat(EditorPanel.linkedMarkdown(doc, "build.gradle.kts")).as("not Markdown").isEmpty();
-        assertThat(EditorPanel.linkedMarkdown(null, "EXT.md")).as("relative to nothing").isEmpty();
+        assertThat(EditorPanel.linkedDocument(doc, "#a-heading")).as("a heading of the same document").isEmpty();
+        assertThat(EditorPanel.linkedDocument(doc, "https://example.com/x.md")).isEmpty();
+        assertThat(EditorPanel.linkedDocument(doc, "mailto:a@b.c")).isEmpty();
+        assertThat(EditorPanel.linkedDocument(doc, "build.gradle.kts")).as("not rendered by comando").isEmpty();
+        assertThat(EditorPanel.linkedDocument(doc, "report/index.html#tests")).contains(Path.of("/kb/claude/report/index.html"));
+        assertThat(EditorPanel.linkedDocument(doc, "file:/kb/old.HTM")).as("a page's link, read against its base").contains(Path.of("/kb/old.HTM"));
+        assertThat(EditorPanel.linkedDocument(null, "EXT.md")).as("relative to nothing").isEmpty();
     }
 
     @Test

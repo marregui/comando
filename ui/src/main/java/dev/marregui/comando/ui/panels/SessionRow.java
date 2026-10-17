@@ -29,7 +29,7 @@ import java.util.Optional;
 
 /**
  * One session in the sidebar's list: its state, name, the panels it is bound to (or headless) and pending approvals;
- * its folder and branch; how long it has run, how full its context is and its conversation; and a row of controls. On
+ * its folder and branch; how full its context is and how long it has run; and a row of controls. On
  * the left, packed: the plug, green while the session runs and grey while it does not, a click on it stopping or
  * starting the session; a fresh start (a stopped session with a conversation starts on a new one); a checkpoint (the
  * session's checkpoint command sent as a prompt), purple once the session is due one; and, while it runs, compact and
@@ -263,8 +263,9 @@ final class SessionRow extends JPanel {
     }
 
     /**
-     * Three lines that never wrap, clipped at the edge: the folder and branch; how full the context is (purple from the
-     * checkpoint's threshold) and how long it has run, whatever is known; the start of its conversation's id.
+     * Two lines that never wrap, clipped at the edge: the folder and branch; how full the context is (purple from the
+     * checkpoint's threshold) and how long it has run, whatever is known. The conversation's id is in the tooltip and
+     * the copied details.
      */
     static String bodyHtml(SessionState s, long nowMillis) {
         String branch = s.branch().isEmpty() ? "" : " ⎇ " + MarkdownHtml.escape(s.branch());
@@ -279,14 +280,10 @@ final class SessionRow extends JPanel {
         if (!uptime.isEmpty()) {
             facts.add("<span style='color:" + muted + "'>" + MarkdownHtml.escape(uptime) + "</span>");
         }
-        String id = s.spec().claudeSessionId();
-        String conversation = "<span style='color:" + muted + "'>" + (id.isEmpty() ? "new conversation"
-                : "id " + MarkdownHtml.escape(id.substring(0, Math.min(8, id.length())))) + "</span>";
         return "<html><nobr><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>"
                 + MarkdownHtml.escape(Clip.keepEnd(Labels.shortPath(s.spec().workDir()), 34)) + branch + "</span></nobr>"
                 // the line stays when nothing is known yet, so every row has the same height
-                + "<br><nobr>" + (facts.isEmpty() ? "&nbsp;" : String.join("<span style='color:" + muted + "'> · </span>", facts)) + "</nobr>"
-                + "<br><nobr>" + conversation + "</nobr></html>";
+                + "<br><nobr>" + (facts.isEmpty() ? "&nbsp;" : String.join("<span style='color:" + muted + "'> · </span>", facts)) + "</nobr></html>";
     }
 
     /** Buttons side by side with no gap between them. */
