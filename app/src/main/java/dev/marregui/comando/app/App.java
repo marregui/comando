@@ -29,6 +29,7 @@ import dev.marregui.comando.mcp.McpServer;
 import dev.marregui.comando.mcp.McpTools;
 import dev.marregui.comando.tools.ToolsAdapter;
 import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
+import dev.marregui.comando.ui.kit.text.LocalImages;
 import dev.marregui.comando.ui.kit.text.MermaidDiagrams;
 import dev.marregui.comando.ui.shell.ComandoUi;
 
@@ -94,6 +95,9 @@ public final class App implements AutoCloseable {
             // the previews draw Mermaid diagrams with mmdc into a cache, once per diagram text
             MermaidDiagrams.install(config.home().resolve("cache").resolve("mermaid"));
             own(MermaidDiagrams::shutdown);
+            // and show the pictures a document names on this machine, an SVG drawn into a cache once
+            LocalImages.install(config.home().resolve("cache").resolve("images"));
+            own(LocalImages::shutdown);
             McpServer mcp;
             try {
                 McpTools tools = new McpTools(loop, loop::state, transcripts, db, new AuditLog(config.auditDir()), Clock.SYSTEM, APPROVAL_TIMEOUT);

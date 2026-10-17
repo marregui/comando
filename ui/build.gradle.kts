@@ -3,6 +3,7 @@ dependencies {
     api(project(":core"))
     implementation(libs.flatlaf)
     implementation(libs.flatlaf.extras)
+    implementation(libs.jsvg)
     implementation(libs.rsyntaxtextarea)
     implementation(libs.autocomplete)
     implementation(libs.commonmark)

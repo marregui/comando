@@ -1,5 +1,7 @@
 [versions]
 flatlaf = "3.7.2"
+# the SVG renderer FlatLaf's extras use; kept at their version
+jsvg = "2.1.0"
 rsyntaxtextarea = "4.0.1"
 autocomplete = "4.0.0"
 commonmark = "0.30.0"
@@ -19,6 +21,7 @@ testcontainers = "2.0.5"
 [libraries]
 flatlaf = { module = "com.formdev:flatlaf", version.ref = "flatlaf" }
 flatlaf-extras = { module = "com.formdev:flatlaf-extras", version.ref = "flatlaf" }
+jsvg = { module = "com.github.weisj:jsvg", version.ref = "jsvg" }
 rsyntaxtextarea = { module = "com.fifesoft:rsyntaxtextarea", version.ref = "rsyntaxtextarea" }
 autocomplete = { module = "com.fifesoft:autocomplete", version.ref = "autocomplete" }
 commonmark = { module = "org.commonmark:commonmark", version.ref = "commonmark" }

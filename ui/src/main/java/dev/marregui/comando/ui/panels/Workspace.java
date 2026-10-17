@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,6 +80,11 @@ public final class Workspace {
     private Runnable attention = () -> {
     };
     private Consumer<PanelId> closer;
+    /** Whether every editor shows the light theme, its text and its rendered Markdown. EDT only. */
+    private boolean light;
+    /** Told when the theme button switches the editors, so the choice is kept. */
+    private Consumer<Boolean> themeChanged = on -> {
+    };
     /** Opens a file a panel's link names; the shell's own open. */
     private Consumer<Path> opener = f -> {
     };
@@ -87,6 +93,8 @@ public final class Workspace {
     private boolean rendering;
     /** Files asked for to edit: the panel that holds one, now or once it opens, shows its text rather than rendered. */
     private final Set<Path> toEdit = new HashSet<>();
+    /** Files a link opens at one of their headings, with the heading, until their panel shows. EDT only. */
+    private final Map<Path, String> toHeading = new HashMap<>();
     /** The state last rendered, for a deleted file of a closed panel, which has no tab. EDT only. */
     private AppState shown;
 
@@ -187,6 +195,21 @@ public final class Workspace {
         closer = close;
     }
 
+    /** Every editor, open now or opened later, in the light theme or the dark one. */
+    public void light(boolean on) {
+        light = on;
+        panels.values().forEach(p -> p.light(on));
+    }
+
+    public boolean light() {
+        return light;
+    }
+
+    /** What runs when a panel's theme button switches the editors, with the new choice. */
+    public void onThemeChanged(Consumer<Boolean> listener) {
+        themeChanged = listener;
+    }
+
     /** How a link followed in a panel's rendered Markdown opens its file. */
     public void onOpenFile(Consumer<Path> open) {
         opener = open;
@@ -258,6 +281,31 @@ public final class Workspace {
             }
         }
         toEdit.add(file);
+    }
+
+    /**
+     * The panel that holds {@code file} scrolls its preview to the heading whose id is {@code heading}: an open one now,
+     * one that opens or reopens at the render that shows it. Called on the EDT.
+     */
+    public void headingWhenOpen(Path file, String heading) {
+        for (Map.Entry<PanelId, EditorPanel> e : panels.entrySet()) {
+            if (texts.file(e.getKey()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
+                e.getValue().showHeading(heading);
+                return;
+            }
+        }
+        toHeading.put(file, heading);
+    }
+
+    private String takeHeading(Path file) {
+        for (Iterator<Map.Entry<Path, String>> it = toHeading.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<Path, String> e = it.next();
+            if (PanelTexts.samePath(e.getKey(), file)) {
+                it.remove();
+                return e.getValue();
+            }
+        }
+        return null;
     }
 
     public void newPanel() {
@@ -341,7 +389,17 @@ public final class Workspace {
                     view.editor().load(texts.load(p.id()));
                     PanelId id = p.id();
                     view.editor().onChange(text -> texts.changed(id, text));
-                    view.onOpenFile(f -> opener.accept(f));
+                    view.onOpenFile((f, heading) -> {
+                        if (heading != null) {
+                            headingWhenOpen(f, heading);
+                        }
+                        opener.accept(f);
+                    });
+                    view.light(light);
+                    view.onThemeToggle(() -> {
+                        light(!light);
+                        themeChanged.accept(light);
+                    });
                     panels.put(p.id(), view);
                     tabs.insertTab(title(p, false), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
                 } else if (tabs.indexOfComponent(view) != i) {
@@ -353,6 +411,10 @@ public final class Workspace {
                 view.file(file, texts.document(p.id()));
                 if (file != null && toEdit.removeIf(f -> PanelTexts.samePath(f, file))) {
                     view.edit();
+                }
+                String heading = file == null ? null : takeHeading(file);
+                if (heading != null) {
+                    view.showHeading(heading);
                 }
                 view.render(p, s);
             }

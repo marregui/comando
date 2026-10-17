@@ -40,7 +40,10 @@ final class Keys {
         return true;
     }
 
-    /** Every command with a key, by menu, as a Markdown table, then the keys of the cards. */
+    /**
+     * Every command with a key, by menu, as a Markdown table; then the keys that belong to one place and are no command:
+     * an approval card's, and those of the find bar, the transcript, the sessions list, the Files tab and the dialogs.
+     */
     static String markdown(List<Command> commands) {
         StringBuilder md = new StringBuilder("# Keyboard shortcuts\n\n| Menu | Command | Keys |\n|---|---|---|\n");
         for (Command c : commands) {
@@ -49,8 +52,36 @@ final class Keys {
                         .append(" | ").append(CommandPalette.keyText(c.key())).append(" |\n");
             }
         }
-        md.append("\nOn an approval card: ⏎ or A gives the green answer (allow, run, answer, approve), D or ⎋ denies; on a tool card S ")
-                .append("allows for the session and L twice allows always; ↑ and ↓ move between cards.\n");
+        md.append(PLACES);
         return md.toString();
     }
+
+    /** The keys of one place each, which no menu lists. */
+    static final String PLACES = """
+
+            ## On an approval card
+
+            | Keys | Does |
+            |---|---|
+            | ⏎ or A | the green answer: allow, run, answer, approve |
+            | D or ⎋ | deny; ⎋ first cancels a pending Always |
+            | S | a tool card: allow for the session |
+            | L, then L again within 3 s | a tool card: allow always |
+            | ↑ ↓ | the card above, the card below |
+            | ⏎ in the note | deny with the note once it holds text; on an empty note, the green answer |
+            | ⌘⏎ in the note | deny with the note |
+            | ⏎ in the Other answer | a new line; only the Answer button sends it |
+            | ⎋ in the note or the Other answer | back to the card |
+
+            ## Elsewhere
+
+            | Where | Keys | Does |
+            |---|---|---|
+            | Find bar | ⏎, ⇧⏎, ⎋ | next match, previous match, close |
+            | Transcript | ⌘C, ⌘A | copy the selection, select all |
+            | Sessions list | ⌘C | copy the selected session's details |
+            | Files tab | ⏎ | open the selected file in a panel |
+            | Files tab filter | ⎋ | clear the filter |
+            | Connection and session dialogs | ⏎, ⌘⏎, ⎋ | save, save and assign to the panel, close (asking first when unsaved) |
+            """;
 }

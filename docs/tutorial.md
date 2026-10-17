@@ -46,14 +46,14 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 | **Menu bar** | **File** (panels and files), **Edit**, **Panel** (run, then the focused panel's **Session**, **Connection**, **Result** and **Tools** submenus), **View** (the window: sidebar, lower panel, zoom), **Help**. |
 | **Sidebar**, left | four tabs in two rows: **Panels** (comando's own panels, open and closed) and **Files** (folders you choose, Claude Code's own folder at first; a double click opens a file in a panel, to read or edit; the tab itself has no buttons, and Panel ▸ Tools ▸ Files tab folders opens `folders.json`, where the folders are set), then **Sessions** (Claude Code sessions, running first; each row shows its context, uptime and id, and its controls start or stop it, compact or clear its conversation and change its model or effort; drag a row to order them yourself) and **Connections** (databases). Panels, Sessions and Connections have a `+` button. ⌘B or the `⋯` button hides the sidebar to a thin rail on the left edge; the rail's `⋯` brings it back. |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it. The tab's icon says what its session is up to: a spinner while it works, an hourglass while it waits on work it left running in the background (an agent, a shell command), a green check when it finished while you were on another tab, a red mark when it failed, a question mark while it waits for your answer; the last three put a `●` before the title until you look (the question mark stays until you answer). Hover for the reason. |
-| **Panel header** | two chips: the panel's **session** and its **connection**, each with a status dot (○ closed, ● open) and a button to start or connect it. Next to the session's plug: a button that starts a stopped session on a **new conversation** (shown when it has one to leave), and a **checkpoint** button that sends the session's checkpoint command (`/reflect` by default; change or clear it in the session dialog). **Run**, **Stop** and **Clear** on the right. |
+| **Panel header** | two chips: the panel's **session** and its **connection**, each with a status dot (○ closed, ● open) and a button to start or connect it. Next to the session's plug: a button that starts a stopped session on a **new conversation** (shown when it has one to leave), and a **checkpoint** button that sends the session's checkpoint command (`/reflect` by default; change or clear it in the session dialog); while the session runs, **compact** and **clear** its conversation. On the right, icons: **Preview** (Markdown), the **editor theme** (light or dark, for every panel), **Run**, **Stop** and **Clear**; hover one for its name. |
 | **Editor** | where you write SQL and prompts, mixed in one text. |
 | **Lower tabs** | **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell), **Results** (SQL output). Plots and kept results open more tabs here. |
 | **Status bar**, bottom | the current message on the left (click it for the recent ones); your plan's usage (session, week, Fable; hover for the reset times; read every 5 minutes), the panel's session, connection and running work on the right. |
 
 One idea runs through the whole tool: **a panel is bound to at most one connection and one session**. SQL you run in the panel goes to its connection; anything else goes to its session.
 
-The command palette lists every command that can run now, with its key. Press **⌘⇧P**, type a few letters, press **⏎**. When you forget a key, use the palette, or **⌘⇧/** for the table of keys. The menus grey out what cannot run now.
+The command palette lists every command that can run now, with its key. Press **⌘⇧P**, type a few letters, press **⏎**. When you forget a key, use the palette, or **⌘⇧/** for the table of keys: the menus' commands, then the keys of an approval card and of single places (find bar, transcript, sessions list, Files tab, dialogs). **Help ▸ Markdown sheet** puts beside the editor what Markdown the preview draws, and how a prompt reaches Claude. The menus grey out what cannot run now.
 
 ## 2. A database
 
@@ -161,8 +161,8 @@ The session can read your database and draw in your window through tools comando
 
 1. At the end of the editor, after an empty line, type this block and press **⌘⇧⏎**:
    `Use db_run_sql to insert one row into trades: sym 'TEST', price 1.0, ts now().`
-   *You should see* "1 waiting for approval" in the status bar, a count on the **Approvals** tab, and the tool's card in the Session tab reading "waiting for your approval · ⌃2".
-2. Open **Approvals**. The card shows the connection and the exact statement.
+   *You should see* "1 waiting for approval" in the status bar and the **Approvals** tab come forward with the card; the Session tab's card for the tool reads "waiting for your approval · ⌃2".
+2. The card shows the connection and the exact statement.
    - **Run** (or **⏎**) executes it.
    - **Deny** (or **D**) refuses it. Type a reason in the note field first, and Claude receives it.
 
@@ -223,7 +223,7 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌘⇧C, ⌘⇧S | copy, export the view |
 | ⌘S | save the panel now |
 | ⌥⌘G | run Gradle tasks |
-| ⌘⇧/ | the table of every key |
+| ⌘⇧/ | the table of every key; Help ▸ Markdown sheet for Markdown |
 | ⏎ or A / D or ⎋ / S / L twice / ↑ ↓ | on an approval card: allow, run, answer or approve / deny / for session, on a tool card / always, on a tool card that offers it / previous or next card |
 | ⌘/ | comment or uncomment the line, in the editor |
 | ⌘= ⌘- ⌘0 | zoom |

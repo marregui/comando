@@ -264,6 +264,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.onAttention(notifier::attention);
         workspace.onClose(this::closePanel);
         workspace.onOpenFile(this::openFile);
+        workspace.onThemeChanged(on -> prefs.putBoolean("editor.light", on));
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
         side = new SidePane(ctx, widgets);
@@ -843,6 +844,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("help.tutorial", "Tutorial", null, this::showTutorial, () -> deps.home() != null);
         // ⌘/ stays the editor's comment toggle; ⌘⇧/ is the Mac's Help key
         cmd("help.keys", "Keyboard shortcuts", key(KeyEvent.VK_SLASH, CMD | SHIFT), this::showKeys);
+        cmd("help.markdown", "Markdown sheet", null, this::showMarkdownSheet);
         cmd("help.kit", "Claude Code kit…", null, this::showKit);
         cmd("help.log", "Show the log", null, this::showLog, () -> deps.logDir() != null);
         cmd("help.dataRoot", "Reveal comando folder", null, () -> reveal(deps.home()), () -> deps.home() != null);
@@ -1215,6 +1217,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         deps.intents().dispatch(new Intent.ShowView("", "Keyboard shortcuts", new ViewSpec.Markdown(Keys.markdown(actions.all())), Placement.SIDE));
     }
 
+    /** The Markdown sheet in the side pane, as the keyboard shortcuts are, to keep beside the editor. */
+    private void showMarkdownSheet() {
+        sidePaneHidden = false;
+        deps.intents().dispatch(new Intent.ShowView("", "Markdown", new ViewSpec.Markdown(MarkdownSheet.markdown()), Placement.SIDE));
+    }
+
     private void reveal(Path dir) {
         Thread.ofVirtual().name("reveal").start(() -> {
             try {
@@ -1455,6 +1463,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
         sidebar.selectTab(prefs.getInt("sidebar.tab", SessionsSidebar.SESSIONS));
         sidebar.manualOrder(prefs.getBoolean("sessions.manualOrder", false));
+        workspace.light(prefs.getBoolean("editor.light", false));
         showSidebar(prefs.getBoolean("sidebar.visible", true));
         vertical.setDividerLocation(prefs.getInt("divider.lower", (int) (h * 0.45)));
         sidePaneHidden = prefs.getBoolean("sidePane.hidden", false);

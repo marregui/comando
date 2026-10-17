@@ -68,6 +68,7 @@ class MenusTest {
                 Map.entry("plug", Set.of("session.toggle", "connection.toggle")),
                 Map.entry("tutorial", Set.of("help.tutorial")),
                 Map.entry("keyboard", Set.of("help.keys")),
+                Map.entry("markdown", Set.of("help.markdown")),
                 Map.entry("kit", Set.of("help.kit")),
                 Map.entry("log", Set.of("help.log")),
                 Map.entry("comando-folder", Set.of("help.dataRoot")));

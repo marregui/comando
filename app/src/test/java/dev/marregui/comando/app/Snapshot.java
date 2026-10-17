@@ -17,6 +17,8 @@ import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.text.HtmlPane;
+import dev.marregui.comando.ui.kit.text.LocalImages;
 
 import javax.imageio.ImageIO;
 import javax.swing.AbstractButton;
@@ -28,12 +30,17 @@ import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
+import javax.swing.event.HyperlinkEvent;
+import javax.swing.text.BadLocationException;
 import javax.swing.tree.DefaultMutableTreeNode;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Font;
 import java.awt.Frame;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -42,6 +49,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
 /**
@@ -133,7 +142,13 @@ public final class Snapshot {
         click("Preview");
         Thread.sleep(800);
         shoot(out.resolve("02d-markdown-preview.png"));
+        // the light editors: the preview, then the text, then back to dark for the shots that follow
+        // the switch redraws on the event thread: done when the click returns
+        click("Light editors");
+        shoot(out.resolve("02d2-light-preview.png"));
         click("Edit");
+        shoot(out.resolve("02d3-light-editor.png"));
+        click("Dark editors");
         // the sidebar's Files tab, clicked as a user would: the folders as rows, the first opened as by a click
         selectSidebarTab("Files");
         SwingUtilities.invokeAndWait(() -> {
@@ -220,6 +235,30 @@ public final class Snapshot {
         SwingUtilities.invokeAndWait(() -> app.ui().openFile(plan));
         Thread.sleep(4000); // mmdc draws the diagram in about 1.5 s, and the preview shows it then
         shoot(out.resolve("02e-markdown-document.png"));
+        // a report with the pictures beside it, a PNG in images/ and an SVG in img/, dark and then light
+        Path report = reportWithPictures(docs);
+        SwingUtilities.invokeAndWait(() -> app.ui().openFile(report));
+        picturesRead(docs.resolve("images/p99-latency.png"), docs.resolve("img/write-path.svg"));
+        shoot(out.resolve("02e2-markdown-pictures.png"));
+        click("Light editors");
+        shoot(out.resolve("02e3-markdown-pictures-light.png"));
+        click("Dark editors");
+        // a link to a heading of another document, double-clicked in the report: the document opens at that heading
+        StringBuilder rollout = new StringBuilder("# Rollout\n\n");
+        for (int i = 1; i <= 6; i++) {
+            rollout.append("## ").append(i).append(". Stage ").append(i).append("\n\n");
+            for (int j = 0; j < 8; j++) {
+                rollout.append("Stage ").append(i).append(", check ").append(j).append(": the lane holds its p99 under 100 ms.\n\n");
+            }
+        }
+        rollout.append("## 7. Rollback\n\nThe old writer comes back with one flag; nothing in the file changes.\n\n");
+        for (int j = 0; j < 30; j++) {
+            rollout.append("Rollback check ").append(j).append(".\n\n");
+        }
+        Files.writeString(docs.resolve("ROLLOUT.md"), rollout);
+        followLink("Lane report", "ROLLOUT.md#7-rollback");
+        showing(loop, "ROLLOUT");
+        shoot(out.resolve("02e4-link-to-a-heading.png"));
         SwingUtilities.invokeAndWait(() -> app.ui().openFile(source));
         Thread.sleep(1500);
         shoot(out.resolve("02f-source-colours.png"));
@@ -239,6 +278,15 @@ public final class Snapshot {
         menuItem("Help", "Show the log");
         showing(loop, "comando-0.log");
         shoot(out.resolve("02h-help-log.png"));
+        // Help's two sheets, each in the side pane: the keys, then Markdown
+        for (String[] sheet : new String[][]{{"Keyboard shortcuts", "Keyboard shortcuts", "02i-help-keys.png"},
+                {"Markdown sheet", "Markdown", "02j-help-markdown.png"}}) {
+            menuItem("Help", sheet[0]);
+            await(loop, st -> st.views().stream().anyMatch(v -> v.title().equals(sheet[1])), 5_000);
+            // the view is drawn on the event thread after the state that holds it: done once the queue is through
+            SwingUtilities.invokeAndWait(() -> { });
+            shoot(out.resolve(sheet[2]));
+        }
         loop.dispatch(new Intent.FocusPanel(first));
         Thread.sleep(500);
         long plotId = loop.state().views().stream().filter(v -> v.title().equals("delay")).findFirst().orElseThrow().id();
@@ -264,6 +312,71 @@ public final class Snapshot {
         System.out.println("intent log in " + config.logDir());
         System.out.println("snapshots in " + out.toAbsolutePath());
         System.exit(0);
+    }
+
+    /**
+     * Waits until the pictures are read and the preview that asked first has been redrawn with them: its redraw is
+     * queued on the event thread before these callbacks run.
+     */
+    private static void picturesRead(Path... files) throws Exception {
+        for (Path file : files) {
+            CountDownLatch read = new CountDownLatch(1);
+            if (LocalImages.current().picture(file, read::countDown) instanceof LocalImages.Picture.Pending
+                    && !read.await(10, TimeUnit.SECONDS)) {
+                throw new IllegalStateException("not read in 10 s: " + file);
+            }
+        }
+        SwingUtilities.invokeAndWait(() -> {
+        });
+        SwingUtilities.invokeAndWait(() -> {
+        });
+    }
+
+    /** A Markdown report as Claude writes one, beside a PNG chart in images/ and an SVG diagram in img/. */
+    private static Path reportWithPictures(Path docs) throws IOException {
+        Path images = Files.createDirectories(docs.resolve("images"));
+        Path img = Files.createDirectories(docs.resolve("img"));
+        BufferedImage chart = new BufferedImage(520, 170, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = chart.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        g.setColor(new Color(0x2B2D30));
+        g.fillRect(0, 0, 520, 170);
+        g.setFont(new Font(Font.SANS_SERIF, Font.PLAIN, 13));
+        int[] p99 = {123, 114, 36, 29, 27};
+        String[] runs = {"base", "lock", "lane", "lane+", "final"};
+        for (int i = 0; i < p99.length; i++) {
+            g.setColor(i < 2 ? new Color(0xE06C75) : new Color(0x56B6C2));
+            g.fillRoundRect(40 + i * 95, 140 - p99[i], 60, p99[i], 6, 6);
+            g.setColor(new Color(0xBCBEC4));
+            g.drawString(runs[i], 45 + i * 95, 160);
+        }
+        g.dispose();
+        ImageIO.write(chart, "png", images.resolve("p99-latency.png").toFile());
+        Files.writeString(img.resolve("write-path.svg"), """
+                <svg xmlns="http://www.w3.org/2000/svg" width="460" height="120" viewBox="0 0 460 120" font-family="Helvetica" font-size="15">
+                  <defs><linearGradient id="g" x1="0" x2="1"><stop offset="0" stop-color="#4f7cff"/><stop offset="1" stop-color="#9b5de5"/></linearGradient>
+                    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#888"/></marker></defs>
+                  <rect x="10" y="35" width="110" height="50" rx="10" fill="url(#g)"/><text x="65" y="65" fill="white" text-anchor="middle">EDT</text>
+                  <rect x="175" y="35" width="110" height="50" rx="10" fill="url(#g)"/><text x="230" y="65" fill="white" text-anchor="middle">store</text>
+                  <rect x="340" y="35" width="110" height="50" rx="10" fill="url(#g)"/><text x="395" y="65" fill="white" text-anchor="middle">file</text>
+                  <line x1="120" y1="60" x2="172" y2="60" stroke="#888" stroke-width="2" marker-end="url(#a)"/>
+                  <line x1="285" y1="60" x2="337" y2="60" stroke="#888" stroke-width="2" marker-end="url(#a)"/>
+                  <text x="146" y="28" fill="#888" text-anchor="middle" font-size="12">edit</text><text x="311" y="28" fill="#888" text-anchor="middle" font-size="12">write</text>
+                </svg>
+                """);
+        return Files.writeString(docs.resolve("LANE-REPORT.md"), """
+                # Lane report
+
+                The lane took the p99 from 410 ms to 90 ms.
+
+                ![p99 latency per run](images/p99-latency.png)
+
+                The write path, as the store sees it:
+
+                ![write path](img/write-path.svg)
+
+                A picture that is not there: ![the old chart](images/old.png)
+                """);
     }
 
     /**
@@ -354,6 +467,32 @@ public final class Snapshot {
             }
         }
         return null;
+    }
+
+    /** Double-clicks a link to {@code href} in the shown preview whose text contains {@code shows}, as a user would. */
+    private static void followLink(String shows, String href) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            for (Frame f : Frame.getFrames()) {
+                if (f instanceof JFrame jf && f.isVisible()) {
+                    HtmlPane pane = find(jf.getContentPane(), HtmlPane.class, x -> x.isShowing() && text(x).contains(shows));
+                    if (pane != null) {
+                        MouseEvent click = new MouseEvent(pane, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 10, 10, 2, false,
+                                MouseEvent.BUTTON1);
+                        pane.fireHyperlinkUpdate(new HyperlinkEvent(pane, HyperlinkEvent.EventType.ACTIVATED, null, href, null, click));
+                        return;
+                    }
+                }
+            }
+            throw new IllegalStateException("no preview showing " + shows);
+        });
+    }
+
+    private static String text(HtmlPane pane) {
+        try {
+            return pane.getDocument().getText(0, pane.getDocument().getLength());
+        } catch (BadLocationException e) {
+            return "";
+        }
     }
 
     private static <T extends Component> T find(Component c, Class<T> type, Predicate<T> match) {

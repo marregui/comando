@@ -16,12 +16,20 @@ import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.JTabbedPane;
+import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
+import javax.swing.event.HyperlinkEvent;
+import javax.swing.text.BadLocationException;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.HeadlessException;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
+import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -273,6 +281,134 @@ class WorkspaceTest {
         JTabbedPane tabs = (JTabbedPane) w[0].component();
         assertThat(List.of(tabs.getTitleAt(0), tabs.getTitleAt(1), tabs.getTitleAt(2))).containsExactly("two", "three", "one");
         assertThat(w[0].focused().panel().id()).as("the moved panel stays in front").isEqualTo(P);
+    }
+
+    /** Two documents, each a file of its own. */
+    private static final class Documents implements PanelTexts {
+        private final Map<PanelId, Path> files;
+        private final Map<PanelId, String> texts;
+
+        Documents(Map<PanelId, Path> files, Map<PanelId, String> texts) {
+            this.files = files;
+            this.texts = texts;
+        }
+
+        @Override
+        public String load(PanelId panel) {
+            return texts.getOrDefault(panel, "");
+        }
+
+        @Override
+        public Optional<Path> file(PanelId panel) {
+            return Optional.ofNullable(files.get(panel));
+        }
+
+        @Override
+        public boolean document(PanelId panel) {
+            return files.containsKey(panel);
+        }
+
+        @Override
+        public void changed(PanelId panel, String text) {
+        }
+
+        @Override
+        public void forget(PanelId panel) {
+        }
+    }
+
+    @Test
+    void aLinkToAHeadingOfAnotherDocumentOpensItThereOrScrollsItsOpenPanelThere() throws Exception {
+        PanelId setupId = new PanelId("setup");
+        StringBuilder setup = new StringBuilder("# Setup\n\n");
+        for (int i = 0; i < 80; i++) {
+            setup.append("Step ").append(i).append(" of the preparation.\n\n");
+        }
+        setup.append("## 2. Install\n\nRun the installer.\n\n");
+        for (int i = 0; i < 40; i++) {
+            setup.append("Check ").append(i).append(" after the install.\n\n");
+        }
+        Documents texts = new Documents(Map.of(P, Path.of("/docs/guide.md"), setupId, Path.of("/docs/setup.md")),
+                Map.of(P, "# Guide\n\nSee [the install](setup.md#2-install).\n", setupId, setup.toString()));
+        List<Path> opened = new CopyOnWriteArrayList<>();
+        Workspace[] w = new Workspace[1];
+        AppState[] s = new AppState[1];
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(intent -> {
+            }, texts, new SchemaRegistry());
+            w[0].onOpenFile(opened::add);
+            s[0] = AppState.initial(List.of(new PanelState(P, "guide", "", "")), List.of(), List.of()).withFocused(P);
+            w[0].render(s[0]);
+            w[0].focused().rendered().fireHyperlinkUpdate(link(w[0].focused(), "setup.md#2-install"));
+        });
+        assertThat(opened).as("the shell opens the file").containsExactly(Path.of("/docs/setup.md"));
+
+        // the shell's panel for it arrives; it is laid out after it is made
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = s[0].withPanels(List.of(s[0].panels().get(0), new PanelState(setupId, "setup", "", "")), setupId);
+            w[0].render(s[0]);
+            layOut(w[0].component(), 900, 500);
+        });
+        EditorPanel setupPanel = w[0].focused();
+        assertThat(setupPanel.previewing()).isTrue();
+        int install = headingY(setupPanel, "2. Install");
+        assertThat(install).as("well below the first screen").isGreaterThan(1000);
+        assertThat(top(setupPanel)).as("opened at the heading").isEqualTo(install);
+        assertThat(install + ((JViewport) setupPanel.rendered().getParent()).getHeight()).as("not the end of the page")
+                .isLessThanOrEqualTo(setupPanel.rendered().getHeight());
+
+        // already open, scrolled elsewhere: the link brings it there again
+        SwingUtilities.invokeAndWait(() -> {
+            ((JViewport) setupPanel.rendered().getParent()).setViewPosition(new Point(0, 0));
+            w[0].render(s[0].withFocused(P));
+            w[0].focused().rendered().fireHyperlinkUpdate(link(w[0].focused(), "setup.md#2-install"));
+        });
+        assertThat(top(setupPanel)).as("its open panel scrolled to the heading").isEqualTo(install);
+    }
+
+    private static HyperlinkEvent link(EditorPanel p, String href) {
+        MouseEvent click = new MouseEvent(p.rendered(), MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 10, 10, 2, false,
+                MouseEvent.BUTTON1);
+        return new HyperlinkEvent(p.rendered(), HyperlinkEvent.EventType.ACTIVATED, null, href, null, click);
+    }
+
+    /** Sizes and lays out a tree never shown, where validate() lays out nothing. */
+    private static void layOut(Container c, int width, int height) {
+        c.setSize(width, height);
+        layOut(c);
+    }
+
+    private static void layOut(Container c) {
+        c.doLayout();
+        for (Component child : c.getComponents()) {
+            if (child instanceof Container inner) {
+                layOut(inner);
+            }
+        }
+    }
+
+    /** The preview's top, once the events the layout posted have run. */
+    private static int top(EditorPanel p) throws Exception {
+        int[] y = new int[1];
+        for (int i = 0; i < 4; i++) {
+            SwingUtilities.invokeAndWait(() -> {
+            });
+        }
+        SwingUtilities.invokeAndWait(() -> y[0] = ((JViewport) p.rendered().getParent()).getViewPosition().y);
+        return y[0];
+    }
+
+    private static int headingY(EditorPanel p, String text) throws Exception {
+        int[] y = new int[1];
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                String all = p.rendered().getDocument().getText(0, p.rendered().getDocument().getLength());
+                y[0] = (int) p.rendered().modelToView2D(all.indexOf(text)).getY();
+            } catch (BadLocationException e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        return y[0];
     }
 
     private static MouseEvent mouse(Component c, int id, int x, int y) {

@@ -18,7 +18,7 @@ as code. Scratchpad plans (`NEVSKY-PLAN.md`) carry Mermaid diagrams.
 | cache | `~/.comando/cache/mermaid/<hash>.png`, keyed by the text and how it is drawn; a text that changes is drawn again; a text `mmdc` rejects is remembered with its reason for the run | drawn once per version of a diagram |
 | no `mmdc` | the source, with a note naming `npm install -g @mermaid-js/mermaid-cli` | |
 | finding `mmdc` | the PATH, then the newest nvm Node, Homebrew, `/usr/local/bin`; its folder goes first on its PATH, since `mmdc` runs on `node` | an app started from Finder has a short PATH |
-| images | only pictures comando drew, from its cache folder; images named in the Markdown still show as their alt text | nothing is fetched that the user did not make |
+| images | only pictures comando drew, from its cache folder; images named in the Markdown still show as their alt text (since [record 58](0058-markdown-shows-the-pictures-beside-it.md), a picture that is a file on this machine shows) | nothing is fetched that the user did not make |
 | exit | the drawing in progress is stopped with its Chromium | no process outlives comando |
 | rejected | an embedded browser (JCEF, JavaFX WebView: over 100 MB and a second toolkit); mermaid.ink or Kroki (the text leaves the machine); a Java renderer (none for flowcharts and sequence diagrams) | |
 

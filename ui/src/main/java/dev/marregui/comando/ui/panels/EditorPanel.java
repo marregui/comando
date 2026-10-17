@@ -35,6 +35,8 @@ import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.InvalidPathException;
@@ -44,6 +46,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -68,14 +71,22 @@ public final class EditorPanel extends JPanel {
     private final JButton sessionFresh = iconButton();
     /** Sends the session's checkpoint command; shown only while the session has one. */
     private final JButton sessionCheckpoint = iconButton();
-    private final JButton run = new JButton("Run", Icons.get("play"));
-    private final JButton stop = new JButton("Stop", Icons.get("stop"));
+    /** Sends {@code /compact} from this panel; shown while the session runs. */
+    private final JButton sessionCompact = iconButton();
+    /** Sends {@code /clear} from this panel; shown while the session runs. */
+    private final JButton sessionClear = iconButton();
+    private final JButton run = iconButton();
+    private final JButton stop = iconButton();
     /** Empties the panel's own text in one step ⌘Z takes back; a document, a file of its own, is never emptied from here. */
-    private final JButton clear = new JButton(Icons.get("clear"));
-    /** Names the other view: Preview while the text is edited, Edit while the Markdown shows rendered. */
-    private final JButton mode = new JButton();
+    private final JButton clear = iconButton();
+    /** Shows the other view: the rendered Markdown while the text is edited, the text while it shows rendered. */
+    private final JButton mode = iconButton();
+    /** Switches every editor between the light theme and the dark one. */
+    private final JButton theme = iconButton();
+    private Runnable themeToggle = () -> {
+    };
     /** Opens an HTML document in the browser, which renders it; shown for HTML only. */
-    private final JButton browser = new JButton("Browser", Icons.get("browser"));
+    private final JButton browser = iconButton();
     private boolean previewing;
     private final HtmlPane rendered = new HtmlPane();
     private final JPanel center = new JPanel(new CardLayout());
@@ -84,17 +95,24 @@ public final class EditorPanel extends JPanel {
     private final SchemaRegistry schemas;
     private PanelState panel;
     private AppState state;
-    private Consumer<Path> opener = f -> {
+    private BiConsumer<Path, String> opener = (f, heading) -> {
     };
+    private final JScrollPane renderedScroll = new JScrollPane(rendered);
+    /** A heading the preview scrolls to once it is laid out; null when none waits. EDT only. */
+    private String pendingHeading;
 
     public EditorPanel(PanelState panel, IntentSink intents, SchemaRegistry schemas) {
         super(new BorderLayout(0, 0));
         this.panel = panel;
         this.intents = intents;
         this.schemas = schemas;
+        run.setIcon(Icons.get("play"));
         run.getAccessibleContext().setAccessibleName("Run");
+        stop.setIcon(Icons.get("stop"));
         stop.getAccessibleContext().setAccessibleName("Stop");
+        clear.setIcon(Icons.get("clear"));
         clear.getAccessibleContext().setAccessibleName("Clear");
+        browser.setIcon(Icons.get("browser"));
         connectionToggle.getAccessibleContext().setAccessibleName("Connect or disconnect");
         sessionToggle.getAccessibleContext().setAccessibleName("Start or stop the session");
         JPanel header = new JPanel(new BorderLayout());
@@ -110,19 +128,22 @@ public final class EditorPanel extends JPanel {
         sessionFresh.getAccessibleContext().setAccessibleName("Start a new conversation");
         sessionCheckpoint.setIcon(Icons.get("checkpoint"));
         sessionCheckpoint.getAccessibleContext().setAccessibleName("Checkpoint");
+        left.add(sessionCompact);
+        left.add(sessionClear);
+        sessionCompact.setIcon(Icons.get("compact"));
+        sessionCompact.getAccessibleContext().setAccessibleName("Compact the conversation");
+        sessionCompact.setToolTipText("Compact the conversation: send " + SessionRow.COMPACT_COMMAND + " to the session");
+        sessionClear.setIcon(Icons.get("clear-conversation"));
+        sessionClear.getAccessibleContext().setAccessibleName("Clear the conversation");
         left.add(Box.createHorizontalStrut(Theme.PAD));
         left.add(connection);
         left.add(connectionToggle);
-        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
+        // icons close together, as the session's at the left
+        JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         run.setToolTipText("Run the selection or the block under the caret (⌘⏎); ⌘⇧⏎ sends to Claude, ⌥⏎ runs as SQL");
         stop.setToolTipText("Stop the running SQL or interrupt the session (⌘.)");
         clear.setToolTipText("Clear the text (⌘Z brings it back)");
-        // a click leaves the keyboard in the editor, ready for the next edit or run
-        run.setFocusable(false);
-        stop.setFocusable(false);
-        clear.setFocusable(false);
-        mode.setFocusable(false);
-        browser.setFocusable(false);
+        // a click leaves the keyboard in the editor, ready for the next edit or run: every icon button is unfocusable
         browser.setToolTipText("Open the page in the browser");
         browser.getAccessibleContext().setAccessibleName("Open in the browser");
         browser.setVisible(false);
@@ -133,8 +154,11 @@ public final class EditorPanel extends JPanel {
         });
         showMode();
         mode.addActionListener(e -> showPreview(!previewing));
+        theme.addActionListener(e -> themeToggle.run());
+        showTheme(false);
         right.add(browser);
         right.add(mode);
+        right.add(theme);
         right.add(run);
         right.add(stop);
         right.add(clear);
@@ -143,9 +167,15 @@ public final class EditorPanel extends JPanel {
         header.add(right, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
         rendered.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD * 2, Theme.PAD, Theme.PAD * 2));
-        rendered.setLinkHandler(href -> linkedDocument(file, href).ifPresent(f -> opener.accept(f)));
-        JScrollPane renderedScroll = new JScrollPane(rendered);
+        rendered.setLinkHandler(href -> linkedDocument(file, href).ifPresent(f -> opener.accept(f, linkedHeading(href))));
         renderedScroll.setBorder(null);
+        // a panel opened for a link to one of its headings is laid out after it is made
+        renderedScroll.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                scrollToPendingHeading();
+            }
+        });
         center.add(editor.component(), EDIT);
         center.add(renderedScroll, PREVIEW);
         add(center, BorderLayout.CENTER);
@@ -179,6 +209,10 @@ public final class EditorPanel extends JPanel {
         sessionToggle.addActionListener(e -> toggleSession());
         sessionFresh.addActionListener(e -> state.session(panel.session()).ifPresent(x -> intents.dispatch(new Intent.StartFresh(x.name()))));
         sessionCheckpoint.addActionListener(e -> state.session(panel.session()).ifPresent(x -> intents.dispatch(new Intent.Checkpoint(x.name()))));
+        sessionCompact.addActionListener(e -> state.session(panel.session())
+                .ifPresent(x -> intents.dispatch(new Intent.SessionCommand(x.name(), SessionRow.COMPACT_COMMAND))));
+        sessionClear.addActionListener(e -> state.session(panel.session())
+                .ifPresent(x -> intents.dispatch(new Intent.SessionCommand(x.name(), SessionRow.CLEAR_COMMAND))));
     }
 
     public CommandEditor editor() {
@@ -255,15 +289,45 @@ public final class EditorPanel extends JPanel {
         return name == null ? "" : name.toString().toLowerCase(Locale.ROOT);
     }
 
-    /** How a followed link opens its file: the shell opens it in a panel, or brings forward the panel that has it. */
-    public void onOpenFile(Consumer<Path> open) {
+    /**
+     * How a followed link opens its file: the shell opens it in a panel, or brings forward the panel that has it; with
+     * the heading the link names after {@code #}, or null.
+     */
+    public void onOpenFile(BiConsumer<Path, String> open) {
         opener = open;
+    }
+
+    /** The heading a link names after the file's name, as written (percent-encoded or not); null when it names none. */
+    static String linkedHeading(String href) {
+        int hash = href.indexOf('#');
+        return hash < 0 || hash == href.length() - 1 ? null : href.substring(hash + 1);
+    }
+
+    /**
+     * Scrolls the preview to the heading whose id is {@code fragment}: now when it is laid out, else once it is. A panel
+     * showing its text, not the preview, stays as it is.
+     */
+    public void showHeading(String fragment) {
+        if (!previewing) {
+            return;
+        }
+        pendingHeading = fragment;
+        scrollToPendingHeading();
+    }
+
+    private void scrollToPendingHeading() {
+        if (pendingHeading == null || !previewing || renderedScroll.getHeight() <= 0) {
+            return;
+        }
+        String heading = pendingHeading;
+        pendingHeading = null;
+        rendered.scrollToHeading(heading);
     }
 
     /**
      * The Markdown or HTML file a link names, a relative one read from {@code document}'s folder; empty for a link to
      * anything else: a web page, a heading of the same document, a file comando does not render. A heading after the
-     * file's name is dropped: the file opens at its top.
+     * file's name is not part of it: {@link #linkedHeading} reads it.
      */
     static Optional<Path> linkedDocument(Path document, String href) {
         String path;
@@ -306,9 +370,9 @@ public final class EditorPanel extends JPanel {
         return mode.isVisible();
     }
 
-    /** The mode button's label: the view a click switches to; for tests. */
+    /** The mode button's name: the view a click switches to; for tests. */
     String modeLabel() {
-        return mode.getText();
+        return mode.getAccessibleContext().getAccessibleName();
     }
 
     public boolean previewing() {
@@ -333,14 +397,21 @@ public final class EditorPanel extends JPanel {
         previewing = on;
         showMode();
         if (on) {
-            rendered.setMarkdown(editor.text());
+            rendered.setMarkdown(editor.text(), folder());
             rendered.setCaretPosition(0);
+        } else {
+            pendingHeading = null;
         }
         ((CardLayout) center.getLayout()).show(center, on ? PREVIEW : EDIT);
         showClear();
         if (!on) {
             editor.requestFocus();
         }
+    }
+
+    /** The folder of the panel's file, which its Markdown's relative image links are read from; null before it has one. */
+    private Path folder() {
+        return file == null ? null : file.toAbsolutePath().getParent();
     }
 
     /** For tests. */
@@ -364,9 +435,32 @@ public final class EditorPanel extends JPanel {
         clear.doClick();
     }
 
+    /** How the theme button switches the editors; the workspace switches every panel's. */
+    public void onThemeToggle(Runnable toggle) {
+        themeToggle = toggle;
+    }
+
+    /** The light editor theme or the dark one, for the text and its rendered Markdown. */
+    public void light(boolean on) {
+        editor.light(on);
+        rendered.setLight(on);
+        showTheme(on);
+    }
+
+    /** For tests. */
+    boolean light() {
+        return rendered.light();
+    }
+
+    private void showTheme(boolean light) {
+        theme.setIcon(Icons.get("theme"));
+        String tip = light ? "Dark editors: every panel's text and preview" : "Light editors: every panel's text and preview";
+        theme.setToolTipText(tip);
+        theme.getAccessibleContext().setAccessibleName(light ? "Dark editors" : "Light editors");
+    }
+
     private void showMode() {
         String label = previewing ? "Edit" : "Preview";
-        mode.setText(label);
         mode.setIcon(Icons.get(previewing ? "edit" : "preview"));
         mode.setToolTipText(previewing ? "Edit the Markdown (⌘⇧M)" : "Show the Markdown rendered (⌘⇧M)");
         mode.getAccessibleContext().setAccessibleName(label);
@@ -384,7 +478,7 @@ public final class EditorPanel extends JPanel {
         }
         if (previewing()) {
             int at = rendered.getCaretPosition();
-            rendered.setMarkdown(text);
+            rendered.setMarkdown(text, folder());
             rendered.setCaretPosition(Math.min(at, rendered.getDocument().getLength()));
         }
     }
@@ -445,9 +539,16 @@ public final class EditorPanel extends JPanel {
             sessionCheckpoint.setEnabled(ss.status() != Status.CLOSING);
             sessionCheckpoint.setIcon(Icons.get(checkpointIcon(ss)));
             sessionCheckpoint.setToolTipText(checkpointTip(ss));
+            // as on the session's row: compact and clear only while it runs
+            sessionCompact.setVisible(ss.status().isUsable());
+            sessionClear.setVisible(ss.status().isUsable());
+            sessionClear.setToolTipText("Clear the conversation: send " + SessionRow.CLEAR_COMMAND + "; a new one starts"
+                    + (ss.spec().claudeSessionId().isEmpty() ? "" : ", the current one (" + ss.spec().claudeSessionId() + ") stays importable"));
         } else {
             sessionFresh.setVisible(false);
             sessionCheckpoint.setVisible(false);
+            sessionCompact.setVisible(false);
+            sessionClear.setVisible(false);
             session.setIcon(Icons.get("claude"));
             session.setText("no session ▾");
             session.setToolTipText("Bind a session");

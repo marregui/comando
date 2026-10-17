@@ -102,6 +102,11 @@ public final class CommandEditor implements Searchable, Zoomable {
         return scroll;
     }
 
+    /** The light editor theme or the dark one: the text's background, syntax colours and gutter. */
+    public void light(boolean on) {
+        Editors.theme(area, on);
+    }
+
     public RSyntaxTextArea area() {
         return area;
     }

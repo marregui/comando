@@ -1126,14 +1126,18 @@ public final class Reducer {
 
     // ---- approvals
 
+    /**
+     * A session asks: its card joins the Approvals tab, which comes forward; the keyboard stays where it is, so typing in
+     * the editor goes on. A card asked for again (the same id) changes nothing.
+     */
     private Transition approvalRequested(AppState s, Approval a) {
         if (s.approval(a.id()).isPresent()) {
             return Transition.of(s);
         }
         List<Approval> approvals = new ArrayList<>(s.approvals());
         approvals.add(a);
-        AppState next = notice(s.withApprovals(approvals), Notice.Level.INFO, a.session() + " asks: " + a.summary() + " (⌃2)",
-                Notice.approval(a.id()));
+        AppState next = notice(s.withApprovals(approvals).withLowerTab(LowerTab.APPROVALS), Notice.Level.INFO,
+                a.session() + " asks: " + a.summary() + " (⌃2)", Notice.approval(a.id()));
         return new Transition(next, List.of(new Effect.DesktopNotify(a.session() + " needs approval", a.summary())));
     }
 

@@ -3,7 +3,10 @@ package dev.marregui.comando.ui.kit.text;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rsyntaxtextarea.RSyntaxUtilities;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
+import org.fife.ui.rsyntaxtextarea.SyntaxScheme;
+import org.fife.ui.rtextarea.Gutter;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
 import javax.swing.AbstractAction;
@@ -13,12 +16,11 @@ import javax.swing.KeyStroke;
 import javax.swing.text.DefaultEditorKit;
 import javax.swing.undo.UndoManager;
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Font;
 import java.awt.event.ActionEvent;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
@@ -91,7 +93,6 @@ public final class Editors {
             Map.entry("ruby", SyntaxConstants.SYNTAX_STYLE_RUBY),
             Map.entry("perl", SyntaxConstants.SYNTAX_STYLE_PERL));
 
-    private static org.fife.ui.rsyntaxtextarea.Theme dark;
 
     private Editors() {
     }
@@ -189,28 +190,36 @@ public final class Editors {
         a.setSyntaxEditingStyle(style);
         a.setCodeFoldingEnabled(false);
         a.setAntiAliasingEnabled(true);
-        darkTheme().apply(a);
+        EditorThemes.apply(a, false);
         a.setFont(Theme.mono());
         return a;
     }
 
-    /** The editor theme's foreground for token type {@code type}, null for the default. */
+    /** The dark editor theme's foreground for token type {@code type}, null for the default. */
     public static Color colorOf(int type) {
-        var scheme = darkTheme().scheme;
+        return colorOf(type, false);
+    }
+
+    /** The editor theme's foreground for token type {@code type}, light or dark; null for the default. */
+    public static Color colorOf(int type, boolean light) {
+        SyntaxScheme scheme = EditorThemes.scheme(light);
         if (type < 0 || type >= scheme.getStyleCount() || scheme.getStyle(type) == null) {
             return null;
         }
         return scheme.getStyle(type).foreground;
     }
 
-    private static synchronized org.fife.ui.rsyntaxtextarea.Theme darkTheme() {
-        if (dark == null) {
-            try (InputStream in = Editors.class.getResourceAsStream("editor-dark.xml")) {
-                dark = org.fife.ui.rsyntaxtextarea.Theme.load(in);
-            } catch (IOException e) {
-                throw new UncheckedIOException("cannot load the editor theme", e);
+    /** Gives {@code area} the light or the dark editor theme; its font, zoom included, stays as it is. */
+    public static void theme(RSyntaxTextArea area, boolean light) {
+        Font font = area.getFont();
+        EditorThemes.apply(area, light);
+        area.setFont(font);
+        // the theme colours the gutter; the icon column inside it keeps its own background unless told
+        Gutter gutter = RSyntaxUtilities.getGutter(area);
+        if (gutter != null) {
+            for (Component c : gutter.getComponents()) {
+                c.setBackground(gutter.getBackground());
             }
         }
-        return dark;
     }
 }

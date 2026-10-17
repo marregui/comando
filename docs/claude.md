@@ -164,9 +164,10 @@ how Claude Code matches them and never allow more than the command could do:
   within 3 s; Esc cancels a pending Always before it denies.
 - A denial carries the note typed on the card. In the note, ⏎ denies once it holds text and gives the primary answer
   while empty; ⌘⏎ denies with the note. ↑ and ↓ move between cards. The keyboard is never taken from outside the tab.
-- While a card waits, its tool call reads "waiting for your approval · ⌃2" in the Session tab.
+- A new card brings the Approvals tab forward; the keyboard stays where it is, so typing in the editor goes on. While
+  a card waits, its tool call reads "waiting for your approval · ⌃2" in the Session tab.
 - Answering the last card while the Approvals tab is in front brings the Session tab forward, on the panel of the
-  session that asked, with the keyboard; a card withdrawn, or answered from another tab, moves nothing.
+  session that asked, with the keyboard; a card withdrawn, or answered after you moved to another tab, moves nothing.
 - A card is withdrawn and its call denied when Claude Code cancels the call, the process exits, or the session is
   removed. A SQL card is also withdrawn at a turn end with nothing queued and no background work; while background work
   runs every card stays ([record 43](adr/0043-a-session-waiting-on-background-work-shows-it.md)).
@@ -213,5 +214,6 @@ and later saves keep the stored item.
 
 Swing renders a label, button, tooltip, tab title or table cell as HTML when its text starts with `<html>`, and loads
 the images it names. Text from Claude, a database or a stored conversation goes through `Plain` (renderers with HTML
-off; a guard character before an `<html>` prefix), and Markdown is converted with images replaced by their alt text.
-No content reaching the window makes comando issue a network request.
+off; a guard character before an `<html>` prefix), and Markdown shows only pictures that are files on this machine, an SVG among them loading only files beside it;
+any other image is its alt text ([record 58](adr/0058-markdown-shows-the-pictures-beside-it.md)). No content reaching
+the window makes comando issue a network request.

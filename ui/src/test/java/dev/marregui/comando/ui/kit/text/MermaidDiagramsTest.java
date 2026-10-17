@@ -96,6 +96,34 @@ class MermaidDiagramsTest {
     }
 
     @Test
+    void aLightPageGetsItsOwnDiagramDrawnInMermaidsDefaultTheme() throws Exception {
+        Path picture = dir.resolve("picture.png");
+        ImageIO.write(new BufferedImage(400, 120, BufferedImage.TYPE_INT_ARGB), "png", picture.toFile());
+        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
+                out=""
+                while [ $# -gt 0 ]; do
+                  if [ "$1" = "-o" ]; then out="$2"; fi
+                  if [ "$1" = "-t" ]; then echo "$2" >> '%s'; fi
+                  shift
+                done
+                cp '%s' "$out"
+                """.formatted(dir.resolve("themes"), picture)));
+        try {
+            CountDownLatch dark = new CountDownLatch(1);
+            CountDownLatch light = new CountDownLatch(1);
+            diagrams.diagram(FLOW, false, dark::countDown);
+            assertThat(dark.await(10, TimeUnit.SECONDS)).isTrue();
+            diagrams.diagram(FLOW, true, light::countDown);
+            assertThat(light.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(Files.readAllLines(dir.resolve("themes"))).containsExactly("dark", "default");
+            assertThat(MermaidDiagrams.key(FLOW, true)).as("kept apart in the cache").isNotEqualTo(MermaidDiagrams.key(FLOW, false));
+            assertThat(MermaidDiagrams.key(FLOW)).isEqualTo(MermaidDiagrams.key(FLOW, false));
+        } finally {
+            diagrams.close();
+        }
+    }
+
+    @Test
     void aPictureThatCannotBeReadIsShownAsAFailureNotAnnouncedAgainAndAgain() throws Exception {
         MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
                 out=""

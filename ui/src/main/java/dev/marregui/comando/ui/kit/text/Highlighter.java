@@ -24,8 +24,13 @@ public final class Highlighter {
     private Highlighter() {
     }
 
-    /** Colour runs of {@code text} for {@code syntax} (a file extension or language name); empty for plain text. */
+    /** Colour runs of {@code text} for {@code syntax} (a file extension or language name), dark; empty for plain text. */
     public static List<Run> runs(String text, String syntax) {
+        return runs(text, syntax, false);
+    }
+
+    /** As {@link #runs(String, String)}, in the light or the dark editor theme's colours. */
+    public static List<Run> runs(String text, String syntax, boolean light) {
         String style = Editors.styleFor(syntax);
         List<Run> out = new ArrayList<>();
         if (style.equals(SyntaxConstants.SYNTAX_STYLE_NONE)) {
@@ -42,7 +47,7 @@ public final class Highlighter {
             }
             Segment seg = new Segment(chars, lineStart, lineEnd - lineStart);
             for (Token t = maker.getTokenList(seg, state, lineStart); t != null && t.isPaintable(); t = t.getNextToken()) {
-                Color c = Editors.colorOf(t.getType());
+                Color c = Editors.colorOf(t.getType(), light);
                 if (c != null && t.length() > 0) {
                     out.add(new Run(t.getTextOffset(), t.getTextOffset() + t.length(), c));
                 }

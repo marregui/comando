@@ -63,3 +63,5 @@ that names the one it replaces; the old record stays as written, and this index'
 | [54](0054-comando-knows-nothing-of-jfr.md) | comando knows nothing of JFR | Miguel, Claude | accepted |
 | [55](0055-the-files-tab-only-shows-folders-json-configures-it.md) | The Files tab only shows; folders.json configures it; every file opens to edit | Miguel, Claude | accepted |
 | [56](0056-html-opens-in-the-browser-not-in-comando.md) | HTML opens in the browser, not in comando | Miguel, Claude | accepted |
+| [57](0057-a-light-editor-and-a-header-of-icons.md) | A light editor, and a panel header of icons | Miguel, Claude | accepted |
+| [58](0058-markdown-shows-the-pictures-beside-it.md) | Markdown shows the pictures beside it | Miguel, Claude | accepted |

@@ -46,15 +46,28 @@ either empty. Several panels may share a connection; a session has at most one p
   ([record 56](adr/0056-html-opens-in-the-browser-not-in-comando.md)).
 - **Links** in rendered Markdown: a web link opens in the browser at a click; a link to another Markdown or HTML
   file, beside the document or by its full path, opens that file in a panel at a double click, or brings forward the
-  panel that has it.
+  panel that has it. A link to a heading (`#` and the heading's id, as GitHub makes it: the text in lower case,
+  punctuation dropped, each space a hyphen, `-1`, `-2` on a repeated heading) scrolls that heading to the top at a
+  double click: in the same document, or in the other one, as it opens or in its open panel (one showing its text
+  stays as it is); `#` alone goes to the top. Until the reader scrolls, the heading stays at the top as pictures and
+  diagrams arrive above it.
 - **Running** SQL opens the panel's connection when closed; a prompt starts its session when stopped.
 - **The header** shows the session, then the connection, as chips with a status dot and a plug (green when running or
   connected) that starts or stops, connects or disconnects. Next to the session's plug: a fresh start (while stopped
   with a conversation: a new conversation; the old one stays importable) and a checkpoint (sends the session's
   checkpoint command, `/reflect` by default; purple once a turn ended with the context at 60% of the window or more and
-  the command was not sent since) ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)).
-  On the right: Browser (HTML: the page in the browser), Preview or Edit (Markdown), Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A
-  production connection frames the panel in red.
+  the command was not sent since) ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)),
+  then, while the session runs, compact and clear (`/compact`, `/clear` sent from the panel, as on the session's row).
+  On the right, icons without a button's shape, close together: Browser (HTML: the page in the browser), Preview or
+  Edit (Markdown), the editor theme, Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A
+  production connection frames the panel in red ([record 57](adr/0057-a-light-editor-and-a-header-of-icons.md)).
+- **The editor theme** is dark (IntelliJ's Dark) or light (IntelliJ's Light) for every panel at once: the text, its
+  gutter, its rendered Markdown (code blocks in the theme's colours, Mermaid diagrams drawn in Mermaid's default
+  theme). The rest of the window stays dark. The choice is kept across restarts.
+- **Pictures in Markdown**: an image link to a PNG, JPEG, GIF or SVG on this machine, named from the document's folder
+  (`images/chart.png`, `../img/flow.svg`) or by its full path, shows the picture, no wider than the panel; it is read on
+  a thread of its own and shown when ready, and read again when the file changes. A web address shows the alt text;
+  so does a missing file, with the reason ([record 58](adr/0058-markdown-shows-the-pictures-beside-it.md)).
 - **The tab icon** shows the first that applies ([records 42 and 43](adr/0043-a-session-waiting-on-background-work-shows-it.md)):
   a question mark while a request waits; a red mark when the last turn or query failed, or the session died, out of view; a green
   check when a turn or query finished out of view; a spinner while one runs; an hourglass while background work the
@@ -245,8 +258,8 @@ read-only.
   not followed.
 - **Bounds.** 12 levels; at most 20 000 names listed and 5 000 entries kept per folder tree; past a bound the folder ends
   with `…`. An unreadable subfolder says why and the rest stands.
-- **Clicks.** A click selects and opens nothing; a double click opens a folder, or a file in a panel (Enter does the
-  same). A text file of at most 2 MB opens in a panel bound to it; a larger one (to 4 MB) or a binary one shows in the
+- **Clicks.** A click selects and opens nothing; a double click opens a folder, or a file in a panel (Enter opens a
+  file). A text file of at most 2 MB opens in a panel bound to it; a larger one (to 4 MB) or a binary one shows in the
   side pane. Opening a folder opens no file; the first time, its newest date-named folder opens too.
 - **Menus.** A file's: Open in a panel, and Edit in a panel (its text rather than rendered). A folder row's: its index
   file.
@@ -283,6 +296,7 @@ read-only.
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |
+| `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |
 | `kit/` | comando's copy of its Claude Code kit, made equal to the build's at start ([record 50](adr/0050-comando-ships-a-claude-code-kit.md)) |
 | `questdb/` | the embedded QuestDB's data |
 

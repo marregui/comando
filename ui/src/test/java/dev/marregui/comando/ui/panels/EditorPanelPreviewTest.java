@@ -3,17 +3,24 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.ui.kit.text.LocalImages;
 import dev.marregui.comando.ui.widgets.editor.CommandEditor;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import javax.imageio.ImageIO;
 import javax.swing.SwingUtilities;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.BadLocationException;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -171,6 +178,39 @@ class EditorPanelPreviewTest {
     }
 
     @Test
+    void aMarkdownFileShowsThePicturesBesideItAsItIsEditedAndReloaded(@TempDir Path dir) throws Exception {
+        Path doc = dir.resolve("SCRATCHPAD/2026-10-17/READ-01.md");
+        Path chart = doc.resolveSibling("images/chart.png");
+        Files.createDirectories(chart.getParent());
+        ImageIO.write(new BufferedImage(40, 20, BufferedImage.TYPE_INT_RGB), "png", chart.toFile());
+        LocalImages.install(dir.resolve("cache"));
+        try {
+            // read once, so the panel finds it read
+            CountDownLatch read = new CountDownLatch(1);
+            if (LocalImages.current().picture(chart, read::countDown) instanceof LocalImages.Picture.Pending) {
+                assertThat(read.await(10, TimeUnit.SECONDS)).isTrue();
+            }
+            EditorPanel panel = panel("READ-01", p -> {
+                p.editor().load("# Findings\n\n![chart](images/chart.png)\n");
+                p.file(doc, true);
+            });
+            assertThat(panel.previewing()).isTrue();
+            assertThat(panel.rendered().getText()).as("the picture beside the file").contains(chart.toUri().toString());
+            SwingUtilities.invokeAndWait(() -> panel.reload("# Findings v2\n\n![chart](./images/chart.png)\n"));
+            assertThat(panel.rendered().getText()).contains("Findings v2").contains(chart.toUri().toString());
+
+            EditorPanel own = panel("spec", p -> {
+                p.editor().load("![chart](images/chart.png)\n");
+                p.file(dir.resolve("panels/spec.md"), false);
+                p.togglePreview();
+            });
+            assertThat(own.rendered().getText()).as("its folder holds no such picture").contains("no such file: chart.png");
+        } finally {
+            LocalImages.install(null);
+        }
+    }
+
+    @Test
     void aLinkToAnotherMarkdownOrHtmlFileNamesThatFileBesideTheDocument() {
         Path doc = Path.of("/kb/claude/INTERNALS.md");
         assertThat(EditorPanel.linkedDocument(doc, "EXT.md")).contains(Path.of("/kb/claude/EXT.md"));
@@ -192,11 +232,11 @@ class EditorPanelPreviewTest {
 
     @Test
     void aMarkdownLinkDoubleClickedInThePreviewOpensItsFile() throws Exception {
-        List<Path> opened = new CopyOnWriteArrayList<>();
+        List<String> opened = new CopyOnWriteArrayList<>();
         EditorPanel doc = panel("guide", p -> {
-            p.editor().load("See [the setup](setup.md) and [this part](#part).");
+            p.editor().load("See [the setup](setup.md), [its install part](setup.md#2-install) and [this part](#part).");
             p.file(Path.of("/docs/guide.md"), true);
-            p.onOpenFile(opened::add);
+            p.onOpenFile((f, heading) -> opened.add(f + (heading == null ? "" : " at " + heading)));
         });
         assertThat(doc.previewing()).isTrue();
         assertThat(doc.rendered().getText()).as("the rendered link keeps its relative target").contains("href=\"setup.md\"");
@@ -206,7 +246,19 @@ class EditorPanelPreviewTest {
         });
         assertThat(opened).as("a single click and a heading of the same document open nothing").isEmpty();
         SwingUtilities.invokeAndWait(() -> doc.rendered().fireHyperlinkUpdate(link(doc, "setup.md", 2)));
-        assertThat(opened).containsExactly(Path.of("/docs/setup.md"));
+        SwingUtilities.invokeAndWait(() -> doc.rendered().fireHyperlinkUpdate(link(doc, "setup.md#2-install", 2)));
+        assertThat(opened).as("the file, and the heading the link names in it")
+                .containsExactly("/docs/setup.md", "/docs/setup.md at 2-install");
+    }
+
+    @Test
+    void aLinksHeadingIsWhatFollowsTheHashAsWritten() {
+        assertThat(EditorPanel.linkedHeading("setup.md#2-install")).isEqualTo("2-install");
+        assertThat(EditorPanel.linkedHeading("../ALPHA.md#caf%C3%A9")).as("decoded where it is looked up").isEqualTo("caf%C3%A9");
+        assertThat(EditorPanel.linkedHeading("my notes.md#top")).isEqualTo("top");
+        assertThat(EditorPanel.linkedHeading("file:///abs/a.md#x")).isEqualTo("x");
+        assertThat(EditorPanel.linkedHeading("setup.md")).isNull();
+        assertThat(EditorPanel.linkedHeading("setup.md#")).as("no heading: the top").isNull();
     }
 
     private static HyperlinkEvent link(EditorPanel p, String href, int clicks) {

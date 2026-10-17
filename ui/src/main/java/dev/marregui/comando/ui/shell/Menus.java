@@ -38,6 +38,7 @@ final class Menus {
             Map.entry("connection.toggle", "plug"),
             Map.entry("help.tutorial", "tutorial"),
             Map.entry("help.keys", "keyboard"),
+            Map.entry("help.markdown", "markdown"),
             Map.entry("help.kit", "kit"),
             Map.entry("help.log", "log"),
             Map.entry("help.dataRoot", "comando-folder"));
@@ -101,7 +102,7 @@ final class Menus {
                         SEPARATOR,
                         "view.notices"),
                 menu("Help", null,
-                        "help.tutorial", "help.keys",
+                        "help.tutorial", "help.keys", "help.markdown",
                         SEPARATOR,
                         "help.kit",
                         SEPARATOR,

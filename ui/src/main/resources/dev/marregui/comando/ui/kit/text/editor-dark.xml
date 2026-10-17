@@ -24,6 +24,7 @@
 	</secondaryLanguages>
 
 	<!-- Gutter styling. -->
+	<gutterBackground color="1E1F22" />
 	<gutterBorder color="1E1F22" />
 	<lineNumbers fg="4B5059" currentFG="A1A3AB" />
 	<foldIndicator fg="6F737A" armedFg="A1A3AB" iconBg="1E1F22" iconArmedBg="2B2D30" />
