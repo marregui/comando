@@ -41,6 +41,8 @@ either empty. Several panels may share a connection; a session has at most one p
   session, with the focused panel's connection. Detach (header chip) leaves the session running headless.
 - **A new panel** (⌘T) gets the focused panel's connection and no session.
 - **Moving** a tab: drag it along the row; a line marks where it lands. The order is saved and kept across restarts.
+- **Links** in rendered Markdown: a web link opens in the browser at a click; a link to another Markdown file, beside
+  the document or by its full path, opens that file in a panel at a double click, or brings forward the panel that has it.
 - **Running** SQL opens the panel's connection when closed; a prompt starts its session when stopped.
 - **The header** shows the session, then the connection, as chips with a status dot and a plug (green when running or
   connected) that starts or stops, connects or disconnects. Next to the session's plug: a fresh start (while stopped

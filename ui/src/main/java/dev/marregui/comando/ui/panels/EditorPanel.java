@@ -34,12 +34,16 @@ import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -47,8 +51,8 @@ import java.util.regex.Pattern;
  * One editor panel: a header with its session and connection, and the command editor. A panel's own text is SQL and
  * prompts; a panel opened on a file, such as a document from the Files tab, is coloured as the file's language, and a Markdown one
  * opens rendered. Any Markdown panel switches between the editor and the rendered text with its header button, which
- * names the other view: Preview while editing, Edit while previewing. A
- * production connection frames the panel in red.
+ * names the other view: Preview while editing, Edit while previewing; a link to another Markdown file, double-clicked in
+ * the rendered text, opens that file in a panel. A production connection frames the panel in red.
  */
 public final class EditorPanel extends JPanel {
 
@@ -78,6 +82,8 @@ public final class EditorPanel extends JPanel {
     private final SchemaRegistry schemas;
     private PanelState panel;
     private AppState state;
+    private Consumer<Path> opener = f -> {
+    };
 
     public EditorPanel(PanelState panel, IntentSink intents, SchemaRegistry schemas) {
         super(new BorderLayout(0, 0));
@@ -125,6 +131,7 @@ public final class EditorPanel extends JPanel {
         header.add(right, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
         rendered.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD * 2, Theme.PAD, Theme.PAD * 2));
+        rendered.setLinkHandler(href -> linkedMarkdown(file, href).ifPresent(f -> opener.accept(f)));
         JScrollPane renderedScroll = new JScrollPane(rendered);
         renderedScroll.setBorder(null);
         center.add(editor.component(), EDIT);
@@ -223,8 +230,55 @@ public final class EditorPanel extends JPanel {
     }
 
     private boolean isMarkdown() {
-        String name = file == null ? ".md" : file.getFileName().toString().toLowerCase(Locale.ROOT);
-        return name.endsWith(".md") || name.endsWith(".markdown");
+        return file == null || markdownName(file);
+    }
+
+    private static boolean markdownName(Path file) {
+        Path name = file.getFileName();
+        String n = name == null ? "" : name.toString().toLowerCase(Locale.ROOT);
+        return n.endsWith(".md") || n.endsWith(".markdown");
+    }
+
+    /** How a followed link opens its file: the shell opens it in a panel, or brings forward the panel that has it. */
+    public void onOpenFile(Consumer<Path> open) {
+        opener = open;
+    }
+
+    /**
+     * The Markdown file a link names, a relative one read from {@code document}'s folder; empty for a link to anything
+     * else: a web page, a heading of the same document, a file that is not Markdown. A heading after the file's name is
+     * dropped: the file opens at its top.
+     */
+    static Optional<Path> linkedMarkdown(Path document, String href) {
+        String path;
+        try {
+            URI uri = new URI(href);
+            if (uri.getScheme() != null && !uri.getScheme().equalsIgnoreCase("file")) {
+                return Optional.empty();
+            }
+            path = uri.getPath();
+        } catch (URISyntaxException e) {
+            // a destination written in angle brackets keeps its spaces, which a URI does not take
+            int cut = href.indexOf('#');
+            path = cut < 0 ? href : href.substring(0, cut);
+        }
+        if (path == null || path.isEmpty()) {
+            return Optional.empty();
+        }
+        Path target;
+        try {
+            target = Path.of(path);
+        } catch (InvalidPathException e) {
+            return Optional.empty();
+        }
+        if (!target.isAbsolute()) {
+            Path folder = document == null ? null : document.toAbsolutePath().getParent();
+            if (folder == null) {
+                return Optional.empty();
+            }
+            target = folder.resolve(target);
+        }
+        return markdownName(target) ? Optional.of(target.normalize()) : Optional.empty();
     }
 
     /** The rendered view; for tests. */

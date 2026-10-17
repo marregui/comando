@@ -15,11 +15,15 @@ import javax.swing.text.html.StyleSheet;
 import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.Point;
+import java.awt.event.MouseEvent;
 
-/** A read-only HTML pane styled from the theme, for rendered Markdown. Links open in the browser. */
+/**
+ * A read-only HTML pane styled from the theme, for rendered Markdown. A web link opens in the browser at a click; any
+ * other link goes to the {@link LinkHandler} at a double click.
+ */
 public class HtmlPane extends JEditorPane {
 
-    /** Receives links that are not web links, such as {@code comando-file:} links to source lines. */
+    /** Receives the links that are not web links, double-clicked or activated from the keyboard: a file beside the document. */
     public interface LinkHandler {
         void open(String href);
     }
@@ -66,9 +70,13 @@ public class HtmlPane extends JEditorPane {
             if (href == null) {
                 return;
             }
+            // the pane activates a link at every click of a double click; a keyboard activation has no clicks
+            int clicks = e.getInputEvent() instanceof MouseEvent m ? m.getClickCount() : 0;
             if (Browser.isWebLink(href)) {
-                Browser.open(href);
-            } else {
+                if (clicks <= 1) {
+                    Browser.open(href);
+                }
+            } else if (clicks == 0 || clicks == 2) {
                 links.open(href);
             }
         });

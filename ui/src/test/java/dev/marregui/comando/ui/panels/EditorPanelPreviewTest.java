@@ -8,8 +8,12 @@ import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.SwingUtilities;
+import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.BadLocationException;
+import java.awt.event.MouseEvent;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -163,5 +167,48 @@ class EditorPanelPreviewTest {
 
         EditorPanel python = panel("rig.py", p -> p.file(Path.of("/s/work/rig.py"), true));
         assertThat(python.editor().area().getSyntaxEditingStyle()).isEqualTo(SyntaxConstants.SYNTAX_STYLE_PYTHON);
+    }
+
+    @Test
+    void aLinkToAnotherMarkdownFileNamesThatFileBesideTheDocument() {
+        Path doc = Path.of("/kb/claude/INTERNALS.md");
+        assertThat(EditorPanel.linkedMarkdown(doc, "EXT.md")).contains(Path.of("/kb/claude/EXT.md"));
+        assertThat(EditorPanel.linkedMarkdown(doc, "../ALPHA.md#claude")).as("the heading is dropped").contains(Path.of("/kb/ALPHA.md"));
+        assertThat(EditorPanel.linkedMarkdown(doc, "notes/My%20Notes.markdown")).contains(Path.of("/kb/claude/notes/My Notes.markdown"));
+        assertThat(EditorPanel.linkedMarkdown(doc, "my notes.md#top")).as("an angle-bracket destination keeps its spaces")
+                .contains(Path.of("/kb/claude/my notes.md"));
+        assertThat(EditorPanel.linkedMarkdown(doc, "/abs/README.MD")).contains(Path.of("/abs/README.MD"));
+        assertThat(EditorPanel.linkedMarkdown(doc, "file:///abs/a.md")).contains(Path.of("/abs/a.md"));
+
+        assertThat(EditorPanel.linkedMarkdown(doc, "#a-heading")).as("a heading of the same document").isEmpty();
+        assertThat(EditorPanel.linkedMarkdown(doc, "https://example.com/x.md")).isEmpty();
+        assertThat(EditorPanel.linkedMarkdown(doc, "mailto:a@b.c")).isEmpty();
+        assertThat(EditorPanel.linkedMarkdown(doc, "build.gradle.kts")).as("not Markdown").isEmpty();
+        assertThat(EditorPanel.linkedMarkdown(null, "EXT.md")).as("relative to nothing").isEmpty();
+    }
+
+    @Test
+    void aMarkdownLinkDoubleClickedInThePreviewOpensItsFile() throws Exception {
+        List<Path> opened = new CopyOnWriteArrayList<>();
+        EditorPanel doc = panel("guide", p -> {
+            p.editor().load("See [the setup](setup.md) and [this part](#part).");
+            p.file(Path.of("/docs/guide.md"), true);
+            p.onOpenFile(opened::add);
+        });
+        assertThat(doc.previewing()).isTrue();
+        assertThat(doc.rendered().getText()).as("the rendered link keeps its relative target").contains("href=\"setup.md\"");
+        SwingUtilities.invokeAndWait(() -> {
+            doc.rendered().fireHyperlinkUpdate(link(doc, "setup.md", 1));
+            doc.rendered().fireHyperlinkUpdate(link(doc, "#part", 2));
+        });
+        assertThat(opened).as("a single click and a heading of the same document open nothing").isEmpty();
+        SwingUtilities.invokeAndWait(() -> doc.rendered().fireHyperlinkUpdate(link(doc, "setup.md", 2)));
+        assertThat(opened).containsExactly(Path.of("/docs/setup.md"));
+    }
+
+    private static HyperlinkEvent link(EditorPanel p, String href, int clicks) {
+        MouseEvent click = new MouseEvent(p.rendered(), MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 10, 10, clicks, false,
+                MouseEvent.BUTTON1);
+        return new HyperlinkEvent(p.rendered(), HyperlinkEvent.EventType.ACTIVATED, null, href, null, click);
     }
 }

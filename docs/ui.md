@@ -22,7 +22,7 @@ The package layers are in [Architecture §8](architecture.md#8-ui-packages).
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` (below) |
 | `format` | `Labels` (times, uptimes, counts, short paths), `Json` |
 | `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `MermaidDiagrams`, `SourceLinks`, `Plain` (below) |
-| `tree`, `layout`, `tabs` | `TreeView` (the one tree; a double click activates a leaf, Enter the selected node); `ShrinkingRow` (chips give up width before buttons); `FixedRowTabs` (tab headers in fixed rows) |
+| `tree`, `layout`, `tabs` | `TreeView` (the one tree; a double click activates a leaf, Enter the selected node); `ShrinkingRow` (chips give up width before buttons); `FixedRowTabs` (tab headers in fixed rows); `MovableTabs` (a tab dragged along the row reports where it lands) |
 | `desktop` | `ExternalEditor` (IntelliJ, else the default application), `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser`, `DesktopTrash` |
 
 Threads:
@@ -42,7 +42,7 @@ Text:
 | `TextSearch` | find in a text area with every match marked |
 | `Highlighter` | syntax colours for text painted outside a text area (the transcript); any thread |
 | `Diffs`, `DiffPane` | unified diff with three lines of context, coloured |
-| `MarkdownHtml`, `HtmlPane` | CommonMark with tables to HTML for Swing; raw HTML escaped; images become alt text; fences coloured as the editors; links open in the browser |
+| `MarkdownHtml`, `HtmlPane` | CommonMark with tables to HTML for Swing; raw HTML escaped; images become alt text; fences coloured as the editors; a web link opens in the browser at a click, any other goes to the pane's owner at a double click |
 | `MermaidDiagrams` | Mermaid blocks drawn by `mmdc` into `cache/mermaid/`, once per diagram text, one at a time |
 | `SourceLinks` | `path/File.java:42` becomes a link that opens the file at the line |
 | `Plain` | `Plain.only(c)` turns HTML rendering off before text is set; `Plain.text(s)` guards a string starting with `<html>` |

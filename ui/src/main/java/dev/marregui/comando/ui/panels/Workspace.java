@@ -79,6 +79,9 @@ public final class Workspace {
     private Runnable attention = () -> {
     };
     private Consumer<PanelId> closer;
+    /** Opens a file a panel's link names; the shell's own open. */
+    private Consumer<Path> opener = f -> {
+    };
     /** Panels removed because their file was deleted outside comando, with the file's name. EDT only. */
     private final Map<PanelId, String> deletedFiles = new HashMap<>();
     private boolean rendering;
@@ -182,6 +185,11 @@ public final class Workspace {
     /** How a tab's close button closes its panel: the shell asks first when the panel's shell runs a job. */
     public void onClose(Consumer<PanelId> close) {
         closer = close;
+    }
+
+    /** How a link followed in a panel's rendered Markdown opens its file. */
+    public void onOpenFile(Consumer<Path> open) {
+        opener = open;
     }
 
     /** The most recently closed panel, removed from the list; empty when none is left. */
@@ -333,6 +341,7 @@ public final class Workspace {
                     view.editor().load(texts.load(p.id()));
                     PanelId id = p.id();
                     view.editor().onChange(text -> texts.changed(id, text));
+                    view.onOpenFile(f -> opener.accept(f));
                     panels.put(p.id(), view);
                     tabs.insertTab(title(p, false), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
                 } else if (tabs.indexOfComponent(view) != i) {
