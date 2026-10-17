@@ -149,7 +149,7 @@ public final class Snapshot {
         SwingUtilities.invokeAndWait(() -> filesFilter().setText("lane"));
         shoot(out.resolve("02c2-sidebar-files-filter.png"));
         SwingUtilities.invokeAndWait(() -> filesFilter().setText(""));
-        // the read-only memory: its index leads it, and a double click opens it rendered with no Edit switch
+        // the memory: its index leads it, and a double click opens it rendered, to edit like any file
         SwingUtilities.invokeAndWait(() -> {
             JTree files = tree("Files");
             if (files != null) {
@@ -268,7 +268,7 @@ public final class Snapshot {
 
     /**
      * Sample folders for the Files tab, written as {@code folders.json} before the start: a scratchpad of two days
-     * whose index is {@code ALPHA.md}, a knowledge base with build output the tab leaves out, a read-only memory whose
+     * whose index is {@code ALPHA.md}, a knowledge base with build output the tab leaves out, a memory whose
      * index leads it, and a folder of skills and one of a plugin, so every folder icon shows.
      */
     private static void sampleFolders(Path home) throws Exception {
@@ -292,11 +292,11 @@ public final class Snapshot {
         Files.writeString(Files.createDirectories(root.resolve("skills").resolve("reflect")).resolve("SKILL.md"), "# reflect\n");
         Files.writeString(Files.createDirectories(root.resolve("plugin").resolve("bin")).resolve("gradle-serial"), "#!/bin/sh\n");
         Files.writeString(home.resolve("folders.json"), JsonFile.JSON.writeValueAsString(List.of(
-                new FolderRoot("Scratchpad", pad.toString(), "ALPHA.md", List.of(), "scratchpad", false),
-                new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory", true),
-                new FolderRoot("KB", kb.toString(), "ALPHA.md", List.of(), "knowledge", false),
-                new FolderRoot("Skills", root.resolve("skills").toString(), "", List.of(), "skills", false),
-                new FolderRoot("Plugin", root.resolve("plugin").toString(), "", List.of(), "plugin", false),
+                new FolderRoot("Scratchpad", pad.toString(), "ALPHA.md", List.of(), "scratchpad"),
+                new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory"),
+                new FolderRoot("KB", kb.toString(), "ALPHA.md", List.of(), "knowledge"),
+                new FolderRoot("Skills", root.resolve("skills").toString(), "", List.of(), "skills"),
+                new FolderRoot("Plugin", root.resolve("plugin").toString(), "", List.of(), "plugin"),
                 new FolderRoot("Notes", root.resolve("notes").toString(), "", List.of()))));
     }
 

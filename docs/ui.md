@@ -17,13 +17,13 @@ The package layers are in [Architecture §8](architecture.md#8-ui-packages).
 | `theme` | `Theme`: FlatLaf dark (`FlatMacDarkLaf` on macOS), the colour tokens (accent, Claude, ok, warn, danger, muted, thinking, diff, card, the plot palette), spacing, the monospaced font. Dark only; the macOS appearance is set dark by a JVM option at launch |
 | `icon` | `Icons` (one SVG set under `/icons`, HiDPI), `SpinnerIcon` (one shared wheel, advanced by its owner's timer) |
 | `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority`, `ToolButton` ([§2](#2-commands-and-keys)) |
-| `resource` | `ResourceActions`: the bar above a list of resources; its selection may name the target of each button ([Workbench §1.3](workbench.md#13-the-sidebar)) |
+| `resource` | `ResourceActions`: the bar above a list of resources ([Workbench §1.3](workbench.md#13-the-sidebar)) |
 | `overlay` | `Overlay`: the empty, loading and error states a widget switches between |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` (below) |
 | `format` | `Labels` (times, uptimes, counts, short paths), `Json` |
 | `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `MermaidDiagrams`, `SourceLinks`, `Plain` (below) |
 | `tree`, `layout`, `tabs` | `TreeView` (the one tree; a double click activates a leaf, Enter the selected node); `ShrinkingRow` (chips give up width before buttons); `FixedRowTabs` (tab headers in fixed rows); `MovableTabs` (a tab dragged along the row reports where it lands) |
-| `desktop` | `ExternalEditor` (IntelliJ, else the default application), `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser`, `DesktopTrash` |
+| `desktop` | `ExternalEditor` (IntelliJ, else the default application), `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser` |
 
 Threads:
 

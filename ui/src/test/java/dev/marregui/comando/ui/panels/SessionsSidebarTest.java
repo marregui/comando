@@ -563,11 +563,6 @@ class SessionsSidebarTest {
         }
 
         @Override
-        public ResourceActions.Editor folders() {
-            return recording("folder", new CopyOnWriteArrayList<>());
-        }
-
-        @Override
         public void exploreSchema(String connection) {
         }
 

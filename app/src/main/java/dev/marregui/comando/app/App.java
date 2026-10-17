@@ -29,7 +29,6 @@ import dev.marregui.comando.mcp.McpServer;
 import dev.marregui.comando.mcp.McpTools;
 import dev.marregui.comando.tools.ToolsAdapter;
 import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
-import dev.marregui.comando.ui.kit.desktop.DesktopTrash;
 import dev.marregui.comando.ui.kit.text.MermaidDiagrams;
 import dev.marregui.comando.ui.shell.ComandoUi;
 
@@ -86,6 +85,7 @@ public final class App implements AutoCloseable {
             loop = new StateLoop(initial, new Reducer(Clock.SYSTEM), effects);
             owned.push(loop);
             store.onNotice(text -> loop.dispatch(new Intent.Notify(Notice.Level.WARN, text, false)));
+            store.onFoldersChanged(folders -> loop.dispatch(new Intent.FoldersRead(folders)));
             if (log != null) {
                 loop.addObserver(log);
             }
@@ -105,7 +105,7 @@ public final class App implements AutoCloseable {
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), config.claudeProjects(), UiInstructions.TEXT)));
             kit = new Kit(Kit.Bundle.resources(), Kit.Cli.process(config.claudeExecutable()), config.kitDir(), HomeDir.claudeDir());
             ToolsFile toolsFile = new ToolsFile(config.home(), kit.gradleSerial());
-            ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, toolsFile::read, DesktopTrash::moveToTrash));
+            ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, toolsFile::read));
             tools = devTools;
             EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
             SessionCatalogue catalogue = new SessionCatalogue(config.claudeProjects());
@@ -113,7 +113,7 @@ public final class App implements AutoCloseable {
                     loop, loop::state, loop, transcripts, results, consoles, schemas, store,
                     () -> catalogue.scan(500).stream().map(e -> new StoredConversation(e.sessionId(), e.cwd(), e.branch(), e.title(),
                             e.lastPrompt(), e.modifiedMillis(), e.sizeBytes())).toList(),
-                    questDb, new KitSetup(kit, toolsFile), version, config.home(), config.logDir(), onQuit));
+                    questDb, new KitSetup(kit, toolsFile, store), version, config.home(), config.logDir(), onQuit));
             effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
             // the embedded QuestDB stops last: it may still serve the connections closed above
             owned.addLast(questDb);

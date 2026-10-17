@@ -113,58 +113,30 @@ class ReducerTest {
     }
 
     @Test
-    void aReadOnlyFolderIsNeitherEditedNorRemoved() {
-        FolderRoot memory = new FolderRoot("Memory", "/m", "MEMORY.md", List.of(), "memory", true);
-        state = state.withFolders(List.of(memory));
-        apply(new Intent.SaveFolder("Memory", new FolderRoot("Memory", "/elsewhere", "", List.of())));
-        assertThat(state.folders()).containsExactly(memory);
-        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.SaveFolders.class);
-        assertThat(state.notice().text()).isEqualTo("Folder Memory is read-only; folders.json changes it");
-        apply(new Intent.RemoveFolder("Memory"));
-        assertThat(state.folders()).containsExactly(memory);
-        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.SaveFolders.class);
-        apply(new Intent.CopyFile("/kb/a.md", "/m/a.md"));
-        assertThat(effects).as("nothing written into a read-only folder").doesNotHaveAnyElementsOfTypes(Effect.CopyFile.class);
-        assertThat(state.notice().text()).isEqualTo("a.md is in folder Memory, which is read-only");
-        apply(new Intent.DeleteFile("/m/MEMORY.md", true));
-        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.DeleteFile.class);
-        apply(new Intent.CopyFile("/m/MEMORY.md", "/kb/MEMORY.md"));
-        assertThat(effects).as("a copy out of it is not a write to it").containsExactly(new Effect.CopyFile("/m/MEMORY.md", "/kb/MEMORY.md"));
-        apply(new Intent.DeleteFile("/kb/a.md", false));
-        assertThat(effects).containsExactly(new Effect.DeleteFile("/kb/a.md", false));
-    }
-
-    @Test
-    void aFolderIsAddedRenamedInPlaceAndRemovedAndEachChangeIsSaved() {
+    void aFolderIsAddedAfterTheOthersAndSavedUnlessOneHasItsName() {
         FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
         FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
-        apply(new Intent.SaveFolder("", kb));
-        apply(new Intent.SaveFolder("", notes));
+        apply(new Intent.AddFolder(kb));
+        apply(new Intent.AddFolder(notes));
         assertThat(state.folders()).containsExactly(kb, notes);
         assertThat(effects).containsExactly(new Effect.SaveFolders(List.of(kb, notes)));
 
-        FolderRoot renamed = new FolderRoot("Knowledge", "/kb", "ALPHA.md", List.of("tools"));
-        apply(new Intent.SaveFolder("KB", renamed));
-        assertThat(state.folders()).as("renamed in place, order kept").containsExactly(renamed, notes);
-
-        apply(new Intent.SaveFolder("", notes.withName("Knowledge")));
-        assertThat(state.folders()).containsExactly(renamed, notes);
+        apply(new Intent.AddFolder(notes.withName("KB")));
+        assertThat(state.folders()).containsExactly(kb, notes);
         assertThat(effects).as("refused: nothing saved").doesNotHaveAnyElementsOfTypes(Effect.SaveFolders.class);
         assertThat(state.notice().level()).isEqualTo(Notice.Level.ERROR);
-        assertThat(state.notice().text()).isEqualTo("A folder called Knowledge exists");
-        apply(new Intent.SaveFolder("Notes", notes.withName("Knowledge")));
-        assertThat(state.notice().text()).as("a rename onto another folder's name").isEqualTo("A folder called Knowledge exists");
-        apply(new Intent.SaveFolder("gone", notes.withName("New")));
-        assertThat(state.notice().text()).isEqualTo("No folder called gone");
-        assertThat(state.folders()).containsExactly(renamed, notes);
+        assertThat(state.notice().text()).isEqualTo("A folder called KB exists");
+    }
 
-        apply(new Intent.RemoveFolder("Knowledge"));
-        assertThat(state.folders()).containsExactly(notes);
-        assertThat(effects).containsExactly(new Effect.SaveFolders(List.of(notes)));
+    @Test
+    void foldersJsonReadAgainReplacesTheFoldersAndWritesNothing() {
+        FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
+        apply(new Intent.FoldersRead(List.of(kb)));
+        assertThat(state.folders()).containsExactly(kb);
+        assertThat(effects).as("the file is the user's: not written back").isEmpty();
         AppState before = state;
-        apply(new Intent.RemoveFolder("Knowledge"));
-        assertThat(state).isSameAs(before);
-        assertThat(effects).isEmpty();
+        apply(new Intent.FoldersRead(List.of(kb)));
+        assertThat(state).as("the same folders change nothing").isSameAs(before);
     }
 
     @Test

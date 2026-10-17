@@ -86,7 +86,7 @@ final class Menus {
                                 "run.insertResult", "run.keep",
                                 SEPARATOR,
                                 "run.plot", "run.plotLive", "run.plotStop"),
-                        menu("Tools", "tool", "tools.gradle", "terminal.restart", SEPARATOR, "tools.settings")),
+                        menu("Tools", "tool", "tools.gradle", "terminal.restart", SEPARATOR, "tools.settings", "files.settings")),
                 menu("View", null,
                         "view.palette", "focus.editor",
                         SEPARATOR,

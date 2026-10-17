@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-16 | accepted; replaces the fixed folder and the always-on read of [record 29](0029-the-scratchpad-is-a-navigator.md), and the Scratchpad tab of [record 40](0040-one-resource-per-dialog-and-two-tab-rows.md) | Miguel (one tab named Files rather than a tab per folder; folders as top-level rows, configured like connections; a filter; an index file opened with its folder; only open folders kept in sync; build output left out; `~/.claude` as the default), Claude (how) |
+| 2026-10-16 | accepted; its bar, folder dialog and configuration row removed by [record 55](0055-the-files-tab-only-shows-folders-json-configures-it.md); replaces the fixed folder and the always-on read of [record 29](0029-the-scratchpad-is-a-navigator.md), and the Scratchpad tab of [record 40](0040-one-resource-per-dialog-and-two-tab-rows.md) | Miguel (one tab named Files rather than a tab per folder; folders as top-level rows, configured like connections; a filter; an index file opened with its folder; only open folders kept in sync; build output left out; `~/.claude` as the default), Claude (how) |
 
 ## 1. Context
 

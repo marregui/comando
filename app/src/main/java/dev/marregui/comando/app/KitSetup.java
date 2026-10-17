@@ -8,15 +8,17 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
-/** The menus' {@link Setup}: the tool settings file and the Claude Code kit. */
+/** The menus' {@link Setup}: the tool settings file, the Files tab's folders file and the Claude Code kit. */
 final class KitSetup implements Setup {
 
     private final Kit kit;
     private final ToolsFile tools;
+    private final Store store;
 
-    KitSetup(Kit kit, ToolsFile tools) {
+    KitSetup(Kit kit, ToolsFile tools, Store store) {
         this.kit = kit;
         this.tools = tools;
+        this.store = store;
     }
 
     static KitOffer offer(Kit.Status status) {
@@ -27,6 +29,11 @@ final class KitSetup implements Setup {
     @Override
     public Path toolSettings() throws IOException {
         return tools.ensure();
+    }
+
+    @Override
+    public Path folderSettings(List<FolderRoot> shown) throws IOException {
+        return store.foldersFile(shown);
     }
 
     @Override

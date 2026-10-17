@@ -14,12 +14,13 @@ what is kept on disk.
 
 ### 1.1 One model for connections, sessions and folders
 
-A connection, a session and a folder of the Files tab are resources: configured, stored, listed in the sidebar, edited
-in one dialog. Each is written once as a resource kind.
+A connection, a session and a folder of the Files tab are resources: configured, stored and listed in the sidebar.
+Each is written once as a resource kind. Connections and sessions are edited in one dialog; folders in `folders.json`
+([§5](#5-the-files-tab)).
 
 | Layer | Connection | Session | Folder |
 |---|---|---|---|
-| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, permission mode, extra directories, budget, checkpoint command, conversation id, next start (new, resume, fork) | `FolderRoot`: name, path, index file, names left out, icon, read-only |
+| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, permission mode, extra directories, budget, checkpoint command, conversation id, next start (new, resume, fork) | `FolderRoot`: name, path, index file, names left out, icon |
 | Kind (`core.resource`) | `ConnectionKind` | `SessionKind` (a clone forks the conversation) | `FolderKind` |
 | Live state (`core.state`) | `ConnectionState`: closed, opening, open, closing, failed, last error | `SessionState`: the same, plus turns, context, activity, branch, background tasks | — |
 | Store file | `connections.json` | `sessions.json` | `folders.json` |
@@ -68,9 +69,9 @@ either empty. Several panels may share a connection; a session has at most one p
 ### 1.3 The sidebar
 
 Four tabs in two fixed rows: Panels and Files, then Sessions and Connections; the tab in front is kept across restarts.
-Each has a bar of buttons above its list (`ResourceActions`): add and import on the left, edit, clone and remove of the
-selected row on the right, off while nothing is selected ([record 37](adr/0037-session-actions-act-on-the-selected-row.md));
-the Files tab keeps all its buttons together at the left ([§5](#5-the-files-tab)). Removing something in use asks
+Panels, Sessions and Connections have a bar of buttons above their list (`ResourceActions`): add and import on the
+left, edit, clone and remove of the selected row on the right, off while nothing is selected
+([record 37](adr/0037-session-actions-act-on-the-selected-row.md)); the Files tab has none ([§5](#5-the-files-tab)). Removing something in use asks
 **Stop and remove**, **Disconnect and remove** or **Close and remove**, or **Leave it**.
 
 - **Sessions:** name, where it is bound ("headless" when nowhere), status, current activity or what it waits on,
@@ -223,15 +224,18 @@ the default applies.
 ## 5. The Files tab
 
 The folders the user chose, one top-level row each, as a navigator of their folders and files
-([records 49, 51, 52](adr/0052-files-open-on-a-double-click-the-bar-follows-the-selection.md)).
+([records 49, 51, 52, 55](adr/0055-the-files-tab-only-shows-folders-json-configures-it.md)). The tab only shows and
+opens: it has no buttons and writes nothing. The files it opens are edited and saved like any other; a `.log` stays
+read-only.
 
 - **Folders** are resources ([§1.1](#11-one-model-for-connections-sessions-and-folders)): a unique name, a full path,
   an optional index file inside it, names to leave out, and the row's icon (folder, scratchpad, memory, knowledge,
   skills, plugin). Without `folders.json` there is one folder, `~/.claude`, opening `CLAUDE.md` and leaving out Claude
   Code's transcripts, caches and per-session state; an emptied list stays empty.
-- **Read-only** is set in `folders.json`, and by the kit on the memory folder, which Claude Code writes. Such a folder
-  is never edited, cloned or removed; its files open in panels that cannot be edited, Markdown rendered without the
-  Edit switch; the reducer refuses a copy into it or a deletion in it.
+- **Configuring.** Panel ▸ Tools ▸ Files tab folders opens `folders.json` in a panel (written with the tab's folders
+  when missing). The store checks it every second: a change it did not write is read again and the tab follows; an
+  entry that breaks the rules is left out with a notice; a file that does not parse keeps the tab's folders, says why
+  and stays where it is. The kit adds its folders there too. A `readOnly` key from older versions is ignored.
 - **Order.** At a folder's top level its index file comes first. Every level then lists folders not named after a date,
   date-named folders (`yyyy-MM-dd`) oldest first, then files, by name ignoring case. Hidden entries, `node_modules`,
   `build`, `target`, `__pycache__`, `out` and the folder's own exclusions are left out; a link to a folder is listed,
@@ -241,13 +245,10 @@ The folders the user chose, one top-level row each, as a navigator of their fold
 - **Clicks.** A click selects and opens nothing; a double click opens a folder, or a file in a panel (Enter does the
   same). A text file of at most 2 MB opens in a panel bound to it; a larger one (to 4 MB) or a binary one shows in the
   side pane. Opening a folder opens no file; the first time, its newest date-named folder opens too.
-- **The bar** (add, edit, clone, remove, together at the left) follows the selection, each tip naming what it affects
-  or why it is off. A folder row: add a folder to the tab; edit, clone or remove that folder (removal keeps its files).
-  A file: edit opens it in a panel showing its text; clone asks for a name ("notes copy.md" offered) and copies it
-  beside the original, never over another file; remove asks, then moves it to the Trash, or where the desktop has none
-  deletes it for good after saying so. A folder inside a folder: add only. A file's context menu offers the same.
+- **Menus.** A file's: Open in a panel, and Edit in a panel (its text rather than rendered). A folder row's: its index
+  file.
 - **Sync.** Only folders whose rows are open are read: at once when opened, then every 5 s on `folder-poll`, sent only
-  when something changed; copies and deletions re-read them at once. A tree carries the settings it was read with and
+  when something changed. A tree carries the settings it was read with and
   is dropped if the folder was edited since; reads are ticketed so an older one never overwrites a newer one. The tree
   keeps what the user opened and selected.
 - **Filter.** A field above the tree finds entries by name across every folder, reading never-read folders once; a

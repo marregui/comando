@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -18,6 +19,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,8 +84,8 @@ class StoreTest {
         }
         Files.writeString(home.resolve("folders.json"), "[{\"name\":\"Memory\",\"path\":\"/m\",\"icon\":\"memory\",\"readOnly\":true}]");
         try (Store store = new Store(home)) {
-            assertThat(store.loadFolders(CLAUDE_DIR)).as("icon and read-only kept through the dialog's rules")
-                    .containsExactly(new FolderRoot("Memory", "/m", "", List.of(), "memory", true));
+            assertThat(store.loadFolders(CLAUDE_DIR)).as("the icon kept through the folders' rules; an old read-only flag ignored")
+                    .containsExactly(new FolderRoot("Memory", "/m", "", List.of(), "memory"));
         }
         Files.writeString(home.resolve("folders.json"), "{not json");
         try (Store store = new Store(home)) {
@@ -110,6 +112,50 @@ class StoreTest {
         }
         assertThat(told).singleElement().asString().startsWith("folders.json: left out KB (the name is used by another folder); Rel (")
                 .contains("a folder without a name (", "Out (the index file must be inside the folder", "NoPath (choose the folder to show)");
+    }
+
+    @Test
+    void foldersJsonChangedByHandIsReadAgainAndOneThatDoesNotReadStaysWhereItIs() throws Exception {
+        Path json = home.resolve("folders.json");
+        Files.writeString(json, "[{\"name\":\"KB\",\"path\":\"/kb\"}]");
+        List<String> told = new CopyOnWriteArrayList<>();
+        List<List<FolderRoot>> read = new CopyOnWriteArrayList<>();
+        try (Store store = new Store(home)) {
+            store.loadFolders(CLAUDE_DIR);
+            store.onNotice(told::add);
+            store.onFoldersChanged(read::add);
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            assertThat(read).as("unchanged since it was read").isEmpty();
+
+            Files.writeString(json, "[{\"name\":\"KB\",\"path\":\"/kb\",\"index\":\"ALPHA.md\"},{\"name\":\"Notes\",\"path\":\"/n\"}]");
+            Files.setLastModifiedTime(json, FileTime.fromMillis(System.currentTimeMillis() + 2_000));
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            assertThat(read).singleElement().isEqualTo(List.of(new FolderRoot("KB", "/kb", "ALPHA.md", List.of()), new FolderRoot("Notes", "/n", "", List.of())));
+
+            Files.writeString(json, "[{\"name\":");
+            Files.setLastModifiedTime(json, FileTime.fromMillis(System.currentTimeMillis() + 4_000));
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            assertThat(read).as("a file half edited keeps the tab's folders").hasSize(1);
+            assertThat(told).singleElement().asString().startsWith("folders.json does not read (").endsWith("); the Files tab keeps its folders");
+            assertThat(json).as("not moved aside: the user is editing it").hasContent("[{\"name\":");
+
+            store.saveFolders(List.of(new FolderRoot("Own", "/o", "", List.of())));
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            assertThat(read).as("the store's own write is not a change of the user's").hasSize(1);
+        }
+    }
+
+    @Test
+    void theFoldersFileIsWrittenWithTheFoldersShownWhenMissing() throws Exception {
+        FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of(), "knowledge");
+        try (Store store = new Store(home)) {
+            Path file = store.foldersFile(List.of(kb));
+            assertThat(file).isEqualTo(home.resolve("folders.json"));
+            assertThat(store.loadFolders(CLAUDE_DIR)).containsExactly(kb);
+            Files.writeString(file, "[]");
+            store.foldersFile(List.of(kb));
+            assertThat(file).as("an existing file is left as it is").hasContent("[]");
+        }
     }
 
     @Test

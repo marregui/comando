@@ -33,7 +33,7 @@ test trees, and a browser over folders of documents.
 | `db` | JDBC lanes (one thread per connection), cancel, columnar results, schema reading, queries for Claude | `core`, pgjdbc |
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, the Claude Code kit (`Kit`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log | `core`, Jackson |
-| `tools` | Gradle runs, the Files tab's folder reads, file copy and delete | `core` |
+| `tools` | Gradle runs, the Files tab's folder reads | `core` |
 | `ui` | the Swing shell, panels, dialogs, the kit, the widgets | `core`, FlatLaf (and Extras), RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
 | `app` | wiring, the store files, the keychain, the intent log, the embedded QuestDB, `main` | all, QuestDB |
 
@@ -100,7 +100,7 @@ One immutable record of metadata and ids. Lists are tens of entries, so lookups 
 | `focused` | the panel the user works in; the lower panel follows it |
 | `connections` | each connection's spec, status (closed, opening, open, closing, failed) and last error |
 | `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, process and turn start, last turn error, background tasks, whether a checkpoint is due |
-| `folders` | the Files tab's folders in order: name, path, index file, names left out, icon, read-only |
+| `folders` | the Files tab's folders in order: name, path, index file, names left out, icon |
 | `runs` | at most one SQL run per panel: request id, SQL, status, counts, timings, error, whether it is a live plot's background refresh |
 | `approvals` | permission prompts waiting for an answer, from every session |
 | `views` | views placed by Claude or the user: id, title, spec, placement (lower or side), pinned, owning session, version |
@@ -117,15 +117,15 @@ A record of the sealed interface `Intent`; anything that changes the state is on
 
 | Group | Intents |
 |---|---|
-| Panels | `AddPanel`, `ClosePanel`, `ReopenPanel`, `RemovePanel`, `RenamePanel`, `FocusPanel`, `BindConnection`, `BindSession`, `OpenSession` |
+| Panels | `AddPanel`, `ClosePanel`, `ReopenPanel`, `RemovePanel`, `RenamePanel`, `MovePanel`, `FocusPanel`, `BindConnection`, `BindSession`, `OpenSession` |
 | Running text | `RunText` (target auto, SQL or Claude), `RefreshSql` (a live plot's re-run), `CancelRun` |
 | SQL events | `SqlStarted`, `SqlRows`, `SqlCompleted`, `SqlFailed`, `SqlCancelled`, `SqlWarning` |
 | Connections | `SaveConnection`, `RemoveConnection`, `OpenConnection`, `CloseConnection`, `TestConnection`, `ExploreSchema`, `SchemaChanged`, `ConnectionOpened`, `ConnectionClosed`, `ConnectionFailed`, `ConnectionLost`, `ConnectionTested` |
-| Sessions | `SaveSession`, `RemoveSession`, `ImportSessions`, `StartSession`, `StartFresh`, `StopSession`, `InterruptSession`, `Checkpoint`, `ClearTranscript`, `SetSessionModel`, `SetSessionEffort`, `SessionStarted`, `SessionInit`, `SessionActivity`, `SessionTurnRunning`, `SessionTurnEnded`, `SessionTasksChanged`, `SessionExited`, `SessionBranch`, `PlanUsageRead` |
+| Sessions | `SaveSession`, `RemoveSession`, `ImportSessions`, `StartSession`, `StartFresh`, `StopSession`, `InterruptSession`, `Checkpoint`, `SessionCommand`, `OrderSessions`, `ClearTranscript`, `SetSessionModel`, `SetSessionEffort`, `SessionStarted`, `SessionInit`, `SessionActivity`, `SessionTurnRunning`, `SessionTurnEnded`, `SessionTasksChanged`, `SessionExited`, `SessionBranch`, `PlanUsageRead` |
 | Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
 | Views | `ShowView`, `RefreshView`, `CloseView`, `PinView`, `SelectLowerTab`, `Arrange`, `SessionLayout`, `SessionFocus` |
 | Editor and files | `EditPanel`, `OpenFile` |
-| Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `SaveFolder`, `RemoveFolder`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `CopyFile`, `DeleteFile` |
+| Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded` |
 | Notices | `Notify`, `DismissNotice` |
 
 A null panel in `RunText`, `RunGradle` or `EditPanel` means the focused panel.
@@ -145,8 +145,8 @@ it throw: an intent naming a missing panel, connection or session changes nothin
   stays until dismissed, replaced by another error, or settled by its own subject. An event that settles a subject
   clears its notice (a run completing, a connection opening, a turn succeeding, an approval answered). A new ERROR also
   asks for a desktop notification while the window is behind.
-- **Read-only folders.** `SaveFolder` and `RemoveFolder` on a read-only folder, and `CopyFile` into or `DeleteFile` in
-  one, are refused with a notice.
+- **The user's file.** `FoldersRead`, `folders.json` read again after the user changed it, replaces the folders and
+  saves nothing; `AddFolder`, the kit's, saves.
 
 ### 4.4 Effects
 
@@ -160,7 +160,7 @@ queues and returns.
 | `ApprovalPort` | `ResolveApproval` |
 | `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `DeletePanel`, `ShowFile`, `Arrange`, `ShowFolder`, `ShowPlanUsage` |
 | `PersistencePort` | `SaveConnections`, `SaveSessions`, `SaveFolders`, `SavePanels` |
-| `ToolPort` | `RunGradle`, `CancelCommand`, `ForgetCommand`, `ReadFolders`, `WatchFolders`, `CopyFile`, `DeleteFile` |
+| `ToolPort` | `RunGradle`, `CancelCommand`, `ForgetCommand`, `ReadFolders`, `WatchFolders` |
 
 `StateLoop` runs one intent at a time: observers (the intent log), the reducer, the effects in order, then the state
 listeners (the UI's coalesced render). The reducer, each effect and each listener are guarded, so a failure is logged and
@@ -201,7 +201,7 @@ transcript text.
 | `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `clearTranscript`, `loadHistory`, `forget` | `ClaudeAdapter` |
 | `McpGateway` | `register(session)` gives the URL and bearer token a session's CLI uses; `unregister` | `McpServer` |
 | `ApprovalPort` | `resolve` | `McpServer` |
-| `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `copyFile`, `deleteFile` | `ToolsAdapter` |
+| `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders` | `ToolsAdapter` |
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showPlanUsage` | `ComandoUi` |
 | `PersistencePort` | `saveConnections`, `saveSessions`, `saveFolders`, `savePanels` | `Store` |
 
@@ -224,9 +224,9 @@ by delta), `FakeResult`.
 | `plan-usage` | platform, daemon | `claude --safe-mode -p /usage` at start and every 5 minutes, stopped after 30 s |
 | MCP requests | virtual, one per request | JSON-RPC; an `approve` call waits for its card |
 | `gradle-<run>`, `tool-output-<run>`, `tool-kill-<run>` | virtual | a run's process and output; SIGKILL what a stop left alive after 2 s |
-| `folder-read`, `file-copy`, `file-delete` | virtual | folder reads; the Files tab's copies and deletions |
+| `folder-read` | virtual | folder reads |
 | `folder-poll` | platform, daemon | every 5 s reads the open folders, sends a tree only when it changed |
-| `store`, `store-secrets` | platform | atomic writes of the store files; panel text 800 ms after the first unsaved change; a check of open panels' files every second; keychain calls apart, so an unlock prompt never holds back panel text |
+| `store`, `store-secrets` | platform | atomic writes of the store files; panel text 800 ms after the first unsaved change; a check of open panels' files and `folders.json` every second; keychain calls apart, so an unlock prompt never holds back panel text |
 | `mermaid` | platform, daemon | `mmdc`, one diagram at a time, 30 s bound |
 | `edt-watchdog` | platform, daemon | a probe to the EDT every 100 ms |
 | `exit`, `shutdown` | platform | close the application after Quit, or from the shutdown hook |

@@ -26,12 +26,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
@@ -122,6 +124,11 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     };
     private volatile Consumer<Deleted> deletions = deleted -> {
     };
+    /** Where {@code folders.json} goes when the user changed it; the Files tab follows. */
+    private volatile Consumer<List<FolderRoot>> foldersChanged = f -> {
+    };
+    /** {@code folders.json} as the store last read or wrote it; null while it is missing. Writer thread, and the start. */
+    private volatile Stamp foldersSeen;
     private final AtomicBoolean panelsPending = new AtomicBoolean();
     private volatile List<PanelState> panelMeta = List.of();
     private volatile List<PanelState> closedMeta = List.of();
@@ -450,10 +457,16 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
      */
     List<FolderRoot> loadFolders(Path claudeDir) {
         List<FolderRoot> read = folders.read();
+        foldersSeen = Stamp.of(folders.path());
         if (read == null) {
             return FolderRoot.defaults(claudeDir);
         }
-        // a hand-edited file meets the dialog's rules: a name used once, a full path, an index inside the folder
+        return valid(read);
+    }
+
+    /** The entries of a hand-edited {@code folders.json} that meet the folders' rules; the user is told of the rest. */
+    private List<FolderRoot> valid(List<FolderRoot> read) {
+        // a name used once, a full path, an index inside the folder
         List<FolderRoot> valid = new ArrayList<>();
         List<String> dropped = new ArrayList<>();
         for (FolderRoot f : read) {
@@ -461,8 +474,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 continue;
             }
             try {
-                // read-only is not an attribute, so the check does not carry it
-                FolderRoot checked = FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(f)).withReadOnly(f.readOnly());
+                FolderRoot checked = FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(f));
                 if (valid.stream().anyMatch(v -> v.name().equals(checked.name()))) {
                     throw new IllegalArgumentException("the name is used by another folder");
                 }
@@ -480,7 +492,68 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     @Override
     public void saveFolders(List<FolderRoot> specs) {
-        submit(() -> write(folders, List.copyOf(specs)));
+        submit(() -> {
+            write(folders, List.copyOf(specs));
+            foldersSeen = Stamp.of(folders.path());
+        });
+    }
+
+    /** Where the folders go when the user changed {@code folders.json}: once a second at most, from the writer thread. */
+    void onFoldersChanged(Consumer<List<FolderRoot>> listener) {
+        foldersChanged = listener;
+    }
+
+    /**
+     * {@code folders.json}, written with {@code shown} first when it is missing, so the user edits the folders the tab
+     * has. Blocks until the file is there; call it off the EDT.
+     */
+    Path foldersFile(List<FolderRoot> shown) throws IOException {
+        try {
+            CompletableFuture.runAsync(() -> {
+                if (!folders.exists()) {
+                    write(folders, List.copyOf(shown));
+                    foldersSeen = Stamp.of(folders.path());
+                }
+            }, writer).get(5, TimeUnit.SECONDS);
+        } catch (ExecutionException | TimeoutException | RejectedExecutionException e) {
+            throw new IOException("cannot write " + folders.path() + ": " + e.getMessage(), e);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IOException("interrupted while writing " + folders.path(), e);
+        }
+        return folders.path();
+    }
+
+    /**
+     * Reads {@code folders.json} again when it changed since the store last read or wrote it: a change of the user's,
+     * in a panel or another editor. A file that does not read keeps the tab's folders and says why; a missing one keeps
+     * them silently.
+     */
+    private void checkFolders() {
+        Stamp now = Stamp.of(folders.path());
+        if (now == null || now.equals(foldersSeen)) {
+            return;
+        }
+        foldersSeen = now;
+        List<FolderRoot> read;
+        try {
+            read = folders.readAsIs();
+        } catch (IOException e) {
+            notices.accept("folders.json does not read (" + e.getMessage().lines().findFirst().orElse("") + "); the Files tab keeps its folders");
+            return;
+        }
+        foldersChanged.accept(valid(orEmpty(read)));
+    }
+
+    /** A file's size and time of change, to know it changed without reading it. */
+    private record Stamp(long modified, long size) {
+        static Stamp of(Path file) {
+            try {
+                return new Stamp(Files.getLastModifiedTime(file).toMillis(), Files.size(file));
+            } catch (IOException e) {
+                return null;
+            }
+        }
     }
 
     @Override
@@ -597,7 +670,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         deletions = listener;
     }
 
-    /** Checks the open panels' files every second, on the writer thread, so a check never races a write. */
+    /** Checks the open panels' files and {@code folders.json} every second, on the writer thread, so a check never races a write. */
     private void pollFiles() {
         try {
             writer.scheduleWithFixedDelay(this::checkFiles, POLL_MILLIS, POLL_MILLIS, TimeUnit.MILLISECONDS);
@@ -621,6 +694,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         if (closed) {
             return;
         }
+        checkFolders();
         List<PanelState> shut = closedMeta;
         List<PanelState> all = new ArrayList<>(panelMeta);
         all.addAll(shut);

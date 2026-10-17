@@ -57,13 +57,11 @@ class ResourceKindTest {
                     .as(outside).hasMessageStartingWith("the index file must be inside the folder");
         }
         assertThat(FolderKind.INSTANCE.removalQuestion(null, "KB")).isEqualTo("Remove folder KB from the Files tab? Its files stay on disk.");
-        FolderRoot skills = new FolderRoot("Skills", "/s", "", List.of(), "skills", false);
+        FolderRoot skills = new FolderRoot("Skills", "/s", "", List.of(), "skills");
         assertThat(FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(skills))).isEqualTo(skills);
         assertThat(FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p")).icon()).as("none set").isEqualTo(FolderRoot.FOLDER);
         assertThatThrownBy(() -> FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p", "icon", "rocket")))
                 .hasMessage("the icon must be one of folder, scratchpad, memory, knowledge, skills, plugin: rocket");
-        assertThat(FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(skills.withReadOnly(true))).readOnly())
-                .as("read-only is not the dialog's to set").isFalse();
     }
 
     @Test

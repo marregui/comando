@@ -6,16 +6,16 @@ import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.swing.AbstractButton;
 import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
+import javax.swing.JScrollBar;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.tree.DefaultMutableTreeNode;
-import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
 import java.nio.file.Files;
@@ -129,7 +129,7 @@ class FilesTabTest {
         assertThat(f.intents).containsExactly(new Intent.WatchFolders(List.of()));
 
         f.render();
-        assertThat(f.labels()).containsExactly("No folders yet. + adds one.");
+        assertThat(f.labels()).containsExactly("No folders yet: Panel ▸ Tools ▸ Files tab folders opens folders.json");
     }
 
     @Test
@@ -161,126 +161,61 @@ class FilesTabTest {
     }
 
     @Test
-    void theBarEditsAndRemovesTheSelectedFolderFromOneGroupAtTheLeftEdge() throws Exception {
-        Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of()), new FolderRoot("KB", "/kb", "", List.of()));
-        AbstractButton edit = f.edit();
-        AbstractButton remove = f.remove();
-        assertThat(edit.isEnabled()).isFalse();
-        assertThat(f.button("Read the open folders again")).as("open folders follow the disk on their own").isNull();
-        BorderLayout bar = (BorderLayout) ((Container) f.tab.actions()).getLayout();
-        assertThat(bar.getLayoutComponent(BorderLayout.EAST)).as("nothing at the right edge").isNull();
-        assertThat(SwingUtilities.isDescendingFrom(remove, bar.getLayoutComponent(BorderLayout.WEST))).isTrue();
-        assertThat(SwingUtilities.isDescendingFrom(f.add(), bar.getLayoutComponent(BorderLayout.WEST))).isTrue();
+    void theTabHasNoButtonsAndItsMenusOnlyOpen() throws Exception {
+        Fixture f = new Fixture(new FolderRoot("Memory", "/m", "MEMORY.md", List.of(), "memory"),
+                new FolderRoot("KB", "/kb", "", List.of(), "knowledge"));
+        List<AbstractButton> buttons = new ArrayList<>();
+        f.edt(() -> Fixture.collect(f.tab.component(), buttons));
+        assertThat(buttons).as("the tab writes nothing: no add, edit, clone or remove").isEmpty();
 
-        AbstractButton add = f.add();
-        assertThat(add.isEnabled()).as("nothing selected: a folder can be added").isTrue();
-        assertThat(add.getToolTipText()).isEqualTo("Add a folder to the Files tab…");
-        assertThat(edit.getToolTipText()).isEqualTo("Edit the selected folder or file");
-        f.edt(() -> f.tree().expandRow(0));
-        f.edt(() -> f.show("Scratchpad", folder("Scratchpad", folder("plans", file("a.md")), file("notes.md"))));
-        assertThat(f.labels()).containsExactly("Scratchpad", "plans", "notes.md", "KB");
-        f.edt(() -> f.tree().setSelectionRow(1));
-        assertThat(add.isEnabled()).as("a folder inside a folder: add").isTrue();
-        assertThat(edit.isEnabled()).as("but it is not a folder of the tab").isFalse();
-        assertThat(edit.getToolTipText()).isEqualTo("Edit folder plans: only files and the tab's own folders");
-        f.edt(() -> f.tree().setSelectionRow(3));
-        assertThat(List.of(add, edit, remove)).as("a folder row: all on").allMatch(AbstractButton::isEnabled);
-        assertThat(List.of(edit.getToolTipText(), f.cloneOf().getToolTipText(), remove.getToolTipText()))
-                .containsExactly("Edit folder KB…", "Clone folder KB…", "Remove folder KB from the Files tab…");
-        f.edt(edit::doClick);
-        assertThat(f.edited).containsExactly("edit KB");
-        f.intents.clear();
-        f.edt(remove::doClick);
-        assertThat(f.asked).singleElement().asString().contains("Remove folder KB from the Files tab? Its files stay on disk.");
-        assertThat(f.intents).containsExactly(new Intent.RemoveFolder("KB"));
-    }
-
-    @Test
-    void aReadOnlyFolderIsNeitherEditedClonedNorRemovedAndSaysSo() throws Exception {
-        Fixture f = new Fixture(new FolderRoot("Memory", "/m", "MEMORY.md", List.of(), "memory", true),
-                new FolderRoot("KB", "/kb", "", List.of(), "knowledge", false));
-        f.edt(() -> f.tree().setSelectionRow(0));
-        for (AbstractButton b : List.of(f.edit(), f.cloneOf(), f.remove())) {
-            assertThat(b.isEnabled()).as(b.getToolTipText()).isFalse();
-        }
-        assertThat(f.edit().getToolTipText()).isEqualTo("Edit folder Memory: it is read-only");
         f.edt(() -> f.show("Memory", folder("Memory", file("MEMORY.md"))));
         f.edt(() -> f.tree().expandRow(0));
         f.edt(() -> f.tree().setSelectionRow(1));
-        assertThat(List.of(f.add(), f.edit(), f.cloneOf(), f.remove())).as("a read-only folder's file").noneMatch(AbstractButton::isEnabled);
-        assertThat(f.remove().getToolTipText()).isEqualTo("Remove file MEMORY.md: folder Memory is read-only");
-        f.edt(() -> assertThat(f.tab.menuFor(file("MEMORY.md")).getComponents()).extracting(c -> ((JMenuItem) c).getText())
-                .containsExactly("Open in a panel"));
+        f.edt(() -> {
+            JPopupMenu menu = f.tab.menuFor(file("MEMORY.md"));
+            assertThat(menu.getComponents()).extracting(c -> ((JMenuItem) c).getText()).containsExactly("Open in a panel", "Edit in a panel");
+            ((JMenuItem) menu.getComponent(0)).doClick();
+            ((JMenuItem) menu.getComponent(1)).doClick();
+        });
+        assertThat(f.opened).containsExactly(Path.of("/s/MEMORY.md"));
+        assertThat(f.editedFiles).containsExactly(Path.of("/s/MEMORY.md"));
+
         f.edt(() -> f.tree().collapseRow(0));
         f.edt(() -> f.tree().setSelectionRow(0));
-        f.edt(() -> assertThat(f.tab.menuFor(new ViewSpec.TreeNode("Memory", "/m · read-only", List.of())).getComponents())
+        f.edt(() -> assertThat(f.tab.menuFor(new ViewSpec.TreeNode("Memory", "/m", List.of())).getComponents())
                 .extracting(c -> ((JMenuItem) c).getText()).containsExactly("Open MEMORY.md"));
         f.edt(() -> f.tree().setSelectionRow(1));
-        assertThat(f.edit().isEnabled()).isTrue();
+        f.edt(() -> assertThat(f.tab.menuFor(new ViewSpec.TreeNode("KB", "/kb", List.of())).getComponentCount())
+                .as("a folder without an index: no menu").isZero());
 
-        assertThat(f.tab.rowIcon(new ViewSpec.TreeNode("Memory", "/m · read-only", List.of()))).as("its row says so").contains("folder-memory");
+        assertThat(f.tab.rowIcon(new ViewSpec.TreeNode("Memory", "/m", List.of()))).contains("folder-memory");
         assertThat(f.tab.rowIcon(new ViewSpec.TreeNode("KB", "/kb", List.of()))).contains("folder-knowledge");
         assertThat(f.tab.rowIcon(folder("Memory"))).as("a subfolder named as a folder").isEmpty();
     }
 
     @Test
-    void theBarEditsClonesAndDeletesAFileNamingItInItsTips() throws Exception {
-        Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of()));
-        f.edt(() -> f.tree().expandRow(0));
+    void whileFilteringTheMenuActsOnTheEntryPickedInTheFiltersTree() throws Exception {
+        Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of()), new FolderRoot("KB", "/kb", "ALPHA.md", List.of()));
         f.edt(() -> f.show("Scratchpad", folder("Scratchpad", file("notes.md"))));
-        f.edt(() -> f.tree().setSelectionRow(1));
-        assertThat(f.add().isEnabled()).as("add adds a folder to the tab: not for a file").isFalse();
-        assertThat(List.of(f.edit(), f.cloneOf(), f.remove())).allMatch(AbstractButton::isEnabled);
-        assertThat(List.of(f.edit().getToolTipText(), f.cloneOf().getToolTipText(), f.remove().getToolTipText()))
-                .containsExactly("Edit file notes.md in a panel", "Clone file notes.md…", "Delete file notes.md…");
-
-        f.edt(f.edit()::doClick);
-        assertThat(f.editedFiles).containsExactly(Path.of("/s/notes.md"));
-
-        f.intents.clear();
-        f.names.add("notes 2.md");
-        f.edt(f.cloneOf()::doClick);
-        assertThat(f.offered).containsExactly("notes copy.md");
-        assertThat(f.intents).containsExactly(new Intent.CopyFile("/s/notes.md", "/s/notes 2.md"));
-        f.intents.clear();
-        f.names.add("../up.md");
-        f.edt(f.cloneOf()::doClick);
-        assertThat(f.intents).singleElement().isInstanceOfSatisfying(Intent.Notify.class,
-                n -> assertThat(n.text()).isEqualTo("Cannot clone notes.md: \"../up.md\" is not a new name in its folder"));
-        f.intents.clear();
-        f.edt(f.cloneOf()::doClick);
-        assertThat(f.intents).as("the name question cancelled").isEmpty();
-
-        f.edt(f.remove()::doClick);
-        assertThat(f.asked).containsExactly("Delete notes.md for good? This desktop has no Trash: it cannot be undone.");
-        assertThat(f.options).containsExactly(List.of("Delete", "Cancel"));
-        assertThat(f.intents).containsExactly(new Intent.DeleteFile("/s/notes.md", false));
-
-        f.trash = true;
-        f.intents.clear();
-        f.edt(() -> f.tree().clearSelection());
-        f.edt(() -> f.tree().setSelectionRow(1));
-        assertThat(f.remove().getToolTipText()).isEqualTo("Move file notes.md to the Trash…");
-        f.edt(f.remove()::doClick);
-        assertThat(f.options).last().isEqualTo(List.of("Move to Trash", "Cancel"));
-        assertThat(f.intents).containsExactly(new Intent.DeleteFile("/s/notes.md", true));
-
-        f.edt(() -> assertThat(f.tab.menuFor(file("notes.md")).getComponents()).extracting(c -> ((JMenuItem) c).getText())
-                .containsExactly("Open in a panel", "Edit in a panel", "Clone…", "Move to the Trash…"));
-    }
-
-    @Test
-    void aCopyIsNamedInItsFolderOnly() {
-        assertThat(FilesTab.isNewName("notes 2.md", "notes.md")).isTrue();
-        for (String bad : List.of("", ".", "..", "notes.md", "a/b.md", "../x.md")) {
-            assertThat(FilesTab.isNewName(bad, "notes.md")).as(bad).isFalse();
-        }
+        f.edt(() -> f.show("KB", folder("KB", file("notes.md"))));
+        f.edt(() -> f.tree().setSelectionRow(0));
+        f.edt(() -> f.tab.filter().setText("notes"));
+        f.edt(() -> f.tab.found().tree().setSelectionRow(2));
+        assertThat(f.foundLabels().get(2)).isEqualTo("KB");
+        f.edt(() -> assertThat(f.tab.menuFor(new ViewSpec.TreeNode("KB", "/kb", List.of())).getComponents())
+                .extracting(c -> ((JMenuItem) c).getText()).containsExactly("Open ALPHA.md"));
+        f.edt(() -> f.tab.found().tree().setSelectionRow(3));
+        f.edt(() -> {
+            assertThat(f.tab.menuFor(file("notes.md")).getComponents()).extracting(c -> ((JMenuItem) c).getText())
+                    .containsExactly("Open in a panel", "Edit in a panel");
+            assertThat(f.tab.menuFor(new ViewSpec.TreeNode("KB", "/kb", List.of())).getComponentCount()).as("a file selected: no folder menu").isZero();
+        });
     }
 
     @Test
     void everyIconAFolderMayHaveIsDrawn() {
         for (String icon : FolderRoot.ICONS) {
-            String name = FilesTab.rowIconName(new FolderRoot("F", "/f", "", List.of(), icon, false));
+            String name = FilesTab.rowIconName(new FolderRoot("F", "/f", "", List.of(), icon));
             assertThat(FilesTab.class.getResource("/icons/" + name + ".svg")).as(name).isNotNull();
         }
     }
@@ -307,36 +242,6 @@ class FilesTabTest {
     }
 
     @Test
-    void whileFilteringTheBarAndTheMenuActOnTheFolderPickedInTheFiltersTree() throws Exception {
-        Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of()), new FolderRoot("KB", "/kb", "ALPHA.md", List.of()));
-        f.edt(() -> f.show("Scratchpad", folder("Scratchpad", file("notes.md"))));
-        f.edt(() -> f.show("KB", folder("KB", file("notes.md"))));
-        f.edt(() -> f.tree().setSelectionRow(0));
-        f.edt(() -> f.tab.filter().setText("notes"));
-        AbstractButton edit = f.edit();
-        assertThat(edit.isEnabled()).as("nothing picked in the filter's tree yet").isFalse();
-        f.edt(() -> f.tab.found().tree().setSelectionRow(2));
-        assertThat(f.foundLabels().get(2)).isEqualTo("KB");
-        assertThat(edit.isEnabled()).isTrue();
-        f.edt(edit::doClick);
-        assertThat(f.edited).containsExactly("edit KB");
-
-        List<String> items = new ArrayList<>();
-        f.edt(() -> {
-            for (Component c : f.tab.menuFor(new ViewSpec.TreeNode("KB", "/kb", List.of())).getComponents()) {
-                items.add(((JMenuItem) c).getText());
-            }
-        });
-        assertThat(items).containsExactly("Open ALPHA.md", "Edit…", "Clone…", "Remove…");
-        f.edt(() -> f.tab.found().tree().setSelectionRow(3));
-        f.edt(() -> {
-            assertThat(f.tab.menuFor(file("notes.md")).getComponents()).extracting(c -> ((JMenuItem) c).getText())
-                    .containsExactly("Open in a panel", "Edit in a panel", "Clone…", "Delete…");
-            assertThat(f.tab.menuFor(new ViewSpec.TreeNode("KB", "/kb", List.of())).getComponentCount()).as("a file selected: no folder menu").isZero();
-        });
-    }
-
-    @Test
     void aFolderRenamedWhileOpenStaysOpenWithItsTree() throws Exception {
         Fixture f = new Fixture(new FolderRoot("KB", "/kb", "", List.of()), new FolderRoot("Notes", "/n", "", List.of()));
         f.edt(() -> f.tree().expandRow(0));
@@ -347,49 +252,17 @@ class FilesTabTest {
         assertThat(f.intents).containsExactly(new Intent.WatchFolders(List.of("Base")));
     }
 
-    /** A tab built and rendered on the event thread, recording what it sends, opens and asks. */
+    /** A tab built and rendered on the event thread, recording what it sends and opens. */
     private static final class Fixture {
         final List<Intent> intents = new CopyOnWriteArrayList<>();
         final List<Path> opened = new CopyOnWriteArrayList<>();
-        final List<String> edited = new CopyOnWriteArrayList<>();
-        final List<String> asked = new CopyOnWriteArrayList<>();
-        final List<List<Object>> options = new CopyOnWriteArrayList<>();
         final List<Path> editedFiles = new CopyOnWriteArrayList<>();
-        /** The names the user types when asked, in turn; none left answers as Cancel. */
-        final List<String> names = new CopyOnWriteArrayList<>();
-        final List<String> offered = new CopyOnWriteArrayList<>();
-        volatile boolean trash;
         AppState state;
         FilesTab tab;
 
         Fixture(FolderRoot... folders) throws Exception {
-            ResourceActions.Editor editor = new ResourceActions.Editor() {
-                @Override
-                public void add() {
-                    edited.add("new");
-                }
-
-                @Override
-                public void edit(String name) {
-                    edited.add("edit " + name);
-                }
-
-                @Override
-                public void cloneOf(String name) {
-                    edited.add("clone " + name);
-                }
-            };
-            ResourceActions.Questions yes = (parent, text, title, choices) -> {
-                asked.add(text);
-                options.add(List.of(choices));
-                return 0;
-            };
-            FilesTab.Names typed = (parent, title, text, initial) -> {
-                offered.add(initial);
-                return names.isEmpty() ? null : names.removeFirst();
-            };
             edt(() -> {
-                tab = new FilesTab(intents::add, opened::add, editedFiles::add, editor, yes, typed, () -> trash, () -> state);
+                tab = new FilesTab(intents::add, opened::add, editedFiles::add);
                 tab.component().setSize(260, 400);
                 tab.tree().component().setSize(260, 400);
             });
@@ -434,34 +307,11 @@ class FilesTabTest {
             return out;
         }
 
-        AbstractButton button(String tip) {
-            return find(tab.actions(), tip);
-        }
-
-        /** The bar's buttons in their order: add, edit, clone, remove. */
-        private AbstractButton bar(int i) {
-            List<AbstractButton> out = new ArrayList<>();
-            collect(tab.actions(), out);
-            return out.get(i);
-        }
-
-        AbstractButton add() {
-            return bar(0);
-        }
-
-        AbstractButton edit() {
-            return bar(1);
-        }
-
-        AbstractButton cloneOf() {
-            return bar(2);
-        }
-
-        AbstractButton remove() {
-            return bar(3);
-        }
-
+        /** The buttons under {@code c}, a scroll bar's arrows left out. */
         private static void collect(Component c, List<AbstractButton> out) {
+            if (c instanceof JScrollBar) {
+                return;
+            }
             if (c instanceof AbstractButton b) {
                 out.add(b);
             } else if (c instanceof Container k) {
@@ -473,21 +323,6 @@ class FilesTabTest {
 
         void edt(Runnable r) throws Exception {
             SwingUtilities.invokeAndWait(r);
-        }
-
-        private static AbstractButton find(Component c, String tip) {
-            if (c instanceof AbstractButton b && tip.equals(b.getToolTipText())) {
-                return b;
-            }
-            if (c instanceof Container k) {
-                for (Component child : k.getComponents()) {
-                    AbstractButton b = find(child, tip);
-                    if (b != null) {
-                        return b;
-                    }
-                }
-            }
-            return null;
         }
     }
 }

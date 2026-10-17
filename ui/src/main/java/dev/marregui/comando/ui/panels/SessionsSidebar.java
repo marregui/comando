@@ -13,7 +13,6 @@ import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.ToolButton;
-import dev.marregui.comando.ui.kit.desktop.DesktopTrash;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.tabs.FixedRowTabs;
@@ -84,9 +83,6 @@ public final class SessionsSidebar {
 
         /** The connection dialog, as {@link #sessions()}. */
         ResourceActions.Editor connections();
-
-        /** The folder dialog, as {@link #sessions()}. */
-        ResourceActions.Editor folders();
 
         /** Shows the connection's schema explorer, as Panel ▸ Connection ▸ Explore the schema does. */
         void exploreSchema(String connection);
@@ -275,8 +271,7 @@ public final class SessionsSidebar {
                 }
             }
         });
-        files = new FilesTab(intents, dialogs::openFile, dialogs::editFile, dialogs.folders(), questions, FilesTab.Names.MODAL,
-                DesktopTrash::available, () -> state);
+        files = new FilesTab(intents, dialogs::openFile, dialogs::editFile);
         sort = ToolButton.of("sort", SORT_TIP, () -> order(false));
         sort.getAccessibleContext().setAccessibleName("Sort the sessions");
         sessionActions = new ResourceActions<>(sessions,
@@ -292,7 +287,7 @@ public final class SessionsSidebar {
                 section(new JScrollPane(panelsTab.list()), panelsTab.actions()));
         tabs.add("Connections", "database", "database connections", section(new JScrollPane(connections), connectionActions.component()));
         tabs.add("Files", "folder", "the folders you chose; a double click on a file opens it in a panel",
-                section(files.component(), files.actions()));
+                section(files.component(), null));
         // two fixed rows (Miguel, 2026-10-15): the documents on top, the resources below; a click moves nothing
         tabs.arrange(new int[][]{{PANELS, FILES}, {SESSIONS, CONNECTIONS}}, ToolButton.of("more", "Hide the sidebar (⌘B)", toggle));
         rail = new JPanel(new BorderLayout());
@@ -752,14 +747,16 @@ public final class SessionsSidebar {
         return i >= 0 && list.getCellBounds(i, i).contains(e.getPoint()) ? list.getModel().getElementAt(i) : null;
     }
 
-    /** A tab's content: its bar of buttons at the top, then the content. */
+    /** A tab's content: its bar of buttons at the top, when it has one, then the content. */
     private static JPanel section(JComponent content, JComponent actions) {
         if (content instanceof JScrollPane sp) {
             sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
             sp.setBorder(null);
         }
         JPanel p = new JPanel(new BorderLayout());
-        p.add(actions, BorderLayout.NORTH);
+        if (actions != null) {
+            p.add(actions, BorderLayout.NORTH);
+        }
         p.add(content, BorderLayout.CENTER);
         return p;
     }

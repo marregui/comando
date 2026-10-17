@@ -7,7 +7,6 @@ import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.text.Plain;
 
 import javax.swing.BorderFactory;
-import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JList;
@@ -24,11 +23,9 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
- * The buttons above a list of resources (sessions, connections, panels, folders), in two groups: on the left, add and
- * whatever else brings resources in; on the right, edit, clone and remove, which act on the selected row and are off
- * while none is selected. A bar whose list holds other rows besides the resources (the Files tab's files) keeps both
- * groups together at the left edge ({@link #leftAligned}), and its selection may decide what the buttons do and say
- * ({@link Target}), so each tip names what its button affects. Remove asks first, naming what removal does: a resource in use (a running session, an open
+ * The buttons above a list of resources (sessions, connections, panels), in two groups: on the left, add and whatever
+ * else brings resources in; on the right, edit, clone and remove, which act on the selected row and are off while none
+ * is selected. Remove asks first, naming what removal does: a resource in use (a running session, an open
  * connection or panel) offers "Stop and remove" ("Disconnect and remove", "Close and remove") or "Leave it", one not
  * in use "Remove" or "Cancel". The safe answer is the default, and closing the question gives it.
  *
@@ -53,7 +50,7 @@ public final class ResourceActions<T> {
         int ask(Component parent, String text, String title, Object[] options);
     }
 
-    /** Where the selected row comes from: a list, or the top level of a tree. */
+    /** Where the selected row comes from. */
     public interface Selection<T> {
         /** The selected row, or null. */
         T selected();
@@ -63,16 +60,6 @@ public final class ResourceActions<T> {
 
         /** What the removal question is shown over. */
         Component component();
-
-        /** Whether add applies to what is selected; always, but for a list holding other rows (a file in the Files tab). */
-        default boolean canAdd() {
-            return true;
-        }
-
-        /** What edit, clone and remove do to the selection and say, when the list decides it; null for its resources. */
-        default Target target() {
-            return null;
-        }
 
         static <T> Selection<T> of(JList<T> list) {
             return new Selection<>() {
@@ -115,16 +102,6 @@ public final class ResourceActions<T> {
         }
     }
 
-    /**
-     * What edit, clone and remove do to the selected row, and the tip of each, naming what it affects ("Edit file
-     * notes.md"). A null action leaves its button off, its tip saying why.
-     */
-    public record Target(String editTip, Runnable edit, String cloneTip, Runnable cloneOf, String removeTip, Runnable remove) {
-    }
-
-    /** Between the groups of a {@link #leftAligned} bar: apart, still one set. */
-    private static final int GROUP_GAP = 8;
-
     private final Selection<T> selection;
     private final Rows<T> rows;
     private final Consumer<String> remove;
@@ -149,26 +126,22 @@ public final class ResourceActions<T> {
         this(Selection.of(list), rows, editor, remove, questions, moreLeft);
     }
 
-    public ResourceActions(Selection<T> selection, Rows<T> rows, Editor editor, Consumer<String> remove, Questions questions,
+    private ResourceActions(Selection<T> selection, Rows<T> rows, Editor editor, Consumer<String> remove, Questions questions,
                            JButton... moreLeft) {
         this.selection = selection;
         this.rows = rows;
         this.remove = remove;
         this.questions = questions;
         String noun = rows.noun();
-        add = ToolButton.of("add", "New " + noun + "…", () -> {
-            if (selection.canAdd()) {
-                editor.add();
-            }
-        });
+        add = ToolButton.of("add", "New " + noun + "…", editor::add);
         left.add(add);
         left.addAll(List.of(moreLeft));
         editTip = "Edit the selected " + noun + "…";
         cloneTip = "Clone the selected " + noun + "…";
         removeTip = "Remove the selected " + noun + "…";
-        edit = ToolButton.of("edit", editTip, () -> act(Target::edit, t -> editor.edit(rows.name().apply(t))));
-        cloneOf = ToolButton.of("copy", cloneTip, () -> act(Target::cloneOf, t -> editor.cloneOf(rows.name().apply(t))));
-        removal = ToolButton.of("close", removeTip, () -> act(Target::remove, this::remove));
+        edit = ToolButton.of("edit", editTip, () -> act(t -> editor.edit(rows.name().apply(t))));
+        cloneOf = ToolButton.of("copy", cloneTip, () -> act(t -> editor.cloneOf(rows.name().apply(t))));
+        removal = ToolButton.of("close", removeTip, () -> act(this::remove));
         onSelection.addAll(List.of(edit, cloneOf, removal));
         bar.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
         bar.add(group(FlowLayout.LEFT, left), BorderLayout.WEST);
@@ -177,19 +150,9 @@ public final class ResourceActions<T> {
         enable();
     }
 
-    /** The bar: the left group at the left edge, the right group at the right edge, unless {@link #leftAligned}. */
+    /** The bar: the left group at the left edge, the right group at the right edge. */
     public JComponent component() {
         return bar;
-    }
-
-    /** Both groups at the left edge, the selection's after a gap. */
-    public ResourceActions<T> leftAligned() {
-        bar.removeAll();
-        JPanel g = group(FlowLayout.LEFT, left);
-        g.add(Box.createHorizontalStrut(GROUP_GAP));
-        onSelection.forEach(g::add);
-        bar.add(g, BorderLayout.WEST);
-        return this;
     }
 
     /** Removes {@code row} after asking; the context menu's Remove does the same. */
@@ -200,16 +163,8 @@ public final class ResourceActions<T> {
         }
     }
 
-    /** A button's click: what the selection's target says, else {@code onRow} on the selected resource. */
-    private void act(Function<Target, Runnable> ofTarget, Consumer<T> onRow) {
-        Target target = selection.target();
-        if (target != null) {
-            Runnable r = ofTarget.apply(target);
-            if (r != null) {
-                r.run();
-            }
-            return;
-        }
+    /** A button's click: {@code onRow} on the selected resource. */
+    private void act(Consumer<T> onRow) {
         T t = selection.selected();
         if (t != null) {
             onRow.accept(t);
@@ -217,18 +172,10 @@ public final class ResourceActions<T> {
     }
 
     private void enable() {
-        Target target = selection.target();
-        if (target == null) {
-            boolean any = selection.selected() != null;
-            show(edit, editTip, any);
-            show(cloneOf, cloneTip, any);
-            show(removal, removeTip, any);
-        } else {
-            show(edit, target.editTip(), target.edit() != null);
-            show(cloneOf, target.cloneTip(), target.cloneOf() != null);
-            show(removal, target.removeTip(), target.remove() != null);
-        }
-        add.setEnabled(selection.canAdd());
+        boolean any = selection.selected() != null;
+        show(edit, editTip, any);
+        show(cloneOf, cloneTip, any);
+        show(removal, removeTip, any);
     }
 
     /** {@code tip} on the button, as its accessible name too, and the button on or off. */
@@ -236,12 +183,6 @@ public final class ResourceActions<T> {
         b.setToolTipText(tip);
         b.getAccessibleContext().setAccessibleName(tip);
         b.setEnabled(on);
-    }
-
-    /** The add button's tip, when "New <noun>…" does not say what it adds. */
-    public ResourceActions<T> addTip(String tip) {
-        show(add, tip, add.isEnabled());
-        return this;
     }
 
     private static JPanel group(int align, List<JButton> buttons) {

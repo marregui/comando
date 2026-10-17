@@ -15,7 +15,6 @@ import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.UiPort;
 import dev.marregui.comando.core.resource.ConnectionKind;
-import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.result.ResultView;
@@ -178,7 +177,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private Notifier notifier;
     private ResourceDialog<ConnectionSpec> connectionsDialog;
     private ResourceDialog<SessionSpec> sessionsDialog;
-    private ResourceDialog<FolderRoot> foldersDialog;
     private ImportSessionsDialog importDialog;
     private Transcript watched;
     private final Runnable transcriptListener = transcriptRender::request;
@@ -286,11 +284,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
 
             @Override
-            public ResourceActions.Editor folders() {
-                return editor(() -> foldersDialog);
-            }
-
-            @Override
             public void exploreSchema(String connection) {
                 ComandoUi.this.exploreSchema(connection);
             }
@@ -343,15 +336,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 Intent.StartSession::new,
                 Intent.StopSession::new,
                 (s, name) -> new Intent.OpenSession(name, s.focused(), PanelId.random())), deps.intents());
-        foldersDialog = new ResourceDialog<>(frame, new ResourceDialog.Config<>(
-                FolderKind.INSTANCE,
-                AppState::folders,
-                s -> Map.of(),
-                Intent.SaveFolder::new,
-                null,
-                null,
-                null,
-                null), deps.intents());
         importDialog = new ImportSessionsDialog(frame, deps.intents(), deps.catalogue());
 
         registerCommands();
@@ -475,7 +459,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         status.render(s);
         connectionsDialog.render(s);
         sessionsDialog.render(s);
-        foldersDialog.render(s);
         watchTranscript(s.focusedPanel().session());
         // the last card answered: the Session tab came forward, and the keyboard the inbox held goes with it
         Component owner = focusOwnerInFrame();
@@ -795,6 +778,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // panel: tools that run in its project
         cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, CMD | ALT), this::runGradle, () -> focusedSession().isPresent());
         cmd("tools.settings", "Tool settings", null, this::openToolSettings);
+        cmd("files.settings", "Files tab folders", null, this::openFolderSettings);
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         // view
         cmd("view.palette", "Command palette", key(KeyEvent.VK_P, CMD | SHIFT), () -> new CommandPalette(actions).show(frame));
@@ -1146,6 +1130,22 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
     }
 
+    /**
+     * Opens {@code folders.json} in a panel, as any document, written with the tab's folders first when missing; the
+     * tab follows the file as it is saved.
+     */
+    private void openFolderSettings() {
+        List<FolderRoot> shown = deps.state().get().folders();
+        Thread.ofVirtual().name("folder-settings").start(() -> {
+            try {
+                Path file = deps.setup().folderSettings(shown);
+                Edt.later(() -> openFile(file));
+            } catch (IOException | RuntimeException e) {
+                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open the Files tab's folders: " + e.getMessage(), false));
+            }
+        });
+    }
+
     /** Help ▸ Claude Code kit: what the kit is here, and an install when there is anything to install. */
     private void showKit() {
         Thread.ofVirtual().name("kit").start(() -> {
@@ -1203,7 +1203,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private List<String> addKitFolders() {
         List<String> added = new ArrayList<>();
         for (FolderRoot f : Setup.missingFolders(deps.state().get().folders(), deps.setup().kitFolders())) {
-            deps.intents().dispatch(new Intent.SaveFolder("", f));
+            deps.intents().dispatch(new Intent.AddFolder(f));
             added.add(f.name());
         }
         return added;

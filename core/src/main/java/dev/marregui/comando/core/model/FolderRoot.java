@@ -9,7 +9,7 @@ import java.util.Set;
 /**
  * A folder the Files tab shows at its top level, configured like a connection: a name, the folder, the file its name
  * opens (its index, such as {@code ALPHA.md}), the names of entries left out besides {@link #ALWAYS_EXCLUDED}, the
- * icon of its row, and whether it is read-only.
+ * icon of its row. The folders are configured in {@code folders.json}; the Files tab only shows them.
  *
  * <p>The record takes any name and path, as read from a hand-edited {@code folders.json}; {@link
  * dev.marregui.comando.core.resource.FolderKind} holds the rules (a name, a full path, an index inside the folder), and
@@ -18,15 +18,12 @@ import java.util.Set;
  * @param index    a path relative to the folder, empty when none
  * @param excludes folder or file names left out wherever they appear, matched ignoring case
  * @param icon     one of {@link #ICONS}; {@link #FOLDER} when none is set
- * @param readOnly a folder another program writes, such as Claude Code's memory: its files open to read, and the
- *                 Files tab neither edits, clones nor removes it; set by the kit or in {@code folders.json}, not in
- *                 the dialog
  */
-public record FolderRoot(String name, String path, String index, List<String> excludes, String icon, boolean readOnly) {
+public record FolderRoot(String name, String path, String index, List<String> excludes, String icon) {
 
     /** The plain folder icon, the default. */
     public static final String FOLDER = "folder";
-    /** The icons a folder's row may have, as the dialog offers them. */
+    /** The icons a folder's row may have. */
     public static final List<String> ICONS = List.of(FOLDER, "scratchpad", "memory", "knowledge", "skills", "plugin");
 
     /** Build output and dependencies, left out of every folder: large, generated, and never a document. */
@@ -41,9 +38,9 @@ public record FolderRoot(String name, String path, String index, List<String> ex
         icon = icon == null || icon.isBlank() ? FOLDER : icon.strip();
     }
 
-    /** A writable folder with the plain icon. */
+    /** A folder with the plain icon. */
     public FolderRoot(String name, String path, String index, List<String> excludes) {
-        this(name, path, index, excludes, FOLDER, false);
+        this(name, path, index, excludes, FOLDER);
     }
 
     /**
@@ -76,10 +73,6 @@ public record FolderRoot(String name, String path, String index, List<String> ex
     }
 
     public FolderRoot withName(String newName) {
-        return new FolderRoot(newName, path, index, excludes, icon, readOnly);
-    }
-
-    public FolderRoot withReadOnly(boolean on) {
-        return new FolderRoot(name, path, index, excludes, icon, on);
+        return new FolderRoot(newName, path, index, excludes, icon);
     }
 }

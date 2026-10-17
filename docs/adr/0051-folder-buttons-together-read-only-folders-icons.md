@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-16 | accepted, but for the row "files", proposed; amends the bar, the sync interval and the order of [record 49](0049-the-files-tab-shows-folders-the-user-chooses.md) | Miguel (the folder buttons grouped at the left; no refresh button, the tab follows the disk, every 5 s; the memory folder read-only, written by Claude Code only; an icon for the memory, the knowledge base, the skills and the plugin; `MEMORY.md` first, then folders, then files), Claude (how: read-only and the icon as folder settings, the index file leading any folder, the reducer refusing as the bar does, the icons' shape) |
+| 2026-10-16 | accepted, but for the row "files", proposed; its rows bar, files and read-only removed by [record 55](0055-the-files-tab-only-shows-folders-json-configures-it.md); amends the bar, the sync interval and the order of [record 49](0049-the-files-tab-shows-folders-the-user-chooses.md) | Miguel (the folder buttons grouped at the left; no refresh button, the tab follows the disk, every 5 s; the memory folder read-only, written by Claude Code only; an icon for the memory, the knowledge base, the skills and the plugin; `MEMORY.md` first, then folders, then files), Claude (how: read-only and the icon as folder settings, the index file leading any folder, the reducer refusing as the bar does, the icons' shape) |
 
 ## 1. Context
 

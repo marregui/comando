@@ -128,12 +128,15 @@ public sealed interface Intent {
     record RemoveConnection(String name) implements Intent {
     }
 
-    /** Adds a folder to the Files tab ({@code previousName} empty) or changes one. */
-    record SaveFolder(String previousName, FolderRoot spec) implements Intent {
+    /** Adds a folder to the Files tab, as the kit does; refused when one has its name. */
+    record AddFolder(FolderRoot spec) implements Intent {
     }
 
-    /** Takes a folder off the Files tab; its files stay on disk. */
-    record RemoveFolder(String name) implements Intent {
+    /** The Files tab's folders as {@code folders.json} now has them, read again after it changed. */
+    record FoldersRead(List<FolderRoot> folders) implements Intent {
+        public FoldersRead {
+            folders = List.copyOf(folders);
+        }
     }
 
     record OpenConnection(String name) implements Intent {
@@ -379,14 +382,6 @@ public sealed interface Intent {
      * is not shown under the edited folder.
      */
     record FolderLoaded(FolderRoot folder, ViewSpec.TreeNode tree) implements Intent {
-    }
-
-    /** Copies a file of the Files tab to {@code to}, a file that must not exist yet; both full paths. */
-    record CopyFile(String from, String to) implements Intent {
-    }
-
-    /** Deletes a file of the Files tab: to the desktop's Trash when {@code toTrash}, for good otherwise. */
-    record DeleteFile(String file, boolean toTrash) implements Intent {
     }
 
     /** The plan's usage limits as read from Claude Code, every few minutes. */

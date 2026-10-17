@@ -13,7 +13,7 @@ import java.util.Map;
 
 /**
  * The Files tab's folders as a resource kind: a name, a folder, an index file, what to leave out and the row's icon.
- * Whether a folder is read-only is not an attribute: the dialog never edits a read-only folder.
+ * Its rules are the ones every entry of {@code folders.json} meets as the store reads it.
  */
 public final class FolderKind implements ResourceKind<FolderRoot> {
 
@@ -79,8 +79,7 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
                 path,
                 index,
                 Arrays.asList(a.getOrDefault("excludes", "").split(",")),
-                icon,
-                false);
+                icon);
     }
 
     @Override

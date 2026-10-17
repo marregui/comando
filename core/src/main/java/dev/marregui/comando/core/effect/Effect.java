@@ -132,14 +132,6 @@ public sealed interface Effect {
         }
     }
 
-    /** Copies a file to {@code to}, which must not exist yet. */
-    record CopyFile(String from, String to) implements Effect {
-    }
-
-    /** Deletes a file: to the Trash when {@code toTrash}, for good otherwise. */
-    record DeleteFile(String file, boolean toTrash) implements Effect {
-    }
-
     /** Shows a folder's tree in the sidebar's Files tab, when the folder still has the settings it was read with. */
     record ShowFolder(FolderRoot folder, ViewSpec.TreeNode tree) implements Effect {
     }

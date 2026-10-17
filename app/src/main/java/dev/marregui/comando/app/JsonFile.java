@@ -40,6 +40,11 @@ final class JsonFile<T> {
         return Files.isRegularFile(path);
     }
 
+    /** The content as it is now, or null when the file is missing; an unreadable file stays where it is. */
+    T readAsIs() throws IOException {
+        return exists() ? JSON.readValue(path.toFile(), type) : null;
+    }
+
     /** The content, or null when the file is missing or unreadable (then it is moved aside). */
     T read() {
         if (!exists()) {

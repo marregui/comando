@@ -350,7 +350,7 @@ public final class Workspace {
                 }
                 refreshTab(p, s, view);
                 Path file = texts.file(p.id()).orElse(null);
-                view.file(file, texts.document(p.id()), file != null && s.folders().stream().anyMatch(f -> f.readOnly() && f.contains(file)));
+                view.file(file, texts.document(p.id()));
                 if (file != null && toEdit.removeIf(f -> PanelTexts.samePath(f, file))) {
                     view.edit();
                 }

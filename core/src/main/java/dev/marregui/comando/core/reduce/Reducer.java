@@ -110,8 +110,8 @@ public final class Reducer {
 
             case Intent.SaveConnection i -> saveConnection(s, i);
             case Intent.RemoveConnection i -> removeConnection(s, i.name());
-            case Intent.SaveFolder i -> saveFolder(s, i);
-            case Intent.RemoveFolder i -> removeFolder(s, i.name());
+            case Intent.AddFolder i -> addFolder(s, i.spec());
+            case Intent.FoldersRead i -> i.folders().equals(s.folders()) ? Transition.of(s) : Transition.of(s.withFolders(i.folders()));
             case Intent.OpenConnection i -> openConnection(s, i.name());
             case Intent.CloseConnection i -> closeConnection(s, i.name());
             case Intent.TestConnection i -> new Transition(notice(s, Notice.Level.INFO, "Testing " + i.spec().label(), Notice.connection(i.spec().name())),
@@ -181,10 +181,6 @@ public final class Reducer {
             case Intent.CancelCommand i -> new Transition(s, List.of(new Effect.CancelCommand(i.runId())));
             case Intent.BrowseFolders i -> new Transition(s, List.of(new Effect.ReadFolders(folders(s, i.names()))));
             case Intent.WatchFolders i -> new Transition(s, List.of(new Effect.WatchFolders(folders(s, i.names()))));
-            case Intent.CopyFile i -> inReadOnlyFolder(s, i.to()).map(f -> refuseReadOnly(s, f, i.to()))
-                    .orElseGet(() -> new Transition(s, List.of(new Effect.CopyFile(i.from(), i.to()))));
-            case Intent.DeleteFile i -> inReadOnlyFolder(s, i.file()).map(f -> refuseReadOnly(s, f, i.file()))
-                    .orElseGet(() -> new Transition(s, List.of(new Effect.DeleteFile(i.file(), i.toTrash()))));
             // a tree read with settings since edited, or of a folder since removed, is dropped: the tab shows only current folders
             case Intent.FolderLoaded i -> s.folders().contains(i.folder())
                     ? new Transition(s, List.of(new Effect.ShowFolder(i.folder(), i.tree()))) : Transition.of(s);
@@ -716,53 +712,14 @@ public final class Reducer {
         return s.folders().stream().filter(f -> names.contains(f.name())).toList();
     }
 
-    private Transition saveFolder(AppState s, Intent.SaveFolder i) {
-        FolderRoot spec = i.spec();
-        boolean isNew = i.previousName().isEmpty();
-        if ((isNew || !i.previousName().equals(spec.name())) && s.folder(spec.name()).isPresent()) {
+    /** A folder after the others, saved to {@code folders.json}. */
+    private Transition addFolder(AppState s, FolderRoot spec) {
+        if (s.folder(spec.name()).isPresent()) {
             return Transition.of(notice(s, Notice.Level.ERROR, "A folder called " + spec.name() + " exists", Notice.folder(spec.name())));
         }
-        if (!isNew && s.folder(i.previousName()).isEmpty()) {
-            return Transition.of(notice(s, Notice.Level.ERROR, "No folder called " + i.previousName(), Notice.folder(i.previousName())));
-        }
-        if (!isNew && s.folder(i.previousName()).get().readOnly()) {
-            return Transition.of(notice(s, Notice.Level.ERROR, readOnly(i.previousName()), Notice.folder(i.previousName())));
-        }
-        List<FolderRoot> folders = new ArrayList<>(s.folders().size() + 1);
-        for (FolderRoot f : s.folders()) {
-            folders.add(f.name().equals(i.previousName()) ? spec : f);
-        }
-        if (isNew) {
-            folders.add(spec);
-        }
+        List<FolderRoot> folders = new ArrayList<>(s.folders());
+        folders.add(spec);
         AppState next = s.withFolders(folders);
-        return new Transition(next, List.of(new Effect.SaveFolders(next.folders())));
-    }
-
-    /** The read-only folder {@code file} is in, if any: no file is written or deleted there. */
-    private static Optional<FolderRoot> inReadOnlyFolder(AppState s, String file) {
-        Path p = Path.of(file);
-        return s.folders().stream().filter(f -> f.readOnly() && f.contains(p)).findFirst();
-    }
-
-    private Transition refuseReadOnly(AppState s, FolderRoot folder, String file) {
-        return Transition.of(notice(s, Notice.Level.ERROR, Path.of(file).getFileName() + " is in folder " + folder.name()
-                + ", which is read-only", Notice.folder(folder.name())));
-    }
-
-    /** Why a read-only folder is neither edited nor removed, and where it is changed. */
-    private static String readOnly(String name) {
-        return "Folder " + name + " is read-only; folders.json changes it";
-    }
-
-    private Transition removeFolder(AppState s, String name) {
-        if (s.folder(name).isEmpty()) {
-            return Transition.of(s);
-        }
-        if (s.folder(name).get().readOnly()) {
-            return Transition.of(notice(s, Notice.Level.ERROR, readOnly(name), Notice.folder(name)));
-        }
-        AppState next = clear(s, Notice.folder(name)).withFolders(s.folders().stream().filter(f -> !f.name().equals(name)).toList());
         return new Transition(next, List.of(new Effect.SaveFolders(next.folders())));
     }
 

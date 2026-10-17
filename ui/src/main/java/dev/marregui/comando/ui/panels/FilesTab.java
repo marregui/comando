@@ -3,21 +3,16 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.core.state.AppState;
-import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.resource.ResourceActions;
-import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.tree.TreeView;
 
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
 import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
@@ -31,10 +26,8 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreePath;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
-import java.awt.Component;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,9 +37,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
-import java.util.function.Supplier;
 
 /**
  * The sidebar's Files tab: the folders the user configured ({@link FolderRoot}), one top-level row each, as a navigator
@@ -55,15 +46,12 @@ import java.util.function.Supplier;
  * index file leads it, offered by name in its row's menu. Only the folders whose rows are open are read and kept in sync
  * ({@link Intent.WatchFolders}), so a closed folder costs nothing; the tree follows them as the tools adapter reads
  * them, keeping what the user opened and selected, and the newest day folder is open at a folder's first read. A
- * folder's row has the icon it was configured with; a read-only one says so in its detail.
+ * folder's row has the icon it was configured with.
  *
- * <p>The filter above the tree finds files and folders by name across every folder: while it has text, a second tree
- * shows the matches with the folders leading to them, and every folder is read once so the closed ones are searched
- * too. Clearing it (Esc) brings back the tree as the user left it. The bar above, at its left edge, follows the
- * selection, each tip naming what its button affects: on a folder row it adds a folder to the tab and edits, clones or
- * removes the selected one, with the same dialog as connections; on a file it edits the file in a panel, clones it
- * under a name the user gives, or deletes it (to the Trash where the desktop has one), add being off; on a folder
- * inside a folder only add applies. A read-only folder and its files are never edited, cloned nor removed.</p>
+ * <p>The tab writes nothing: it has no buttons, and a file's menu opens it, rendered or as text; the folders are
+ * configured in {@code folders.json}. The filter above the tree finds files and folders by name across every folder:
+ * while it has text, a second tree shows the matches with the folders leading to them, and every folder is read once
+ * so the closed ones are searched too. Clearing it (Esc) brings back the tree as the user left it.</p>
  */
 final class FilesTab {
 
@@ -76,31 +64,16 @@ final class FilesTab {
     /** Rows of the filter's tree expanded at most, so a filter of one letter stays quick. */
     private static final int MAX_FOUND_ROWS = 2_000;
 
-    /** Asks for a name; null when the user cancels. Tests answer for the user. */
-    interface Names {
-        Names MODAL = (parent, title, text, initial) -> (String) JOptionPane.showInputDialog(parent, text, title,
-                JOptionPane.PLAIN_MESSAGE, null, null, initial);
-
-        String ask(Component parent, String title, String text, String initial);
-    }
-
     private final IntentSink intents;
     private final Consumer<Path> open;
     /** Opens a file in a panel in its editor, rather than rendered. */
     private final Consumer<Path> editFile;
-    private final ResourceActions.Questions questions;
-    private final Names names;
-    /** Whether the desktop has a Trash, asked when a file is to be deleted. */
-    private final BooleanSupplier trash;
-    private final ResourceActions.Editor editor;
     private final TreeView tree = new TreeView();
     private final TreeView found = new TreeView();
     private final JTextField filter = new JTextField();
     private final CardLayout cards = new CardLayout();
     private final JPanel center = new JPanel(cards);
     private final JPanel body = new JPanel(new BorderLayout());
-    private final ResourceActions<FolderRoot> actions;
-    private final List<Runnable> selectionListeners = new ArrayList<>();
 
     private List<FolderRoot> folders = List.of();
     /** The latest tree read of each folder, by name. */
@@ -117,15 +90,10 @@ final class FilesTab {
     private boolean restoring;
     private boolean built;
 
-    FilesTab(IntentSink intents, Consumer<Path> open, Consumer<Path> editFile, ResourceActions.Editor editor,
-             ResourceActions.Questions questions, Names names, BooleanSupplier trash, Supplier<AppState> state) {
+    FilesTab(IntentSink intents, Consumer<Path> open, Consumer<Path> editFile) {
         this.intents = intents;
         this.open = open;
         this.editFile = editFile;
-        this.questions = questions;
-        this.names = names;
-        this.trash = trash;
-        this.editor = editor;
         for (TreeView t : List.of(tree, found)) {
             t.tree().setRootVisible(false);
             t.icons(n -> {
@@ -157,8 +125,6 @@ final class FilesTab {
                 }
             }
         });
-        tree.tree().addTreeSelectionListener(e -> selectionListeners.forEach(Runnable::run));
-        found.tree().addTreeSelectionListener(e -> selectionListeners.forEach(Runnable::run));
 
         filter.putClientProperty("JTextField.placeholderText", "Filter by name");
         filter.putClientProperty("JTextField.showClearButton", true);
@@ -181,38 +147,6 @@ final class FilesTab {
         });
         filter.registerKeyboardAction(e -> filter.setText(""), KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_FOCUSED);
 
-        actions = new ResourceActions<>(new ResourceActions.Selection<>() {
-            @Override
-            public FolderRoot selected() {
-                FolderRoot f = selectedFolder();
-                return f == null || f.readOnly() ? null : f;
-            }
-
-            @Override
-            public void onChange(Runnable listener) {
-                selectionListeners.add(listener);
-            }
-
-            @Override
-            public Component component() {
-                return shown().tree();
-            }
-
-            @Override
-            public boolean canAdd() {
-                ViewSpec.TreeNode n = shown().selected();
-                return n == null || !n.link().startsWith(SourceLinks.SCHEME);
-            }
-
-            @Override
-            public ResourceActions.Target target() {
-                return targetOf(shown().tree().getSelectionPath());
-            }
-        }, new ResourceActions.Rows<>(FolderKind.INSTANCE.noun(), FolderRoot::name, FolderRoot::name, f -> false, "",
-                f -> FolderKind.INSTANCE.removalQuestion(state.get(), f.name())),
-                editor, name -> intents.dispatch(new Intent.RemoveFolder(name)), questions)
-                .leftAligned().addTip("Add a folder to the Files tab…");
-
         center.add(tree.component(), "tree");
         center.add(found.component(), "found");
         JPanel top = new JPanel(new BorderLayout());
@@ -225,11 +159,6 @@ final class FilesTab {
     /** The filter above the tree. */
     JComponent component() {
         return body;
-    }
-
-    /** Add, then edit, clone and remove of the selected folder or file, together at the left edge. */
-    JComponent actions() {
-        return actions.component();
     }
 
     TreeView tree() {
@@ -350,7 +279,7 @@ final class FilesTab {
             rows.add(new ViewSpec.TreeNode(f.name(), rowDetail(f), children));
         }
         ViewSpec.TreeNode root = new ViewSpec.TreeNode("Files", "",
-                rows.isEmpty() ? List.of(placeholder("No folders yet. + adds one.")) : rows);
+                rows.isEmpty() ? List.of(placeholder("No folders yet: Panel ▸ Tools ▸ Files tab folders opens folders.json")) : rows);
         restoring = true;
         try {
             if (built) {
@@ -362,12 +291,11 @@ final class FilesTab {
         } finally {
             restoring = false;
         }
-        selectionListeners.forEach(Runnable::run);
     }
 
-    /** A folder's row's detail: its path, and whether it is read-only. */
+    /** A folder's row's detail: its path. */
     private static String rowDetail(FolderRoot f) {
-        return Labels.shortPath(f.path()) + (f.readOnly() ? " · read-only" : "");
+        return Labels.shortPath(f.path());
     }
 
     /**
@@ -462,83 +390,6 @@ final class FilesTab {
         return p == null || p.getPathCount() != 2 ? null : folderOf(p).orElse(null);
     }
 
-    /** What the bar's edit, clone and remove do to the node at {@code path}, and what their tips say. */
-    private ResourceActions.Target targetOf(TreePath path) {
-        ViewSpec.TreeNode n = path == null ? null : node(path);
-        Optional<FolderRoot> folder = path == null ? Optional.empty() : folderOf(path);
-        // nothing, or an entry that stands for none: "reading…", "empty", "…", an error
-        if (n == null || folder.isEmpty() || n.label().equals(ViewSpec.TreeNode.MORE)
-                || n.children().isEmpty() && n.link().isEmpty() && n.detail().isEmpty()) {
-            return off("the selected folder or file", "");
-        }
-        FolderRoot f = folder.get();
-        if (path.getPathCount() == 2) {
-            return f.readOnly() ? off("folder " + f.name(), ": it is read-only")
-                    : new ResourceActions.Target("Edit folder " + f.name() + "…", () -> editor.edit(f.name()),
-                    "Clone folder " + f.name() + "…", () -> editor.cloneOf(f.name()),
-                    "Remove folder " + f.name() + " from the Files tab…", () -> actions.remove(f));
-        }
-        if (!n.link().startsWith(SourceLinks.SCHEME)) {
-            return off("folder " + n.label(), ": only files and the tab's own folders");
-        }
-        Path file = Path.of(SourceLinks.path(n.link()));
-        if (f.readOnly()) {
-            return off("file " + n.label(), ": folder " + f.name() + " is read-only");
-        }
-        return new ResourceActions.Target("Edit file " + n.label() + " in a panel", () -> editFile.accept(file),
-                "Clone file " + n.label() + "…", () -> cloneFile(file),
-                (trash.getAsBoolean() ? "Move file " + n.label() + " to the Trash…" : "Delete file " + n.label() + "…"), () -> deleteFile(file));
-    }
-
-    /** Buttons off, their tips naming {@code what} and {@code why}. */
-    private static ResourceActions.Target off(String what, String why) {
-        return new ResourceActions.Target("Edit " + what + why, null, "Clone " + what + why, null, "Remove " + what + why, null);
-    }
-
-    private static ViewSpec.TreeNode node(TreePath path) {
-        return ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject() instanceof ViewSpec.TreeNode n ? n : null;
-    }
-
-    /** Copies {@code file} beside it, under a name the user gives; "notes copy.md" offered. */
-    private void cloneFile(Path file) {
-        String name = file.getFileName().toString();
-        int dot = name.lastIndexOf('.');
-        String offered = dot > 0 ? name.substring(0, dot) + " copy" + name.substring(dot) : name + " copy";
-        String answer = names.ask(shown().tree(), "Clone " + name, "Name of the copy, in the same folder:", offered);
-        if (answer == null) {
-            return;
-        }
-        String copy = answer.strip();
-        if (!isNewName(copy, name)) {
-            intents.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot clone " + name + ": \"" + copy
-                    + "\" is not a new name in its folder", false));
-            return;
-        }
-        intents.dispatch(new Intent.CopyFile(file.toString(), file.resolveSibling(copy).toString()));
-    }
-
-    /** Whether {@code copy} names a file beside {@code original}: one name, not a path, and not the original's. */
-    static boolean isNewName(String copy, String original) {
-        try {
-            return !copy.isEmpty() && !copy.equals(".") && !copy.equals("..") && !copy.equals(original)
-                    && Path.of(copy).getNameCount() == 1 && !copy.contains("/");
-        } catch (InvalidPathException e) {
-            return false;
-        }
-    }
-
-    /** Deletes {@code file} after asking: to the Trash where the desktop has one, for good otherwise, as the question says. */
-    private void deleteFile(Path file) {
-        String name = file.getFileName().toString();
-        boolean toTrash = trash.getAsBoolean();
-        String text = toTrash ? "Move " + name + " to the Trash? It can be put back from there."
-                : "Delete " + name + " for good? This desktop has no Trash: it cannot be undone.";
-        Object[] options = toTrash ? new Object[]{"Move to Trash", "Cancel"} : new Object[]{"Delete", "Cancel"};
-        if (questions.ask(shown().tree(), Plain.text(text), "Delete " + Plain.text(name), options) == 0) {
-            intents.dispatch(new Intent.DeleteFile(file.toString(), toTrash));
-        }
-    }
-
     private void activate(ViewSpec.TreeNode n) {
         if (n.link().startsWith(SourceLinks.SCHEME)) {
             open.accept(Path.of(SourceLinks.path(n.link())));
@@ -553,30 +404,19 @@ final class FilesTab {
     }
 
     /**
-     * The context menu of {@code n}, selected in the tree in front: a file's, a folder row's, or none. A read-only
-     * folder's offers its index file only.
+     * The context menu of {@code n}, selected in the tree in front: a file's opens it rendered or as its text, a folder
+     * row's opens its index file; any other node has none.
      */
     JPopupMenu menuFor(ViewSpec.TreeNode n) {
         JPopupMenu menu = new JPopupMenu();
         if (n.link().startsWith(SourceLinks.SCHEME)) {
-            menu.add(item("Open in a panel", "text", () -> activate(n)));
-            // the bar's actions on the file selected, as the bar names them
-            ResourceActions.Target t = targetOf(shown().tree().getSelectionPath());
-            if (t.edit() != null && n.equals(node(shown().tree().getSelectionPath()))) {
-                menu.add(item("Edit in a panel", "edit", t.edit()));
-                menu.add(item("Clone…", "copy", t.cloneOf()));
-                menu.add(item(trash.getAsBoolean() ? "Move to the Trash…" : "Delete…", "close", t.remove()));
-            }
+            Path file = Path.of(SourceLinks.path(n.link()));
+            menu.add(item("Open in a panel", "text", () -> open.accept(file)));
+            menu.add(item("Edit in a panel", "edit", () -> editFile.accept(file)));
         } else if (selectedFolder() != null && selectedFolder().name().equals(n.label())) {
             FolderRoot f = selectedFolder();
             // asked for by name: a missing index says so in the status bar, as any file that cannot be opened
             f.indexFile().ifPresent(index -> menu.add(item("Open " + f.index(), "index", () -> open.accept(index))));
-            if (f.readOnly()) {
-                return menu;
-            }
-            menu.add(item("Edit…", "edit", () -> editor.edit(f.name())));
-            menu.add(item("Clone…", "copy", () -> editor.cloneOf(f.name())));
-            menu.add(item("Remove…", "close", () -> actions.remove(f)));
         }
         return menu;
     }
@@ -601,7 +441,6 @@ final class FilesTab {
         } else {
             cards.show(center, "tree");
         }
-        selectionListeners.forEach(Runnable::run);
     }
 
     /** Reads, once, the folders never read, so the filter searches the closed ones too. */

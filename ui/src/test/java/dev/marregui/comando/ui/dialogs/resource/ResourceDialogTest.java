@@ -3,12 +3,10 @@ package dev.marregui.comando.ui.dialogs.resource;
 import com.formdev.flatlaf.FlatDarkLaf;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ConnectionSpec;
-import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.resource.ConnectionKind;
-import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
@@ -101,32 +99,6 @@ class ResourceDialogTest {
         ResourceDialog<ConnectionSpec> connections = connections(new RecordingSink());
         connections.prepare(States.twoPanels(), "local");
         assertEveryButtonVisible(connections.content(), "Test", "Connect", "Assign to panel", "Save");
-    }
-
-    @Test
-    void aFolderHasSaveOnlyAndItsFormIsChecked() {
-        RecordingSink sink = new RecordingSink();
-        ResourceDialog<FolderRoot> d = folders(sink);
-        AppState state = States.twoPanels().withFolders(List.of(new FolderRoot("KB", "/kb", "ALPHA.md", List.of())));
-        d.render(state);
-        d.prepare(state, "KB");
-        assertEveryButtonVisible(d.content(), "Save");
-        assertThat(all(d.content(), AbstractButton.class, b -> List.of("Test", "Connect", "Start", "Assign to panel").contains(b.getText())))
-                .as("a folder is neither tested, opened nor assigned").isEmpty();
-        JRootPane root = new JRootPane();
-        d.install(root);
-        assertThat(registered(root)).as("Esc only, no ⌘⏎: nothing to assign").containsExactly(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0));
-
-        text(d, "index").setText("../outside.md");
-        click(d, "Save");
-        assertThat(sink.intents()).isEmpty();
-        assertThat(message(d).getText()).isEqualTo("the index file must be inside the folder: ../outside.md");
-
-        text(d, "index").setText("docs/ALPHA.md");
-        text(d, "excludes").setText("tools, bin");
-        click(d, "Save");
-        assertThat(sink.intents()).containsExactly(new Intent.SaveFolder("KB", new FolderRoot("KB", "/kb", "docs/ALPHA.md", List.of("tools", "bin"))));
-        assertThat(message(d).getText()).isEqualTo("Saved KB");
     }
 
     // ---- keys
@@ -437,11 +409,6 @@ class ResourceDialogTest {
         InputMap map = root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         KeyStroke[] keys = map.keys();
         return keys == null ? List.of() : Stream.of(keys).filter(k -> !(map.get(k) instanceof String)).toList();
-    }
-
-    private static ResourceDialog<FolderRoot> folders(RecordingSink sink) {
-        return new ResourceDialog<>(null, new ResourceDialog.Config<>(
-                FolderKind.INSTANCE, AppState::folders, s -> Map.of(), Intent.SaveFolder::new, null, null, null, null), sink);
     }
 
     private static ResourceDialog<ConnectionSpec> connections(RecordingSink sink) {

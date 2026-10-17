@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-16 | accepted; replaces the one click and the index opened with its folder of [record 49](0049-the-files-tab-shows-folders-the-user-chooses.md), and the row "files" of [record 51](0051-folder-buttons-together-read-only-folders-icons.md), to which it adds the scratchpad icon | Miguel (a click on a folder opens no file; only a double click on a file opens it; the bar follows the selection, add off for a file; the bar acts on files too, each tip saying whether it affects a file or a folder; a scratchpad icon; the New panel button at the right end of the panel tabs), Claude (how: what edit, clone and remove do to a file, the Trash, what a folder inside a folder and an empty selection turn on, the pencil, the button's placement) |
+| 2026-10-16 | accepted; its rows bar, tips, clone a file, remove a file and read-only removed by [record 55](0055-the-files-tab-only-shows-folders-json-configures-it.md); replaces the one click and the index opened with its folder of [record 49](0049-the-files-tab-shows-folders-the-user-chooses.md), and the row "files" of [record 51](0051-folder-buttons-together-read-only-folders-icons.md), to which it adds the scratchpad icon | Miguel (a click on a folder opens no file; only a double click on a file opens it; the bar follows the selection, add off for a file; the bar acts on files too, each tip saying whether it affects a file or a folder; a scratchpad icon; the New panel button at the right end of the panel tabs), Claude (how: what edit, clone and remove do to a file, the Trash, what a folder inside a folder and an empty selection turn on, the pencil, the button's placement) |
 
 ## 1. Context
 
