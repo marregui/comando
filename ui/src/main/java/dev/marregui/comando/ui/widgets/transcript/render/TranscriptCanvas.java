@@ -50,6 +50,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private static final int PAD_X = Theme.PAD * 2;
     private static final int PAD_Y = Theme.PAD;
     private static final int[] NONE = {0, 0};
+    /** The number of items an exact layout spreads over the cores; fewer are laid out on the EDT alone. */
+    private static final int PARALLEL_FROM = 64;
 
     private final List<Item> items = new ArrayList<>();
     private final Map<Integer, Item> byIndex = new HashMap<>();
@@ -467,6 +469,9 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             tops = Arrays.copyOf(tops, items.size());
             heights = Arrays.copyOf(heights, items.size());
         }
+        if (exact) {
+            layOutInParallel(inner, s);
+        }
         Rectangle vis = getVisibleRect();
         int lo = vis.y;
         int hi = vis.y + vis.height;
@@ -492,6 +497,23 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         estimated = guessed;
         if (estimated) {
             refiner.start();
+        }
+    }
+
+    /**
+     * Lays out the items an exact layout still has to, on every core when there are many: a find or a select-all over a
+     * long stored conversation lays out each block once. An item lays out only its own subtree, with its own boxes and
+     * the shared immutable style, so items are independent; the caller waits, and reads the heights after.
+     */
+    private void layOutInParallel(int inner, Style s) {
+        List<Item> stale = new ArrayList<>();
+        for (Item item : items) {
+            if (item.needsLayout(inner, s)) {
+                stale.add(item);
+            }
+        }
+        if (stale.size() >= PARALLEL_FROM) {
+            stale.parallelStream().forEach(item -> item.layout(inner, s));
         }
     }
 

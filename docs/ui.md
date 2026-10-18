@@ -169,6 +169,7 @@ afterwards. A `path:line` link opens the file in the side pane.
 16-character delta per frame, laying out and painting a 1200 × 800 viewport at the end, then streams a 9 000-character
 open thinking block. It fails when either 99th percentile exceeds 16 ms. It also prints, without failing on them, the
 frames of a 1 500-line code fence whose last 100 lines stream (a growing block keeps the layouts of its whole lines), and
-the time of a find over 2 000 loaded blocks. On 2026-10-18 (Apple silicon, JDK 25, headless, 1 798 frames) p99 was
-3.40 ms, the thinking block's 1.41 ms and the code fence's 4.75 ms; the find took 1.4 s, as it lays out every block
-exactly. `TranscriptShot` paints the session to a PNG; `docs/images/transcript.png` is its output.
+the time of a find over 2 000 loaded blocks, for a word in most of them and for a word in a few. An exact layout of
+many blocks, which a find needs for exact positions, spreads them over the cores. On 2026-10-18 (Apple silicon, 12
+cores, JDK 25, headless, 1 798 frames) p99 was 3.39 ms, the thinking block's 1.41 ms and the code fence's 4.75 ms; the
+find took 540 ms and 457 ms (1.4 s on one core: the font code contends, so 12 cores give about 2.7 times). `TranscriptShot` paints the session to a PNG; `docs/images/transcript.png` is its output.

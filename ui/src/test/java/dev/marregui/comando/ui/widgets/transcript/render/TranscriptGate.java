@@ -93,7 +93,8 @@ public final class TranscriptGate {
         System.out.printf(Locale.ROOT, "1 500-line code fence, its last 100 lines streamed (%d frames): p50 %.2f ms, p99 %.2f ms, max %.2f ms%n",
                 codeSorted.length, ms(codeSorted[codeSorted.length / 2]), ms(codeSorted[(int) (codeSorted.length * 0.99)]),
                 ms(codeSorted[codeSorted.length - 1]));
-        System.out.printf(Locale.ROOT, "find in %d loaded blocks: first search %.2f ms, the next match %.2f ms%n", find[2], ms(find[0]), ms(find[1]));
+        System.out.printf(Locale.ROOT, "find in %d loaded blocks, a word in most: first search %.2f ms, the next match %.2f ms; "
+                + "a word in a few, from the end backwards: %.2f ms%n", find[2], ms(find[0]), ms(find[1]), ms(find[3]));
         if (p99 > 16.0 || thinkingP99 > 16.0) {
             System.out.println("GATE FAILED: p99 above 16 ms");
             System.exit(1);
@@ -199,7 +200,17 @@ public final class TranscriptGate {
         canvas.find("timeout", true);
         long next = System.nanoTime() - t1;
         canvas.clearFind();
-        return new long[]{first, next, n};
+        TranscriptCanvas fresh = new TranscriptCanvas(href -> { });
+        fresh.setSize(width, height);
+        for (int i = 0; i < n; i++) {
+            fresh.append(i, session.get(i % session.size()));
+        }
+        fresh.ensureLayout(width);
+        paintTop(fresh, width, height, img, Math.max(0, fresh.contentHeight() - height));
+        long t2 = System.nanoTime();
+        fresh.find("Reducer.java:42", false);
+        long rare = System.nanoTime() - t2;
+        return new long[]{first, next, n, rare};
     }
 
     private static void paintTop(TranscriptCanvas canvas, int width, int height, BufferedImage img, int top) {
