@@ -26,7 +26,7 @@ session's `<session-id>.jsonl`, the directory `<session-id>/subagents/` holds `a
 | shell tasks | not in the strip | the session's waiting status shows them ([record 43](0043-a-session-waiting-on-background-work-shows-it.md)) |
 | stored conversation | the card's header links to it (`subagent:<toolUseId>`); comando reads Claude Code's files, off the EDT, and shows a lower view named `agent · <description>` | what a sub-agent read and did, beyond the steps the card shows |
 | following | while the session runs, the view is rendered again every 2 s while the file grows, keeping the reader's place; it stops after 30 s without growth, when the meta file says `finished`, or when the session stops; at most 4 follow at once, the oldest stops first; two sub-agents with one description get distinct titles, numbered | live, at a bounded cost; a view is found by its title |
-| large files | only the last 2 MB are read, and the view says so; each tool result is clipped to 200 characters | a long sub-agent cannot stall the reader or the view |
+| large files | only the task and the last 2 MB are read, and the view says so, under the task, so a refreshed view keeps its start; each tool result is clipped to 200 characters | a long sub-agent cannot stall the reader or the view |
 
 ## 3. Consequences
 

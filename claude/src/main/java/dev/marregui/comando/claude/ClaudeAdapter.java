@@ -306,8 +306,11 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 try {
                     openSubagent(name, claudeSessionId, toolUseId);
                 } catch (RuntimeException e) {
+                    if (closed) {
+                        return; // quitting: a read or a follow cut short is no failure
+                    }
                     LOG.log(System.Logger.Level.ERROR, "cannot open a sub-agent [session=" + name + ", toolUseId=" + toolUseId + ']', e);
-                    sink.dispatch(new Intent.Notify(Notice.Level.WARN, "Session " + name + ": cannot open the sub-agent's transcript", false));
+                    subagentSays(new Intent.Notify(Notice.Level.WARN, "Session " + name + ": cannot open the sub-agent's transcript", false));
                 }
             });
         } catch (RejectedExecutionException e) {
@@ -336,7 +339,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     private void openSubagent(String name, String claudeSessionId, String toolUseId) {
         Optional<SubagentFiles.Found> found = SubagentFiles.find(settings.projectsDir(), claudeSessionId, toolUseId, json);
         if (found.isEmpty()) {
-            sink.dispatch(new Intent.Notify(Notice.Level.WARN, "Session " + name + ": transcript not found for this sub-agent", false));
+            subagentSays(new Intent.Notify(Notice.Level.WARN, "Session " + name + ": transcript not found for this sub-agent", false));
             return;
         }
         SubagentFiles.Found f = found.get();
@@ -347,7 +350,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         if (markdown == null) {
             return;
         }
-        sink.dispatch(new Intent.ShowView("", t.title, new ViewSpec.Markdown(markdown), Placement.LOWER));
+        subagentSays(new Intent.ShowView("", t.title, new ViewSpec.Markdown(markdown), Placement.LOWER));
         stopTail(toolUseId);
         Session s = sessions.get(name);
         if (s == null || !s.live || SubagentFiles.finished(f.meta(), json)) {
@@ -377,11 +380,32 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     private String title(String description, String toolUseId) {
         String base = "agent · " + Clip.keepStart(description, 60);
         String title = base;
-        for (int n = 2; titles.containsKey(title) && !titles.get(title).equals(toolUseId); n++) {
+        for (int n = 2; taken(title, toolUseId); n++) {
             title = base + " (" + n + ")";
         }
         titles.put(title, toolUseId);
         return title;
+    }
+
+    /** True when another sub-agent has {@code title}: given it lately, or followed under it now. */
+    private boolean taken(String title, String toolUseId) {
+        String owner = titles.get(title);
+        if (owner != null && !owner.equals(toolUseId)) {
+            return true;
+        }
+        for (Map.Entry<String, Tail> e : tails.entrySet()) {
+            if (e.getValue().title.equals(title) && !e.getKey().equals(toolUseId)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Sends a sub-agent view's intent, unless the adapter closed: nothing is sent after {@link #close} returns. */
+    private void subagentSays(Intent intent) {
+        if (!closed) {
+            sink.dispatch(intent);
+        }
     }
 
     private void follow(String toolUseId, Tail t) {
@@ -395,7 +419,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             t.grewAt = now;
             String markdown = renderSubagent(t);
             if (markdown != null) {
-                sink.dispatch(new Intent.RefreshView(t.title, new ViewSpec.Markdown(markdown)));
+                subagentSays(new Intent.RefreshView(t.title, new ViewSpec.Markdown(markdown)));
             }
         }
         if (now - t.grewAt >= TimeUnit.MILLISECONDS.toNanos(TAIL_IDLE_MILLIS) || SubagentFiles.finished(t.found.meta(), json)) {
@@ -409,7 +433,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             return SubagentFiles.render(t.found.transcript(), SubagentFiles.LIMIT_BYTES, json);
         } catch (IOException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read " + t.found.transcript() + ": " + e.getMessage());
-            sink.dispatch(new Intent.Notify(Notice.Level.WARN, "Session " + t.session + ": cannot read the sub-agent's transcript", false));
+            subagentSays(new Intent.Notify(Notice.Level.WARN, "Session " + t.session + ": cannot read the sub-agent's transcript", false));
             return null;
         }
     }
@@ -677,7 +701,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         planUsage.shutdownNow();
         subagents.shutdownNow();
         try {
-            subagents.awaitTermination(2, TimeUnit.SECONDS); // a read under way sends nothing after close returns
+            subagents.awaitTermination(2, TimeUnit.SECONDS); // a read that outlasts the wait sends nothing: it checks closed first
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

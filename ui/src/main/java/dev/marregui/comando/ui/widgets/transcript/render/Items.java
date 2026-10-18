@@ -33,7 +33,7 @@ final class Items {
     static final int MAX_RESULT_LINES = 400;
     static final int MAX_INPUT_LINES = 300;
     /** An Agent call's result that launched its sub-agent into the background, with the sub-agent's id. */
-    static final Pattern LAUNCHED = Pattern.compile("(?is)launched.*?agentId: ([A-Za-z0-9_-]+)");
+    static final Pattern LAUNCHED = Pattern.compile("(?s)\\s*Async agent launched\\b.*?agentId: ([A-Za-z0-9_-]+)");
 
     private Items() {
     }
@@ -483,7 +483,7 @@ final class Items {
             if (!c.resultText().equals(agentOf)) {
                 agentOf = c.resultText();
                 Matcher m = LAUNCHED.matcher(agentOf);
-                agentId = m.find() ? m.group(1) : "";
+                agentId = m.lookingAt() ? m.group(1) : ""; // the launch's own text, never a report that quotes one
             }
             return agentId;
         }
@@ -493,9 +493,12 @@ final class Items {
          * stops it the first time the canvas sees it ended.
          */
         void seen(long nowMillis) {
-            if (isActive() && times[0] < 0) {
-                times[0] = nowMillis;
-            } else if (!isActive() && times[0] >= 0 && times[1] < 0) {
+            if (isActive()) {
+                if (times[0] < 0) {
+                    times[0] = nowMillis;
+                }
+                times[1] = -1; // active again: an end seen early (a task list late or stale) was not the end
+            } else if (times[0] >= 0 && times[1] < 0) {
                 times[1] = nowMillis;
             }
         }

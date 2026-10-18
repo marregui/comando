@@ -98,8 +98,8 @@ text and shown to 400 lines.
 - **Subagents.** Not documented by Claude Code (2.1.302): beside `<session-id>.jsonl` sits `<session-id>/subagents/`,
   with per subagent `agent-<id>.jsonl` (its whole conversation, `isSidechain: true`) and `agent-<id>.meta.json`
   (`agentType`, `description`, `toolUseId` = the Agent call's id; seen on 2026-10-18 also `finished`). `SubagentFiles` finds
-  the meta file whose `toolUseId` matches (files over 4 kB skipped), and renders the conversation as Markdown, reading
-  only the last 2 MB of a longer file and saying so. `ClaudeAdapter.showSubagent` does it on a thread of its own and
+  the meta file whose `toolUseId` matches (files over 4 kB skipped), and renders the conversation as Markdown; of a longer file it reads its
+  task (the first line) and its last 2 MB, and says so. `ClaudeAdapter.showSubagent` does it on a thread of its own and
   shows a lower view; while the session runs it then follows the file every 2 s while it grows, until 30 s pass without
   growth, the meta file says `finished`, or the session stops; at most 4 views follow at once, the oldest stops first. A file missing or
   moved by a later Claude Code gives the notice "transcript not found for this sub-agent"

@@ -132,10 +132,10 @@ class SubagentFilesProbeTest {
         for (int delta : new int[]{-1, 0}) {
             Path f = sized(tmp.resolve("at" + delta + ".jsonl"), 4096 + delta);
             String md = SubagentFiles.render(f, 4096, json);
-            assertThat(md).doesNotContain("Only the last").contains("FIRST");
+            assertThat(md).doesNotContain("is longer than").contains("FIRST");
         }
         Path over = sized(tmp.resolve("over.jsonl"), 4097);
-        assertThat(SubagentFiles.render(over, 4096, json)).startsWith("_Only the last").doesNotContain("FIRST").contains("LAST");
+        assertThat(SubagentFiles.render(over, 4096, json)).startsWith("_The conversation is longer than").doesNotContain("FIRST").contains("LAST");
     }
 
     /** The cut lands exactly at the start of a line: that whole line is the first whole line, and is shown. */
@@ -150,7 +150,7 @@ class SubagentFilesProbeTest {
 
         String md = SubagentFiles.render(f, limit, json);
 
-        assertThat(md).startsWith("_Only the last").doesNotContain("FIRST").contains("THIRD");
+        assertThat(md).startsWith("_The conversation is longer than").doesNotContain("FIRST").contains("THIRD");
         assertThat(md).as("the whole line that starts exactly at the cut").contains("SECOND");
     }
 
@@ -161,7 +161,7 @@ class SubagentFilesProbeTest {
         String big = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"" + "z".repeat(5000) + "\"}]}}";
         Files.writeString(f, "{\"type\":\"user\",\"message\":{\"content\":\"task\"}}\n" + big + "\n");
         String md = SubagentFiles.render(f, 4096, json);
-        assertThat(md.strip()).startsWith("_Only the last").doesNotContain("zzz");
+        assertThat(md.strip()).startsWith("> task\n\n_The conversation is longer than").doesNotContain("zzz");
     }
 
     private static Path sized(Path f, int size) throws IOException {

@@ -31,6 +31,8 @@ final class SubagentFiles {
     /** A meta file is a few hundred bytes; a larger one is not one. */
     static final long META_BYTES = 4096;
     static final int RESULT_CHARS = 200;
+    /** The most of a file's first line read for its task when the file is cut. */
+    static final long HEAD_BYTES = 64 * 1024;
     private static final String META = ".meta.json";
 
     private SubagentFiles() {
@@ -106,10 +108,12 @@ final class SubagentFiles {
     /**
      * The conversation as Markdown: the task as a quote, each answer's text, each tool call as one list item with its
      * result clipped to {@link #RESULT_CHARS} characters. A file over {@code limitBytes} is read from where its last
-     * {@code limitBytes} start, at the first whole line, and the output says so first.
+     * {@code limitBytes} start, at the first whole line, after its task (the file's first line, when it fits in
+     * {@link #HEAD_BYTES}), and the output says so after the task: a view refreshed while the file grows keeps its start.
      */
     static String render(Path file, long limitBytes, ObjectMapper json) throws IOException {
         String text;
+        String head = "";
         long size;
         try (RandomAccessFile in = new RandomAccessFile(file.toFile(), "r")) {
             size = in.length();
@@ -122,23 +126,33 @@ final class SubagentFiles {
             if (size > limitBytes) {
                 int eol = text.indexOf('\n');
                 text = eol < 0 ? "" : text.substring(eol + 1); // up to the first line's end: cut, or the byte before the cut
+                byte[] first = new byte[(int) Math.min(HEAD_BYTES, from)];
+                in.seek(0);
+                in.readFully(first);
+                String f = new String(first, StandardCharsets.UTF_8);
+                int end = f.indexOf('\n');
+                head = end < 0 ? "" : f.substring(0, end);
             }
         } catch (FileNotFoundException e) {
             return "_The sub-agent has written nothing yet._\n";
         }
         List<String> parts = new ArrayList<>();
-        if (size > limitBytes) {
-            parts.add("_Only the last " + megabytes(limitBytes) + " of " + megabytes(size) + " are shown._");
-        }
         Map<String, Integer> callAt = new HashMap<>();
+        if (size > limitBytes) {
+            JsonNode task = parse(head, json);
+            if (task != null && task.path("type").asText("").equals("user") && task.path("message").path("content").isTextual()) {
+                parts.add(quote(task.path("message").path("content").asText()));
+            }
+            // no size that grows: the view's start stays the same while the file grows
+            parts.add("_The conversation is longer than " + megabytes(limitBytes) + ": only its last " + megabytes(limitBytes)
+                    + " are shown._");
+        }
         for (String line : text.split("\n")) {
             if (line.isBlank()) {
                 continue;
             }
-            JsonNode n;
-            try {
-                n = json.readTree(line);
-            } catch (IOException e) {
+            JsonNode n = parse(line, json);
+            if (n == null) {
                 continue; // a line still being written
             }
             JsonNode content = n.path("message").path("content");
@@ -150,6 +164,18 @@ final class SubagentFiles {
             }
         }
         return parts.isEmpty() ? "_The sub-agent has written nothing yet._\n" : String.join("\n\n", parts) + "\n";
+    }
+
+    /** The line's JSON; null when it is not whole JSON. */
+    private static JsonNode parse(String line, ObjectMapper json) {
+        if (line.isBlank()) {
+            return null;
+        }
+        try {
+            return json.readTree(line);
+        } catch (IOException e) {
+            return null;
+        }
     }
 
     private static void user(JsonNode content, List<String> parts, Map<String, Integer> callAt) {

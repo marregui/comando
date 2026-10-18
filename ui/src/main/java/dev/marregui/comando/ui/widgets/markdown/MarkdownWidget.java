@@ -35,12 +35,13 @@ public final class MarkdownWidget implements Widget<ViewSpec.Markdown>, Copyable
     }
 
     /**
-     * Shows the Markdown; a first render starts at the top. A render that replaces what is shown (a view refreshed in
-     * place) keeps the reader where it was, or at the end when it was at the end, so a growing document can be followed.
+     * Shows the Markdown at its top. A render of the same document grown or edited in place (a view refreshed while it
+     * is followed: the same first {@link #SAME_START} characters) keeps the reader where it was, or at the end when it
+     * was at the end; another document under the same view starts at its top.
      */
     @Override
     public void render(ViewSpec.Markdown view) {
-        boolean first = markdown.isEmpty();
+        boolean first = !sameDocument(markdown, view.markdown());
         JScrollBar bar = scroll.getVerticalScrollBar();
         boolean atEnd = bar.getValue() + bar.getVisibleAmount() >= bar.getMaximum() - 4 && bar.getValue() > 0;
         Point at = scroll.getViewport().getViewPosition();
@@ -48,6 +49,7 @@ public final class MarkdownWidget implements Widget<ViewSpec.Markdown>, Copyable
         pane.setMarkdown(markdown);
         if (first) {
             pane.setCaretPosition(0);
+            scroll.getViewport().setViewPosition(new Point(0, 0)); // the caret's own scroll stops at the border
             return;
         }
         SwingUtilities.invokeLater(() -> {
@@ -58,6 +60,16 @@ public final class MarkdownWidget implements Widget<ViewSpec.Markdown>, Copyable
                 scroll.getViewport().setViewPosition(at);
             }
         });
+    }
+
+    static final int SAME_START = 200;
+
+    private static boolean sameDocument(String before, String after) {
+        if (before.isEmpty()) {
+            return false;
+        }
+        int n = Math.min(SAME_START, Math.min(before.length(), after.length()));
+        return before.regionMatches(0, after, 0, n);
     }
 
     @Override

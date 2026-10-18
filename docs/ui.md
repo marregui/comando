@@ -176,7 +176,8 @@ The "transcript" link in a subagent card's header (`subagent:<toolUseId>`) opens
 a lower view, "agent · <description>": the task quoted, each text, each tool call as one list item with its result
 clipped to 200 characters ([record 64](adr/0064-sub-agents-are-shown-live.md)). Two subagents with one description get
 "agent · <description>" and "agent · <description> (2)". While the session runs and the file grows, the view is rendered
-again every 2 s, keeping the reader where it was, or at the end when it was at the end.
+again every 2 s, keeping the reader where it was, or at the end when it was at the end; any Markdown view replaced by
+another document starts at its top.
 
 ### 4.3 The frame-time gate
 

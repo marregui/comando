@@ -89,6 +89,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         root.add(north, BorderLayout.NORTH);
         root.add(new Layered(scroll, latest), BorderLayout.CENTER);
         scroll.getVerticalScrollBar().getModel().addChangeListener(e -> barChanged());
+        canvas.onAgentsChanged(this::updateStrip);
         scroll.addHierarchyListener(e -> {
             if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0 && scroll.isShowing() && following) {
                 SwingUtilities.invokeLater(this::scrollToEnd);
@@ -167,6 +168,9 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
             return;
         }
         if (view.transcript() != transcript || !view.session().equals(session) || view.transcript().size() < built) {
+            if (!view.session().equals(session)) {
+                tasks = List.of(); // the previous session's tasks say nothing of this one's cards; its own come next
+            }
             transcript = view.transcript();
             session = view.session();
             reset(Math.max(0, transcript.size() - WINDOW));

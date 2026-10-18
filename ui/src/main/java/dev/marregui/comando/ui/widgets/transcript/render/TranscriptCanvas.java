@@ -83,6 +83,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * "Show earlier" rebuilds the cards, and a call five minutes in still reads five minutes.
      */
     private final Map<String, long[]> times = bounded();
+    private Runnable agentsChanged = () -> { };
     private Set<Items.ToolItem> waitingCards = Collections.newSetFromMap(new IdentityHashMap<>());
     private List<Approval> waitingFor = List.of();
     /** Repaints running cards' elapsed time once a second while one runs and the canvas is on screen. */
@@ -325,7 +326,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             launched.remove(card);
         }
         card.seen(now);
-        if (card.runningSince() >= 0) {
+        if (card.call().isSubagent() && card.runningSince() >= 0) {
             times.putIfAbsent(card.call().toolUseId(), card.times());
         }
         boolean agent = card.call().isSubagent() && card.call().parent().isEmpty();
@@ -373,7 +374,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         retrackLaunched();
     }
 
-    /** Re-reads whether each launched sub-agent still works; repaints when one changed. */
+    /** Re-reads whether each launched sub-agent still works; repaints, and tells the listener, when one changed. */
     private void retrackLaunched() {
         boolean changed = false;
         for (Items.ToolItem card : List.copyOf(launched)) {
@@ -383,7 +384,13 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         }
         if (changed) {
             repaint();
+            agentsChanged.run();
         }
+    }
+
+    /** Runs when the running sub-agents change with no block appended or replaced: a launch's grace ending, a task list. */
+    public void onAgentsChanged(Runnable listener) {
+        agentsChanged = listener;
     }
 
     private static <V> Map<String, V> bounded() {

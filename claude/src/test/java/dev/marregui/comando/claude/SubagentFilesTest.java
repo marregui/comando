@@ -77,7 +77,7 @@ class SubagentFilesTest {
         assertThat(md).contains("- `Bash` ls demo → widget-1 widget-2 widget-3\n");
         assertThat(md).contains("- `Read` demo/widget-1 → a widget\n");
         assertThat(md.lines().filter(l -> l.startsWith("- `"))).hasSize(2);
-        assertThat(md).doesNotContain("private musing", "ignored", "Only the last");
+        assertThat(md).doesNotContain("private musing", "ignored", "is longer than");
     }
 
     @Test
@@ -93,7 +93,7 @@ class SubagentFilesTest {
     }
 
     @Test
-    void aFileOverTheLimitShowsOnlyItsTailAndSaysSo() throws IOException {
+    void aFileOverTheLimitShowsItsTaskThenOnlyItsTailAndSaysSo() throws IOException {
         Path f = subagents.resolve("agent-huge.jsonl");
         try (Writer w = Files.newBufferedWriter(f, StandardCharsets.UTF_8)) {
             w.write(userText("THE FIRST PROMPT") + "\n");
@@ -107,8 +107,8 @@ class SubagentFilesTest {
 
         String md = SubagentFiles.render(f, SubagentFiles.LIMIT_BYTES, json);
 
-        assertThat(md).startsWith("_Only the last 2.0 MB of 3.0 MB are shown._");
-        assertThat(md).doesNotContain("THE FIRST PROMPT");
+        assertThat(md).as("the task stays first, so a refreshed view keeps its start")
+                .startsWith("> THE FIRST PROMPT\n\n_The conversation is longer than 2.0 MB: only its last 2.0 MB are shown._");
         assertThat(md).contains("THE LAST WORD");
         assertThat(md.length()).isLessThan((int) SubagentFiles.LIMIT_BYTES + 1000);
     }

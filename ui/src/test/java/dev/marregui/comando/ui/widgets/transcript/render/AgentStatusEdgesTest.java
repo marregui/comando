@@ -42,7 +42,7 @@ class AgentStatusEdgesTest {
                 "{\"description\":\"survey\",\"prompt\":\"Do it.\",\"run_in_background\":true}", "", Block.ToolStatus.RUNNING, "");
         int at = add(a);
         now.addAndGet(300);
-        canvas.update(at, a.withResult("Agent launched in the background. agentId: x1", false));
+        canvas.update(at, a.withResult("Async agent launched successfully.\nagentId: x1 (internal ID)", false));
 
         assertThat(canvas.cardStatus("a1")).as("a background sub-agent that has just started").doesNotStartWith("done");
     }
