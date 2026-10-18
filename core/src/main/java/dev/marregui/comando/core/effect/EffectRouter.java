@@ -45,6 +45,7 @@ public final class EffectRouter implements StateLoop.EffectHandler {
             case Effect.ClearTranscript e -> claude.clearTranscript(e.name());
             case Effect.LoadHistory e -> claude.loadHistory(e.spec());
             case Effect.ForgetSession e -> claude.forget(e.name());
+            case Effect.ShowSubagent e -> claude.showSubagent(e.name(), e.claudeSessionId(), e.toolUseId());
             case Effect.ResolveApproval e -> approvals.resolve(e.approval(), e.decision());
             case Effect.EditPanelText e -> ui.editPanel(e.panel(), e.text(), e.mode());
             case Effect.DesktopNotify e -> ui.notifyDesktop(e.title(), e.text());

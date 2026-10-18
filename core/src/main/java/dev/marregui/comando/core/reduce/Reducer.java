@@ -187,6 +187,7 @@ public final class Reducer {
             case Intent.PlanUsageRead i -> new Transition(s, List.of(new Effect.ShowPlanUsage(i.usage())));
             case Intent.OpenFile i -> new Transition(s, List.of(new Effect.ShowFile(i.session(), i.path(),
                     s.session(i.session()).map(x -> x.spec().workDir()).orElse(HomeDir.home()), i.line())));
+            case Intent.OpenSubagent i -> openSubagent(s, i);
             case Intent.Notify i -> new Transition(notice(s, i.level(), i.text(), i.subject()),
                     i.desktop() ? List.of(new Effect.DesktopNotify("comando", i.text())) : List.of());
             case Intent.DismissNotice i -> Transition.of(s.withNotice(Notice.NONE));
@@ -1211,6 +1212,16 @@ public final class Reducer {
         }
         AppState next = s.withApprovals(s.approvals().stream().filter(x -> x.id() != i.id()).toList());
         return Transition.of(notice(next, Notice.Level.WARN, "Approval withdrawn: " + i.reason(), Notice.approval(i.id())));
+    }
+
+    /** A sub-agent's conversation sits beside its session's, so a session without one has none to show. */
+    private Transition openSubagent(AppState s, Intent.OpenSubagent i) {
+        String conversation = s.session(i.session()).map(x -> x.spec().claudeSessionId()).orElse("");
+        if (conversation.isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.INFO, "Session " + i.session() + ": the session has no conversation yet",
+                    Notice.session(i.session())));
+        }
+        return new Transition(s, List.of(new Effect.ShowSubagent(i.session(), conversation, i.toolUseId())));
     }
 
     // ---- views

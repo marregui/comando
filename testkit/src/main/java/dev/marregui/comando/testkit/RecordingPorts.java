@@ -112,6 +112,11 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     }
 
     @Override
+    public void showSubagent(String name, String claudeSessionId, String toolUseId) {
+        record("claude.showSubagent " + name + ' ' + claudeSessionId + ' ' + toolUseId);
+    }
+
+    @Override
     public void resolve(Approval approval, ApprovalDecision decision) {
         record("approval.resolve " + approval.id() + ' ' + decision);
     }

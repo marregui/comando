@@ -32,6 +32,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -47,6 +48,9 @@ import java.util.function.LongSupplier;
  */
 public final class TranscriptCanvas extends JComponent implements Scrollable, Marks {
 
+    /** The scheme of a sub-agent card's header link to its stored conversation: {@code subagent:<toolUseId>}. */
+    public static final String SUBAGENT_SCHEME = "subagent:";
+
     private static final int PAD_X = Theme.PAD * 2;
     private static final int PAD_Y = Theme.PAD;
     private static final int[] NONE = {0, 0};
@@ -59,6 +63,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     /** The card or hook group each nested item sits in. */
     private final Map<Item, Item> parentOf = new IdentityHashMap<>();
     private final Set<Items.ToolItem> running = Collections.newSetFromMap(new IdentityHashMap<>());
+    /** The running top-level sub-agent cards, in the order they started. */
+    private final Set<Items.ToolItem> runningAgents = new LinkedHashSet<>();
     private Set<Items.ToolItem> waitingCards = Collections.newSetFromMap(new IdentityHashMap<>());
     private List<Approval> waitingFor = List.of();
     /** Repaints running cards' elapsed time once a second while one runs and the canvas is on screen. */
@@ -163,6 +169,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         cards.clear();
         parentOf.clear();
         running.clear();
+        runningAgents.clear();
         waitingCards.clear();
         revealed.clear();
         updateTicker();
@@ -225,6 +232,9 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             parent.addChild(shown);
             parentOf.put(shown, parent);
             invalidateAncestors(parent);
+            if (item instanceof Items.ToolItem card) {
+                countTool(parent, card);
+            }
         } else {
             items.add(shown);
         }
@@ -273,6 +283,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         invalidateAncestors(parentOf.get(item));
         if (item instanceof Items.ToolItem card) {
             track(card);
+            lastToolChanged(card);
             if (!waitingFor.isEmpty() || !waitingCards.isEmpty()) {
                 resolveWaiting();
             }
@@ -281,15 +292,123 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         changed();
     }
 
-    /** Keeps the set of running cards, which drives the elapsed-time repaint. */
+    /** Keeps the set of running cards, which drives the elapsed-time repaint, and the running top-level sub-agents. */
     private void track(Items.ToolItem card) {
         card.seen(nowMillis());
+        boolean agent = card.call().isSubagent() && card.call().parent().isEmpty();
         if (card.isRunning()) {
             running.add(card);
+            if (agent) {
+                runningAgents.add(card);
+            }
         } else {
             running.remove(card);
+            runningAgents.remove(card);
         }
         updateTicker();
+    }
+
+    /** A tool call nested in {@code parent}: it counts in every card it sits in, up to the top level. */
+    private void countTool(Items.ToolItem parent, Items.ToolItem card) {
+        String label = Items.ToolItem.lastLabel(card.call());
+        for (Item p = parent; p != null; p = parentOf.get(p)) {
+            if (p instanceof Items.ToolItem t) {
+                t.toolAdded(card.call().toolUseId(), label);
+            }
+        }
+    }
+
+    /** A nested call changed (its input arrived): the cards showing it as their latest call show the new summary. */
+    private void lastToolChanged(Items.ToolItem card) {
+        String label = null;
+        for (Item p = parentOf.get(card); p != null; p = parentOf.get(p)) {
+            if (p instanceof Items.ToolItem t && t.isLastTool(card.call().toolUseId())) {
+                if (label == null) {
+                    label = Items.ToolItem.lastLabel(card.call());
+                }
+                t.lastToolChanged(label);
+            }
+        }
+    }
+
+    /** A running top-level sub-agent: its card's tool-use id, its description, and when the canvas first saw it running. */
+    public record RunningAgent(String toolUseId, String description, long startedMillis) {
+    }
+
+    /** The running top-level sub-agent cards, in the order they started. */
+    public List<RunningAgent> runningAgents() {
+        List<RunningAgent> out = new ArrayList<>(runningAgents.size());
+        for (Items.ToolItem card : runningAgents) {
+            Block.ToolCall c = card.call();
+            out.add(new RunningAgent(c.toolUseId(), card.summary(), card.runningSince()));
+        }
+        return out;
+    }
+
+    /** The tool calls nested in the card {@code toolUseId}, at any depth; -1 when there is no such card. For tests. */
+    int toolCount(String toolUseId) {
+        Items.ToolItem card = cards.get(toolUseId);
+        return card == null ? -1 : card.toolCount();
+    }
+
+    /** The latest tool call nested in the card {@code toolUseId}, as its status shows it. For tests. */
+    String lastTool(String toolUseId) {
+        Items.ToolItem card = cards.get(toolUseId);
+        return card == null ? "" : card.lastTool();
+    }
+
+    /** Whether the card {@code toolUseId} is open. */
+    public boolean isCardOpen(String toolUseId) {
+        Items.ToolItem card = cards.get(toolUseId);
+        return card != null && card.isOpen();
+    }
+
+    /** The top of the top-level item holding the card {@code toolUseId}; -1 when there is none or it has no position. For tests. */
+    int topOf(String toolUseId) {
+        Item item = cards.get(toolUseId);
+        if (item == null) {
+            return -1;
+        }
+        while (parentOf.get(item) != null) {
+            item = parentOf.get(item);
+        }
+        int index = items.indexOf(item);
+        return index < 0 || index >= tops.length ? -1 : tops[index];
+    }
+
+    /**
+     * Opens the card {@code toolUseId} and the cards around it, and scrolls its top-level item to the top of the view;
+     * false when there is no such card.
+     */
+    public boolean reveal(String toolUseId) {
+        Items.ToolItem card = cards.get(toolUseId);
+        if (card == null) {
+            return false;
+        }
+        for (Item i = card; i != null; i = parentOf.get(i)) {
+            if (i.fold() != null && !i.fold().isOpen()) {
+                i.toggle();
+                invalidateAncestors(parentOf.get(i));
+            }
+        }
+        Item top = card;
+        while (parentOf.get(top) != null) {
+            top = parentOf.get(top);
+        }
+        int index = items.indexOf(top);
+        if (index < 0) {
+            return false;
+        }
+        structureChanged = true;
+        changed();
+        ensureLayout(getWidth() > 0 ? getWidth() : viewportWidth());
+        if (getParent() instanceof JViewport v) {
+            v.setViewSize(new Dimension(Math.max(getWidth(), 1), total));
+        }
+        Rectangle visible = getVisibleRect();
+        scrollRectToVisible(new Rectangle(0, tops[index], 1, Math.max(1, visible.height)));
+        repaint();
+        return true;
     }
 
     public Block blockAt(int index) {
@@ -833,6 +952,14 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         }
         int i = firstAt(e.getY());
         if (i < items.size() && e.getY() >= tops[i] && items.get(i).laidOut()) {
+            String link = items.get(i).headerLinkAt(e.getX() - PAD_X, e.getY() - tops[i]);
+            if (link != null) {
+                // followed on release, as a link in text is
+                clearSelection();
+                pressedLink = link;
+                repaint();
+                return;
+            }
             Item toggle = items.get(i).toggleAt(e.getX() - PAD_X, e.getY() - tops[i]);
             if (toggle != null && toggle.toggle()) {
                 invalidateAncestors(parentOf.get(toggle));

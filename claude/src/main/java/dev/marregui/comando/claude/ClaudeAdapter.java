@@ -9,9 +9,13 @@ import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.port.ClaudePort;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.McpGateway;
+import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.core.view.ViewSpec;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -21,13 +25,16 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
+import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -51,6 +58,17 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     /** Reads the plan's usage limits; a thread of its own, as a read can take seconds. */
     private final ScheduledExecutorService planUsage =
             Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("plan-usage").daemon(true).unstarted(r));
+
+    /** The most sub-agent views that follow their file at once; opening another stops the oldest. */
+    static final int TAILS = 4;
+    static final long TAIL_EVERY_MILLIS = 2_000;
+    /** A sub-agent's file that has not grown for this long is taken as finished. */
+    static final long TAIL_IDLE_MILLIS = 30_000;
+    /** Reads sub-agent files and follows the open ones; a thread of its own, as a read can take a while. */
+    private final ScheduledExecutorService subagents =
+            Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("subagent-tail").daemon(true).unstarted(r));
+    /** The sub-agent views following their file, by tool-use id, oldest first. Confined to {@link #subagents}. */
+    private final LinkedHashMap<String, Tail> tails = new LinkedHashMap<>();
 
     public ClaudeAdapter(IntentSink sink, TranscriptRegistry transcripts, McpGateway mcp, ClaudeSettings settings) {
         this.sink = sink;
@@ -260,7 +278,135 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             }
         });
         s.strand.shutdown();
+        stopTails(name);
         transcripts.forget(name);
+    }
+
+    /**
+     * Shows the sub-agent's conversation as a lower view, then, until its file stops growing for
+     * {@link #TAIL_IDLE_MILLIS}, its meta file says it finished, or the session stops, renders it again every
+     * {@link #TAIL_EVERY_MILLIS} the file grew.
+     */
+    @Override
+    public void showSubagent(String name, String claudeSessionId, String toolUseId) {
+        try {
+            subagents.execute(() -> openSubagent(name, claudeSessionId, toolUseId));
+        } catch (RejectedExecutionException e) {
+            LOG.log(System.Logger.Level.DEBUG, "adapter closed, sub-agent not shown [session=" + name + ']');
+        }
+    }
+
+    // ---- sub-agents, on their own thread
+
+    /** A sub-agent view that follows its file. */
+    private static final class Tail {
+        final String session;
+        final String title;
+        final SubagentFiles.Found found;
+        long size;
+        long grewAt;
+        ScheduledFuture<?> future;
+
+        Tail(String session, String title, SubagentFiles.Found found) {
+            this.session = session;
+            this.title = title;
+            this.found = found;
+        }
+    }
+
+    private void openSubagent(String name, String claudeSessionId, String toolUseId) {
+        Optional<SubagentFiles.Found> found = SubagentFiles.find(settings.projectsDir(), claudeSessionId, toolUseId, json);
+        if (found.isEmpty()) {
+            sink.dispatch(new Intent.Notify(Notice.Level.WARN, "Session " + name + ": transcript not found for this sub-agent", false));
+            return;
+        }
+        SubagentFiles.Found f = found.get();
+        String description = f.description().isEmpty() ? toolUseId : f.description();
+        // the reducer clips longer titles, and a refresh finds its view by the title as kept
+        Tail t = new Tail(name, "agent · " + Clip.keepStart(description, 60), f);
+        t.size = SubagentFiles.size(f.transcript());
+        String markdown = renderSubagent(t);
+        if (markdown == null) {
+            return;
+        }
+        sink.dispatch(new Intent.ShowView("", t.title, new ViewSpec.Markdown(markdown), Placement.LOWER));
+        stopTail(toolUseId);
+        if (SubagentFiles.finished(f.meta(), json)) {
+            return;
+        }
+        t.grewAt = System.nanoTime();
+        tails.put(toolUseId, t);
+        while (tails.size() > TAILS) {
+            stopTail(tails.firstEntry().getKey());
+        }
+        t.future = subagents.scheduleWithFixedDelay(() -> {
+            // an exception escaping a periodic task cancels every later run
+            try {
+                follow(toolUseId, t);
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.ERROR, "sub-agent follow failed [session=" + t.session + ", toolUseId=" + toolUseId + ']', e);
+                stopTail(toolUseId);
+            }
+        }, TAIL_EVERY_MILLIS, TAIL_EVERY_MILLIS, TimeUnit.MILLISECONDS);
+    }
+
+    private void follow(String toolUseId, Tail t) {
+        if (tails.get(toolUseId) != t) {
+            return;
+        }
+        long size = SubagentFiles.size(t.found.transcript());
+        long now = System.nanoTime();
+        if (size != t.size) {
+            t.size = size;
+            t.grewAt = now;
+            String markdown = renderSubagent(t);
+            if (markdown != null) {
+                sink.dispatch(new Intent.RefreshView(t.title, new ViewSpec.Markdown(markdown)));
+            }
+        }
+        if (now - t.grewAt >= TimeUnit.MILLISECONDS.toNanos(TAIL_IDLE_MILLIS) || SubagentFiles.finished(t.found.meta(), json)) {
+            stopTail(toolUseId);
+        }
+    }
+
+    /** The conversation as Markdown; null, after a notice, when it cannot be read. */
+    private String renderSubagent(Tail t) {
+        try {
+            return SubagentFiles.render(t.found.transcript(), SubagentFiles.LIMIT_BYTES, json);
+        } catch (IOException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot read " + t.found.transcript() + ": " + e.getMessage());
+            sink.dispatch(new Intent.Notify(Notice.Level.WARN, "Session " + t.session + ": cannot read the sub-agent's transcript", false));
+            return null;
+        }
+    }
+
+    private void stopTail(String toolUseId) {
+        Tail t = tails.remove(toolUseId);
+        if (t != null && t.future != null) {
+            t.future.cancel(false);
+        }
+    }
+
+    /** The session stopped: its sub-agents write no more. */
+    private void stopTails(String session) {
+        try {
+            subagents.execute(() -> tails.entrySet().removeIf(e -> {
+                if (!e.getValue().session.equals(session)) {
+                    return false;
+                }
+                if (e.getValue().future != null) {
+                    e.getValue().future.cancel(false);
+                }
+                return true;
+            }));
+        } catch (RejectedExecutionException e) {
+            LOG.log(System.Logger.Level.DEBUG, "adapter closed [session=" + session + ']');
+        }
+    }
+
+    /** For tests: how many sub-agent views follow their file; waits for the tail thread's queued work first. */
+    int followedSubagents() throws Exception {
+        return subagents.submit(tails::size).get();
     }
 
     // ---- strand work
@@ -357,6 +503,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         s.current = null;
         mcp.unregister(s.name, run.ticket);
+        stopTails(s.name);
         sink.dispatch(new Intent.SessionExited(s.name, clean ? 0 : code, lastLine(err)));
     }
 
@@ -492,6 +639,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         closed = true;
         planUsage.shutdownNow();
+        subagents.shutdownNow();
         // SIGTERM to every process, collected on each strand; the strands then stop, so no exit handler runs and
         // this method cleans up after the processes itself: SIGKILL after the grace period, config files with
         // their bearer tokens deleted, tokens revoked

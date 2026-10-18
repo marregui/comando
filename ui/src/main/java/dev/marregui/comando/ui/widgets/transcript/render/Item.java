@@ -129,6 +129,11 @@ abstract class Item {
         return null;
     }
 
+    /** The link in the header at {@code (px, py)} (relative), which a click follows instead of toggling; null when none. */
+    String headerLinkAt(int px, int py) {
+        return null;
+    }
+
     /** Opens or closes the item; false when it has nothing to show. */
     boolean toggle() {
         return false;

@@ -1,0 +1,9 @@
+{"parentUuid":null,"isSidechain":true,"agentId":"a1","type":"user","message":{"role":"user","content":"Count the widgets in the demo folder.\nReport the total."},"uuid":"u1","timestamp":"2026-10-17T10:00:00.000Z","sessionId":"conv-1"}
+{"type":"request","sessionId":"conv-1","agentId":"a1","id":"r1"}
+{"parentUuid":"u1","isSidechain":true,"agentId":"a1","type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"private musing","signature":"x"}]},"uuid":"u2","sessionId":"conv-1"}
+{"parentUuid":"u2","isSidechain":true,"agentId":"a1","type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"I will list the folder first."},{"type":"tool_use","id":"tu1","name":"Bash","input":{"command":"ls demo"},"caller":{}}]},"uuid":"u3","sessionId":"conv-1"}
+{"parentUuid":"u3","isSidechain":true,"agentId":"a1","type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu1","content":"widget-1\nwidget-2\nwidget-3","is_error":false}]},"uuid":"u4","sessionId":"conv-1"}
+{"parentUuid":"u4","isSidechain":true,"agentId":"a1","type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"tu2","name":"Read","input":{"file_path":"demo/widget-1"},"caller":{}}]},"uuid":"u5","sessionId":"conv-1"}
+{"parentUuid":"u5","isSidechain":true,"agentId":"a1","type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tu2","content":[{"type":"text","text":"a widget"}]}]},"uuid":"u6","sessionId":"conv-1"}
+{"parentUuid":"u6","isSidechain":true,"agentId":"a1","type":"attachment","attachment":{"type":"note","text":"ignored"},"uuid":"u7","sessionId":"conv-1"}
+{"parentUuid":"u7","isSidechain":true,"agentId":"a1","type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"There are 3 widgets."}]},"uuid":"u8","sessionId":"conv-1"}

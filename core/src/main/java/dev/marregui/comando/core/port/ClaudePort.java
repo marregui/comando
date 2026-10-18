@@ -20,4 +20,10 @@ public interface ClaudePort {
     void loadHistory(SessionSpec spec);
 
     void forget(String name);
+
+    /**
+     * Shows the stored conversation of the sub-agent that the Agent call {@code toolUseId} of conversation
+     * {@code claudeSessionId} started, as a lower view that follows the file while it grows.
+     */
+    void showSubagent(String name, String claudeSessionId, String toolUseId);
 }

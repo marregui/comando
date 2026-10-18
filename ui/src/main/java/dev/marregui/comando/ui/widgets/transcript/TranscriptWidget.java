@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.widgets.transcript;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.ui.kit.desktop.Browser;
@@ -17,6 +18,7 @@ import dev.marregui.comando.ui.widget.capability.Zoomable;
 import dev.marregui.comando.ui.widgets.transcript.render.Style;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
 
+import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
@@ -39,6 +41,9 @@ import java.util.List;
  * whose range changed because blocks arrived says nothing about where the user wants to be. Becoming visible
  * scrolls a following transcript to its end. A prompt the user sent from a panel always lands in view: it
  * follows again. While it does not follow, a "Latest" button over the bottom right returns to the end.
+ *
+ * <p>While sub-agents run, a strip above the transcript names them; a sub-agent card's header links to its stored
+ * conversation.
  */
 public final class TranscriptWidget implements Widget<TranscriptView>, Searchable, Copyable, Zoomable {
 
@@ -50,6 +55,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     private final JButton earlier = new JButton();
     private final JButton latest = new JButton("↓ Latest");
     private final JPanel root = new JPanel(new BorderLayout());
+    private final AgentStrip strip = new AgentStrip(canvas::reveal, System::currentTimeMillis);
     private final Overlay overlay = new Overlay(root);
     private Transcript transcript;
     private String session = "";
@@ -60,6 +66,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     private int barMaximum = -1;
     private int barExtent = -1;
     private List<Approval> waiting = List.of();
+    private List<BackgroundTask> tasks = List.of();
 
     public TranscriptWidget(WidgetContext context) {
         this.context = context;
@@ -72,7 +79,14 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         latest.setToolTipText("Scroll to the latest block and follow it");
         latest.setFocusable(false);
         latest.addActionListener(e -> followLatest());
-        root.add(earlier, BorderLayout.NORTH);
+        JPanel north = new JPanel();
+        north.setLayout(new BoxLayout(north, BoxLayout.Y_AXIS));
+        north.setOpaque(false);
+        strip.setAlignmentX(0f);
+        earlier.setAlignmentX(0f);
+        north.add(strip);
+        north.add(earlier);
+        root.add(north, BorderLayout.NORTH);
         root.add(new Layered(scroll, latest), BorderLayout.CENTER);
         scroll.getVerticalScrollBar().getModel().addChangeListener(e -> barChanged());
         scroll.addHierarchyListener(e -> {
@@ -111,6 +125,27 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         canvas.setWaiting(this.waiting);
     }
 
+    /**
+     * The background work of the session this tab shows: its sub-agents without a running card get a chip in the
+     * strip. Does nothing when the list equals the last one.
+     */
+    public void setBackgroundTasks(List<BackgroundTask> tasks) {
+        if (tasks.equals(this.tasks)) {
+            return;
+        }
+        this.tasks = List.copyOf(tasks);
+        updateStrip();
+    }
+
+    /** The strip of running sub-agents; for tests. */
+    AgentStrip strip() {
+        return strip;
+    }
+
+    private void updateStrip() {
+        strip.show(transcript == null ? List.of() : canvas.runningAgents(), tasks);
+    }
+
     /** The painter, for measurement and tests. */
     public TranscriptCanvas canvas() {
         return canvas;
@@ -146,6 +181,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         built = start;
         updateEarlierButton();
         updateLatest();
+        updateStrip();
     }
 
     private void sync() {
@@ -173,6 +209,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         built = n;
         following = follow;
         updateLatest();
+        updateStrip();
         if (follow) {
             SwingUtilities.invokeLater(this::scrollToEnd);
         }
@@ -225,9 +262,12 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         earlier.setText("Show " + Math.min(WINDOW, windowStart) + " earlier blocks (" + windowStart + " hidden)");
     }
 
-    private void openLink(String href) {
+    /** Follows a link in the transcript; package-private for tests. */
+    void openLink(String href) {
         if (href.startsWith(SourceLinks.SCHEME)) {
             context.intents().dispatch(new Intent.OpenFile(session, SourceLinks.path(href), SourceLinks.line(href)));
+        } else if (href.startsWith(TranscriptCanvas.SUBAGENT_SCHEME)) {
+            context.intents().dispatch(new Intent.OpenSubagent(session, href.substring(TranscriptCanvas.SUBAGENT_SCHEME.length())));
         } else {
             Browser.open(href);
         }

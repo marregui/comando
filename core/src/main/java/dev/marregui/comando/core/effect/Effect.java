@@ -79,6 +79,10 @@ public sealed interface Effect {
     record ForgetSession(String name) implements Effect {
     }
 
+    /** Reads, off the EDT, the stored conversation of the sub-agent that the Agent call {@code toolUseId} started, and shows it. */
+    record ShowSubagent(String name, String claudeSessionId, String toolUseId) implements Effect {
+    }
+
     // ---- approvals
 
     record ResolveApproval(Approval approval, ApprovalDecision decision) implements Effect {

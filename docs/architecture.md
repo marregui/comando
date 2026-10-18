@@ -124,7 +124,7 @@ A record of the sealed interface `Intent`; anything that changes the state is on
 | Sessions | `SaveSession`, `RemoveSession`, `ImportSessions`, `StartSession`, `StartFresh`, `StopSession`, `InterruptSession`, `Checkpoint`, `SessionCommand`, `OrderSessions`, `ClearTranscript`, `SetSessionModel`, `SetSessionEffort`, `SessionStarted`, `SessionInit`, `SessionActivity`, `SessionTurnRunning`, `SessionTurnEnded`, `SessionTasksChanged`, `SessionExited`, `SessionBranch`, `PlanUsageRead` |
 | Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
 | Views | `ShowView`, `RefreshView`, `CloseView`, `PinView`, `SelectLowerTab`, `Arrange`, `SessionLayout`, `SessionFocus` |
-| Editor and files | `EditPanel`, `OpenFile` |
+| Editor and files | `EditPanel`, `OpenFile`, `OpenSubagent` |
 | Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded` |
 | Notices | `Notify`, `DismissNotice` |
 
@@ -156,7 +156,7 @@ queues and returns.
 | Port | Effects |
 |---|---|
 | `DatabasePort` | `OpenDb`, `CloseDb`, `ForgetSchema`, `TestDb`, `ExecuteSql`, `CancelSql`, `ReleaseResult`, `LoadSchema` |
-| `ClaudePort` | `StartClaude`, `StopClaude`, `SendToClaude`, `InterruptClaude`, `LoadHistory`, `ClearTranscript`, `ForgetSession` |
+| `ClaudePort` | `StartClaude`, `StopClaude`, `SendToClaude`, `InterruptClaude`, `LoadHistory`, `ClearTranscript`, `ForgetSession`, `ShowSubagent` |
 | `ApprovalPort` | `ResolveApproval` |
 | `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `DeletePanel`, `ShowFile`, `Arrange`, `ShowFolder`, `ShowPlanUsage` |
 | `PersistencePort` | `SaveConnections`, `SaveSessions`, `SaveFolders`, `SavePanels` |

@@ -27,6 +27,7 @@ import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.FlowLayout;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -179,6 +180,7 @@ public final class LowerPanel {
             renderTranscript(focused.session());
             String shown = focused.session();
             transcript.setWaiting(s.approvals().stream().filter(a -> a.session().equals(shown)).toList());
+            transcript.setBackgroundTasks(s.session(shown).map(SessionState::tasks).orElse(List.of()));
             inbox.render(s.approvals());
             int pending = s.approvals().size();
             tabs.setTitleAt(APPROVALS, pending == 0 ? "Approvals" : "Approvals (" + pending + ")");

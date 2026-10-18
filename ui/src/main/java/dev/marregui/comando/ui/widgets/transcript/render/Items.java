@@ -362,6 +362,7 @@ final class Items {
 
     static final class ToolItem extends Item {
         static final String WAITING = "waiting for your approval · ⌃2";
+        static final int LAST_CHARS = 60;
         private static final int IN_X = 8;
         private static final int IN_Y = 5;
         private static final int CHILD_INDENT = 12;
@@ -379,6 +380,16 @@ final class Items {
         private int[] childTops = new int[0];
         /** When the canvas first saw the call running; negative while it has not. */
         private long runningSince = -1;
+        /** When the canvas saw the call end, after it saw it running; negative until then. */
+        private long endedAt = -1;
+        /** Tool calls nested in this card at any depth, counted as they are added. */
+        private int tools;
+        /** The most recent nested tool call: its id and its name with its summary, clipped. */
+        private String lastId = "";
+        private String last = "";
+        /** The summary of the input it was read from, kept until the input changes. */
+        private String summaryOf;
+        private String summary = "";
         private boolean waiting;
         private String statusText = "";
         private Style statusStyle;
@@ -426,11 +437,62 @@ final class Items {
             return call().status() == Block.ToolStatus.RUNNING;
         }
 
-        /** Starts the elapsed time of a running call at {@code nowMillis}, the first time the canvas sees it running. */
+        /**
+         * Starts the elapsed time of a running call at {@code nowMillis}, the first time the canvas sees it running, and
+         * stops it the first time the canvas sees it ended.
+         */
         void seen(long nowMillis) {
             if (isRunning() && runningSince < 0) {
                 runningSince = nowMillis;
+            } else if (!isRunning() && runningSince >= 0 && endedAt < 0) {
+                endedAt = nowMillis;
             }
+        }
+
+        /** When the canvas first saw the call running; negative while it has not. */
+        long runningSince() {
+            return runningSince;
+        }
+
+        /** A tool call was nested in this card, at any depth; it is now the most recent one. */
+        void toolAdded(String toolUseId, String summary) {
+            tools++;
+            lastId = toolUseId;
+            last = summary;
+        }
+
+        /** The nested call {@code toolUseId} changed; true when it is the most recent one, whose summary is shown. */
+        boolean isLastTool(String toolUseId) {
+            return lastId.equals(toolUseId);
+        }
+
+        void lastToolChanged(String summary) {
+            last = summary;
+        }
+
+        int toolCount() {
+            return tools;
+        }
+
+        /** The call's one-line summary (a sub-agent's description), parsed again only when the input changed. */
+        String summary() {
+            String in = call().inputJson();
+            if (!in.equals(summaryOf)) {
+                summaryOf = in;
+                summary = ToolText.summary(call().name(), Json.parse(in));
+            }
+            return summary;
+        }
+
+        String lastTool() {
+            return last;
+        }
+
+        /** The name and summary of a nested call as a sub-agent card's status shows it, at most {@link #LAST_CHARS} characters. */
+        static String lastLabel(Block.ToolCall c) {
+            String summary = ToolText.summary(c.name(), Json.parse(c.inputJson()));
+            String label = ToolText.displayName(c.name()) + (summary.isEmpty() ? "" : " " + summary);
+            return label.length() <= LAST_CHARS ? label : label.substring(0, LAST_CHARS - 1) + "…";
         }
 
         /** Marks the running call as held up by an approval card; true when that changed. */
@@ -442,16 +504,38 @@ final class Items {
             return true;
         }
 
-        /** The status beside the title while the call runs: the wait for an approval, or the time it has run; empty once done. */
+        /**
+         * The status beside the title while the call runs: the wait for an approval, or the time it has run; a sub-agent
+         * adds the tool calls it made and its latest one. Once done, empty, except for a sub-agent that did not fail:
+         * how long it ran and the tool calls it made.
+         */
         String statusText(long nowMillis) {
+            return statusText(nowMillis, true);
+        }
+
+        /** The status, without the latest tool call when not {@code withLast}: for a card too narrow to show it. */
+        String statusText(long nowMillis, boolean withLast) {
+            boolean subagent = call().isSubagent();
             if (!isRunning()) {
-                return "";
+                if (!subagent || call().status() == Block.ToolStatus.ERROR) {
+                    return "";
+                }
+                String took = runningSince >= 0 && endedAt >= 0 ? " · " + Labels.elapsed(endedAt - runningSince) : "";
+                return "done" + took + " · " + toolsLabel();
             }
             if (waiting) {
                 return WAITING;
             }
             long elapsed = runningSince < 0 ? 0 : nowMillis - runningSince;
-            return elapsed < 1000 ? "running" : "running · " + Labels.elapsed(elapsed);
+            String status = elapsed < 1000 ? "running" : "running · " + Labels.elapsed(elapsed);
+            if (subagent && tools > 0) {
+                status += " · " + toolsLabel() + (withLast && !last.isEmpty() ? " · " + last : "");
+            }
+            return status;
+        }
+
+        private String toolsLabel() {
+            return tools == 1 ? "1 tool" : tools + " tools";
         }
 
         /**
@@ -486,6 +570,11 @@ final class Items {
                 JsonNode in = Json.parse(c.inputJson());
                 String summary = ToolText.summary(c.name(), in);
                 Rich t = new Rich(s.body, s.text).append(ToolText.displayName(c.name()), s.bold, s.text);
+                if (c.isSubagent()) {
+                    t.append("  ", s.body, s.text);
+                    int at = t.length();
+                    t.append("transcript", s.small, s.link, null, true, false).link(at, t.length(), TranscriptCanvas.SUBAGENT_SCHEME + c.toolUseId());
+                }
                 if (!summary.isEmpty()) {
                     t.append("   " + summary, s.body, s.muted);
                 }
@@ -606,18 +695,24 @@ final class Items {
             int right = x + width() - IN_X;
             String text = statusText(marks.nowMillis());
             TextLayout st = text.isEmpty() ? null : status(text, s);
-            int used = st != null ? Math.round(st.getAdvance()) : statusIcon != null ? 16 : 0;
+            if (st != null && st.getAdvance() > width() / 2f) {
+                text = statusText(marks.nowMillis(), false); // the latest tool call gives way to the title
+                st = status(text, s);
+            }
+            int iconWidth = statusIcon != null ? 16 : 0;
+            int used = iconWidth + (st != null ? (iconWidth > 0 ? 6 : 0) + Math.round(st.getAdvance()) : 0);
             if (!children.isEmpty() && !fold.isOpen()) {
                 TextLayout steps = new TextLayout(children.size() + " steps", s.small, Style.FRC);
                 g.setColor(s.muted);
                 steps.draw(g, right - used - 6 - steps.getAdvance(), cy + IN_Y + steps.getAscent() + 1);
                 used += 6 + Math.round(steps.getAdvance());
             }
-            if (st != null) {
-                g.setColor(Theme.WARN);
-                st.draw(g, right - st.getAdvance(), cy + IN_Y + st.getAscent() + 1);
-            } else if (statusIcon != null) {
+            if (statusIcon != null) {
                 statusIcon.paintIcon(marks.component(), g, right - 16, cy + IN_Y + 1);
+            }
+            if (st != null) {
+                g.setColor(isRunning() ? Theme.WARN : s.muted);
+                st.draw(g, right - (iconWidth > 0 ? iconWidth + 6 : 0) - st.getAdvance(), cy + IN_Y + st.getAscent() + 1);
             }
             Shape old = g.getClip();
             int titleRight = right - Math.max(70, used + 8);
@@ -661,6 +756,23 @@ final class Items {
             for (int i = 0; i < children.size() && i < childTops.length; i++) {
                 children.get(i).collect(bx + CHILD_INDENT, cy + childTops[i], out);
             }
+        }
+
+        @Override
+        String headerLinkAt(int px, int py) {
+            if (py < 3 + IN_Y + headerHeight) {
+                return title == null ? null : title.linkAt(px - IN_X - 22, py - 3 - IN_Y);
+            }
+            if (fold.isOpen()) {
+                for (int i = 0; i < children.size() && i < childTops.length; i++) {
+                    Item child = children.get(i);
+                    int top = 3 + childTops[i];
+                    if (py >= top && py < top + child.height) {
+                        return child.headerLinkAt(px - IN_X - CHILD_INDENT, py - top);
+                    }
+                }
+            }
+            return null;
         }
 
         @Override

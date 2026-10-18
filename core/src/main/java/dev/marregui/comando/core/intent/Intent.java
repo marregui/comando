@@ -341,6 +341,10 @@ public sealed interface Intent {
     record OpenFile(String session, String path, int line) implements Intent {
     }
 
+    /** Shows the conversation of the sub-agent that the session's Agent call {@code toolUseId} started. */
+    record OpenSubagent(String session, String toolUseId) implements Intent {
+    }
+
     // ---- development tools
 
     /** Runs Gradle tasks in the build of the panel's session; a null panel means the focused one. */
