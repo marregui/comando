@@ -99,6 +99,8 @@ val uiTest = tasks.register<Test>("uiTest") {
         includeTestsMatching("*UiReplayTest")
         includeTestsMatching("*UiKeysTest")
     }
+    // one JVM per class: the keyboard tests bring the process to the front, which changes the next window's layout
+    forkEvery = 1
     systemProperty("java.awt.headless", "false")
     systemProperty("comando.uiTests", "true")
     systemProperty("comando.prefsNode", "dev/marregui/comando-test")
