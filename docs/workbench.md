@@ -91,7 +91,8 @@ left, edit, clone and remove of the selected row on the right, off while nothing
 **Stop and remove**, **Disconnect and remove** or **Close and remove**, or **Leave it**.
 
 - **Sessions:** name, where it is bound ("headless" when nowhere), status, current activity or what it waits on,
-  pending approvals; directory and branch; `ctx` and the context % (purple from 60%), how long it has run. Over the
+  pending approvals; directory and branch; `ctx` and the context % (purple from 60%), how long it has run, a line
+  only when either is known, so a disconnected row has its controls under its folder. Over the
   row's text the tooltip shows the details Copy details copies, the full session id among them. At the left a plug, fresh start, checkpoint, and while running compact and clear (`/compact`, `/clear`
   sent from the session's panel); at the right the model and effort as menus (a change saves and, on a running session,
   sends `/model` or `/effort`). A copy button at the row's top right under the mouse, Copy details in its menu and ⌘C

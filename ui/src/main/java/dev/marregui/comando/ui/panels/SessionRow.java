@@ -263,9 +263,10 @@ final class SessionRow extends JPanel {
     }
 
     /**
-     * Two lines that never wrap, clipped at the edge: the folder and branch; how full the context is (purple from the
-     * checkpoint's threshold) and how long it has run, whatever is known. The conversation's id is in the tooltip and
-     * the copied details.
+     * Lines that never wrap, clipped at the edge: the folder and branch; then how full the context is (purple from the
+     * checkpoint's threshold) and how long it has run, whatever is known, a line only when something is, so a
+     * disconnected row has its controls right under its folder. The conversation's id is in the tooltip and the copied
+     * details.
      */
     static String bodyHtml(SessionState s, long nowMillis) {
         String branch = s.branch().isEmpty() ? "" : " ⎇ " + MarkdownHtml.escape(s.branch());
@@ -282,8 +283,8 @@ final class SessionRow extends JPanel {
         }
         return "<html><nobr><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>"
                 + MarkdownHtml.escape(Clip.keepEnd(Labels.shortPath(s.spec().workDir()), 34)) + branch + "</span></nobr>"
-                // the line stays when nothing is known yet, so every row has the same height
-                + "<br><nobr>" + (facts.isEmpty() ? "&nbsp;" : String.join("<span style='color:" + muted + "'> · </span>", facts)) + "</nobr></html>";
+                + (facts.isEmpty() ? "" : "<br><nobr>" + String.join("<span style='color:" + muted + "'> · </span>", facts) + "</nobr>")
+                + "</html>";
     }
 
     /** Buttons side by side with no gap between them. */

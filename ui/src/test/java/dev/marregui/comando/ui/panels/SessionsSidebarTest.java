@@ -463,7 +463,7 @@ class SessionsSidebarTest {
         assertThat(lines).hasSize(2);
         assertThat(lines[1]).contains(">ctx 42%<", "up 1 h 05 min").doesNotContain("context", "e41164bc");
         String[] fresh = SessionRow.bodyHtml(SessionState.closed(SessionSpec.fresh("new", "/w/new")), started).split("<br>");
-        assertThat(fresh).as("the same height before anything is known").hasSize(2);
+        assertThat(fresh).as("nothing known: no empty line, the controls come up under the folder").hasSize(1);
     }
 
     private static List<String> names(JList<?> list) throws Exception {
