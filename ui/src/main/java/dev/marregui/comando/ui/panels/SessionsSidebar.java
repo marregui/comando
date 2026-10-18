@@ -269,7 +269,7 @@ public final class SessionsSidebar {
                 }
             }
         });
-        files = new FilesTab(intents, dialogs::openFile, dialogs::editFile);
+        files = new FilesTab(intents, dialogs::openFile, dialogs::editFile, questions);
         sort = ToolButton.of("sort", SORT_TIP, () -> order(false));
         sort.getAccessibleContext().setAccessibleName("Sort the sessions");
         sessionActions = new ResourceActions<>(sessions,

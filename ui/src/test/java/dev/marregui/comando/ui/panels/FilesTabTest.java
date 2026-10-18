@@ -194,6 +194,64 @@ class FilesTabTest {
     }
 
     @Test
+    void aDeletableFoldersSelectionGoesToTheTrashAfterAskingAndNoOtherFolderOffersIt() throws Exception {
+        Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of(), "scratchpad").withTrash("ALPHA.md"),
+                new FolderRoot("KB", "/kb", "", List.of()));
+        f.edt(() -> f.tree().expandRow(0));
+        f.edt(() -> f.show("Scratchpad", folder("Scratchpad", folder("2026-10-18", file("ALPHA.md"), file("READ-01.md"), folder("work", file("a.py"))))));
+        f.edt(() -> f.show("KB", folder("KB", file("design.md"))));
+        assertThat(f.labels()).containsExactly("Scratchpad", "2026-10-18", "ALPHA.md", "READ-01.md", "work", "KB");
+
+        f.edt(() -> f.tree().setSelectionRows(new int[]{3, 4}));
+        f.edt(() -> {
+            JPopupMenu menu = f.tab.menuFor(file("READ-01.md"));
+            assertThat(items(menu)).containsExactly("Open in a panel", "Edit in a panel", "Move 2 entries to the Trash…");
+            f.answer = 1;
+            item(menu, "Move 2 entries to the Trash…").doClick();
+        });
+        assertThat(f.asked).hasSize(1);
+        assertThat(f.asked.getFirst()).contains("Move 2 entries (READ-01.md, 2026-10-18/work) to the Trash?", "Their own lines in ALPHA.md are taken out.");
+        assertThat(f.intents).as("cancelled: nothing moves").noneMatch(Intent.DeleteFiles.class::isInstance);
+
+        f.edt(() -> {
+            f.answer = 0;
+            item(f.tab.menuFor(folder("work", file("a.py"))), "Move 2 entries to the Trash…").doClick();
+        });
+        assertThat(f.intents).filteredOn(Intent.DeleteFiles.class::isInstance)
+                .containsExactly(new Intent.DeleteFiles("Scratchpad", List.of("/s/READ-01.md", "/s/2026-10-18/work")));
+
+        f.edt(() -> f.tree().setSelectionRow(4));
+        f.edt(() -> assertThat(items(f.tab.menuFor(folder("work", file("a.py"))))).as("a subfolder alone").containsExactly("Move work to the Trash…"));
+        f.edt(() -> f.tree().setSelectionRow(0));
+        f.edt(() -> assertThat(f.tab.menuFor(new ViewSpec.TreeNode("Scratchpad", "/s", List.of())).getComponentCount())
+                .as("the folder's own row never goes").isZero());
+        f.edt(() -> f.tree().setSelectionRows(new int[]{3, 5}));
+        f.edt(() -> assertThat(items(f.tab.menuFor(file("READ-01.md")))).as("a selection reaching another folder").containsExactly("Open in a panel", "Edit in a panel"));
+        f.edt(() -> f.tree().expandRow(5));
+        f.edt(() -> f.tree().setSelectionRow(6));
+        f.edt(() -> assertThat(items(f.tab.menuFor(file("design.md")))).as("a folder that keeps its files").containsExactly("Open in a panel", "Edit in a panel"));
+    }
+
+    private static List<String> items(JPopupMenu menu) {
+        List<String> out = new ArrayList<>();
+        for (Component c : menu.getComponents()) {
+            if (c instanceof JMenuItem m) {
+                out.add(m.getText());
+            }
+        }
+        return out;
+    }
+
+    private static JMenuItem item(JPopupMenu menu, String text) {
+        for (Component c : menu.getComponents()) {
+            if (c instanceof JMenuItem m && m.getText().equals(text)) {
+                return m;
+            }
+        }
+        throw new AssertionError("no item " + text);
+    }
+
+    @Test
     void whileFilteringTheMenuActsOnTheEntryPickedInTheFiltersTree() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of()), new FolderRoot("KB", "/kb", "ALPHA.md", List.of()));
         f.edt(() -> f.show("Scratchpad", folder("Scratchpad", file("notes.md"))));
@@ -257,12 +315,18 @@ class FilesTabTest {
         final List<Intent> intents = new CopyOnWriteArrayList<>();
         final List<Path> opened = new CopyOnWriteArrayList<>();
         final List<Path> editedFiles = new CopyOnWriteArrayList<>();
+        /** The questions asked, and the button the user picks: 0 moves to the Trash, 1 cancels. */
+        final List<String> asked = new CopyOnWriteArrayList<>();
+        volatile int answer = 1;
         AppState state;
         FilesTab tab;
 
         Fixture(FolderRoot... folders) throws Exception {
             edt(() -> {
-                tab = new FilesTab(intents::add, opened::add, editedFiles::add);
+                tab = new FilesTab(intents::add, opened::add, editedFiles::add, (parent, text, title, options) -> {
+                    asked.add(String.valueOf(text));
+                    return answer;
+                });
                 tab.component().setSize(260, 400);
                 tab.tree().component().setSize(260, 400);
             });

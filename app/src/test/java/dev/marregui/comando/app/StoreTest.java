@@ -104,6 +104,11 @@ class StoreTest {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("the icon kept through the folders' rules; an old read-only flag ignored")
                     .containsExactly(new FolderRoot("Memory", "/m", "", List.of(), "memory"));
         }
+        Files.writeString(home.resolve("folders.json"), "[{\"name\":\"Scratchpad\",\"path\":\"/s\",\"deletable\":true,\"listedIn\":\"ALPHA.md\"}]");
+        try (Store store = new Store(home)) {
+            assertThat(store.loadFolders(CLAUDE_DIR)).as("entries that go to the Trash, with their listing file")
+                    .containsExactly(new FolderRoot("Scratchpad", "/s", "", List.of()).withTrash("ALPHA.md"));
+        }
         Files.writeString(home.resolve("folders.json"), "{not json");
         try (Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("unreadable: the default").isEqualTo(FolderRoot.defaults(CLAUDE_DIR));

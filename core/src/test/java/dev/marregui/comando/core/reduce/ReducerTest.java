@@ -129,6 +129,32 @@ class ReducerTest {
     }
 
     @Test
+    void entriesGoToTheTrashOnlyFromADeletableFolderAndNeverTheFolderItselfOrAPathOutside() {
+        FolderRoot pad = new FolderRoot("Scratchpad", "/s", "", List.of(), "scratchpad").withTrash("ALPHA.md");
+        FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
+        state = state.withFolders(List.of(pad, kb));
+        apply(new Intent.DeleteFiles("Scratchpad", List.of("/s/2026-10-18/a.md", "/s/2026-10-17")));
+        assertThat(effects).containsExactly(new Effect.DeleteFiles(pad, List.of("/s/2026-10-18/a.md", "/s/2026-10-17")));
+
+        apply(new Intent.DeleteFiles("KB", List.of("/kb/x.md")));
+        assertThat(effects).as("a folder not marked deletable keeps its files").doesNotHaveAnyElementsOfTypes(Effect.DeleteFiles.class);
+        assertThat(state.notice().level()).isEqualTo(Notice.Level.ERROR);
+        assertThat(state.notice().text()).startsWith("Folder KB keeps its files");
+
+        apply(new Intent.DeleteFiles("Scratchpad", List.of("/s/a.md", "/s")));
+        assertThat(effects).as("the folder itself: nothing moves").doesNotHaveAnyElementsOfTypes(Effect.DeleteFiles.class);
+        assertThat(state.notice().text()).isEqualTo("Folder Scratchpad itself stays; nothing was moved to the Trash");
+
+        apply(new Intent.DeleteFiles("Scratchpad", List.of("/s/../kb/x.md")));
+        assertThat(effects).as("a path leading outside").doesNotHaveAnyElementsOfTypes(Effect.DeleteFiles.class);
+        assertThat(state.notice().text()).isEqualTo("x.md is not in folder Scratchpad; nothing was moved to the Trash");
+
+        apply(new Intent.DeleteFiles("Gone", List.of("/g/a.md")));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.DeleteFiles.class);
+        assertThat(state.notice().text()).isEqualTo("No folder called Gone");
+    }
+
+    @Test
     void foldersJsonReadAgainReplacesTheFoldersAndWritesNothing() {
         FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
         apply(new Intent.FoldersRead(List.of(kb)));

@@ -103,7 +103,10 @@ public final class TreeView {
         if (e.isPopupTrigger()) {
             TreePath path = tree.getPathForLocation(e.getX(), e.getY());
             if (path != null) {
-                tree.setSelectionPath(path);
+                // a right click inside the selection keeps it, so a menu can act on every selected node
+                if (!tree.isPathSelected(path)) {
+                    tree.setSelectionPath(path);
+                }
                 ViewSpec.TreeNode n = node(path);
                 if (n != null) {
                     onMenu.accept(n, e);
@@ -183,8 +186,13 @@ public final class TreeView {
                 expanded.add(labels(p));
             }
         }
-        TreePath selection = tree.getSelectionPath();
-        List<String> selected = selection == null ? null : labels(selection);
+        List<List<String>> selected = new ArrayList<>();
+        TreePath[] selection = tree.getSelectionPaths();
+        if (selection != null) {
+            for (TreePath p : selection) {
+                selected.add(labels(p));
+            }
+        }
         Rectangle view = tree.getVisibleRect();
         tree.setModel(new DefaultTreeModel(build(root)));
         for (List<String> path : expanded) {
@@ -193,9 +201,15 @@ public final class TreeView {
                 tree.expandPath(p);
             }
         }
-        TreePath reselect = selected == null ? null : find(selected);
-        if (reselect != null) {
-            tree.setSelectionPath(reselect);
+        List<TreePath> reselect = new ArrayList<>();
+        for (List<String> path : selected) {
+            TreePath p = find(path);
+            if (p != null) {
+                reselect.add(p);
+            }
+        }
+        if (!reselect.isEmpty()) {
+            tree.setSelectionPaths(reselect.toArray(TreePath[]::new));
         }
         tree.scrollRectToVisible(view);
     }

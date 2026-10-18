@@ -15,6 +15,8 @@ import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 import javax.swing.JTabbedPane;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
@@ -261,6 +263,77 @@ class WorkspaceTest {
             w[0].render(s[0] = s[0].withSession(failed));
         });
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.ERROR);
+    }
+
+    @Test
+    void aTabsMenuClosesTheOthersOrThoseToOneSideAndKeepsTabsWaitingForTheUserOrRunningAProgram() throws Exception {
+        PanelId a = new PanelId("a");
+        PanelId b = new PanelId("b");
+        PanelId c = new PanelId("c");
+        PanelId d = new PanelId("d");
+        PanelId e = new PanelId("e");
+        SessionState session = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        // a and b are plain; c's session waits for an approval; d's shell runs a program; e's session is mid-turn
+        AppState s = AppState.initial(List.of(new PanelState(a, "a", "", ""), new PanelState(b, "b", "", ""),
+                        new PanelState(c, "c", "", "s"), new PanelState(d, "d", "", ""), new PanelState(e, "e", "", "busy")), List.of(),
+                List.of(session, SessionState.closed(SessionSpec.fresh("busy", "/tmp")).withStatus(Status.OPEN, "").withTurns(1, 1L)))
+                .withApprovals(List.of(new Approval(1L, "s", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)));
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        List<PanelId> closedOne = new CopyOnWriteArrayList<>();
+        Workspace[] w = new Workspace[1];
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(intents::add, new Texts(), new SchemaRegistry());
+            w[0].onClose(closedOne::add);
+            w[0].onRunsProgram(d::equals);
+            w[0].render(s);
+        });
+        assertThat(w[0].statuses()).containsEntry(c, TabStatus.NEEDS_YOU).containsEntry(e, TabStatus.WORKING);
+
+        List<String> labels = new CopyOnWriteArrayList<>();
+        List<Boolean> enabled = new CopyOnWriteArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            for (Component item : w[0].tabMenu(0).getComponents()) {
+                if (item instanceof JMenuItem m) {
+                    labels.add(m.getText());
+                    enabled.add(m.isEnabled());
+                }
+            }
+        });
+        assertThat(labels).containsExactly("Close", "Close others", "Close to the right", "Close to the left");
+        assertThat(enabled).as("nothing left of the first tab").containsExactly(true, true, true, false);
+
+        SwingUtilities.invokeAndWait(() -> menuItem(w[0].tabMenu(1), "Close others").doClick());
+        assertThat(intents).filteredOn(i -> i instanceof Intent.FocusPanel || i instanceof Intent.ClosePanel)
+                .as("b in front, then the others but the one waiting and the one running a program")
+                .containsExactly(new Intent.FocusPanel(b), new Intent.ClosePanel(a), new Intent.ClosePanel(e));
+        assertThat(intents).as("no notice until the tabs are gone").noneMatch(Intent.Notify.class::isInstance);
+        AppState after = s.withPanels(s.panels().stream().filter(p -> !p.id().equals(a) && !p.id().equals(e)).toList(), b);
+        SwingUtilities.invokeAndWait(() -> w[0].render(after));
+        assertThat(intents).filteredOn(Intent.Notify.class::isInstance).extracting(i -> ((Intent.Notify) i).text())
+                .as("one notice for the close, none per tab")
+                .containsExactly("Closed 2 tabs; ⌘⇧T or the Panels tab reopens them; kept 2 tabs open: 1 waiting for you, 1 running a program in the shell");
+
+        // b c d now; a menu opened on d, then b closes elsewhere: the menu still closes only what was left of d
+        intents.clear();
+        JPopupMenu[] menu = new JPopupMenu[1];
+        SwingUtilities.invokeAndWait(() -> menu[0] = w[0].tabMenu(2));
+        SwingUtilities.invokeAndWait(() -> w[0].render(after.withPanels(after.panels().stream().filter(p -> !p.id().equals(b)).toList(), c)));
+        SwingUtilities.invokeAndWait(() -> menuItem(menu[0], "Close to the left").doClick());
+        assertThat(intents).filteredOn(Intent.ClosePanel.class::isInstance).as("b is gone, c waits for the user: nothing closes").isEmpty();
+        assertThat(intents).filteredOn(Intent.Notify.class::isInstance).extracting(i -> ((Intent.Notify) i).text())
+                .containsExactly("Kept 1 tab open: 1 waiting for you");
+
+        SwingUtilities.invokeAndWait(() -> menuItem(w[0].tabMenu(1), "Close").doClick());
+        assertThat(closedOne).as("Close is the tab's own close, which asks when its shell runs a program").containsExactly(d);
+    }
+
+    private static JMenuItem menuItem(JPopupMenu menu, String text) {
+        for (Component item : menu.getComponents()) {
+            if (item instanceof JMenuItem m && m.getText().equals(text)) {
+                return m;
+            }
+        }
+        throw new AssertionError("no item " + text);
     }
 
     @Test

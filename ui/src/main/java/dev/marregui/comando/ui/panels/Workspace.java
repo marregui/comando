@@ -20,8 +20,10 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JComponent;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JTabbedPane;
 import javax.swing.Timer;
 import java.awt.Component;
@@ -46,6 +48,7 @@ import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 import java.util.function.LongSupplier;
+import java.util.function.Predicate;
 
 /**
  * The open panels as tabs, in state order; the selected tab is the focused panel, and a tab dragged along the row moves
@@ -53,6 +56,8 @@ import java.util.function.LongSupplier;
  * it, closed), a document by its file. Each tab shows its panel's {@link TabStatus} in its icon, and a "● " before its
  * title while the status asks for a look: a turn or query that finished (or failed) while another tab was in front is
  * marked until the user looks at it; a session waiting for the user is marked until answered; a running one spins.
+ * A tab's menu closes it, the others, or those to its right or its left; such a close keeps the tabs waiting for the
+ * user and those whose shell runs a program.
  */
 public final class Workspace {
 
@@ -81,6 +86,11 @@ public final class Workspace {
     private Runnable attention = () -> {
     };
     private Consumer<PanelId> closer;
+    /** Whether a panel's shell runs a program, which closing the panel would end; the shell tells. */
+    private Predicate<PanelId> runsProgram = id -> false;
+    /** The tabs a menu's close is closing, which post no notice of their own, and the one notice said once they are gone. EDT only. */
+    private final Set<PanelId> bulkClosing = new HashSet<>();
+    private String bulkSummary;
     /** Whether every editor shows the light theme, its text and its rendered Markdown. EDT only. */
     private boolean light;
     /** Told when the theme button switches the editors, so the choice is kept. */
@@ -151,7 +161,112 @@ public final class Workspace {
                     rename((EditorPanel) tabs.getComponentAt(i));
                 }
             }
+
+            @Override
+            public void mousePressed(MouseEvent e) {
+                popup(e);
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                popup(e);
+            }
+
+            private void popup(MouseEvent e) {
+                int i = tabs.indexAtLocation(e.getX(), e.getY());
+                if (e.isPopupTrigger() && i >= 0) {
+                    tabMenu(i).show(tabs, e.getX(), e.getY());
+                }
+            }
         });
+    }
+
+    /**
+     * The menu of the tab at {@code index}: close it, the others, or the tabs to its right or its left, in the order
+     * shown. The tabs each item closes are taken as the menu opens, so a tab that closes while it is open changes nothing.
+     */
+    JPopupMenu tabMenu(int index) {
+        PanelId clicked = ((EditorPanel) tabs.getComponentAt(index)).panel().id();
+        int n = tabs.getTabCount();
+        List<PanelId> others = ids(0, n, index);
+        List<PanelId> right = ids(index + 1, n, -1);
+        List<PanelId> left = ids(0, index, -1);
+        JPopupMenu menu = new JPopupMenu();
+        menu.add(menuItem("Close", "close", true, () -> closer.accept(clicked)));
+        menu.addSeparator();
+        menu.add(menuItem("Close others", null, !others.isEmpty(), () -> closeTabs(clicked, others)));
+        menu.add(menuItem("Close to the right", null, !right.isEmpty(), () -> closeTabs(clicked, right)));
+        menu.add(menuItem("Close to the left", null, !left.isEmpty(), () -> closeTabs(clicked, left)));
+        return menu;
+    }
+
+    private static JMenuItem menuItem(String text, String icon, boolean enabled, Runnable run) {
+        JMenuItem item = icon == null ? new JMenuItem(text) : new JMenuItem(text, Icons.get(icon));
+        item.setEnabled(enabled);
+        item.addActionListener(e -> run.run());
+        return item;
+    }
+
+    /** The panels of the tabs from {@code from} to {@code to}, not included, leaving out the tab at {@code skip}. */
+    private List<PanelId> ids(int from, int to, int skip) {
+        List<PanelId> out = new ArrayList<>(Math.max(0, to - from));
+        for (int i = from; i < to; i++) {
+            if (i != skip) {
+                out.add(((EditorPanel) tabs.getComponentAt(i)).panel().id());
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Closes {@code ids} with {@code keep} in front, as their close buttons would, but without asking: a tab waiting for
+     * the user stays, so no question is hidden, and so does a tab whose shell runs a program, which closing would end.
+     * One notice, once the tabs are gone, says how many closed and what stayed, in place of a notice per tab.
+     */
+    void closeTabs(PanelId keep, List<PanelId> ids) {
+        intents.dispatch(new Intent.FocusPanel(keep));
+        int waiting = 0;
+        int running = 0;
+        List<PanelId> closing = new ArrayList<>(ids.size());
+        for (PanelId id : ids) {
+            if (!panels.containsKey(id)) {
+                continue;
+            }
+            if (statuses.get(id) == TabStatus.NEEDS_YOU) {
+                waiting++;
+            } else if (runsProgram.test(id)) {
+                running++;
+            } else {
+                closing.add(id);
+            }
+        }
+        List<String> parts = new ArrayList<>(3);
+        if (!closing.isEmpty()) {
+            parts.add("Closed " + closing.size() + (closing.size() == 1 ? " tab" : " tabs") + "; ⌘⇧T or the Panels tab reopens them");
+        }
+        if (waiting + running > 0) {
+            List<String> why = new ArrayList<>(2);
+            if (waiting > 0) {
+                why.add(waiting + " waiting for you");
+            }
+            if (running > 0) {
+                why.add(running + " running a program in the shell");
+            }
+            int kept = waiting + running;
+            parts.add((closing.isEmpty() ? "Kept " : "kept ") + kept + (kept == 1 ? " tab open: " : " tabs open: ") + String.join(", ", why));
+        }
+        if (parts.isEmpty()) {
+            return;
+        }
+        String summary = String.join("; ", parts);
+        if (closing.isEmpty()) {
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO, summary, false));
+            return;
+        }
+        bulkClosing.clear();
+        bulkClosing.addAll(closing);
+        bulkSummary = summary;
+        closing.forEach(id -> intents.dispatch(new Intent.ClosePanel(id)));
     }
 
     public JComponent component() {
@@ -197,6 +312,11 @@ public final class Workspace {
     /** How a tab's close button closes its panel: the shell asks first when the panel's shell runs a job. */
     public void onClose(Consumer<PanelId> close) {
         closer = close;
+    }
+
+    /** Whether a panel's shell runs a program: a tab closed with others stays open while it does. */
+    public void onRunsProgram(Predicate<PanelId> runs) {
+        runsProgram = runs;
     }
 
     /** Every editor, open now or opened later, in the light theme or the dark one. */
@@ -381,6 +501,8 @@ public final class Workspace {
                     if (deletedFile != null) {
                         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Removed " + was.title() + ": " + deletedFile
                                 + " was deleted outside comando", false));
+                    } else if (bulkClosing.contains(id)) {
+                        // a menu's close says it once, below
                     } else if (kept) {
                         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Closed " + was.title()
                                 + "; ⌘⇧T or the Panels tab reopens it", false));
@@ -388,6 +510,12 @@ public final class Workspace {
                         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Closed " + was.title() + " — ⌘⇧T reopens it", false));
                     }
                 }
+            }
+            // a menu's close is done once none of its tabs is open: its one notice now
+            if (bulkSummary != null && bulkClosing.stream().noneMatch(ids::contains)) {
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, bulkSummary, false));
+                bulkSummary = null;
+                bulkClosing.clear();
             }
             // add new panels at their position, update titles and bindings
             for (int i = 0; i < s.panels().size(); i++) {

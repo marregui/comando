@@ -180,6 +180,7 @@ public final class Reducer {
             case Intent.CancelCommand i -> new Transition(s, List.of(new Effect.CancelCommand(i.runId())));
             case Intent.BrowseFolders i -> new Transition(s, List.of(new Effect.ReadFolders(folders(s, i.names()))));
             case Intent.WatchFolders i -> new Transition(s, List.of(new Effect.WatchFolders(folders(s, i.names()))));
+            case Intent.DeleteFiles i -> deleteFiles(s, i);
             // a tree read with settings since edited, or of a folder since removed, is dropped: the tab shows only current folders
             case Intent.FolderLoaded i -> s.folders().contains(i.folder())
                     ? new Transition(s, List.of(new Effect.ShowFolder(i.folder(), i.tree()))) : Transition.of(s);
@@ -730,6 +731,31 @@ public final class Reducer {
     /** The configured folders named, in the configuration's order; a name no folder has is skipped. */
     private static List<FolderRoot> folders(AppState s, List<String> names) {
         return s.folders().stream().filter(f -> names.contains(f.name())).toList();
+    }
+
+    /** Entries of a deletable folder to the Trash: refused for any other folder, for the folder itself and for a path outside it. */
+    private Transition deleteFiles(AppState s, Intent.DeleteFiles i) {
+        Optional<FolderRoot> folder = s.folder(i.folder());
+        if (folder.isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "No folder called " + i.folder(), Notice.folder(i.folder())));
+        }
+        FolderRoot f = folder.get();
+        if (!f.deletable()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "Folder " + f.name() + " keeps its files: \"deletable\" in folders.json lets them go to the Trash",
+                    Notice.folder(f.name())));
+        }
+        if (i.paths().isEmpty()) {
+            return Transition.of(s);
+        }
+        Path root = Path.of(f.path()).normalize();
+        for (String p : i.paths()) {
+            Path path = Path.of(p).normalize();
+            if (!path.isAbsolute() || !f.contains(path) || path.equals(root)) {
+                return Transition.of(notice(s, Notice.Level.ERROR, (path.equals(root) ? "Folder " + f.name() + " itself stays"
+                        : path.getFileName() + " is not in folder " + f.name()) + "; nothing was moved to the Trash", Notice.folder(f.name())));
+            }
+        }
+        return new Transition(s, List.of(new Effect.DeleteFiles(f, i.paths())));
     }
 
     /** A folder after the others, saved to {@code folders.json}. */

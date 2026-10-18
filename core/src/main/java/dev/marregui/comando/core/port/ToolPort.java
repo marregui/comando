@@ -24,4 +24,10 @@ public interface ToolPort {
 
     /** Reads {@code folders} every few seconds from now on, and stops reading any other. */
     void watchFolders(List<FolderRoot> folders);
+
+    /**
+     * Moves {@code paths}, files and subfolders inside {@code folder}, to the desktop's Trash, and takes each one's own
+     * lines out of the folder's listing file; says how it went, and the open folders show it.
+     */
+    void deleteFiles(FolderRoot folder, List<String> paths);
 }

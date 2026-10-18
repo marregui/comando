@@ -3,12 +3,14 @@ package dev.marregui.comando.tools;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingSink;
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
@@ -17,6 +19,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.IntStream;
 
@@ -285,6 +288,102 @@ class ToolsAdapterTest {
                 .extracting(ViewSpec.TreeNode::label).containsExactly("deeper.md");
         assertThat(root.children().getLast().link()).isEqualTo("comando-file:" + dir.resolve("PLAN.md") + "#0");
         assertThat(root.children().getFirst().link()).as("a folder has no link").isEmpty();
+    }
+
+    /** A Trash that moves each entry into {@code bin}, as the desktop's would, and records it. */
+    private ToolsAdapter withTrash(Path bin, List<Path> trashed) {
+        return new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), System.getProperty("java.home")), file -> {
+            Files.move(file, bin.resolve(file.getFileName() + "-" + trashed.size()));
+            trashed.add(file);
+            return true;
+        });
+    }
+
+    @Test
+    void entriesGoToTheTrashAndLeaveTheirOwnLinesInTheNearestListingAndTheOpenFoldersShowIt(@TempDir Path dir, @TempDir Path bin) throws Exception {
+        Path day = Files.createDirectories(dir.resolve("2026-10-18"));
+        Path work = Files.createDirectories(day.resolve("work"));
+        Path read = Files.writeString(day.resolve("READ-01-X-OCT-18.md"), "# x");
+        Path mine = Files.writeString(work.resolve("mine.py"), "print()");
+        Files.writeString(day.resolve("ALPHA.md"), """
+                ## To read
+
+                1. `READ-01-X-OCT-18.md`: the result.
+
+                | Artefact | Holds |
+                |---|---|
+                | `work/` | `mine.py` |
+                | READ-01-X-OCT-18.md | the result |
+                """);
+        FolderRoot pad = new FolderRoot("Scratchpad", dir.toString(), "", List.of(), "scratchpad").withTrash("ALPHA.md");
+        List<Path> trashed = new CopyOnWriteArrayList<>();
+        ToolsAdapter tools = withTrash(bin, trashed);
+        tools.watchFolders(List.of(pad));
+        sink.await(Intent.FolderLoaded.class, WAIT);
+
+        tools.deleteFiles(pad, List.of(read.toString()));
+        Intent.Notify done = sink.await(Intent.Notify.class, n -> n.text().startsWith("Moved"), WAIT);
+        assertThat(done.level()).isEqualTo(Notice.Level.INFO);
+        assertThat(done.text()).isEqualTo("Moved READ-01-X-OCT-18.md to the Trash; 2 lines out of 2026-10-18/ALPHA.md");
+        assertThat(trashed).containsExactly(read);
+        assertThat(day.resolve("ALPHA.md")).content().doesNotContain("READ-01").contains("| `work/` |");
+        sink.await(Intent.FolderLoaded.class, l -> l.tree().children().getFirst().children().stream().noneMatch(c -> c.label().startsWith("READ")), WAIT);
+
+        tools.deleteFiles(pad, List.of(mine.toString(), work.toString()));
+        Intent.Notify folder = sink.await(Intent.Notify.class, n -> n.text().startsWith("Moved work"), WAIT);
+        assertThat(folder.text()).as("a file inside a folder asked for goes with it").isEqualTo("Moved work to the Trash; 1 line out of 2026-10-18/ALPHA.md");
+        assertThat(trashed).containsExactly(read, work);
+        assertThat(day.resolve("ALPHA.md")).content().doesNotContain("work/");
+        try (var left = Files.list(day)) {
+            assertThat(left.map(p -> p.getFileName().toString())).as("no temporary file left").containsExactly("ALPHA.md");
+        }
+    }
+
+    @Test
+    void nothingGoesWithoutATrashAndNeitherTheFolderNorAnythingOutsideItEverGoes(@TempDir Path dir, @TempDir Path bin) throws Exception {
+        Path a = Files.writeString(dir.resolve("a.md"), "a");
+        Path outside = Files.writeString(bin.resolve("outside.md"), "o");
+        FolderRoot pad = new FolderRoot("Scratchpad", dir.toString(), "", List.of()).withTrash("");
+        adapter().deleteFiles(pad, List.of(a.toString()));
+        Intent.Notify none = sink.await(Intent.Notify.class, n -> n.level() == Notice.Level.ERROR, WAIT);
+        assertThat(none.text()).isEqualTo("Nothing moved to the Trash; cannot move a.md: this desktop has no Trash");
+        assertThat(a).as("a Trash missing: never deleted for good instead").exists();
+
+        List<Path> trashed = new CopyOnWriteArrayList<>();
+        ToolsAdapter tools = withTrash(Files.createDirectories(bin.resolve("bin")), trashed);
+        tools.deleteFiles(pad, List.of(dir.toString(), outside.toString(), dir.resolve("gone.md").toString()));
+        Intent.Notify refused = sink.await(Intent.Notify.class, n -> n.level() == Notice.Level.ERROR && n.text().contains("outside.md"), WAIT);
+        assertThat(refused.text()).startsWith("Nothing moved to the Trash; cannot move ").contains("gone.md: no such file or folder");
+        assertThat(trashed).isEmpty();
+        assertThat(outside).exists();
+
+        tools.deleteFiles(new FolderRoot("KB", dir.toString(), "", List.of()), List.of(a.toString()));
+        sink.await(Intent.Notify.class, n -> n.text().contains("a.md: not an entry of folder KB"), WAIT);
+        assertThat(a).as("a folder not marked deletable").exists();
+    }
+
+    @Test
+    void aListingThatGoesWithItsEntriesIsNotReplacedByOneAboveAndARefusedEntryDoesNotStopTheRest(@TempDir Path dir, @TempDir Path bin) throws Exception {
+        Path day = Files.createDirectories(dir.resolve("2026-10-18"));
+        Path alpha = Files.writeString(day.resolve("ALPHA.md"), "- `x.md`: x\n");
+        Path x = Files.writeString(day.resolve("x.md"), "x");
+        Path locked = Files.writeString(day.resolve("locked.md"), "l");
+        Files.writeString(dir.resolve("ALPHA.md"), "- `2026-10-18/x.md`: listed above too\n");
+        FolderRoot pad = new FolderRoot("Scratchpad", dir.toString(), "", List.of()).withTrash("ALPHA.md");
+        List<Path> trashed = new CopyOnWriteArrayList<>();
+        ToolsAdapter tools = new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), System.getProperty("java.home")), file -> {
+            if (file.equals(locked)) {
+                throw new IOException("the Trash refused it");
+            }
+            Files.move(file, bin.resolve(file.getFileName()));
+            trashed.add(file);
+            return true;
+        });
+        tools.deleteFiles(pad, List.of(alpha.toString(), locked.toString(), x.toString()));
+        Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
+        assertThat(n.text()).isEqualTo("Moved 2 entries to the Trash; cannot move locked.md: the Trash refused it");
+        assertThat(trashed).containsExactly(alpha, x);
+        assertThat(dir.resolve("ALPHA.md")).as("the day's listing went too: the one above is not the day's").hasContent("- `2026-10-18/x.md`: listed above too\n");
     }
 
     @Test

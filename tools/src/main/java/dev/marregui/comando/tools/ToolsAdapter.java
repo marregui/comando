@@ -6,6 +6,7 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.ToolPort;
+import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.view.ViewSpec;
 
 import java.io.IOException;
@@ -13,9 +14,13 @@ import java.io.InputStreamReader;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -25,14 +30,25 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
  * Runs the development tools. Each run is a child process on a virtual thread that copies its output
  * into the run's console and sends {@link Intent.CommandFinished} at the end; nothing blocks the caller.
- * Reading a folder also happens on a virtual thread and ends in a view.
+ * Reading a folder also happens on a virtual thread and ends in a view, and so does moving a folder's entries to the
+ * Trash, which ends in a notice and a read of the open folders.
  */
 public final class ToolsAdapter implements ToolPort, AutoCloseable {
+
+    /** Moves a file or a folder to the desktop's Trash; false when the desktop has none. */
+    @FunctionalInterface
+    public interface Trash {
+        /** A desktop without a Trash, as in tests and on a server. */
+        Trash NONE = file -> false;
+
+        boolean moveToTrash(Path file) throws IOException;
+    }
 
     private static final System.Logger LOG = System.getLogger(ToolsAdapter.class.getName());
 
@@ -40,6 +56,9 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     private final ConsoleRegistry consoles;
     /** Read at each run, so a kit installed while comando runs serves the next run. */
     private final Supplier<ToolSettings> settings;
+    private final Trash trash;
+    /** One move to the Trash at a time, so two never edit one listing file together. */
+    private final ReentrantLock trashing = new ReentrantLock();
     private final Map<Long, Process> running = new ConcurrentHashMap<>();
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
     private final Set<Long> forgotten = ConcurrentHashMap.newKeySet();
@@ -54,9 +73,14 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     static final long DRAIN_MILLIS = 2_000;
 
     public ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, Supplier<ToolSettings> settings) {
+        this(sink, consoles, settings, Trash.NONE);
+    }
+
+    public ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, Supplier<ToolSettings> settings, Trash trash) {
         this.sink = sink;
         this.consoles = consoles;
         this.settings = settings;
+        this.trash = trash;
     }
 
     @Override
@@ -356,6 +380,119 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             // under the lock, so two sends of one folder reach the state loop in the order their reads were ticketed
             sink.dispatch(new Intent.FolderLoaded(folder, tree));
         }
+    }
+
+    /**
+     * Moves {@code paths} to the Trash, off the caller's thread, then takes each moved entry's own lines out of the
+     * nearest listing file above it ({@link FolderRoot#listedIn}), and reads the open folders again. Never deletes for
+     * good: without a Trash nothing moves. An entry inside another one asked for goes with it.
+     */
+    @Override
+    public void deleteFiles(FolderRoot folder, List<String> paths) {
+        Path root = Path.of(folder.path()).toAbsolutePath().normalize();
+        List<Path> asked = paths.stream().map(p -> Path.of(p).toAbsolutePath().normalize()).distinct().toList();
+        // only an entry that goes itself takes the ones inside it along: the folder, refused, takes nothing
+        List<Path> items = asked.stream().filter(p -> asked.stream()
+                .noneMatch(o -> !o.equals(p) && p.startsWith(o) && o.startsWith(root) && !o.equals(root))).toList();
+        Thread.ofVirtual().name("file-trash").start(() -> {
+            trashing.lock();
+            try {
+                sink.dispatch(trash(folder, items));
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "moving to the Trash failed", e);
+                sink.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot move to the Trash: " + e, false));
+            } finally {
+                trashing.unlock();
+            }
+            // the tab shows the change now rather than at the next poll
+            watchedFolders.forEach(f -> readFolder(f, true));
+        });
+    }
+
+    /** Moves {@code items}, then edits their listing files; answers the notice that says what came of it. */
+    private Intent.Notify trash(FolderRoot folder, List<Path> items) {
+        Path root = Path.of(folder.path()).toAbsolutePath().normalize();
+        List<String> failed = new ArrayList<>();
+        // each listing file with the entries it loses, relative to its folder, a folder's with a trailing slash
+        Map<Path, List<String>> listed = new LinkedHashMap<>();
+        // each entry's listing, found before anything moves: a listing that goes in the same batch is not replaced by one above it
+        Map<Path, Optional<Path>> listings = new HashMap<>();
+        items.forEach(item -> listings.put(item, listing(folder, root, item)));
+        int moved = 0;
+        String last = "";
+        for (int at = 0; at < items.size(); at++) {
+            Path item = items.get(at);
+            String name = item.getFileName() == null ? item.toString() : item.getFileName().toString();
+            if (!folder.deletable() || !item.startsWith(root) || item.equals(root)) {
+                failed.add(name + ": not an entry of folder " + folder.name() + " that goes to the Trash");
+                continue;
+            }
+            if (!Files.exists(item, LinkOption.NOFOLLOW_LINKS)) {
+                failed.add(name + ": no such file or folder");
+                continue;
+            }
+            boolean dir = Files.isDirectory(item, LinkOption.NOFOLLOW_LINKS);
+            try {
+                if (!trash.moveToTrash(item)) {
+                    int left = items.size() - at - 1;
+                    failed.add(name + ": this desktop has no Trash" + (left == 0 ? "" : "; " + left + " more left in place"));
+                    break;
+                }
+            } catch (IOException | RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot move " + item + " to the Trash", e);
+                failed.add(name + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
+                continue;
+            }
+            moved++;
+            last = name;
+            listings.get(item).ifPresent(l -> listed.computeIfAbsent(l, k -> new ArrayList<>())
+                    .add(l.getParent().relativize(item).toString().replace('\\', '/') + (dir ? "/" : "")));
+        }
+        StringBuilder text = new StringBuilder(moved == 0 ? "Nothing moved to the Trash"
+                : "Moved " + (moved == 1 ? last : moved + " entries") + " to the Trash");
+        List<String> unlisted = new ArrayList<>();
+        for (Map.Entry<Path, List<String>> e : listed.entrySet()) {
+            String where = root.relativize(e.getKey()).toString();
+            if (!Files.isRegularFile(e.getKey(), LinkOption.NOFOLLOW_LINKS)) {
+                // the listing file went to the Trash too, after the entry it lists
+                continue;
+            }
+            try {
+                ListingLines.Result r = ListingLines.without(Files.readString(e.getKey(), StandardCharsets.UTF_8), e.getValue());
+                if (r.removed() > 0) {
+                    Path tmp = e.getKey().resolveSibling("." + e.getKey().getFileName() + ".comando-tmp");
+                    Files.writeString(tmp, r.text(), StandardCharsets.UTF_8);
+                    Files.move(tmp, e.getKey(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                    text.append("; ").append(r.removed()).append(r.removed() == 1 ? " line" : " lines").append(" out of ").append(where);
+                }
+                if (!r.mentions().isEmpty()) {
+                    text.append("; still named in ").append(where).append(r.mentions().size() == 1 ? " at line " : " at lines ")
+                            .append(String.join(", ", r.mentions().stream().map(String::valueOf).toList()));
+                }
+            } catch (IOException | RuntimeException ex) {
+                LOG.log(System.Logger.Level.WARNING, "cannot update " + e.getKey(), ex);
+                unlisted.add(where + " not updated: " + (ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()));
+            }
+        }
+        if (!failed.isEmpty()) {
+            text.append("; cannot move ").append(String.join("; ", failed));
+        }
+        unlisted.forEach(u -> text.append("; ").append(u));
+        return new Intent.Notify(failed.isEmpty() && unlisted.isEmpty() ? Notice.Level.INFO : Notice.Level.ERROR, text.toString(), false);
+    }
+
+    /** The listing file nearest {@code item}: in its folder or one above it, up to the configured folder; empty when none. */
+    private static Optional<Path> listing(FolderRoot folder, Path root, Path item) {
+        if (folder.listedIn().isEmpty()) {
+            return Optional.empty();
+        }
+        for (Path dir = item.getParent(); dir != null && dir.startsWith(root); dir = dir.getParent()) {
+            Path candidate = dir.resolve(folder.listedIn());
+            if (Files.isRegularFile(candidate, LinkOption.NOFOLLOW_LINKS)) {
+                return Optional.of(candidate);
+            }
+        }
+        return Optional.empty();
     }
 
     /** Stops every run; called at exit. */

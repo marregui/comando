@@ -279,6 +279,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.onThemeChanged(windowLayout::lightEditors);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
+        workspace.onRunsProgram(id -> lower.terminals().runningJob(id).isPresent());
         side = new SidePane(ctx, widgets);
         sidebar = new SessionsSidebar(deps.intents(), new SessionsSidebar.Dialogs() {
             @Override

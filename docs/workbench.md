@@ -79,6 +79,10 @@ either empty. Several panels may share a connection; a session has at most one p
 - **Closing** (⌘W when no view has the keyboard; the last open panel cannot be closed) keeps a panel of comando's own, closed, with its file, title and bindings, until removed; a document
   is dropped ([record 39](adr/0039-panels-are-kept-until-removed.md)). ⌘⇧T reopens the last of ten recently closed;
   the Panels tab reopens any. Closing asks first when the panel's shell runs a job in the foreground.
+- **A tab's menu** (right click on the tab, not the panel) closes it, the others, the tabs to its right or those to its
+  left, in the order shown after any drag. Such a close puts the clicked tab in front and asks nothing: a tab waiting
+  for the user and a tab whose shell runs a program stay open, and one notice says how many closed and stayed; a tab
+  mid-turn closes and its session runs on ([record 63](adr/0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md)).
 - **Renaming** a connection or session renames every binding (a running session must stop first); removing one closes
   it and unbinds its panels.
 
@@ -239,12 +243,15 @@ the nearest directory at or above its working directory with an executable `grad
 
 The folders the user chose, one top-level row each, as a navigator of their folders and files
 ([records 49, 51, 52, 55](adr/0055-the-files-tab-only-shows-folders-json-configures-it.md)). The tab only shows and
-opens: it has no buttons and writes nothing. The files it opens are edited and saved like any other; a `.log` stays
-read-only.
+opens: it has no buttons, and writes nothing but the Trash of a deletable folder
+([record 63](adr/0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md)). The files it opens are
+edited and saved like any other; a `.log` stays read-only.
 
 - **Folders** are resources ([§1.1](#11-one-model-for-connections-sessions-and-folders)): a unique name, a full path,
-  an optional index file inside it, names to leave out, and the row's icon (folder, scratchpad, memory, knowledge,
-  skills, plugin). Without `folders.json` there is one folder, `~/.claude`, opening `CLAUDE.md` and leaving out Claude
+  an optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge,
+  skills, plugin), whether its entries go to the Trash (`deletable`) and the file name that lists them (`listedIn`).
+  The kit's Scratchpad is deletable and listed in `ALPHA.md`; the kit adds only folders that are missing, so a
+  Scratchpad entry written before gains the two keys by editing `folders.json`. Without `folders.json` there is one folder, `~/.claude`, opening `CLAUDE.md` and leaving out Claude
   Code's transcripts, caches and per-session state; an emptied list stays empty.
 - **Configuring.** Files ▸ Files tab folders opens `folders.json` in a panel (written with the tab's folders
   when missing). The store checks it every second: a change it did not write is read again and the tab follows; an
@@ -261,6 +268,12 @@ read-only.
   side pane. Opening a folder opens no file; the first time, its newest date-named folder opens too.
 - **Menus.** A file's: Open in a panel, and Edit in a panel (its text rather than rendered). A folder row's: its index
   file.
+- **Trash.** In a deletable folder, a file's or subfolder's menu moves the selection (⌘- or ⇧-click for several) to the
+  desktop's Trash after one question naming it; the folder's row never goes, and a selection reaching another folder
+  offers nothing. Without a Trash nothing moves; nothing is deleted for good. With `listedIn` set, each entry moved
+  leaves the nearest such file in its folder or above: its own lines go (a list item or table row whose first element
+  is its path relative to that file, `READ-01-X.md`, `work/a.py`, a folder with its slash `work/`, with the lines
+  indented under an item; never inside a code block), and the notice gives the lines that still name it. A panel on a moved file is removed as for any file deleted outside.
 - **Sync.** Only folders whose rows are open are read: at once when opened, then every 5 s on `folder-poll`, sent only
   when something changed. A tree carries the settings it was read with and
   is dropped if the folder was edited since; reads are ticketed so an older one never overwrites a newer one. The tree

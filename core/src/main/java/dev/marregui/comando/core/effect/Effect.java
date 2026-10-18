@@ -132,6 +132,13 @@ public sealed interface Effect {
         }
     }
 
+    /** Moves {@code paths}, inside {@code folder}, to the desktop's Trash; never deletes for good. */
+    record DeleteFiles(FolderRoot folder, List<String> paths) implements Effect {
+        public DeleteFiles {
+            paths = List.copyOf(paths);
+        }
+    }
+
     /** Shows a folder's tree in the sidebar's Files tab, when the folder still has the settings it was read with. */
     record ShowFolder(FolderRoot folder, ViewSpec.TreeNode tree) implements Effect {
     }

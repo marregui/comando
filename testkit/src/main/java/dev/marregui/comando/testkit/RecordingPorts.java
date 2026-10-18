@@ -188,6 +188,11 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
         record("tools.watchFolders " + names(folders));
     }
 
+    @Override
+    public void deleteFiles(FolderRoot folder, List<String> paths) {
+        record("tools.deleteFiles " + folder.name() + " " + String.join(",", paths));
+    }
+
     private static String names(List<FolderRoot> folders) {
         return String.join(",", folders.stream().map(FolderRoot::name).toList());
     }

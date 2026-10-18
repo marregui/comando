@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-17 | accepted; removes the bar, the folder dialog and the configuration row of [record 49](0049-the-files-tab-shows-folders-the-user-chooses.md), the rows bar, files and read-only of [record 51](0051-folder-buttons-together-read-only-folders-icons.md), the rows bar, tips, clone a file, remove a file and read-only of [record 52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md) | Miguel (no buttons in the Files tab, which is read-only; the files it opens are edited, saved and added to like any other; folders configured by a menu entry that opens `folders.json`; the read-only flag and the tab's file operations dropped), Claude (how: the menu entry's place, the file read again when it changes, what a file that does not read does) |
+| 2026-10-17 | accepted; removes the bar, the folder dialog and the configuration row of [record 49](0049-the-files-tab-shows-folders-the-user-chooses.md), the rows bar, files and read-only of [record 51](0051-folder-buttons-together-read-only-folders-icons.md), the rows bar, tips, clone a file, remove a file and read-only of [record 52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md); the Trash returns for deletable folders in [record 63](0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md) | Miguel (no buttons in the Files tab, which is read-only; the files it opens are edited, saved and added to like any other; folders configured by a menu entry that opens `folders.json`; the read-only flag and the tab's file operations dropped), Claude (how: the menu entry's place, the file read again when it changes, what a file that does not read does) |
 
 ## 1. Context
 

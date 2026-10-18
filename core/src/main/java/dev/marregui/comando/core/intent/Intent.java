@@ -384,6 +384,16 @@ public sealed interface Intent {
     record FolderLoaded(FolderRoot folder, ViewSpec.TreeNode tree) implements Intent {
     }
 
+    /**
+     * Moves files and subfolders of the Files tab's folder {@code folder} to the desktop's Trash, full paths; refused
+     * unless the folder is deletable and every path is inside it, never the folder itself.
+     */
+    record DeleteFiles(String folder, List<String> paths) implements Intent {
+        public DeleteFiles {
+            paths = List.copyOf(paths);
+        }
+    }
+
     /** The plan's usage limits as read from Claude Code, every few minutes. */
     record PlanUsageRead(PlanUsage usage) implements Intent {
     }

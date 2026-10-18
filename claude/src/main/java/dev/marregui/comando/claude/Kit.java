@@ -433,12 +433,13 @@ public final class Kit {
 
     /**
      * The folders the Files tab gains with the kit: the memory, the knowledge base and the scratchpad, each with its
-     * index. The memory folder is the one the last {@link #status} found; reads nothing.
+     * index; the scratchpad's files and day folders go to the Trash from the tab, each leaving its lines in its day's
+     * {@code ALPHA.md}. The memory folder is the one the last {@link #status} found; reads nothing.
      */
     public List<FolderRoot> folders() {
         return List.of(new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory"),
                 new FolderRoot("Knowledge base", claudeDir.resolve("KB").toString(), "ALPHA.md", List.of(), "knowledge"),
-                new FolderRoot("Scratchpad", claudeDir.resolve("SCRATCHPAD").toString(), "README.md", List.of(), "scratchpad"));
+                new FolderRoot("Scratchpad", claudeDir.resolve("SCRATCHPAD").toString(), "README.md", List.of(), "scratchpad").withTrash("ALPHA.md"));
     }
 
     /** The skeleton's files, relative to Claude Code's folder. */

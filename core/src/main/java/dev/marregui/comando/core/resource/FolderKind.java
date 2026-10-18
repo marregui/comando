@@ -12,7 +12,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The Files tab's folders as a resource kind: a name, a folder, an index file, what to leave out and the row's icon.
+ * The Files tab's folders as a resource kind: a name, a folder, an index file, what to leave out, the row's icon,
+ * whether its entries may go to the Trash and the file that lists them.
  * Its rules are the ones every entry of {@code folders.json} meets as the store reads it.
  */
 public final class FolderKind implements ResourceKind<FolderRoot> {
@@ -26,7 +27,11 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
                     "a file in the folder, such as ALPHA.md; opened with the folder"),
             Attribute.of("excludes", "Leave out", Attribute.Kind.TEXT, false,
                     "folder and file names, comma-separated; build output is always left out"),
-            Attribute.choice("icon", "Icon", FolderRoot.ICONS, "the icon of the folder's row in the Files tab"));
+            Attribute.choice("icon", "Icon", FolderRoot.ICONS, "the icon of the folder's row in the Files tab"),
+            Attribute.of("deletable", "Trash", Attribute.Kind.BOOLEAN, false,
+                    "whether the Files tab moves the folder's files and subfolders to the Trash"),
+            Attribute.of("listedIn", "Listed in", Attribute.Kind.TEXT, false,
+                    "a file name, such as ALPHA.md: an entry moved to the Trash leaves the nearest one above it"));
 
     private FolderKind() {
     }
@@ -49,6 +54,8 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
         m.put("index", f.index());
         m.put("excludes", String.join(", ", f.excludes()));
         m.put("icon", f.icon());
+        m.put("deletable", Boolean.toString(f.deletable()));
+        m.put("listedIn", f.listedIn());
         return m;
     }
 
@@ -74,12 +81,18 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
         if (!icon.isEmpty() && !FolderRoot.ICONS.contains(icon)) {
             throw new IllegalArgumentException("the icon must be one of " + String.join(", ", FolderRoot.ICONS) + ": " + icon);
         }
+        String listedIn = a.getOrDefault("listedIn", "").strip();
+        if (!listedIn.isEmpty() && (listedIn.contains("/") || listedIn.contains("\\") || listedIn.equals(".") || listedIn.equals(".."))) {
+            throw new IllegalArgumentException("the listing file must be a file name, such as ALPHA.md: " + listedIn);
+        }
         return new FolderRoot(
                 name,
                 path,
                 index,
                 Arrays.asList(a.getOrDefault("excludes", "").split(",")),
-                icon);
+                icon,
+                Boolean.parseBoolean(a.getOrDefault("deletable", "false").strip()),
+                listedIn);
     }
 
     @Override

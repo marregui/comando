@@ -39,6 +39,19 @@ class ResourceKindTest {
     }
 
     @Test
+    void aFolderWhoseEntriesGoToTheTrashKeepsItsListingFileAndTheListingIsAFileName() {
+        FolderRoot pad = new FolderRoot("Scratchpad", "/s", "", List.of(), "scratchpad").withTrash("ALPHA.md");
+        assertThat(FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(pad))).isEqualTo(pad);
+        assertThat(pad.withName("Pad").deletable()).isTrue();
+        assertThat(pad.withName("Pad").listedIn()).isEqualTo("ALPHA.md");
+        assertThat(FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p")).deletable()).as("by default a folder keeps its files").isFalse();
+        for (String bad : List.of("day/ALPHA.md", "..", "a\\b")) {
+            assertThatThrownBy(() -> FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p", "listedIn", bad)))
+                    .as(bad).hasMessageStartingWith("the listing file must be a file name");
+        }
+    }
+
+    @Test
     void folderRoundTripAndItsFormIsChecked() {
         FolderRoot spec = new FolderRoot("Plugin", "/Users/x/.claude/plugins/p", "README.md", List.of("tools", "bin"));
         assertThat(FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(spec))).isEqualTo(spec);

@@ -7,6 +7,8 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.resource.ResourceActions;
+import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.tree.TreeView;
 
@@ -48,8 +50,9 @@ import java.util.function.Consumer;
  * them, keeping what the user opened and selected, and the newest day folder is open at a folder's first read. A
  * folder's row has the icon it was configured with.
  *
- * <p>The tab writes nothing: it has no buttons, and a file's menu opens it, rendered or as text; the folders are
- * configured in {@code folders.json}. The filter above the tree finds files and folders by name across every folder:
+ * <p>The tab has no buttons, and a file's menu opens it, rendered or as text; the folders are configured in {@code
+ * folders.json}. In a folder configured as deletable, the menu also moves the selected files and subfolders to the
+ * Trash, after asking; that is the only thing the tab writes. The filter above the tree finds files and folders by name across every folder:
  * while it has text, a second tree shows the matches with the folders leading to them, and every folder is read once
  * so the closed ones are searched too. Clearing it (Esc) brings back the tree as the user left it.</p>
  */
@@ -68,6 +71,7 @@ final class FilesTab {
     private final Consumer<Path> open;
     /** Opens a file in a panel in its editor, rather than rendered. */
     private final Consumer<Path> editFile;
+    private final ResourceActions.Questions questions;
     private final TreeView tree = new TreeView();
     private final TreeView found = new TreeView();
     private final JTextField filter = new JTextField();
@@ -93,9 +97,15 @@ final class FilesTab {
     private boolean built;
 
     FilesTab(IntentSink intents, Consumer<Path> open, Consumer<Path> editFile) {
+        this(intents, open, editFile, ResourceActions.Questions.MODAL);
+    }
+
+    /** With the question asked before entries go to the Trash; tests answer it. */
+    FilesTab(IntentSink intents, Consumer<Path> open, Consumer<Path> editFile, ResourceActions.Questions questions) {
         this.intents = intents;
         this.open = open;
         this.editFile = editFile;
+        this.questions = questions;
         for (TreeView t : List.of(tree, found)) {
             t.tree().setRootVisible(false);
             t.icons(n -> {
@@ -408,7 +418,8 @@ final class FilesTab {
 
     /**
      * The context menu of {@code n}, selected in the tree in front: a file's opens it rendered or as its text, a folder
-     * row's opens its index file; any other node has none.
+     * row's opens its index file; any other node has none. In a deletable folder, a file's or a subfolder's menu also
+     * moves the selection to the Trash.
      */
     JPopupMenu menuFor(ViewSpec.TreeNode n) {
         JPopupMenu menu = new JPopupMenu();
@@ -416,12 +427,84 @@ final class FilesTab {
             Path file = Path.of(SourceLinks.path(n.link()));
             menu.add(item("Open in a panel", "text", () -> open.accept(file)));
             menu.add(item("Edit in a panel", "edit", () -> editFile.accept(file)));
+            addTrash(menu);
+        } else if (entry(n)) {
+            addTrash(menu);
         } else if (selectedFolder() != null && selectedFolder().name().equals(n.label())) {
             FolderRoot f = selectedFolder();
             // asked for by name: a missing index says so in the status bar, as any file that cannot be opened
             f.indexFile().ifPresent(index -> menu.add(item("Open " + f.index(), "index", () -> open.accept(index))));
         }
         return menu;
+    }
+
+    /** Whether {@code n} is a file or a subfolder, not a folder's row, a placeholder or a note such as "more…". */
+    private boolean entry(ViewSpec.TreeNode n) {
+        TreePath p = shown().tree().getSelectionPath();
+        return p != null && p.getPathCount() > 2 && !n.label().equals(ViewSpec.TreeNode.MORE) && !n.label().startsWith("✗ ")
+                && (n.link().startsWith(SourceLinks.SCHEME) || !n.children().isEmpty() || !n.detail().isEmpty());
+    }
+
+    /**
+     * The selection as entries of one deletable folder, with their full paths; empty when anything selected is not
+     * such an entry, so the Trash item acts on the whole selection or is not offered.
+     */
+    Optional<Map.Entry<FolderRoot, List<Path>>> trashable() {
+        TreePath[] selected = shown().tree().getSelectionPaths();
+        if (selected == null || selected.length == 0) {
+            return Optional.empty();
+        }
+        FolderRoot folder = null;
+        List<Path> paths = new ArrayList<>(selected.length);
+        for (TreePath p : selected) {
+            Optional<FolderRoot> f = folderOf(p);
+            if (f.isEmpty() || !f.get().deletable() || folder != null && !folder.equals(f.get())
+                    || !(((DefaultMutableTreeNode) p.getLastPathComponent()).getUserObject() instanceof ViewSpec.TreeNode n)
+                    || p.getPathCount() <= 2 || n.label().equals(ViewSpec.TreeNode.MORE) || n.label().startsWith("✗ ")
+                    || !(n.link().startsWith(SourceLinks.SCHEME) || !n.children().isEmpty() || !n.detail().isEmpty())) {
+                return Optional.empty();
+            }
+            folder = f.get();
+            paths.add(pathOf(folder, p, n));
+        }
+        return Optional.of(Map.entry(folder, List.copyOf(paths)));
+    }
+
+    /** A file's path from its link; a subfolder's from its folder and the names leading to it. */
+    private static Path pathOf(FolderRoot folder, TreePath p, ViewSpec.TreeNode n) {
+        if (n.link().startsWith(SourceLinks.SCHEME)) {
+            return Path.of(SourceLinks.path(n.link()));
+        }
+        Path out = Path.of(folder.path());
+        for (int i = 2; i < p.getPathCount(); i++) {
+            if (((DefaultMutableTreeNode) p.getPathComponent(i)).getUserObject() instanceof ViewSpec.TreeNode c) {
+                out = out.resolve(c.label());
+            }
+        }
+        return out;
+    }
+
+    private void addTrash(JPopupMenu menu) {
+        trashable().ifPresent(t -> {
+            List<Path> paths = t.getValue();
+            String what = paths.size() == 1 ? paths.getFirst().getFileName().toString() : paths.size() + " entries";
+            menu.addSeparator();
+            menu.add(item("Move " + what + " to the Trash…", "trash", () -> moveToTrash(t.getKey(), paths)));
+        });
+    }
+
+    /** Asks, naming what goes, then moves it to the Trash. */
+    private void moveToTrash(FolderRoot folder, List<Path> paths) {
+        List<String> names = paths.stream().map(p -> Path.of(folder.path()).relativize(p).toString()).toList();
+        String shownNames = names.size() <= 5 ? String.join(", ", names)
+                : String.join(", ", names.subList(0, 5)) + " and " + (names.size() - 5) + " more";
+        String text = "Move " + (names.size() == 1 ? names.getFirst() : names.size() + " entries (" + shownNames + ")")
+                + " to the Trash? They can be put back from there."
+                + (folder.listedIn().isEmpty() ? "" : " Their own lines in " + folder.listedIn() + " are taken out.");
+        Object[] options = {"Move to Trash", "Cancel"};
+        if (questions.ask(shown().tree(), Plain.text(text), "Move to the Trash", options) == 0) {
+            intents.dispatch(new Intent.DeleteFiles(folder.name(), paths.stream().map(Path::toString).toList()));
+        }
     }
 
     private static JMenuItem item(String text, String icon, Runnable r) {
