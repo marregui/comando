@@ -7,7 +7,6 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
-import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -45,7 +44,6 @@ import dev.marregui.comando.ui.kit.action.KeyPriority;
 import dev.marregui.comando.ui.kit.async.Coalescer;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.EdtWatchdog;
-import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.Labels;
@@ -76,7 +74,6 @@ import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 import dev.marregui.comando.ui.widgets.text.TextWidget;
 import dev.marregui.comando.ui.widgets.tree.TreeWidget;
 
-import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JMenuBar;
 import javax.swing.JOptionPane;
@@ -92,10 +89,7 @@ import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.Frame;
-import java.awt.GraphicsDevice;
-import java.awt.GraphicsEnvironment;
 import java.awt.KeyboardFocusManager;
-import java.awt.Rectangle;
 import java.awt.Toolkit;
 import java.awt.desktop.QuitResponse;
 import java.awt.event.AWTEventListener;
@@ -112,7 +106,6 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -136,8 +129,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private static final int CMD = Platform.menuShortcutMask();
     /** How long closing waits for the event thread to close the window. */
     private static final Duration CLOSE_BOUND = Duration.ofSeconds(5);
-    /** False once the user said not to offer the kit when comando starts. */
-    static final String KIT_OFFER = "kit.offer";
 
     /** What the shell needs from the application. */
     public record Dependencies(
@@ -159,12 +150,14 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private final Dependencies deps;
+    private final HelpActions help;
     private final ActionRegistry actions = new ActionRegistry();
     private final WidgetRegistry widgets = new WidgetRegistry();
     private final Coalescer render = new Coalescer(this::render);
     private final Coalescer transcriptRender = new Coalescer(this::renderTranscript);
     /** Window layout; tests point {@code comando.prefsNode} elsewhere so they never read or change the user's. */
     private final Preferences prefs = Preferences.userRoot().node(System.getProperty("comando.prefsNode", "dev/marregui/comando"));
+    private final WindowLayout windowLayout = new WindowLayout(prefs);
     private JFrame frame;
     private Workspace workspace;
     private LowerPanel lower;
@@ -182,7 +175,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private ResourceDialog<SessionSpec> sessionsDialog;
     private ImportSessionsDialog importDialog;
     /** The About card while it is open. */
-    private JDialog about;
     private Transcript watched;
     private final Runnable transcriptListener = transcriptRender::request;
     private boolean sidePaneShown;
@@ -221,6 +213,17 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     public ComandoUi(Dependencies deps) {
         this.deps = deps;
+        this.help = new HelpActions(deps, prefs, () -> frame, this::openFile, actions::run, () -> sidePaneHidden = false, actions::all);
+    }
+
+    /** About comando, over the window; the application menu's item and the palette open it. */
+    public void showAbout() {
+        help.showAbout();
+    }
+
+    /** Offers the kit when comando starts, once the window shows, unless the user said not to ask again. Any thread. */
+    public void offerKit(Setup.KitOffer offer) {
+        help.offerKit(offer);
     }
 
     /** Builds and shows the window; call from any thread. */
@@ -253,7 +256,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // when it goes ahead the response stays unanswered because the exit ends the process.
         // the application menu's About comando opens comando's own card, worded by about.md
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_ABOUT)) {
-            Desktop.getDesktop().setAboutHandler(event -> Edt.later(this::showAbout));
+            Desktop.getDesktop().setAboutHandler(event -> Edt.later(help::showAbout));
         }
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
             Desktop.getDesktop().setQuitHandler((event, response) -> Edt.later(() -> {
@@ -273,7 +276,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.onAttention(notifier::attention);
         workspace.onClose(this::closePanel);
         workspace.onOpenFile(this::openFile);
-        workspace.onThemeChanged(on -> prefs.putBoolean("editor.light", on));
+        workspace.onThemeChanged(windowLayout::lightEditors);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
         side = new SidePane(ctx, widgets);
@@ -359,7 +362,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         deps.loop().addListener(stateListener);
         render();
         frame.setVisible(true);
-        if (prefs.getBoolean("window.maximized", false)) {
+        if (windowLayout.maximized()) {
             frame.setExtendedState(frame.getExtendedState() | Frame.MAXIMIZED_BOTH);
         }
         layoutSaver = new Timer(1_000, e -> saveLayoutQuietly());
@@ -377,7 +380,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
         tickTimer = new Timer(1_000, e -> tick());
         tickTimer.start();
-        writeTutorial();
+        help.writeTutorial();
         EditorPanel p = workspace.focused();
         if (p != null) {
             p.editor().requestFocus();
@@ -406,21 +409,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** {@code [kind] in=… comando=…}, the part of a stall's line that groups stalls of one cause. */
     private static String label(EdtWatchdog.Stall stall) {
         return stall.where().isEmpty() ? "[" + stall.kind() + "]" : "[" + stall.kind() + "] " + stall.where();
-    }
-
-    /** The tutorial's file exists from the start, to be opened as any file, not only from Help. */
-    private void writeTutorial() {
-        Path home = deps.home();
-        if (home == null) {
-            return;
-        }
-        Thread.ofVirtual().name("write-tutorial").start(() -> {
-            try {
-                HelpFiles.writeTutorial(home);
-            } catch (IOException | RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot write the tutorial into " + home + ": " + e.getMessage());
-            }
-        });
     }
 
     /** Once a second: elapsed times on the panels and the results, uptimes on the session rows. */
@@ -505,7 +493,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             // place the divider once the split has a size; a stored position that would hide either side is ignored
             Edt.later(() -> {
                 int width = editorAndSide.getWidth();
-                int saved = prefs.getInt("divider.side", -1);
+                int saved = windowLayout.sideDivider();
                 if (width > 0 && saved >= 200 && saved <= width - 200) {
                     editorAndSide.setDividerLocation(saved);
                 } else {
@@ -817,8 +805,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("run.plotStop", "Stop refreshing plots", null, livePlots::stopAll, () -> livePlots.size() > 0);
         // panel: tools that run in its project
         cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, CMD | ALT), this::runGradle, () -> focusedSession().isPresent());
-        cmd("tools.settings", "Tool settings", null, this::openToolSettings);
-        cmd("files.settings", "Files tab folders", null, this::openFolderSettings);
+        cmd("tools.settings", "Tool settings", null, help::openToolSettings);
+        cmd("files.settings", "Files tab folders", null, help::openFolderSettings);
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         // view
         cmd("view.palette", "Command palette", key(KeyEvent.VK_P, CMD | SHIFT), () -> new CommandPalette(actions).show(frame));
@@ -876,16 +864,16 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }, () -> capability(Zoomable.class) != null);
         cmd("view.notices", "Recent notices", null, () -> status.showHistory());
         // help
-        cmd("help.tutorial", "Tutorial", null, this::showTutorial, () -> deps.home() != null);
+        cmd("help.tutorial", "Tutorial", null, help::showTutorial, () -> deps.home() != null);
         // ⌘/ stays the editor's comment toggle; ⌘⇧/ is the Mac's Help key
-        cmd("help.keys", "Keyboard shortcuts", key(KeyEvent.VK_SLASH, CMD | SHIFT), this::showKeys);
-        cmd("help.markdown", "Markdown sheet", null, this::showMarkdownSheet);
-        cmd("help.kit", "Claude Code kit…", null, this::showKit);
-        cmd("help.log", "Show the log", null, this::showLog, () -> deps.logDir() != null);
-        cmd("help.dataRoot", "Reveal comando folder", null, () -> reveal(deps.home()), () -> deps.home() != null);
+        cmd("help.keys", "Keyboard shortcuts", key(KeyEvent.VK_SLASH, CMD | SHIFT), help::showKeys);
+        cmd("help.markdown", "Markdown sheet", null, help::showMarkdownSheet);
+        cmd("help.kit", "Claude Code kit…", null, help::showKit);
+        cmd("help.log", "Show the log", null, help::showLog, () -> deps.logDir() != null);
+        cmd("help.dataRoot", "Reveal comando folder", null, () -> help.reveal(deps.home()), () -> deps.home() != null);
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice
         boolean mac = Platform.isMac();
-        cmd("app.about", "About comando", null, this::showAbout);
+        cmd("app.about", "About comando", null, help::showAbout);
         cmd("app.quit", "Quit comando", mac ? null : key(KeyEvent.VK_Q, CMD), this::quit);
     }
 
@@ -1144,173 +1132,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         deps.intents().dispatch(new Intent.ExploreSchema(connection));
     }
 
-    /** The tutorial in a panel, as a document: its file in comando's folder, written from this build's copy first. */
-    private void showTutorial() {
-        Path home = deps.home();
-        Thread.ofVirtual().name("show-tutorial").start(() -> {
-            try {
-                Path file = HelpFiles.writeTutorial(home);
-                Edt.later(() -> openFile(file));
-            } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot show the tutorial: " + e.getMessage(), false));
-            }
-        });
-    }
-
-    /** Opens {@code tools.json} in a panel, as any document, written with its defaults first when missing. */
-    private void openToolSettings() {
-        Thread.ofVirtual().name("tool-settings").start(() -> {
-            try {
-                Path file = deps.setup().toolSettings();
-                Edt.later(() -> openFile(file));
-            } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open the tool settings: " + e.getMessage(), false));
-            }
-        });
-    }
-
-    /**
-     * Opens {@code folders.json} in a panel, as any document, written with the tab's folders first when missing; the
-     * tab follows the file as it is saved.
-     */
-    private void openFolderSettings() {
-        List<FolderRoot> shown = deps.state().get().folders();
-        Thread.ofVirtual().name("folder-settings").start(() -> {
-            try {
-                Path file = deps.setup().folderSettings(shown);
-                Edt.later(() -> openFile(file));
-            } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open the Files tab's folders: " + e.getMessage(), false));
-            }
-        });
-    }
-
-    /**
-     * About comando: the card of {@link About}, over the window; when it is open already it comes forward. The Claude
-     * Code version is the one the most recent session reported; before any session started there is none to show.
-     */
-    public void showAbout() {
-        if (about != null && about.isDisplayable()) {
-            about.toFront();
-            return;
-        }
-        String claude = deps.state().get().sessions().stream().filter(s -> !s.info().cliVersion().isEmpty())
-                .max(Comparator.comparingLong(SessionState::startedMillis)).map(s -> s.info().cliVersion()).orElse("");
-        about = About.show(frame, About.load(About.facts(deps.version(), deps.home(), claude)), this::followAbout);
-    }
-
-    /** A link of the About card: the tutorial, the data root, or a page in the browser. */
-    private void followAbout(String target) {
-        switch (target) {
-            case "comando:tutorial" -> actions.run("help.tutorial");
-            case "comando:home" -> {
-                if (deps.home() != null) {
-                    reveal(deps.home());
-                }
-            }
-            default -> {
-                if (Browser.isWebLink(target)) {
-                    Browser.open(target);
-                }
-            }
-        }
-    }
-
-    /** Tools ▸ Help ▸ Claude Code kit: what the kit is here, and an install when there is anything to install. */
-    private void showKit() {
-        Thread.ofVirtual().name("kit").start(() -> {
-            try {
-                Setup.KitOffer offer = deps.setup().kit();
-                Edt.later(() -> askKit(offer, false));
-            } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot read the Claude Code kit's state: " + e.getMessage(), false));
-            }
-        });
-    }
-
-    /**
-     * Offers the kit when comando starts: once the window shows, and unless the user said not to ask again. Any
-     * thread.
-     */
-    public void offerKit(Setup.KitOffer offer) {
-        Edt.later(() -> {
-            if (frame != null && prefs.getBoolean(KIT_OFFER, true)) {
-                askKit(offer, true);
-            }
-        });
-    }
-
-    private void askKit(Setup.KitOffer found, boolean atStart) {
-        Setup.KitOffer offer = found.withFolders(Setup.missingFolders(deps.state().get().folders(), deps.setup().kitFolders()).stream()
-                .map(f -> "Add " + f.name() + " (" + HomeDir.shorten(f.path()) + ") to the Files tab").toList());
-        Object[] options = offer.buttons(atStart).toArray();
-        int pick = JOptionPane.showOptionDialog(frame, Plain.text(offer.message()), "Claude Code kit", JOptionPane.DEFAULT_OPTION,
-                offer.pending() ? JOptionPane.QUESTION_MESSAGE : JOptionPane.INFORMATION_MESSAGE, null, options,
-                options[atStart && options.length > 1 ? 1 : 0]);
-        if (atStart && pick == Setup.DONT_ASK) {
-            prefs.putBoolean(KIT_OFFER, false);
-        }
-        if (!offer.pending() || pick != Setup.DO) {
-            return;
-        }
-        Thread.ofVirtual().name("kit-install").start(() -> {
-            try {
-                List<String> said = new ArrayList<>(deps.setup().installKit());
-                List<String> added = addKitFolders();
-                if (!added.isEmpty()) {
-                    said.add("added " + String.join(" and ", added) + " to the Files tab");
-                }
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, said.isEmpty()
-                        ? "The Claude Code kit was already in place"
-                        : "Claude Code kit: " + String.join("; ", said) + ". New Claude sessions load it.", false));
-            } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "The Claude Code kit install stopped: " + e.getMessage(), false));
-            }
-        });
-    }
-
-    /** Adds the kit's folders the Files tab lacks; their names. */
-    private List<String> addKitFolders() {
-        List<String> added = new ArrayList<>();
-        for (FolderRoot f : Setup.missingFolders(deps.state().get().folders(), deps.setup().kitFolders())) {
-            deps.intents().dispatch(new Intent.AddFolder(f));
-            added.add(f.name());
-        }
-        return added;
-    }
-
-    /** Every command with a key, by menu, as a table in the side pane. */
-    private void showKeys() {
-        sidePaneHidden = false;
-        deps.intents().dispatch(new Intent.ShowView("", "Keyboard shortcuts", new ViewSpec.Markdown(Keys.markdown(actions.all())), Placement.SIDE));
-    }
-
-    /** The Markdown sheet in the side pane, as the keyboard shortcuts are, to keep beside the editor. */
-    private void showMarkdownSheet() {
-        sidePaneHidden = false;
-        deps.intents().dispatch(new Intent.ShowView("", "Markdown", new ViewSpec.Markdown(MarkdownSheet.markdown()), Placement.SIDE));
-    }
-
-    private void reveal(Path dir) {
-        Thread.ofVirtual().name("reveal").start(() -> {
-            try {
-                Desktop.getDesktop().open(dir.toFile());
-            } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open " + dir + ": " + e.getMessage(), false));
-            }
-        });
-    }
-
-    /** The log comando writes now, in a panel, as a document: read-only, following its end, reloaded as it grows. */
-    private void showLog() {
-        Path log = HelpFiles.log(deps.logDir());
-        if (Files.isRegularFile(log)) {
-            openFile(log);
-        } else {
-            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "No log yet at " + log, false));
-        }
-    }
-
     /** Asks for Gradle tasks, naming the build they run in; the last ones are remembered across restarts. */
     private void runGradle() {
         String dir = focusedSession().map(x -> Labels.shortPath(x.spec().workDir())).orElse("the session's directory");
@@ -1363,7 +1184,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     private void toggleSidebar() {
         if (sidebar.isShown()) {
-            prefs.putInt("divider.sidebar", outer.getDividerLocation());
+            windowLayout.sidebarDivider(outer.getDividerLocation());
         }
         showSidebar(!sidebar.isShown());
     }
@@ -1375,7 +1196,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private void showSidebar(boolean shown) {
         sidebar.show(shown);
         outer.setDividerSize(shown ? outerDividerSize : 0);
-        outer.setDividerLocation(shown ? prefs.getInt("divider.sidebar", 260) : sidebar.railWidth());
+        outer.setDividerLocation(shown ? windowLayout.sidebarDivider() : sidebar.railWidth());
         outer.revalidate();
     }
 
@@ -1516,69 +1337,21 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     // ---- window layout
 
-    /**
-     * Restores the window's bounds, kept on a screen that still exists (a window saved on a detached display opens
-     * centred on the main one), the dividers and the sidebar; maximized is restored once the window shows.
-     */
+    /** The window's bounds, its dividers, the sidebar and the side pane as they were; maximized once the window shows. */
     private void restoreLayout() {
-        int w = prefs.getInt("window.width", 1500);
-        int h = prefs.getInt("window.height", 950);
-        int x = prefs.getInt("window.x", Integer.MIN_VALUE);
-        int y = prefs.getInt("window.y", Integer.MIN_VALUE);
-        Rectangle saved = new Rectangle(x, y, w, h);
-        Rectangle screen = onScreen(saved);
-        if (x != Integer.MIN_VALUE && screen != null) {
-            Rectangle fit = saved.intersection(screen);
-            frame.setBounds(fit.width < 400 || fit.height < 300 ? new Rectangle(screen.x, screen.y, Math.min(w, screen.width),
-                    Math.min(h, screen.height)) : fit);
-        } else {
-            frame.setSize(w, h);
-            frame.setLocationRelativeTo(null);
-        }
-        sidebar.selectTab(prefs.getInt("sidebar.tab", SessionsSidebar.SESSIONS));
-        sidebar.manualOrder(prefs.getBoolean("sessions.manualOrder", false));
-        workspace.light(prefs.getBoolean("editor.light", false));
-        showSidebar(prefs.getBoolean("sidebar.visible", true));
-        vertical.setDividerLocation(prefs.getInt("divider.lower", (int) (h * 0.45)));
-        sidePaneHidden = prefs.getBoolean("sidePane.hidden", false);
-    }
-
-    /** The bounds of the screen {@code r} overlaps most, or null when it is on none. */
-    private static Rectangle onScreen(Rectangle r) {
-        Rectangle best = null;
-        long bestArea = 0;
-        for (GraphicsDevice d : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
-            Rectangle b = d.getDefaultConfiguration().getBounds();
-            Rectangle i = b.intersection(r);
-            long area = i.isEmpty() ? 0 : (long) i.width * i.height;
-            if (area > bestArea) {
-                best = b;
-                bestArea = area;
-            }
-        }
-        return best;
+        int h = windowLayout.restoreBounds(frame);
+        sidebar.selectTab(windowLayout.sidebarTab());
+        sidebar.manualOrder(windowLayout.manualOrder());
+        workspace.light(windowLayout.lightEditors());
+        showSidebar(windowLayout.sidebarShown());
+        vertical.setDividerLocation(windowLayout.lowerDivider(h));
+        sidePaneHidden = windowLayout.sidePaneHidden();
     }
 
     private void saveLayout() {
-        boolean maximized = (frame.getExtendedState() & Frame.MAXIMIZED_BOTH) == Frame.MAXIMIZED_BOTH;
-        prefs.putBoolean("window.maximized", maximized);
-        if (!maximized) {
-            prefs.putInt("window.width", frame.getWidth());
-            prefs.putInt("window.height", frame.getHeight());
-            prefs.putInt("window.x", frame.getX());
-            prefs.putInt("window.y", frame.getY());
-        }
-        if (sidebar.isShown()) {
-            prefs.putInt("divider.sidebar", outer.getDividerLocation());
-        }
-        prefs.putBoolean("sidebar.visible", sidebar.isShown());
-        prefs.putInt("sidebar.tab", sidebar.selectedTab());
-        prefs.putBoolean("sessions.manualOrder", sidebar.manualOrder());
-        prefs.putBoolean("sidePane.hidden", sidePaneHidden);
-        prefs.putInt("divider.lower", vertical.getDividerLocation());
-        if (sidePaneShown) {
-            prefs.putInt("divider.side", editorAndSide.getDividerLocation());
-        }
+        windowLayout.save(frame, new WindowLayout.Saved(sidebar.isShown(), sidebar.isShown() ? outer.getDividerLocation() : -1,
+                sidebar.selectedTab(), sidebar.manualOrder(), sidePaneHidden, vertical.getDividerLocation(),
+                sidePaneShown ? editorAndSide.getDividerLocation() : -1));
     }
 
     private void saveLayoutQuietly() {
