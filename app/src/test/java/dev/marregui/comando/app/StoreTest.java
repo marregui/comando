@@ -50,7 +50,9 @@ class StoreTest {
         try (Store store = new Store(home)) {
             store.onNotice(notices::add);
             store.load();
+            store.saveNow().get(5, TimeUnit.SECONDS); // what loading wrote is on disk before the file is replaced
             // a non-empty directory where sessions.json goes: the replacing move cannot remove it
+            Files.deleteIfExists(home.resolve("sessions.json"));
             Files.createDirectories(home.resolve("sessions.json"));
             Files.writeString(home.resolve("sessions.json").resolve("keep"), "x");
             store.saveSessions(List.of(SessionSpec.imported("edge", "/w", "abc")));
