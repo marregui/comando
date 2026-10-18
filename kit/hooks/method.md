@@ -19,6 +19,10 @@
 5. Done means tested, every acceptance passing on the final tree, the review's findings resolved, and the affected docs true again.
 6. Reviews: `/deep-review`. Checkpoints: `/reflect` when comando's checkpoint is due (60% of the context window) and at the end of a session; each one leaves the memory's recall sharper and the KB truer than it found them.
 
+## Compaction
+
+A compaction summary keeps the task in progress, the decisions taken and their reasons, what is done and what is pending, open questions, the commands that worked, and the user's corrections. It ends with a `Modified files` list: every file written or edited since the session started, one absolute path per line, carried over from any earlier summary and extended, never reset.
+
 ## Output and git
 
 - Result first, then any decision the user must make. No recap.

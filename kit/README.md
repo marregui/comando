@@ -6,7 +6,7 @@ agents are given specs with an executable acceptance check; Gradle runs in one c
 
 | Part | What it does |
 |---|---|
-| `hooks/method.md` | the method, read by Claude at every session start (new, resumed, cleared) and after each compaction: where knowledge is kept, how a task is worked |
+| `hooks/method.md` | the method, read by Claude at every session start (new, resumed, cleared) and after each compaction: where knowledge is kept, how a task is worked, what a compaction summary keeps |
 | `skills/reflect` | `/reflect`: writes the session into memory, corrects the knowledge base, consolidates the scratchpad |
 | `skills/deep-review` | `/deep-review`: an adversarial review against the stated requirements, every finding proved |
 | `templates/agent-spec.md` | the spec an agent is given: files, limits, executable acceptance |
