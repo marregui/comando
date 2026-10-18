@@ -223,9 +223,10 @@ written and then been quiet for 200 ms (at most 3 s). An exited shell offers a r
 ⌥⌘G asks for tasks (default `build`, then the last used) and runs them in the build of the focused panel's session:
 the nearest directory at or above its working directory with an executable `gradlew`.
 
-- **Command:** `<wrapper> <root> <tasks>`, the wrapper being `tools.json`'s `gradleWrapper`, by default the kit's
-  `gradle-serial` (one run per checkout at a time); `<root>/gradlew --console=plain <tasks>` when it is `none` or
-  the wrapper is not found. Arguments split like shell words, without expansion.
+- **Command:** `<kit>/bin/gradle-serial <root> <tasks>` (one run per checkout at a time, queued on the same lock as
+  the kit's own runs), or `<root>/gradlew --console=plain <tasks>` when the kit's `gradle-serial` is not there or not
+  executable; each run looks again. Arguments split like shell words, without expansion. Nothing configures it
+  ([record 62](adr/0062-gradle-runs-by-convention.md)).
 - **Output:** a console view filled as output arrives; past 4 MB the rest is held and its last 64 kB shown at the end.
   The same command again replaces an unpinned view and stops the old run.
 - **Stop:** SIGTERM to the process tree, SIGKILL 2 s later; output is read at most 2 s after the process exits.
@@ -233,10 +234,6 @@ the nearest directory at or above its working directory with an executable `grad
   line, and "Send failures to Claude" sends messages and stacks (60 lines each) to the session of the panel the run
   came from.
 - A run of 10 s or more ends with a desktop notification while the window is not active.
-
-`tools.json` in the data root holds the Gradle wrapper's path (`gradleWrapper`); Tools ▸ Tool settings opens it
-(written with an empty key when missing). Each run reads it; what is wrong with it is the run's first console line, and
-the default applies.
 
 ## 5. The Files tab
 
@@ -289,7 +286,6 @@ read-only.
 |---|---|
 | `connections.json`, `sessions.json`, `folders.json`, `panels.json` | the specs and panel metadata (bindings, file name, closed) |
 | `panels/<title>.md` | each panel's text ([record 26](adr/0026-a-file-per-panel.md)) |
-| `tools.json` | the Gradle wrapper's path |
 | `comando.lock` | held while comando runs; a second start on the same root refuses |
 | `run/` | MCP configurations of running sessions (`0600`) |
 | `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision |

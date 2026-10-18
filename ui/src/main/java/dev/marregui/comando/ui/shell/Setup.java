@@ -15,9 +15,6 @@ import java.util.List;
  */
 public interface Setup {
 
-    /** The tool settings file ({@code tools.json}), written with its defaults first when missing. */
-    Path toolSettings() throws IOException;
-
     /** The Files tab's folders file ({@code folders.json}), written with the folders {@code shown} first when missing. */
     Path folderSettings(List<FolderRoot> shown) throws IOException;
 
@@ -32,11 +29,6 @@ public interface Setup {
 
     /** For a window without them (the replay tests): every call fails. */
     Setup NONE = new Setup() {
-        @Override
-        public Path toolSettings() throws IOException {
-            throw new IOException("no settings in this window");
-        }
-
         @Override
         public Path folderSettings(List<FolderRoot> shown) throws IOException {
             throw new IOException("no settings in this window");

@@ -41,7 +41,6 @@ final class Menus {
             Map.entry("run.plotStop", "chart-stop"),
             Map.entry("server.start", "play"),
             Map.entry("server.stop", "stop"),
-            Map.entry("tools.settings", "settings"),
             Map.entry("help.tutorial", "tutorial"),
             Map.entry("help.keys", "keyboard"),
             Map.entry("help.markdown", "markdown"),
@@ -80,7 +79,6 @@ final class Menus {
             Map.entry("server.start", "Starts a QuestDB server in the questdb folder of comando's data root, on QuestDB's default ports"
                     + " (PostgreSQL wire 8812, console 9000), reachable from this machine only, with QuestDB's default login."),
             Map.entry("server.stop", "Stops the embedded QuestDB server; its data stays in the questdb folder. It also stops when comando quits."),
-            Map.entry("tools.settings", "Opens tools.json in a panel: the Gradle wrapper that Run Gradle tasks (⌘⌥G) runs."),
             Map.entry("help.tutorial", "comando in ten minutes, opened as a document: from an empty window to a database, a Claude session,"
                     + " approvals and plots."),
             Map.entry("help.keys", "The table of every key, in the side pane: each command's, then those of approval cards, the find bar,"
@@ -122,7 +120,7 @@ final class Menus {
         if (server) {
             tools.add(menu("Embedded QuestDB", "database", "server.start", "server.stop"));
         }
-        tools.addAll(List.of(SEPARATOR, "tools.settings", SEPARATOR,
+        tools.addAll(List.of(SEPARATOR,
                 menu("Help", "question",
                         "help.tutorial", "help.keys", "help.markdown",
                         SEPARATOR,

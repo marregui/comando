@@ -89,18 +89,6 @@ final class HelpActions {
         });
     }
 
-    /** Opens {@code tools.json} in a panel, as any document, written with its defaults first when missing. */
-    void openToolSettings() {
-        Thread.ofVirtual().name("tool-settings").start(() -> {
-            try {
-                Path file = deps.setup().toolSettings();
-                Edt.later(() -> openFile.accept(file));
-            } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open the tool settings: " + e.getMessage(), false));
-            }
-        });
-    }
-
     /**
      * Opens {@code folders.json} in a panel, as any document, written with the tab's folders first when missing; the
      * tab follows the file as it is saved.

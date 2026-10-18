@@ -46,7 +46,7 @@ class MenusTest {
                 "panel.openSpec", "files.settings", "view.export",
                 "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
                 // a menu's own items, then its submenus'
-                "view.palette", "terminal.restart", "run.plotStop", "tools.settings", "server.start", "server.stop",
+                "view.palette", "terminal.restart", "run.plotStop", "server.start", "server.stop",
                 "help.tutorial", "help.keys", "help.markdown", "help.kit", "help.log", "help.dataRoot");
         assertThat(submenus(bar)).extracting(MenuEntry.Menu::title).containsExactly("Embedded QuestDB", "Help");
         assertThat(ids(Menus.bar(false))).as("no embedded server, no submenu for it").doesNotContain("server.start", "server.stop");

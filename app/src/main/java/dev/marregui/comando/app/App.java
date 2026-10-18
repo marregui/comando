@@ -27,6 +27,7 @@ import dev.marregui.comando.db.DbSettings;
 import dev.marregui.comando.mcp.AuditLog;
 import dev.marregui.comando.mcp.McpServer;
 import dev.marregui.comando.mcp.McpTools;
+import dev.marregui.comando.tools.ToolSettings;
 import dev.marregui.comando.tools.ToolsAdapter;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
@@ -110,8 +111,7 @@ public final class App implements AutoCloseable {
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), config.claudeProjects(), UiInstructions.TEXT)));
             kit = new Kit(Kit.Bundle.resources(), Kit.Cli.process(config.claudeExecutable()), config.kitDir(), HomeDir.claudeDir());
-            ToolsFile toolsFile = new ToolsFile(config.home(), kit.gradleSerial());
-            ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, toolsFile::read));
+            ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, () -> ToolSettings.of(kit.gradleSerial())));
             tools = devTools;
             EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
             SessionCatalogue catalogue = new SessionCatalogue(config.claudeProjects());
@@ -119,7 +119,7 @@ public final class App implements AutoCloseable {
                     loop, loop::state, loop, transcripts, results, consoles, schemas, store,
                     () -> catalogue.scan(500).stream().map(e -> new StoredConversation(e.sessionId(), e.cwd(), e.branch(), e.title(),
                             e.lastPrompt(), e.modifiedMillis(), e.sizeBytes())).toList(),
-                    questDb, new KitSetup(kit, toolsFile, store), version, config.home(), config.logDir(), onQuit));
+                    questDb, new KitSetup(kit, store), version, config.home(), config.logDir(), onQuit));
             effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
             // the embedded QuestDB stops last: it may still serve the connections closed above
             owned.addLast(questDb);

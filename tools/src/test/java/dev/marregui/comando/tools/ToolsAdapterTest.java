@@ -30,7 +30,7 @@ class ToolsAdapterTest {
     private final ConsoleRegistry consoles = new ConsoleRegistry();
 
     private ToolsAdapter adapter() {
-        return new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), System.getProperty("java.home"), ""));
+        return new ToolsAdapter(sink, consoles, () -> new ToolSettings(Optional.empty(), System.getProperty("java.home")));
     }
 
     private static FolderRoot folder(String name, Path path, String... excludes) {
@@ -196,14 +196,14 @@ class ToolsAdapterTest {
     }
 
     @Test
-    void eachRunReadsTheSettingsAndShowsWhatWasWrongWithThemFirst(@TempDir Path dir) throws Exception {
+    void eachRunReadsTheSettings(@TempDir Path dir) throws Exception {
         fakeBuild(dir);
         Path serial = dir.resolve("serial");
         Files.writeString(serial, "#!/bin/sh\necho \"serial $*\"\n");
         Files.setPosixFilePermissions(serial, PosixFilePermissions.fromString("rwxr-xr-x"));
         List<ToolSettings> settings = new ArrayList<>(List.of(
-                new ToolSettings(Optional.empty(), System.getProperty("java.home"), "tools.json: not JSON; using the defaults"),
-                new ToolSettings(Optional.of(serial), System.getProperty("java.home"), "")));
+                new ToolSettings(Optional.empty(), System.getProperty("java.home")),
+                new ToolSettings(Optional.of(serial), System.getProperty("java.home"))));
         ToolsAdapter tools = new ToolsAdapter(sink, consoles, settings::removeFirst);
 
         tools.runGradle(1L, dir.toString(), "build");
@@ -211,8 +211,8 @@ class ToolsAdapterTest {
         tools.runGradle(2L, dir.toString(), "build");
         sink.await(Intent.CommandFinished.class, e -> e.runId() == 2L, WAIT);
 
-        assertThat(consoles.of(1L).text(0)).startsWith("tools.json: not JSON; using the defaults\n$ " + dir.resolve("gradlew"));
-        assertThat(consoles.of(2L).text(0)).as("the settings changed between runs").startsWith("$ " + serial + " " + dir + " build")
+        assertThat(consoles.of(1L).text(0)).startsWith("$ " + dir.resolve("gradlew"));
+        assertThat(consoles.of(2L).text(0)).as("the kit appeared between runs").startsWith("$ " + serial + " " + dir + " build")
                 .contains("serial " + dir + " build");
     }
 

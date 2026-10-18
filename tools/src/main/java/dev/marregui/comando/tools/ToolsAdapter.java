@@ -38,7 +38,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
     private final IntentSink sink;
     private final ConsoleRegistry consoles;
-    /** Read at each run, so a change to the user's settings applies to the next run. */
+    /** Read at each run, so a kit installed while comando runs serves the next run. */
     private final Supplier<ToolSettings> settings;
     private final Map<Long, Process> running = new ConcurrentHashMap<>();
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
@@ -64,7 +64,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         active.add(runId);
         Thread.ofVirtual().name("gradle-" + runId).start(() -> guarded(runId, () -> {
             Console out = consoles.of(runId);
-            ToolSettings tools = settings(out);
+            ToolSettings tools = settings.get();
             Optional<Path> root = GradleBuild.root(Path.of(workDir));
             if (root.isEmpty()) {
                 out.append("No gradlew at or above " + workDir + "\n");
@@ -77,15 +77,6 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             TestReports reports = exit == Integer.MIN_VALUE ? TestReports.NONE : TestReports.collect(root.get(), start);
             finish(runId, exit, start, reports);
         }));
-    }
-
-    /** The settings for one run; what was wrong with the user's goes to the run's console first. */
-    private ToolSettings settings(Console out) {
-        ToolSettings tools = settings.get();
-        if (!tools.problem().isEmpty()) {
-            out.append(tools.problem() + "\n");
-        }
-        return tools;
     }
 
     /** Runs a run's body so that it always ends with {@link Intent.CommandFinished}, even when the body fails. */

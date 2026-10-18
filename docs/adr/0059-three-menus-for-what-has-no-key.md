@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-18 | accepted | Miguel (menus only for what is needed; Files for File and Panel; Help and the palette in Tools; the comando menu left as macOS makes it; no native code), Claude (what stays, the areas, icons and tooltips) |
+| 2026-10-18 | accepted; Tool settings removed by [record 62](0062-gradle-runs-by-convention.md) | Miguel (menus only for what is needed; Files for File and Panel; Help and the palette in Tools; the comando menu left as macOS makes it; no native code), Claude (what stays, the areas, icons and tooltips) |
 
 ## 1. Context
 
@@ -16,7 +16,7 @@ keyboard shortcuts sheet lists every key. Most items repeated a key and a button
 | Question | Rule | Why |
 |---|---|---|
 | what a menu holds | a command with no key and no control in the window, and what macOS expects in a menu (undo and the clipboard) | the menus are no longer where keys are learned |
-| the bar | **Files**: Open file…, Files tab folders…, Export view… · **Edit**: Undo, Redo, Cut, Copy, Paste, Select all · **Tools**: Command palette, Restart the shell, Stop refreshing plots, Embedded QuestDB ▸ (Start, Stop), Tool settings…, Help ▸ (Tutorial, Keyboard shortcuts, Markdown sheet, Claude Code kit…, Show the log, Reveal comando folder) | Files matches the sidebar tab; Tools holds the palette, the way to every other command |
+| the bar | **Files**: Open file…, Files tab folders…, Export view… · **Edit**: Undo, Redo, Cut, Copy, Paste, Select all · **Tools**: Command palette, Restart the shell, Stop refreshing plots, Embedded QuestDB ▸ (Start, Stop), Help ▸ (Tutorial, Keyboard shortcuts, Markdown sheet, Claude Code kit…, Show the log, Reveal comando folder) | Files matches the sidebar tab; Tools holds the palette, the way to every other command |
 | the comando menu | as macOS makes it (About, Services, Hide, Quit) | changing it takes native code |
 | icons | every item and submenu has one, in the house style (16-point SVG, IntelliJ's grey with a blue, green or red accent); the bar's own titles are words | macOS draws an item's icon in its menu bar |
 | tooltips | every item and submenu has one: what it does, where its result goes, what else does the same | the menu documents itself |

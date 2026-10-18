@@ -68,3 +68,4 @@ that names the one it replaces; the old record stays as written, and this index'
 | [59](0059-three-menus-for-what-has-no-key.md) | Three menus, for what has no key or control | Miguel, Claude | accepted |
 | [60](0060-about-is-a-card-worded-by-a-file.md) | About comando is a card worded by a file | Miguel, Claude | accepted |
 | [61](0061-the-kit-overrides-a-setup-of-the-users-own-with-consent.md) | The kit overrides a setup of the user's own, with the user's consent | Miguel, Claude | accepted |
+| [62](0062-gradle-runs-by-convention.md) | Gradle runs by convention; no `tools.json` | Miguel, Claude | accepted |
