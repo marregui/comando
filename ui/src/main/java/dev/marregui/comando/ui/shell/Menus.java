@@ -156,7 +156,7 @@ final class Menus {
         put(a, "Window", "view.sidebar", "view.sidePane", "view.files", "view.restoreLayout", "view.session", "view.approvals",
                 "view.terminal", "view.results", "view.nextTab", "view.previousTab", "view.closeLower", "view.zoomIn", "view.zoomOut",
                 "view.zoomReset", "view.notices", "view.session.alt", "view.approvals.alt", "view.terminal.alt", "view.results.alt");
-        put(a, "comando", "app.quit");
+        put(a, "comando", "app.about", "app.quit");
         return Map.copyOf(a);
     }
 

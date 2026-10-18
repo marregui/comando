@@ -22,6 +22,7 @@ import dev.marregui.comando.ui.kit.text.LocalImages;
 
 import javax.imageio.ImageIO;
 import javax.swing.AbstractButton;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JList;
 import javax.swing.JMenu;
@@ -41,6 +42,7 @@ import java.awt.Frame;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Window;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -287,6 +289,9 @@ public final class Snapshot {
             SwingUtilities.invokeAndWait(() -> { });
             shoot(out.resolve(sheet[2]));
         }
+        // About comando, as the application menu opens it: the card alone, at the Retina scale it is seen at
+        SwingUtilities.invokeAndWait(() -> app.ui().showAbout());
+        shootDialog("About comando", out.resolve("02k-about.png"));
         loop.dispatch(new Intent.FocusPanel(first));
         Thread.sleep(500);
         long plotId = loop.state().views().stream().filter(v -> v.title().equals("delay")).findFirst().orElseThrow().id();
@@ -666,6 +671,35 @@ public final class Snapshot {
             }
         }
         return null;
+    }
+
+    /** Paints the open dialog titled {@code title} at twice its size on a dark ground, then closes it. */
+    static void shootDialog(String title, Path file) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            for (Window w : Window.getWindows()) {
+                if (w instanceof JDialog d && d.isVisible() && title.equals(d.getTitle())) {
+                    int margin = 40;
+                    Container content = d.getContentPane();
+                    BufferedImage img = new BufferedImage(2 * (content.getWidth() + 2 * margin), 2 * (content.getHeight() + 2 * margin),
+                            BufferedImage.TYPE_INT_RGB);
+                    Graphics2D g = img.createGraphics();
+                    g.setColor(new Color(0x111214));
+                    g.fillRect(0, 0, img.getWidth(), img.getHeight());
+                    g.scale(2, 2);
+                    g.translate(margin, margin);
+                    content.paint(g);
+                    g.dispose();
+                    d.dispose();
+                    try {
+                        ImageIO.write(img, "png", file.toFile());
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                    return;
+                }
+            }
+            throw new IllegalStateException("no dialog " + title);
+        });
     }
 
     static void shoot(Path file) throws Exception {

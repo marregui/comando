@@ -45,6 +45,7 @@ import dev.marregui.comando.ui.kit.action.KeyPriority;
 import dev.marregui.comando.ui.kit.async.Coalescer;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.EdtWatchdog;
+import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.Labels;
@@ -75,6 +76,7 @@ import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 import dev.marregui.comando.ui.widgets.text.TextWidget;
 import dev.marregui.comando.ui.widgets.tree.TreeWidget;
 
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JMenuBar;
 import javax.swing.JOptionPane;
@@ -178,6 +180,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private ResourceDialog<ConnectionSpec> connectionsDialog;
     private ResourceDialog<SessionSpec> sessionsDialog;
     private ImportSessionsDialog importDialog;
+    /** The About card while it is open. */
+    private JDialog about;
     private Transcript watched;
     private final Runnable transcriptListener = transcriptRender::request;
     private boolean sidePaneShown;
@@ -246,6 +250,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // the AppKit thread, and closing then waits on an EDT that may need that thread. The handler runs the
         // same quit as closing the window; when the user cancels it the response cancels a pending logout too, and
         // when it goes ahead the response stays unanswered because the exit ends the process.
+        // the application menu's About comando opens comando's own card, worded by about.md
+        if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_ABOUT)) {
+            Desktop.getDesktop().setAboutHandler(event -> Edt.later(this::showAbout));
+        }
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
             Desktop.getDesktop().setQuitHandler((event, response) -> Edt.later(() -> {
                 // a trigger that arrives while the question is open is answered with it
@@ -847,6 +855,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("help.dataRoot", "Reveal comando folder", null, () -> reveal(deps.home()), () -> deps.home() != null);
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice
         boolean mac = Platform.isMac();
+        cmd("app.about", "About comando", null, this::showAbout);
         cmd("app.quit", "Quit comando", mac ? null : key(KeyEvent.VK_Q, CMD), this::quit);
     }
 
@@ -1143,6 +1152,41 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open the Files tab's folders: " + e.getMessage(), false));
             }
         });
+    }
+
+    /**
+     * About comando: the card of {@link About}, over the window; when it is open already it comes forward. The Claude
+     * Code version is the one the most recent session reported; before any session started there is none to show.
+     */
+    public void showAbout() {
+        if (about != null && about.isDisplayable()) {
+            about.toFront();
+            return;
+        }
+        String claude = "";
+        for (SessionState s : deps.state().get().sessions()) {
+            if (!s.info().cliVersion().isEmpty()) {
+                claude = s.info().cliVersion();
+            }
+        }
+        about = About.show(frame, About.load(About.facts(deps.version(), deps.home(), claude)), this::followAbout);
+    }
+
+    /** A link of the About card: the tutorial, the data root, or a page in the browser. */
+    private void followAbout(String target) {
+        switch (target) {
+            case "comando:tutorial" -> actions.run("help.tutorial");
+            case "comando:home" -> {
+                if (deps.home() != null) {
+                    reveal(deps.home());
+                }
+            }
+            default -> {
+                if (Browser.isWebLink(target)) {
+                    Browser.open(target);
+                }
+            }
+        }
     }
 
     /** Tools ▸ Help ▸ Claude Code kit: what the kit is here, and an install when there is anything to install. */

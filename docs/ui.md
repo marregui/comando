@@ -60,6 +60,11 @@ submenu has an icon and a tooltip saying what it does. A command in no menu is n
 Session, Connection, Results, Edit, Window) in the palette and the keyboard shortcuts; the registry refuses a command
 with neither. Key bindings and the palette (⌘⇧P) come from the registry.
 
+The application menu's About comando, and the palette's, open `About`'s card: drawn by hand (warm charcoal, a gold
+hairline, Helvetica Neue Light, Charter italic, spaced small capitals), worded by `about.md` beside the class,
+whose `{version}`, `{java}`, `{claude}`, `{system}`, `{home}` and `{year}` take the run's values
+([record 60](adr/0060-about-is-a-card-worded-by-a-file.md)).
+
 - A command sits in at most one menu and has at most one key; registering an id twice throws.
 - In the main window a command's key is claimed before the focused component sees it (`KeyPriority`), because
   RSyntaxTextArea binds ⌘⏎, ⌘J and ⌘⇧K, which comando's commands also use, and the terminal takes every key. A disabled command leaves its key to
