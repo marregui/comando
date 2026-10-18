@@ -216,6 +216,7 @@ by delta), `FakeResult`.
 |---|---|---|
 | EDT | AWT | renders the state, turns input into intents; owns every Swing component |
 | `comando-reducer` | platform | applies intents in order; the only writer of `AppState` |
+| `reducer-watchdog` | platform, daemon | looks at the reducer every 100 ms; an intent still applying at 1 s is logged with the reducer's stack |
 | `db-<connection>` | platform, one per connection | opens the connection, runs statements one at a time, fetches rows |
 | `db-timer` | platform | health checks every 60 s; the abort after an unanswered cancel |
 | `claude-strand-<session>` | virtual, single-threaded | every change to a session: start, send, interrupt, stop, history; the transcript's one writer |
@@ -260,6 +261,7 @@ Bounded waits:
 | Keychain calls | 10 s | killed; the connection loads without its password, the item is kept |
 | Closing the window at quit | 5 s | quit anyway |
 | The EDT | 200 ms | a stall, one INFO line when it ends; past 1 s (2 s in the JDK's drawing) a hang, logged with the EDT's stack |
+| One intent in the reducer | 200 ms | a stall, one INFO line when it ends naming its slowest part; past 1 s a hang, logged with the reducer's stack while it holds, a WARNING and the user's notice when it ends |
 
 ## 7. Ownership and exit
 
@@ -273,7 +275,7 @@ built and rethrows.
 |---|---|---|
 | 1 | `Store` | writes pending panel text and `panels.json`, finishes queued writes; waits up to 5 s (11 s for connections, one keychain call) |
 | 2 | `IntentLog` | closes the log after the loop, so the shutdown's intents are recorded |
-| 3 | `StateLoop` | stops the reducer after the queued intents |
+| 3 | `StateLoop` | stops the reducer after the queued intents, then its watchdog |
 | 4 | `DbAdapter` | cancels running statements, closes connections |
 | 5 | `MermaidDiagrams` | stops `mmdc` and its children |
 | 6 | `LocalImages` | stops reading pictures and drawing SVGs |
@@ -353,6 +355,7 @@ Gates:
 |---|---|---|
 | transcript frame time | `./gradlew :ui:transcriptGate` | p99 ≤ 16 ms ([UI](ui.md#43-the-frame-time-gate)) |
 | EDT responsiveness | always on: `EdtWatchdog` | a probe answered within 200 ms |
+| reducer responsiveness | always on: `StateLoop` and its watchdog | each intent applied within 200 ms |
 
 comando has no JFR code. It is profiled from outside like any JVM, with the JDK's own events, and its EDT stalls are
 in its log ([UI §1](ui.md#1-the-kit)); the packaged runtime keeps `jdk.jfr`, `jdk.management.jfr` and

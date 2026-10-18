@@ -78,4 +78,66 @@ class StateLoopTest {
         loop.dispatch(new Intent.RunText(States.P1, "SELECT 1", Target.AUTO));
         assertThat(loop.state()).isSameAs(before);
     }
+
+    @Test
+    void anIntentPastTheStallLimitIsToldOnceItEndsWithItsSlowestPart() {
+        List<StateLoop.Stall> stalls = new CopyOnWriteArrayList<>();
+        StateLoop.EffectHandler slow = e -> {
+            if (e instanceof Effect.ExecuteSql) {
+                hold(120);
+            }
+        };
+        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), slow, 60, 10_000, stalls::add)) {
+            loop.applyNow(new Intent.FocusPanel(States.P2));
+            assertThat(stalls).isEmpty();
+
+            loop.applyNow(new Intent.RunText(States.P1, "SELECT 1", Target.AUTO));
+            assertThat(stalls).hasSize(1);
+            StateLoop.Stall stall = stalls.getFirst();
+            assertThat(stall.ended()).isTrue();
+            assertThat(stall.part()).isEqualTo("effect ExecuteSql");
+            assertThat(stall.millis()).isGreaterThanOrEqualTo(120);
+            assertThat(stall.stack()).isEmpty();
+        }
+    }
+
+    @Test
+    void anIntentHeldPastTheHangLimitIsToldOnceWhileHeldWithTheLoopsStackThenWhenItEnds() throws Exception {
+        List<StateLoop.Stall> stalls = new CopyOnWriteArrayList<>();
+        CountDownLatch ended = new CountDownLatch(1);
+        // held 400 ms past the hang limit, so the watchdog looks at the same intent four more times
+        StateLoop.EffectHandler blocking = e -> {
+            if (e instanceof Effect.ExecuteSql) {
+                hold(700);
+            }
+        };
+        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), blocking, 50, 300, s -> {
+            stalls.add(s);
+            if (s.ended()) {
+                ended.countDown();
+            }
+        }).start()) {
+            loop.dispatch(new Intent.RunText(States.P1, "SELECT 1", Target.AUTO));
+            assertThat(ended.await(5, TimeUnit.SECONDS)).isTrue();
+
+            assertThat(stalls).hasSize(2);
+            StateLoop.Stall told = stalls.getFirst();
+            assertThat(told.ended()).isFalse();
+            assertThat(told.part()).isEqualTo("effect ExecuteSql");
+            assertThat(told.millis()).isGreaterThanOrEqualTo(300);
+            assertThat(told.stack()).contains("StateLoopTest.hold");
+            StateLoop.Stall end = stalls.get(1);
+            assertThat(end.ended()).isTrue();
+            assertThat(end.part()).isEqualTo("effect ExecuteSql");
+            assertThat(end.millis()).isGreaterThanOrEqualTo(700);
+        }
+    }
+
+    /** Work that takes {@code millis}: the loop's thread is held, as a port that blocks would hold it. */
+    private static void hold(long millis) {
+        long until = System.nanoTime() + millis * 1_000_000;
+        while (System.nanoTime() < until) {
+            Thread.onSpinWait();
+        }
+    }
 }
