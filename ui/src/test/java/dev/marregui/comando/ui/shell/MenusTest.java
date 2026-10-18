@@ -6,10 +6,7 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.Set;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -31,14 +28,55 @@ class MenusTest {
         return ids;
     }
 
+    private static List<MenuEntry.Menu> submenus(List<MenuEntry.Menu> bar) {
+        List<MenuEntry.Menu> subs = new ArrayList<>();
+        bar.forEach(top -> walk(top, m -> {
+            if (m != top) {
+                subs.add(m);
+            }
+        }));
+        return subs;
+    }
+
     @Test
-    void fiveMenusInTheirOrderEachCommandOnce() {
+    void threeMenusHoldingOnlyWhatHasNoKeyOrControlAndWhatMacOsExpects() {
         List<MenuEntry.Menu> bar = Menus.bar(true);
-        assertThat(bar).extracting(MenuEntry.Menu::title).containsExactly("File", "Edit", "Panel", "View", "Help");
-        List<String> ids = ids(bar);
-        assertThat(new HashSet<>(ids)).hasSameSizeAs(ids);
-        assertThat(ids).contains("server.start", "server.stop", "session.model.fable", "session.effort.max");
-        assertThat(ids(Menus.bar(false))).as("no embedded server, no submenu for it").doesNotContain("server.start");
+        assertThat(bar).extracting(MenuEntry.Menu::title).containsExactly("Files", "Edit", "Tools");
+        assertThat(ids(bar)).containsExactly(
+                "panel.openSpec", "files.settings", "view.export",
+                "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
+                // a menu's own items, then its submenus'
+                "view.palette", "terminal.restart", "run.plotStop", "tools.settings", "server.start", "server.stop",
+                "help.tutorial", "help.keys", "help.markdown", "help.kit", "help.log", "help.dataRoot");
+        assertThat(submenus(bar)).extracting(MenuEntry.Menu::title).containsExactly("Embedded QuestDB", "Help");
+        assertThat(ids(Menus.bar(false))).as("no embedded server, no submenu for it").doesNotContain("server.start", "server.stop");
+        assertThat(submenus(Menus.bar(false))).extracting(MenuEntry.Menu::title).containsExactly("Help");
+    }
+
+    @Test
+    void everyItemAndSubmenuHasAnIconThatExistsAndATooltip() {
+        List<MenuEntry.Menu> bar = Menus.bar(true);
+        for (String id : ids(bar)) {
+            assertThat(Menus.icon(id)).as(id + " has an icon").isNotNull();
+            assertThat(MenusTest.class.getResource("/icons/" + Menus.icon(id) + ".svg")).as(id + "'s icon is a resource").isNotNull();
+            assertThat(Menus.tip(id)).as(id + " has a tooltip").isNotBlank();
+        }
+        for (MenuEntry.Menu sub : submenus(bar)) {
+            assertThat(sub.icon()).as(sub.title() + " has an icon").isNotNull();
+            assertThat(MenusTest.class.getResource("/icons/" + sub.icon() + ".svg")).isNotNull();
+            assertThat(Menus.MENU_TIPS.get(sub.title())).as(sub.title() + " has a tooltip").isNotBlank();
+        }
+        assertThat(bar).as("the bar's own titles are words, as macOS draws them").allMatch(m -> m.icon() == null);
+        assertThat(Menus.TIPS.keySet()).as("no tooltip for an item that is gone").isEqualTo(new HashSet<>(ids(bar)));
+    }
+
+    @Test
+    void aCommandIsInAMenuOrInAnAreaNeverBoth() {
+        List<String> placed = ids(Menus.bar(true));
+        assertThat(new HashSet<>(placed)).hasSameSizeAs(placed);
+        assertThat(Menus.AREAS.keySet()).doesNotContainAnyElementsOf(placed);
+        assertThat(Menus.AREAS).containsEntry("run", "Run").containsEntry("session.model.opus", "Session ▸ Model")
+                .containsEntry("panel.9", "Panels").containsEntry("view.results.alt", "Window").doesNotContainKey("view.lastPrompt");
     }
 
     @Test
@@ -53,35 +91,5 @@ class MenusTest {
                         .as(m.title() + " has no double line").isFalse();
             }
         }));
-    }
-
-    @Test
-    void eachIconMeansOneThing() {
-        // items: an icon where the same action is a button with it, and the Help items' own
-        Map<String, Set<String>> byIcon = Menus.ICONS.entrySet().stream()
-                .collect(Collectors.groupingBy(Map.Entry::getValue, Collectors.mapping(Map.Entry::getKey, Collectors.toSet())));
-        assertThat(byIcon).containsOnly(
-                Map.entry("play", Set.of("run")),
-                Map.entry("stop", Set.of("run.stop")),
-                Map.entry("add", Set.of("panel.new")),
-                Map.entry("close", Set.of("file.close")),
-                Map.entry("plug", Set.of("session.toggle", "connection.toggle")),
-                Map.entry("tutorial", Set.of("help.tutorial")),
-                Map.entry("keyboard", Set.of("help.keys")),
-                Map.entry("markdown", Set.of("help.markdown")),
-                Map.entry("kit", Set.of("help.kit")),
-                Map.entry("log", Set.of("help.log")),
-                Map.entry("comando-folder", Set.of("help.dataRoot")));
-        assertThat(ids(Menus.bar(true))).containsAll(Menus.ICONS.keySet());
-
-        // menus: the Panel menu's submenus carry their subject's icon, and no other menu does
-        List<String> withIcons = new ArrayList<>();
-        Menus.bar(true).forEach(top -> walk(top, m -> {
-            if (m.icon() != null) {
-                withIcons.add(m.title() + "=" + m.icon());
-            }
-        }));
-        assertThat(withIcons).containsExactly("Session=claude", "Connection=database", "Result=table", "Tools=tool");
-        assertThat(Set.copyOf(Menus.ICONS.values())).doesNotContainAnyElementsOf(Set.of("claude", "database", "table", "tool"));
     }
 }

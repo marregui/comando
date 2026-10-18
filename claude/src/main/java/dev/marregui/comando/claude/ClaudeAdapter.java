@@ -230,6 +230,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             } catch (IOException e) {
                 s.mapper.note(Block.NoteKind.ERROR, "Cannot read the stored conversation: " + e.getMessage());
             }
+            s.mapper.endHistory(); // its last turn's end, when it ended: its answer reads as the conclusion
             s.mapper.endRunningTools(); // a call the stored conversation never answered will not be answered now
             s.mapper.note(Block.NoteKind.INFO, "Stored conversation " + spec.claudeSessionId() + " loaded; start the session to continue it");
             s.transcript.changed();

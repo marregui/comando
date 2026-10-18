@@ -263,7 +263,7 @@ public final class Snapshot {
         Thread.sleep(1500);
         shoot(out.resolve("02f-source-colours.png"));
         // Help's tutorial and log open as documents from their files: the tutorial rendered, the log read-only at its end
-        menuItem("Help", "Tutorial");
+        menuItem("Tools", "Help", "Tutorial");
         showing(loop, "tutorial");
         shoot(out.resolve("02g-help-tutorial.png"));
         // the snapshot logs to the console only: a log file as comando writes one
@@ -275,13 +275,13 @@ public final class Snapshot {
                 "2026-10-16 08:40:02.003 INFO  [edt-watchdog] dev.marregui.comando.ui.shell.ComandoUi the EDT was busy for 310 ms [drawing] in=SunToolkit.awtLock comando=Items.fillRound:77",
                 "2026-10-16 08:40:05.871 INFO  [claude-comando] dev.marregui.comando.claude.ClaudeAdapter claude started [session=comando, pid=4242, mode=RESUME]",
                 ""));
-        menuItem("Help", "Show the log");
+        menuItem("Tools", "Help", "Show the log");
         showing(loop, "comando-0.log");
         shoot(out.resolve("02h-help-log.png"));
         // Help's two sheets, each in the side pane: the keys, then Markdown
         for (String[] sheet : new String[][]{{"Keyboard shortcuts", "Keyboard shortcuts", "02i-help-keys.png"},
                 {"Markdown sheet", "Markdown", "02j-help-markdown.png"}}) {
-            menuItem("Help", sheet[0]);
+            menuItem("Tools", "Help", sheet[0]);
             await(loop, st -> st.views().stream().anyMatch(v -> v.title().equals(sheet[1])), 5_000);
             // the view is drawn on the event thread after the state that holds it: done once the queue is through
             SwingUtilities.invokeAndWait(() -> { });
@@ -609,7 +609,7 @@ public final class Snapshot {
         });
     }
 
-    /** Clicks the item at {@code path} in the window's menu bar ("Help", "Tutorial"), as a user would. */
+    /** Clicks the item at {@code path} in the window's menu bar ("Tools", "Help", "Tutorial"), as a user would. */
     static void menuItem(String... path) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             for (Frame f : Frame.getFrames()) {

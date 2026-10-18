@@ -51,7 +51,7 @@ class TranscriptWidgetTest {
         Transcript first = new Transcript();
         fill(first, 0, 40);
         widget.render(new TranscriptView("a", first));
-        widget.jumpToLastPrompt();
+        widget.scrolledAway();
         assertThat(widget.following()).isFalse();
 
         Transcript second = new Transcript();
@@ -65,7 +65,7 @@ class TranscriptWidgetTest {
         Transcript t = new Transcript();
         fill(t, 0, 40);
         widget.render(new TranscriptView("s", t));
-        widget.jumpToLastPrompt();
+        widget.scrolledAway();
         assertThat(widget.following()).isFalse();
         assertThat(widget.latestShown()).as("not following: the way back to the end shows").isTrue();
 

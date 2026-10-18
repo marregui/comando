@@ -84,7 +84,7 @@ public final class SessionsSidebar {
         /** The connection dialog, as {@link #sessions()}. */
         ResourceActions.Editor connections();
 
-        /** Shows the connection's schema explorer, as Panel ▸ Connection ▸ Explore the schema does. */
+        /** Shows the connection's schema explorer, as Explore the schema (⌘⇧E) does. */
         void exploreSchema(String connection);
 
         /** Opens a file in a panel, or brings forward the panel that has it. */
@@ -147,7 +147,7 @@ public final class SessionsSidebar {
     static final List<String> MODELS = List.of("fable", "opus", "sonnet", "haiku");
     static final List<String> EFFORTS = List.of("low", "medium", "high", "xhigh", "max");
 
-    /** {@code toggle} hides or shows the sidebar, as View ▸ Sidebar does; the owner calls {@link #show}. */
+    /** {@code toggle} hides or shows the sidebar, as ⌘B does; the owner calls {@link #show}. */
     public SessionsSidebar(IntentSink intents, Dialogs dialogs, PanelTexts texts, Runnable toggle) {
         this(intents, dialogs, texts, toggle, ResourceActions.Questions.MODAL);
     }

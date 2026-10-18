@@ -244,11 +244,10 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         bar.setValue(bar.getMaximum());
     }
 
-    /** Scrolls to the last prompt and highlights it; false when there is none. */
-    public boolean jumpToLastPrompt() {
+    /** Stops following the end, as the reader scrolling up does; for tests, where nothing is shown to scroll. */
+    void scrolledAway() {
         following = false;
         updateLatest();
-        return canvas.jumpToLastPrompt();
     }
 
     // ---- capabilities

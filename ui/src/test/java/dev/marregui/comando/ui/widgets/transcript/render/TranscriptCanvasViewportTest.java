@@ -182,32 +182,6 @@ class TranscriptCanvasViewportTest {
     }
 
     @Test
-    void jumpToLastPromptDuringTheIdlePassShowsThePrompt() {
-        JPanel parent = new JPanel(null);
-        parent.add(viewport);
-        parent.addNotify(); // displayable, so the canvas is validated and scrolls are clamped to its size
-        rebuildAtEnd(session(27));
-        viewport.validate();
-        paintView();
-        viewport.validate();
-        assertThat(canvas.jumpToLastPrompt()).isTrue();
-        List<Item> items = canvas.topLevel();
-        int top = 10;
-        int last = -1;
-        for (int i = 0; i < items.size(); i++) {
-            if (items.get(i) instanceof Items.PromptItem) {
-                last = i;
-            }
-        }
-        for (int i = 0; i < last; i++) {
-            top += items.get(i).height;
-        }
-        int y = viewport.getViewPosition().y;
-        assertThat(top).as("the last prompt is in view").isBetween(y, y + H);
-        assertThat(canvas.getHeight()).as("the scroll range is the exact content").isEqualTo(canvas.contentHeight());
-    }
-
-    @Test
     void aSessionSwitchWithTheFindBarOpenLaysOutOnlyWhatIsVisible() {
         rebuildAtEnd(session(1));
         paintView();

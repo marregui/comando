@@ -82,10 +82,23 @@ public sealed interface Block {
         }
     }
 
-    /** The {@code result} that ended a turn. */
+    /** The {@code result} that ended a turn; or, read from a stored conversation, the end of a turn without its numbers. */
     record TurnEnd(double costUsd, long durationMillis, int numTurns, boolean error, String text) implements Block {
+        /** The duration of a turn read from a stored conversation, which records none. */
+        public static final long UNTIMED = -1L;
+
         public TurnEnd {
             Objects.requireNonNull(text, "text");
+        }
+
+        /** A turn of a stored conversation that ended: its last message stopped at the end of the turn. */
+        public static TurnEnd stored() {
+            return new TurnEnd(-1.0, UNTIMED, 0, false, "");
+        }
+
+        /** False for a turn read from a stored conversation, with no time, cost or count. */
+        public boolean timed() {
+            return durationMillis != UNTIMED;
         }
 
         @Override

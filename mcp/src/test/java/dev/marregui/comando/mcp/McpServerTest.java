@@ -617,6 +617,17 @@ class McpServerTest {
     }
 
     @Test
+    void aStoredConversationsTurnEndReadsAsSuchWithoutNumbers() throws Exception {
+        reviewsInPanelTwo();
+        Transcript t = transcripts.of("reviews");
+        t.append(new Block.UserPrompt("go", "", ""));
+        t.append(new Block.AssistantText("m", 0, "done", false, ""));
+        t.append(Block.TurnEnd.stored());
+        String read = text(tool("session_read", "{\"session\":\"reviews\",\"after\":0}"));
+        assertThat(read).contains("[2] turn ended (stored conversation)").doesNotContain("-0.0 s");
+    }
+
+    @Test
     void describeListsColumns() throws Exception {
         assertThat(text(tool("db_describe", "{\"table\":\"trades\"}"))).startsWith("column\ttype\nts\tTIMESTAMP");
     }

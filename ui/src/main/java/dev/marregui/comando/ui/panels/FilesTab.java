@@ -279,7 +279,7 @@ final class FilesTab {
             rows.add(new ViewSpec.TreeNode(f.name(), rowDetail(f), children));
         }
         ViewSpec.TreeNode root = new ViewSpec.TreeNode("Files", "",
-                rows.isEmpty() ? List.of(placeholder("No folders yet: Panel ▸ Tools ▸ Files tab folders opens folders.json")) : rows);
+                rows.isEmpty() ? List.of(placeholder("No folders yet: Files ▸ Files tab folders opens folders.json")) : rows);
         restoring = true;
         try {
             if (built) {

@@ -342,6 +342,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         registerCommands();
         frame.setJMenuBar(menuBar());
         actions.bind(frame.getRootPane());
+        actions.areas(Menus.AREAS);
         keyPriority = KeyPriority.install(actions, frame);
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addPropertyChangeListener("permanentFocusOwner", focusListener);
         Toolkit.getDefaultToolkit().addAWTEventListener(keyClock, AWTEvent.KEY_EVENT_MASK);
@@ -389,7 +390,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
         if (millis >= 1_000) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN,
-                    "The window stopped responding for " + Labels.elapsed(millis) + "; the log has where (Help ▸ Show the log)", false));
+                    "The window stopped responding for " + Labels.elapsed(millis) + "; the log has where (Tools ▸ Help ▸ Show the log)", false));
         }
     }
 
@@ -666,7 +667,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private static final int CTRL = InputEvent.CTRL_DOWN_MASK;
     private static final int ALT = InputEvent.ALT_DOWN_MASK;
 
-    /** Registers every command; where each sits in the menus, and its icon, comes from {@link Menus}. */
+    /** Registers every command; where each sits, in a menu or an area, its icon and its tooltip come from {@link Menus}. */
     private void registerCommands() {
         // file
         cmd("panel.new", "New panel", key(KeyEvent.VK_T, CMD), () -> workspace.newPanel());
@@ -827,10 +828,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             int index = i - 1;
             cmd("panel." + i, "Go to panel " + i, key(KeyEvent.VK_0 + i, CMD), () -> workspace.select(index));
         }
-        cmd("view.lastPrompt", "Jump to the last prompt", null, () -> {
-            deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.SESSION));
-            Edt.later(() -> lower.transcript().jumpToLastPrompt());
-        }, () -> focusedSession().isPresent());
         cmd("view.zoomIn", "Zoom in", key(KeyEvent.VK_EQUALS, CMD), () -> zoom(1), () -> capability(Zoomable.class) != null);
         cmd("view.zoomOut", "Zoom out", key(KeyEvent.VK_MINUS, CMD), () -> zoom(-1), () -> capability(Zoomable.class) != null);
         cmd("view.zoomReset", "Reset zoom", key(KeyEvent.VK_0, CMD), () -> {
@@ -871,7 +868,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private JMenuBar menuBar() {
-        return actions.menuBar(Menus.bar(deps.server() != null));
+        return actions.menuBar(Menus.bar(deps.server() != null), Menus::tip, Menus.MENU_TIPS::get);
     }
 
     // ---- focus
@@ -993,7 +990,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
     }
 
-    /** File ▸ Open file…: a file chosen anywhere, starting in the panels' folder. */
+    /** Files ▸ Open file…: a file chosen anywhere, starting in the panels' folder. */
     private void openSpec() {
         Optional<Path> folder = deps.texts().folder();
         if (folder.isPresent()) {
@@ -1148,7 +1145,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
     }
 
-    /** Help ▸ Claude Code kit: what the kit is here, and an install when there is anything to install. */
+    /** Tools ▸ Help ▸ Claude Code kit: what the kit is here, and an install when there is anything to install. */
     private void showKit() {
         Thread.ofVirtual().name("kit").start(() -> {
             try {

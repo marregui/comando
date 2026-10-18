@@ -1077,11 +1077,15 @@ final class Items {
         }
 
         /**
-         * {@code 12.4 s}, after the error text when the turn failed or was interrupted. No spend: a subscription's limits
-         * are the plan usage the status bar shows, not money per turn.
+         * {@code 12.4 s}, after the error text when the turn failed or was interrupted; nothing for a turn of a stored
+         * conversation, which records no time. No spend: a subscription's limits are the plan usage the status bar shows,
+         * not money per turn.
          */
         String summary() {
             Block.TurnEnd t = turn();
+            if (!t.timed()) {
+                return "";
+            }
             StringBuilder sb = new StringBuilder();
             if (t.error()) {
                 sb.append(t.text()).append(" · ");
@@ -1125,7 +1129,8 @@ final class Items {
 
         @Override
         String markdown() {
-            return "_" + summary() + "_";
+            String summary = summary();
+            return summary.isEmpty() ? "" : "_" + summary + "_";
         }
     }
 }

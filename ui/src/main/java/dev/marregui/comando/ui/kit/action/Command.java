@@ -7,8 +7,8 @@ import java.util.function.BooleanSupplier;
 /**
  * One user action: menus, key bindings and the command palette are all built from these.
  *
- * @param group the menu path the command sits at ("Panel ▸ Session"), set when the menu bar places it; empty for a
- *              command in no menu, reached by its key or the palette
+ * @param group the menu path the command sits at ("Tools ▸ Help"), set when the menu bar places it; for a command in no
+ *              menu, reached by its key or the palette, the area it belongs to ("Session"); empty until either is set
  * @param key   key stroke, or null
  */
 public record Command(String id, String label, String icon, KeyStroke key, String group, Runnable run, BooleanSupplier enabled) {

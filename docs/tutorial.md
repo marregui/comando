@@ -44,7 +44,7 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 | Part | What it is |
 |---|---|
 | **Menu bar** | **File** (panels and files), **Edit**, **Panel** (run, then the focused panel's **Session**, **Connection**, **Result** and **Tools** submenus), **View** (the window: sidebar, lower panel, zoom), **Help**. |
-| **Sidebar**, left | four tabs in two rows: **Panels** (comando's own panels, open and closed) and **Files** (folders you choose, Claude Code's own folder at first; a double click opens a file in a panel, to read or edit; the tab itself has no buttons, and Panel ▸ Tools ▸ Files tab folders opens `folders.json`, where the folders are set), then **Sessions** (Claude Code sessions, running first; each row shows its context, uptime and id, and its controls start or stop it, compact or clear its conversation and change its model or effort; drag a row to order them yourself) and **Connections** (databases). Panels, Sessions and Connections have a `+` button. ⌘B or the `⋯` button hides the sidebar to a thin rail on the left edge; the rail's `⋯` brings it back. |
+| **Sidebar**, left | four tabs in two rows: **Panels** (comando's own panels, open and closed) and **Files** (folders you choose, Claude Code's own folder at first; a double click opens a file in a panel, to read or edit; the tab itself has no buttons, and Files ▸ Files tab folders opens `folders.json`, where the folders are set), then **Sessions** (Claude Code sessions, running first; each row shows its context, uptime and id, and its controls start or stop it, compact or clear its conversation and change its model or effort; drag a row to order them yourself) and **Connections** (databases). Panels, Sessions and Connections have a `+` button. ⌘B or the `⋯` button hides the sidebar to a thin rail on the left edge; the rail's `⋯` brings it back. |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it. The tab's icon says what its session is up to: a spinner while it works, an hourglass while it waits on work it left running in the background (an agent, a shell command), a green check when it finished while you were on another tab, a red mark when it failed, a question mark while it waits for your answer; the last three put a `●` before the title until you look (the question mark stays until you answer). Hover for the reason. |
 | **Panel header** | two chips: the panel's **session** and its **connection**, each with a status dot (○ closed, ● open) and a button to start or connect it. Next to the session's plug: a button that starts a stopped session on a **new conversation** (shown when it has one to leave), and a **checkpoint** button that sends the session's checkpoint command (`/reflect` by default; change or clear it in the session dialog); while the session runs, **compact** and **clear** its conversation. On the right, icons: **Preview** (Markdown), the **editor theme** (light or dark, for every panel), **Run**, **Stop** and **Clear**; hover one for its name. |
 | **Editor** | where you write SQL and prompts, mixed in one text. |
@@ -53,13 +53,13 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 
 One idea runs through the whole tool: **a panel is bound to at most one connection and one session**. SQL you run in the panel goes to its connection; anything else goes to its session.
 
-The command palette lists every command that can run now, with its key. Press **⌘⇧P**, type a few letters, press **⏎**. When you forget a key, use the palette, or **⌘⇧/** for the table of keys: the menus' commands, then the keys of an approval card and of single places (find bar, transcript, sessions list, Files tab, dialogs). **Help ▸ Markdown sheet** puts beside the editor what Markdown the preview draws, and how a prompt reaches Claude. The menus grey out what cannot run now.
+The command palette lists every command that can run now, with its key. Press **⌘⇧P**, type a few letters, press **⏎**. When you forget a key, use the palette, or **⌘⇧/** for the table of keys: every command's, with its menu or area, then the keys of an approval card and of single places (find bar, transcript, sessions list, Files tab, dialogs). **Tools ▸ Help ▸ Markdown sheet** puts beside the editor what Markdown the preview draws, and how a prompt reaches Claude. The menus hold only what has no key or button: **Files** (open a file, the Files tab's folders, export), **Edit**, and **Tools** (the palette, the shell, plots, the embedded QuestDB, settings, and **Help**). Each item's tooltip says what it does; the menus grey out what cannot run now.
 
 ## 2. A database
 
 comando can run a QuestDB server for you, so you need nothing else installed.
 
-1. Press **⌘⇧P**, type `embedded`, press **⏎** on **Start** (Panel ▸ Connection ▸ Embedded QuestDB).
+1. Press **⌘⇧P**, type `embedded`, press **⏎** on **Start** (Tools ▸ Embedded QuestDB).
    *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few seconds; **Stop**, in the same places, stops it. The server keeps its data in `~/.comando/questdb` and listens on this machine only.
 2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Click **+** above the list in the sidebar's **Connections** tab: the dialog opens on a new connection. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
    *You should see* `tutorial ○` in the panel header and `○ tutorial` in the sidebar.
@@ -223,7 +223,7 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌘⇧C, ⌘⇧S | copy, export the view |
 | ⌘S | save the panel now |
 | ⌥⌘G | run Gradle tasks |
-| ⌘⇧/ | the table of every key; Help ▸ Markdown sheet for Markdown |
+| ⌘⇧/ | the table of every key; Tools ▸ Help ▸ Markdown sheet for Markdown |
 | ⏎ or A / D or ⎋ / S / L twice / ↑ ↓ | on an approval card: allow, run, answer or approve / deny / for session, on a tool card / always, on a tool card that offers it / previous or next card |
 | ⌘/ | comment or uncomment the line, in the editor |
 | ⌘= ⌘- ⌘0 | zoom |

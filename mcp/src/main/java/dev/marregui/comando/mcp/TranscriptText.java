@@ -79,6 +79,7 @@ final class TranscriptText {
             case Block.ToolCall c -> "tool " + c.name() + " " + clip(c.inputJson(), MAX_TOOL_INPUT) + " → " + c.status().name().toLowerCase(Locale.ROOT)
                     + (c.resultText().isEmpty() ? "" : ":\n" + indent(clip(c.resultText(), MAX_TOOL_RESULT)));
             case Block.Note n -> "note " + n.kind().name().toLowerCase(Locale.ROOT) + ": " + clip(n.text(), MAX_TOOL_RESULT);
+            case Block.TurnEnd e when !e.timed() -> "turn ended (stored conversation)";
             case Block.TurnEnd e -> String.format(Locale.ROOT, "turn %s: %d turns, %.1f s%s", e.error() ? "failed" : "ended",
                     e.numTurns(), e.durationMillis() / 1000.0, e.text().isEmpty() || !e.error() ? "" : ": " + clip(e.text(), MAX_TOOL_RESULT));
         };

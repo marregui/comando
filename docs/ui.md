@@ -53,9 +53,12 @@ through `Edt` or a `Coalescer`.
 
 ## 2. Commands and keys
 
-Every user action is a `Command`: id, label, icon, key, menu path, action, enablement. The menu bar is built from
-`Menus` (File, Edit, Panel with its Session, Connection, Result and Tools submenus, View, Help;
-[record 36](adr/0036-five-menus-by-subject.md)); key bindings and the palette (⌘⇧P) come from the registry.
+Every user action is a `Command`: id, label, icon, key, menu path or area, action, enablement. The menu bar is built
+from `Menus`: Files, Edit and Tools (with Embedded QuestDB and Help), holding only what has no key or control in the
+window and what macOS expects in a menu ([record 59](adr/0059-three-menus-for-what-has-no-key.md)). Every item and
+submenu has an icon and a tooltip saying what it does. A command in no menu is named by its area (Panels, Run,
+Session, Connection, Results, Edit, Window) in the palette and the keyboard shortcuts; the registry refuses a command
+with neither. Key bindings and the palette (⌘⇧P) come from the registry.
 
 - A command sits in at most one menu and has at most one key; registering an id twice throws.
 - In the main window a command's key is claimed before the focused component sees it (`KeyPriority`), because
@@ -139,7 +142,7 @@ clip by binary search.
 | Item | Paints |
 |---|---|
 | prompt | a bubble, with the panel it came from |
-| text | paragraphs, highlighted code, tables; a turn's conclusion (its last text before the turn end) in gold |
+| text | paragraphs, highlighted code, tables; a turn's conclusion (its last text before the turn end, a live one or one read from a stored conversation) in gold |
 | thinking | only while it is the latest item of its list; collapsed with its token count once it ends |
 | tool card | running, done or failed; a one-line summary; "running · 12 s", or "waiting for your approval · ⌃2"; open: input, result (400 lines), a subagent's blocks; opens by itself for edits, errors and running subagents |
 | note | an icon by kind and the first line; error notes start open |

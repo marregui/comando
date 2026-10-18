@@ -9,9 +9,12 @@ import javax.swing.KeyStroke;
 import java.awt.Component;
 import java.awt.EventQueue;
 import java.awt.event.ActionEvent;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-/** Keys the shell forwards to the focused component, and the table Help ▸ Keyboard shortcuts shows. */
+/** Keys the shell forwards to the focused component, and the table Tools ▸ Help ▸ Keyboard shortcuts shows. */
 final class Keys {
 
     private Keys() {
@@ -41,16 +44,21 @@ final class Keys {
     }
 
     /**
-     * Every command with a key, by menu, as a Markdown table; then the keys that belong to one place and are no command:
+     * Every command with a key, with its menu or area, as a Markdown table, grouped by where it belongs, each group where
+     * its first command is; then the keys that belong to one place and are no command:
      * an approval card's, and those of the find bar, the transcript, the sessions list, the Files tab and the dialogs.
      */
     static String markdown(List<Command> commands) {
-        StringBuilder md = new StringBuilder("# Keyboard shortcuts\n\n| Menu | Command | Keys |\n|---|---|---|\n");
+        StringBuilder md = new StringBuilder("# Keyboard shortcuts\n\n| Where | Command | Keys |\n|---|---|---|\n");
+        Map<String, List<Command>> byPlace = new LinkedHashMap<>();
         for (Command c : commands) {
             if (c.key() != null) {
-                md.append("| ").append(c.group().isEmpty() ? "—" : c.group()).append(" | ").append(c.label().replace("|", "\\|"))
-                        .append(" | ").append(CommandPalette.keyText(c.key())).append(" |\n");
+                byPlace.computeIfAbsent(c.group(), g -> new ArrayList<>()).add(c);
             }
+        }
+        for (Command c : byPlace.values().stream().flatMap(List::stream).toList()) {
+            md.append("| ").append(c.group().isEmpty() ? "—" : c.group()).append(" | ").append(c.label().replace("|", "\\|"))
+                    .append(" | ").append(CommandPalette.keyText(c.key())).append(" |\n");
         }
         md.append(PLACES);
         return md.toString();

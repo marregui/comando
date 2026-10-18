@@ -35,6 +35,19 @@ class CommandKeysTest {
         String md = Keys.markdown(List.of(
                 Command.of("a", "Run | block", null, KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, CMD), "Run", () -> { }),
                 Command.of("b", "No key", null, null, "Run", () -> { })));
-        assertThat(md).contains("| Run | Run \\| block |").doesNotContain("No key");
+        assertThat(md).contains("| Where | Command | Keys |", "| Run | Run \\| block |").doesNotContain("No key");
+    }
+
+    @Test
+    void theKeyTableGroupsCommandsWhereTheyBelongInTheOrderEachPlaceFirstAppears() {
+        KeyStroke k = KeyStroke.getKeyStroke(KeyEvent.VK_1, CMD);
+        String md = Keys.markdown(List.of(
+                Command.of("a", "New panel", null, k, "Panels", () -> { }),
+                Command.of("b", "Open file…", null, k, "Files", () -> { }),
+                Command.of("c", "Close", null, k, "Panels", () -> { }),
+                Command.of("d", "Export view…", null, k, "Files", () -> { })));
+        assertThat(md.indexOf("New panel")).isLessThan(md.indexOf("Close"));
+        assertThat(md.indexOf("Close")).as("the panels together").isLessThan(md.indexOf("Open file…"));
+        assertThat(md.indexOf("Open file…")).isLessThan(md.indexOf("Export view…"));
     }
 }

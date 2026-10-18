@@ -93,7 +93,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private String findText = "";
     /** Items the current find opened; clearing the find closes them again. */
     private final List<Item> revealed = new ArrayList<>();
-    private Item flashing;
 
     public TranscriptCanvas(Consumer<String> links) {
         this.links = links;
@@ -657,10 +656,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
                     continue; // estimated past the visible pass; the idle pass lays it out and repaints
                 }
                 item.paint(g, PAD_X, top, clip, this);
-                if (item == flashing) {
-                    g.setColor(Theme.withAlpha(Theme.ACCENT, 50));
-                    g.fillRoundRect(PAD_X - 4, top, laidWidth + 8, heights[i], Theme.RADIUS, Theme.RADIUS);
-                }
             }
         } finally {
             g.dispose();
@@ -1066,33 +1061,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             }
         }
         return false;
-    }
-
-    // ---- navigation
-
-    /** Scrolls to the last prompt and highlights it briefly; false when there is none. */
-    public boolean jumpToLastPrompt() {
-        ensureExact();
-        for (int i = items.size() - 1; i >= 0; i--) {
-            if (items.get(i) instanceof Items.PromptItem) {
-                Rectangle visible = getVisibleRect();
-                scrollRectToVisible(new Rectangle(0, Math.max(0, tops[i] - 20), 1, visible.height));
-                flash(items.get(i));
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private void flash(Item item) {
-        flashing = item;
-        repaint();
-        Timer t = new Timer(900, e -> {
-            flashing = null;
-            repaint();
-        });
-        t.setRepeats(false);
-        t.start();
     }
 
     /**

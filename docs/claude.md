@@ -86,7 +86,9 @@ text and shown to 400 lines.
   does not check).
 - **History.** A session with a conversation id shows its stored transcript without starting a process. After a restart
   every session comes back closed with its transcript; nothing is sent until the user sends something, and the first
-  prompt resumes the conversation.
+  prompt resumes the conversation. A stored conversation records no turn results; a turn ends where a message stopped
+  at the end of its turn (`stop_reason` `end_turn`), and gets a turn end without time, so its answer reads in gold as
+  it did live; one cut off mid-turn gets none.
 
 ## 2. MCP tools
 

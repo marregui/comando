@@ -14,6 +14,7 @@ import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static dev.marregui.comando.ui.kit.action.MenuEntry.SEPARATOR;
 import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
@@ -70,6 +71,34 @@ class MenuBarTest {
         r.bind(root);
         assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(GO)).isEqualTo("go.1");
         assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(RUN)).as("the menu item's accelerator runs it").isNull();
+    }
+
+    @Test
+    void itemsAndSubmenusCarryTheirTooltips() {
+        JMenuBar bar = registry().menuBar(List.of(menu("Panel", null, "run", menu("Session", "claude", "toggle", "compact"))),
+                id -> id.equals("run") ? "Runs the block" : null, title -> title.equals("Session") ? "The panel's session" : null);
+        JMenu panel = bar.getMenu(0);
+        assertThat(((JMenuItem) panel.getMenuComponent(0)).getToolTipText()).isEqualTo("Runs the block");
+        JMenu session = (JMenu) panel.getMenuComponent(1);
+        assertThat(session.getToolTipText()).isEqualTo("The panel's session");
+        assertThat(((JMenuItem) session.getMenuComponent(1)).getToolTipText()).as("no tip, no tooltip").isNull();
+    }
+
+    @Test
+    void aCommandInNoMenuIsNamedByItsAreaAndKeepsItsWindowWideKey() {
+        ActionRegistry r = registry();
+        r.menuBar(List.of(menu("Panel", null, "run", "toggle", "compact", "model.opus")));
+        r.areas(Map.of("go.1", "Panels"));
+        assertThat(r.get("go.1").group()).isEqualTo("Panels");
+        assertThat(r.get("run").group()).as("a menu's path stays").isEqualTo("Panel");
+        JPanel root = new JPanel();
+        r.bind(root);
+        assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(GO)).as("an area is no menu").isEqualTo("go.1");
+
+        ActionRegistry missing = registry();
+        missing.menuBar(List.of(menu("Panel", null, "run")));
+        assertThatThrownBy(() -> missing.areas(Map.of("go.1", "Panels")))
+                .isInstanceOf(IllegalStateException.class).hasMessageContaining("toggle").hasMessageContaining("compact");
     }
 
     @Test

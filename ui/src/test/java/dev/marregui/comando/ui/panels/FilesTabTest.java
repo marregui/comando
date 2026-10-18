@@ -129,7 +129,7 @@ class FilesTabTest {
         assertThat(f.intents).containsExactly(new Intent.WatchFolders(List.of()));
 
         f.render();
-        assertThat(f.labels()).containsExactly("No folders yet: Panel ▸ Tools ▸ Files tab folders opens folders.json");
+        assertThat(f.labels()).containsExactly("No folders yet: Files ▸ Files tab folders opens folders.json");
     }
 
     @Test

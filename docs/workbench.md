@@ -233,7 +233,7 @@ the nearest directory at or above its working directory with an executable `grad
   came from.
 - A run of 10 s or more ends with a desktop notification while the window is not active.
 
-`tools.json` in the data root holds the Gradle wrapper's path (`gradleWrapper`); Panel ▸ Tools ▸ Tool settings opens it
+`tools.json` in the data root holds the Gradle wrapper's path (`gradleWrapper`); Tools ▸ Tool settings opens it
 (written with an empty key when missing). Each run reads it; what is wrong with it is the run's first console line, and
 the default applies.
 
@@ -248,7 +248,7 @@ read-only.
   an optional index file inside it, names to leave out, and the row's icon (folder, scratchpad, memory, knowledge,
   skills, plugin). Without `folders.json` there is one folder, `~/.claude`, opening `CLAUDE.md` and leaving out Claude
   Code's transcripts, caches and per-session state; an emptied list stays empty.
-- **Configuring.** Panel ▸ Tools ▸ Files tab folders opens `folders.json` in a panel (written with the tab's folders
+- **Configuring.** Files ▸ Files tab folders opens `folders.json` in a panel (written with the tab's folders
   when missing). The store checks it every second: a change it did not write is read again and the tab follows; an
   entry that breaks the rules is left out with a notice; a file that does not parse keeps the tab's folders, says why
   and stays where it is. The kit adds its folders there too. A `readOnly` key from older versions is ignored.
@@ -268,8 +268,8 @@ read-only.
   is dropped if the folder was edited since; reads are ticketed so an older one never overwrites a newer one. The tree
   keeps what the user opened and selected.
 - **Filter.** A field above the tree finds entries by name across every folder, reading never-read folders once; a
-  second tree shows the matches with the folders leading to them; Esc returns to the tree as left. View ▸ Files puts
-  the keyboard there.
+  second tree shows the matches with the folders leading to them; Esc returns to the tree as left. The palette's Files
+  command puts the keyboard there.
 
 | Entry | Icon |
 |---|---|
@@ -292,7 +292,7 @@ read-only.
 | `comando.lock` | held while comando runs; a second start on the same root refuses |
 | `run/` | MCP configurations of running sessions (`0600`) |
 | `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision |
-| `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Help ▸ Show the log opens it read-only |
+| `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Tools ▸ Help ▸ Show the log opens it read-only |
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |

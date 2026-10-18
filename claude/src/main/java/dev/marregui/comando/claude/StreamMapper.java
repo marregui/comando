@@ -40,6 +40,8 @@ final class StreamMapper {
     private String lastModel = "";
     /** The context size: input tokens of the last main-thread API call; -1 until one is seen. */
     private long contextTokens = -1;
+    /** While a stored conversation is read: the message that ended its turn, until its last line is read; else null. */
+    private String turnEndingMessage;
 
     StreamMapper(String session, Transcript transcript, IntentSink sink, ObjectMapper json) {
         this.session = session;
@@ -73,14 +75,30 @@ final class StreamMapper {
         return type;
     }
 
-    /** Maps one line of a stored transcript: user and assistant messages, compaction, nothing live. */
+    /**
+     * Maps one line of a stored transcript: user and assistant messages, compaction, nothing live. A stored conversation
+     * has no {@code result} lines; a turn ends where a message stopped at the end of its turn ({@code stop_reason}
+     * {@code end_turn}), which gets a {@link Block.TurnEnd#stored()} after the message's last line.
+     */
     void acceptHistory(String line) {
         JsonNode e = parse(line);
         if (e == null || e.path("isMeta").asBoolean(false)) {
             return;
         }
-        switch (e.path("type").asText()) {
-            case "assistant" -> assistant(e);
+        String type = e.path("type").asText();
+        String messageId = e.path("message").path("id").asText("");
+        // a message is stored a content block per line, each with its stop reason: the turn ends after its last one
+        if (turnEndingMessage != null && (type.equals("user") || type.equals("assistant") && !messageId.equals(turnEndingMessage))) {
+            endHistoryTurn();
+        }
+        switch (type) {
+            case "assistant" -> {
+                assistant(e);
+                if (parent(e).isEmpty() && !e.path("isSidechain").asBoolean(false)
+                        && e.path("message").path("stop_reason").asText("").equals("end_turn")) {
+                    turnEndingMessage = messageId;
+                }
+            }
             case "user" -> user(e, true);
             case "system" -> {
                 if (e.path("subtype").asText().equals("compact_boundary")) {
@@ -91,6 +109,18 @@ final class StreamMapper {
                 // titles, snapshots, mode changes and attachments carry nothing to show
             }
         }
+    }
+
+    /** The stored conversation is read: the turn its last message ended, if it did, ends now. */
+    void endHistory() {
+        if (turnEndingMessage != null) {
+            endHistoryTurn();
+        }
+    }
+
+    private void endHistoryTurn() {
+        transcript.append(Block.TurnEnd.stored());
+        turnEndingMessage = null;
     }
 
     /** Appends the prompt comando sent; called on the strand before the line goes to the process. */

@@ -154,6 +154,53 @@ class StreamMapperTest {
     }
 
     @Test
+    void aStoredTurnEndsAfterTheLastLineOfTheMessageThatStoppedAtItsEnd() {
+        // shapes as version 2.1.302 stores them: one line per content block, each with its message's stop reason
+        mapper.acceptHistory("""
+                {"type":"user","message":{"role":"user","content":"why is it slow"}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","isSidechain":false,"message":{"id":"m1","role":"assistant","stop_reason":"tool_use","content":[{"type":"text","text":"Looking."}]}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","isSidechain":false,"message":{"id":"m1","role":"assistant","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}]}}""");
+        mapper.acceptHistory("""
+                {"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"t1","content":"x"}]}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","isSidechain":true,"message":{"id":"s1","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"a subagent's end"}]}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","isSidechain":false,"message":{"id":"m2","role":"assistant","stop_reason":"end_turn","content":[{"type":"thinking","thinking":"so"}]}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","isSidechain":false,"message":{"id":"m2","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"The cache misses."}]}}""");
+        mapper.acceptHistory("""
+                {"type":"system","subtype":"stop_hook_summary","isSidechain":false}""");
+        mapper.acceptHistory("""
+                {"type":"user","message":{"role":"user","content":"and now"}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","isSidechain":false,"message":{"id":"m3","role":"assistant","stop_reason":"end_turn","content":[{"type":"text","text":"Fixed."}]}}""");
+        mapper.endHistory();
+        mapper.endHistory();
+
+        List<String> shape = blocks().stream().map(b -> switch (b) {
+            case Block.UserPrompt p -> "prompt " + p.text();
+            case Block.AssistantText a -> "text " + a.text();
+            case Block.TurnEnd t -> t.timed() ? "timed end" : "end";
+            default -> b.getClass().getSimpleName();
+        }).toList();
+        assertThat(shape).as("an end after the message's last line, none for a subagent, one at the end of the file").containsExactly(
+                "prompt why is it slow", "text Looking.", "ToolCall", "text a subagent's end", "Thinking", "text The cache misses.", "end",
+                "prompt and now", "text Fixed.", "end");
+    }
+
+    @Test
+    void aStoredConversationCutOffMidTurnHasNoEnd() {
+        mapper.acceptHistory("""
+                {"type":"user","message":{"role":"user","content":"go"}}""");
+        mapper.acceptHistory("""
+                {"type":"assistant","message":{"id":"m1","role":"assistant","stop_reason":"tool_use","content":[{"type":"text","text":"Checking."}]}}""");
+        mapper.endHistory();
+        assertThat(blocks(Block.TurnEnd.class)).isEmpty();
+    }
+
+    @Test
     void theBackgroundSetIsTheSessionsBackgroundWork() {
         // shapes as Claude Code 2.1.300 sends them for a background agent that runs a shell command of its own
         mapper.accept("""

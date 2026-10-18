@@ -97,11 +97,20 @@ class TranscriptCanvasTest {
         canvas.append(9, new Block.TurnEnd(0.1, 1_000, 2, false, ""));
         assertThat(((Items.TextItem) canvas.itemAt(7)).isConclusion()).as("a turn that ends on a tool call has none").isFalse();
 
-        // stored history has no turn ends: the next prompt closes the turn
+        // a stored conversation's turn end, as its messages record it: the last answer of the file is a conclusion too
         canvas.append(10, new Block.UserPrompt("history", "", ""));
         canvas.append(11, text("An old answer."));
-        canvas.append(12, new Block.UserPrompt("next", "", ""));
+        canvas.append(12, Block.TurnEnd.stored());
+        canvas.append(13, new Block.Note(Block.NoteKind.INFO, "Stored conversation loaded", ""));
         assertThat(((Items.TextItem) canvas.itemAt(11)).isConclusion()).isTrue();
+        assertThat(((Items.TurnItem) canvas.itemAt(12)).summary()).as("a stored turn records no time").isEmpty();
+        assertThat(((Items.TurnItem) canvas.itemAt(12)).markdown()).isEmpty();
+
+        // a file from a version that stored no stop reasons has no turn ends: the next prompt closes the turn
+        canvas.append(14, new Block.UserPrompt("older", "", ""));
+        canvas.append(15, text("An older answer."));
+        canvas.append(16, new Block.UserPrompt("next", "", ""));
+        assertThat(((Items.TextItem) canvas.itemAt(15)).isConclusion()).isTrue();
         paint(800, 600);
     }
 

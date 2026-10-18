@@ -10,7 +10,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 
 /**
- * The files behind the Help menu, so each opens in a panel as any document does, and can be opened as a file too: the
+ * The files behind Tools ▸ Help, so each opens in a panel as any document does, and can be opened as a file too: the
  * tutorial, written into comando's folder from the copy this build carries, and the log comando writes.
  */
 final class HelpFiles {
