@@ -196,7 +196,7 @@ class SubagentTailEdgesTest {
     private static boolean blockedInOpen() {
         return Thread.getAllStackTraces().entrySet().stream()
                 .filter(e -> e.getKey().getName().equals("subagent-tail"))
-                .anyMatch(e -> Arrays.stream(e.getValue()).anyMatch(s -> s.getClassName().equals("java.io.RandomAccessFile")
-                        && s.getMethodName().startsWith("open")));
+                .anyMatch(e -> Arrays.stream(e.getValue()).anyMatch(s -> (s.getClassName().equals("java.io.RandomAccessFile")
+                        || s.getClassName().startsWith("sun.nio.fs.")) && s.getMethodName().startsWith("open")));
     }
 }

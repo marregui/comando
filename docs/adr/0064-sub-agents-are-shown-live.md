@@ -25,8 +25,8 @@ session's `<session-id>.jsonl`, the directory `<session-id>/subagents/` holds `a
 | strip | above the transcript while sub-agents run: a chip per running top-level Agent card in start order, then a chip per background sub-agent (`local_agent`) that no card shows; a card's chip opens and scrolls to it; one line, the chips that do not fit counted in a "+N" chip; hidden when empty; its own timer runs only while it shows | four parallel agents compared at a glance |
 | shell tasks | not in the strip | the session's waiting status shows them ([record 43](0043-a-session-waiting-on-background-work-shows-it.md)) |
 | stored conversation | the card's header links to it (`subagent:<toolUseId>`); comando reads Claude Code's files, off the EDT, and shows a lower view named `agent · <description>` | what a sub-agent read and did, beyond the steps the card shows |
-| following | while the session runs, the view is rendered again every 2 s while the file grows, keeping the reader's place; it stops after 30 s without growth, when the meta file says `finished`, or when the session stops; at most 4 follow at once, the oldest stops first; two sub-agents with one description get distinct titles, numbered | live, at a bounded cost; a view is found by its title |
-| large files | only the task and the last 2 MB are read, and the view says so, under the task, so a refreshed view keeps its start; each tool result is clipped to 200 characters | a long sub-agent cannot stall the reader or the view |
+| following | while the sub-agent runs, the view is rendered again every 2 s its file grew, keeping the reader's place; it stops when the stream says the sub-agent ended (the Agent call's result unless it is a launch; a background one's `task_notification`, which names the call), when the meta file says `finished`, when the session stops, or after 10 min without growth; its last line says it is updated, or why it no longer is; at most 4 follow at once, the oldest stops first; two sub-agents with one description get distinct titles, numbered | a sub-agent writes nothing while a tool runs or the model answers: 138 of 150 sub-agent files on this machine have a gap over 30 s, the median longest 113 s, so a quiet file is no end; the stream and the meta file are |
+| large files | the file is read as it grows, only the whole lines added since the last read; the view keeps the task and the steps from the last 100 tool calls on, says under the task that earlier steps are left out, and ends with how many of all it shows; a file over 256 MB is read from where its last 256 MB start; each tool result is clipped to 200 characters | a byte window held few steps (the last 2 MB of a 16.5 MB file held 15 of 187 tool calls); read incrementally, that file costs 80–170 ms once, then its growth |
 
 ## 3. Consequences
 
@@ -38,6 +38,10 @@ sub-agent's card reads done at its launch, as before this record, and its chip i
 A running sub-agent whose card lies before the 2 000 blocks the tab loads has no card chip; a background one keeps its
 hourglass chip.
 
+The following and large-file rules were amended on 2026-10-18 (Miguel), after the first rules (30 s without growth, the
+last 2 MB) left most views stale mid-run and showed a long sub-agent's last few steps only.
+
 `Intent.OpenSubagent` and `Effect.ShowSubagent` are added; `ClaudePort.showSubagent` is routed to `ClaudeAdapter`,
-which reads with the package-private `SubagentFiles` on a thread of its own. `TranscriptCanvas` gains `runningAgents`,
+which reads with the package-private `SubagentFiles.Conversation` on a thread of its own and asks the session's
+`StreamMapper` whether the sub-agent ended. `TranscriptCanvas` gains `runningAgents`,
 `reveal` and the header link; `TranscriptWidget` gains the `AgentStrip` and `setBackgroundTasks`, fed by `LowerPanel`.

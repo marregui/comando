@@ -181,11 +181,13 @@ class SubagentViewTest {
         }
         assertThat(adapter.followedSubagents()).isEqualTo(ClaudeAdapter.TAILS);
 
-        // the first one no longer follows: its growth refreshes nothing; the fifth's does
+        // the first one no longer follows: its view says so once, and its growth refreshes nothing; the fifth's does
+        Intent.RefreshView stopped = sink.await(Intent.RefreshView.class, r -> r.title().equals("agent · agent 1"), WAIT);
+        assertThat(md(stopped).strip()).endsWith(ClaudeAdapter.STOPPED_TOO_MANY);
         grow("b1", "more");
         grow("b5", "more");
-        sink.await(Intent.RefreshView.class, r -> r.title().equals("agent · agent 5"), WAIT);
-        assertThat(sink.of(Intent.RefreshView.class)).extracting(Intent.RefreshView::title).doesNotContain("agent · agent 1");
+        sink.await(Intent.RefreshView.class, r -> r.title().equals("agent · agent 5") && md(r).contains("more"), WAIT);
+        assertThat(sink.of(Intent.RefreshView.class)).filteredOn(r -> r.title().equals("agent · agent 1")).hasSize(1);
     }
 
     @Test

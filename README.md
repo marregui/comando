@@ -50,7 +50,7 @@ A block is a run of lines between blank lines. comando decides where it goes and
 | | |
 |---|---|
 | **One editor, two targets** | SQL and prompts in one Markdown file per panel, each block coloured as what it is (SQL only while the panel's database is open). SQL completion from the live schema. |
-| **Claude Code, headless** | One `claude -p` process per session: start, resume, fork, start fresh, compact, clear, interrupt, stop; model and effort per session; each session's context, uptime and id on its row, copied with a click; stored conversations import from `~/.claude/projects`. A checkpoint button sends `/reflect` (or your command) and turns purple at 60% of the context window. |
+| **Claude Code, headless** | One `claude -p` process per session: start, resume, fork, start fresh, compact, clear, interrupt, stop; model and effort per session; each session's context and uptime on its row, its id in the row's tooltip, all copied with a click; stored conversations import from `~/.claude/projects`. A checkpoint button sends `/reflect` (or your command) and turns purple at 60% of the context window. |
 | **A painted transcript** | Prompts, text, tool calls with results, nested subagents, notes and turn ends, painted with Java2D so long sessions stream within a frame. Thinking gives way to the answer; the conclusion reads in gold. |
 | **Claude drives the window** | An MCP server inside the app: tables, plots, diffs, files, Markdown and trees on screen; text into the editor; SQL under a lexical policy (writes refused on production connections); the window's state. Sessions can prompt one another and read each other's transcripts. |
 | **Sessions at a glance** | Tab icons for working, waiting on background work, needs you, failed and finished; the Dock bounces when you are needed or something failed. The status bar shows the plan's usage limits; no spend is shown anywhere. |
@@ -89,10 +89,10 @@ Your data stays in `~/.comando`: panels as Markdown files, connections, sessions
 
 ## Built with
 
-Java 25 and Swing, FlatLaf, RSyntaxTextArea, JediTerm and pty4j, commonmark-java, Jackson, the PostgreSQL JDBC driver and QuestDB. Eight Gradle modules (core, db, claude, mcp, tools, ui, app, testkit); CI builds, tests and replays the UI on macOS and Linux.
+Java 25 and Swing, FlatLaf, jsvg, RSyntaxTextArea, JediTerm and pty4j, commonmark-java, Jackson, the PostgreSQL JDBC driver and QuestDB. Eight Gradle modules (core, db, claude, mcp, tools, ui, app, testkit); CI builds, tests and replays the UI on macOS and Linux.
 
 ## Status
 
 In daily use by its author; version 2.0.0-SNAPSHOT, not yet released. The macOS build is unsigned.
 
-comando is under the [Apache License 2.0](LICENSE). Third-party components keep their licences: JediTerm (LGPL-3.0) and pty4j (EPL-1.0) for the terminal, FlatLaf, RSyntaxTextArea and AutoComplete, commonmark-java, java-diff-utils, Jackson, SLF4J, the PostgreSQL JDBC driver, QuestDB.
+comando is under the [Apache License 2.0](LICENSE). Third-party components keep their licences: JediTerm (LGPL-3.0) and pty4j (EPL-1.0) for the terminal, FlatLaf, jsvg (MIT), RSyntaxTextArea and AutoComplete, commonmark-java, java-diff-utils, Jackson, SLF4J, the PostgreSQL JDBC driver, QuestDB.

@@ -14,6 +14,8 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Turns Claude Code's stream-JSON events, or the lines of a stored transcript, into transcript blocks
@@ -42,6 +44,11 @@ final class StreamMapper {
     private long contextTokens = -1;
     /** While a stored conversation is read: the message that ended its turn, until its last line is read; else null. */
     private String turnEndingMessage;
+    /**
+     * The Agent calls whose sub-agent ended: a foreground one by its call's result, a background one by its task's
+     * notification. Written on the strand, read by the sub-agent thread.
+     */
+    private final Set<String> endedAgents = ConcurrentHashMap.newKeySet();
 
     StreamMapper(String session, Transcript transcript, IntentSink sink, ObjectMapper json) {
         this.session = session;
@@ -197,7 +204,14 @@ final class StreamMapper {
             case "api_retry" -> note(Block.NoteKind.RETRY, "API retry " + e.path("attempt").asInt() + "/" + e.path("max_retries").asInt()
                     + " after " + e.path("error_status").asText(e.path("error").asText("error")));
             case "task_started" -> sink.dispatch(new Intent.SessionActivity(session, e.path("description").asText("task")));
-            case "task_notification" -> sink.dispatch(new Intent.SessionActivity(session, "requesting"));
+            case "task_notification" -> {
+                // a background task's end, named by the call that started it (2.1.302: status "completed")
+                String call = e.path("tool_use_id").asText("");
+                if (!call.isEmpty() && !e.path("status").asText("").equals("running")) {
+                    endedAgents.add(call);
+                }
+                sink.dispatch(new Intent.SessionActivity(session, "requesting"));
+            }
             case "background_tasks_changed" -> backgroundTasks(e.path("tasks"));
             case "permission_denied" -> note(Block.NoteKind.DENIED, "Denied: " + e.path("tool_name").asText("tool"));
             default -> LOG.log(System.Logger.Level.DEBUG, "system event ignored [session=" + session + ", subtype=" + subtype + ']');
@@ -417,6 +431,14 @@ final class StreamMapper {
             text = sb.toString();
         }
         transcript.replace(at, call.withResult(clip(text, MAX_RESULT_CHARS), block.path("is_error").asBoolean(false)));
+        if (call.isSubagent() && Block.ToolCall.launchedAgent(text).isEmpty()) {
+            endedAgents.add(id); // a launch is no end: the background sub-agent's task notification ends it
+        }
+    }
+
+    /** True when the sub-agent the Agent call {@code toolUseId} started has ended, as the stream told; any thread. */
+    boolean agentEnded(String toolUseId) {
+        return endedAgents.contains(toolUseId);
     }
 
     // ---- result

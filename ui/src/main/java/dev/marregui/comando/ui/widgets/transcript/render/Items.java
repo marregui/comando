@@ -24,16 +24,12 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /** The item for each block kind. */
 final class Items {
 
     static final int MAX_RESULT_LINES = 400;
     static final int MAX_INPUT_LINES = 300;
-    /** An Agent call's result that launched its sub-agent into the background, with the sub-agent's id. */
-    static final Pattern LAUNCHED = Pattern.compile("(?s)\\s*Async agent launched\\b.*?agentId: ([A-Za-z0-9_-]+)");
 
     private Items() {
     }
@@ -482,8 +478,7 @@ final class Items {
             }
             if (!c.resultText().equals(agentOf)) {
                 agentOf = c.resultText();
-                Matcher m = LAUNCHED.matcher(agentOf);
-                agentId = m.lookingAt() ? m.group(1) : ""; // the launch's own text, never a report that quotes one
+                agentId = Block.ToolCall.launchedAgent(agentOf);
             }
             return agentId;
         }

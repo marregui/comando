@@ -20,7 +20,7 @@ Each is written once as a resource kind. Connections and sessions are edited in 
 
 | Layer | Connection | Session | Folder |
 |---|---|---|---|
-| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, permission mode, extra directories, budget, checkpoint command, conversation id, next start (new, resume, fork) | `FolderRoot`: name, path, index file, names left out, icon |
+| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, permission mode, extra directories, budget, checkpoint command, conversation id, next start (new, resume, fork) | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file |
 | Kind (`core.resource`) | `ConnectionKind` | `SessionKind` (a clone forks the conversation) | `FolderKind` |
 | Live state (`core.state`) | `ConnectionState`: closed, opening, open, closing, failed, last error | `SessionState`: the same, plus turns, context, activity, branch, background tasks | — |
 | Store file | `connections.json` | `sessions.json` | `folders.json` |
@@ -41,6 +41,9 @@ either empty. Several panels may share a connection; a session has at most one p
   panel forward; else the focused panel takes it when it has no session; else a new panel opens, titled after the
   session, with the focused panel's connection. Detach (header chip) leaves the session running headless.
 - **A new panel** (⌘T) gets the focused panel's connection and no session.
+- **Renaming** a panel: double-click its tab, the Panels tab's Rename…, or "Rename panel…" in the palette.
+- **Restore layout** (palette) puts the sidebar, side pane and lower divider back as they were before a session
+  arranged them; it is greyed out while nothing was arranged.
 - **Moving** a tab: drag it along the row; a line marks where it lands. The order is saved and kept across restarts.
 - **HTML files** open as text, to edit; the Browser button opens the page in the desktop's browser
   ([record 56](adr/0056-html-opens-in-the-browser-not-in-comando.md)).
@@ -106,7 +109,10 @@ left, edit, clone and remove of the selected row on the right, off while nothing
   conversations.
 - **Panels:** comando's own panels, open and closed, with session, connection and file name. Clone copies text and
   connection, not the session. Removing deletes the panel's file; removing the last open panel leaves an empty one.
-- **Connections:** name, user, host, port, database, status; the context menu connects, tests, explores the schema.
+- **Connections:** name, user, host, port, database, status; the context menu binds it to the focused panel, connects
+  or disconnects, tests, explores the schema, edits, clones and removes.
+- A session row's context menu: Open in a panel, Start or Stop, Interrupt the turn while one runs, Compact and Clear
+  the conversation while it runs, Model, Effort, Copy details, Edit…, Clone…, Remove….
 - ⌘B or the `⋯` button hides the sidebar to a rail on the left edge.
 
 ## 2. Running text
@@ -156,7 +162,8 @@ SQL results fill the Results tab; an error is selectable text, and a position th
 single-statement block until the next edit. A prompt's turn streams into the Session tab. ⌘⇧I appends what the panel's
 last run produced as a block of its own: the selected rows (up to 500), else the first 50, else the error, as
 tab-separated text in a fence with no blank line inside; a question typed on the next line belongs to the same block,
-so ⌘⏎ sends rows and question together.
+so ⌘⏎ sends rows and question together. A query of 10 s or more ends with a desktop notification naming its panel
+while the window is not active; a live plot's refresh gives none.
 
 ## 3. The database
 
@@ -190,7 +197,7 @@ only, formatting cells into one reused buffer.
 | Key | Does |
 |---|---|
 | ⌘J | plots the last result: x is the first time column, else the first numeric one; up to eight more numeric columns as series; at most 2 000 000 rows |
-| ⌘⇧J | the same, re-running the query each period (default 5 s) while it is not running; another run in the panel or a failed query or connection stops it with a notice; closing its tab stops it quietly |
+| ⌘⇧J | the same, re-running the query each period (default 5 s) while it is not running; another run in the panel or a failed query or connection stops it with a notice; closing its tab stops it quietly; Tools ▸ Stop refreshing plots stops them all, the plots staying as they are |
 | ⌘⇧R | keeps the result in a tab of its own (at most 100 000 rows) |
 | ⌘⇧I | attaches the result to the editor ([§2.4](#24-where-things-land)) |
 | ⌘⇧S | exports the grid as CSV in the order shown, written off the EDT |
@@ -220,7 +227,8 @@ Runs go through `ToolPort` (`tools` module); the terminal lives in the UI becaus
 JediTerm on a pseudo-terminal from pty4j, one per panel, started the first time it is shown, as `$SHELL -l` (else
 `/bin/zsh`, else `/bin/sh`) in the session's directory, else home; `TERM=xterm-256color`, `TERM_PROGRAM=comando`. ⌃3
 shows it; ⌃⏎ in the editor types the selection or line into it and presses Enter, waiting until a starting shell has
-written and then been quiet for 200 ms (at most 3 s). An exited shell offers a restart bar.
+written and then been quiet for 200 ms (at most 3 s). An exited shell offers a restart bar; Tools ▸ Restart the shell
+ends the focused panel's shell and starts a new one in the session's directory.
 
 ### 4.2 Gradle runs
 

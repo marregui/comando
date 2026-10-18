@@ -1,6 +1,8 @@
 package dev.marregui.comando.core.transcript;
 
 import java.util.Objects;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * One entry of a session transcript. {@code parent} is the id of the Agent or Skill tool call that started
@@ -68,6 +70,19 @@ public sealed interface Block {
 
         public boolean isSubagent() {
             return name.equals("Agent") || name.equals("Task");
+        }
+
+        /** An Agent call's result that launched its sub-agent into the background, with the sub-agent's id. */
+        private static final Pattern LAUNCHED = Pattern.compile("(?s)\\s*Async agent launched\\b.*?agentId: ([A-Za-z0-9_-]+)");
+
+        /**
+         * The id of the sub-agent an Agent call's {@code result} launched into the background ("Async agent launched
+         * successfully. … agentId: a58…", Claude Code 2.1.302, undocumented); empty for any other result. Only the
+         * launch's own text counts, never a report that quotes one.
+         */
+        public static String launchedAgent(String result) {
+            Matcher m = LAUNCHED.matcher(result);
+            return m.lookingAt() ? m.group(1) : "";
         }
     }
 

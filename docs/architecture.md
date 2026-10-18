@@ -34,7 +34,7 @@ test trees, and a browser over folders of documents.
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, the Claude Code kit (`Kit`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log | `core`, Jackson |
 | `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash | `core` |
-| `ui` | the Swing shell, panels, dialogs, the kit, the widgets | `core`, FlatLaf (and Extras), RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
+| `ui` | the Swing shell, panels, dialogs, the kit, the widgets | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
 | `app` | wiring, the store files, the keychain, the intent log, the embedded QuestDB, `main` | all, QuestDB |
 
 `ui` depends on `core` only; `app` is the one module that sees every other.
@@ -125,7 +125,7 @@ A record of the sealed interface `Intent`; anything that changes the state is on
 | Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
 | Views | `ShowView`, `RefreshView`, `CloseView`, `PinView`, `SelectLowerTab`, `Arrange`, `SessionLayout`, `SessionFocus` |
 | Editor and files | `EditPanel`, `OpenFile`, `OpenSubagent` |
-| Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded` |
+| Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `DeleteFiles` (the Files tab's move to the Trash) |
 | Notices | `Notify`, `DismissNotice` |
 
 A null panel in `RunText`, `RunGradle` or `EditPanel` means the focused panel.
@@ -160,7 +160,7 @@ queues and returns.
 | `ApprovalPort` | `ResolveApproval` |
 | `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `DeletePanel`, `ShowFile`, `Arrange`, `ShowFolder`, `ShowPlanUsage` |
 | `PersistencePort` | `SaveConnections`, `SaveSessions`, `SaveFolders`, `SavePanels` |
-| `ToolPort` | `RunGradle`, `CancelCommand`, `ForgetCommand`, `ReadFolders`, `WatchFolders` |
+| `ToolPort` | `RunGradle`, `CancelCommand`, `ForgetCommand`, `ReadFolders`, `WatchFolders`, `DeleteFiles` |
 
 `StateLoop` runs one intent at a time: observers (the intent log), the reducer, the effects in order, then the state
 listeners (the UI's coalesced render). The reducer, each effect and each listener are guarded, so a failure is logged and
@@ -201,7 +201,7 @@ transcript text.
 | `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `clearTranscript`, `loadHistory`, `forget` | `ClaudeAdapter` |
 | `McpGateway` | `register(session)` gives the URL and bearer token a session's CLI uses; `unregister` | `McpServer` |
 | `ApprovalPort` | `resolve` | `McpServer` |
-| `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders` | `ToolsAdapter` |
+| `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles` | `ToolsAdapter` |
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showPlanUsage` | `ComandoUi` |
 | `PersistencePort` | `saveConnections`, `saveSessions`, `saveFolders`, `savePanels` | `Store` |
 
@@ -221,7 +221,7 @@ by delta), `FakeResult`.
 | `claude-strand-<session>` | virtual, single-threaded | every change to a session: start, send, interrupt, stop, history; the transcript's one writer |
 | `claude-out-`, `-in-`, `-err-`, `-exit-<session>` | platform, per process | stdout lines, the stdin queue, the last 40 stderr lines, the exit |
 | `claude-timer` | platform | the stop sequence's deadlines |
-| `subagent-tail` | platform, daemon | finds and renders a sub-agent's stored conversation; follows up to 4 of them every 2 s while their files grow |
+| `subagent-tail` | platform, daemon | finds and renders a sub-agent's stored conversation; follows up to 4 of them every 2 s while they run, reading only what their files gained |
 | `plan-usage` | platform, daemon | `claude --safe-mode -p /usage` at start and every 5 minutes, stopped after 30 s |
 | MCP requests | virtual, one per request | JSON-RPC; an `approve` call waits for its card |
 | `gradle-<run>`, `tool-output-<run>`, `tool-kill-<run>` | virtual | a run's process and output; SIGKILL what a stop left alive after 2 s |
@@ -229,9 +229,10 @@ by delta), `FakeResult`.
 | `folder-poll` | platform, daemon | every 5 s reads the open folders, sends a tree only when it changed |
 | `store`, `store-secrets` | platform | atomic writes of the store files; panel text 800 ms after the first unsaved change; a check of open panels' files and `folders.json` every second; keychain calls apart, so an unlock prompt never holds back panel text |
 | `mermaid` | platform, daemon | `mmdc`, one diagram at a time, 30 s bound |
+| `local-images` | platform, daemon | reads the pictures a Markdown view names and draws SVGs into `cache/images/`, one at a time |
 | `edt-watchdog` | platform, daemon | a probe to the EDT every 100 ms |
 | `exit`, `shutdown` | platform | close the application after Quit, or from the shutdown hook |
-| short virtual threads | virtual | one blocking call each off the EDT: opening a file, the tutorial, stored conversations, links, the external editor, notifications, the kit, exports, preparing a large plot |
+| short virtual threads | virtual | one blocking call each off the EDT: opening a file, the tutorial, stored conversations, links, the external editor, notifications, the kit, exports, preparing a large plot, moving files to the Trash (`file-trash`) |
 
 How work crosses threads:
 
@@ -275,13 +276,14 @@ built and rethrows.
 | 3 | `StateLoop` | stops the reducer after the queued intents |
 | 4 | `DbAdapter` | cancels running statements, closes connections |
 | 5 | `MermaidDiagrams` | stops `mmdc` and its children |
-| 6 | `McpServer` | denies every waiting approval, stops the server |
-| 7 | `ClaudeAdapter` | SIGTERM, SIGKILL 2 s later; deletes every MCP configuration file and revokes its token |
-| 8 | `ToolsAdapter` | SIGTERM to every run's process tree, SIGKILL 2 s later; stops the folder poll |
-| 9 | `EmbeddedQuestDb` | closes after the lanes |
-| 10 | `ComandoUi` | closes last: terminals, live plots, the EDT watchdog, the window |
+| 6 | `LocalImages` | stops reading pictures and drawing SVGs |
+| 7 | `McpServer` | denies every waiting approval, stops the server |
+| 8 | `ClaudeAdapter` | SIGTERM, SIGKILL 2 s later; deletes every MCP configuration file and revokes its token |
+| 9 | `ToolsAdapter` | SIGTERM to every run's process tree, SIGKILL 2 s later; stops the folder poll |
+| 10 | `EmbeddedQuestDb` | closes after the lanes |
+| 11 | `ComandoUi` | closes last: terminals, live plots, the EDT watchdog, the window |
 
-Quit (window, Dock, menu) first asks when work would stop: a running query, a turn, a shell job in the foreground, a
+Quit (window, Dock, menu) first asks when work would stop: a running query, a turn, a session's background work, a shell job in the foreground, a
 Gradle run; Cancel is the default. It then saves the layout, ends terminals and live plots, greys the window, and
 runs `onQuit`, which starts the `exit` thread: `App.close()`, then `System.exit(0)`. A shutdown hook calls `App.close()`
 too; the second call does nothing.
@@ -296,7 +298,7 @@ dev.marregui.comando.ui
 │                   transcript (with doc/ and render/), tree
 ├── panels/         the window's regions: Workspace, EditorPanel, LowerPanel, SessionsSidebar, PanelsTab, FilesTab,
 │                   SidePane, StatusBar, ResultsView, TerminalTabs, ViewTabs, …
-├── dialogs/        resource/ (ResourceDialog, one dialog for connections, sessions and folders), sessions/ (import)
+├── dialogs/        resource/ (ResourceDialog, one dialog for connections and sessions; folders are edited in folders.json), sessions/ (import)
 ├── shell/          ComandoUi (the frame and the UI port), WindowLayout, HelpActions, Menus, Keys, LivePlots, Notifier, HelpFiles, OpenFiles, …
 └── PanelTexts      editor text between saves
 ```

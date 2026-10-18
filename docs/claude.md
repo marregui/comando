@@ -93,17 +93,23 @@ text and shown to 400 lines.
   `run_in_background` returns at once, its result text reading "Async agent launched successfully. … agentId: <id>";
   `<id>` is the `task_id` of its `local_agent` task in `background_tasks_changed`, and `task_started` carries the call's
   `tool_use_id`. The subagent's messages keep arriving in the stream with `parent_tool_use_id` set to the call, so its
-  blocks nest in the card as a foreground one's do. The transcript reads the card as running in the background while
-  the task is listed ([record 64](adr/0064-sub-agents-are-shown-live.md)).
+  blocks nest in the card as a foreground one's do (checked again on 2026-10-18 with comando's flags). At its end a
+  `task_notification` names the call's `tool_use_id` with `status` `completed`. The transcript reads the card as running
+  in the background while the task is listed ([record 64](adr/0064-sub-agents-are-shown-live.md)).
 - **Subagents.** Not documented by Claude Code (2.1.302): beside `<session-id>.jsonl` sits `<session-id>/subagents/`,
   with per subagent `agent-<id>.jsonl` (its whole conversation, `isSidechain: true`) and `agent-<id>.meta.json`
-  (`agentType`, `description`, `toolUseId` = the Agent call's id; seen on 2026-10-18 also `finished`). `SubagentFiles` finds
-  the meta file whose `toolUseId` matches (files over 4 kB skipped), and renders the conversation as Markdown; of a longer file it reads its
-  task (the first line) and its last 2 MB, and says so. `ClaudeAdapter.showSubagent` does it on a thread of its own and
-  shows a lower view; while the session runs it then follows the file every 2 s while it grows, until 30 s pass without
-  growth, the meta file says `finished`, or the session stops; at most 4 views follow at once, the oldest stops first. A file missing or
-  moved by a later Claude Code gives the notice "transcript not found for this sub-agent"
-  ([record 64](adr/0064-sub-agents-are-shown-live.md)).
+  (`agentType`, `description`, `toolUseId` = the Agent call's id; `finished: true` once it ended, written by 2.1.30x on
+  every sub-agent seen on this machine since 2026-10-16, absent from older ones). `SubagentFiles` finds the meta file
+  whose `toolUseId` matches (files over 4 kB skipped). Its `Conversation` reads the file as it grows, parsing only the
+  whole lines added since the last read, and keeps the task (the first line) and the steps from the last 100 tool calls
+  on, saying how many of all it shows; a file over 256 MB is read from where its last 256 MB start, and the view says
+  so. `ClaudeAdapter.showSubagent` does it on a thread of its own and shows a lower view; while the session runs it then
+  renders it again every 2 s the file grew. It stops when the stream says the subagent ended (`StreamMapper` records
+  the Agent call's result, unless it is a launch, and a background task's `task_notification`), when the meta file says
+  `finished`, when the session stops, or after 10 min without growth, a backstop; a subagent writes nothing while a
+  tool runs or the model answers, often for minutes. The view's last line says whether it is still updated and, if not,
+  why. At most 4 views follow at once, the oldest stops first. A file missing or moved by a later Claude Code gives the
+  notice "transcript not found for this sub-agent" ([record 64](adr/0064-sub-agents-are-shown-live.md)).
 
 ## 2. MCP tools
 

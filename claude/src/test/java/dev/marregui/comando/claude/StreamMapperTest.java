@@ -138,6 +138,36 @@ class StreamMapperTest {
         assertThat(((Block.ToolCall) blocks().get(0)).resultText()).isEqualTo("report");
     }
 
+    /** The event shapes Claude Code 2.1.302 sent for a foreground and a background sub-agent (read on 2026-10-18). */
+    @Test
+    void aSubagentEndsAtItsCallsResultOrForABackgroundOneAtItsTaskNotification() {
+        mapper.accept("""
+                {"type":"assistant","parent_tool_use_id":null,"message":{"id":"m1","content":[{"type":"tool_use","id":"fg","name":"Agent","input":{"prompt":"look"}}]}}""");
+        mapper.accept("""
+                {"type":"assistant","parent_tool_use_id":null,"message":{"id":"m2","content":[{"type":"tool_use","id":"bg","name":"Agent","input":{"prompt":"wait","run_in_background":true}}]}}""");
+        mapper.accept("""
+                {"type":"assistant","parent_tool_use_id":null,"message":{"id":"m3","content":[{"type":"tool_use","id":"sh","name":"Bash","input":{"command":"ls"}}]}}""");
+        assertThat(mapper.agentEnded("fg")).isFalse();
+
+        mapper.accept("""
+                {"type":"user","parent_tool_use_id":null,"message":{"content":[{"type":"tool_result","tool_use_id":"bg","content":[{"type":"text","text":"Async agent launched successfully. (This tool result is internal metadata.)\\nagentId: a8280b64a05ce6dc1 (internal ID)\\nThe agent is working in the background."}]}]}}""");
+        mapper.accept("""
+                {"type":"user","parent_tool_use_id":null,"message":{"content":[{"type":"tool_result","tool_use_id":"sh","content":"out"}]}}""");
+        assertThat(mapper.agentEnded("bg")).as("a launch is no end").isFalse();
+        assertThat(mapper.agentEnded("sh")).as("not a sub-agent").isFalse();
+
+        mapper.accept("""
+                {"type":"user","parent_tool_use_id":null,"message":{"content":[{"type":"tool_result","tool_use_id":"fg","content":[{"type":"text","text":"report"}]}]}}""");
+        assertThat(mapper.agentEnded("fg")).isTrue();
+
+        mapper.accept("""
+                {"type":"system","subtype":"task_notification","task_id":"a8280b64a05ce6dc1","tool_use_id":"bg","status":"running","summary":"wait"}""");
+        assertThat(mapper.agentEnded("bg")).isFalse();
+        mapper.accept("""
+                {"type":"system","subtype":"task_notification","task_id":"a8280b64a05ce6dc1","tool_use_id":"bg","status":"completed","output_file":"","summary":"wait"}""");
+        assertThat(mapper.agentEnded("bg")).isTrue();
+    }
+
     @Test
     void historyKeepsTypedPromptsAndSkipsMetaLines() {
         mapper.acceptHistory("""

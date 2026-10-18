@@ -3,12 +3,16 @@ package dev.marregui.comando.claude;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.io.FileNotFoundException;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
-import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -26,8 +30,13 @@ final class SubagentFiles {
 
     private static final System.Logger LOG = System.getLogger(SubagentFiles.class.getName());
 
-    /** The most of a conversation read; a longer one shows its end. */
-    static final long LIMIT_BYTES = 2L * 1024 * 1024;
+    /** The most of a conversation read; a longer one is read from where its last this many bytes start. */
+    static final long SCAN_BYTES = 256L * 1024 * 1024;
+    /** The tool calls a view keeps, the latest; the steps before the oldest kept are not shown. */
+    static final int LAST_TOOLS = 100;
+    /** The most steps a view keeps, tool calls and texts together. */
+    static final int MAX_STEPS = 4 * LAST_TOOLS;
+    static final int CHUNK_BYTES = 1 << 20;
     /** A meta file is a few hundred bytes; a larger one is not one. */
     static final long META_BYTES = 4096;
     static final int RESULT_CHARS = 200;
@@ -106,64 +115,288 @@ final class SubagentFiles {
     }
 
     /**
-     * The conversation as Markdown: the task as a quote, each answer's text, each tool call as one list item with its
-     * result clipped to {@link #RESULT_CHARS} characters. A file over {@code limitBytes} is read from where its last
-     * {@code limitBytes} start, at the first whole line, after its task (the file's first line, when it fits in
-     * {@link #HEAD_BYTES}), and the output says so after the task: a view refreshed while the file grows keeps its start.
+     * The conversation as Markdown, read once: {@link Conversation#render} of a {@link Conversation} that reads at most
+     * the last {@code scanBytes} of the file.
      */
-    static String render(Path file, long limitBytes, ObjectMapper json) throws IOException {
-        String text;
-        String head = "";
-        long size;
-        try (RandomAccessFile in = new RandomAccessFile(file.toFile(), "r")) {
-            size = in.length();
-            // one byte before the cut too: when it is a line's end, the first line read is whole
-            long from = Math.max(0L, size - limitBytes - 1);
-            byte[] bytes = new byte[(int) (size - from)];
-            in.seek(from);
-            in.readFully(bytes);
-            text = new String(bytes, StandardCharsets.UTF_8);
-            if (size > limitBytes) {
-                int eol = text.indexOf('\n');
-                text = eol < 0 ? "" : text.substring(eol + 1); // up to the first line's end: cut, or the byte before the cut
-                byte[] first = new byte[(int) Math.min(HEAD_BYTES, from)];
-                in.seek(0);
-                in.readFully(first);
-                String f = new String(first, StandardCharsets.UTF_8);
-                int end = f.indexOf('\n');
-                head = end < 0 ? "" : f.substring(0, end);
-            }
-        } catch (FileNotFoundException e) {
-            return "_The sub-agent has written nothing yet._\n";
+    static String render(Path file, long scanBytes, ObjectMapper json) throws IOException {
+        Conversation c = new Conversation(file, json, scanBytes);
+        c.read();
+        return c.render("");
+    }
+
+    /**
+     * A sub-agent's conversation, read as its file grows: each {@link #read} parses only the whole lines added since the
+     * last, so a long sub-agent followed every few seconds costs its growth, not its length. It keeps the task (the
+     * file's first line), and the steps from the last {@link #LAST_TOOLS} tool calls on: each answer's text, and each
+     * tool call as one list item with its result clipped to {@link #RESULT_CHARS} characters. A file longer than
+     * {@code scanBytes} at the first read is read from where its last {@code scanBytes} start, at the first whole line,
+     * and the output says so after the task. Confined to one thread.
+     */
+    static final class Conversation {
+
+        private final Path file;
+        private final ObjectMapper json;
+        private final long scanBytes;
+        /** The byte the next read starts at, always a line's start; -1 before the first read. */
+        private long offset = -1;
+        /** The first read started after the file's start: it was longer than {@link #scanBytes}. */
+        private boolean cut;
+        /** No line was read yet: the next user text is the task. */
+        private boolean first = true;
+        private String task = "";
+        private final ArrayDeque<Step> steps = new ArrayDeque<>();
+        /** The tool calls kept that wait for their result, by id. */
+        private final Map<String, Step> waiting = new HashMap<>();
+        /** Every tool call read, and those kept. */
+        private int tools;
+        private int toolsKept;
+
+        Conversation(Path file, ObjectMapper json, long scanBytes) {
+            this.file = file;
+            this.json = json;
+            this.scanBytes = scanBytes;
         }
-        List<String> parts = new ArrayList<>();
-        Map<String, Integer> callAt = new HashMap<>();
-        if (size > limitBytes) {
-            JsonNode task = parse(head, json);
-            if (task != null && task.path("type").asText("").equals("user") && task.path("message").path("content").isTextual()) {
-                parts.add(quote(task.path("message").path("content").asText()));
+
+        /** One step: an answer's text, a prompt, or a tool call with its result once it arrives. */
+        private static final class Step {
+            final String toolId;
+            String text;
+
+            Step(String toolId, String text) {
+                this.toolId = toolId;
+                this.text = text;
             }
-            // no size that grows: the view's start stays the same while the file grows
-            parts.add("_The conversation is longer than " + megabytes(limitBytes) + ": only its last " + megabytes(limitBytes)
-                    + " are shown._");
         }
-        for (String line : text.split("\n")) {
-            if (line.isBlank()) {
-                continue;
+
+        /** Every tool call read, kept or not. */
+        int tools() {
+            return tools;
+        }
+
+        /**
+         * Reads the whole lines the file gained since the last read; a line still being written waits for the next.
+         * A file shorter than what was read was replaced, and is read again from its start.
+         */
+        void read() throws IOException {
+            try (FileChannel ch = FileChannel.open(file, StandardOpenOption.READ)) {
+                long size = ch.size();
+                if (offset < 0 || size < offset) {
+                    reset();
+                    offset = 0;
+                    if (size > scanBytes) {
+                        cut = true;
+                        task = taskOf(firstLine(ch));
+                        first = false;
+                        offset = lineStart(ch, size - scanBytes, size);
+                    }
+                }
+                consume(ch, size);
+            } catch (NoSuchFileException e) {
+                // not written yet
             }
+        }
+
+        private void reset() {
+            cut = false;
+            first = true;
+            task = "";
+            steps.clear();
+            waiting.clear();
+            tools = 0;
+            toolsKept = 0;
+        }
+
+        /** The task, then the steps kept, then {@code footer} when not empty. */
+        String render(String footer) {
+            List<String> parts = new ArrayList<>();
+            if (!task.isBlank()) {
+                parts.add(quote(task));
+            }
+            if (cut) {
+                // no size that grows: the view's start stays the same while the file grows
+                parts.add("_The conversation is longer than " + megabytes(scanBytes) + ": only its last " + megabytes(scanBytes)
+                        + " are read._");
+            }
+            if (tools > toolsKept) {
+                parts.add("_Earlier steps are not shown: the view keeps the last " + LAST_TOOLS + " tool calls._");
+            }
+            for (Step s : steps) {
+                parts.add(s.text);
+            }
+            if (tools > toolsKept) {
+                parts.add("_" + toolsKept + " of " + tools + " tool calls shown._");
+            }
+            if (task.isBlank() && steps.isEmpty() && !cut) {
+                parts.add("_The sub-agent has written nothing yet._");
+            }
+            if (!footer.isEmpty()) {
+                parts.add(footer);
+            }
+            return String.join("\n\n", parts) + "\n";
+        }
+
+        /** Parses the whole lines from {@link #offset} to {@code size}, read a chunk at a time; a line may span chunks. */
+        private void consume(FileChannel ch, long size) throws IOException {
+            ByteArrayOutputStream line = new ByteArrayOutputStream();
+            ByteBuffer buf = ByteBuffer.allocate(CHUNK_BYTES);
+            long at = offset;
+            while (at < size) {
+                buf.clear();
+                buf.limit((int) Math.min(CHUNK_BYTES, size - at));
+                int n = ch.read(buf, at);
+                if (n <= 0) {
+                    break;
+                }
+                byte[] b = buf.array();
+                int from = 0;
+                for (int i = 0; i < n; i++) {
+                    if (b[i] == '\n') {
+                        line.write(b, from, i - from);
+                        accept(line.toString(StandardCharsets.UTF_8));
+                        line.reset();
+                        from = i + 1;
+                        offset = at + i + 1;
+                    }
+                }
+                line.write(b, from, n - from);
+                at += n;
+            }
+        }
+
+        private void accept(String line) {
             JsonNode n = parse(line, json);
+            boolean wasFirst = first;
+            first = false;
             if (n == null) {
-                continue; // a line still being written
+                return;
             }
             JsonNode content = n.path("message").path("content");
             switch (n.path("type").asText("")) {
-                case "user" -> user(content, parts, callAt);
-                case "assistant" -> assistant(content, parts, callAt);
+                case "user" -> user(content, wasFirst);
+                case "assistant" -> assistant(content);
                 default -> {
                 }
             }
         }
-        return parts.isEmpty() ? "_The sub-agent has written nothing yet._\n" : String.join("\n\n", parts) + "\n";
+
+        private void user(JsonNode content, boolean isTask) {
+            if (content.isTextual()) {
+                text(content.asText(), isTask);
+                return;
+            }
+            for (JsonNode c : content) {
+                switch (c.path("type").asText("")) {
+                    case "text" -> {
+                        text(c.path("text").asText(""), isTask);
+                        isTask = false;
+                    }
+                    case "tool_result" -> {
+                        Step call = waiting.remove(c.path("tool_use_id").asText(""));
+                        String result = oneLine(resultText(c.path("content")));
+                        if (call != null && !result.isEmpty()) {
+                            call.text += (c.path("is_error").asBoolean(false) ? " → failed: " : " → ") + result;
+                        }
+                    }
+                    default -> {
+                    }
+                }
+            }
+        }
+
+        private void text(String text, boolean isTask) {
+            if (isTask) {
+                task = text;
+            } else {
+                add(new Step(null, quote(text)));
+            }
+        }
+
+        private void assistant(JsonNode content) {
+            for (JsonNode c : content) {
+                switch (c.path("type").asText("")) {
+                    case "text" -> {
+                        String t = c.path("text").asText("").strip();
+                        if (!t.isEmpty()) {
+                            add(new Step(null, t));
+                        }
+                    }
+                    case "tool_use" -> {
+                        String summary = oneLine(summary(c.path("input")));
+                        Step call = new Step(c.path("id").asText(""), "- `" + c.path("name").asText("tool") + '`'
+                                + (summary.isEmpty() ? "" : " " + summary));
+                        tools++;
+                        toolsKept++;
+                        add(call);
+                        waiting.put(call.toolId, call);
+                    }
+                    default -> {
+                    }
+                }
+            }
+        }
+
+        /** Keeps {@code step}, dropping the oldest steps while more than {@link #LAST_TOOLS} tool calls or {@link #MAX_STEPS} steps are kept. */
+        private void add(Step step) {
+            steps.addLast(step);
+            while (toolsKept > LAST_TOOLS || steps.size() > MAX_STEPS) {
+                Step old = steps.removeFirst();
+                if (old.toolId != null) {
+                    toolsKept--;
+                    waiting.remove(old.toolId);
+                }
+            }
+        }
+
+        /** The task in a stored first line: its prompt when it is a user line with text, else empty. */
+        private String taskOf(String line) {
+            JsonNode n = parse(line, json);
+            if (n == null || !n.path("type").asText("").equals("user")) {
+                return "";
+            }
+            JsonNode content = n.path("message").path("content");
+            if (content.isTextual()) {
+                return content.asText();
+            }
+            for (JsonNode c : content) {
+                if (c.path("type").asText("").equals("text")) {
+                    return c.path("text").asText("");
+                }
+            }
+            return "";
+        }
+
+        /** The file's first line when it ends within {@link #HEAD_BYTES}; else empty. */
+        private static String firstLine(FileChannel ch) throws IOException {
+            ByteBuffer buf = ByteBuffer.allocate((int) Math.min(HEAD_BYTES, ch.size()));
+            ch.read(buf, 0);
+            byte[] b = buf.array();
+            for (int i = 0; i < buf.position(); i++) {
+                if (b[i] == '\n') {
+                    return new String(b, 0, i, StandardCharsets.UTF_8);
+                }
+            }
+            return "";
+        }
+
+        /** The first line start at or after {@code pos}: {@code pos} itself when the byte before it ends a line; {@code size} when none. */
+        private static long lineStart(FileChannel ch, long pos, long size) throws IOException {
+            ByteBuffer buf = ByteBuffer.allocate(CHUNK_BYTES);
+            for (long at = pos - 1; at < size; ) {
+                buf.clear();
+                buf.limit((int) Math.min(CHUNK_BYTES, size - at));
+                int n = ch.read(buf, at);
+                if (n <= 0) {
+                    break;
+                }
+                for (int i = 0; i < n; i++) {
+                    if (buf.get(i) == '\n') {
+                        return at + i + 1;
+                    }
+                }
+                at += n;
+            }
+            return size;
+        }
     }
 
     /** The line's JSON; null when it is not whole JSON. */
@@ -175,47 +408,6 @@ final class SubagentFiles {
             return json.readTree(line);
         } catch (IOException e) {
             return null;
-        }
-    }
-
-    private static void user(JsonNode content, List<String> parts, Map<String, Integer> callAt) {
-        if (content.isTextual()) {
-            parts.add(quote(content.asText()));
-            return;
-        }
-        for (JsonNode c : content) {
-            switch (c.path("type").asText("")) {
-                case "text" -> parts.add(quote(c.path("text").asText("")));
-                case "tool_result" -> {
-                    Integer at = callAt.remove(c.path("tool_use_id").asText(""));
-                    String result = oneLine(resultText(c.path("content")));
-                    if (at != null && !result.isEmpty()) {
-                        parts.set(at, parts.get(at) + (c.path("is_error").asBoolean(false) ? " → failed: " : " → ") + result);
-                    }
-                }
-                default -> {
-                }
-            }
-        }
-    }
-
-    private static void assistant(JsonNode content, List<String> parts, Map<String, Integer> callAt) {
-        for (JsonNode c : content) {
-            switch (c.path("type").asText("")) {
-                case "text" -> {
-                    String t = c.path("text").asText("").strip();
-                    if (!t.isEmpty()) {
-                        parts.add(t);
-                    }
-                }
-                case "tool_use" -> {
-                    String summary = oneLine(summary(c.path("input")));
-                    parts.add("- `" + c.path("name").asText("tool") + '`' + (summary.isEmpty() ? "" : " " + summary));
-                    callAt.put(c.path("id").asText(""), parts.size() - 1);
-                }
-                default -> {
-                }
-            }
         }
     }
 

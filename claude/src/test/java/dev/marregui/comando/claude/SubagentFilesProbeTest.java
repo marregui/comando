@@ -57,7 +57,7 @@ class SubagentFilesProbeTest {
                 String call = "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"tool_use\",\"id\":\"i\",\"name\":\"T\",\"input\":{}}]}}";
                 Files.writeString(f, call + "\n" + String.format(t, v) + "\n" + sentinel() + "\n");
                 try {
-                    String md = SubagentFiles.render(f, SubagentFiles.LIMIT_BYTES, json);
+                    String md = SubagentFiles.render(f, SubagentFiles.SCAN_BYTES, json);
                     if (!md.contains("SENTINEL")) {
                         failures.add(t + " <- " + v + ": sentinel lost");
                     }
@@ -106,8 +106,8 @@ class SubagentFilesProbeTest {
         String c = "{\"type\":\"user\",\"message\":{\"content\":[{\"type\":\"tool_result\",\"tool_use_id\":\"i\",\"content\":\"out\"}]}}";
         Files.writeString(lf, a + "\n" + b + "\n" + c + "\n");
         Files.writeString(crlf, a + "\r\n" + b + "\r\n" + c + "\r\n");
-        assertThat(SubagentFiles.render(crlf, SubagentFiles.LIMIT_BYTES, json))
-                .isEqualTo(SubagentFiles.render(lf, SubagentFiles.LIMIT_BYTES, json));
+        assertThat(SubagentFiles.render(crlf, SubagentFiles.SCAN_BYTES, json))
+                .isEqualTo(SubagentFiles.render(lf, SubagentFiles.SCAN_BYTES, json));
     }
 
     /** The tail cut inside a three-byte character: no replacement character, the following lines kept. */

@@ -21,9 +21,9 @@ The package layers are in [Architecture §8](architecture.md#8-ui-packages).
 | `overlay` | `Overlay`: the empty, loading and error states a widget switches between |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` (below) |
 | `format` | `Labels` (times, uptimes, counts, short paths), `Json` |
-| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `LocalImages`, `LocalLinks`, `MermaidDiagrams`, `SourceLinks`, `Plain` (below) |
+| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `LocalImages`, `LocalLinks`, `MermaidDiagrams`, `SourceLinks`, `Plain`, `EditorThemes`, `Fences` (below) |
 | `tree`, `layout`, `tabs` | `TreeView` (the one tree; a double click activates a leaf, Enter the selected node); `ShrinkingRow` (chips give up width before buttons); `FixedRowTabs` (tab headers in fixed rows); `MovableTabs` (a tab dragged along the row reports where it lands) |
-| `desktop` | `ExternalEditor` (IntelliJ, else the default application), `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser` |
+| `desktop` | `ExternalEditor` (IntelliJ, else the default application), `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser`, `DesktopTrash` (the Files tab's Trash) |
 
 Threads:
 
@@ -70,7 +70,7 @@ whose `{version}`, `{java}`, `{claude}`, `{system}`, `{home}` and `{year}` take 
 - A command sits in at most one menu and has at most one key; registering an id twice throws.
 - In the main window a command's key is claimed before the focused component sees it (`KeyPriority`), because
   RSyntaxTextArea binds ⌘⏎, ⌘J and ⌘⇧K, which comando's commands also use, and the terminal takes every key. A disabled command leaves its key to
-  the component, so ⌘J (plot) stays enabled and says "no result" rather than joining lines; ⌘/ is left to the editor.
+  the component, so ⌘J (plot) stays enabled and says "The panel has no rows to plot" rather than joining lines; ⌘/ is left to the editor.
 - Run keys act only in the focused panel's editor. Edit commands (undo, redo, cut, copy, paste, select all) run the focused
   component's own binding. Menu items grey out what cannot run; the palette lists only what can, ranked by label match.
 - On macOS ⌘Q belongs to the application menu's quit handler.
@@ -173,11 +173,14 @@ strip appears or goes. A card's counts are kept as blocks arrive, never by walki
 survive a rebuild of the tab (a session switch, "Show earlier").
 
 The "transcript" link in a subagent card's header (`subagent:<toolUseId>`) opens the subagent's stored conversation as
-a lower view, "agent · <description>": the task quoted, each text, each tool call as one list item with its result
-clipped to 200 characters ([record 64](adr/0064-sub-agents-are-shown-live.md)). Two subagents with one description get
-"agent · <description>" and "agent · <description> (2)". While the session runs and the file grows, the view is rendered
-again every 2 s, keeping the reader where it was, or at the end when it was at the end; any Markdown view replaced by
-another document starts at its top.
+a lower view, "agent · <description>": the task quoted, then the steps from the last 100 tool calls on, each text and
+each tool call as one list item with its result clipped to 200 characters; when earlier steps are left out it says so
+under the task and ends with "100 of 340 tool calls shown" ([record 64](adr/0064-sub-agents-are-shown-live.md)). Two
+subagents with one description get "agent · <description>" and "agent · <description> (2)". While the subagent runs,
+the view is rendered again every 2 s its file grew, keeping the reader where it was, or at the end when it was at the
+end, and its last line reads "Updating while the sub-agent runs."; when it stops, the last line says why: the
+subagent ended, the session stopped, nothing was written for 10 min, or four newer views follow theirs (the last two
+say the link follows it again). Any Markdown view replaced by another document starts at its top.
 
 ### 4.3 The frame-time gate
 
