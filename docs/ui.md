@@ -151,7 +151,7 @@ clip by binary search.
 | prompt | a bubble, with the panel it came from |
 | text | paragraphs, highlighted code, tables; a turn's conclusion (its last text before the turn end, a live one or one read from a stored conversation) in gold |
 | thinking | only while it is the latest item of its list; collapsed with its token count once it ends |
-| tool card | running, done or failed; a one-line summary; "running · 12 s", or "waiting for your approval · ⌃2"; open: input, result (400 lines), a subagent's blocks; opens by itself for edits, errors and running subagents. A subagent card adds the tool calls its blocks made, at any depth, and the latest: "running · 1 min 04 s · 9 tools · Read docs/ui.md" (the latest drops first when the card is narrow), then "done · 1 min 30 s · 12 tools"; its header links to its stored conversation |
+| tool card | running, done or failed; a one-line summary; "running · 12 s", or "waiting for your approval · ⌃2"; open: input, result (400 lines), a subagent's blocks; opens by itself for edits, errors and running subagents. A subagent card adds the tool calls its blocks made, at any depth, and the latest: "running · 1 min 04 s · 9 tools · Read docs/ui.md" (the latest drops first when the card is narrow), then "done · 1 min 30 s · 12 tools". An Agent call whose result says it launched its subagent into the background reads "running in background · …" while the session lists that subagent among its open tasks, and done once it leaves the list. A card with no nested blocks shows no count: a stored conversation keeps a subagent's blocks in a file of its own. Its header links to its stored conversation |
 | note | an icon by kind and the first line; error notes start open |
 | hook group | consecutive hook outputs as one line, "hooks · UserPromptSubmit, SessionStart (3)" |
 | turn end | the duration, no cost ([record 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)); an interrupted turn reads muted |
@@ -163,17 +163,20 @@ the end until the user scrolls; a "↓ Latest" button returns, and sending a pro
 blocks; ⌘⇧C copies it, or the loaded blocks, as Markdown; ⌘F opens the cards that hold matches and closes them again
 afterwards. A `path:line` link opens the file in the side pane.
 
-While a subagent runs, a strip above the transcript holds one chip per running top-level Agent card, in start order
-(spinner, description clipped to 28 characters, elapsed time), then one per background subagent of the session
-(`local_agent` tasks, hourglass) that no running card shows; shell tasks stay out, they show in the session's waiting
-status. A click on a card's chip opens the card and scrolls it to the top of the view. The strip hides when it is
-empty; its timer runs only while it shows. A card's counts are kept as blocks arrive, never by walking its blocks on a
-paint.
+While a subagent runs, a strip above the transcript holds one chip per running top-level Agent card, foreground or
+background, in start order (spinner, description clipped to 28 characters, elapsed time), then one per background
+subagent of the session (`local_agent` tasks, hourglass) that no card in the loaded window shows; shell tasks stay out,
+they show in the session's waiting status. A click on a card's chip opens the card and scrolls it to the top of the
+view. The strip is one line: the chips that do not fit are counted in a last "+N" chip, whose tooltip names them. It
+hides when it is empty; its timer runs only while it shows; a transcript that followed its end still shows it when the
+strip appears or goes. A card's counts are kept as blocks arrive, never by walking its blocks on a paint; its times
+survive a rebuild of the tab (a session switch, "Show earlier").
 
 The "transcript" link in a subagent card's header (`subagent:<toolUseId>`) opens the subagent's stored conversation as
 a lower view, "agent · <description>": the task quoted, each text, each tool call as one list item with its result
-clipped to 200 characters ([record 64](adr/0064-sub-agents-are-shown-live.md)). While the file grows, the view is
-rendered again every 2 s.
+clipped to 200 characters ([record 64](adr/0064-sub-agents-are-shown-live.md)). Two subagents with one description get
+"agent · <description>" and "agent · <description> (2)". While the session runs and the file grows, the view is rendered
+again every 2 s, keeping the reader where it was, or at the end when it was at the end.
 
 ### 4.3 The frame-time gate
 

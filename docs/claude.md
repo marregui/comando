@@ -89,13 +89,19 @@ text and shown to 400 lines.
   prompt resumes the conversation. A stored conversation records no turn results; a turn ends where a message stopped
   at the end of its turn (`stop_reason` `end_turn`), and gets a turn end without time, so its answer reads in gold as
   it did live; one cut off mid-turn gets none.
+- **Background subagents** (2.1.302, seen in a `-p` stream-json run, undocumented): an Agent call with
+  `run_in_background` returns at once, its result text reading "Async agent launched successfully. … agentId: <id>";
+  `<id>` is the `task_id` of its `local_agent` task in `background_tasks_changed`, and `task_started` carries the call's
+  `tool_use_id`. The subagent's messages keep arriving in the stream with `parent_tool_use_id` set to the call, so its
+  blocks nest in the card as a foreground one's do. The transcript reads the card as running in the background while
+  the task is listed ([record 64](adr/0064-sub-agents-are-shown-live.md)).
 - **Subagents.** Not documented by Claude Code (2.1.302): beside `<session-id>.jsonl` sits `<session-id>/subagents/`,
   with per subagent `agent-<id>.jsonl` (its whole conversation, `isSidechain: true`) and `agent-<id>.meta.json`
   (`agentType`, `description`, `toolUseId` = the Agent call's id; seen on 2026-10-18 also `finished`). `SubagentFiles` finds
   the meta file whose `toolUseId` matches (files over 4 kB skipped), and renders the conversation as Markdown, reading
   only the last 2 MB of a longer file and saying so. `ClaudeAdapter.showSubagent` does it on a thread of its own and
-  shows a lower view; it then follows the file every 2 s while it grows, until 30 s pass without growth, the meta file
-  says `finished`, or the session stops; at most 4 views follow at once, the oldest stops first. A file missing or
+  shows a lower view; while the session runs it then follows the file every 2 s while it grows, until 30 s pass without
+  growth, the meta file says `finished`, or the session stops; at most 4 views follow at once, the oldest stops first. A file missing or
   moved by a later Claude Code gives the notice "transcript not found for this sub-agent"
   ([record 64](adr/0064-sub-agents-are-shown-live.md)).
 

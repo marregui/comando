@@ -127,8 +127,8 @@ class AgentStatusTest {
         add(tool("t1", "Bash", "{\"command\":\"ls\"}", ""));
 
         assertThat(canvas.runningAgents()).containsExactly(
-                new TranscriptCanvas.RunningAgent("a1", "first", 1_000_000L),
-                new TranscriptCanvas.RunningAgent("a2", "second", 1_005_000L));
+                new TranscriptCanvas.RunningAgent("a1", "first", 1_000_000L, ""),
+                new TranscriptCanvas.RunningAgent("a2", "second", 1_005_000L, ""));
 
         canvas.update(at, first.withResult("done", false));
         assertThat(canvas.runningAgents()).extracting(TranscriptCanvas.RunningAgent::toolUseId).containsExactly("a2");

@@ -221,6 +221,7 @@ by delta), `FakeResult`.
 | `claude-strand-<session>` | virtual, single-threaded | every change to a session: start, send, interrupt, stop, history; the transcript's one writer |
 | `claude-out-`, `-in-`, `-err-`, `-exit-<session>` | platform, per process | stdout lines, the stdin queue, the last 40 stderr lines, the exit |
 | `claude-timer` | platform | the stop sequence's deadlines |
+| `subagent-tail` | platform, daemon | finds and renders a sub-agent's stored conversation; follows up to 4 of them every 2 s while their files grow |
 | `plan-usage` | platform, daemon | `claude --safe-mode -p /usage` at start and every 5 minutes, stopped after 30 s |
 | MCP requests | virtual, one per request | JSON-RPC; an `approve` call waits for its card |
 | `gradle-<run>`, `tool-output-<run>`, `tool-kill-<run>` | virtual | a run's process and output; SIGKILL what a stop left alive after 2 s |

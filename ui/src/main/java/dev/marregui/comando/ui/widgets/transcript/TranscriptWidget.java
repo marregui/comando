@@ -134,6 +134,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
             return;
         }
         this.tasks = List.copyOf(tasks);
+        canvas.setBackgroundTasks(this.tasks);
         updateStrip();
     }
 
@@ -143,7 +144,12 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     }
 
     private void updateStrip() {
+        boolean shown = strip.isVisible();
         strip.show(transcript == null ? List.of() : canvas.runningAgents(), tasks);
+        if (shown != strip.isVisible() && following) {
+            // the strip took or gave back a line of the view: a transcript that followed its end still shows it
+            SwingUtilities.invokeLater(this::scrollToEnd); // after the layout the change asked for
+        }
     }
 
     /** The painter, for measurement and tests. */
@@ -176,6 +182,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     private void reset(int start) {
         canvas.clear();
         canvas.setWaiting(waiting);
+        canvas.setBackgroundTasks(tasks);
         following = true;
         windowStart = start;
         built = start;

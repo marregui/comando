@@ -69,6 +69,16 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("subagent-tail").daemon(true).unstarted(r));
     /** The sub-agent views following their file, by tool-use id, oldest first. Confined to {@link #subagents}. */
     private final LinkedHashMap<String, Tail> tails = new LinkedHashMap<>();
+    /**
+     * The sub-agent view titles given, title to tool-use id: a view is found by its title alone, so two sub-agents
+     * with the same description get distinct ones. Confined to {@link #subagents}; the oldest go first.
+     */
+    private final Map<String, String> titles = new LinkedHashMap<>() {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
+            return size() > 256;
+        }
+    };
 
     public ClaudeAdapter(IntentSink sink, TranscriptRegistry transcripts, McpGateway mcp, ClaudeSettings settings) {
         this.sink = sink;
@@ -115,6 +125,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         String branch = "";
         /** The last start failed and said so; a prompt sent after it adds no second error. Cleared by a start. */
         boolean startFailed;
+        /** A process of the session runs; read by the sub-agent thread, which follows only a running session's sub-agents. */
+        volatile boolean live;
 
         Session(String name) {
             this.name = name;
@@ -290,7 +302,14 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     @Override
     public void showSubagent(String name, String claudeSessionId, String toolUseId) {
         try {
-            subagents.execute(() -> openSubagent(name, claudeSessionId, toolUseId));
+            subagents.execute(() -> {
+                try {
+                    openSubagent(name, claudeSessionId, toolUseId);
+                } catch (RuntimeException e) {
+                    LOG.log(System.Logger.Level.ERROR, "cannot open a sub-agent [session=" + name + ", toolUseId=" + toolUseId + ']', e);
+                    sink.dispatch(new Intent.Notify(Notice.Level.WARN, "Session " + name + ": cannot open the sub-agent's transcript", false));
+                }
+            });
         } catch (RejectedExecutionException e) {
             LOG.log(System.Logger.Level.DEBUG, "adapter closed, sub-agent not shown [session=" + name + ']');
         }
@@ -322,8 +341,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         SubagentFiles.Found f = found.get();
         String description = f.description().isEmpty() ? toolUseId : f.description();
-        // the reducer clips longer titles, and a refresh finds its view by the title as kept
-        Tail t = new Tail(name, "agent · " + Clip.keepStart(description, 60), f);
+        Tail t = new Tail(name, title(description, toolUseId), f);
         t.size = SubagentFiles.size(f.transcript());
         String markdown = renderSubagent(t);
         if (markdown == null) {
@@ -331,8 +349,9 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         sink.dispatch(new Intent.ShowView("", t.title, new ViewSpec.Markdown(markdown), Placement.LOWER));
         stopTail(toolUseId);
-        if (SubagentFiles.finished(f.meta(), json)) {
-            return;
+        Session s = sessions.get(name);
+        if (s == null || !s.live || SubagentFiles.finished(f.meta(), json)) {
+            return; // a stopped session's sub-agents write no more
         }
         t.grewAt = System.nanoTime();
         tails.put(toolUseId, t);
@@ -348,6 +367,21 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 stopTail(toolUseId);
             }
         }, TAIL_EVERY_MILLIS, TAIL_EVERY_MILLIS, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * The view title of the sub-agent {@code toolUseId}: {@code agent · <description>}, numbered when another sub-agent
+     * took that title; the same sub-agent keeps its title. The reducer clips longer titles, and a refresh finds its
+     * view by the title as kept, so the description is clipped first.
+     */
+    private String title(String description, String toolUseId) {
+        String base = "agent · " + Clip.keepStart(description, 60);
+        String title = base;
+        for (int n = 2; titles.containsKey(title) && !titles.get(title).equals(toolUseId); n++) {
+            title = base + " (" + n + ")";
+        }
+        titles.put(title, toolUseId);
+        return title;
     }
 
     private void follow(String toolUseId, Tail t) {
@@ -445,6 +479,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                     line -> s.run(() -> onLine(s, line)),
                     code -> s.run(() -> onExit(s, run, code)));
             s.current = run;
+            s.live = true;
             s.startFailed = false;
             if (spec.startMode() == StartMode.NEW) {
                 // the Session tab shows one conversation: the new one starts empty, the old stays in Claude Code's files
@@ -502,6 +537,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             s.transcript.changed();
         }
         s.current = null;
+        s.live = false;
         mcp.unregister(s.name, run.ticket);
         stopTails(s.name);
         sink.dispatch(new Intent.SessionExited(s.name, clean ? 0 : code, lastLine(err)));
@@ -640,6 +676,11 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         closed = true;
         planUsage.shutdownNow();
         subagents.shutdownNow();
+        try {
+            subagents.awaitTermination(2, TimeUnit.SECONDS); // a read under way sends nothing after close returns
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
         // SIGTERM to every process, collected on each strand; the strands then stop, so no exit handler runs and
         // this method cleans up after the processes itself: SIGKILL after the grace period, config files with
         // their bearer tokens deleted, tokens revoked

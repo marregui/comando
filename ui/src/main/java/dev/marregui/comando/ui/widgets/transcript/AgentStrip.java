@@ -14,9 +14,10 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.Timer;
 import java.awt.Cursor;
-import java.awt.FlowLayout;
+import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
+import java.awt.Insets;
 import java.awt.RenderingHints;
 import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseAdapter;
@@ -31,24 +32,28 @@ import java.util.function.LongSupplier;
 /**
  * One line above the transcript while sub-agents run: a chip per running top-level Agent card (spinner, description,
  * elapsed time), which a click scrolls to and opens, then a chip per background sub-agent of the session that has no
- * running card (hourglass, description, elapsed time). Hidden when there is none. Its timer runs only while it shows.
+ * running card (hourglass, description, elapsed time). Hidden when there is none. One line: the chips that do not fit
+ * are counted in a last "+N" chip, whose tooltip names them. Its timer runs only while it shows.
  */
 final class AgentStrip extends JPanel {
 
     static final int DESCRIPTION_CHARS = 28;
     static final String LOCAL_AGENT = "local_agent";
+    private static final int GAP = 6;
+    private static final int VGAP = 3;
 
     private final Consumer<String> reveal;
     private final LongSupplier clock;
     private final SpinnerIcon spinner = new SpinnerIcon(12);
     private final Timer timer = new Timer(SpinnerIcon.STEP_MILLIS, e -> tick());
     private final List<Chip> chips = new ArrayList<>();
+    private final JLabel more = new JLabel();
     private List<RunningAgent> agents = List.of();
     private List<BackgroundTask> tasks = List.of();
     private long lastSecond = -1;
 
     AgentStrip(Consumer<String> reveal, LongSupplier clock) {
-        super(new FlowLayout(FlowLayout.LEFT, 6, 3));
+        super(null);
         this.reveal = reveal;
         this.clock = clock;
         setOpaque(false);
@@ -91,6 +96,8 @@ final class AgentStrip extends JPanel {
             chips.add(c);
         }
         chips.forEach(this::add);
+        more.setFont(chips.isEmpty() ? more.getFont() : chips.getFirst().getFont());
+        add(more);
         lastSecond = -1;
         relabel();
         setVisible(!chips.isEmpty());
@@ -104,6 +111,7 @@ final class AgentStrip extends JPanel {
         Set<String> shown = new HashSet<>();
         for (RunningAgent a : agents) {
             shown.add(a.toolUseId());
+            shown.add(a.agentId());
             shown.add(a.description());
         }
         return tasks.stream().filter(t -> t.kind().equals(LOCAL_AGENT) && !shown.contains(t.id()) && !shown.contains(t.description())).toList();
@@ -112,6 +120,77 @@ final class AgentStrip extends JPanel {
     /** The chips in order; for tests. */
     List<JLabel> chips() {
         return List.copyOf(chips);
+    }
+
+    /** The chips laid out on the line, and the "+N" text, empty when all fit; for tests. */
+    List<JLabel> shownChips() {
+        return chips.stream().<JLabel>map(c -> c).filter(c -> c.getWidth() > 0).toList();
+    }
+
+    String moreText() {
+        return more.getWidth() > 0 ? more.getText() : "";
+    }
+
+    @Override
+    public Dimension getPreferredSize() {
+        Insets in = getInsets();
+        int w = 0;
+        int h = 0;
+        for (Chip c : chips) {
+            Dimension d = c.getPreferredSize();
+            w += d.width + GAP;
+            h = Math.max(h, d.height);
+        }
+        return new Dimension(in.left + in.right + w + GAP, in.top + in.bottom + h + 2 * VGAP);
+    }
+
+    @Override
+    public Dimension getMinimumSize() {
+        return new Dimension(0, getPreferredSize().height);
+    }
+
+    @Override
+    public Dimension getMaximumSize() {
+        return new Dimension(Integer.MAX_VALUE, getPreferredSize().height);
+    }
+
+    /** Left to right on one line; what does not fit, keeping room for the "+N" chip, is counted in it. */
+    @Override
+    public void doLayout() {
+        Insets in = getInsets();
+        int right = getWidth() - in.right - GAP;
+        int x = in.left + GAP;
+        int y = in.top + VGAP;
+        int fitted = 0;
+        for (int i = 0; i < chips.size(); i++) {
+            Dimension d = chips.get(i).getPreferredSize();
+            int left = chips.size() - i - 1;
+            int reserve = left == 0 ? 0 : GAP + moreWidth(left);
+            if (x + d.width + reserve > right) {
+                break;
+            }
+            chips.get(i).setBounds(x, y, d.width, d.height);
+            x += d.width + GAP;
+            fitted++;
+        }
+        StringBuilder hidden = new StringBuilder();
+        for (int i = fitted; i < chips.size(); i++) {
+            chips.get(i).setBounds(0, 0, 0, 0);
+            hidden.append(hidden.isEmpty() ? "" : ", ").append(chips.get(i).description);
+        }
+        int rest = chips.size() - fitted;
+        if (rest == 0) {
+            more.setBounds(0, 0, 0, 0);
+            return;
+        }
+        more.setText("+" + rest);
+        more.setToolTipText(hidden.toString());
+        Dimension d = more.getPreferredSize();
+        more.setBounds(x, y + 2, d.width, d.height);
+    }
+
+    private int moreWidth(int n) {
+        return more.getFontMetrics(more.getFont()).stringWidth("+" + n) + 2;
     }
 
     /** For tests: whether the timer runs. */

@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.widgets.transcript.render;
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.marregui.comando.core.result.Formats;
 import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.Json;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
@@ -23,12 +24,16 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /** The item for each block kind. */
 final class Items {
 
     static final int MAX_RESULT_LINES = 400;
     static final int MAX_INPUT_LINES = 300;
+    /** An Agent call's result that launched its sub-agent into the background, with the sub-agent's id. */
+    static final Pattern LAUNCHED = Pattern.compile("(?is)launched.*?agentId: ([A-Za-z0-9_-]+)");
 
     private Items() {
     }
@@ -378,10 +383,16 @@ final class Items {
         private int inputTop;
         private int resultTop;
         private int[] childTops = new int[0];
-        /** When the canvas first saw the call running; negative while it has not. */
-        private long runningSince = -1;
-        /** When the canvas saw the call end, after it saw it running; negative until then. */
-        private long endedAt = -1;
+        /**
+         * When the canvas first saw the call running, when it saw it end after that, and when it saw a sub-agent's
+         * launch into the background; negative until then. Shared with the canvas, so a rebuilt canvas keeps them.
+         */
+        private final long[] times;
+        /** A sub-agent launched into the background that still works, by the session's open tasks. */
+        private boolean background;
+        /** The result the launched agent's id was read from, and that id; empty when the result is not a launch. */
+        private String agentOf;
+        private String agentId = "";
         /** Tool calls nested in this card at any depth, counted as they are added. */
         private int tools;
         /** The most recent nested tool call: its id and its name with its summary, clipped. */
@@ -396,13 +407,22 @@ final class Items {
         private TextLayout status;
 
         ToolItem(Block.ToolCall b) {
-            this(b, 0);
+            this(b, 0, newTimes());
         }
 
-        ToolItem(Block.ToolCall b, long order) {
+        ToolItem(Block.ToolCall b, long order, long[] times) {
             super(b);
             this.order = order;
+            this.times = times;
             autoOpen();
+        }
+
+        static long[] newTimes() {
+            return new long[]{-1, -1, -1};
+        }
+
+        long[] times() {
+            return times;
         }
 
         Block.ToolCall call() {
@@ -437,21 +457,64 @@ final class Items {
             return call().status() == Block.ToolStatus.RUNNING;
         }
 
+        /** Running, or a sub-agent working in the background after its call returned. */
+        boolean isActive() {
+            return isRunning() || background;
+        }
+
+        /** Marks the sub-agent as working in the background; true when that changed. */
+        boolean setBackground(boolean b) {
+            if (background == b) {
+                return false;
+            }
+            background = b;
+            return true;
+        }
+
         /**
-         * Starts the elapsed time of a running call at {@code nowMillis}, the first time the canvas sees it running, and
+         * The id of the sub-agent this call launched into the background, read from its result ("Async agent launched
+         * successfully. … agentId: a58…", Claude Code 2.1.302, undocumented); empty for any other call.
+         */
+        String launchedAgent() {
+            Block.ToolCall c = call();
+            if (!c.isSubagent() || c.status() != Block.ToolStatus.DONE) {
+                return "";
+            }
+            if (!c.resultText().equals(agentOf)) {
+                agentOf = c.resultText();
+                Matcher m = LAUNCHED.matcher(agentOf);
+                agentId = m.find() ? m.group(1) : "";
+            }
+            return agentId;
+        }
+
+        /**
+         * Starts the elapsed time of an active call at {@code nowMillis}, the first time the canvas sees it active, and
          * stops it the first time the canvas sees it ended.
          */
         void seen(long nowMillis) {
-            if (isRunning() && runningSince < 0) {
-                runningSince = nowMillis;
-            } else if (!isRunning() && runningSince >= 0 && endedAt < 0) {
-                endedAt = nowMillis;
+            if (isActive() && times[0] < 0) {
+                times[0] = nowMillis;
+            } else if (!isActive() && times[0] >= 0 && times[1] < 0) {
+                times[1] = nowMillis;
+            }
+        }
+
+        /** Notes the first time the canvas sees the result launch the sub-agent, if it saw the call run before it. */
+        void launchSeen(long nowMillis) {
+            if (times[2] < 0 && times[0] >= 0 && !launchedAgent().isEmpty()) {
+                times[2] = nowMillis;
             }
         }
 
         /** When the canvas first saw the call running; negative while it has not. */
         long runningSince() {
-            return runningSince;
+            return times[0];
+        }
+
+        /** When the canvas first saw the call's result launch a sub-agent into the background; negative when it has not. */
+        long launchedAt() {
+            return times[2];
         }
 
         /** A tool call was nested in this card, at any depth; it is now the most recent one. */
@@ -488,11 +551,21 @@ final class Items {
             return last;
         }
 
-        /** The name and summary of a nested call as a sub-agent card's status shows it, at most {@link #LAST_CHARS} characters. */
+        /**
+         * The name and summary of a nested call as a sub-agent card's status shows it, at most {@link #LAST_CHARS}
+         * characters: a path keeps its end, which names it.
+         */
         static String lastLabel(Block.ToolCall c) {
+            String name = ToolText.displayName(c.name());
             String summary = ToolText.summary(c.name(), Json.parse(c.inputJson()));
-            String label = ToolText.displayName(c.name()) + (summary.isEmpty() ? "" : " " + summary);
-            return label.length() <= LAST_CHARS ? label : label.substring(0, LAST_CHARS - 1) + "…";
+            if (summary.isEmpty()) {
+                return Clip.keepStart(name, LAST_CHARS);
+            }
+            int room = LAST_CHARS - name.length() - 1;
+            if (room < 8) {
+                return Clip.keepStart(name + " " + summary, LAST_CHARS);
+            }
+            return name + " " + (isPath(c.name()) ? Clip.keepEnd(summary, room) : Clip.keepStart(summary, room));
         }
 
         /** Marks the running call as held up by an approval card; true when that changed. */
@@ -516,26 +589,29 @@ final class Items {
         /** The status, without the latest tool call when not {@code withLast}: for a card too narrow to show it. */
         String statusText(long nowMillis, boolean withLast) {
             boolean subagent = call().isSubagent();
-            if (!isRunning()) {
+            if (!isActive()) {
                 if (!subagent || call().status() == Block.ToolStatus.ERROR) {
                     return "";
                 }
-                String took = runningSince >= 0 && endedAt >= 0 ? " · " + Labels.elapsed(endedAt - runningSince) : "";
-                return "done" + took + " · " + toolsLabel();
+                // a stored conversation keeps a sub-agent's blocks apart: no blocks means no count, not none
+                String took = times[0] >= 0 && times[1] >= 0 ? " · " + Labels.elapsed(times[1] - times[0]) : "";
+                return "done" + took + toolsLabel();
             }
-            if (waiting) {
+            if (waiting && isRunning()) {
                 return WAITING;
             }
-            long elapsed = runningSince < 0 ? 0 : nowMillis - runningSince;
-            String status = elapsed < 1000 ? "running" : "running · " + Labels.elapsed(elapsed);
+            long elapsed = times[0] < 0 ? 0 : nowMillis - times[0];
+            String running = background ? "running in background" : "running";
+            String status = elapsed < 1000 ? running : running + " · " + Labels.elapsed(elapsed);
             if (subagent && tools > 0) {
-                status += " · " + toolsLabel() + (withLast && !last.isEmpty() ? " · " + last : "");
+                status += toolsLabel() + (withLast && !last.isEmpty() ? " · " + last : "");
             }
             return status;
         }
 
+        /** " · n tools", or nothing before the first. */
         private String toolsLabel() {
-            return tools == 1 ? "1 tool" : tools + " tools";
+            return tools == 0 ? "" : tools == 1 ? " · 1 tool" : " · " + tools + " tools";
         }
 
         /**
@@ -545,6 +621,11 @@ final class Items {
         private void autoOpen() {
             Block.ToolCall c = call();
             fold.openIf(isEdit(c.name()) || c.status() == Block.ToolStatus.ERROR || (c.isSubagent() && c.status() == Block.ToolStatus.RUNNING));
+        }
+
+        /** A tool whose summary is a file's path. */
+        private static boolean isPath(String name) {
+            return isEdit(name) || name.equals("Read") || name.equals("NotebookEdit");
         }
 
         private static boolean isEdit(String name) {
@@ -699,7 +780,8 @@ final class Items {
                 text = statusText(marks.nowMillis(), false); // the latest tool call gives way to the title
                 st = status(text, s);
             }
-            int iconWidth = statusIcon != null ? 16 : 0;
+            Icon mark = background ? null : statusIcon; // a launch's result is not the sub-agent's end
+            int iconWidth = mark != null ? 16 : 0;
             int used = iconWidth + (st != null ? (iconWidth > 0 ? 6 : 0) + Math.round(st.getAdvance()) : 0);
             if (!children.isEmpty() && !fold.isOpen()) {
                 TextLayout steps = new TextLayout(children.size() + " steps", s.small, Style.FRC);
@@ -707,11 +789,11 @@ final class Items {
                 steps.draw(g, right - used - 6 - steps.getAdvance(), cy + IN_Y + steps.getAscent() + 1);
                 used += 6 + Math.round(steps.getAdvance());
             }
-            if (statusIcon != null) {
-                statusIcon.paintIcon(marks.component(), g, right - 16, cy + IN_Y + 1);
+            if (mark != null) {
+                mark.paintIcon(marks.component(), g, right - 16, cy + IN_Y + 1);
             }
             if (st != null) {
-                g.setColor(isRunning() ? Theme.WARN : s.muted);
+                g.setColor(isActive() ? Theme.WARN : s.muted);
                 st.draw(g, right - (iconWidth > 0 ? iconWidth + 6 : 0) - st.getAdvance(), cy + IN_Y + st.getAscent() + 1);
             }
             Shape old = g.getClip();

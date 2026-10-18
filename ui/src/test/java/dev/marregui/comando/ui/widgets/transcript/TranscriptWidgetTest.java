@@ -179,7 +179,7 @@ class TranscriptWidgetTest {
     void aRunningChipClickRevealsItsCardAndABackgroundChipHasNoClick() {
         List<String> revealed = new ArrayList<>();
         AgentStrip strip = new AgentStrip(revealed::add, () -> 10_000L);
-        strip.show(List.of(new TranscriptCanvas.RunningAgent("a1", "survey", 4_000L)),
+        strip.show(List.of(new TranscriptCanvas.RunningAgent("a1", "survey", 4_000L, "")),
                 List.of(new BackgroundTask("bg1", "local_agent", "watch", 0L)));
         assertThat(strip.chips()).extracting(JLabel::getText).containsExactly("survey · 6 s", "watch");
 

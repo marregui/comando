@@ -113,14 +113,15 @@ final class SubagentFiles {
         long size;
         try (RandomAccessFile in = new RandomAccessFile(file.toFile(), "r")) {
             size = in.length();
-            long from = Math.max(0L, size - limitBytes);
+            // one byte before the cut too: when it is a line's end, the first line read is whole
+            long from = Math.max(0L, size - limitBytes - 1);
             byte[] bytes = new byte[(int) (size - from)];
             in.seek(from);
             in.readFully(bytes);
             text = new String(bytes, StandardCharsets.UTF_8);
-            if (from > 0) {
+            if (size > limitBytes) {
                 int eol = text.indexOf('\n');
-                text = eol < 0 ? "" : text.substring(eol + 1); // the first line was cut
+                text = eol < 0 ? "" : text.substring(eol + 1); // up to the first line's end: cut, or the byte before the cut
             }
         } catch (FileNotFoundException e) {
             return "_The sub-agent has written nothing yet._\n";
