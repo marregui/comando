@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.shell;
 
+import dev.marregui.comando.ui.kit.format.KeyText;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
@@ -16,7 +18,7 @@ final class MarkdownSheet {
             if (in == null) {
                 throw new IllegalStateException("markdown-sheet.md is missing from the build");
             }
-            return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+            return KeyText.of(new String(in.readAllBytes(), StandardCharsets.UTF_8));
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read the Markdown sheet", e);
         }

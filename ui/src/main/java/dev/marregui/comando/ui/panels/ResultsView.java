@@ -6,6 +6,7 @@ import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.result.ResultView;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SqlRun;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
@@ -62,7 +63,7 @@ public final class ResultsView {
         south.add(planToggle, BorderLayout.EAST);
         root.add(center, BorderLayout.CENTER);
         root.add(south, BorderLayout.SOUTH);
-        overlay.showEmpty("Run SQL from the editor: select it, or put the caret in its block, and press ⌘⏎.");
+        overlay.showEmpty(KeyText.of("Run SQL from the editor: select it, or put the caret in its block, and press ⌘⏎."));
         Capabilities.mark(root, new Copyable() {
             @Override
             public String copyText() {
@@ -103,7 +104,7 @@ public final class ResultsView {
             shownResult = null;
             grid.setSource(null, "result.csv");
             status.setText(" ");
-            overlay.showEmpty("Run SQL from the editor: select it, or put the caret in its block, and press ⌘⏎.");
+            overlay.showEmpty(KeyText.of("Run SQL from the editor: select it, or put the caret in its block, and press ⌘⏎."));
             return;
         }
         SqlRun run = maybeRun.get();

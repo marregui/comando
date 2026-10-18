@@ -11,6 +11,7 @@ import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -211,9 +212,9 @@ public final class ResourceDialog<S> {
             });
         }
         if (config.assign() != null) {
-            actions.add(button("Assign to panel", "pin", session
+            actions.add(button("Assign to panel", "pin", KeyText.of(session
                             ? "Saves when needed, then opens the session in a panel: its own, else the focused one when it has none, else a new one (⌘⏎)"
-                            : "Saves when needed, then binds the " + noun + " to the focused panel (⌘⏎)",
+                            : "Saves when needed, then binds the " + noun + " to the focused panel (⌘⏎)"),
                     this::assign));
         }
         save = button("Save", "check", "Saves the form (⏎)", this::save);

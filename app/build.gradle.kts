@@ -15,6 +15,11 @@ dependencies {
     implementation(libs.jackson.databind)
     implementation(libs.questdb)
     testImplementation(project(":testkit"))
+    // the keyboard tests reach into the editor and the terminal of a real window
+    testImplementation(libs.rsyntaxtextarea)
+    testImplementation(libs.jediterm.core)
+    testImplementation(libs.jediterm.ui)
+    testImplementation(libs.awaitility)
 }
 
 tasks.jar {
@@ -90,7 +95,10 @@ val uiTest = tasks.register<Test>("uiTest") {
     testClassesDirs = sourceSets["test"].output.classesDirs
     classpath = sourceSets["test"].runtimeClasspath
     useJUnitPlatform()
-    filter { includeTestsMatching("*UiReplayTest") }
+    filter {
+        includeTestsMatching("*UiReplayTest")
+        includeTestsMatching("*UiKeysTest")
+    }
     systemProperty("java.awt.headless", "false")
     systemProperty("comando.uiTests", "true")
     systemProperty("comando.prefsNode", "dev/marregui/comando-test")

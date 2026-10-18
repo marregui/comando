@@ -10,6 +10,7 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
@@ -123,7 +124,7 @@ public final class Workspace {
         texts.onOutsideChange(change -> Edt.later(() -> takeOutside(change)));
         texts.onDeleted(deleted -> Edt.later(() -> closeDeleted(deleted)));
         tabs.putClientProperty("JTabbedPane.tabClosable", true);
-        tabs.putClientProperty("JTabbedPane.tabCloseToolTipText", "Close the panel (⌘W; ⌘⇧T reopens it)");
+        tabs.putClientProperty("JTabbedPane.tabCloseToolTipText", KeyText.of("Close the panel (⌘W; ⌘⇧T reopens it)"));
         tabs.putClientProperty("JTabbedPane.tabCloseCallback", (IntConsumer) i -> {
             EditorPanel p = (EditorPanel) tabs.getComponentAt(i);
             closer.accept(p.panel().id());
@@ -132,7 +133,7 @@ public final class Workspace {
         tabs.putClientProperty("JTabbedPane.scrollButtonsPolicy", "asNeededSingle");
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         JButton add = new JButton(Icons.get("add"));
-        add.setToolTipText("New panel (⌘T)");
+        add.setToolTipText(KeyText.of("New panel (⌘T)"));
         add.getAccessibleContext().setAccessibleName("New panel");
         add.putClientProperty("JButton.buttonType", "toolBarButton");
         add.addActionListener(e -> newPanel());
@@ -242,7 +243,7 @@ public final class Workspace {
         }
         List<String> parts = new ArrayList<>(3);
         if (!closing.isEmpty()) {
-            parts.add("Closed " + closing.size() + (closing.size() == 1 ? " tab" : " tabs") + "; ⌘⇧T or the Panels tab reopens them");
+            parts.add("Closed " + closing.size() + (closing.size() == 1 ? " tab" : " tabs") + KeyText.of("; ⌘⇧T or the Panels tab reopens them"));
         }
         if (waiting + running > 0) {
             List<String> why = new ArrayList<>(2);
@@ -505,9 +506,9 @@ public final class Workspace {
                         // a menu's close says it once, below
                     } else if (kept) {
                         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Closed " + was.title()
-                                + "; ⌘⇧T or the Panels tab reopens it", false));
+                                + KeyText.of("; ⌘⇧T or the Panels tab reopens it"), false));
                     } else if (was.document()) {
-                        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Closed " + was.title() + " — ⌘⇧T reopens it", false));
+                        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Closed " + was.title() + KeyText.of(" — ⌘⇧T reopens it"), false));
                     }
                 }
             }

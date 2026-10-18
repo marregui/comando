@@ -41,7 +41,7 @@ class KeyPriorityTest {
 
     @Test
     void aCommandKeyRunsTheCommandBeforeTheFocusedEditor() {
-        KeyPriority p = KeyPriority.detached(registry, c -> c == editor);
+        KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
         KeyEvent press = pressed(editor, KeyEvent.VK_ENTER, CMD);
 
         assertThat(p.dispatchKeyEvent(press)).isTrue();
@@ -51,7 +51,7 @@ class KeyPriorityTest {
 
     @Test
     void theCharacterTypedByAClaimedPressIsSwallowedOnce() {
-        KeyPriority p = KeyPriority.detached(registry, c -> c == editor);
+        KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
         p.dispatchKeyEvent(pressed(editor, KeyEvent.VK_ENTER, CMD));
 
         assertThat(p.dispatchKeyEvent(typed(editor, '\n'))).isTrue();
@@ -62,7 +62,7 @@ class KeyPriorityTest {
     @Test
     void otherKeysAndOtherWindowsAreLeftAlone() {
         JPanel elsewhere = new JPanel();
-        KeyPriority p = KeyPriority.detached(registry, c -> c == editor);
+        KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
 
         assertThat(p.dispatchKeyEvent(pressed(editor, KeyEvent.VK_J, InputEvent.ALT_DOWN_MASK))).isFalse();
         assertThat(p.dispatchKeyEvent(pressed(elsewhere, KeyEvent.VK_ENTER, CMD))).isFalse();
@@ -73,10 +73,25 @@ class KeyPriorityTest {
     @Test
     void aDisabledCommandLeavesTheKeyToTheComponent() {
         enabled.set(false);
-        KeyPriority p = KeyPriority.detached(registry, c -> c == editor);
+        KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
 
         assertThat(p.dispatchKeyEvent(pressed(editor, KeyEvent.VK_ENTER, CMD))).isFalse();
         assertThat(runs).hasValue(0);
+    }
+
+    /** The terminal keeps Ctrl with a letter for its shell: on desktops other than macOS that is ⌘'s key. */
+    @Test
+    void aKeyTheFocusedComponentKeepsIsLeftToIt() {
+        KeyStroke close = KeyStroke.getKeyStroke(KeyEvent.VK_W, InputEvent.CTRL_DOWN_MASK);
+        AtomicInteger closes = new AtomicInteger();
+        registry.register(new Command("close", "Close", null, close, "Panels", closes::incrementAndGet, () -> true));
+        JPanel shell = new JPanel();
+        KeyPriority p = KeyPriority.detached(registry, c -> c == editor || c == shell, (c, k) -> c == shell && k.equals(close));
+
+        assertThat(p.dispatchKeyEvent(pressed(shell, KeyEvent.VK_W, InputEvent.CTRL_DOWN_MASK))).as("the shell's ^W").isFalse();
+        assertThat(closes).hasValue(0);
+        assertThat(p.dispatchKeyEvent(pressed(editor, KeyEvent.VK_W, InputEvent.CTRL_DOWN_MASK))).as("elsewhere a command").isTrue();
+        assertThat(closes).hasValue(1);
     }
 
     private static KeyEvent pressed(Component source, int code, int modifiers) {

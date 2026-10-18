@@ -46,6 +46,7 @@ import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.EdtWatchdog;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -126,7 +127,15 @@ import java.util.prefs.Preferences;
 public final class ComandoUi implements UiPort, AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(ComandoUi.class.getName());
-    private static final int CMD = Platform.menuShortcutMask();
+    /**
+     * The modifier of comando's commands, ⌘ on macOS and Ctrl elsewhere; read per window, so a test may build one with
+     * either desktop's keys ({@link Platform#KEYS_PROPERTY}).
+     */
+    private final int shortcut = Platform.menuShortcutMask();
+    /**
+     * The modifier of the lower tabs' keys: ⌃ on macOS; elsewhere Ctrl is the panels' (⌘1…⌘9), so Alt takes its place.
+     */
+    private final int lowerTabKey = Platform.macKeys() ? InputEvent.CTRL_DOWN_MASK : InputEvent.ALT_DOWN_MASK;
     /** How long closing waits for the event thread to close the window. */
     private static final Duration CLOSE_BOUND = Duration.ofSeconds(5);
 
@@ -214,6 +223,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     public ComandoUi(Dependencies deps) {
         this.deps = deps;
         this.help = new HelpActions(deps, prefs, () -> frame, this::openFile, actions::run, () -> sidePaneHidden = false, actions::all);
+    }
+
+    /** Every command registered once {@link #start} has run, with its key on this desktop; the keyboard tests read them. */
+    public List<Command> commands() {
+        return actions.all();
     }
 
     /** About comando, over the window; the application menu's item and the palette open it. */
@@ -356,7 +370,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         frame.setJMenuBar(menuBar());
         actions.bind(frame.getRootPane());
         actions.areas(Menus.AREAS);
-        keyPriority = KeyPriority.install(actions, frame);
+        keyPriority = KeyPriority.install(actions, frame, TerminalWidget::keepsKey);
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addPropertyChangeListener("permanentFocusOwner", focusListener);
         Toolkit.getDefaultToolkit().addAWTEventListener(keyClock, AWTEvent.KEY_EVENT_MASK);
         restoreLayout();
@@ -559,7 +573,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     public void notifyDesktop(String title, String text) {
         Edt.run(() -> {
             if (notifier != null) {
-                notifier.notify(title, text);
+                notifier.notify(KeyText.of(title), KeyText.of(text));
             }
         });
     }
@@ -694,11 +708,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** Registers every command; where each sits, in a menu or an area, its icon and its tooltip come from {@link Menus}. */
     private void registerCommands() {
         // file
-        cmd("panel.new", "New panel", key(KeyEvent.VK_T, CMD), () -> workspace.newPanel());
-        cmd("panel.openSpec", "Open file…", key(KeyEvent.VK_O, CMD), this::openSpec);
-        cmd("panel.reopen", "Reopen closed panel", key(KeyEvent.VK_T, CMD | SHIFT), this::reopenPanel, () -> workspace.hasClosed());
+        cmd("panel.new", "New panel", key(KeyEvent.VK_T, shortcut), () -> workspace.newPanel());
+        cmd("panel.openSpec", "Open file…", key(KeyEvent.VK_O, shortcut), this::openSpec);
+        cmd("panel.reopen", "Reopen closed panel", key(KeyEvent.VK_T, shortcut | SHIFT), this::reopenPanel, () -> workspace.hasClosed());
         // ⌘S saves the focused panel wherever the keyboard is; exporting a view is ⌘⇧S
-        cmd("panel.save", "Save", key(KeyEvent.VK_S, CMD), this::savePanel);
+        cmd("panel.save", "Save", key(KeyEvent.VK_S, shortcut), this::savePanel);
         cmd("panel.rename", "Rename panel…", null, () -> {
             EditorPanel p = workspace.focused();
             if (p != null) {
@@ -706,7 +720,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         });
         // ⌘W closes the view that has the keyboard, else the panel
-        cmd("file.close", "Close", key(KeyEvent.VK_W, CMD), () -> {
+        cmd("file.close", "Close", key(KeyEvent.VK_W, shortcut), () -> {
             long view = focusedView();
             if (view >= 0) {
                 deps.intents().dispatch(new Intent.CloseView(view));
@@ -714,16 +728,16 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 closePanel(focusedId());
             }
         });
-        cmd("view.export", "Export view…", key(KeyEvent.VK_S, CMD | SHIFT), this::export, () -> capability(Exportable.class) != null);
+        cmd("view.export", "Export view…", key(KeyEvent.VK_S, shortcut | SHIFT), this::export, () -> capability(Exportable.class) != null);
         // edit: each forwards its key to the focused component's own binding, so the menu shows the keys the
         // components already have; a component without the binding (the terminal) gets the key itself
-        edit("edit.undo", "Undo", key(KeyEvent.VK_Z, CMD));
-        edit("edit.redo", "Redo", key(KeyEvent.VK_Z, CMD | SHIFT));
-        edit("edit.cut", "Cut", key(KeyEvent.VK_X, CMD));
-        edit("edit.copy", "Copy", key(KeyEvent.VK_C, CMD));
-        edit("edit.paste", "Paste", key(KeyEvent.VK_V, CMD));
-        edit("edit.selectAll", "Select all", key(KeyEvent.VK_A, CMD));
-        cmd("view.copy", "Copy view content", key(KeyEvent.VK_C, CMD | SHIFT), () -> {
+        edit("edit.undo", "Undo", key(KeyEvent.VK_Z, shortcut));
+        edit("edit.redo", "Redo", key(KeyEvent.VK_Z, shortcut | SHIFT));
+        edit("edit.cut", "Cut", key(KeyEvent.VK_X, shortcut));
+        edit("edit.copy", "Copy", key(KeyEvent.VK_C, shortcut));
+        edit("edit.paste", "Paste", key(KeyEvent.VK_V, shortcut));
+        edit("edit.selectAll", "Select all", key(KeyEvent.VK_A, shortcut));
+        cmd("view.copy", "Copy view content", key(KeyEvent.VK_C, shortcut | SHIFT), () -> {
             Copyable c = capability(Copyable.class);
             if (c != null && Capabilities.copy(c)) {
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "Copied the view's content", false));
@@ -732,34 +746,36 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             Copyable c = capability(Copyable.class);
             return c != null && c.canCopy();
         });
-        cmd("view.find", "Find…", key(KeyEvent.VK_F, CMD), () -> findBar.open(capability(Searchable.class)),
+        cmd("view.find", "Find…", key(KeyEvent.VK_F, shortcut), () -> findBar.open(capability(Searchable.class)),
                 () -> capability(Searchable.class) != null);
-        cmd("view.findNext", "Find next", key(KeyEvent.VK_G, CMD), () -> findBar.next(true), () -> findBar.isOpen());
-        cmd("view.findPrevious", "Find previous", key(KeyEvent.VK_G, CMD | SHIFT), () -> findBar.next(false), () -> findBar.isOpen());
+        cmd("view.findNext", "Find next", key(KeyEvent.VK_G, shortcut), () -> findBar.next(true), () -> findBar.isOpen());
+        cmd("view.findPrevious", "Find previous", key(KeyEvent.VK_G, shortcut | SHIFT), () -> findBar.next(false), () -> findBar.isOpen());
         KeyStroke complete = key(KeyEvent.VK_SPACE, CTRL);
         cmd("edit.complete", "Complete SQL", complete, () -> Keys.forward(editorArea(), complete, true),
                 () -> editorFocused() && Keys.forward(editorArea(), complete, false));
         // ⌥⎋ as well, as in macOS text views: ⌃Space is the system's input-source switch on many Macs
         cmd("edit.completeAlt", "Complete SQL", key(KeyEvent.VK_ESCAPE, ALT), () -> Keys.forward(editorArea(), complete, true),
                 () -> editorFocused() && Keys.forward(editorArea(), complete, false));
-        cmd("panel.preview", "Edit / Preview Markdown", key(KeyEvent.VK_M, CMD | SHIFT), () -> {
+        cmd("panel.preview", "Edit / Preview Markdown", key(KeyEvent.VK_M, shortcut | SHIFT), () -> {
             EditorPanel p = workspace.focused();
             if (p != null) {
                 p.togglePreview();
             }
         });
         // panel: running
-        cmd("run", "Run", key(KeyEvent.VK_ENTER, CMD), () -> run(Target.AUTO), this::canRun);
-        cmd("run.claude", "Send to Claude", key(KeyEvent.VK_ENTER, CMD | SHIFT), () -> run(Target.CLAUDE), this::canRun);
+        cmd("run", "Run", key(KeyEvent.VK_ENTER, shortcut), () -> run(Target.AUTO), this::canRun);
+        cmd("run.claude", "Send to Claude", key(KeyEvent.VK_ENTER, shortcut | SHIFT), () -> run(Target.CLAUDE), this::canRun);
         cmd("run.sql", "Run as SQL", key(KeyEvent.VK_ENTER, ALT), () -> run(Target.SQL), this::canRun);
-        cmd("terminal.run", "Run in the terminal", key(KeyEvent.VK_ENTER, CTRL), this::runInTerminal, this::editorFocused);
-        cmd("run.stop", "Stop", key(KeyEvent.VK_PERIOD, CMD), () -> deps.intents().dispatch(new Intent.CancelRun(focusedId())),
+        // ⌃⏎ on macOS; elsewhere Ctrl+⏎ is Run and Alt+⏎ Run as SQL, so Ctrl+Alt+⏎
+        cmd("terminal.run", "Run in the terminal", key(KeyEvent.VK_ENTER, Platform.macKeys() ? CTRL : shortcut | ALT), this::runInTerminal,
+                this::editorFocused);
+        cmd("run.stop", "Stop", key(KeyEvent.VK_PERIOD, shortcut), () -> deps.intents().dispatch(new Intent.CancelRun(focusedId())),
                 this::canStop);
         // panel: its session
         cmd("session.toggle", "Connect or disconnect", null, () -> focusedSession().ifPresent(x ->
                 deps.intents().dispatch(x.status().isUsable() ? new Intent.StopSession(x.name()) : new Intent.StartSession(x.name()))),
                 () -> focusedSession().isPresent());
-        cmd("session.interrupt", "Interrupt the turn", key(KeyEvent.VK_PERIOD, CMD | SHIFT),
+        cmd("session.interrupt", "Interrupt the turn", key(KeyEvent.VK_PERIOD, shortcut | SHIFT),
                 () -> focusedSession().ifPresent(x -> deps.intents().dispatch(new Intent.InterruptSession(x.name()))),
                 () -> focusedSession().map(SessionState::isBusy).orElse(false));
         // as the panel's and the row's buttons do: only a running session has a conversation to compact
@@ -778,7 +794,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 deps.state().get().sessions().stream().map(x -> x.name()).toList(),
                 name -> deps.intents().dispatch(new Intent.OpenSession(name, deps.state().get().focused(), PanelId.random()))));
         // the focused panel's session in the dialog, or a new one when the panel has none
-        cmd("session.dialog", "Session settings…", key(KeyEvent.VK_K, CMD | SHIFT), () -> openSessions(deps.state().get().focusedPanel().session()));
+        cmd("session.dialog", "Session settings…", key(KeyEvent.VK_K, shortcut | SHIFT), () -> openSessions(deps.state().get().focusedPanel().session()));
         cmd("session.import", "Import conversations…", null, this::openImport);
         // panel: its connection
         cmd("connection.toggle", "Connect or disconnect", null, () -> {
@@ -786,38 +802,38 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             s.connection(s.focusedPanel().connection()).ifPresent(c -> deps.intents().dispatch(c.status().isUsable()
                     ? new Intent.CloseConnection(c.name()) : new Intent.OpenConnection(c.name())));
         }, () -> !deps.state().get().focusedPanel().connection().isEmpty());
-        cmd("connection.schema", "Explore the schema", key(KeyEvent.VK_E, CMD | SHIFT),
+        cmd("connection.schema", "Explore the schema", key(KeyEvent.VK_E, shortcut | SHIFT),
                 () -> exploreSchema(deps.state().get().focusedPanel().connection()),
                 () -> !deps.state().get().focusedPanel().connection().isEmpty());
         cmd("panel.bindConnection", "Bind a connection…", null, () -> choose("Connection for this panel",
                 deps.state().get().connections().stream().map(x -> x.name()).toList(),
                 name -> deps.intents().dispatch(new Intent.BindConnection(deps.state().get().focused(), name))));
-        cmd("connection.dialog", "Connection settings…", key(KeyEvent.VK_O, CMD | SHIFT), () -> openConnections(deps.state().get().focusedPanel().connection()));
+        cmd("connection.dialog", "Connection settings…", key(KeyEvent.VK_O, shortcut | SHIFT), () -> openConnections(deps.state().get().focusedPanel().connection()));
         if (deps.server() != null) {
             cmd("server.start", "Start", null, () -> deps.server().toggle(), () -> !deps.server().isRunning());
             cmd("server.stop", "Stop", null, () -> deps.server().toggle(), () -> deps.server().isRunning());
         }
         // panel: its results
-        cmd("run.insertResult", "Attach to the editor", key(KeyEvent.VK_I, CMD | SHIFT), this::insertLastResult, this::hasRun);
-        cmd("run.keep", "Keep in a tab", key(KeyEvent.VK_R, CMD | SHIFT), this::keepResult, this::hasRun);
+        cmd("run.insertResult", "Attach to the editor", key(KeyEvent.VK_I, shortcut | SHIFT), this::insertLastResult, this::hasRun);
+        cmd("run.keep", "Keep in a tab", key(KeyEvent.VK_R, shortcut | SHIFT), this::keepResult, this::hasRun);
         // always claimed: the editor's own ⌘J joins lines, which the user never means here; without a run it says so
-        cmd("run.plot", "Plot", key(KeyEvent.VK_J, CMD), this::plotLastResult);
-        cmd("run.plotLive", "Plot, refreshing…", key(KeyEvent.VK_J, CMD | SHIFT), this::plotLive, this::hasRun);
+        cmd("run.plot", "Plot", key(KeyEvent.VK_J, shortcut), this::plotLastResult);
+        cmd("run.plotLive", "Plot, refreshing…", key(KeyEvent.VK_J, shortcut | SHIFT), this::plotLive, this::hasRun);
         cmd("run.plotStop", "Stop refreshing plots", null, livePlots::stopAll, () -> livePlots.size() > 0);
         // panel: tools that run in its project
-        cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, CMD | ALT), this::runGradle, () -> focusedSession().isPresent());
+        cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, shortcut | ALT), this::runGradle, () -> focusedSession().isPresent());
         cmd("files.settings", "Files tab folders", null, help::openFolderSettings);
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         // view
-        cmd("view.palette", "Command palette", key(KeyEvent.VK_P, CMD | SHIFT), () -> new CommandPalette(actions).show(frame));
-        cmd("focus.editor", "Focus the editor", key(KeyEvent.VK_E, CMD), () -> {
+        cmd("view.palette", "Command palette", key(KeyEvent.VK_P, shortcut | SHIFT), () -> new CommandPalette(actions).show(frame));
+        cmd("focus.editor", "Focus the editor", key(KeyEvent.VK_E, shortcut), () -> {
             EditorPanel p = workspace.focused();
             if (p != null) {
                 p.editor().requestFocus();
             }
         });
-        cmd("view.sidebar", "Sidebar", key(KeyEvent.VK_B, CMD), this::toggleSidebar);
-        cmd("view.sidePane", "Side pane", key(KeyEvent.VK_BACK_SLASH, CMD), () -> {
+        cmd("view.sidebar", "Sidebar", key(KeyEvent.VK_B, shortcut), this::toggleSidebar);
+        cmd("view.sidePane", "Side pane", key(KeyEvent.VK_BACK_SLASH, shortcut), () -> {
             sidePaneHidden = sidePaneShown;
             render();
         }, () -> sidePaneShown || side.hasViews());
@@ -830,33 +846,33 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
         cmd("view.restoreLayout", "Restore layout", null, this::restoreArranged, () -> beforeArrange != null);
         // ⌃1–⌃4 follow the lower tabs' order: Session, Approvals, Terminal, Results
-        cmd("view.session", "Session", key(KeyEvent.VK_1, CTRL), () -> showLowerAndFocus(LowerTab.SESSION, lower.transcript().canvas()));
-        cmd("view.approvals", "Approvals", key(KeyEvent.VK_2, CTRL),
+        cmd("view.session", "Session", key(KeyEvent.VK_1, lowerTabKey), () -> showLowerAndFocus(LowerTab.SESSION, lower.transcript().canvas()));
+        cmd("view.approvals", "Approvals", key(KeyEvent.VK_2, lowerTabKey),
                 () -> showLowerAndFocus(LowerTab.APPROVALS, lower.inbox().component(), lower.inbox()::focusFirst));
-        cmd("view.terminal", "Terminal", key(KeyEvent.VK_3, CTRL), () -> {
+        cmd("view.terminal", "Terminal", key(KeyEvent.VK_3, lowerTabKey), () -> {
             deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.TERMINAL));
             Edt.later(() -> lower.terminals().focusShown(deps.state().get()));
         });
-        cmd("view.results", "Results", key(KeyEvent.VK_4, CTRL), () -> showLowerAndFocus(LowerTab.RESULTS, lower.results().grid().table()));
+        cmd("view.results", "Results", key(KeyEvent.VK_4, lowerTabKey), () -> showLowerAndFocus(LowerTab.RESULTS, lower.results().grid().table()));
         // ⌘⌥1–4 as well: macOS Mission Control takes ⌃1–⌃4 when its desktop shortcuts are on
         String[] lowerTabs = {"view.session", "view.approvals", "view.terminal", "view.results"};
         for (int i = 0; i < lowerTabs.length; i++) {
             String target = lowerTabs[i];
-            cmd(target + ".alt", actions.get(target).label() + " tab", key(KeyEvent.VK_1 + i, CMD | ALT), () -> actions.run(target));
+            cmd(target + ".alt", actions.get(target).label() + " tab", key(KeyEvent.VK_1 + i, shortcut | ALT), () -> actions.run(target));
         }
         cmd("view.nextTab", "Next tab", key(KeyEvent.VK_TAB, CTRL), () -> lower.selectRelative(1));
         cmd("view.previousTab", "Previous tab", key(KeyEvent.VK_TAB, CTRL | SHIFT), () -> lower.selectRelative(-1));
-        cmd("view.closeLower", "Close the view in front", key(KeyEvent.VK_W, CMD | SHIFT),
+        cmd("view.closeLower", "Close the view in front", key(KeyEvent.VK_W, shortcut | SHIFT),
                 () -> deps.intents().dispatch(new Intent.CloseView(lower.selectedView())), () -> lower.selectedView() >= 0);
-        cmd("panel.next", "Next panel", key(KeyEvent.VK_CLOSE_BRACKET, CMD | SHIFT), () -> workspace.selectRelative(1));
-        cmd("panel.previous", "Previous panel", key(KeyEvent.VK_OPEN_BRACKET, CMD | SHIFT), () -> workspace.selectRelative(-1));
+        cmd("panel.next", "Next panel", key(KeyEvent.VK_CLOSE_BRACKET, shortcut | SHIFT), () -> workspace.selectRelative(1));
+        cmd("panel.previous", "Previous panel", key(KeyEvent.VK_OPEN_BRACKET, shortcut | SHIFT), () -> workspace.selectRelative(-1));
         for (int i = 1; i <= 9; i++) {
             int index = i - 1;
-            cmd("panel." + i, "Go to panel " + i, key(KeyEvent.VK_0 + i, CMD), () -> workspace.select(index));
+            cmd("panel." + i, "Go to panel " + i, key(KeyEvent.VK_0 + i, shortcut), () -> workspace.select(index));
         }
-        cmd("view.zoomIn", "Zoom in", key(KeyEvent.VK_EQUALS, CMD), () -> zoom(1), () -> capability(Zoomable.class) != null);
-        cmd("view.zoomOut", "Zoom out", key(KeyEvent.VK_MINUS, CMD), () -> zoom(-1), () -> capability(Zoomable.class) != null);
-        cmd("view.zoomReset", "Reset zoom", key(KeyEvent.VK_0, CMD), () -> {
+        cmd("view.zoomIn", "Zoom in", key(KeyEvent.VK_EQUALS, shortcut), () -> zoom(1), () -> capability(Zoomable.class) != null);
+        cmd("view.zoomOut", "Zoom out", key(KeyEvent.VK_MINUS, shortcut), () -> zoom(-1), () -> capability(Zoomable.class) != null);
+        cmd("view.zoomReset", "Reset zoom", key(KeyEvent.VK_0, shortcut), () -> {
             Zoomable z = capability(Zoomable.class);
             if (z != null) {
                 z.resetZoom();
@@ -866,7 +882,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // help
         cmd("help.tutorial", "Tutorial", null, help::showTutorial, () -> deps.home() != null);
         // ⌘/ stays the editor's comment toggle; ⌘⇧/ is the Mac's Help key
-        cmd("help.keys", "Keyboard shortcuts", key(KeyEvent.VK_SLASH, CMD | SHIFT), help::showKeys);
+        cmd("help.keys", "Keyboard shortcuts", key(KeyEvent.VK_SLASH, shortcut | SHIFT), help::showKeys);
         cmd("help.markdown", "Markdown sheet", null, help::showMarkdownSheet);
         cmd("help.kit", "Claude Code kit…", null, help::showKit);
         cmd("help.log", "Show the log", null, help::showLog, () -> deps.logDir() != null);
@@ -874,7 +890,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice
         boolean mac = Platform.isMac();
         cmd("app.about", "About comando", null, help::showAbout);
-        cmd("app.quit", "Quit comando", mac ? null : key(KeyEvent.VK_Q, CMD), this::quit);
+        cmd("app.quit", "Quit comando", mac ? null : key(KeyEvent.VK_Q, shortcut), this::quit);
     }
 
     private void cmd(String id, String label, KeyStroke key, Runnable run) {
@@ -895,7 +911,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private JMenuBar menuBar() {
-        return actions.menuBar(Menus.bar(deps.server() != null), Menus::tip, Menus.MENU_TIPS::get);
+        return actions.menuBar(Menus.bar(deps.server() != null), Menus::tip, id -> KeyText.of(Menus.MENU_TIPS.get(id)));
     }
 
     // ---- focus

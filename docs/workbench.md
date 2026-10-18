@@ -156,6 +156,12 @@ Claude icon) 250 ms after the last keystroke, before anything runs.
 
 The run keys act while the keyboard is in the focused panel's editor.
 
+Keys are written as macOS writes them. On other desktops each is the same with Ctrl for ⌘ (⌘⇧P is Ctrl+Shift+P), but
+for two that would be another command's there: the lower tabs ⌃1–⌃4 are Alt+1–4, and ⌃⏎ is Ctrl+Alt+⏎. In the
+terminal Ctrl with a letter, `[`, `\` or `]` goes to the shell, as ⌃ does on macOS; comando's other keys work there.
+The palette, the shortcuts table and every text in the window name the desktop's own keys
+([record 65](adr/0065-keys-on-desktops-other-than-macos.md)).
+
 ### 2.4 Where things land
 
 SQL results fill the Results tab; an error is selectable text, and a position the database names is underlined in a

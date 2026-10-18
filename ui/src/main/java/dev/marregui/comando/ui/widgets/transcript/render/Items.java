@@ -5,6 +5,7 @@ import dev.marregui.comando.core.result.Formats;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.Json;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Diffs;
@@ -596,7 +597,7 @@ final class Items {
                 return "done" + took + toolsLabel();
             }
             if (waiting && isRunning()) {
-                return WAITING;
+                return KeyText.of(WAITING);
             }
             long elapsed = times[0] < 0 ? 0 : nowMillis - times[0];
             String running = background ? "running in background" : "running";

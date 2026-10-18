@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.ui.kit.action.MenuEntry;
+import dev.marregui.comando.ui.kit.format.KeyText;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -111,7 +112,7 @@ final class Menus {
 
     /** The tooltip of command {@code id}, or null. */
     static String tip(String id) {
-        return TIPS.get(id);
+        return KeyText.of(TIPS.get(id));
     }
 
     /** The menu bar; the embedded server's submenu only when comando has one. */

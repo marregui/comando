@@ -11,6 +11,7 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.ui.kit.format.KeyText;
 
 import javax.swing.Timer;
 import java.util.HashMap;
@@ -106,7 +107,7 @@ final class LivePlots {
         if (failed) {
             stop(l.panel);
             intents.dispatch(new Intent.Notify(Notice.Level.WARN, "Live plot " + l.title + " stopped: connection " + connection
-                    + " is down; run the query again once it is back, then ⌘⇧J", false, Notice.connection(connection)));
+                    + " is down; run the query again once it is back, then " + KeyText.of("⌘⇧J"), false, Notice.connection(connection)));
             return;
         }
         if (run == null || !run.status().isActive()) {

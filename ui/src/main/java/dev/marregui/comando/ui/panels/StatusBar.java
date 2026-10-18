@@ -9,6 +9,7 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
@@ -184,7 +185,7 @@ public final class StatusBar {
                 if (!selected) {
                     c.setForeground(color(n.level()));
                 }
-                c.setToolTipText(Plain.text(n.text()));
+                c.setToolTipText(Plain.text(KeyText.of(n.text())));
                 return c;
             }
         });
@@ -194,7 +195,7 @@ public final class StatusBar {
                 int i = list.locationToIndex(e.getPoint());
                 if (i >= 0) {
                     Toolkit.getDefaultToolkit().getSystemClipboard()
-                            .setContents(new StringSelection(model.get(i).text()), null);
+                            .setContents(new StringSelection(KeyText.of(model.get(i).text())), null);
                     menu.setVisible(false);
                 }
             }
@@ -238,11 +239,11 @@ public final class StatusBar {
 
     /** The notice with its time and its whole text, for the tooltip. */
     static String fullLine(Notice n) {
-        return (n.atMillis() > 0 ? TIME.format(Instant.ofEpochMilli(n.atMillis())) + "  " : "") + n.text();
+        return (n.atMillis() > 0 ? TIME.format(Instant.ofEpochMilli(n.atMillis())) + "  " : "") + KeyText.of(n.text());
     }
 
     static String historyLine(Notice n) {
-        return (n.atMillis() > 0 ? TIME.format(Instant.ofEpochMilli(n.atMillis())) + "  " : "") + Clip.keepStart(n.text(), 160);
+        return (n.atMillis() > 0 ? TIME.format(Instant.ofEpochMilli(n.atMillis())) + "  " : "") + Clip.keepStart(KeyText.of(n.text()), 160);
     }
 
     private static Color color(Notice.Level level) {
@@ -264,7 +265,7 @@ public final class StatusBar {
     public void render(AppState s) {
         Notice n = s.notice();
         history = s.notices();
-        notice.setText(n.text().isEmpty() ? " " : Plain.text(n.text()));
+        notice.setText(n.text().isEmpty() ? " " : Plain.text(KeyText.of(n.text())));
         notice.setToolTipText(n.text().isEmpty() ? (history.isEmpty() ? null : "Recent notices")
                 : wrapped(fullLine(n) + " · click for recent notices"));
         notice.setForeground(color(n.level()));

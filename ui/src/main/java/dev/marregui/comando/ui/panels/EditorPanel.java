@@ -16,6 +16,7 @@ import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.desktop.Browser;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.layout.ShrinkingRow;
@@ -141,9 +142,9 @@ public final class EditorPanel extends JPanel {
         left.add(connectionToggle);
         // icons close together, as the session's at the left
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
-        run.setToolTipText("Run the selection or the block under the caret (⌘⏎); ⌘⇧⏎ sends to Claude, ⌥⏎ runs as SQL");
-        stop.setToolTipText("Stop the running SQL or interrupt the session (⌘.)");
-        clear.setToolTipText("Clear the text (⌘Z brings it back)");
+        run.setToolTipText(KeyText.of("Run the selection or the block under the caret (⌘⏎); ⌘⇧⏎ sends to Claude, ⌥⏎ runs as SQL"));
+        stop.setToolTipText(KeyText.of("Stop the running SQL or interrupt the session (⌘.)"));
+        clear.setToolTipText(KeyText.of("Clear the text (⌘Z brings it back)"));
         // a click leaves the keyboard in the editor, ready for the next edit or run: every icon button is unfocusable
         browser.setToolTipText("Open the page in the browser");
         browser.getAccessibleContext().setAccessibleName("Open in the browser");
@@ -436,7 +437,7 @@ public final class EditorPanel extends JPanel {
     private void showMode() {
         String label = previewing ? "Edit" : "Preview";
         mode.setIcon(Icons.get(previewing ? "edit" : "preview"));
-        mode.setToolTipText(previewing ? "Edit the Markdown (⌘⇧M)" : "Show the Markdown rendered (⌘⇧M)");
+        mode.setToolTipText(KeyText.of(previewing ? "Edit the Markdown (⌘⇧M)" : "Show the Markdown rendered (⌘⇧M)"));
         mode.getAccessibleContext().setAccessibleName(label);
     }
 

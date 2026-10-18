@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.kit.action;
 
+import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -187,8 +189,37 @@ public final class CommandPalette {
         return i == query.length();
     }
 
-    /** A key as the Mac writes it: modifiers ⌃⌥⇧⌘ in that order, then the key ("⇧⌘⏎", "⌃1"). */
+    /**
+     * A key as the desktop writes it: with macOS's keys its modifiers ⌃⌥⇧⌘ in that order, then the key ("⇧⌘⏎", "⌃1");
+     * with the others' Ctrl, Alt, Shift, Super, then the key ("Ctrl+Shift+Enter", "Alt+1").
+     */
     public static String keyText(KeyStroke k) {
+        return Platform.macKeys() ? macText(k) : otherText(k);
+    }
+
+    /** {@code k} as the desktops other than macOS write it. */
+    static String otherText(KeyStroke k) {
+        int m = k.getModifiers();
+        List<String> parts = new ArrayList<>(5);
+        if ((m & InputEvent.CTRL_DOWN_MASK) != 0) {
+            parts.add("Ctrl");
+        }
+        if ((m & InputEvent.ALT_DOWN_MASK) != 0) {
+            parts.add("Alt");
+        }
+        if ((m & InputEvent.SHIFT_DOWN_MASK) != 0) {
+            parts.add("Shift");
+        }
+        if ((m & InputEvent.META_DOWN_MASK) != 0) {
+            parts.add("Super");
+        }
+        String key = macText(KeyStroke.getKeyStroke(k.getKeyCode(), 0));
+        parts.add(key.equals("Space") ? key : KeyText.name(key));
+        return String.join("+", parts);
+    }
+
+    /** {@code k} as the Mac writes it. */
+    static String macText(KeyStroke k) {
         int m = k.getModifiers();
         StringBuilder sb = new StringBuilder();
         if ((m & InputEvent.CTRL_DOWN_MASK) != 0) {

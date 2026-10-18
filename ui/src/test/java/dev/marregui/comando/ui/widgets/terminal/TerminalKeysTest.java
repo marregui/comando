@@ -1,0 +1,59 @@
+package dev.marregui.comando.ui.widgets.terminal;
+
+import com.jediterm.terminal.ui.JediTermWidget;
+import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
+import org.junit.jupiter.api.Test;
+
+import javax.swing.JPanel;
+import javax.swing.JTextField;
+import javax.swing.KeyStroke;
+import java.awt.Component;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * A terminal keeps for its shell the control characters a shell reads, Ctrl with a letter, {@code [ \ ]} or space: on
+ * macOS ⌃ sends them and no command uses it; elsewhere Ctrl is also ⌘'s key, and in a terminal the shell has it.
+ */
+class TerminalKeysTest {
+
+    private static final int CTRL = InputEvent.CTRL_DOWN_MASK;
+
+    private final JediTermWidget term = new JediTermWidget(new DefaultSettingsProvider());
+    private final Component inside = term.getTerminalPanel();
+
+    private static KeyStroke key(int code, int modifiers) {
+        return KeyStroke.getKeyStroke(code, modifiers);
+    }
+
+    @Test
+    void ctrlWithALetterOrABracketBackslashOrSpaceStaysWithTheShell() {
+        for (int code = KeyEvent.VK_A; code <= KeyEvent.VK_Z; code++) {
+            assertThat(TerminalWidget.keepsKey(inside, key(code, CTRL))).as(KeyEvent.getKeyText(code)).isTrue();
+        }
+        for (int code : new int[]{KeyEvent.VK_OPEN_BRACKET, KeyEvent.VK_BACK_SLASH, KeyEvent.VK_CLOSE_BRACKET, KeyEvent.VK_SPACE}) {
+            assertThat(TerminalWidget.keepsKey(inside, key(code, CTRL))).as(KeyEvent.getKeyText(code)).isTrue();
+        }
+        assertThat(TerminalWidget.keepsKey(term, key(KeyEvent.VK_C, CTRL))).as("the widget itself").isTrue();
+    }
+
+    @Test
+    void otherChordsStayCommandsSoTheyWorkFromTheTerminal() {
+        assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_P, CTRL | InputEvent.SHIFT_DOWN_MASK))).as("the palette").isFalse();
+        assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_1, CTRL))).as("panel 1").isFalse();
+        assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_1, InputEvent.ALT_DOWN_MASK))).as("the Session tab").isFalse();
+        assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_ENTER, CTRL))).isFalse();
+        assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_EQUALS, CTRL))).as("zoom").isFalse();
+        assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_W, CTRL | InputEvent.ALT_DOWN_MASK))).isFalse();
+        assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_W, InputEvent.META_DOWN_MASK))).as("⌘W on macOS").isFalse();
+    }
+
+    @Test
+    void outsideATerminalNothingIsKept() {
+        assertThat(TerminalWidget.keepsKey(new JTextField(), key(KeyEvent.VK_W, CTRL))).isFalse();
+        assertThat(TerminalWidget.keepsKey(new JPanel(), key(KeyEvent.VK_E, CTRL))).isFalse();
+        assertThat(TerminalWidget.keepsKey(null, key(KeyEvent.VK_E, CTRL))).isFalse();
+    }
+}

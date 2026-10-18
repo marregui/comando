@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.shell;
 
+import dev.marregui.comando.ui.kit.format.KeyText;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
@@ -52,7 +54,7 @@ final class HelpFiles {
             if (in == null) {
                 throw new IOException("the tutorial is not in this build");
             }
-            text = tutorialText(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+            text = KeyText.of(tutorialText(new String(in.readAllBytes(), StandardCharsets.UTF_8)));
         }
         Path file = tutorial(home);
         if (Files.isRegularFile(file) && Files.readString(file, StandardCharsets.UTF_8).equals(text)) {

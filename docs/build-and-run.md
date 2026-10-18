@@ -12,7 +12,7 @@
 | JDK 25 | building and running from Gradle | the toolchain is not provisioned automatically; Gradle finds an installed JDK 25 |
 | Claude Code CLI | sessions | found at `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, else on `PATH`; `COMANDO_CLAUDE` overrides. Tested from 2.1.296 up to, not including, 2.2.0; another version gets a warning at start |
 | Docker | the PostgreSQL adapter tests | optional; those tests are skipped without it |
-| macOS | the keychain, the DMG | everything else runs on Linux (IntelliJ links too, with `idea` on the `PATH`) |
+| macOS | the keychain, the DMG | everything else runs on Linux (IntelliJ links too, with `idea` on the `PATH`), with Ctrl for ⌘ ([record 65](adr/0065-keys-on-desktops-other-than-macos.md)) |
 | IntelliJ IDEA's `idea` launcher | "Open in IntelliJ" | optional; files open in the default application without it |
 | folders of documents | the sidebar's Files tab | optional; Claude Code's folder (`CLAUDE_CONFIG_DIR`, else `~/.claude`) until you configure your own; a folder that is missing says so in its row |
 | `lockf` (macOS) or `flock` (Linux) | "Run Gradle tasks" through the kit's `gradle-serial` | the kit's wrapper takes a per-checkout lock with one of them |
@@ -26,7 +26,7 @@
 | `./gradlew :app:installDist` | a runnable distribution in `app/build/install/comando`; start it with `bin/comando` |
 | `./gradlew :app:dmg` | an unsigned macOS disk image with its own runtime in `app/build/dmg`, with comando's icon (`app/src/main/icon/comando.icns`, drawn from `comando.svg` next to it; the commands that redraw it after an edit are in `app/build.gradle.kts`) |
 | `./gradlew test -PkeychainTest=true` | also runs the test that writes and deletes one item in the login keychain |
-| `./gradlew :app:uiTest` | replays the recorded intent log against the window; needs a display (`xvfb-run` on Linux) |
+| `./gradlew :app:uiTest` | replays the recorded intent log against the window, and drives its keyboard with macOS's keys and the other desktops' (`UiKeysTest`, [record 65](adr/0065-keys-on-desktops-other-than-macos.md)); needs a display (`xvfb-run` on Linux) |
 | `./gradlew :ui:transcriptGate` | measures transcript frame times; fails when p99 exceeds 16 ms |
 | `./gradlew :app:snapshot -Pout=<dir>` | drives comando on a scratch data root and paints the window to PNG files; `-Plive=true` adds a real Claude session (haiku) whose approvals are allowed, `-Phistory=<conversation id>` loads a stored conversation, `-Ptools=true` adds a Gradle run in a build of its own |
 | `./gradlew :app:hero -Pout=<dir>` | paints the README's picture to `hero.png`: starts the embedded QuestDB from the menu, connects, and runs a real Claude turn (haiku) that queries and plots through comando's tools; approvals are allowed; the turn is live, so when it shows a failed tool call, run the task again |

@@ -20,7 +20,7 @@ The package layers are in [Architecture §8](architecture.md#8-ui-packages).
 | `resource` | `ResourceActions`: the bar above a list of resources ([Workbench §1.3](workbench.md#13-the-sidebar)) |
 | `overlay` | `Overlay`: the empty, loading and error states a widget switches between |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` (below) |
-| `format` | `Labels` (times, uptimes, counts, short paths), `Json` |
+| `format` | `Labels` (times, uptimes, counts, short paths), `Json`, `KeyText` (keys named as the desktop names them) |
 | `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `LocalImages`, `LocalLinks`, `MermaidDiagrams`, `SourceLinks`, `Plain`, `EditorThemes`, `Fences` (below) |
 | `tree`, `layout`, `tabs` | `TreeView` (the one tree; a double click activates a leaf, Enter the selected node); `ShrinkingRow` (chips give up width before buttons); `FixedRowTabs` (tab headers in fixed rows); `MovableTabs` (a tab dragged along the row reports where it lands) |
 | `desktop` | `ExternalEditor` (IntelliJ, else the default application), `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser`, `DesktopTrash` (the Files tab's Trash) |
@@ -69,11 +69,16 @@ whose `{version}`, `{java}`, `{claude}`, `{system}`, `{home}` and `{year}` take 
 
 - A command sits in at most one menu and has at most one key; registering an id twice throws.
 - In the main window a command's key is claimed before the focused component sees it (`KeyPriority`), because
-  RSyntaxTextArea binds ⌘⏎, ⌘J and ⌘⇧K, which comando's commands also use, and the terminal takes every key. A disabled command leaves its key to
+  RSyntaxTextArea binds ⌘⏎, ⌘J and ⌘⇧K, which comando's commands also use, and the terminal takes every key; the terminal keeps Ctrl
+  with a letter, `[`, `\`, `]` or space for its shell (`TerminalWidget.keepsKey`), which elsewhere is ⌘'s key. A disabled command leaves its key to
   the component, so ⌘J (plot) stays enabled and says "The panel has no rows to plot" rather than joining lines; ⌘/ is left to the editor.
 - Run keys act only in the focused panel's editor. Edit commands (undo, redo, cut, copy, paste, select all) run the focused
   component's own binding. Menu items grey out what cannot run; the palette lists only what can, ranked by label match.
 - On macOS ⌘Q belongs to the application menu's quit handler.
+- `Platform.macKeys()` chooses macOS's keys or the other desktops' (Ctrl for ⌘, the lower tabs on Alt+1–4, the line to the
+  terminal on Ctrl+Alt+⏎); `-Dcomando.keys=mac` or `linux` chooses either on any desktop, for tests. Every text naming
+  a key passes through `KeyText.of`, the palette's `keyText` names keys the same way
+  ([record 65](adr/0065-keys-on-desktops-other-than-macos.md)).
 
 ## 3. Widgets
 

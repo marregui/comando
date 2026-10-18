@@ -71,3 +71,4 @@ that names the one it replaces; the old record stays as written, and this index'
 | [62](0062-gradle-runs-by-convention.md) | Gradle runs by convention; no `tools.json` | Miguel, Claude | accepted |
 | [63](0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md) | A tab's menu closes many; a scratchpad's entries go to the Trash | Miguel, Claude | accepted |
 | [64](0064-sub-agents-are-shown-live.md) | Sub-agents are shown live | Miguel, Claude | accepted; following and large files amended 2026-10-18 |
+| [65](0065-keys-on-desktops-other-than-macos.md) | Keys on desktops other than macOS | Miguel, Claude | accepted |

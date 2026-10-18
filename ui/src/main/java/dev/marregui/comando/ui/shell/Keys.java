@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.ui.kit.action.Command;
 import dev.marregui.comando.ui.kit.action.CommandPalette;
+import dev.marregui.comando.ui.kit.format.KeyText;
 
 import javax.swing.Action;
 import javax.swing.JComponent;
@@ -60,7 +61,7 @@ final class Keys {
             md.append("| ").append(c.group().isEmpty() ? "—" : c.group()).append(" | ").append(c.label().replace("|", "\\|"))
                     .append(" | ").append(CommandPalette.keyText(c.key())).append(" |\n");
         }
-        md.append(PLACES);
+        md.append(KeyText.of(PLACES));
         return md.toString();
     }
 

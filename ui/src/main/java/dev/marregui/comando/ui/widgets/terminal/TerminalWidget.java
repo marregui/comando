@@ -16,6 +16,7 @@ import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import com.jediterm.terminal.ui.settings.SettingsProvider;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -30,8 +31,10 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.SwingConstants;
+import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Font;
 import java.awt.event.InputEvent;
@@ -119,6 +122,25 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
     public JComponent component() {
         return root;
+    }
+
+    /** The keys a shell reads with Ctrl: the letters, {@code [ \ ]} and space ({@code ^A}…{@code ^Z}, {@code ^[ ^\ ^]}, {@code ^@}). */
+    static final int MODIFIERS = InputEvent.SHIFT_DOWN_MASK | InputEvent.CTRL_DOWN_MASK | InputEvent.ALT_DOWN_MASK
+            | InputEvent.META_DOWN_MASK | InputEvent.ALT_GRAPH_DOWN_MASK;
+
+    /**
+     * True when {@code key}, pressed in {@code c}, belongs to the shell of a terminal that holds {@code c}: Ctrl alone
+     * with a letter, {@code [}, {@code \}, {@code ]} or space, the control characters a shell reads. On macOS no
+     * command uses them; elsewhere Ctrl is ⌘'s key, and in a terminal the shell keeps it, as it keeps ⌃ on macOS.
+     */
+    public static boolean keepsKey(Component c, KeyStroke key) {
+        if ((key.getModifiers() & MODIFIERS) != InputEvent.CTRL_DOWN_MASK) {
+            return false;
+        }
+        int code = key.getKeyCode();
+        boolean control = code >= KeyEvent.VK_A && code <= KeyEvent.VK_Z || code == KeyEvent.VK_OPEN_BRACKET
+                || code == KeyEvent.VK_BACK_SLASH || code == KeyEvent.VK_CLOSE_BRACKET || code == KeyEvent.VK_SPACE;
+        return control && c != null && (c instanceof JediTermWidget || SwingUtilities.getAncestorOfClass(JediTermWidget.class, c) != null);
     }
 
     public boolean isStarted() {
@@ -226,7 +248,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
     }
 
     private void showDirectory() {
-        empty.setText("Shell in " + Labels.shortPath(directory.toString()) + " — click or press ⌃3 to start");
+        empty.setText("Shell in " + Labels.shortPath(directory.toString()) + KeyText.of(" — click or press ⌃3 to start"));
         if (exitedBar.isVisible() && isStarted()) {
             restartButton.setText(restartText());
         }
@@ -622,7 +644,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
          */
         @Override
         public TerminalActionPresentation getSelectAllActionPresentation() {
-            return Platform.isMac() ? new TerminalActionPresentation("Select All",
+            return Platform.macKeys() ? new TerminalActionPresentation("Select All",
                     KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.META_DOWN_MASK))
                     : super.getSelectAllActionPresentation();
         }

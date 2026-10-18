@@ -14,6 +14,7 @@ import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.ToolButton;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.tabs.FixedRowTabs;
@@ -287,11 +288,11 @@ public final class SessionsSidebar {
         tabs.add("Files", "folder", "the folders you chose; a double click on a file opens it in a panel",
                 section(files.component(), null));
         // two fixed rows (Miguel, 2026-10-15): the documents on top, the resources below; a click moves nothing
-        tabs.arrange(new int[][]{{PANELS, FILES}, {SESSIONS, CONNECTIONS}}, ToolButton.of("more", "Hide the sidebar (⌘B)", toggle));
+        tabs.arrange(new int[][]{{PANELS, FILES}, {SESSIONS, CONNECTIONS}}, ToolButton.of("more", KeyText.of("Hide the sidebar (⌘B)"), toggle));
         rail = new JPanel(new BorderLayout());
         rail.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(4, 1, 0, 1)));
-        rail.add(ToolButton.of("more", "Show the sidebar (⌘B)", toggle), BorderLayout.NORTH);
+        rail.add(ToolButton.of("more", KeyText.of("Show the sidebar (⌘B)"), toggle), BorderLayout.NORTH);
         rail.setVisible(false);
         root.add(tabs.component(), BorderLayout.CENTER);
         root.add(rail, BorderLayout.WEST);
