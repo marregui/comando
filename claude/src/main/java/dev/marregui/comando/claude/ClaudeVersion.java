@@ -1,8 +1,11 @@
 package dev.marregui.comando.claude;
 
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
@@ -49,7 +52,8 @@ public record ClaudeVersion(int major, int minor, int patch) implements Comparab
 
     /**
      * Runs {@code <executable> --version}; the result is a message for the user, empty when the version is tested.
-     * Blocks up to five seconds: call it off the EDT and off the reducer thread.
+     * Blocks up to six seconds: five for the CLI to exit, one more for its output; call it off the EDT and off the
+     * reducer thread.
      */
     public static String check(String executable) {
         Process p;
@@ -60,11 +64,24 @@ public record ClaudeVersion(int major, int minor, int patch) implements Comparab
         }
         try (InputStream in = p.getInputStream()) {
             p.getOutputStream().close();
+            // read on a thread of its own: a child the CLI left running can hold the output open after the exit
+            StringBuffer read = new StringBuffer();
+            Thread reader = Thread.ofVirtual().name("claude-version").start(() -> {
+                try (BufferedReader lines = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
+                    for (String line = lines.readLine(); line != null; line = lines.readLine()) {
+                        read.append(line).append('\n');
+                    }
+                } catch (IOException e) {
+                    // closed while reading: what was read stands
+                }
+            });
             if (!p.waitFor(5, TimeUnit.SECONDS)) {
                 p.destroyForcibly();
                 return "'" + executable + " --version' did not answer within 5 s.";
             }
-            String out = new String(in.readAllBytes(), StandardCharsets.UTF_8).strip();
+            // what the CLI wrote before it exited is read at once; a pipe still held open is not waited for
+            reader.join(Duration.ofSeconds(1));
+            String out = read.toString().strip();
             return parse(out)
                     .map(v -> v.tested() ? "" : "Claude Code " + v + " is outside the tested range " + TESTED_FROM + " to "
                             + TESTED_UNTIL + " (exclusive); the transcript may miss events.")

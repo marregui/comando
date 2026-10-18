@@ -75,7 +75,7 @@ text and shown to 400 lines.
   work under `-p`. `/clear` writes `conversation_reset`, ends its turn with no model call and reports the new
   conversation in a new `system/init`: comando zeroes the context, notes the clear, and resumes the new id from then on,
   saying the previous one can be imported again.
-- **Versions.** At start `claude --version` runs with a 5 s bound. A version outside the tested line (2.1.296 up to,
+- **Versions.** At start `claude --version` runs with a 5 s bound on its exit and 1 s more for its output. A version outside the tested line (2.1.296 up to,
   not including, 2.2.0) gets a warning, not a refusal; features are read from `system/init`'s capabilities.
 
 ### 1.4 Stored conversations
