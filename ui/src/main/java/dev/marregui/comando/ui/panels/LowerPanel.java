@@ -61,6 +61,8 @@ public final class LowerPanel {
     private final Map<String, Long> seenTranscript = new HashMap<>();
     /** The run the user last saw on the Results tab, by panel: request id and status. */
     private final Map<PanelId, String> seenRun = new HashMap<>();
+    /** The tab in front before the last change, so the Approvals tab knows when it comes forward. EDT only. */
+    private int lastSelected = SESSION;
 
     public LowerPanel(WidgetContext context, ResultRegistry results, TranscriptRegistry transcripts, WidgetRegistry registry) {
         this.context = context;
@@ -104,6 +106,14 @@ public final class LowerPanel {
             if (tab != null) {
                 context.intents().dispatch(new Intent.SelectLowerTab(tab));
             }
+        });
+        // the Approvals tab comes forward at its top, the oldest request first, however it was brought forward
+        tabs.addChangeListener(e -> {
+            int i = tabs.getSelectedIndex();
+            if (i == APPROVALS && lastSelected != APPROVALS) {
+                inbox.shown();
+            }
+            lastSelected = i;
         });
     }
 

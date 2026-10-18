@@ -6,6 +6,7 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.PermissionRules;
+import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.Json;
 import dev.marregui.comando.ui.kit.format.Labels;
@@ -54,6 +55,7 @@ import java.awt.Container;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.KeyboardFocusManager;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.FocusAdapter;
@@ -81,6 +83,9 @@ import java.util.function.LongSupplier;
  * characters wide: Enter starts a line, no key in it answers (the Answer button does), Escape returns to the card; it
  * holds nothing once the card is answered. Questions show their options with descriptions; a plan shows rendered; an edit shows its
  * diff.
+ *
+ * <p>Each time the inbox comes forward ({@link #shown}) it shows its top, the oldest request first, unless the keyboard
+ * is in a card. A request arriving while it is in front moves nothing.</p>
  *
  * <p>When the card that holds the keyboard leaves because the user answered it here, the keyboard moves to the
  * card that took its place. When it leaves for any other reason (withdrawn by Claude Code, its session ended), the
@@ -211,6 +216,32 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     @Override
     public void unmount() {
         ages.stop();
+    }
+
+    /**
+     * The inbox came forward: it shows its top, so the first request is the first thing read; again once the cards are
+     * laid out, as a card's text, set as it is built, can scroll its viewport. Nothing moves while the keyboard is in a
+     * card: the user is answering it.
+     */
+    public void shown() {
+        if (holdsFocus()) {
+            return;
+        }
+        toTop();
+        Edt.later(() -> {
+            if (!holdsFocus()) {
+                toTop();
+            }
+        });
+    }
+
+    private void toTop() {
+        scroll.getViewport().setViewPosition(new Point(0, 0));
+    }
+
+    /** The scroll position, for tests. */
+    int scrollTop() {
+        return scroll.getViewport().getViewPosition().y;
     }
 
     /** Moves the keyboard focus to the oldest card. */

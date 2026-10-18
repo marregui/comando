@@ -13,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.AbstractButton;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JRadioButton;
@@ -25,6 +26,7 @@ import javax.swing.text.JTextComponent;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.FontMetrics;
+import java.awt.Point;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
@@ -79,6 +81,42 @@ class ApprovalInboxTest {
 
     private static Approval plan(long id) {
         return new Approval(id, "work", ApprovalKind.PLAN, "ExitPlanMode", "{\"plan\":\"1. do it\"}", "plan", T0);
+    }
+
+    @Test
+    void theInboxComesForwardAtItsTopUnlessTheKeyboardIsInACard() throws Exception {
+        List<Approval> many = new ArrayList<>();
+        for (long id = 1; id <= 8; id++) {
+            many.add(id % 2 == 0 ? question(id) : bash(id, "ls " + id));
+        }
+        SwingUtilities.invokeAndWait(() -> {
+            inbox.render(many);
+            JComponent c = inbox.component();
+            c.setSize(600, 200);
+            layout(c);
+        });
+        JScrollPane sp = (JScrollPane) find(inbox.component(), x -> x instanceof JScrollPane);
+        SwingUtilities.invokeAndWait(() -> sp.getViewport().setViewPosition(new Point(0, 400)));
+        assertThat(inbox.scrollTop()).as("the cards are taller than the view").isEqualTo(400);
+
+        SwingUtilities.invokeAndWait(inbox::shown);
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(inbox.scrollTop()).as("the oldest request first").isZero();
+
+        SwingUtilities.invokeAndWait(() -> sp.getViewport().setViewPosition(new Point(0, 400)));
+        focus.owner = cards().get(3);
+        SwingUtilities.invokeAndWait(inbox::shown);
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(inbox.scrollTop()).as("answering a card: nothing moves").isEqualTo(400);
+    }
+
+    private static void layout(Component c) {
+        c.doLayout();
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                layout(child);
+            }
+        }
     }
 
     private List<Component> cards() {

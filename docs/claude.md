@@ -168,6 +168,8 @@ how Claude Code matches them and never allow more than the command could do:
   while empty; ⌘⏎ denies with the note. ↑ and ↓ move between cards. The keyboard is never taken from outside the tab.
 - A new card brings the Approvals tab forward; the keyboard stays where it is, so typing in the editor goes on. While
   a card waits, its tool call reads "waiting for your approval · ⌃2" in the Session tab.
+- The Approvals tab comes forward at its top, the oldest card first, however it is brought forward (a new card, a
+  click, ⌃2); a card arriving while it is in front, or while the keyboard is in a card, moves nothing.
 - Answering the last card while the Approvals tab is in front brings the Session tab forward, on the panel of the
   session that asked, with the keyboard; a card withdrawn, or answered after you moved to another tab, moves nothing.
 - A card is withdrawn and its call denied when Claude Code cancels the call, the process exits, or the session is
