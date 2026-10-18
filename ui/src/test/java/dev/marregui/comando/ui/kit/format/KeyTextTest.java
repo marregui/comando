@@ -9,9 +9,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 /** Keys named in text as each desktop names them: macOS's glyphs, or Ctrl, Alt and Shift where ⌘ is Ctrl. */
 class KeyTextTest {
 
+    /** The keys the run chose ({@code -Dcomando.keys}), restored after each test, never cleared: later tests read them. */
+    private final String keys = System.getProperty(Platform.KEYS_PROPERTY);
+
     @AfterEach
     void tearDown() {
-        System.clearProperty(Platform.KEYS_PROPERTY);
+        if (keys == null) {
+            System.clearProperty(Platform.KEYS_PROPERTY);
+        } else {
+            System.setProperty(Platform.KEYS_PROPERTY, keys);
+        }
     }
 
     @Test

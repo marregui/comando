@@ -59,6 +59,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.prefs.Preferences;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -132,18 +133,34 @@ class UiKeysTest {
         }
     }
 
+    /** Window layouts saved here, apart from the replay test's node, whose window expects the default layout. */
+    private static final String PREFS = "dev/marregui/comando-test-keys";
+
     private final List<AutoCloseable> open = new ArrayList<>();
+    private final String keys = System.getProperty(Platform.KEYS_PROPERTY);
+    private final String prefs = System.getProperty("comando.prefsNode");
 
     @AfterEach
     void tearDown() throws Exception {
         for (AutoCloseable c : open) {
             c.close();
         }
-        System.clearProperty(Platform.KEYS_PROPERTY);
+        restore(Platform.KEYS_PROPERTY, keys);
+        restore("comando.prefsNode", prefs);
+        Preferences.userRoot().node(PREFS).removeNode();
+    }
+
+    private static void restore(String property, String value) {
+        if (value == null) {
+            System.clearProperty(property);
+        } else {
+            System.setProperty(property, value);
+        }
     }
 
     private Window open(String keys) throws Exception {
         System.setProperty(Platform.KEYS_PROPERTY, keys);
+        System.setProperty("comando.prefsNode", PREFS);
         IntentLog.Replay replay = IntentLog.read(Path.of(getClass().getResource("/replay/snapshot.jsonl").toURI()));
         RecordingPorts ports = new RecordingPorts();
         Deferred effects = new Deferred();

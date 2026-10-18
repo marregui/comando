@@ -30,9 +30,16 @@ class KeyTextUseTest {
             "widgets/transcript/render/Items.java", List.of("WAITING ="), // the tool card's status
             "kit/format/KeyText.java", List.of("MODIFIERS =")); // the translator's own glyphs
 
+    /** The keys the run chose ({@code -Dcomando.keys}), restored after each test, never cleared: later tests read them. */
+    private final String keys = System.getProperty(Platform.KEYS_PROPERTY);
+
     @AfterEach
     void tearDown() {
-        System.clearProperty(Platform.KEYS_PROPERTY);
+        if (keys == null) {
+            System.clearProperty(Platform.KEYS_PROPERTY);
+        } else {
+            System.setProperty(Platform.KEYS_PROPERTY, keys);
+        }
     }
 
     @Test

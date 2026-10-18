@@ -12,6 +12,7 @@ import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.PanelTexts;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import org.junit.jupiter.api.Test;
 
@@ -311,7 +312,7 @@ class WorkspaceTest {
         SwingUtilities.invokeAndWait(() -> w[0].render(after));
         assertThat(intents).filteredOn(Intent.Notify.class::isInstance).extracting(i -> ((Intent.Notify) i).text())
                 .as("one notice for the close, none per tab")
-                .containsExactly("Closed 2 tabs; ⌘⇧T or the Panels tab reopens them; kept 2 tabs open: 1 waiting for you, 1 running a program in the shell");
+                .containsExactly(KeyText.of("Closed 2 tabs; ⌘⇧T or the Panels tab reopens them; kept 2 tabs open: 1 waiting for you, 1 running a program in the shell"));
 
         // b c d now; a menu opened on d, then b closes elsewhere: the menu still closes only what was left of d
         intents.clear();

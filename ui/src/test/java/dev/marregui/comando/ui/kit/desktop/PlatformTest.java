@@ -22,7 +22,7 @@ class PlatformTest {
     void withoutADisplayMenuShortcutsUseCommandOnMacOsAndCtrlElsewhere() {
         assertThat(Platform.menuShortcutMask(true)).isEqualTo(InputEvent.META_DOWN_MASK);
         assertThat(Platform.menuShortcutMask(false)).isEqualTo(InputEvent.CTRL_DOWN_MASK);
-        assertThat(Platform.menuShortcutMask()).isEqualTo(Platform.isMac() ? InputEvent.META_DOWN_MASK : InputEvent.CTRL_DOWN_MASK);
+        assertThat(Platform.menuShortcutMask()).isEqualTo(Platform.macKeys() ? InputEvent.META_DOWN_MASK : InputEvent.CTRL_DOWN_MASK);
     }
 
     @Test

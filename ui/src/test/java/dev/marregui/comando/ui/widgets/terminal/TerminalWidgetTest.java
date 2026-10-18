@@ -2,6 +2,8 @@ package dev.marregui.comando.ui.widgets.terminal;
 
 import com.jediterm.terminal.SubstringFinder;
 import com.jediterm.terminal.ui.TerminalPanel;
+import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -32,9 +34,9 @@ class TerminalWidgetTest {
     void beforeItsShellStartsTheAreaSaysWhereAndHow() {
         TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge2"));
         assertThat(t.isStarted()).isFalse();
-        assertThat(t.emptyText()).isEqualTo("Shell in ~/edge2 — click or press ⌃3 to start");
+        assertThat(t.emptyText()).isEqualTo(KeyText.of("Shell in ~/edge2 — click or press ⌃3 to start"));
         t.setDirectory(Path.of("/srv/x"));
-        assertThat(t.emptyText()).isEqualTo("Shell in /srv/x — click or press ⌃3 to start");
+        assertThat(t.emptyText()).isEqualTo(KeyText.of("Shell in /srv/x — click or press ⌃3 to start"));
     }
 
     @Test
@@ -316,7 +318,7 @@ class TerminalWidgetTest {
     @Test
     void commandASelectsTheTerminalBufferOnMacOs() {
         var keys = new TerminalWidget.Settings(() -> 13).getSelectAllActionPresentation().getKeyStrokes();
-        if (System.getProperty("os.name", "").startsWith("Mac")) {
+        if (Platform.macKeys()) {
             assertThat(keys).containsExactly(KeyStroke.getKeyStroke(KeyEvent.VK_A,
                     InputEvent.META_DOWN_MASK));
         } else {

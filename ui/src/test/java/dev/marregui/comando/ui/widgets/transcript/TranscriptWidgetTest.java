@@ -9,6 +9,7 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.RecordingSink;
 import dev.marregui.comando.testkit.SyntheticSession;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
 import org.junit.jupiter.api.BeforeAll;
@@ -97,12 +98,12 @@ class TranscriptWidgetTest {
 
         List<Approval> waiting = List.of(new Approval(7, "s", ApprovalKind.TOOL, "Bash", "{}", "rm -rf build", 0L, "tu1"));
         widget.setWaiting(waiting);
-        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("waiting for your approval · ⌃2");
+        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo(KeyText.of("waiting for your approval · ⌃2"));
 
         // another session's transcript, then back: the canvas is rebuilt and the mark comes back with it
         widget.render(new TranscriptView("other", new Transcript()));
         widget.render(new TranscriptView("s", t));
-        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("waiting for your approval · ⌃2");
+        assertThat(widget.canvas().cardStatus("tu1")).isEqualTo(KeyText.of("waiting for your approval · ⌃2"));
 
         widget.setWaiting(List.of());
         assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("running");

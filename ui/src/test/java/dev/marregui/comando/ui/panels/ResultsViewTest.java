@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.state.SqlRun;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
@@ -18,7 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ResultsViewTest {
 
-    private static final String EMPTY = "Run SQL from the editor: select it, or put the caret in its block, and press ⌘⏎.";
+    private static final String EMPTY = KeyText.of("Run SQL from the editor: select it, or put the caret in its block, and press ⌘⏎.");
 
     /** A panel without a run never shows another panel's running statement on the tick. */
     @Test

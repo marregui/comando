@@ -12,6 +12,7 @@ import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -97,8 +98,8 @@ class SessionsSidebarTest {
         });
         assertThat(panelsAfter).isEqualTo(at.get("Panels"));
 
-        AbstractButton hide = button(sidebar.component(), "Hide the sidebar (⌘B)");
-        AbstractButton show = button(sidebar.component(), "Show the sidebar (⌘B)");
+        AbstractButton hide = button(sidebar.component(), KeyText.of("Hide the sidebar (⌘B)"));
+        AbstractButton show = button(sidebar.component(), KeyText.of("Show the sidebar (⌘B)"));
         assertThat(sidebar.isShown()).isTrue();
         assertThat(shows(show, sidebar.component())).as("no rail beside the tabs").isFalse();
         for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.PANELS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES}) {
