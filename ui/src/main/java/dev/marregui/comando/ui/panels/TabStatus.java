@@ -100,7 +100,7 @@ enum TabStatus {
                     .filter(m -> m.length() > 2).orElse("");
             case DONE -> " · finished";
             case WORKING -> {
-                String what = session.filter(SessionState::isBusy).map(ss -> ss.activity().isEmpty() ? "working" : ss.activity())
+                String what = session.filter(SessionState::isBusy).map(TabStatus::working)
                         .orElse("running");
                 long since = session.map(SessionState::turnStartedMillis).orElse(0L);
                 yield " · " + what + (since > 0 ? " " + Labels.elapsed(nowMillis - since) : "");
@@ -112,6 +112,11 @@ enum TabStatus {
             }
             case IDLE, NONE -> "";
         };
+    }
+
+    /** What a session in a turn does, for every place that shows it: its tool's activity, else "working". */
+    static String working(SessionState ss) {
+        return ss.activity().isEmpty() ? "working" : ss.activity();
     }
 
     /** What a waiting session waits on, for every place that shows it: "waiting on review agent". */

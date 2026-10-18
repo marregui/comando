@@ -177,6 +177,16 @@ class ApprovalInboxTest {
     }
 
     @Test
+    void aMultiEditShowsItsDiff() {
+        inbox.render(List.of(new Approval(1, "work", ApprovalKind.TOOL, "MultiEdit", """
+                {"file_path":"/src/A.java","edits":[{"old_string":"int a = 1;","new_string":"int a = 2;"},
+                  {"old_string":"int b = 1;","new_string":"long b = 1;"}]}""", "edit A.java", T0)));
+        JTextComponent viewer = (JTextComponent) find(cards().getFirst(), c -> c instanceof JTextComponent t && !t.isEditable() && t.isFocusable());
+        assertThat(viewer.getText()).contains("+++ /src/A.java").contains("-int a = 1;").contains("+int a = 2;")
+                .contains("-int b = 1;").contains("+long b = 1;").doesNotContain("old_string");
+    }
+
+    @Test
     void theCardsLettersWorkFromItsViewer() {
         inbox.render(List.of(bash(1, "ls -la")));
         Component viewer = find(cards().getFirst(), c -> c instanceof JTextComponent t && !t.isEditable() && t.isFocusable());

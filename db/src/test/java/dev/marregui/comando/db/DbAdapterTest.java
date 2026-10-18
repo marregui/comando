@@ -2,6 +2,7 @@ package dev.marregui.comando.db;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.result.ColumnKind;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.result.ResultView;
@@ -16,12 +17,17 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import java.net.InetAddress;
+import java.net.ServerSocket;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class DbAdapterTest {
 
@@ -190,6 +196,28 @@ class DbAdapterTest {
         db.cancel(8L);
         sink.await(Intent.SqlCancelled.class, c -> c.requestId() == 9L, Duration.ofSeconds(10));
         assertThat(sink.of(Intent.SqlStarted.class)).noneMatch(s -> s.requestId() == 9L);
+    }
+
+    @Test
+    void aStatementQueuedWhenComandoQuitsDoesNotRun() throws Exception {
+        // the lane is held by a connect to a server that accepts and never answers; behind it, a write to the real one
+        try (ServerSocket silent = new ServerSocket(0, 1, InetAddress.getLoopbackAddress())) {
+            ConnectionSpec stuck = new ConnectionSpec("probe", "127.0.0.1", silent.getLocalPort(), "qdb", "admin", "quest", false);
+            ConnectionSpec real = new ConnectionSpec("probe", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "quest", false);
+            db.execute(10L, stuck, "SELECT 1");
+            CompletableFuture<QueryPort.Rows> queued = db.query(real, "CREATE TABLE closing_probe (ts TIMESTAMP, v DOUBLE) TIMESTAMP(ts)", 1);
+            db.close();
+            assertThatThrownBy(() -> queued.get(WAIT.toSeconds(), TimeUnit.SECONDS)).as("its caller is answered")
+                    .hasMessageContaining("did not run");
+        }
+
+        DbAdapter after = new DbAdapter(sink, results, new DbSettings(0, 1_000, 500, 60, 1_000L));
+        try {
+            QueryPort.Rows tables = after.query(spec, "SELECT count() FROM tables() WHERE table_name = 'closing_probe'", 1).get();
+            assertThat(tables.rows().getFirst().getFirst()).as("the queued write never ran").isEqualTo("0");
+        } finally {
+            after.close();
+        }
     }
 
     @Test

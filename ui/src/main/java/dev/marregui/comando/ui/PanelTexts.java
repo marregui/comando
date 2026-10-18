@@ -20,6 +20,11 @@ public interface PanelTexts {
         return a.toAbsolutePath().normalize().toString().equalsIgnoreCase(b.toAbsolutePath().normalize().toString());
     }
 
+    /** Whether a panel on {@code file} shows a log: read-only, following its end as it grows. */
+    static boolean isLog(Path file) {
+        return file.getFileName() != null && file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".log");
+    }
+
     /** The title a file gives a panel opened on it: its name without a {@code .md} extension. */
     static String titleOf(Path file) {
         String name = file.getFileName().toString();
@@ -66,11 +71,28 @@ public interface PanelTexts {
     }
 
     /**
-     * Binds a new panel to an existing file of the folder and loads its text, off the EDT; completes with the reason
-     * when it cannot, else empty.
+     * Binds a new panel to an existing file of the folder and loads its text, off the EDT; completes with what came of
+     * it.
      */
-    default CompletableFuture<String> open(PanelId panel, Path file) {
-        return CompletableFuture.completedFuture("panel text is not kept in files");
+    default CompletableFuture<Opened> open(PanelId panel, Path file) {
+        return CompletableFuture.completedFuture(Opened.refused("panel text is not kept in files"));
+    }
+
+    /** What came of {@link #open}: the panel bound to the file, the file already open in another panel, or a refusal. */
+    record Opened(Kind kind, String reason) {
+
+        public enum Kind { BOUND, ALREADY_OPEN, REFUSED }
+
+        public static final Opened BOUND = new Opened(Kind.BOUND, "");
+
+        public static Opened alreadyOpen(String name) {
+            return new Opened(Kind.ALREADY_OPEN, name + " is already open");
+        }
+
+        /** {@code reason} empty: bound. */
+        public static Opened refused(String reason) {
+            return reason.isEmpty() ? BOUND : new Opened(Kind.REFUSED, reason);
+        }
     }
 
     /**

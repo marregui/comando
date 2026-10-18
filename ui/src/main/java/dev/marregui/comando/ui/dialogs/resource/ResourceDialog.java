@@ -47,6 +47,7 @@ import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
@@ -55,17 +56,18 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 
 /**
  * The one dialog for configurable resources: the form of one resource, generated from the kind's attributes, with
  * Test, Open/Close, Assign and Save. It edits the resource the caller names, or a new one, or an unsaved copy of one;
- * the sidebar's lists add, pick, clone and remove resources. Connections, sessions and folders are configurations of it.
+ * the sidebar's lists add, pick, clone and remove resources. Connections and sessions are configurations of it.
  *
  * <p>⏎ saves, ⌘⏎ saves and assigns to the focused panel, Esc or the window's close button closes and asks
  * first when the form has unsaved changes, so a closed dialog never holds an edit that was not saved. Opening the
  * dialog on another resource while the form has unsaved changes asks the same question first; keeping the edits
  * cancels the opening. Questions are asked in a row inside the dialog. The outcome of Test, Connect and Start is the
- * latest notice about the resource, shown under the form.</p>
+ * latest notice about the resource, shown on the line above the buttons.</p>
  *
  * @param <S> the spec record
  */
@@ -75,8 +77,8 @@ public final class ResourceDialog<S> {
     static final Dimension DEFAULT_SIZE = new Dimension(600, 520);
 
     /**
-     * What differs between connections, sessions and folders. {@code test}, {@code open} (with {@code close}) and
-     * {@code assign} are null for a kind without them, and the dialog then has no such button: a folder has Save only.
+     * What differs between connections and sessions. {@code test}, {@code open} (with {@code close}) and
+     * {@code assign} are null for a kind without them, and the dialog then has no such button.
      */
     public record Config<S>(
             ResourceKind<S> kind,
@@ -108,8 +110,6 @@ public final class ResourceDialog<S> {
     private final JButton confirmYes = new JButton();
     private final JButton confirmNo = new JButton();
     private Runnable onConfirm;
-    /** What answering the open question with its safe button, or leaving it unanswered, does besides closing it. */
-    private Runnable onCancel;
     private JDialog dialog;
     private JRootPane root;
     private AppState state;
@@ -186,7 +186,6 @@ public final class ResourceDialog<S> {
         confirmButtons.add(confirmYes);
         confirmYes.addActionListener(e -> {
             Runnable r = onConfirm;
-            onCancel = null;
             hideConfirm();
             if (r != null) {
                 r.run();
@@ -639,7 +638,6 @@ public final class ResourceDialog<S> {
     }
 
     private void confirm(String question, String yes, String no, Runnable action) {
-        onCancel = null; // a question replacing another drops the first one's cancel: the new one decides
         confirmText.setText(question);
         confirmYes.setText(yes);
         confirmNo.setText(no);
@@ -656,17 +654,12 @@ public final class ResourceDialog<S> {
         if (!confirmRow.isVisible()) {
             return;
         }
-        Runnable cancel = onCancel;
         onConfirm = null;
-        onCancel = null;
         confirmRow.setVisible(false);
         if (root != null) {
             root.setDefaultButton(save);
         }
         content.revalidate();
-        if (cancel != null) {
-            cancel.run();
-        }
     }
 
     private void updateOpenClose() {
@@ -864,8 +857,7 @@ public final class ResourceDialog<S> {
         browse.getAccessibleContext().setAccessibleName("Choose " + label);
         browse.addActionListener(e -> {
             String text = field.getText();
-            Path start = Path.of(text.isBlank() ? System.getProperty("user.home") : text.split(File.pathSeparator)[0].strip());
-            FileChoosers.directory(content, label, start).ifPresent(dir -> {
+            FileChoosers.directory(content, label, chooserStart(text)).ifPresent(dir -> {
                 String path = dir.toAbsolutePath().toString();
                 lastDirectory = path;
                 field.setText(many && !text.isBlank() ? text + File.pathSeparator + path : path);
@@ -873,6 +865,20 @@ public final class ResourceDialog<S> {
         });
         p.add(browse, BorderLayout.EAST);
         return p;
+    }
+
+    /** Where the folder chooser opens: the field's first folder, else the home folder. */
+    static Path chooserStart(String text) {
+        for (String part : text.split(Pattern.quote(File.pathSeparator))) {
+            if (!part.isBlank()) {
+                try {
+                    return Path.of(part.strip());
+                } catch (InvalidPathException e) {
+                    break;
+                }
+            }
+        }
+        return Path.of(System.getProperty("user.home"));
     }
 
     private JButton button(String text, String icon, String tip, Runnable r) {

@@ -1,11 +1,15 @@
 package dev.marregui.comando.ui.widgets.terminal;
 
+import com.jediterm.terminal.SubstringFinder;
+import com.jediterm.terminal.ui.TerminalPanel;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.io.IOException;
@@ -13,8 +17,10 @@ import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -184,6 +190,76 @@ class TerminalWidgetTest {
             assertThat(found.get()).isEqualTo(2);
         } finally {
             SwingUtilities.invokeAndWait(() -> t.get().close());
+        }
+    }
+
+    @Test
+    void findNextSearchesAgainOnceTheOutputChanged(@TempDir Path dir) throws Exception {
+        AtomicReference<TerminalWidget> t = new AtomicReference<>();
+        Semaphore changed = new Semaphore(0);
+        SwingUtilities.invokeAndWait(() -> {
+            t.set(new TerminalWidget(dir, List.of("/bin/sh", "-c", "echo alpha needle; echo needle beta; exec cat")));
+            t.get().start();
+            t.get().buffer().addModelListener(changed::release);
+        });
+        try {
+            awaitScreen(t.get(), changed, s -> s.contains("beta"));
+            AtomicReference<Integer> found = new AtomicReference<>();
+            AtomicReference<Object> first = new AtomicReference<>();
+            AtomicReference<Object> next = new AtomicReference<>();
+            SwingUtilities.invokeAndWait(() -> {
+                found.set(t.get().find("needle", true));
+                first.set(panel(t.get().component()).getFindResult());
+                t.get().find("needle", true);
+                next.set(panel(t.get().component()).getFindResult());
+            });
+            assertThat(found.get()).isEqualTo(2);
+            assertThat(next.get()).as("with no new output the next find steps through the same results").isSameAs(first.get());
+
+            // new output on the same screen: the scrollback's line count does not change
+            SwingUtilities.invokeAndWait(() -> t.get().send("gamma needle\n"));
+            awaitScreen(t.get(), changed, s -> count(s, "gamma") == 2); // the echo and cat's copy
+            SwingUtilities.invokeAndWait(() -> found.set(t.get().find("needle", true)));
+            assertThat(found.get()).as("the next find counts the new matches").isEqualTo(4);
+            AtomicReference<Object> on = new AtomicReference<>();
+            AtomicReference<Object> beta = new AtomicReference<>();
+            SwingUtilities.invokeAndWait(() -> {
+                on.set(panel(t.get().component()).getFindResult().selectedItem().getStart());
+                beta.set(((SubstringFinder.FindResult) first.get()).getItems().get(1).getStart());
+            });
+            assertThat(on.get()).as("it steps on from the match the user was on, alpha's, to beta's: not to the newest")
+                    .isEqualTo(beta.get());
+        } finally {
+            SwingUtilities.invokeAndWait(() -> t.get().close());
+        }
+    }
+
+    private static TerminalPanel panel(Component c) {
+        if (c instanceof TerminalPanel p) {
+            return p;
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                TerminalPanel p = panel(child);
+                if (p != null) {
+                    return p;
+                }
+            }
+        }
+        return null;
+    }
+
+    /** Waits, up to eight seconds, for the screen to satisfy {@code done}, rechecking on each change of the buffer. */
+    private static void awaitScreen(TerminalWidget t, Semaphore changed, Predicate<String> done) throws Exception {
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(8);
+        while (true) {
+            AtomicReference<String> screen = new AtomicReference<>("");
+            SwingUtilities.invokeAndWait(() -> screen.set(t.screenText()));
+            if (done.test(screen.get())) {
+                return;
+            }
+            long left = deadline - System.nanoTime();
+            assertThat(left > 0 && changed.tryAcquire(left, TimeUnit.NANOSECONDS)).as("the screen: %s", screen.get()).isTrue();
         }
     }
 

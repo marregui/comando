@@ -37,6 +37,10 @@ public final class SidePane {
         return -1;
     }
 
+    public boolean hasViews() {
+        return views.size() > 0;
+    }
+
     /** Returns true when the pane holds views. */
     public boolean render(AppState s) {
         boolean changed = views.render(s.views());

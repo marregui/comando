@@ -7,16 +7,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SourceLinksTest {
 
     @Test
-    void linksPathsWithLinesInTextAndCodeSpans() {
-        String html = "<p>See <code>db/src/main/java/Lane.java:118</code> and core/Reducer.java:42.</p>";
-        String linked = SourceLinks.linkHtml(html);
-        assertThat(linked).contains("db/src/main/java/Lane.java:118</a>").contains("core/Reducer.java:42</a>");
-        assertThat(linked).contains("href=\"" + SourceLinks.SCHEME);
+    void findsPathsWithLinesInText() {
+        String text = "See db/src/main/java/Lane.java:118 and core/Reducer.java:42.";
+        assertThat(SourceLinks.refs(text)).extracting(SourceLinks.Ref::href)
+                .containsExactly(SourceLinks.SCHEME + "db/src/main/java/Lane.java#118", SourceLinks.SCHEME + "core/Reducer.java#42");
+        SourceLinks.Ref first = SourceLinks.refs(text).getFirst();
+        assertThat(text.substring(first.start(), first.end())).isEqualTo("db/src/main/java/Lane.java:118");
+        assertThat(SourceLinks.path(first.href())).isEqualTo("db/src/main/java/Lane.java");
+        assertThat(SourceLinks.line(first.href())).isEqualTo(118);
     }
 
     @Test
-    void leavesPreBlocksLinksAndTimesAlone() {
-        String html = "<pre><code>at Lane.java:118</code></pre><p><a href=\"x\">a.java:1</a> at 10:30 or http://h:8080/x</p>";
-        assertThat(SourceLinks.linkHtml(html)).isEqualTo(html);
+    void leavesTimesAndAddressesAlone() {
+        assertThat(SourceLinks.refs("at 10:30 or http://h:8080/x")).isEmpty();
     }
 }

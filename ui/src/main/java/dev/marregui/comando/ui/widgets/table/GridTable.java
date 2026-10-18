@@ -264,6 +264,8 @@ public final class GridTable implements Searchable, Copyable, Exportable {
         int matches = 0;
         int firstRow = -1;
         int firstCol = -1;
+        int lastRow = -1;
+        int lastCol = -1;
         int nextRow = -1;
         int nextCol = -1;
         long start = (long) Math.max(findRow, 0) * cols + Math.max(findColumn, -1);
@@ -279,6 +281,8 @@ public final class GridTable implements Searchable, Copyable, Exportable {
                     firstRow = r;
                     firstCol = c;
                 }
+                lastRow = r;
+                lastCol = c;
                 long at = (long) r * cols + c;
                 if (forward && at > start && nextRow < 0) {
                     nextRow = r;
@@ -291,8 +295,9 @@ public final class GridTable implements Searchable, Copyable, Exportable {
             }
         }
         if (nextRow < 0) {
-            nextRow = firstRow;
-            nextCol = firstCol;
+            // past the last match forwards, or before the first backwards: wrap around
+            nextRow = forward ? firstRow : lastRow;
+            nextCol = forward ? firstCol : lastCol;
         }
         if (nextRow >= 0) {
             findRow = nextRow;
@@ -383,7 +388,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
 
     static String csv(CharSequence v) {
         String s = v.toString();
-        if (s.indexOf(',') < 0 && s.indexOf('"') < 0 && s.indexOf('\n') < 0) {
+        if (s.indexOf(',') < 0 && s.indexOf('"') < 0 && s.indexOf('\n') < 0 && s.indexOf('\r') < 0) {
             return s;
         }
         return '"' + s.replace("\"", "\"\"") + '"';

@@ -17,11 +17,9 @@ import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
-import java.net.URISyntaxException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
@@ -113,53 +111,11 @@ public final class LocalImages {
     }
 
     /**
-     * The picture file an image link names, a relative one read from {@code folder}: a path, or a {@code file:} URL,
-     * to a PNG, JPEG, GIF or SVG. Empty for a web address, a {@code data:} URI, another kind of file, or a relative
-     * path with no folder to read it from. A {@code #} or {@code ?} part after the name is dropped.
+     * The picture file an image link names, as {@link LocalLinks#file} reads it: a PNG, JPEG, GIF or SVG; empty for
+     * any other kind of file.
      */
     public static Optional<Path> resolve(Path folder, String destination) {
-        if (destination == null || destination.isBlank()) {
-            return Optional.empty();
-        }
-        String path;
-        try {
-            URI uri = new URI(destination.strip());
-            if (uri.getScheme() != null && !uri.getScheme().equalsIgnoreCase("file") || uri.getRawAuthority() != null) {
-                // a web address, or one naming another machine, scheme-relative or file://host/
-                return Optional.empty();
-            }
-            path = uri.getPath();
-        } catch (URISyntaxException e) {
-            // a destination in angle brackets keeps its spaces, which a URI does not take
-            String raw = destination.strip();
-            int cut = indexOfAny(raw, '#', '?');
-            path = cut < 0 ? raw : raw.substring(0, cut);
-            if (raw.contains("://")) {
-                return Optional.empty();
-            }
-        }
-        if (path == null || path.isEmpty() || !shown(path)) {
-            return Optional.empty();
-        }
-        Path target;
-        try {
-            target = Path.of(path);
-        } catch (InvalidPathException e) {
-            return Optional.empty();
-        }
-        if (!target.isAbsolute()) {
-            if (folder == null) {
-                return Optional.empty();
-            }
-            target = folder.toAbsolutePath().resolve(target);
-        }
-        return Optional.of(target.normalize());
-    }
-
-    private static int indexOfAny(String s, char a, char b) {
-        int i = s.indexOf(a);
-        int j = s.indexOf(b);
-        return i < 0 ? j : j < 0 ? i : Math.min(i, j);
+        return LocalLinks.file(folder, destination).filter(f -> shown(f.getFileName().toString()));
     }
 
     /** Whether a file of this name is a kind of picture the preview shows. */
@@ -255,7 +211,7 @@ public final class LocalImages {
         Path png = cache.resolve(cacheName(key));
         SVGDocument doc;
         try (InputStream in = Files.newInputStream(key.file())) {
-            LoaderContext context = LoaderContext.builder().externalResourcePolicy(ResourcePolicy.ALLOW_RELATIVE).build();
+            LoaderContext context = LoaderContext.builder().externalResourcePolicy(beside(key.file())).build();
             doc = new SVGLoader().load(in, key.file().toUri(), context);
         }
         if (doc == null) {
@@ -292,6 +248,40 @@ public final class LocalImages {
             }
         }
         return new Picture.Ready(png, width, height);
+    }
+
+    /**
+     * What an SVG may load: embedded data, and files in its folder or below it. The library's relative policy alone
+     * resolves {@code //host/x.png} to {@code file://host/x.png}, which the JDK opens on that machine, and
+     * {@code ../x.png} to a file outside the folder.
+     */
+    static ResourcePolicy beside(Path svg) {
+        Path folder = svg.toAbsolutePath().normalize().getParent();
+        return new ResourcePolicy() {
+            @Override
+            public URI resolveResourceURI(URI base, String path) {
+                return confine(ResourcePolicy.ALLOW_RELATIVE.resolveResourceURI(base, path));
+            }
+
+            @Override
+            public URI resolveResourceURI(URI base, URI resource) {
+                return confine(ResourcePolicy.ALLOW_RELATIVE.resolveResourceURI(base, resource));
+            }
+
+            private URI confine(URI uri) {
+                if (uri == null || "data".equals(uri.getScheme())) {
+                    return uri;
+                }
+                if (folder == null || !"file".equalsIgnoreCase(uri.getScheme()) || uri.getRawAuthority() != null) {
+                    return null;
+                }
+                try {
+                    return Path.of(uri).normalize().startsWith(folder) ? uri : null;
+                } catch (IllegalArgumentException e) {
+                    return null;
+                }
+            }
+        };
     }
 
     /** The drawing's file in the cache: one per SVG as it is on disk now, at this scale. */

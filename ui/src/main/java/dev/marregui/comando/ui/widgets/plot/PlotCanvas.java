@@ -53,7 +53,6 @@ final class PlotCanvas extends JComponent {
     private int dragStart = -1;
     private int dragNow = -1;
     private int hoverX = -1;
-    private float fontScale = 1f;
 
     PlotCanvas() {
         MouseAdapter mouse = new MouseAdapter() {
@@ -232,11 +231,6 @@ final class PlotCanvas extends JComponent {
         zoomTo(mid - half, mid + half);
     }
 
-    void scaleFont(int steps) {
-        fontScale = steps == 0 ? 1f : Math.max(0.6f, Math.min(2.5f, fontScale + 0.1f * steps));
-        repaint();
-    }
-
     /** Fits y to the points inside the visible x range. */
     private void fitY() {
         double lo = Double.POSITIVE_INFINITY;
@@ -319,7 +313,7 @@ final class PlotCanvas extends JComponent {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
         Font font = getFont() == null ? new Font(Font.SANS_SERIF, Font.PLAIN, 12) : getFont();
-        g.setFont(font.deriveFont(font.getSize2D() * fontScale));
+        g.setFont(font);
         FontMetrics fm = g.getFontMetrics();
         Rectangle a = area(width, height);
         g.setColor(Theme.CARD_BORDER);

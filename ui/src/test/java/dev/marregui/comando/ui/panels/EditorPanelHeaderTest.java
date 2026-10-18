@@ -95,8 +95,33 @@ class EditorPanelHeaderTest {
             button(p[0], "Compact the conversation").doClick();
             button(p[0], "Clear the conversation").doClick();
         });
-        assertThat(intents).containsExactly(new Intent.SessionCommand("work", SessionRow.COMPACT_COMMAND),
-                new Intent.SessionCommand("work", SessionRow.CLEAR_COMMAND));
+        assertThat(intents).containsExactly(new Intent.SessionCommand("work", SessionSpec.COMPACT_COMMAND),
+                new Intent.SessionCommand("work", SessionSpec.CLEAR_COMMAND));
+    }
+
+    @Test
+    void aSessionNamedLikeHtmlIsShownAsText() throws Exception {
+        SessionState imported = SessionState.closed(SessionSpec.fresh("<html><b>bold</b>", "/w"));
+        PanelState panel = new PanelState(A, "one", "", imported.name());
+        EditorPanel[] p = new EditorPanel[1];
+        SwingUtilities.invokeAndWait(() -> {
+            p[0] = new EditorPanel(panel, i -> { }, new SchemaRegistry());
+            p[0].render(panel, AppState.initial(List.of(panel), List.of(), List.of(imported)));
+        });
+        List<AbstractButton> chips = new ArrayList<>();
+        collectText(p[0], "bold</b>", chips);
+        assertThat(chips).isNotEmpty().allSatisfy(b -> assertThat(b.getText()).doesNotStartWith("<html>"));
+    }
+
+    private static void collectText(Component c, String part, List<AbstractButton> out) {
+        if (c instanceof AbstractButton b && b.getText() != null && b.getText().contains(part)) {
+            out.add(b);
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                collectText(child, part, out);
+            }
+        }
     }
 
     @Test

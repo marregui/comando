@@ -112,6 +112,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -487,8 +488,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             findBar.close(); // the view it searched was closed
         }
         actions.refresh();
-        frame.setTitle("comando — " + s.focusedPanel().title()
-                + (s.focusedPanel().session().isEmpty() ? "" : " · " + s.focusedPanel().session()));
+        if (!quitting) {
+            // a render already asked for when quit began must not take back the closing title
+            frame.setTitle("comando — " + s.focusedPanel().title()
+                    + (s.focusedPanel().session().isEmpty() ? "" : " · " + s.focusedPanel().session()));
+        }
     }
 
     private void showSidePane(boolean show) {
@@ -542,6 +546,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             if (p == null) {
                 return;
             }
+            if (!p.editable()) {
+                refuseReadOnly();
+                return;
+            }
             switch (mode) {
                 case REPLACE -> p.editor().replaceAll(text);
                 case INSERT -> p.editor().insertAtCaret(text);
@@ -552,6 +560,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 }
             }
         });
+    }
+
+    private void refuseReadOnly() {
+        deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "The panel shows a log, which is read-only; nothing was written", false));
     }
 
     @Override
@@ -586,8 +598,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     @Override
     public void showFile(String session, String path, String baseDir, int line) {
         Thread.ofVirtual().name("show-file").start(() -> {
-            Path p = FileView.resolve(path, baseDir);
             try {
+                Path p = FileView.resolve(path, baseDir);
                 FileView file = FileView.read(p, line);
                 // a file opens on the user's click only: it shows even in a side pane the user hid earlier, and even when
                 // it replaces the same file's view in place
@@ -596,8 +608,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                     deps.intents().dispatch(new Intent.ShowView(session, file.title(), file.spec(), Placement.SIDE));
                     render.request();
                 });
-            } catch (IOException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open " + p + ": " + e.getMessage(), false));
+            } catch (IOException | RuntimeException e) {
+                // a path that is no path (a NUL in it) is told like a file that cannot be read
+                String why = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open " + path + ": " + why, false));
             }
         });
     }
@@ -624,11 +638,24 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
         long idle = (System.nanoTime() - lastKeyNanos) / 1_000_000;
         if (lastKeyNanos != 0 && idle < TYPING_PAUSE_MILLIS) {
-            Timer later = new Timer((int) (TYPING_PAUSE_MILLIS - idle) + 50, e -> arrangeWhenIdle(layout));
-            later.setRepeats(false);
-            later.start();
+            // one layout waits for the pause: a newer one replaces it, so an older never lands after it
+            boolean waiting = pendingLayout != null;
+            pendingLayout = layout;
+            if (!waiting) {
+                Timer later = new Timer((int) (TYPING_PAUSE_MILLIS - idle) + 50, e -> {
+                    Layout next = pendingLayout;
+                    pendingLayout = null;
+                    if (next != null) {
+                        arrangeWhenIdle(next);
+                    }
+                });
+                later.setRepeats(false);
+                later.start();
+            }
             return;
         }
+        // a layout applied now is newer than one still waiting for the pause, which then never lands
+        pendingLayout = null;
         if (beforeArrange == null) {
             // Restore layout goes back to before the first arrangement the user has not undone
             beforeArrange = new LayoutSnapshot(sidebar.isShown(), sidePaneHidden, vertical.getDividerLocation());
@@ -746,12 +773,15 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("session.interrupt", "Interrupt the turn", key(KeyEvent.VK_PERIOD, CMD | SHIFT),
                 () -> focusedSession().ifPresent(x -> deps.intents().dispatch(new Intent.InterruptSession(x.name()))),
                 () -> focusedSession().map(SessionState::isBusy).orElse(false));
-        cmd("session.compact", "Compact the conversation", null, () -> sendCommand("/compact"), () -> focusedSession().isPresent());
-        for (String m : Menus.MODELS) {
+        // as the panel's and the row's buttons do: only a running session has a conversation to compact
+        cmd("session.compact", "Compact the conversation", null, () -> focusedSession().ifPresent(x ->
+                        deps.intents().dispatch(new Intent.SessionCommand(x.name(), SessionSpec.COMPACT_COMMAND))),
+                () -> focusedSession().filter(x -> x.status().isUsable()).isPresent());
+        for (String m : SessionSpec.MODELS) {
             cmd("session.model." + m, m, null, () -> focusedSession().ifPresent(x ->
                     deps.intents().dispatch(new Intent.SetSessionModel(x.name(), m))), () -> focusedSession().isPresent());
         }
-        for (String e : Menus.EFFORTS) {
+        for (String e : SessionSpec.EFFORTS) {
             cmd("session.effort." + e, e, null, () -> focusedSession().ifPresent(x ->
                     deps.intents().dispatch(new Intent.SetSessionEffort(x.name(), e))), () -> focusedSession().isPresent());
         }
@@ -802,7 +832,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("view.sidePane", "Side pane", key(KeyEvent.VK_BACK_SLASH, CMD), () -> {
             sidePaneHidden = sidePaneShown;
             render();
-        }, () -> sidePaneShown || side.component().getComponentCount() > 0);
+        }, () -> sidePaneShown || side.hasViews());
         cmd("view.files", "Files", null, () -> {
             if (!sidebar.isShown()) {
                 toggleSidebar();
@@ -1043,12 +1073,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             PanelId id = PanelId.random();
             // the title the store gives a panel opened on a file, so the file keeps its name
             String title = PanelTexts.titleOf(file);
-            deps.texts().open(id, file).thenAccept(refused -> {
-                if (refused.isEmpty()) {
-                    deps.intents().dispatch(new Intent.AddPanel(id, title, deps.texts().document(id)));
-                } else if (!refused.endsWith("is already open")) {
-                    // already open: a click racing the first one's panel, which comes forward on its own
-                    deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, refused, false));
+            deps.texts().open(id, file).thenAccept(opened -> {
+                switch (opened.kind()) {
+                    case BOUND -> deps.intents().dispatch(new Intent.AddPanel(id, title, deps.texts().document(id)));
+                    // a click racing the first one's panel, which comes forward on its own
+                    case ALREADY_OPEN -> { }
+                    case REFUSED -> deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, opened.reason(), false));
                 }
                 Edt.later(() -> openingFiles.remove(file));
             });
@@ -1070,7 +1100,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** Closes a panel; asks first when its shell runs a job in front, which closing would end. */
     private void closePanel(PanelId id) {
         Optional<String> job = lower.terminals().runningJob(id);
-        if (job.isPresent()) {
+        // the last panel is never closed: the reducer says so, with nothing asked first
+        if (job.isPresent() && deps.state().get().panels().size() > 1) {
             String title = deps.state().get().panel(id).map(x -> x.title()).orElse("the panel");
             String why = job.get().equals(TerminalWidget.UNCHECKED_JOB)
                     ? "comando cannot tell whether its shell is running a program; closing the panel ends anything it runs."
@@ -1163,12 +1194,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             about.toFront();
             return;
         }
-        String claude = "";
-        for (SessionState s : deps.state().get().sessions()) {
-            if (!s.info().cliVersion().isEmpty()) {
-                claude = s.info().cliVersion();
-            }
-        }
+        String claude = deps.state().get().sessions().stream().filter(s -> !s.info().cliVersion().isEmpty())
+                .max(Comparator.comparingLong(SessionState::startedMillis)).map(s -> s.info().cliVersion()).orElse("");
         about = About.show(frame, About.load(About.facts(deps.version(), deps.home(), claude)), this::followAbout);
     }
 
@@ -1284,10 +1311,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
     }
 
-    private void sendCommand(String command) {
-        deps.intents().dispatch(new Intent.RunText(focusedId(), command, Target.CLAUDE));
-    }
-
     /** Asks for Gradle tasks, naming the build they run in; the last ones are remembered across restarts. */
     private void runGradle() {
         String dir = focusedSession().map(x -> Labels.shortPath(x.spec().workDir())).orElse("the session's directory");
@@ -1367,6 +1390,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (p == null) {
             return;
         }
+        if (!p.editable()) {
+            refuseReadOnly();
+            return;
+        }
         if (run == null) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "The panel has no result to attach", false));
             return;
@@ -1409,8 +1436,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Run the query to plot first", false));
             return;
         }
+        ViewSpec.Plot plot;
         try {
-            ResultViews.plot(lower.results().shown());
+            plot = ResultViews.plot(lower.results().shown());
         } catch (IllegalArgumentException e) {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, e.getMessage(), false));
             return;
@@ -1427,9 +1455,14 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Not a number of seconds: " + every, false));
             return;
         }
+        if (seconds < 1 || seconds > LivePlots.MAX_SECONDS) {
+            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Refresh every 1 to " + LivePlots.MAX_SECONDS + " seconds", false));
+            return;
+        }
         String title = "live · " + s.focusedPanel().title();
         livePlots.start(s.focused(), run.sql(), title, seconds);
-        deps.intents().dispatch(new Intent.ShowView("", title, ResultViews.plot(lower.results().shown()), Placement.LOWER));
+        // the plot checked before the dialog: a run that ended while it was open is plotted by the first refresh
+        deps.intents().dispatch(new Intent.ShowView("", title, plot, Placement.LOWER));
     }
 
     /** Copies the focused panel's last result into its own tab, which later runs do not replace. */
@@ -1564,19 +1597,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             if (frame == null) {
                 return;
             }
-            lower.terminals().closeAll();
-            livePlots.stopAll();
-            if (watchdog != null) {
-                watchdog.close();
-            }
-            keyPriority.close();
-            stopListening();
-            deps.loop().removeListener(stateListener);
-            deps.schemas().removeListener(schemaListener);
-            if (watched != null) {
-                watched.removeListener(transcriptListener);
-                watched = null;
-            }
+            teardown();
             frame.dispose();
         }, CLOSE_BOUND);
         if (!closed) {
@@ -1596,6 +1617,30 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         Object pick = JOptionPane.showInputDialog(frame, title, title, JOptionPane.PLAIN_MESSAGE, null, shown.toArray(), shown.getFirst());
         if (pick != null) {
             chosen.accept(names.get(shown.indexOf(pick.toString())));
+        }
+    }
+
+    /**
+     * Stops what the window runs: its timers and listeners, the shells, the live plots and the watchdog; once, at quit
+     * or at close. No state renders after it, so the closing window keeps its title.
+     */
+    private void teardown() {
+        if (tornDown) {
+            return;
+        }
+        tornDown = true;
+        stopListening();
+        lower.terminals().closeAll();
+        livePlots.stopAll();
+        if (watchdog != null) {
+            watchdog.close();
+        }
+        keyPriority.close();
+        deps.loop().removeListener(stateListener);
+        deps.schemas().removeListener(schemaListener);
+        if (watched != null) {
+            watched.removeListener(transcriptListener);
+            watched = null;
         }
     }
 
@@ -1633,6 +1678,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private boolean quitting;
+    private boolean tornDown;
+    /** The layout a session asked for while the user typed, applied at the pause; null when none waits. */
+    private Layout pendingLayout;
     private final Consumer<String> schemaListener = connection -> render.request();
     private final StateLoop.Listener stateListener = (previous, next) -> render.request();
 
@@ -1663,13 +1711,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
         quitting = true;
         saveLayoutQuietly();
-        stopListening();
-        lower.terminals().closeAll();
-        livePlots.stopAll();
-        if (watchdog != null) {
-            watchdog.close();
-        }
-        keyPriority.close();
+        teardown();
         // the window stays, saying so, until the application has closed (close() disposes it): a relaunch meanwhile
         // finds the lock held, and the user can see why
         frame.setTitle("comando — closing…");

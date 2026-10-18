@@ -224,6 +224,8 @@ class EditorPanelPreviewTest {
         assertThat(EditorPanel.linkedDocument(doc, "#a-heading")).as("a heading of the same document").isEmpty();
         assertThat(EditorPanel.linkedDocument(doc, "https://example.com/x.md")).isEmpty();
         assertThat(EditorPanel.linkedDocument(doc, "mailto:a@b.c")).isEmpty();
+        assertThat(EditorPanel.linkedDocument(doc, "file://host/abs/a.md")).as("a file on another machine").isEmpty();
+        assertThat(EditorPanel.linkedDocument(doc, "//host/abs/a.md")).as("scheme-relative, another machine").isEmpty();
         assertThat(EditorPanel.linkedDocument(doc, "build.gradle.kts")).as("not rendered by comando").isEmpty();
         assertThat(EditorPanel.linkedDocument(doc, "report/index.html#tests")).contains(Path.of("/kb/claude/report/index.html"));
         assertThat(EditorPanel.linkedDocument(doc, "file:/kb/old.HTM")).as("a page's link, read against its base").contains(Path.of("/kb/old.HTM"));

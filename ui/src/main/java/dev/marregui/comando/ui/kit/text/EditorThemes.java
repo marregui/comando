@@ -18,7 +18,10 @@ final class EditorThemes {
     }
 
     static void apply(RSyntaxTextArea area, boolean light) {
-        theme(light).apply(area);
+        Theme theme = theme(light);
+        theme.apply(area);
+        // each area its own copy: a zoom rewrites its scheme's fonts, which would reach every other editor
+        area.setSyntaxScheme((SyntaxScheme) theme.scheme.clone());
     }
 
     static SyntaxScheme scheme(boolean light) {

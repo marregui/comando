@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.widget.capability.Zoomable;
 import dev.marregui.comando.ui.widgets.transcript.doc.Span;
 
 import javax.swing.UIManager;
@@ -40,6 +41,7 @@ public final class Style {
     final Color inlineCodeBackground = new Color(0x393B40);
     final Color selection = new Color(0x214283);
     final Color findMatch = new Color(0x6B5A1E);
+    final Color tableRule = new Color(0x4E5157);
     final Color findCurrent = new Color(0xA88A1E);
 
     private final Font base;
@@ -56,8 +58,8 @@ public final class Style {
         this.monoBase = monoBase;
         this.text = text;
         this.zoom = zoom;
-        float size = Math.max(9f, base.getSize2D() + zoom);
-        float monoSize = Math.max(8f, monoBase.getSize2D() - 1f + zoom);
+        float size = Zoomable.clampSize(base.getSize2D() + zoom);
+        float monoSize = Zoomable.clampSize(monoBase.getSize2D() - 1f + zoom);
         body = base.deriveFont(Font.PLAIN, size);
         bold = base.deriveFont(Font.BOLD, size);
         italic = base.deriveFont(Font.ITALIC, size);
@@ -77,6 +79,16 @@ public final class Style {
 
     /** The style for the look and feel's default font and the theme's monospaced font. */
     public static Style of(int zoom) {
+        return new Style(baseFont(), Theme.mono(), zoom);
+    }
+
+    /** {@code zoom} kept to the steps that move the body text between 8 and 40 pt: a step past either end changes nothing. */
+    public static int clampZoom(int zoom) {
+        float base = baseFont().getSize2D();
+        return Math.round(Zoomable.clampSize(base + zoom) - base);
+    }
+
+    private static Font baseFont() {
         Font base = UIManager.getFont("defaultFont");
         if (base == null) {
             base = UIManager.getFont("Label.font");
@@ -84,7 +96,7 @@ public final class Style {
         if (base == null) {
             base = new Font(Font.SANS_SERIF, Font.PLAIN, 13);
         }
-        return new Style(base, Theme.mono(), zoom);
+        return base;
     }
 
     /** The same style with the text in {@link Theme#GOLD}: a turn's conclusion. */

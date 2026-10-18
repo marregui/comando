@@ -28,8 +28,8 @@ Each is written once as a resource kind. Connections and sessions are edited in 
 `ResourceDialog` edits one resource: stored, new, or an unsaved copy ([record 40](adr/0040-one-resource-per-dialog-and-two-tab-rows.md)).
 The form is generated from the kind's attributes, with a hint under each field; rarely set fields sit under "▸
 Advanced". ⏎ saves; ⌘⏎ saves and assigns to the focused panel; Esc or the close button asks before dropping unsaved
-changes. Test, Connect or Start, and Assign save a changed form first; their outcome shows on the line under the
-buttons. Test checks the form as typed.
+changes. Connect or Start, and Assign save a changed form first; Test tries the form as typed, without saving it.
+Their outcome shows on the line above the buttons.
 
 ### 1.2 Panels
 

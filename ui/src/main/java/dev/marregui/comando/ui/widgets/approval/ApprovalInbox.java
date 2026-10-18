@@ -12,6 +12,7 @@ import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
 import dev.marregui.comando.ui.kit.text.DiffPane;
+import dev.marregui.comando.ui.kit.text.Diffs;
 import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
@@ -353,12 +354,13 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                     yield sp;
                 }
                 case SQL_WRITE -> code(in.path("sql").asText(""), "sql", 8);
-                case TOOL -> switch (a.toolName()) {
-                    case "Bash" -> code(in.path("command").asText("") + describe(in), "sh", 10);
-                    case "Edit" -> diff(in.path("file_path").asText(""), in.path("old_string").asText(""), in.path("new_string").asText(""));
-                    case "Write" -> diff(in.path("file_path").asText(""), "", in.path("content").asText(""));
-                    default -> code(Json.pretty(in), "json", 12);
-                };
+                case TOOL -> {
+                    Diffs.Edit edit = Diffs.edit(a.toolName(), in);
+                    if (edit != null) {
+                        yield diff(edit.path(), edit.before(), edit.after());
+                    }
+                    yield a.toolName().equals("Bash") ? code(in.path("command").asText("") + describe(in), "sh", 10) : code(Json.pretty(in), "json", 12);
+                }
             };
         }
 

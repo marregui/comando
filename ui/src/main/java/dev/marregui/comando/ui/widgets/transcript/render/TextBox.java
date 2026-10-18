@@ -136,6 +136,23 @@ final class TextBox {
         return singles.computeIfAbsent(at, k -> new TextLayout(rich.attributed(at, end).getIterator(), Style.FRC));
     }
 
+    /**
+     * Takes the line layouts of {@code previous} for the source lines that end before {@code prefix}, where both texts
+     * are the same: a block that grows at its end lays out only its new lines. Only before this box's first layout.
+     */
+    void adoptLines(TextBox previous, int prefix) {
+        if (previous.singlesStyle == null || !singles.isEmpty()) {
+            return;
+        }
+        singlesStyle = previous.singlesStyle;
+        previous.singles.forEach((at, layout) -> {
+            int end = previous.text.indexOf('\n', at);
+            if (end >= 0 && end < prefix) {
+                singles.put(at, layout);
+            }
+        });
+    }
+
     /** The width the box was laid out at. */
     int width() {
         return width;

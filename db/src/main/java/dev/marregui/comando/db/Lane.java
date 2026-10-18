@@ -50,6 +50,8 @@ final class Lane implements AutoCloseable {
     }
 
     private static final System.Logger LOG = System.getLogger(Lane.class.getName());
+    /** The bound on a table description, as long as Claude waits for one. */
+    private static final int DESCRIBE_SECONDS = 60;
 
     /** The statement the lane runs now. */
     private record Running(long requestId, Statement statement, Connection connection) {
@@ -66,6 +68,8 @@ final class Lane implements AutoCloseable {
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
     private volatile Running running;
     private volatile boolean closed;
+    /** Set when close runs the queued tasks on its own thread: the lane thread is still busy, and owns the connection. */
+    private volatile boolean drained;
     private int pending; // guarded by this: tasks accepted and not yet ended
     private boolean retired; // guarded by this
     private Connection connection; // lane thread only
@@ -84,7 +88,7 @@ final class Lane implements AutoCloseable {
 
     /** False when the lane has stopped; so for every method that queues work. */
     boolean open(ConnectionSpec spec) {
-        return submit(() -> {
+        return work(() -> {
             try {
                 ensureOpen(spec);
             } catch (SQLException e) {
@@ -94,7 +98,7 @@ final class Lane implements AutoCloseable {
     }
 
     boolean execute(long requestId, ConnectionSpec spec, String sql) {
-        return submit(() -> run(requestId, spec, sql));
+        return work(() -> run(requestId, spec, sql), () -> sink.dispatch(new Intent.SqlCancelled(requestId)));
     }
 
     /**
@@ -103,7 +107,7 @@ final class Lane implements AutoCloseable {
      * it with {@link Overtaken} without opening the connection again.
      */
     boolean query(ConnectionSpec spec, String sql, int maxRows, CompletableFuture<QueryPort.Rows> out, BooleanSupplier wanted) {
-        boolean accepted = submit(() -> {
+        boolean accepted = work(() -> {
             if (out.isDone()) {
                 return; // the caller gave up while this waited behind other runs: it must not run later
             }
@@ -129,7 +133,7 @@ final class Lane implements AutoCloseable {
             } catch (RuntimeException e) {
                 out.completeExceptionally(e);
             }
-        });
+        }, () -> out.completeExceptionally(closing()));
         if (accepted && closed) {
             out.completeExceptionally(new IllegalStateException("connection " + name + " is closed"));
         }
@@ -141,7 +145,7 @@ final class Lane implements AutoCloseable {
      * whose query QuestDB does not accept.
      */
     boolean describe(ConnectionSpec spec, String table, CompletableFuture<QueryPort.Rows> out, BooleanSupplier wanted) {
-        return submit(() -> {
+        return work(() -> {
             if (!wanted.getAsBoolean()) {
                 out.completeExceptionally(new Overtaken(name));
                 return;
@@ -153,13 +157,18 @@ final class Lane implements AutoCloseable {
                 return;
             }
             SQLException first;
-            try (Statement st = connection.createStatement();
-                 ResultSet rs = st.executeQuery("SHOW COLUMNS FROM " + quote(table))) {
-                out.complete(textRows(rs, 10_000));
-                return;
+            try (Statement st = connection.createStatement()) {
+                st.setQueryTimeout(DESCRIBE_SECONDS);
+                try (ResultSet rs = st.executeQuery("SHOW COLUMNS FROM " + quote(table))) {
+                    out.complete(textRows(rs, 10_000));
+                    return;
+                }
             } catch (SQLException e) {
                 first = e;
             }
+            // the driver's metadata takes no statement timeout: a network timeout bounds it, so a stalled server cannot
+            // hold the lane, and the next run opens the connection again if the timeout broke it
+            boolean bounded = networkTimeout(DESCRIBE_SECONDS * 1000);
             try (ResultSet rs = connection.getMetaData().getColumns(null, null, table, null)) {
                 List<List<String>> rows = new ArrayList<>();
                 while (rs.next()) {
@@ -172,8 +181,22 @@ final class Lane implements AutoCloseable {
                 }
             } catch (SQLException e) {
                 out.completeExceptionally(new IllegalStateException(message(first), first));
+            } finally {
+                if (bounded) {
+                    networkTimeout(0);
+                }
             }
-        });
+        }, () -> out.completeExceptionally(closing()));
+    }
+
+    /** Sets the connection's network timeout, 0 for none; false when the driver does not take one. */
+    private boolean networkTimeout(int millis) {
+        try {
+            connection.setNetworkTimeout(Runnable::run, millis);
+            return true;
+        } catch (SQLException | RuntimeException e) {
+            return false;
+        }
     }
 
     /** A double-quoted identifier; embedded quotes are doubled. */
@@ -228,7 +251,7 @@ final class Lane implements AutoCloseable {
         if (running != null) {
             return; // a statement in flight is its own liveness check
         }
-        submit(() -> {
+        work(() -> {
             if (connection == null) {
                 return;
             }
@@ -243,6 +266,30 @@ final class Lane implements AutoCloseable {
                 sink.dispatch(new Intent.ConnectionLost(name, "validity check failed"));
             }
         });
+    }
+
+    /** Queues work that runs only while the lane is open: once it closes, a queued task does nothing. */
+    private boolean work(Runnable task) {
+        return work(task, () -> {
+        });
+    }
+
+    /**
+     * Queues work that runs only while the lane is open: a task still queued when the lane closes runs {@code
+     * whenClosed} instead, so a statement queued before the user quit is not run during the exit.
+     */
+    private boolean work(Runnable task, Runnable whenClosed) {
+        return submit(() -> {
+            if (closed) {
+                whenClosed.run();
+            } else {
+                task.run();
+            }
+        });
+    }
+
+    private IllegalStateException closing() {
+        return new IllegalStateException("connection " + name + " is closing; the statement did not run");
     }
 
     /**
@@ -498,11 +545,18 @@ final class Lane implements AutoCloseable {
             cancelled.add(r.requestId());
             cancelStatement(r);
         }
-        submit(this::closeConnection);
+        // the connection is the lane thread's: closed there, never by the tasks drained below on this thread
+        submit(() -> {
+            if (!drained) {
+                closeConnection();
+            }
+        });
         thread.shutdown();
         try {
             if (!thread.awaitTermination(3, TimeUnit.SECONDS)) {
-                thread.shutdownNow();
+                // the tasks still queued are run here as closed: each answers its caller, none runs its statement
+                drained = true;
+                thread.shutdownNow().forEach(Runnable::run);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();

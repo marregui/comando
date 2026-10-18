@@ -79,13 +79,15 @@ class McpServerTest {
         }
     };
 
+    private McpTools tools;
+
     @BeforeEach
     void start() throws Exception {
         server = start(Duration.ofMinutes(5));
     }
 
     private McpServer start(Duration approvalTimeout) throws Exception {
-        McpTools tools = new McpTools(sink, state::get, transcripts, db, AuditLog.none(), new FakeClock(), approvalTimeout);
+        tools = new McpTools(sink, state::get, transcripts, db, AuditLog.none(), new FakeClock(), approvalTimeout);
         McpServer s = McpServer.start(tools, 0, "test");
         ticket = s.register("work");
         return s;
@@ -290,6 +292,15 @@ class McpServerTest {
     }
 
     @Test
+    void aLogPanelTakesNoTextFromATool() throws Exception {
+        tools.readOnly(States.P2::equals);
+        JsonNode r = tool("ui_insert", "{\"text\":\"-- note\",\"panel\":\"two\",\"mode\":\"append\"}");
+        assertThat(r.path("isError").asBoolean()).isTrue();
+        assertThat(text(r)).contains("read-only").contains("nothing was written");
+        assertThat(sink.of(Intent.EditPanel.class)).isEmpty();
+    }
+
+    @Test
     void editorToolsTargetTheCallersPanel() throws Exception {
         tool("ui_set_editor", "{\"text\":\"SELECT 1\"}");
         Intent.EditPanel edit = sink.await(Intent.EditPanel.class, WAIT);
@@ -466,6 +477,46 @@ class McpServerTest {
         assertThat(r.path("isError").asBoolean()).isTrue();
         assertThat(text(r)).contains("not today");
         assertThat(queries).isEmpty();
+    }
+
+    @Test
+    void aWriteApprovedAfterItsConnectionWasRepointedRunsNothing() throws Exception {
+        CompletableFuture<JsonNode> call = CompletableFuture.supplyAsync(() -> {
+            try {
+                return tool("db_run_sql", "{\"sql\":\"DROP TABLE t\"}");
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
+        // while the card is open, the user points the connection at another server
+        ConnectionSpec elsewhere = new ConnectionSpec("local", "elsewhere", 8812, "qdb", "admin", "quest", false);
+        state.set(state.get().withConnection(ConnectionState.closed(elsewhere)));
+        server.resolve(asked.approval(), ApprovalDecision.allowOnce());
+        JsonNode r = call.get();
+        assertThat(r.path("isError").asBoolean()).isTrue();
+        assertThat(text(r)).contains("changed while the card was open; nothing ran");
+        assertThat(queries).as("neither the old target nor the new").isEmpty();
+    }
+
+    @Test
+    void aSessionThatEndsWhileItsCardWaitsIsDeniedAndItsCardWithdrawn() throws Exception {
+        CompletableFuture<JsonNode> call = CompletableFuture.supplyAsync(() -> {
+            try {
+                return tool("db_run_sql", "{\"sql\":\"DROP TABLE t\"}");
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
+        // the process exits: the adapter removes its ticket before it reports the exit
+        server.unregister("work", ticket);
+        JsonNode r = call.get(WAIT.toSeconds(), TimeUnit.SECONDS);
+        assertThat(r.path("isError").asBoolean()).isTrue();
+        assertThat(text(r)).contains("The session ended before the user answered");
+        assertThat(sink.await(Intent.ApprovalWithdrawn.class, WAIT).id()).as("its card goes").isEqualTo(asked.approval().id());
+        server.resolve(asked.approval(), ApprovalDecision.allowOnce());
+        assertThat(queries).as("a late allow runs nothing").isEmpty();
     }
 
     @Test

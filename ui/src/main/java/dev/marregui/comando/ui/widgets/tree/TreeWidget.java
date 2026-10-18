@@ -18,6 +18,7 @@ import javax.swing.JPopupMenu;
 public final class TreeWidget implements Widget<ViewSpec.Tree>, Copyable {
 
     private final TreeView tree = new TreeView();
+    private boolean rendered;
 
     public TreeWidget(WidgetContext context) {
         tree.onActivate(n -> open(context, n));
@@ -49,9 +50,15 @@ public final class TreeWidget implements Widget<ViewSpec.Tree>, Copyable {
         return tree.component();
     }
 
+    /** The first view opens two levels; a refresh keeps what the user opened and selected. */
     @Override
     public void render(ViewSpec.Tree view) {
-        tree.setRoot(view.root(), 2);
+        if (rendered) {
+            tree.update(view.root());
+        } else {
+            rendered = true;
+            tree.setRoot(view.root(), 2);
+        }
     }
 
     @Override

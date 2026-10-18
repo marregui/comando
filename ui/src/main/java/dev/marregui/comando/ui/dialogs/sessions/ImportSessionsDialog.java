@@ -32,6 +32,7 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Window;
 import java.awt.event.KeyEvent;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -200,9 +201,19 @@ public final class ImportSessionsDialog {
     }
 
     static String nameFor(StoredConversation c) {
-        String base = c.title().isBlank() ? Path.of(c.cwd()).getFileName() + " " + c.sessionId().substring(0, Math.min(8, c.sessionId().length()))
+        String base = c.title().isBlank() ? folderName(c.cwd()) + " " + c.sessionId().substring(0, Math.min(8, c.sessionId().length()))
                 : c.title().strip();
         return base.length() > 48 ? base.substring(0, 48).strip() : base;
+    }
+
+    /** The last name of a conversation's folder; "session" for the root, an empty folder or one that is no path. */
+    private static String folderName(String cwd) {
+        try {
+            Path name = Path.of(cwd).getFileName();
+            return name == null || name.toString().isBlank() ? "session" : name.toString();
+        } catch (InvalidPathException e) {
+            return "session";
+        }
     }
 
     private static String uniqueName(String base, Set<String> taken) {

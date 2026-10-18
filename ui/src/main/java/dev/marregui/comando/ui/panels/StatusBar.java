@@ -270,7 +270,7 @@ public final class StatusBar {
         notice.setForeground(color(n.level()));
         notice.setIcon(n.text().isEmpty() ? null : Icons.get(icon(n.level()), 14));
         PanelState p = s.focusedPanel();
-        session.setText(s.session(p.session()).map(StatusBar::sessionText).orElse(""));
+        session.setText(s.session(p.session()).map(x -> Plain.text(sessionText(x))).orElse(""));
         session.setIcon(p.session().isEmpty() ? null : Icons.get("claude", 14));
         connection.setText(s.connection(p.connection()).map(c -> c.name() + " " + EditorPanel.dot(c.status())).orElse(""));
         connection.setIcon(p.connection().isEmpty() ? null : Icons.get("database", 14));
@@ -309,9 +309,9 @@ public final class StatusBar {
     /** The focused panel's session: name, model, effort, context used and, during a turn, what it does; no cost. */
     static String sessionText(SessionState x) {
         StringBuilder sb = new StringBuilder(x.name());
-        String model = x.info().model().isEmpty() ? x.spec().model() : x.info().model();
-        if (!model.isEmpty()) {
-            sb.append(" · ").append(model.replace("claude-", ""));
+        String model = SessionRow.modelName(x);
+        if (!model.equals("default")) {
+            sb.append(" · ").append(model);
         }
         if (!x.spec().effort().isEmpty()) {
             sb.append(" · ").append(x.spec().effort());
@@ -321,7 +321,7 @@ public final class StatusBar {
                     .append(x.contextWindow() > 0 ? " (" + Math.min(100, x.contextTokens() * 100 / x.contextWindow()) + "%)" : "");
         }
         if (x.isBusy()) {
-            sb.append(" · ").append(x.activity().isEmpty() ? "working" : x.activity());
+            sb.append(" · ").append(TabStatus.working(x));
         } else if (x.isWaiting()) {
             sb.append(" · ").append(TabStatus.waiting(x));
         }

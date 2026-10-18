@@ -91,6 +91,10 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private Map<TextBox, List<int[]>> matchesByBox = new IdentityHashMap<>();
     private int currentMatch = -1;
     private String findText = "";
+    /** Where {@link #rewindFind} left the current match: its box, its item and its offset; -1 when not rewound. */
+    private TextBox rewoundBox;
+    private Item rewoundItem;
+    private int rewoundAt = -1;
     /** Items the current find opened; clearing the find closes them again. */
     private final List<Item> revealed = new ArrayList<>();
 
@@ -937,7 +941,9 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * closes what the previous one opened.
      */
     public int find(String text, boolean forward) {
+        boolean fromRewound = false;
         if (!text.equals(findText)) {
+            fromRewound = rewoundAt >= 0;
             findText = text;
             currentMatch = -1;
             concealRevealed(Set.of());
@@ -952,11 +958,17 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         rematch();
         if (matches.isEmpty()) {
             currentMatch = -1;
+            dropRewound();
             repaint();
             return 0;
         }
-        currentMatch = currentMatch < 0 ? (forward ? 0 : matches.size() - 1)
-                : Math.floorMod(currentMatch + (forward ? 1 : -1), matches.size());
+        if (fromRewound) {
+            currentMatch = atOrAfterRewound();
+        } else {
+            currentMatch = currentMatch < 0 ? (forward ? 0 : matches.size() - 1)
+                    : Math.floorMod(currentMatch + (forward ? 1 : -1), matches.size());
+        }
+        dropRewound();
         int[] m = matches.get(currentMatch);
         Placed p = placed.get(m[0]);
         int y = p.y() + Math.round(p.box().topOf(m[1]));
@@ -964,6 +976,61 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         scrollRectToVisible(new Rectangle(0, Math.max(0, y - visible.height / 3), 1, visible.height / 2));
         repaint();
         return matches.size();
+    }
+
+    /**
+     * The next find of a new text starts where the current match begins, so typing on keeps the match under the
+     * reader's eye rather than going back to the first in the transcript.
+     */
+    public void rewindFind() {
+        dropRewound();
+        if (placed != null && currentMatch >= 0 && currentMatch < matches.size()) {
+            int[] m = matches.get(currentMatch);
+            rewoundBox = placed.get(m[0]).box();
+            rewoundItem = placed.get(m[0]).item();
+            rewoundAt = m[1];
+        }
+    }
+
+    /** The first match at or after the anchor, in reading order; the first match when the anchor's text is gone. */
+    private int atOrAfterRewound() {
+        int from = -1;
+        for (int i = 0; i < placed.size() && from < 0; i++) {
+            if (placed.get(i).box() == rewoundBox) {
+                from = i;
+            }
+        }
+        for (int i = 0; i < placed.size() && from < 0; i++) {
+            if (placed.get(i).item() == rewoundItem) {
+                from = i;
+            }
+        }
+        if (from < 0) {
+            return 0;
+        }
+        for (int k = 0; k < matches.size(); k++) {
+            int[] m = matches.get(k);
+            if (m[0] > from || (m[0] == from && m[1] >= rewoundAt)) {
+                return k;
+            }
+        }
+        return 0;
+    }
+
+    private void dropRewound() {
+        rewoundBox = null;
+        rewoundItem = null;
+        rewoundAt = -1;
+    }
+
+    /** The top of the current match in the canvas, -1 when there is none; for tests. */
+    int currentMatchY() {
+        if (placed == null || currentMatch < 0 || currentMatch >= matches.size()) {
+            return -1;
+        }
+        int[] m = matches.get(currentMatch);
+        Placed p = placed.get(m[0]);
+        return p.y() + Math.round(p.box().topOf(m[1]));
     }
 
     /**
@@ -982,6 +1049,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             }
         }
         findText = "";
+        dropRewound();
         clearMatches();
         if (concealRevealed(keep)) {
             structureChanged = true;

@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.kit.text;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.github.difflib.DiffUtils;
 import com.github.difflib.UnifiedDiffUtils;
 import com.github.difflib.patch.Patch;
@@ -10,7 +11,33 @@ import java.util.List;
 /** Unified diffs of two texts, three lines of context. */
 public final class Diffs {
 
+    /** The file an edit tool changes, the text it replaces and the text it writes. */
+    public record Edit(String path, String before, String after) {
+    }
+
     private Diffs() {
+    }
+
+    /**
+     * What the edit tool {@code tool} changes with input {@code in}; null for a tool that edits nothing. A
+     * multi-edit's replaced texts and written texts each follow one another, an ellipsis line between them.
+     */
+    public static Edit edit(String tool, JsonNode in) {
+        String path = in.path("file_path").asText("");
+        return switch (tool) {
+            case "Edit" -> new Edit(path, in.path("old_string").asText(""), in.path("new_string").asText(""));
+            case "MultiEdit" -> {
+                StringBuilder before = new StringBuilder();
+                StringBuilder after = new StringBuilder();
+                for (JsonNode e : in.path("edits")) {
+                    before.append(e.path("old_string").asText("")).append("\n…\n");
+                    after.append(e.path("new_string").asText("")).append("\n…\n");
+                }
+                yield new Edit(path, before.toString(), after.toString());
+            }
+            case "Write" -> new Edit(path, "", in.path("content").asText(""));
+            default -> null;
+        };
     }
 
     public static List<String> unified(String path, String before, String after) {

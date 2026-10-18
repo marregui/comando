@@ -3,11 +3,16 @@ package dev.marregui.comando.ui.widgets.editor;
 import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.schema.Schema;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import org.fife.ui.autocomplete.AutoCompletion;
 import org.fife.ui.autocomplete.BasicCompletion;
+import org.fife.ui.autocomplete.Completion;
+import org.fife.ui.autocomplete.CompletionCellRenderer;
 import org.fife.ui.autocomplete.DefaultCompletionProvider;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
+import javax.swing.JList;
+import javax.swing.ListCellRenderer;
 import javax.swing.text.JTextComponent;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -53,7 +58,28 @@ final class SqlCompletion {
         auto.setAutoActivationEnabled(true);
         auto.setAutoActivationDelay(400);
         auto.setAutoCompleteSingleChoices(false);
+        auto.setListCellRenderer(new EscapingRenderer());
         setSchema(Schema.EMPTY);
+    }
+
+    /** The completion list's renderer; for tests. */
+    ListCellRenderer<Object> renderer() {
+        return auto.getListCellRenderer();
+    }
+
+    /**
+     * The library's renderer, which builds each row's HTML from a completion's text: a table or column name, which a
+     * database may give any characters, is escaped first.
+     */
+    private static final class EscapingRenderer extends CompletionCellRenderer {
+        @Override
+        protected void prepareForOtherCompletion(JList<?> list, Completion c, int index, boolean selected, boolean hasFocus) {
+            StringBuilder sb = new StringBuilder("<html><nobr>").append(MarkdownHtml.escape(c.getInputText()));
+            if (c instanceof BasicCompletion b && b.getShortDescription() != null) {
+                appendShortDescription(sb, MarkdownHtml.escape(b.getShortDescription()));
+            }
+            setText(sb.toString());
+        }
     }
 
     /** Removes the completion and the listeners the library registered globally (look and feel). */

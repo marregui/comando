@@ -116,7 +116,7 @@ text and shown to 400 lines.
 | `ui_open_file` | `path`, `line` | shows a file in the side pane: Markdown rendered when no `line` is given, other text read-only at the line, binary said so; `~/` and relative paths resolve; at most 4 MB |
 | `ui_notify` | `text`, `level` | a status-bar message, and a desktop notification while the window is not active |
 | `ui_get_state` | — | panels with bindings and last run, connections, sessions (busy, `waitingOn`), open views |
-| `ui_set_layout` | `panel`, `lower_tab`, `sidebar`, `side_pane`, `lower_share` | without `panel`, selects `lower_tab` at once while the user looks at a panel of this session; with `panel` (one of this session's), focuses it and selects the tab once the user has not typed for 2 s, if the panel is still this session's; panes and the lower share change after the same pause; View ▸ Restore layout undoes it |
+| `ui_set_layout` | `panel`, `lower_tab`, `sidebar`, `side_pane`, `lower_share` | without `panel`, selects `lower_tab` at once while the user looks at a panel of this session; with `panel` (one of this session's), focuses it and selects the tab once the user has not typed for 2 s, if the panel is still this session's; panes and the lower share change after the same pause; Restore layout in the palette undoes it |
 | `ui_close_view` | `id` | closes a view this session placed; the user's or pinned views are refused |
 | `db_run_sql` | `sql`, `connection`, `max_rows`, `show`, `title` | runs SQL on the connection's lane under the policy ([§3.2](#32-sql-from-claude)); returns the first result as tab-separated text; `show` also opens it as a table |
 | `db_describe` | `table`, `connection` | a table's columns and types |

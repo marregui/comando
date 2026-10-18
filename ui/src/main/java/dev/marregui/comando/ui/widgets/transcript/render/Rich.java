@@ -6,6 +6,7 @@ import java.awt.font.TextAttribute;
 import java.text.AttributedString;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 
 /**
  * Text with font and colour runs, links and per-line backgrounds, built once and laid out by
@@ -21,6 +22,11 @@ final class Rich {
 
     private final StringBuilder text = new StringBuilder();
     private final List<Run> runs = new ArrayList<>();
+    /** The span of text one entry of the run index covers. */
+    private static final int CHUNK = 256;
+    private int[][] chunks;
+    /** How many runs {@link #chunks} indexes; -1 before it is built. */
+    private int indexed = -1;
     private final List<Link> links = new ArrayList<>();
     private final Font baseFont;
     private final Color baseColor;
@@ -123,12 +129,52 @@ final class Rich {
         return links;
     }
 
+    /**
+     * The runs touching each {@link #CHUNK} characters of the text, by index in the order they were added: a line's
+     * layout visits only the runs over it, and a later run still wins over an earlier one. Built on first use and again
+     * when runs were added since.
+     */
+    private int[][] chunks() {
+        if (indexed != runs.size()) {
+            int n = text.length() / CHUNK + 1;
+            int[] counts = new int[n];
+            for (Run r : runs) {
+                for (int c = r.start() / CHUNK, last = lastChunk(r, n); c <= last; c++) {
+                    counts[c]++;
+                }
+            }
+            int[][] out = new int[n][];
+            for (int c = 0; c < n; c++) {
+                out[c] = new int[counts[c]];
+            }
+            int[] filled = new int[n];
+            for (int k = 0; k < runs.size(); k++) {
+                Run r = runs.get(k);
+                for (int c = r.start() / CHUNK, last = lastChunk(r, n); c <= last; c++) {
+                    out[c][filled[c]++] = k;
+                }
+            }
+            chunks = out;
+            indexed = runs.size();
+        }
+        return chunks;
+    }
+
+    private static int lastChunk(Run r, int chunks) {
+        return Math.min(chunks - 1, Math.max(r.start(), r.end() - 1) / CHUNK);
+    }
+
     /** The attributed form of {@code [start, end)}, which must not be empty. */
     AttributedString attributed(int start, int end) {
         AttributedString a = new AttributedString(text.substring(start, end));
         a.addAttribute(TextAttribute.FONT, baseFont);
         a.addAttribute(TextAttribute.FOREGROUND, baseColor);
-        for (Run r : runs) {
+        int[][] ch = chunks();
+        int first = Math.min(ch.length - 1, start / CHUNK);
+        int last = Math.min(ch.length - 1, (end - 1) / CHUNK);
+        int[] touching = first == last ? ch[first] : IntStream.rangeClosed(first, last).flatMap(c -> IntStream.of(ch[c])).sorted().distinct().toArray();
+        for (int k : touching) {
+            Run r = runs.get(k);
             int s = Math.max(r.start(), start);
             int e = Math.min(r.end(), end);
             if (s >= e) {

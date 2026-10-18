@@ -88,12 +88,19 @@ final class PanelFiles {
 
     private Path path(String name) {
         Path p = Path.of(name);
-        return p.isAbsolute() ? p : dir.resolve(name);
+        if (p.isAbsolute() || owned(name)) {
+            return dir.resolve(p);
+        }
+        return dir.resolve(p).toAbsolutePath().normalize();
     }
 
-    /** A file of the folder, which comando names, renames and deletes when its panel is removed; not a file elsewhere. */
+    /**
+     * A file of the folder, which comando names, renames and deletes when its panel is removed; not a file elsewhere.
+     * Only a plain file name is one: a stored name with a folder in it, {@code ../} included, is a file elsewhere.
+     */
     private static boolean owned(String name) {
-        return !Path.of(name).isAbsolute();
+        Path p = Path.of(name);
+        return !p.isAbsolute() && p.getNameCount() == 1 && !name.equals(".") && !name.equals("..");
     }
 
     /** Binds a stored panel to its file and returns the file's text; empty when the file is missing. */

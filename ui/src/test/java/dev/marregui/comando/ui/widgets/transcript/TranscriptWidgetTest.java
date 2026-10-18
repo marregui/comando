@@ -100,4 +100,21 @@ class TranscriptWidgetTest {
         widget.setWaiting(List.of());
         assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("running");
     }
+
+    @Test
+    void zoomStopsAtTheFontLimitsAndTurnsBackAtOnce() {
+        for (int i = 0; i < 100; i++) {
+            widget.zoom(-1);
+        }
+        int smallest = widget.canvas().zoom();
+        assertThat(smallest).as("the steps stop where the text reaches 8 pt").isGreaterThan(-20);
+        widget.zoom(1);
+        assertThat(widget.canvas().zoom()).as("one step back enlarges again").isEqualTo(smallest + 1);
+        for (int i = 0; i < 100; i++) {
+            widget.zoom(1);
+        }
+        assertThat(widget.canvas().zoom()).as("the steps stop where the text reaches 40 pt").isLessThan(40);
+        widget.resetZoom();
+        assertThat(widget.canvas().zoom()).isZero();
+    }
 }

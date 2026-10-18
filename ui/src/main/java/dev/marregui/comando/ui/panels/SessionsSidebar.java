@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.resource.ConnectionKind;
 import dev.marregui.comando.core.resource.SessionKind;
@@ -65,8 +66,8 @@ import java.util.function.Consumer;
  * The left column, four tabs in two fixed rows (Panels and Files, then Sessions and Connections): Sessions (every
  * session with its project, branch, state, context, conversation and pending approvals, and controls to connect or
  * disconnect it, compact or clear its conversation and change its model or effort), Panels (comando's own panels, open
- * and closed), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). Above the sessions, the
- * connections and the folders, the same {@link ResourceActions}: add (and, for sessions, import and sort) on the left;
+ * and closed), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). Above the panels, the
+ * sessions and the connections, the same {@link ResourceActions}: add (and, for sessions, import and sort) on the left;
  * edit, clone and remove of the selected row on the right. Double-click on a session opens it in a panel
  * ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. Sessions are listed running first, then
  * by name, until the user drags one: from then on in the order the user left them, until the sort button. Hidden, the
@@ -143,9 +144,6 @@ public final class SessionsSidebar {
     private final JButton sort;
     /** Where copied details go; the system clipboard, or a test's list. */
     Consumer<String> clipboard = text -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
-    /** The models and efforts the row's menus offer, as the palette and the session dialog do. */
-    static final List<String> MODELS = List.of("fable", "opus", "sonnet", "haiku");
-    static final List<String> EFFORTS = List.of("low", "medium", "high", "xhigh", "max");
 
     /** {@code toggle} hides or shows the sidebar, as ⌘B does; the owner calls {@link #show}. */
     public SessionsSidebar(IntentSink intents, Dialogs dialogs, PanelTexts texts, Runnable toggle) {
@@ -451,8 +449,8 @@ public final class SessionsSidebar {
             case POWER -> intents.dispatch(s.status().isUsable() ? new Intent.StopSession(s.name()) : new Intent.StartSession(s.name()));
             case FRESH -> intents.dispatch(new Intent.StartFresh(s.name()));
             case CHECKPOINT -> intents.dispatch(new Intent.Checkpoint(s.name()));
-            case COMPACT -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionRow.COMPACT_COMMAND));
-            case CLEAR -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionRow.CLEAR_COMMAND));
+            case COMPACT -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.COMPACT_COMMAND));
+            case CLEAR -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.CLEAR_COMMAND));
             case COPY -> clipboard.accept(details(s));
             case MODEL, EFFORT -> {
                 Rectangle at = layOutRow(s, i).bounds(cell, control);
@@ -466,12 +464,12 @@ public final class SessionsSidebar {
     /** One item per model, the session's own checked; a choice applies now to a running session and is saved. */
     List<JMenuItem> modelItems(SessionState s) {
         String current = SessionRow.modelName(s);
-        return MODELS.stream().map(m -> choice(m, m.equals(current), () -> intents.dispatch(new Intent.SetSessionModel(s.name(), m)))).toList();
+        return SessionSpec.MODELS.stream().map(m -> choice(m, m.equals(current), () -> intents.dispatch(new Intent.SetSessionModel(s.name(), m)))).toList();
     }
 
     List<JMenuItem> effortItems(SessionState s) {
         String current = SessionRow.effortName(s);
-        return EFFORTS.stream().map(e -> choice(e, e.equals(current), () -> intents.dispatch(new Intent.SetSessionEffort(s.name(), e)))).toList();
+        return SessionSpec.EFFORTS.stream().map(e -> choice(e, e.equals(current), () -> intents.dispatch(new Intent.SetSessionEffort(s.name(), e)))).toList();
     }
 
     private static JMenuItem choice(String text, boolean current, Runnable r) {
@@ -660,8 +658,8 @@ public final class SessionsSidebar {
             m.add(item("Start", "play", () -> intents.dispatch(new Intent.StartSession(s.name()))));
         }
         if (s.status().isUsable()) {
-            m.add(item("Compact the conversation", "compact", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionRow.COMPACT_COMMAND))));
-            m.add(item("Clear the conversation", "clear-conversation", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionRow.CLEAR_COMMAND))));
+            m.add(item("Compact the conversation", "compact", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.COMPACT_COMMAND))));
+            m.add(item("Clear the conversation", "clear-conversation", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.CLEAR_COMMAND))));
         }
         JMenu models = new JMenu("Model");
         modelItems(s).forEach(models::add);

@@ -238,7 +238,7 @@ class PanelFilesTest {
         try {
             try (Store store = new Store(home)) {
                 store.load();
-                assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEmpty();
+                assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.BOUND);
                 store.savePanels(List.of(own, new PanelState(id, "PLAN", "", "", true)), List.of());
                 store.saveNow().get(5, TimeUnit.SECONDS);
                 Files.setPosixFilePermissions(docs, PosixFilePermissions.fromString("r-xr-xr-x"));
@@ -343,12 +343,22 @@ class PanelFilesTest {
     }
 
     @Test
+    void aStoredNameReachingOutOfTheFolderIsADocumentAndIsNeverDeleted() throws Exception {
+        Path outside = Files.writeString(home.resolve("victim.md"), "keep");
+        PanelFiles files = new PanelFiles(dir(), notice -> { });
+        assertThat(files.read("x", "victim", "../victim.md")).isEqualTo("keep");
+        assertThat(files.document("x")).isTrue();
+        files.remove("x");
+        assertThat(Files.readString(outside)).isEqualTo("keep");
+    }
+
+    @Test
     void removingADocumentsPanelNeverDeletesTheDocument() throws Exception {
         Path doc = Files.writeString(home.resolve("PLAN.md"), "# plan");
         PanelId id = new PanelId("d");
         try (Store store = new Store(home)) {
             store.load();
-            assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEmpty();
+            assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.BOUND);
             store.savePanels(List.of(new PanelState(id, "PLAN", "", "", true)), List.of());
             store.saveNow().get(5, TimeUnit.SECONDS);
             store.delete(id);
@@ -384,8 +394,8 @@ class PanelFilesTest {
             store.load();
             // put in the folder while comando runs: loose until the next start, so ⌘O binds it
             Files.writeString(Files.createDirectories(dir()).resolve("Ravenna plan.md"), "# Ravenna");
-            assertThat(store.open(new PanelId("g"), dir().resolve("gone.md")).get(5, TimeUnit.SECONDS)).isEqualTo("gone.md no longer exists");
-            assertThat(store.open(id, dir().resolve("Ravenna plan.md")).get(5, TimeUnit.SECONDS)).isEmpty();
+            assertThat(store.open(new PanelId("g"), dir().resolve("gone.md")).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.refused("gone.md no longer exists"));
+            assertThat(store.open(id, dir().resolve("Ravenna plan.md")).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.BOUND);
             assertThat(store.load(id)).isEqualTo("# Ravenna");
             store.savePanels(List.of(new PanelState(id, PanelFiles.title(dir().resolve("Ravenna plan.md")), "", "")), List.of());
             store.changed(id, "# Ravenna\n\nmore");
@@ -513,7 +523,7 @@ class PanelFilesTest {
             store.onNotice(notices::add);
             store.onDeleted(deleted::add);
             store.load();
-            assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEmpty();
+            assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.BOUND);
             store.savePanels(List.of(new PanelState(id, "ALPHA", "", ""), new PanelState(own, "spec", "", "")), List.of());
             store.changed(own, "mine");
             store.saveNow().get(5, TimeUnit.SECONDS);
@@ -611,7 +621,7 @@ class PanelFilesTest {
             store.changed(closing, "v2 typed just before closing");
             store.forget(closing);
             store.savePanels(List.of(), List.of(spec));
-            assertThat(store.open(new PanelId("r"), dir().resolve("spec.md")).get(5, TimeUnit.SECONDS)).isEqualTo("spec.md is already open");
+            assertThat(store.open(new PanelId("r"), dir().resolve("spec.md")).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.alreadyOpen("spec.md"));
             store.savePanels(List.of(spec), List.of());
             assertThat(store.load(closing)).isEqualTo("v2 typed just before closing");
             store.saveNow().get(5, TimeUnit.SECONDS);
@@ -654,8 +664,8 @@ class PanelFilesTest {
             store.load();
             // put in the folder while comando runs: loose until the next start, so ⌘O binds it
             Path spec = Files.writeString(Files.createDirectories(dir()).resolve("spec.md"), "# spec");
-            assertThat(store.open(new PanelId("a"), spec).get(5, TimeUnit.SECONDS)).isEmpty();
-            assertThat(store.open(new PanelId("b"), spec).get(5, TimeUnit.SECONDS)).isEqualTo("spec.md is already open");
+            assertThat(store.open(new PanelId("a"), spec).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.BOUND);
+            assertThat(store.open(new PanelId("b"), spec).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.alreadyOpen("spec.md"));
         }
     }
 
@@ -781,7 +791,7 @@ class PanelFilesTest {
         try (Store store = new Store(home)) {
             store.onOutsideChange(outside::add);
             store.load();
-            assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEmpty();
+            assertThat(store.open(id, doc).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.BOUND);
             assertThat(store.load(id)).isEqualTo("# read me");
             assertThat(store.document(id)).as("shows as its own language, Markdown rendered first").isTrue();
             store.savePanels(List.of(new PanelState(id, "READ-01-X", "", "")), List.of());

@@ -14,6 +14,7 @@ import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
+import dev.marregui.comando.ui.widgets.transcript.render.Style;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
 
 import javax.swing.JButton;
@@ -258,6 +259,11 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     }
 
     @Override
+    public void rewindFind() {
+        canvas.rewindFind();
+    }
+
+    @Override
     public void clearFind() {
         canvas.clearFind();
     }
@@ -271,7 +277,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
 
     @Override
     public void zoom(int steps) {
-        canvas.setZoom(canvas.zoom() + steps);
+        canvas.setZoom(Style.clampZoom(canvas.zoom() + steps));
     }
 
     @Override

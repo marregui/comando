@@ -196,8 +196,9 @@ public final class MermaidDiagrams {
                 Files.deleteIfExists(out);
                 Files.deleteIfExists(err);
             }
-        } catch (IOException e) {
-            failures.put(key, "cannot draw it: " + e.getMessage());
+        } catch (IOException | RuntimeException e) {
+            // any failure is the diagram's, told once: a key left waiting would show as drawing forever
+            failures.put(key, "cannot draw it: " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             if (p != null) {

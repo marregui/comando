@@ -188,7 +188,30 @@ class TranscriptCanvasTest {
         load(SyntheticSession.steps(10_000));
         canvas.ensureLayout(1000);
         // 8 turns of prompt, thinking, text, 5 calls, text, turn end, plus the subagent's call; its prompt and text nest
-        assertThat(canvas.markdown()).contains("**Agent** · survey the module").doesNotContain("> List the classes.");
+        assertThat(canvas.markdown()).contains("**Agent** · survey the module").doesNotContain("\n\n> List the classes.");
+    }
+
+    @Test
+    void theMarkdownOfASubagentCallQuotesItsSteps() {
+        load(SyntheticSession.steps(10_000));
+        canvas.ensureLayout(1000);
+        String md = canvas.markdown();
+        int call = md.indexOf("**Agent** · survey the module");
+        assertThat(call).isNotNegative();
+        String card = md.substring(call);
+        assertThat(card).as("the subagent's prompt and answer, quoted under the call")
+                .contains("> > List the classes.")
+                .contains("> The module has **12 classes**; the entry point is `core/Reducer.java:42`.");
+        assertThat(card.indexOf("> > List the classes.")).as("after the call's result")
+                .isGreaterThan(card.indexOf("The module has 12 classes."));
+    }
+
+    @Test
+    void zoomKeepsTheTextBetween8And40Points() {
+        assertThat(Style.of(-100).body.getSize2D()).isEqualTo(8f);
+        assertThat(Style.of(-100).mono.getSize2D()).isEqualTo(8f);
+        assertThat(Style.of(100).body.getSize2D()).isEqualTo(40f);
+        assertThat(Style.of(100).mono.getSize2D()).isEqualTo(40f);
     }
 
     @Test
@@ -200,6 +223,25 @@ class TranscriptCanvasTest {
         assertThat(matches).isGreaterThanOrEqualTo(8);
         canvas.clearFind();
         assertThat(canvas.find("no such text anywhere", true)).isZero();
+    }
+
+    @Test
+    void typingOnInTheFindBarKeepsTheMatchUnderTheReader() {
+        load(SyntheticSession.steps(10_000));
+        paint(1000, 700);
+        int matches = canvas.find("cancelSignal", true);
+        assertThat(matches).isGreaterThanOrEqualTo(4);
+        canvas.find("cancelSignal", true);
+        canvas.find("cancelSignal", true);
+        int before = canvas.currentMatchY();
+        canvas.rewindFind();
+        canvas.find("cancelSignalT", true);
+        assertThat(canvas.currentMatchY()).as("at or after the match the reader was on, not the first one")
+                .isGreaterThanOrEqualTo(before).isPositive();
+        canvas.clearFind();
+        canvas.find("cancelSignal", true);
+        int first = canvas.currentMatchY();
+        assertThat(before).as("the third match is below the first").isGreaterThan(first);
     }
 
     @Test

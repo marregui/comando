@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.kit.text;
 
+import com.github.weisj.jsvg.parser.resources.ResourcePolicy;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -11,6 +12,7 @@ import java.awt.image.BufferedImage;
 import java.io.RandomAccessFile;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.FileTime;
@@ -92,6 +94,7 @@ class LocalImagesTest {
         assertThat(LocalImages.resolve(doc, "photo.webp")).as("a kind Swing cannot show").isEmpty();
         assertThat(LocalImages.resolve(doc, "notes.md")).isEmpty();
         assertThat(LocalImages.resolve(doc, "folder.png/")).isEmpty();
+        assertThat(LocalImages.resolve(doc, "/..")).as("the root names no file").isEmpty();
         assertThat(LocalImages.resolve(null, "chart.png")).as("relative to nothing").isEmpty();
         assertThat(LocalImages.resolve(null, "/abs/chart.png")).contains(Path.of("/abs/chart.png"));
         assertThat(LocalImages.resolve(doc, "")).isEmpty();
@@ -108,6 +111,23 @@ class LocalImagesTest {
         Path gif = dir.resolve("anim.gif");
         ImageIO.write(new BufferedImage(8, 9, BufferedImage.TYPE_BYTE_INDEXED), "gif", gif.toFile());
         assertThat(read(images, gif)).isEqualTo(new LocalImages.Picture.Ready(gif, 8, 9));
+    }
+
+    @Test
+    void anSvgLoadsOnlyFilesInItsFolderAndEmbeddedData() {
+        Path svg = Path.of("/kb/notes/img/flow.svg");
+        URI base = svg.toUri();
+        assertThat(ResourcePolicy.ALLOW_RELATIVE.resolveResourceURI(base, "//host/x.png")).as("the library's policy alone")
+                .hasToString("file://host/x.png");
+        ResourcePolicy beside = LocalImages.beside(svg);
+        assertThat(beside.resolveResourceURI(base, "//host/x.png")).as("another machine").isNull();
+        assertThat(beside.resolveResourceURI(base, "file://host/x.png")).isNull();
+        assertThat(beside.resolveResourceURI(base, "https://example.org/x.png")).isNull();
+        assertThat(beside.resolveResourceURI(base, "../../secret.png")).as("outside its folder").isNull();
+        assertThat(beside.resolveResourceURI(base, "/etc/x.png")).isNull();
+        assertThat(beside.resolveResourceURI(base, "logo.png")).isEqualTo(Path.of("/kb/notes/img/logo.png").toUri());
+        assertThat(beside.resolveResourceURI(base, "parts/a.png")).isEqualTo(Path.of("/kb/notes/img/parts/a.png").toUri());
+        assertThat(beside.resolveResourceURI(base, "data:image/png;base64,AAAA")).isNotNull();
     }
 
     @Test

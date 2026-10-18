@@ -37,6 +37,8 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.Rectangle;
 import java.awt.event.KeyEvent;
+import java.io.File;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -521,6 +523,15 @@ class ResourceDialogTest {
 
     private static Container confirmRow(ResourceDialog<?> d) {
         return one(d.content(), Container.class, c -> "confirm".equals(c.getName()));
+    }
+
+    @Test
+    void theFolderChooserOpensOnTheFieldsFirstFolderOrHome() {
+        String home = System.getProperty("user.home");
+        assertThat(ResourceDialog.chooserStart("")).isEqualTo(Path.of(home));
+        assertThat(ResourceDialog.chooserStart(File.pathSeparator)).as("separators only").isEqualTo(Path.of(home));
+        assertThat(ResourceDialog.chooserStart(" " + File.pathSeparator + "/w/b")).isEqualTo(Path.of("/w/b"));
+        assertThat(ResourceDialog.chooserStart("/w/a\0b")).as("no path").isEqualTo(Path.of(home));
     }
 
     private static JLabel label(Container row) {

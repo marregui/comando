@@ -10,6 +10,7 @@ import dev.marregui.comando.core.port.PersistencePort;
 import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.ui.PanelTexts;
+import dev.marregui.comando.ui.PanelTexts.Opened;
 import dev.marregui.comando.ui.PanelTexts.Outside;
 
 import java.io.IOException;
@@ -745,8 +746,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
      * closing panel's last write to the same file, which is queued before it.
      */
     @Override
-    public CompletableFuture<String> open(PanelId panel, Path file) {
-        CompletableFuture<String> done = new CompletableFuture<>();
+    public CompletableFuture<Opened> open(PanelId panel, Path file) {
+        CompletableFuture<Opened> done = new CompletableFuture<>();
         try {
             writer.execute(() -> {
                 try {
@@ -757,7 +758,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     // checked and bound on the writer thread, so two opens of one file cannot both bind it
                     for (String other : live) {
                         if (files.file(other).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
-                            done.complete(name + " is already open");
+                            done.complete(Opened.alreadyOpen(name));
                             return;
                         }
                     }
@@ -775,13 +776,13 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                             schedulePanels();
                         });
                     }
-                    done.complete(r.error());
+                    done.complete(Opened.refused(r.error()));
                 } catch (RuntimeException e) {
-                    done.complete(reason(e));
+                    done.complete(Opened.refused(reason(e)));
                 }
             });
         } catch (RejectedExecutionException e) {
-            done.complete("comando is closing");
+            done.complete(Opened.refused("comando is closing"));
         }
         return done;
     }
@@ -934,11 +935,13 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         }
     }
 
-    private static <T> void write(JsonFile<T> file, T value) {
+    /** Writes a settings file; a failure is told, and the next change writes the whole list again. */
+    private <T> void write(JsonFile<T> file, T value) {
         try {
             file.write(value);
         } catch (IOException e) {
             LOG.log(System.Logger.Level.ERROR, "cannot save [file=" + file.path() + "]: " + e.getMessage(), e);
+            notices.accept("Cannot write " + file.path().getFileName() + ": " + reason(e) + "; it is written again with the next change");
         }
     }
 

@@ -24,6 +24,7 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.Timer;
+import java.awt.Component;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -167,7 +168,10 @@ public final class Workspace {
             return;
         }
         view.reload(change.text());
-        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Reloaded " + change.file() + ": it changed outside comando", false));
+        if (!view.isLog()) {
+            // a log grows all the time: following it is what the panel is for, not news
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Reloaded " + change.file() + ": it changed outside comando", false));
+        }
     }
 
     /**
@@ -313,10 +317,15 @@ public final class Workspace {
     }
 
     public void rename(EditorPanel p) {
-        String title = (String) JOptionPane.showInputDialog(tabs, "Panel name", "Rename panel", JOptionPane.PLAIN_MESSAGE, null, null,
-                p.panel().title());
+        rename(p.panel(), tabs, intents);
+    }
+
+    /** Asks for a panel's new name over {@code owner}; the panel tabs and the Panels tab both rename this way. */
+    static void rename(PanelState panel, Component owner, IntentSink intents) {
+        String title = (String) JOptionPane.showInputDialog(owner, "Panel name", "Rename panel", JOptionPane.PLAIN_MESSAGE, null, null,
+                panel.title());
         if (title != null && !title.isBlank()) {
-            intents.dispatch(new Intent.RenamePanel(p.panel().id(), title));
+            intents.dispatch(new Intent.RenamePanel(panel.id(), title));
         }
     }
 

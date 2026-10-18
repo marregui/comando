@@ -3,7 +3,11 @@ package dev.marregui.comando.ui.widgets.editor;
 import dev.marregui.comando.core.schema.Schema;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.JLabel;
+import javax.swing.JList;
+import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
+import java.awt.Component;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -22,6 +26,24 @@ class SqlCompletionTest {
         assertThat(c.provider().getCompletionByInputText("ts")).hasSize(1);
         assertThat(c.provider().getCompletionByInputText("SELECT")).hasSize(1);
         assertThat(SqlCompletion.columns(SCHEMA)).containsEntry("ts", "TIMESTAMP in trades, quotes").containsEntry("bid", "DOUBLE in quotes");
+    }
+
+    @Test
+    void aTableNamedLikeHtmlIsListedAsText() throws Exception {
+        SqlCompletion c = new SqlCompletion();
+        c.setSchema(new Schema(List.of(new Schema.Table("<img src=http://h/x.png>", List.of(new Schema.Column("<u>c", "INT"))))));
+        String[] shown = new String[2];
+        SwingUtilities.invokeAndWait(() -> {
+            JList<Object> list = new JList<>();
+            shown[0] = text(c.renderer().getListCellRendererComponent(list, c.provider().getCompletionByInputText("<img src=http://h/x.png>").getFirst(), 0, false, false));
+            shown[1] = text(c.renderer().getListCellRendererComponent(list, c.provider().getCompletionByInputText("<u>c").getFirst(), 1, false, false));
+        });
+        assertThat(shown[0]).contains("&lt;img src=http://h/x.png&gt;").doesNotContain("<img");
+        assertThat(shown[1]).contains("&lt;u&gt;c").doesNotContain("<u>");
+    }
+
+    private static String text(Component c) {
+        return ((JLabel) c).getText();
     }
 
     @Test

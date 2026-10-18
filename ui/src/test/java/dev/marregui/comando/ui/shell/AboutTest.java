@@ -54,13 +54,6 @@ class AboutTest {
     }
 
     @Test
-    void thePathUnderTheHomeFolderReadsFromTilde() {
-        assertThat(About.tilde("/Users/m/.comando", "/Users/m")).isEqualTo("~/.comando");
-        assertThat(About.tilde("/Users/m", "/Users/m")).isEqualTo("~");
-        assertThat(About.tilde("/Users/mx/.comando", "/Users/m")).as("a sibling is not under it").isEqualTo("/Users/mx/.comando");
-    }
-
-    @Test
     void theCardPaintsAtRetinaScaleAndALinkClickedGoesWhereItSays() {
         List<String> followed = new CopyOnWriteArrayList<>();
         About.Content c = About.load(About.facts("2.0.0", Path.of("/tmp/x"), ""));

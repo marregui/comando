@@ -15,7 +15,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * {@code tools.json} in comando's folder: where the tools are. The user edits it as a document (Panel ▸ Tools ▸ Tool
+ * {@code tools.json} in comando's folder: where the tools are. The user edits it as a document (Tools ▸ Tool
  * settings); it is read at each run, so an edit applies to the next run. A key that is missing or empty takes its
  * default ({@link ToolSettings#resolve}). Unlike the store files, an unreadable one is left where it is, being the
  * user's own text, and the run says what is wrong with it.

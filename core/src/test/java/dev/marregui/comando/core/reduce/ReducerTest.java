@@ -241,6 +241,24 @@ class ReducerTest {
     }
 
     @Test
+    void aStartReportedAfterTheStopLeavesTheSessionStopped() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.StopSession("work"));
+        Status stopped = state.session("work").orElseThrow().status();
+        apply(new Intent.SessionStarted("work"));
+        assertThat(state.session("work").orElseThrow().status()).isEqualTo(stopped).isNotEqualTo(Status.OPEN);
+    }
+
+    @Test
+    void anAddedPanelNeverSharesATitleInAnyCase() {
+        PanelId readme = new PanelId("readme");
+        apply(new Intent.AddPanel(readme, "One"));
+        assertThat(state.panel(readme).orElseThrow().title()).isEqualTo("One 2");
+        apply(new Intent.RenamePanel(P2, "ONE"));
+        assertThat(state.panel(P2).orElseThrow().title()).isEqualTo("two");
+    }
+
+    @Test
     void twoPanelsSharingASessionFeedOneQueue() {
         apply(new Intent.RunText(P1, "first", Target.CLAUDE));
         apply(new Intent.SessionStarted("work"));

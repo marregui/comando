@@ -31,6 +31,14 @@ public record SessionSpec(
 
     /** The checkpoint command of a session that never set one: what the Checkpoint button sends. */
     public static final String DEFAULT_CHECKPOINT = "/reflect";
+    /** Claude Code's command that compacts a conversation, sent by the compact buttons and the palette. */
+    public static final String COMPACT_COMMAND = "/compact";
+    /** Claude Code's command that clears a conversation; a new one starts. */
+    public static final String CLEAR_COMMAND = "/clear";
+    /** The model families comando offers, in the palette, a session row's chips and the session dialog. */
+    public static final List<String> MODELS = List.of("fable", "opus", "sonnet", "haiku");
+    /** The efforts comando offers, in the same places. */
+    public static final List<String> EFFORTS = List.of("low", "medium", "high", "xhigh", "max");
 
     public SessionSpec {
         // a sessions.json written before the field existed has none: the default, not a hidden button

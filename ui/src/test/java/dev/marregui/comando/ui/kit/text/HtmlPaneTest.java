@@ -202,6 +202,35 @@ class HtmlPaneTest {
     }
 
     @Test
+    void aPictureRenderedBeforeThePaneHadAWidthFitsOnceItIsLaidOut(@TempDir Path dir) throws Exception {
+        Path wide = dir.resolve("wide.png");
+        ImageIO.write(new BufferedImage(2000, 100, BufferedImage.TYPE_INT_RGB), "png", wide.toFile());
+        LocalImages.install(dir.resolve("cache"));
+        try {
+            CountDownLatch read = new CountDownLatch(1);
+            if (LocalImages.current().picture(wide, read::countDown) instanceof LocalImages.Picture.Pending) {
+                assertThat(read.await(10, TimeUnit.SECONDS)).isTrue();
+            }
+            HtmlPane[] pane = new HtmlPane[1];
+            SwingUtilities.invokeAndWait(() -> {
+                pane[0] = new HtmlPane();
+                pane[0].setMarkdown("![wide](wide.png)", dir);
+                assertThat(pane[0].getText()).as("no width yet: as drawn").contains("width=\"2000\"");
+                JScrollPane scroll = new JScrollPane(pane[0]);
+                scroll.setSize(500, 300);
+                layOut(scroll);
+            });
+            settle();
+            SwingUtilities.invokeAndWait(() -> {
+                assertThat(pane[0].flushResize()).as("a re-size waits for the resize to settle").isTrue();
+                assertThat(pane[0].getText()).doesNotContain("width=\"2000\"");
+            });
+        } finally {
+            LocalImages.install(null);
+        }
+    }
+
+    @Test
     void aPictureDrawnAboveTheHeadingTheReaderWasTakenToKeepsTheHeadingInView(@TempDir Path dir) throws Exception {
         Path chart = dir.resolve("images/chart.png");
         Files.createDirectories(chart.getParent());

@@ -533,7 +533,7 @@ public final class CommandEditor implements Searchable, Zoomable {
 
     @Override
     public void zoom(int steps) {
-        area.setFont(area.getFont().deriveFont(Math.max(8f, Math.min(40f, area.getFont().getSize2D() + steps))));
+        area.setFont(area.getFont().deriveFont(Zoomable.clampSize(area.getFont().getSize2D() + steps)));
     }
 
     @Override

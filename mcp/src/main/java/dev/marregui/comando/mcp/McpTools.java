@@ -14,6 +14,7 @@ import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PermissionRules;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
@@ -48,6 +49,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -89,6 +91,14 @@ public final class McpTools {
     private final ConcurrentHashMap<Long, CompletableFuture<ApprovalDecision>> pending = new ConcurrentHashMap<>();
     /** The approval each in-flight JSON-RPC call waits on, by "session#request id", for {@code notifications/cancelled}. */
     private final ConcurrentHashMap<String, Long> approvalByCall = new ConcurrentHashMap<>();
+    /** The session each pending approval was asked by, so a session's exit denies what it still waits on. */
+    private final ConcurrentHashMap<Long, String> askedBy = new ConcurrentHashMap<>();
+    /** Whether a session's process still runs; set by the server, which knows its tickets. */
+    private volatile Predicate<String> live = session -> true;
+    /** Panels that take no text: a log follows its program and is never written. */
+    private volatile Predicate<PanelId> readOnly = panel -> false;
+    /** The answer to every card of a session that ended while the card waited. */
+    private static final ApprovalDecision.Deny SESSION_ENDED = new ApprovalDecision.Deny("The session ended before the user answered.");
     /** The JSON-RPC call this request thread serves; each request runs on its own thread. */
     private static final ThreadLocal<String> CALL = new ThreadLocal<>();
 
@@ -195,13 +205,22 @@ public final class McpTools {
         long id = approvalIds.incrementAndGet();
         CompletableFuture<ApprovalDecision> answer = new CompletableFuture<>();
         pending.put(id, answer);
+        askedBy.put(id, session);
         String call = CALL.get();
         if (call != null) {
             approvalByCall.put(call, id);
         }
-        sink.dispatch(new Intent.ApprovalRequested(new Approval(id, session, kind, tool, inputJson, summary, clock.millis(), toolUseId)));
         try {
-            return answer.get(approvalTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            // a session that ended before its card was shown gets no card: its process is gone and nothing it asked runs
+            if (!live.test(session)) {
+                return SESSION_ENDED;
+            }
+            sink.dispatch(new Intent.ApprovalRequested(new Approval(id, session, kind, tool, inputJson, summary, clock.millis(), toolUseId)));
+            ApprovalDecision d = answer.get(approvalTimeout.toMillis(), TimeUnit.MILLISECONDS);
+            if (d == SESSION_ENDED) {
+                sink.dispatch(new Intent.ApprovalWithdrawn(id, "the session ended"));
+            }
+            return d;
         } catch (TimeoutException e) {
             sink.dispatch(new Intent.ApprovalWithdrawn(id, "no answer within " + approvalTimeout.toMinutes() + " minutes"));
             return new ApprovalDecision.Deny("No answer from the user within " + approvalTimeout.toMinutes() + " minutes.");
@@ -213,10 +232,33 @@ public final class McpTools {
             return new ApprovalDecision.Deny("Approval failed: " + e.getCause().getMessage());
         } finally {
             pending.remove(id);
+            askedBy.remove(id);
             if (call != null) {
                 approvalByCall.remove(call, id);
             }
         }
+    }
+
+    /** Tells the tools which panels take no text (a log); the application calls it once, with the store's view. */
+    public void readOnly(Predicate<PanelId> readOnly) {
+        this.readOnly = readOnly;
+    }
+
+    /** Tells the tools which sessions still run; the server calls it once, with its view of the tickets. */
+    void live(Predicate<String> live) {
+        this.live = live;
+    }
+
+    /** A session's process ended: every card it still waits on is denied, and withdrawn by the request it answers. */
+    void sessionEnded(String session) {
+        askedBy.forEach((id, asker) -> {
+            if (asker.equals(session)) {
+                CompletableFuture<ApprovalDecision> answer = pending.get(id);
+                if (answer != null) {
+                    answer.complete(SESSION_ENDED);
+                }
+            }
+        });
     }
 
     void resolve(Approval approval, ApprovalDecision decision) {
@@ -298,6 +340,9 @@ public final class McpTools {
         if (!panel.session().isEmpty() && !panel.session().equals(session) && !args.path("force").asBoolean(false)) {
             return Outcome.fail("panel '" + panel.title() + "' belongs to session " + panel.session()
                     + "; pass force: true only when the user asked you to write there");
+        }
+        if (readOnly.test(panel.id())) {
+            return Outcome.fail("panel '" + panel.title() + "' shows a log, which is read-only; nothing was written");
         }
         sink.dispatch(new Intent.EditPanel(panel.id(), text.asText(), mode, session));
         return Outcome.ok(mode.name().toLowerCase(Locale.ROOT) + " in panel '" + panel.title() + "'");
@@ -533,10 +578,11 @@ public final class McpTools {
             // session never starts it again (record 44)
             return Outcome.fail("session " + to + " is not running; a session another session prompts must be running: the user starts it");
         }
-        List<PanelState> panels = s.panelsBoundToSession(to);
+        // a log panel takes no text, so the user would not see the prompt there
+        List<PanelState> panels = s.panelsBoundToSession(to).stream().filter(p -> !readOnly.test(p.id())).toList();
         if (panels.isEmpty()) {
-            return Outcome.fail("session " + to + " has no open panel; the prompt goes through its panel so the user sees it: "
-                    + "the user opens one for it first");
+            return Outcome.fail("session " + to + " has no open panel that takes text; the prompt goes through its panel so the user "
+                    + "sees it: the user opens one for it first");
         }
         PanelState panel = panels.getFirst();
         String prompt = fromLine(session) + '\n' + text;
@@ -647,14 +693,19 @@ public final class McpTools {
             if (d instanceof ApprovalDecision.Deny deny) {
                 return Outcome.fail("The user denied the statement" + (deny.message().isBlank() ? "." : ": " + deny.message()));
             }
+            // the user approved the target the card named: a connection repointed or removed meanwhile is not it
+            ConnectionSpec now = connectionFor(session, args.path("connection").asText(""));
+            if (!now.equals(spec)) {
+                return Outcome.fail("connection " + spec.name() + " changed while the card was open; nothing ran. Ask again.");
+            }
         }
         QueryPort.Rows rows;
-        CompletableFuture<QueryPort.Rows> pending = db.query(spec, sql, maxRows);
+        CompletableFuture<QueryPort.Rows> result = db.query(spec, sql, maxRows);
         // a schema change reloads the schema behind completion and an open explorer, as a panel's run does; a failed
         // block may have run its earlier statements
         boolean ddl = Classifier.anyDdl(sql);
         try {
-            rows = pending.get(90, TimeUnit.SECONDS);
+            rows = result.get(90, TimeUnit.SECONDS);
         } catch (ExecutionException e) {
             if (ddl) {
                 sink.dispatch(new Intent.SchemaChanged(spec.name()));
@@ -662,10 +713,12 @@ public final class McpTools {
             return Outcome.fail(e.getCause().getMessage());
         } catch (TimeoutException e) {
             // withdrawn: a statement still queued behind the user's runs will not run after Claude was told it failed
-            pending.cancel(false);
+            result.cancel(false);
             return Outcome.fail("no result within 90 s on " + spec.name() + "; a statement still queued behind the user's runs was withdrawn "
                     + "and will not run; one already running ends at its 60 s statement timeout");
         } catch (InterruptedException e) {
+            // comando is closing: a statement still queued must not run after the caller was told it failed
+            result.cancel(false);
             Thread.currentThread().interrupt();
             return Outcome.fail("interrupted");
         }
@@ -685,13 +738,16 @@ public final class McpTools {
             return Outcome.fail("table is required");
         }
         ConnectionSpec spec = connectionFor(session, args.path("connection").asText(""));
+        CompletableFuture<QueryPort.Rows> result = db.describe(spec, table);
         try {
-            return Outcome.ok(format(db.describe(spec, table).get(60, TimeUnit.SECONDS)));
+            return Outcome.ok(format(result.get(60, TimeUnit.SECONDS)));
         } catch (ExecutionException e) {
             return Outcome.fail(e.getCause().getMessage());
         } catch (TimeoutException e) {
+            result.cancel(false);
             return Outcome.fail("no answer within 60 s");
         } catch (InterruptedException e) {
+            result.cancel(false);
             Thread.currentThread().interrupt();
             return Outcome.fail("interrupted");
         }
@@ -728,16 +784,27 @@ public final class McpTools {
             return rows.updateCount() >= 0 ? rows.updateCount() + " rows changed" : "done";
         }
         StringBuilder sb = new StringBuilder();
-        sb.append(String.join("\t", rows.columns())).append('\n');
+        sb.append(clip(String.join("\t", rows.columns()), MAX_RESULT_CHARS)).append('\n');
         int shown = 0;
+        boolean cut = false;
         for (List<String> row : rows.rows()) {
-            if (sb.length() > MAX_RESULT_CHARS) {
+            int room = MAX_RESULT_CHARS - sb.length();
+            if (room <= 0) {
                 break;
             }
-            sb.append(String.join("\t", row)).append('\n');
+            // the budget holds for every character: one huge cell is cut, not passed whole
+            String line = String.join("\t", row);
+            cut = line.length() > room;
+            sb.append(clip(line, room)).append('\n');
             shown++;
+            if (cut) {
+                break;
+            }
         }
         sb.append('(').append(shown).append(shown == 1 ? " row" : " rows");
+        if (cut) {
+            sb.append(", the last cut at " + MAX_RESULT_CHARS / 1024 + " kB");
+        }
         if (shown < rows.rows().size() || rows.truncated()) {
             sb.append(", more rows exist; refine the query or raise max_rows");
         }

@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widgets.terminal;
 
+import com.jediterm.core.compatibility.Point;
 import com.jediterm.terminal.StyledTextConsumer;
 import com.jediterm.terminal.SubstringFinder;
 import com.jediterm.terminal.TerminalColor;
@@ -61,8 +62,6 @@ import java.util.stream.Collectors;
 public final class TerminalWidget implements Zoomable, Searchable {
 
     private static final System.Logger LOG = System.getLogger(TerminalWidget.class.getName());
-    private static final float MIN_FONT = 8f;
-    private static final float MAX_FONT = 40f;
     private static final int GATE_POLL_MILLIS = 50;
     /** The job reported when {@code ps} cannot say what the shell runs: closing asks rather than kills unseen. */
     public static final String UNCHECKED_JOB = "a program comando could not check";
@@ -84,7 +83,8 @@ public final class TerminalWidget implements Zoomable, Searchable {
     private Pty pty;
     private float fontSize = Theme.mono().getSize2D();
     private String findText = "";
-    private int findHistory = -1;
+    /** Set by the emulator on any change of the buffer, cleared by a find that searches it again. */
+    private volatile boolean bufferChanged;
 
     public TerminalWidget(Path directory) {
         this(directory, Pty.loginShell());
@@ -153,6 +153,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         }
         pty = started;
         term = new Term(new Settings(() -> fontSize));
+        term.getTerminalTextBuffer().addModelListener(() -> bufferChanged = true);
         term.setTtyConnector(started);
         term.start();
         gate.started(System.nanoTime());
@@ -428,6 +429,11 @@ public final class TerminalWidget implements Zoomable, Searchable {
         return term == null ? "" : term.getTerminalTextBuffer().getScreenLines();
     }
 
+    /** The emulator's buffer, for tests; null before the shell starts. */
+    TerminalTextBuffer buffer() {
+        return term == null ? null : term.getTerminalTextBuffer();
+    }
+
     // ---- zoom
 
     @Override
@@ -445,7 +451,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
     }
 
     private void setFontSize(float size) {
-        float s = Math.max(MIN_FONT, Math.min(MAX_FONT, size));
+        float s = Zoomable.clampSize(size);
         if (s == fontSize) {
             return;
         }
@@ -468,15 +474,23 @@ public final class TerminalWidget implements Zoomable, Searchable {
         TerminalPanel panel = t.getTerminalPanel();
         TerminalTextBuffer buffer = t.getTerminalTextBuffer();
         SubstringFinder.FindResult result;
-        if (!text.equals(findText) || buffer.getHistoryLinesCount() != findHistory || panel.getFindResult() == null) {
+        SubstringFinder.FindResult old = panel.getFindResult();
+        // output that changed the buffer moves or replaces lines, so earlier results point at other text
+        if (!text.equals(findText) || bufferChanged || old == null) {
+            // the same text again after new output: step on from the match the user was on, when it is still there
+            Point at = text.equals(findText) && old != null && !old.getItems().isEmpty() ? old.selectedItem().getStart() : null;
             findText = text;
-            findHistory = buffer.getHistoryLinesCount();
+            bufferChanged = false; // before the search: a change during it searches again next time
             SubstringFinder.FindResult found = search(buffer, text);
             panel.setFindResult(found);
             if (found.getItems().isEmpty()) {
                 return 0;
             }
-            result = panel.selectPrevFindResultItem(); // from the first item, "previous" is the last: the latest output
+            if (at != null && selectAt(found, at)) {
+                result = forward ? panel.selectNextFindResultItem() : panel.selectPrevFindResultItem();
+            } else {
+                result = panel.selectPrevFindResultItem(); // from the first item, "previous" is the last: the latest output
+            }
         } else {
             result = forward ? panel.selectNextFindResultItem() : panel.selectPrevFindResultItem();
         }
@@ -489,6 +503,17 @@ public final class TerminalWidget implements Zoomable, Searchable {
         if (term != null) {
             term.getTerminalPanel().setFindResult(null);
         }
+    }
+
+    /** Selects the item of {@code result} that starts at {@code at}; false, with the first selected, when none does. */
+    private static boolean selectAt(SubstringFinder.FindResult result, Point at) {
+        for (int i = 0; i < result.getItems().size(); i++) {
+            if (result.selectedItem().getStart().equals(at)) {
+                return true;
+            }
+            result.nextFindItem();
+        }
+        return false;
     }
 
     private static SubstringFinder.FindResult search(TerminalTextBuffer buffer, String text) {

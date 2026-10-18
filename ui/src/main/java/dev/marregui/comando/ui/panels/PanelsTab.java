@@ -19,7 +19,6 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenuItem;
-import javax.swing.JOptionPane;
 import javax.swing.JPopupMenu;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
@@ -105,7 +104,7 @@ final class PanelsTab {
 
             @Override
             public void edit(String id) {
-                row(id).ifPresent(PanelsTab.this::rename);
+                row(id).ifPresent(r -> Workspace.rename(r.panel(), list, intents));
             }
 
             @Override
@@ -157,14 +156,6 @@ final class PanelsTab {
                 + (p.session().isEmpty() ? "" : " Its session " + p.session() + " keeps running without a panel.");
     }
 
-    private void rename(Row r) {
-        String title = (String) JOptionPane.showInputDialog(list, "Panel name", "Rename panel", JOptionPane.PLAIN_MESSAGE, null, null,
-                r.panel().title());
-        if (title != null && !title.isBlank()) {
-            intents.dispatch(new Intent.RenamePanel(r.panel().id(), title));
-        }
-    }
-
     /** A new panel with the text and connection of {@code r}, without its session: a session has one panel. */
     private void copy(Row r) {
         PanelId id = PanelId.random();
@@ -177,7 +168,7 @@ final class PanelsTab {
         JPopupMenu m = new JPopupMenu();
         m.add(item(r.open() ? "Bring forward" : "Open", "file", () -> open(r)));
         m.addSeparator();
-        m.add(item("Rename…", "edit", () -> rename(r)));
+        m.add(item("Rename…", "edit", () -> Workspace.rename(r.panel(), list, intents)));
         m.add(item("Clone", "copy", () -> copy(r)));
         m.add(item("Remove…", "close", () -> actions.remove(r)));
         return m;

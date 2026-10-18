@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.panels;
 
+import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.Clip;
@@ -44,8 +45,6 @@ final class SessionRow extends JPanel {
         POWER, FRESH, CHECKPOINT, COMPACT, CLEAR, MODEL, EFFORT, COPY
     }
 
-    static final String COMPACT_COMMAND = "/compact";
-    static final String CLEAR_COMMAND = "/clear";
 
     /** The first line, beside the copy button; the lines under it take the row's whole width. */
     private final JLabel title = new JLabel();
@@ -69,7 +68,7 @@ final class SessionRow extends JPanel {
         fresh.setIcon(Icons.get("fresh", 14));
         checkpoint.setIcon(Icons.get("checkpoint", 14));
         compact.setIcon(Icons.get("compact", 14));
-        compact.setToolTipText("Compact the conversation: send " + COMPACT_COMMAND + " to the session");
+        compact.setToolTipText("Compact the conversation: send " + SessionSpec.COMPACT_COMMAND + " to the session");
         clear.setIcon(Icons.get("clear-conversation", 14));
         copy.setIcon(Icons.get("copy", 14));
         copy.setToolTipText("Copy the session's details: name, folder, conversation, uptime, context");
@@ -116,7 +115,7 @@ final class SessionRow extends JPanel {
         checkpoint.setToolTipText(EditorPanel.checkpointTip(s));
         compact.setVisible(running);
         clear.setVisible(running);
-        clear.setToolTipText("Clear the conversation: send " + CLEAR_COMMAND + "; a new one starts"
+        clear.setToolTipText("Clear the conversation: send " + SessionSpec.CLEAR_COMMAND + "; a new one starts"
                 + (s.spec().claudeSessionId().isEmpty() ? "" : ", the current one (" + s.spec().claudeSessionId() + ") stays importable"));
         model.setText(modelName(s) + " ▾");
         model.setToolTipText("Model: " + modelName(s) + "; click to change");
@@ -238,7 +237,7 @@ final class SessionRow extends JPanel {
             return "default";
         }
         String lower = m.toLowerCase(Locale.ROOT);
-        for (String family : new String[]{"fable", "opus", "sonnet", "haiku"}) {
+        for (String family : SessionSpec.MODELS) {
             if (lower.contains(family)) {
                 return family;
             }
@@ -256,7 +255,7 @@ final class SessionRow extends JPanel {
         String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.WARN) + "'>⚑" + approvals + "</span>";
         String where = "&nbsp;<span style='color:" + Theme.hex(focused ? Theme.ACCENT : Theme.MUTED_STRONG)
                 + "'>· " + MarkdownHtml.escape(Clip.keepEnd(bound, 24)) + "</span>";
-        String doing = s.isBusy() ? (s.activity().isEmpty() ? "working" : s.activity()) : s.isWaiting() ? TabStatus.waiting(s) : "";
+        String doing = s.isBusy() ? TabStatus.working(s) : s.isWaiting() ? TabStatus.waiting(s) : "";
         String busy = doing.isEmpty() ? "" : "&nbsp;&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>"
                 + MarkdownHtml.escape(Clip.keepEnd(doing, 30)) + "</span>";
         return "<html><nobr>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(s.name()) + "</b>" + where + badge + busy + "</nobr></html>";

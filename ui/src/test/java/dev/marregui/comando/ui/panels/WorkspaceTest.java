@@ -72,6 +72,21 @@ class WorkspaceTest {
     }
 
     @Test
+    void aLogFollowingItsGrowthPostsNoNotice() throws Exception {
+        Texts texts = new Texts();
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        Workspace[] w = new Workspace[1];
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(intents::add, texts, new SchemaRegistry());
+            w[0].render(AppState.initial(List.of(new PanelState(P, "comando-0", "", "", true)), List.of(), List.of()));
+            w[0].focused().file(Path.of("/home/.comando/logs/comando-0.log"), true);
+        });
+        SwingUtilities.invokeAndWait(() -> w[0].takeOutside(new PanelTexts.Outside(P, "comando-0.log", "one\ntwo\n", () -> true)));
+        assertThat(w[0].focused().editor().text()).isEqualTo("one\ntwo\n");
+        assertThat(intents).noneMatch(Intent.Notify.class::isInstance);
+    }
+
+    @Test
     void aFileChangedOutsideShowsInItsPanelUnlessThePanelHasUnsavedEdits() throws Exception {
         Texts texts = new Texts();
         List<Intent> intents = new CopyOnWriteArrayList<>();

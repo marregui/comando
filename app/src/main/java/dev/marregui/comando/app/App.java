@@ -28,6 +28,7 @@ import dev.marregui.comando.mcp.AuditLog;
 import dev.marregui.comando.mcp.McpServer;
 import dev.marregui.comando.mcp.McpTools;
 import dev.marregui.comando.tools.ToolsAdapter;
+import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
 import dev.marregui.comando.ui.kit.text.LocalImages;
 import dev.marregui.comando.ui.kit.text.MermaidDiagrams;
@@ -101,6 +102,7 @@ public final class App implements AutoCloseable {
             McpServer mcp;
             try {
                 McpTools tools = new McpTools(loop, loop::state, transcripts, db, new AuditLog(config.auditDir()), Clock.SYSTEM, APPROVAL_TIMEOUT);
+                tools.readOnly(panel -> store.document(panel) && store.file(panel).map(PanelTexts::isLog).orElse(false));
                 mcp = own(McpServer.start(tools, 0, version));
             } catch (IOException e) {
                 throw new UncheckedIOException("cannot start the MCP server", e);

@@ -1,8 +1,16 @@
 package dev.marregui.comando.claude;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermissions;
+import java.time.Duration;
+
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 class ClaudeVersionTest {
 
@@ -23,5 +31,16 @@ class ClaudeVersionTest {
     @Test
     void aMissingExecutableIsReported() {
         assertThat(ClaudeVersion.check("/nonexistent/claude")).contains("not found");
+    }
+
+    @Test
+    void aChildHoldingTheOutputOpenAfterTheExitDoesNotHoldTheCheck(@TempDir Path dir) throws IOException {
+        Path script = dir.resolve("claude");
+        Files.writeString(script, "#!/bin/sh\necho '2.1.296 (Claude Code)'\nsleep 8 &\nexit 0\n");
+        Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwx------"));
+
+        String message = assertTimeoutPreemptively(Duration.ofSeconds(7), () -> ClaudeVersion.check(script.toString()));
+
+        assertThat(message).isEmpty();
     }
 }

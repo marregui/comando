@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widgets.transcript.doc;
 
+import dev.marregui.comando.ui.kit.text.Fences;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
 import org.commonmark.Extension;
 import org.commonmark.ext.gfm.tables.TableBlock;
@@ -62,7 +63,7 @@ public final class MarkdownDoc {
         switch (n) {
             case Heading h -> out.add(new Para.Text(Para.Kind.HEADING, h.getLevel(), depth, "", inlines(h)));
             case Paragraph p -> out.add(new Para.Text(Para.Kind.PARAGRAPH, 0, depth, marker, inlines(p)));
-            case FencedCodeBlock c -> out.add(new Para.Code(info(c.getInfo()), trimEnd(c.getLiteral()), depth));
+            case FencedCodeBlock c -> out.add(new Para.Code(Fences.language(c.getInfo()), trimEnd(c.getLiteral()), depth));
             case IndentedCodeBlock c -> out.add(new Para.Code("", trimEnd(c.getLiteral()), depth));
             case HtmlBlock h -> out.add(new Para.Code("", trimEnd(h.getLiteral()), depth));
             case ThematicBreak t -> out.add(new Para.Rule(depth));
@@ -192,15 +193,6 @@ public final class MarkdownDoc {
             out.add(s);
         }
         return out;
-    }
-
-    private static String info(String info) {
-        if (info == null) {
-            return "";
-        }
-        String s = info.strip();
-        int sp = s.indexOf(' ');
-        return sp < 0 ? s : s.substring(0, sp);
     }
 
     private static String trimEnd(String s) {

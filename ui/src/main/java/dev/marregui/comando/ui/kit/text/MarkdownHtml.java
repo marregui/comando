@@ -202,8 +202,7 @@ public final class MarkdownHtml {
         public void render(Node node) {
             FencedCodeBlock block = (FencedCodeBlock) node;
             String code = block.getLiteral() == null ? "" : block.getLiteral();
-            String info = block.getInfo() == null ? "" : block.getInfo().strip();
-            String language = info.isEmpty() ? "" : info.split("\\s+", 2)[0];
+            String language = Fences.language(block.getInfo());
             HtmlWriter w = context.getWriter();
             if (mermaid != null && language.equalsIgnoreCase("mermaid")) {
                 w.line();

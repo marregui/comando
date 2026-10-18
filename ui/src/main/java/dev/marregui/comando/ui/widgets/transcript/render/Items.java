@@ -29,7 +29,6 @@ final class Items {
 
     static final int MAX_RESULT_LINES = 400;
     static final int MAX_INPUT_LINES = 300;
-    static final int MAX_NOTE_CHARS = 600;
 
     private Items() {
     }
@@ -525,22 +524,13 @@ final class Items {
             return 3 + y + IN_Y + 3;
         }
 
-        /** The unified diff an edit makes, null for a tool that edits nothing. */
+        /** The unified diff an edit makes, null for a tool that edits nothing. Text written in place of nothing is clipped. */
         private static List<String> editDiff(Block.ToolCall c, JsonNode in) {
-            return switch (c.name()) {
-                case "Edit" -> Diffs.unified(in.path("file_path").asText(""), in.path("old_string").asText(""), in.path("new_string").asText(""));
-                case "MultiEdit" -> {
-                    StringBuilder before = new StringBuilder();
-                    StringBuilder after = new StringBuilder();
-                    for (JsonNode e : in.path("edits")) {
-                        before.append(e.path("old_string").asText("")).append("\n…\n");
-                        after.append(e.path("new_string").asText("")).append("\n…\n");
-                    }
-                    yield Diffs.unified(in.path("file_path").asText(""), before.toString(), after.toString());
-                }
-                case "Write" -> Diffs.unified(in.path("file_path").asText(""), "", clipLines(in.path("content").asText(""), MAX_INPUT_LINES));
-                default -> null;
-            };
+            Diffs.Edit e = Diffs.edit(c.name(), in);
+            if (e == null) {
+                return null;
+            }
+            return Diffs.unified(e.path(), e.before(), e.before().isEmpty() ? clipLines(e.after(), MAX_INPUT_LINES) : e.after());
         }
 
         private static Rich inputRich(Block.ToolCall c, JsonNode in, Style s) {
@@ -710,7 +700,10 @@ final class Items {
             return fold.isOpen() ? closed + guessText(text(), w - 2 * IN_X, s) : closed;
         }
 
-        /** The summary line, the input fenced (a shell command, a diff, or JSON) and the result fenced and clipped. */
+        /**
+         * The summary line, the input fenced (a shell command, a diff, or JSON), the result fenced and clipped, then a
+         * subagent's steps, each quoted.
+         */
         @Override
         String markdown() {
             Block.ToolCall c = call();
@@ -738,6 +731,12 @@ final class Items {
             }
             if (!c.resultText().isEmpty()) {
                 sb.append("\n\n").append(fence("", clipLines(c.resultText(), MAX_RESULT_LINES)));
+            }
+            for (Item child : children) {
+                String m = child.markdown();
+                if (!m.isEmpty()) {
+                    sb.append("\n\n> ").append(m.replace("\n", "\n> "));
+                }
             }
             return sb.toString();
         }

@@ -145,8 +145,7 @@ public final class Reducer {
             case Intent.ClearTranscript i -> clearTranscript(s, i.name());
             case Intent.SetSessionModel i -> sessionSetting(s, i.name(), i.model(), true);
             case Intent.SetSessionEffort i -> sessionSetting(s, i.name(), i.effort(), false);
-            case Intent.SessionStarted i -> Transition.of(clear(s.withSession(i.name(),
-                    x -> x.withStatus(Status.OPEN, "").withoutTasks().withStarted(clock.millis())), Notice.session(i.name())));
+            case Intent.SessionStarted i -> sessionStarted(s, i.name());
             case Intent.SessionInit i -> sessionInit(s, i);
             case Intent.SessionActivity i -> Transition.of(s.withSession(i.name(), x -> x.withActivity(i.activity(), clock.millis())));
             case Intent.SessionTasksChanged i -> Transition.of(s.withSession(i.name(), x -> x.withTasks(i.open(), clock.millis())));
@@ -193,6 +192,20 @@ public final class Reducer {
         };
     }
 
+    /**
+     * The process is up. A start reported after the user asked to stop it (the session closing) leaves it closing, and
+     * the stop's exit follows; one reported for a session already open changes nothing. A closed session takes it: the
+     * adapter reports a start before the exit of the same process, so a closed session's start is a new one (and the
+     * window replays drive sessions this way).
+     */
+    private Transition sessionStarted(AppState s, String name) {
+        return s.session(name)
+                .filter(x -> x.status() == Status.OPENING || x.status() == Status.CLOSED)
+                .map(x -> Transition.of(clear(s.withSession(x.withStatus(Status.OPEN, "").withoutTasks().withStarted(clock.millis())),
+                        Notice.session(name))))
+                .orElse(Transition.of(s));
+    }
+
     // ---- panels
 
     private Transition addPanel(AppState s, Intent.AddPanel i) {
@@ -200,7 +213,8 @@ public final class Reducer {
             return Transition.of(s);
         }
         PanelState current = s.focusedPanel();
-        String title = i.title().isBlank() ? defaultTitle(s) : i.title().strip();
+        // a title names a panel to the tools and keys its plots: a second file of the same name gets "README 2"
+        String title = i.title().isBlank() ? defaultTitle(s) : uniqueTitle(s, i.title().strip());
         List<PanelState> panels = new ArrayList<>(s.panels());
         panels.add(new PanelState(i.panel(), title, current.connection(), "", i.document()));
         AppState next = s.withPanels(panels, i.panel());
@@ -315,7 +329,7 @@ public final class Reducer {
         }
         String title = i.title().strip();
         // a title names a panel to the tools and keys its plots: two panels never share one
-        if (Stream.concat(s.panels().stream(), s.closed().stream()).anyMatch(p -> !p.id().equals(i.panel()) && p.title().equals(title))) {
+        if (Stream.concat(s.panels().stream(), s.closed().stream()).anyMatch(p -> !p.id().equals(i.panel()) && p.title().equalsIgnoreCase(title))) {
             return Transition.of(notice(s, Notice.Level.ERROR, "A panel called " + title + " exists", Notice.panel(i.panel().value())));
         }
         if (s.closedPanel(i.panel()).isPresent()) {
@@ -380,10 +394,7 @@ public final class Reducer {
         if (s.panel(i.newPanel()).isPresent()) {
             return Transition.of(s);
         }
-        String title = i.session();
-        for (int n = 2; titleTaken(s, title); n++) {
-            title = i.session() + " " + n;
-        }
+        String title = uniqueTitle(s, i.session());
         List<PanelState> panels = new ArrayList<>(s.panels());
         panels.add(new PanelState(i.newPanel(), title, target.connection(), i.session()));
         AppState next = notice(s.withPanels(panels, i.newPanel()), Notice.Level.INFO,
@@ -398,6 +409,15 @@ public final class Reducer {
             n++;
         }
         return "panel " + n;
+    }
+
+    /** {@code title}, or the first of "title 2", "title 3"… no panel has, open or closed. */
+    private static String uniqueTitle(AppState s, String title) {
+        String candidate = title;
+        for (int n = 2; titleTaken(s, candidate); n++) {
+            candidate = title + " " + n;
+        }
+        return candidate;
     }
 
     private static boolean titleTaken(AppState s, String title) {
@@ -1230,7 +1250,7 @@ public final class Reducer {
         if (done.isEmpty()) {
             return Transition.of(s);
         }
-        String undo = panes ? " (View ▸ Restore layout undoes it)" : "";
+        String undo = panes ? " (Restore layout in the palette undoes it)" : "";
         return new Transition(notice(next, Notice.Level.INFO, i.session() + " " + String.join(", ", done) + undo), effects);
     }
 

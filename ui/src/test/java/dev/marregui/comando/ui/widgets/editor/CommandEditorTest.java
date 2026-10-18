@@ -16,6 +16,18 @@ class CommandEditorTest {
     private static final String TEXT = "SELECT 1;\n\nExplain the query above.\n";
 
     @Test
+    void zoomStaysBetween8And40Points() {
+        onEdt(() -> {
+            CommandEditor e = new CommandEditor();
+            e.zoom(100);
+            assertThat(e.area().getFont().getSize2D()).isEqualTo(40f);
+            e.zoom(-100);
+            assertThat(e.area().getFont().getSize2D()).isEqualTo(8f);
+            e.dispose();
+        });
+    }
+
+    @Test
     void runningABlockTintsItAndLeavesNothingSelected() {
         onEdt(() -> {
             CommandEditor e = new CommandEditor();

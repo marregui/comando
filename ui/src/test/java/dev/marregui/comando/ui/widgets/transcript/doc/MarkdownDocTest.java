@@ -57,4 +57,11 @@ class MarkdownDocTest {
         Para.Text p = (Para.Text) MarkdownDoc.parse("a <b>tag</b> here").getFirst();
         assertThat(p.plain()).isEqualTo("a <b>tag</b> here");
     }
+
+    @Test
+    void aFenceLanguageIsTheFirstWordOfItsInfo() {
+        assertThat(MarkdownDoc.parse("```python\ttitle=x\nprint(1)\n```").getFirst()).isEqualTo(new Para.Code("python", "print(1)", 0));
+        assertThat(MarkdownDoc.parse("```  sql   linenos\nselect 1\n```").getFirst()).isEqualTo(new Para.Code("sql", "select 1", 0));
+        assertThat(MarkdownDoc.parse("```\nplain\n```").getFirst()).isEqualTo(new Para.Code("", "plain", 0));
+    }
 }

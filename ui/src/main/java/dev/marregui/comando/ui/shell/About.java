@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.shell;
 
+import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.commonmark.ext.gfm.tables.TableBlock;
 import org.commonmark.ext.gfm.tables.TableBody;
@@ -14,7 +15,6 @@ import org.commonmark.node.SoftLineBreak;
 import org.commonmark.node.Text;
 import org.commonmark.parser.Parser;
 
-import javax.imageio.ImageIO;
 import javax.swing.AbstractAction;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
@@ -197,14 +197,9 @@ final class About {
         String os = System.getProperty("os.name", "");
         v.put("system", (os.startsWith("Mac") ? "macOS" : os) + " " + System.getProperty("os.version", "") + " · "
                 + System.getProperty("os.arch", ""));
-        v.put("home", home == null ? "" : tilde(home.toAbsolutePath().toString(), System.getProperty("user.home", "")));
+        v.put("home", home == null ? "" : Labels.shortPath(home.toAbsolutePath().toString()));
         v.put("year", String.valueOf(Year.now().getValue()));
         return v;
-    }
-
-    static String tilde(String path, String userHome) {
-        return !userHome.isEmpty() && (path.equals(userHome) || path.startsWith(userHome + "/"))
-                ? "~" + path.substring(userHome.length()) : path;
     }
 
     /**
@@ -485,7 +480,7 @@ final class About {
             double scale = g.getTransform().getScaleX();
             int pixels = (int) Math.round(ICON * Math.max(1, scale));
             if (icon == null || iconPixels != pixels) {
-                BufferedImage source = picture();
+                BufferedImage source = AppIcon.load();
                 if (source == null) {
                     return;
                 }
@@ -502,14 +497,6 @@ final class About {
             i.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
             i.drawImage(icon, x, y, ICON, ICON, null);
             i.dispose();
-        }
-
-        private static BufferedImage picture() {
-            try (InputStream in = About.class.getResourceAsStream("/icons/comando.png")) {
-                return in == null ? null : ImageIO.read(in);
-            } catch (IOException e) {
-                return null;
-            }
         }
 
         /** {@code source} at {@code pixels} a side, halved step by step so the downscale keeps its detail. */

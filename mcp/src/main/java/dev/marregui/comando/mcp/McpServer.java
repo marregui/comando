@@ -50,6 +50,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         this.tools = tools;
         this.http = http;
         this.version = version;
+        tools.live(tokenBySession::containsKey);
     }
 
     /**
@@ -92,7 +93,10 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
             return;
         }
         sessionByToken.remove(ticket.token(), session);
-        tokenBySession.remove(session, ticket.token());
+        // an earlier process's late unregister finds a newer token here and leaves the newer process's cards alone
+        if (tokenBySession.remove(session, ticket.token())) {
+            tools.sessionEnded(session);
+        }
     }
 
     // ---- ApprovalPort

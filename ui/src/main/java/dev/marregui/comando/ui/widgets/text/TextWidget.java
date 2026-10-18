@@ -128,7 +128,7 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
 
     @Override
     public void zoom(int steps) {
-        area.setFont(area.getFont().deriveFont(Math.max(8f, area.getFont().getSize2D() + steps)));
+        area.setFont(area.getFont().deriveFont(Zoomable.clampSize(area.getFont().getSize2D() + steps)));
     }
 
     @Override

@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.schema.Schema;
@@ -13,12 +14,15 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.layout.ShrinkingRow;
 import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
+import dev.marregui.comando.ui.kit.text.LocalLinks;
+import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.editor.CommandEditor;
 
@@ -37,9 +41,6 @@ import java.awt.Color;
 import java.awt.FlowLayout;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
@@ -132,7 +133,7 @@ public final class EditorPanel extends JPanel {
         left.add(sessionClear);
         sessionCompact.setIcon(Icons.get("compact"));
         sessionCompact.getAccessibleContext().setAccessibleName("Compact the conversation");
-        sessionCompact.setToolTipText("Compact the conversation: send " + SessionRow.COMPACT_COMMAND + " to the session");
+        sessionCompact.setToolTipText("Compact the conversation: send " + SessionSpec.COMPACT_COMMAND + " to the session");
         sessionClear.setIcon(Icons.get("clear-conversation"));
         sessionClear.getAccessibleContext().setAccessibleName("Clear the conversation");
         left.add(Box.createHorizontalStrut(Theme.PAD));
@@ -210,9 +211,9 @@ public final class EditorPanel extends JPanel {
         sessionFresh.addActionListener(e -> state.session(panel.session()).ifPresent(x -> intents.dispatch(new Intent.StartFresh(x.name()))));
         sessionCheckpoint.addActionListener(e -> state.session(panel.session()).ifPresent(x -> intents.dispatch(new Intent.Checkpoint(x.name()))));
         sessionCompact.addActionListener(e -> state.session(panel.session())
-                .ifPresent(x -> intents.dispatch(new Intent.SessionCommand(x.name(), SessionRow.COMPACT_COMMAND))));
+                .ifPresent(x -> intents.dispatch(new Intent.SessionCommand(x.name(), SessionSpec.COMPACT_COMMAND))));
         sessionClear.addActionListener(e -> state.session(panel.session())
-                .ifPresent(x -> intents.dispatch(new Intent.SessionCommand(x.name(), SessionRow.CLEAR_COMMAND))));
+                .ifPresent(x -> intents.dispatch(new Intent.SessionCommand(x.name(), SessionSpec.CLEAR_COMMAND))));
     }
 
     public CommandEditor editor() {
@@ -251,14 +252,14 @@ public final class EditorPanel extends JPanel {
         }
     }
 
-    /** For tests. */
-    boolean editable() {
+    /** False for a log: nothing writes into it, neither the user nor a tool. */
+    public boolean editable() {
         return editor.area().isEditable();
     }
 
     /** A document ending in {@code .log}: read-only, and it follows its end as it grows. */
     boolean isLog() {
-        return document && file != null && file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".log");
+        return document && file != null && PanelTexts.isLog(file);
     }
 
     private void followEnd() {
@@ -330,35 +331,8 @@ public final class EditorPanel extends JPanel {
      * file's name is not part of it: {@link #linkedHeading} reads it.
      */
     static Optional<Path> linkedDocument(Path document, String href) {
-        String path;
-        try {
-            URI uri = new URI(href);
-            if (uri.getScheme() != null && !uri.getScheme().equalsIgnoreCase("file")) {
-                return Optional.empty();
-            }
-            path = uri.getPath();
-        } catch (URISyntaxException e) {
-            // a destination written in angle brackets keeps its spaces, which a URI does not take
-            int cut = href.indexOf('#');
-            path = cut < 0 ? href : href.substring(0, cut);
-        }
-        if (path == null || path.isEmpty()) {
-            return Optional.empty();
-        }
-        Path target;
-        try {
-            target = Path.of(path);
-        } catch (InvalidPathException e) {
-            return Optional.empty();
-        }
-        if (!target.isAbsolute()) {
-            Path folder = document == null ? null : document.toAbsolutePath().getParent();
-            if (folder == null) {
-                return Optional.empty();
-            }
-            target = folder.resolve(target);
-        }
-        return markdownName(target) || htmlName(target) ? Optional.of(target.normalize()) : Optional.empty();
+        Path folder = document == null ? null : document.toAbsolutePath().getParent();
+        return LocalLinks.file(folder, href).filter(f -> markdownName(f) || htmlName(f));
     }
 
     /** The rendered view; for tests. */
@@ -523,9 +497,8 @@ public final class EditorPanel extends JPanel {
         // session chip
         if (x.isPresent()) {
             SessionState ss = x.get();
-            String branch = ss.branch().isEmpty() ? "" : "  ⎇ " + ss.branch();
             session.setIcon(Icons.get("claude"));
-            session.setText(ss.name() + branch + "  " + dot(ss.status()) + busyText(ss));
+            session.setText(chipText(ss));
             session.setToolTipText(Labels.shortPath(ss.spec().workDir()) + " · " + ss.status()
                     + (ss.error().isEmpty() ? "" : " · " + ss.error()));
             sessionToggle.setVisible(true);
@@ -542,7 +515,7 @@ public final class EditorPanel extends JPanel {
             // as on the session's row: compact and clear only while it runs
             sessionCompact.setVisible(ss.status().isUsable());
             sessionClear.setVisible(ss.status().isUsable());
-            sessionClear.setToolTipText("Clear the conversation: send " + SessionRow.CLEAR_COMMAND + "; a new one starts"
+            sessionClear.setToolTipText("Clear the conversation: send " + SessionSpec.CLEAR_COMMAND + "; a new one starts"
                     + (ss.spec().claudeSessionId().isEmpty() ? "" : ", the current one (" + ss.spec().claudeSessionId() + ") stays importable"));
         } else {
             sessionFresh.setVisible(false);
@@ -583,6 +556,12 @@ public final class EditorPanel extends JPanel {
         }
     }
 
+    /** The session chip: name, branch, status dot and what it does; a name from a stored conversation is shown as text. */
+    private static String chipText(SessionState ss) {
+        String branch = ss.branch().isEmpty() ? "" : "  ⎇ " + ss.branch();
+        return Plain.text(ss.name() + branch + "  " + dot(ss.status()) + busyText(ss));
+    }
+
     /** "working · 12 s" while a turn runs; the shell's one-second tick refreshes it. */
     static String busyText(SessionState ss) {
         if (ss.isWaiting()) {
@@ -592,7 +571,7 @@ public final class EditorPanel extends JPanel {
         if (!ss.isBusy()) {
             return "";
         }
-        String what = ss.activity().isEmpty() ? "working" : ss.activity();
+        String what = TabStatus.working(ss);
         long since = ss.turnStartedMillis();
         int queued = ss.pendingTurns() - 1;
         return "  " + what + (since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "")
@@ -607,10 +586,7 @@ public final class EditorPanel extends JPanel {
     /** Refreshes what changes with time alone: the session chip's elapsed time, working or waiting. */
     public void tick() {
         if (state != null) {
-            state.session(panel.session()).filter(EditorPanel::counting).ifPresent(ss -> {
-                String branch = ss.branch().isEmpty() ? "" : "  ⎇ " + ss.branch();
-                session.setText(ss.name() + branch + "  " + dot(ss.status()) + busyText(ss));
-            });
+            state.session(panel.session()).filter(EditorPanel::counting).ifPresent(ss -> session.setText(chipText(ss)));
         }
     }
 
@@ -647,7 +623,7 @@ public final class EditorPanel extends JPanel {
     private JPopupMenu connectionMenu() {
         JPopupMenu m = new JPopupMenu();
         for (ConnectionState c : state.connections()) {
-            JMenuItem item = new JMenuItem(c.name() + "  " + c.spec().label(), Icons.get("database"));
+            JMenuItem item = new JMenuItem(Plain.text(c.name() + "  " + c.spec().label()), Icons.get("database"));
             item.addActionListener(e -> intents.dispatch(new Intent.BindConnection(panel.id(), c.name())));
             m.add(item);
         }
@@ -679,7 +655,7 @@ public final class EditorPanel extends JPanel {
         for (SessionState x : state.sessions()) {
             List<PanelState> elsewhere = state.panelsBoundToSession(x.name());
             String where = elsewhere.isEmpty() ? "" : "  · " + elsewhere.getFirst().title();
-            JMenuItem item = new JMenuItem(x.name() + "  " + Labels.shortPath(x.spec().workDir()) + where, Icons.get("claude"));
+            JMenuItem item = new JMenuItem(Plain.text(x.name() + "  " + Labels.shortPath(x.spec().workDir()) + where), Icons.get("claude"));
             item.addActionListener(e -> intents.dispatch(new Intent.OpenSession(x.name(), panel.id(), PanelId.random())));
             m.add(item);
         }

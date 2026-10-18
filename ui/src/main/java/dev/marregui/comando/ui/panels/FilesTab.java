@@ -76,6 +76,8 @@ final class FilesTab {
     private final JPanel body = new JPanel(new BorderLayout());
 
     private List<FolderRoot> folders = List.of();
+    /** The folders' index file names, lower case, as each cell's icon asks: made when the folders change. */
+    private Set<String> indexNames = Set.of();
     /** The latest tree read of each folder, by name. */
     private final Map<String, ViewSpec.TreeNode> read = new HashMap<>();
     /** Folders whose newest day was opened, the first time their row was open with their tree read; never again. */
@@ -97,7 +99,7 @@ final class FilesTab {
         for (TreeView t : List.of(tree, found)) {
             t.tree().setRootVisible(false);
             t.icons(n -> {
-                String icon = rowIcon(n).orElseGet(() -> iconName(n, indexNames()));
+                String icon = rowIcon(n).orElseGet(() -> iconName(n, indexNames));
                 return icon.isEmpty() ? null : Icons.get(icon);
             });
             t.onActivate(this::activate);
@@ -200,6 +202,7 @@ final class FilesTab {
             });
         }
         folders = s.folders();
+        indexNames = indexNames(folders);
         Set<String> keep = new HashSet<>(renamed);
         folders.stream().filter(before::contains).forEach(f -> keep.add(f.name()));
         read.keySet().retainAll(keep);
@@ -260,7 +263,7 @@ final class FilesTab {
         return folders.stream().filter(f -> f.name().equals(name)).findFirst();
     }
 
-    private Set<String> indexNames() {
+    private static Set<String> indexNames(List<FolderRoot> folders) {
         Set<String> names = new HashSet<>();
         for (FolderRoot f : folders) {
             if (!f.index().isEmpty()) {

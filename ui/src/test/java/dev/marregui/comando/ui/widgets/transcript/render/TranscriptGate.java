@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
 import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.SyntheticSession;
 
 import javax.swing.JViewport;
@@ -66,6 +67,10 @@ public final class TranscriptGate {
 
         thinking(delta, width, height, img);
         long[] thinkingFrames = thinking(delta, width, height, img);
+        codeFence(delta, width, height, img);
+        long[] codeFrames = codeFence(delta, width, height, img);
+        findInLongTranscript(width, height, img);
+        long[] find = findInLongTranscript(width, height, img);
 
         long[] sorted = frames.clone();
         Arrays.sort(sorted);
@@ -83,6 +88,12 @@ public final class TranscriptGate {
         double thinkingP99 = ms(thinkingSorted[(int) (thinkingSorted.length * 0.99)]);
         System.out.printf(Locale.ROOT, "open thinking streamed (%d frames): p50 %.2f ms, p99 %.2f ms, max %.2f ms%n", thinkingSorted.length,
                 ms(thinkingSorted[thinkingSorted.length / 2]), thinkingP99, ms(thinkingSorted[thinkingSorted.length - 1]));
+        long[] codeSorted = codeFrames.clone();
+        Arrays.sort(codeSorted);
+        System.out.printf(Locale.ROOT, "1 500-line code fence, its last 100 lines streamed (%d frames): p50 %.2f ms, p99 %.2f ms, max %.2f ms%n",
+                codeSorted.length, ms(codeSorted[codeSorted.length / 2]), ms(codeSorted[(int) (codeSorted.length * 0.99)]),
+                ms(codeSorted[codeSorted.length - 1]));
+        System.out.printf(Locale.ROOT, "find in %d loaded blocks: first search %.2f ms, the next match %.2f ms%n", find[2], ms(find[0]), ms(find[1]));
         if (p99 > 16.0 || thinkingP99 > 16.0) {
             System.out.println("GATE FAILED: p99 above 16 ms");
             System.exit(1);
@@ -129,6 +140,66 @@ public final class TranscriptGate {
             frames[i] = System.nanoTime() - t;
         }
         return frames;
+    }
+
+    /**
+     * An answer holding one 1 500-line Java fence: the first 1 400 lines are there, the last 100 stream one delta per
+     * frame, painting the end, as a long code block arrives.
+     */
+    private static long[] codeFence(int delta, int width, int height, BufferedImage img) {
+        StringBuilder code = new StringBuilder("Here is the class:\n\n```java\n");
+        for (int i = 0; i < 1500; i++) {
+            code.append("    private static final int FIELD_").append(i).append(" = compute(").append(i).append(", \"x\"); // note\n");
+        }
+        String head = code.substring(0, nthLine(code, 1403));
+        String full = code.append("```\n").toString();
+        TranscriptCanvas canvas = new TranscriptCanvas(href -> { });
+        canvas.setSize(width, height);
+        canvas.append(0, new Block.AssistantText("m", 0, head, true, ""));
+        canvas.ensureLayout(width);
+        long[] frames = new long[(full.length() - head.length()) / delta];
+        for (int i = 0; i < frames.length; i++) {
+            long t = System.nanoTime();
+            canvas.update(0, new Block.AssistantText("m", 0, full.substring(0, head.length() + (i + 1) * delta), true, ""));
+            canvas.ensureLayout(width);
+            paintTop(canvas, width, height, img, Math.max(0, canvas.contentHeight() - height));
+            frames[i] = System.nanoTime() - t;
+        }
+        return frames;
+    }
+
+    private static int nthLine(CharSequence s, int n) {
+        int at = 0;
+        for (int i = 0; i < n; i++) {
+            at = s.toString().indexOf('\n', at) + 1;
+        }
+        return at;
+    }
+
+    /**
+     * The synthetic session's final blocks repeated to 2 000, as a stored conversation loads, the end laid out and
+     * painted; then one find of a word every tool result holds, and the next match. Returns both times and the count.
+     */
+    private static long[] findInLongTranscript(int width, int height, BufferedImage img) {
+        Transcript session = SyntheticSession.transcript();
+        TranscriptCanvas canvas = new TranscriptCanvas(href -> { });
+        canvas.setSize(width, height);
+        int n = 0;
+        while (n < 2000) {
+            for (int i = 0; i < session.size() && n < 2000; i++) {
+                canvas.append(n++, session.get(i));
+            }
+        }
+        canvas.ensureLayout(width);
+        paintTop(canvas, width, height, img, Math.max(0, canvas.contentHeight() - height));
+        long t0 = System.nanoTime();
+        canvas.find("timeout", true);
+        long first = System.nanoTime() - t0;
+        long t1 = System.nanoTime();
+        canvas.find("timeout", true);
+        long next = System.nanoTime() - t1;
+        canvas.clearFind();
+        return new long[]{first, next, n};
     }
 
     private static void paintTop(TranscriptCanvas canvas, int width, int height, BufferedImage img, int top) {

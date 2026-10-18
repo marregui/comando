@@ -183,7 +183,11 @@ public final class EdtWatchdog implements AutoCloseable {
                 long total = (System.nanoTime() - blockedSince) / 1_000_000;
                 ended.accept(stall, total);
             }
-            sleep(PERIOD_MILLIS);
+            // the next probe a period after this one was posted, not a period after its answer was seen
+            long left = PERIOD_MILLIS - (System.nanoTime() - probe) / 1_000_000;
+            if (left > 0) {
+                sleep(left);
+            }
         }
     }
 

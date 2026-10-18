@@ -7,6 +7,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import javax.swing.JEditorPane;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.BadLocationException;
@@ -57,8 +58,16 @@ public class HtmlPane extends JEditorPane {
     /** Whether the pane shows a light page: dark text on warm paper, code and diagrams in light colours. */
     private boolean light;
 
+    /** A change of width smaller than this keeps the pictures as they are sized. */
+    private static final int RESIZE_SLACK = 16;
+    /** The width the page's pictures and diagrams were sized for; -1 when it has none. */
+    private int sizedFor = -1;
+    /** Sizes the pictures again once a resize settles: a page rendered before it was laid out had no width to fit. */
+    private final Timer resized = new Timer(150, e -> redraw(this.markdown));
+
     public HtmlPane() {
         setContentType("text/html");
+        resized.setRepeats(false);
         OwnStyles kit = new OwnStyles();
         kit.setStyleSheet(styles(false));
         setEditorKit(kit);
@@ -72,6 +81,9 @@ public class HtmlPane extends JEditorPane {
             public void componentResized(ComponentEvent e) {
                 if (anchored != null && getParent() instanceof JViewport vp && vp.getViewPosition().y == anchoredY) {
                     scrollToHeading(anchored);
+                }
+                if (sizedFor >= 0 && Math.abs(getWidth() - sizedFor) > RESIZE_SLACK) {
+                    resized.restart();
                 }
             }
         });
@@ -243,6 +255,7 @@ public class HtmlPane extends JEditorPane {
     /** Shows {@code markdown} rendered; its Mermaid diagrams as pictures once {@link MermaidDiagrams} has drawn them. */
     public void setMarkdown(String markdown) {
         this.markdown = markdown;
+        sizedFor = -1;
         setHtml(MarkdownHtml.render(markdown, this::diagram, light, this::picture));
     }
 
@@ -256,6 +269,16 @@ public class HtmlPane extends JEditorPane {
         setMarkdown(markdown);
     }
 
+    /** Runs a re-size waiting for the resize to settle, now; false when none waits. For tests. */
+    boolean flushResize() {
+        if (!resized.isRunning()) {
+            return false;
+        }
+        resized.stop();
+        redraw(markdown);
+        return true;
+    }
+
     /** The HTML of an image link: its picture when it names one on this machine, else null for its alt text. */
     private String picture(String destination, String alt) {
         Optional<Path> file = LocalImages.resolve(folder, destination);
@@ -264,6 +287,7 @@ public class HtmlPane extends JEditorPane {
         }
         String shown = markdown;
         LocalImages.Picture p = LocalImages.current().picture(file.get(), () -> Edt.later(() -> redraw(shown)));
+        sizedFor = getWidth();
         Insets in = getInsets();
         return pictureHtml(p, alt, file.get(), getWidth() - in.left - in.right - 8);
     }
@@ -279,16 +303,7 @@ public class HtmlPane extends JEditorPane {
      */
     static String pictureHtml(LocalImages.Picture p, String alt, Path file, int maxWidth) {
         return switch (p) {
-            case LocalImages.Picture.Ready r -> {
-                int w = r.width();
-                int h = r.height();
-                if (maxWidth > 0 && w > maxWidth) {
-                    h = Math.max(1, (int) ((long) h * maxWidth / w));
-                    w = maxWidth;
-                }
-                yield "<img src=\"" + attribute(r.file().toUri().toString()) + "\" width=\"" + w + "\" height=\"" + h
-                        + "\" alt=\"" + attribute(alt) + "\">";
-            }
+            case LocalImages.Picture.Ready r -> img(r.file(), r.width(), r.height(), maxWidth, alt);
             case LocalImages.Picture.Pending ignored -> "<font color=\"" + Theme.hex(Theme.MUTED) + "\"><i>"
                     + MarkdownHtml.escape("loading " + file.getFileName() + "…") + "</i></font>";
             case LocalImages.Picture.Unavailable u -> "<i>" + MarkdownHtml.escape(alt.isEmpty() ? "image" : alt) + "</i> <font color=\""
@@ -299,6 +314,7 @@ public class HtmlPane extends JEditorPane {
     private String diagram(String source) {
         String shown = markdown;
         MermaidDiagrams.Diagram d = MermaidDiagrams.current().diagram(source, light, () -> Edt.later(() -> redraw(shown)));
+        sizedFor = getWidth();
         Insets in = getInsets();
         return diagramHtml(source, d, getWidth() - in.left - in.right - 8);
     }
@@ -327,18 +343,21 @@ public class HtmlPane extends JEditorPane {
      */
     static String diagramHtml(String source, MermaidDiagrams.Diagram d, int maxWidth) {
         return switch (d) {
-            case MermaidDiagrams.Diagram.Ready r -> {
-                int w = r.width();
-                int h = r.height();
-                if (maxWidth > 0 && w > maxWidth) {
-                    h = Math.max(1, h * maxWidth / w);
-                    w = maxWidth;
-                }
-                yield "<p><img src=\"" + r.png().toUri() + "\" width=\"" + w + "\" height=\"" + h + "\" alt=\"diagram\"></p>";
-            }
+            case MermaidDiagrams.Diagram.Ready r -> "<p>" + img(r.png(), r.width(), r.height(), maxWidth, "diagram") + "</p>";
             case MermaidDiagrams.Diagram.Pending p -> note("drawing the diagram…") + code(source);
             case MermaidDiagrams.Diagram.Unavailable u -> note(u.why()) + code(source);
         };
+    }
+
+    /** An image of a file, no wider than {@code maxWidth} points when that is positive, its height scaled with it. */
+    private static String img(Path file, int width, int height, int maxWidth, String alt) {
+        int w = width;
+        int h = height;
+        if (maxWidth > 0 && w > maxWidth) {
+            h = Math.max(1, (int) ((long) h * maxWidth / w));
+            w = maxWidth;
+        }
+        return "<img src=\"" + attribute(file.toUri().toString()) + "\" width=\"" + w + "\" height=\"" + h + "\" alt=\"" + attribute(alt) + "\">";
     }
 
     private static String note(String text) {

@@ -21,7 +21,7 @@ The package layers are in [Architecture §8](architecture.md#8-ui-packages).
 | `overlay` | `Overlay`: the empty, loading and error states a widget switches between |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` (below) |
 | `format` | `Labels` (times, uptimes, counts, short paths), `Json` |
-| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `MermaidDiagrams`, `SourceLinks`, `Plain` (below) |
+| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `LocalImages`, `LocalLinks`, `MermaidDiagrams`, `SourceLinks`, `Plain` (below) |
 | `tree`, `layout`, `tabs` | `TreeView` (the one tree; a double click activates a leaf, Enter the selected node); `ShrinkingRow` (chips give up width before buttons); `FixedRowTabs` (tab headers in fixed rows); `MovableTabs` (a tab dragged along the row reports where it lands) |
 | `desktop` | `ExternalEditor` (IntelliJ, else the default application), `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser` |
 
@@ -47,8 +47,10 @@ Text:
 | `SourceLinks` | `path/File.java:42` becomes a link that opens the file at the line |
 | `Plain` | `Plain.only(c)` turns HTML rendering off before text is set; `Plain.text(s)` guards a string starting with `<html>` |
 
-Rules: colours, fonts and spacing come from `Theme` (the transcript's `Style` and the terminal's palette excepted);
-placeholder, spinner and error states are `Overlay`; a user action is a `Command`; work from other threads reaches Swing
+Rules: colours, fonts and spacing come from `Theme` (excepted: the transcript's `Style`, the terminal's palette, the
+light page `HtmlPane` draws documents on, and the selected tab of `FixedRowTabs`); placeholder, spinner and error states
+are `Overlay` (excepted: the terminal, whose placeholder starts the shell on a click and whose exit bar offers a
+restart); a user action is a `Command`; work from other threads reaches Swing
 through `Edt` or a `Coalescer`.
 
 ## 2. Commands and keys
@@ -57,8 +59,8 @@ Every user action is a `Command`: id, label, icon, key, menu path or area, actio
 from `Menus`: Files, Edit and Tools (with Embedded QuestDB and Help), holding only what has no key or control in the
 window and what macOS expects in a menu ([record 59](adr/0059-three-menus-for-what-has-no-key.md)). Every item and
 submenu has an icon and a tooltip saying what it does. A command in no menu is named by its area (Panels, Run,
-Session, Connection, Results, Edit, Window) in the palette and the keyboard shortcuts; the registry refuses a command
-with neither. Key bindings and the palette (⌘⇧P) come from the registry.
+Session, Session ▸ Model, Session ▸ Effort, Connection, Results, Edit, Window, comando) in the palette and the keyboard
+shortcuts; the registry refuses a command with neither. Key bindings and the palette (⌘⇧P) come from the registry.
 
 The application menu's About comando, and the palette's, open `About`'s card: drawn by hand (warm charcoal, a gold
 hairline, Helvetica Neue Light, Charter italic, spaced small capitals), worded by `about.md` beside the class,
@@ -165,6 +167,8 @@ afterwards. A `path:line` link opens the file in the side pane.
 
 `./gradlew :ui:transcriptGate` replays `SyntheticSession` (8 turns, 41 tool calls with a subagent, about 10 k tokens) one
 16-character delta per frame, laying out and painting a 1200 × 800 viewport at the end, then streams a 9 000-character
-open thinking block. It fails when either 99th percentile exceeds 16 ms. On 2026-10-13 (Apple silicon, JDK 25, headless,
-1 798 frames) p99 was 3.39 ms and the thinking block's 1.40 ms. `TranscriptShot` paints the session to a PNG;
-`docs/images/transcript.png` is its output.
+open thinking block. It fails when either 99th percentile exceeds 16 ms. It also prints, without failing on them, the
+frames of a 1 500-line code fence whose last 100 lines stream (a growing block keeps the layouts of its whole lines), and
+the time of a find over 2 000 loaded blocks. On 2026-10-18 (Apple silicon, JDK 25, headless, 1 798 frames) p99 was
+3.40 ms, the thinking block's 1.41 ms and the code fence's 4.75 ms; the find took 1.4 s, as it lays out every block
+exactly. `TranscriptShot` paints the session to a PNG; `docs/images/transcript.png` is its output.

@@ -140,11 +140,26 @@ final class Paras {
         private Style built;
         private TextBox box;
         private int indent;
+        /** The view this one grew from while it streamed, until the first layout takes its line layouts. */
+        private CodeView grewFrom;
 
         CodeView(Para.Code para) {
             this.para = para;
             this.text = Rich.detab(para.text());
             this.colors = Highlighter.runs(text, para.language());
+        }
+
+        /**
+         * Grows from the longest of {@code previous} whose text this one's starts with, in the same language: its whole
+         * lines keep their layouts, which a code block streamed one delta at a time would otherwise lay out again each time.
+         */
+        void growFrom(List<View> previous) {
+            for (View v : previous) {
+                if (v instanceof CodeView c && c.box != null && c.para.language().equals(para.language()) && text.startsWith(c.text)
+                        && (grewFrom == null || c.text.length() > grewFrom.text.length())) {
+                    grewFrom = c;
+                }
+            }
         }
 
         @Override
@@ -161,6 +176,11 @@ final class Paras {
                     r.color(c.start(), c.end(), c.color());
                 }
                 box = new TextBox(r);
+                if (grewFrom != null && grewFrom.built == s) {
+                    // a lexer reads forward, so the lines before the old text's last line end are coloured as before
+                    box.adoptLines(grewFrom.box, grewFrom.text.lastIndexOf('\n') + 1);
+                }
+                grewFrom = null;
             }
             indent = para.depth() * s.indent;
             return box.layout(Math.max(40, w - indent - 2 * INSET), s) + 2 * INSET;
@@ -258,7 +278,7 @@ final class Paras {
                     paintBox(g, cells[r][c], cx + CELL, ry + CELL, clip, marks);
                     cx += widths[c];
                 }
-                g.setColor(new Color(0x4E5157));
+                g.setColor(built.tableRule);
                 g.fillRect(x + indent, ry, tableWidth, 1);
                 ry += heights[r];
             }
@@ -329,7 +349,11 @@ final class Paras {
         List<View> out = new ArrayList<>(next.size());
         for (Para p : next) {
             ArrayDeque<View> same = old.get(p);
-            out.add(same != null && !same.isEmpty() ? same.poll() : of(p));
+            View v = same != null && !same.isEmpty() ? same.poll() : of(p);
+            if (v instanceof CodeView c && c.box == null) {
+                c.growFrom(previous);
+            }
+            out.add(v);
         }
         return out;
     }

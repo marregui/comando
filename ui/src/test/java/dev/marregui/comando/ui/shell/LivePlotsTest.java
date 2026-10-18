@@ -33,4 +33,14 @@ class LivePlotsTest {
         assertThat(n.text()).startsWith("Live plot live · one stopped: its query failed");
         assertThat(n.subject()).isEqualTo(Notice.panel(States.P1.value()));
     }
+
+    @Test
+    void aRefreshPeriodBeyondADayIsADay() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            LivePlots plots = new LivePlots(new RecordingSink(), new ResultRegistry());
+            plots.start(States.P1, "select 1", "live · one", 3_000_000);
+            assertThat(plots.periodMillis(States.P1)).isEqualTo(LivePlots.MAX_SECONDS * 1000);
+            plots.stopAll();
+        });
+    }
 }

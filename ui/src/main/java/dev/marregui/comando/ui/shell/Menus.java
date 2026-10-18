@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.shell;
 
+import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.ui.kit.action.MenuEntry;
 
 import java.util.ArrayList;
@@ -20,10 +21,6 @@ import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
  * the same; macOS shows both in its menu bar.
  */
 final class Menus {
-
-    /** The models and efforts a session row's chips offer, as the palette does. */
-    static final List<String> MODELS = List.of("fable", "opus", "sonnet", "haiku");
-    static final List<String> EFFORTS = List.of("low", "medium", "high", "xhigh", "max");
 
     /** The icon of each command that has one: every item of the bar, and commands shown as the same button. */
     static final Map<String, String> ICONS = Map.ofEntries(
@@ -81,7 +78,7 @@ final class Menus {
                     + " session; what ran in it stops. The Terminal tab shows it."),
             Map.entry("run.plotStop", "Stops every plot that refreshes itself (Plot, refreshing…: ⌘⇧J). The plots stay as they are."),
             Map.entry("server.start", "Starts a QuestDB server in the questdb folder of comando's data root, on QuestDB's default ports"
-                    + " (PostgreSQL wire 8812, console 9000). It listens on every interface with QuestDB's public default login."),
+                    + " (PostgreSQL wire 8812, console 9000), reachable from this machine only, with QuestDB's default login."),
             Map.entry("server.stop", "Stops the embedded QuestDB server; its data stays in the questdb folder. It also stops when comando quits."),
             Map.entry("tools.settings", "Opens tools.json in a panel: the Gradle wrapper that Run Gradle tasks (⌘⌥G) runs."),
             Map.entry("help.tutorial", "comando in ten minutes, opened as a document: from an empty window to a database, a Claude session,"
@@ -148,8 +145,8 @@ final class Menus {
         put(a, "Run", "run", "run.claude", "run.sql", "terminal.run", "run.stop", "tools.gradle");
         put(a, "Session", "session.toggle", "session.interrupt", "session.compact", "panel.bindSession", "session.dialog",
                 "session.import");
-        MODELS.forEach(m -> a.put("session.model." + m, "Session ▸ Model"));
-        EFFORTS.forEach(e -> a.put("session.effort." + e, "Session ▸ Effort"));
+        SessionSpec.MODELS.forEach(m -> a.put("session.model." + m, "Session ▸ Model"));
+        SessionSpec.EFFORTS.forEach(e -> a.put("session.effort." + e, "Session ▸ Effort"));
         put(a, "Connection", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog");
         put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive");
         put(a, "Edit", "view.copy", "view.find", "view.findNext", "view.findPrevious", "edit.complete", "edit.completeAlt");

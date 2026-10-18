@@ -27,6 +27,9 @@ final class LivePlots {
 
     private final IntentSink intents;
     private final ResultRegistry results;
+    /** The longest refresh period: a day, well inside a timer's milliseconds. */
+    static final int MAX_SECONDS = 86_400;
+
     private final Map<PanelId, Live> live = new HashMap<>();
 
     private final class Live {
@@ -52,7 +55,7 @@ final class LivePlots {
 
     void start(PanelId panel, String sql, String title, int seconds) {
         stop(panel);
-        Live l = new Live(panel, sql, title, Math.max(1, seconds));
+        Live l = new Live(panel, sql, title, Math.clamp(seconds, 1, MAX_SECONDS));
         live.put(panel, l);
         l.timer.start();
     }
@@ -71,6 +74,11 @@ final class LivePlots {
 
     int size() {
         return live.size();
+    }
+
+    /** A live plot's refresh period in milliseconds; for tests. */
+    int periodMillis(PanelId panel) {
+        return live.get(panel).timer.getDelay();
     }
 
     private AppState last;

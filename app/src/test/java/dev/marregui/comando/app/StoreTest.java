@@ -45,6 +45,21 @@ class StoreTest {
     }
 
     @Test
+    void aSettingsFileThatCannotBeWrittenIsTold() throws Exception {
+        List<String> notices = new CopyOnWriteArrayList<>();
+        try (Store store = new Store(home)) {
+            store.onNotice(notices::add);
+            store.load();
+            // a non-empty directory where sessions.json goes: the replacing move cannot remove it
+            Files.createDirectories(home.resolve("sessions.json"));
+            Files.writeString(home.resolve("sessions.json").resolve("keep"), "x");
+            store.saveSessions(List.of(SessionSpec.imported("edge", "/w", "abc")));
+            store.saveNow().get(5, TimeUnit.SECONDS);
+        }
+        assertThat(notices).anyMatch(n -> n.startsWith("Cannot write sessions.json"));
+    }
+
+    @Test
     void roundTripOfSpecsBindingsAndText() {
         PanelId id = new PanelId("p-1");
         try (Store store = new Store(home)) {

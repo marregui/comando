@@ -151,6 +151,15 @@ class ClaudeAdapterTest {
     }
 
     @Test
+    void aWorkingDirectoryThatIsNoPathFailsTheStart() throws Exception {
+        ClaudeAdapter a = adapter("fake-claude.sh");
+        a.start(SessionSpec.fresh("work", "/tmp/bad\0dir"));
+        Intent.SessionExited exit = sink.await(Intent.SessionExited.class, WAIT);
+        assertThat(exit.exitCode()).isEqualTo(-1);
+        assertThat(exit.error()).startsWith("working directory is not a path");
+    }
+
+    @Test
     void aMissingWorkingDirectoryFailsTheStart() throws Exception {
         ClaudeAdapter a = adapter("fake-claude.sh");
         a.start(SessionSpec.fresh("work", tmp.resolve("nope").toString()));

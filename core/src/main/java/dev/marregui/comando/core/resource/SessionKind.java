@@ -23,8 +23,8 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
     private static final List<Attribute> ATTRIBUTES = List.of(
             Attribute.of("name", "Name", Attribute.Kind.TEXT, true, "unique; also the CLI's --name"),
             Attribute.of("workDir", "Working directory", Attribute.Kind.DIRECTORY, true, "the CLI runs here"),
-            Attribute.openChoice("model", "Model", List.of("", "fable", "opus", "sonnet", "haiku"), "empty: the CLI's default; a full model id also works"),
-            Attribute.choice("effort", "Effort", List.of("", "low", "medium", "high", "xhigh", "max"), "empty: the CLI's default"),
+            Attribute.openChoice("model", "Model", orDefault(SessionSpec.MODELS), "empty: the CLI's default; a full model id also works"),
+            Attribute.choice("effort", "Effort", orDefault(SessionSpec.EFFORTS), "empty: the CLI's default"),
             Attribute.choice("permissionMode", "Permission mode",
                     List.of("", "default", "acceptEdits", "plan", "auto", "dontAsk"), "empty: the CLI's default"),
             Attribute.of("addDirs", "Extra directories", Attribute.Kind.DIRECTORIES, false, "--add-dir, separated by " + File.pathSeparator),
@@ -37,6 +37,14 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                     "RESUME continues the stored conversation; FORK copies it").inAdvanced());
 
     private SessionKind() {
+    }
+
+    /** The choices with the empty one, the CLI's default, first. */
+    private static List<String> orDefault(List<String> choices) {
+        List<String> all = new ArrayList<>(choices.size() + 1);
+        all.add("");
+        all.addAll(choices);
+        return List.copyOf(all);
     }
 
     @Override

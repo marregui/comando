@@ -17,6 +17,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
@@ -270,7 +271,13 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             sink.dispatch(new Intent.SessionStarted(s.name));
             return;
         }
-        Path workDir = Path.of(spec.workDir());
+        Path workDir;
+        try {
+            workDir = Path.of(spec.workDir());
+        } catch (InvalidPathException e) {
+            failStart(s, null, "working directory is not a path: " + e.getMessage());
+            return;
+        }
         if (!Files.isDirectory(workDir)) {
             failStart(s, null, "working directory does not exist: " + workDir);
             return;

@@ -299,7 +299,7 @@ class ReducerNoticeAndLayoutTest {
 
         apply(new Intent.SessionLayout("other", null, null, new Layout(Layout.Toggle.HIDE, Layout.Toggle.KEEP, Double.NaN)));
         assertThat(effects).containsExactly(new Effect.Arrange(new Layout(Layout.Toggle.HIDE, Layout.Toggle.KEEP, Double.NaN)));
-        assertThat(state.notice().text()).isEqualTo("other arranged the panes (View ▸ Restore layout undoes it)");
+        assertThat(state.notice().text()).isEqualTo("other arranged the panes (Restore layout in the palette undoes it)");
     }
 
     @Test
@@ -311,7 +311,7 @@ class ReducerNoticeAndLayoutTest {
 
         assertThat(state.focused()).isEqualTo(P2);
         assertThat(effects).containsExactly(new Effect.Arrange(new Layout(Layout.Toggle.HIDE, Layout.Toggle.KEEP, Double.NaN, P1, null, "work")));
-        assertThat(state.notice().text()).isEqualTo("work will focus one once you pause typing, arranged the panes (View ▸ Restore layout undoes it)");
+        assertThat(state.notice().text()).isEqualTo("work will focus one once you pause typing, arranged the panes (Restore layout in the palette undoes it)");
     }
 
     // ---- one error per failed start, background runs, subjects cleared by removal and withdrawal

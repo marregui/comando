@@ -317,9 +317,10 @@ public final class Kit {
     }
 
     /**
-     * Installs the kit, whole or not at all: sets the memory folder unless the user did, refreshes comando's copy,
-     * registers it and installs the plugin unless Claude Code has it (or enables it when disabled), and writes the
-     * skeleton files that are missing. A step that fails undoes the steps before it, last first.
+     * Installs the kit. First comando's copy is made equal to the build's, as at every start: the copy is comando's,
+     * and this is not undone. Then, whole or not at all: sets the memory folder unless the user did, registers the
+     * copy and installs the plugin unless Claude Code has it (or enables it when disabled), and writes the skeleton
+     * files that are missing. A step that fails undoes the steps before it, last first.
      *
      * @return what was done, one line each
      * @throws IOException naming the step that failed and what Claude Code said, and what was undone (or could not be);

@@ -2,7 +2,6 @@ package dev.marregui.comando.ui.widget.capability;
 
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
-import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.JComponent;
 import java.awt.Component;
@@ -119,9 +118,5 @@ public final class Capabilities {
             String failed = error;
             Edt.later(() -> outcome.accept(file, failed));
         });
-    }
-
-    static String muted() {
-        return Theme.hex(Theme.MUTED);
     }
 }

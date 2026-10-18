@@ -334,8 +334,7 @@ used: comando's event rates are UI rates.
 
 ## 10. Quality
 
-`./gradlew build` compiles every module with warnings as errors and runs the unit and adapter tests (103 classes, 765
-tests on 2026-10-16). The database tests run against an embedded QuestDB, and against PostgreSQL through Testcontainers
+`./gradlew build` compiles every module with warnings as errors and runs the unit and adapter tests. The database tests run against an embedded QuestDB, and against PostgreSQL through Testcontainers
 when Docker is there; the Claude adapter runs against fake CLI scripts and recorded streams; the MCP server is tested
 over HTTP.
 
