@@ -1,0 +1,120 @@
+# `app`
+
+The composition root: `main`, the configuration, the wiring of every module, the files comando keeps, the keychain,
+the intent log, logging and the embedded QuestDB. It is the one module that sees all the others; none of them sees
+it. It also holds the Gradle tasks that run, paint, replay and package the application.
+
+1. [Architecture](#1-architecture)
+2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
+3. [Configuration](#3-configuration)
+4. [Threads](#4-threads)
+5. [Tests and tasks](#5-tests-and-tasks)
+
+## 1. Architecture
+
+| Class | Does |
+|---|---|
+| `Main` | sets the dark appearance before AWT starts, reads `AppConfig`, configures logging, takes the data root's lock (`comando.lock`; a second instance on the same root refuses), builds and starts `App`, and adds a shutdown hook that closes it |
+| `App` | builds every part in dependency order on a stack and closes them in reverse, each once; a failed constructor step closes what was built and rethrows |
+| `AppConfig` | the data root and its folders (`run`, `logs`, `audit`, `questdb`, `kit`), the `claude` executable, the keychain and kit switches |
+| `Store` | implements `core`'s `PersistencePort` and `ui`'s `PanelTexts`: `connections.json`, `sessions.json`, `folders.json`, `panels.json`, and a Markdown file per panel; writes from immutable snapshots on its own threads |
+| `PanelFiles` | each panel's text as a file: named after the title, follows renames, never overwrites an edit made outside comando |
+| `JsonFile` | one store file: atomic replace through a temporary file; an unreadable file is renamed aside, not overwritten |
+| `Secrets` | connection passwords in the macOS login keychain through `/usr/bin/security`; elsewhere `Secrets.NONE` |
+| `IntentLog` | with `-Dcomando.recordIntents=true`, every intent as a JSON line after the starting state, passwords blanked |
+| `Logging` | `System.Logger` to `logs/comando-<n>.log` (10 files of 1 MiB), warnings to stderr, uncaught exceptions logged |
+| `EmbeddedQuestDb` | `ui`'s `ServerToggle`: a QuestDB server in `questdb/`, every listener on `127.0.0.1` |
+| `KitSetup` | `ui`'s `Setup`: `folders.json` and `claude`'s `Kit` as the menus reach them |
+| `Welcome` | the first panel's text on a fresh data root |
+
+**Build and close order** ([Architecture §7](../docs/architecture.md#7-ownership-and-exit)):
+
+| Created | Part | Closed |
+|---|---|---|
+| 1 | `Store` | 9 |
+| 2 | `IntentLog` (when recording) | 8 |
+| 3 | `StateLoop` | 7 |
+| 4 | `DbAdapter` | 6 |
+| 5, 6 | `MermaidDiagrams`, `LocalImages` | 5, 4 |
+| 7 | `McpServer` (with `McpTools`) | 3 |
+| 8 | `ClaudeAdapter` | 2 |
+| 9 | `ToolsAdapter` | 1 |
+| 10 | `EmbeddedQuestDb` | 10, after the lanes it may serve |
+| 11 | `ComandoUi` | 11, greyed and titled "closing…" until the rest has closed |
+
+`EffectRouter` needs the adapters, and the loop needs an effect handler before they exist: `App.DeferredEffects`
+stands in until the router is built.
+
+## 2. Interface with the rest of the app
+
+```mermaid
+flowchart TB
+  APP["app: Main, App"] --> CORE["core: StateLoop, Reducer, EffectRouter, registries"]
+  APP --> DB["db: DbAdapter"]
+  APP --> CL["claude: ClaudeAdapter, Kit, SessionCatalogue"]
+  APP --> MCP["mcp: McpServer, McpTools"]
+  APP --> TO["tools: ToolsAdapter"]
+  APP --> UI["ui: ComandoUi"]
+  ST["app Store"] -.->|"PersistencePort, PanelTexts"| CORE
+  ST -.-> UI
+  Q["app EmbeddedQuestDb"] -.->|"ServerToggle"| UI
+  K["app KitSetup"] -.->|"Setup"| UI
+```
+
+What `app` connects, and nothing else does:
+
+| From | To | Through |
+|---|---|---|
+| `EffectRouter` | `db`, `claude`, `mcp`, `ui`, `Store`, `tools` | the six effect ports |
+| `mcp` `McpTools` | `db` | `QueryPort` |
+| `claude` `ClaudeAdapter` | `mcp` `McpServer` | `McpGateway` |
+| `tools` `ToolsAdapter` | `claude` `Kit` | a `Supplier<ToolSettings>` built from `Kit.gradleSerial()` |
+| `tools` `ToolsAdapter` | `ui` `DesktopTrash` | `ToolsAdapter.Trash` |
+| `ui` import dialog | `claude` `SessionCatalogue` | a supplier mapping entries to `StoredConversation` |
+| `mcp` editor tools | `Store` | `McpTools.readOnly`: panels showing a log take no text |
+| `Store` | `StateLoop` | `Notify` for a store warning, `FoldersRead` when `folders.json` changed outside |
+
+**At start** (`App.start`): the reducer starts, the window is built, the Files tab's open folders are read every 5 s,
+the plan's usage every 5 minutes, every session with a stored conversation loads its transcript, `claude --version` is
+checked, and the kit is refreshed and, on the user's own data root, offered when Claude Code lacks it.
+
+**At quit:** the window asks when work would stop, then `onQuit` starts the `exit` thread: `App.close()`, then
+`System.exit(0)`. The shutdown hook's `close()` does nothing the second time.
+
+## 3. Configuration
+
+| Setting | Effect |
+|---|---|
+| `-Dcomando.home`, else `COMANDO_HOME`, else `~/.comando` | the data root |
+| `COMANDO_CLAUDE` | the `claude` executable; else the usual install paths, else `claude` on `PATH` |
+| `-Dcomando.recordIntents=true` | writes the intent log to `logs/intents-<millis>.jsonl` |
+| `-Dcomando.keychain` | passwords in the keychain; on by default only for `~/.comando` |
+| `-Dcomando.offerKit` | offers the Claude Code kit at start; on by default only for `~/.comando` |
+
+So a test or tool pointing the data root elsewhere never writes the user's keychain or asks Claude Code about the
+user's plugins. The JVM options (`-Xms64m -Xmx4g`, periodic G1, the QuestDB export, the dark appearance) are in
+`build.gradle.kts` for `run` and for `dmg`.
+
+## 4. Threads
+
+| Thread | Does |
+|---|---|
+| `store`, `store-secrets` | the store's writes; panel text 800 ms after the first unsaved change; a check of open panels' files and `folders.json` every second; keychain calls apart, so an unlock prompt never holds back panel text |
+| `claude-version`, `kit` | virtual: the start-up checks |
+| `exit`, `shutdown` | close the application after Quit, or from the shutdown hook |
+
+## 5. Tests and tasks
+
+Tests: `StoreTest`, `StoreSaveNowTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`,
+`KitAtStartTest`, `EmbeddedQuestDbTest`; the window tests `UiReplayTest` (intent logs replayed against the real shell
+with `testkit`'s `RecordingPorts`) and `UiKeysTest` (keys typed into a real window) run only under `:app:uiTest`.
+
+| Task | Does |
+|---|---|
+| `./gradlew :app:run` | starts comando from a copy of the build output made at launch, so a build while it runs cannot break it |
+| `./gradlew :app:uiTest` | the window tests; needs a display (`xvfb-run` on Linux), one JVM per class |
+| `./gradlew :app:snapshot -Pout=<dir>` | drives comando with intents and paints its window to PNG files (`-Plive=true` starts a real session) |
+| `./gradlew :app:hero -Pout=<dir>` | paints the README's picture with a live Claude Code turn |
+| `./gradlew :app:dmg` | an unsigned macOS disk image with its own runtime, in `build/dmg` |
+
+Further reading: [Build and run](../docs/build-and-run.md), [Workbench §6](../docs/workbench.md#6-persistence).

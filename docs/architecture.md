@@ -39,6 +39,11 @@ test trees, and a browser over folders of documents.
 
 `ui` depends on `core` only; `app` is the one module that sees every other.
 
+Each module has a README on its classes, its threads and its interface with the others:
+[`core`](../core/README.md), [`testkit`](../testkit/README.md), [`db`](../db/README.md),
+[`claude`](../claude/README.md), [`mcp`](../mcp/README.md), [`tools`](../tools/README.md), [`ui`](../ui/README.md),
+[`app`](../app/README.md).
+
 ## 3. The flow of one command
 
 Every change to what the window shows is an intent, applied by one reducer on one thread. Keys, database rows, Claude
@@ -173,7 +178,7 @@ thread.
 
 | Store | Keyed by | Written by | Read by |
 |---|---|---|---|
-| `ResultRegistry` → `ColumnarResult` | SQL request id | the connection's lane | Results tab, plots, MCP |
+| `ResultRegistry` → `ColumnarResult` | SQL request id | the connection's lane | Results tab, plots, attachments |
 | `TranscriptRegistry` → `Transcript` | session name | the session's strand | Session tab |
 | `ConsoleRegistry` → `Console` | command run id | the run's thread | console views |
 | `SchemaRegistry` → `Schema` | connection name | the database adapter | completion, schema explorer |
