@@ -221,6 +221,21 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
         record("tools.deleteFiles " + folder.name() + " " + String.join(",", paths));
     }
 
+    @Override
+    public void rollBack(String root, List<RepoStatus.FileChange> changes) {
+        record("tools.rollBack " + root + " " + String.join(",", changes.stream().map(RepoStatus.FileChange::path).toList()));
+    }
+
+    @Override
+    public void removeFiles(String root, List<String> paths) {
+        record("tools.removeFiles " + root + " " + String.join(",", paths));
+    }
+
+    @Override
+    public void unstage(String root, List<String> paths) {
+        record("tools.unstage " + root + " " + String.join(",", paths));
+    }
+
     private static String names(List<FolderRoot> folders) {
         return String.join(",", folders.stream().map(FolderRoot::name).toList());
     }

@@ -78,6 +78,7 @@ The terminal is not here: JediTerm is a Swing component and lives in `ui`.
 | `file-trash` | virtual: moves to the Trash and the listing edits |
 | `repo-read` | virtual: the repositories read at once when `watchRepos` changes them |
 | `change-read` | virtual, one at a time: a changed file's two versions |
+| `repo-write` | virtual, one at a time: `RollBack`, `RemoveFiles`, `Unstage` through git (`restore`, `rm --cached`) and the Trash, then the repositories read again |
 | `git-out`, `git-err` | virtual, per git run: its output and the start of its errors |
 
 `close()` stops every run's process tree (SIGTERM, SIGKILL 2 s later), the folder poll, the change reads and every git

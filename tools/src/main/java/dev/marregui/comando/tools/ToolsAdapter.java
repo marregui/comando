@@ -549,6 +549,163 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     /**
+     * Changes the working trees and indexes of repositories one at a time, in the order asked, then reads the
+     * repositories again so the Files tab and the Changes view show the result.
+     */
+    private final ExecutorService repoWrites =
+            Executors.newSingleThreadExecutor(r -> Thread.ofVirtual().name("repo-write").unstarted(r));
+
+    @Override
+    public void rollBack(String root, List<RepoStatus.FileChange> changes) {
+        onRepository(() -> sink.dispatch(rollBack(Path.of(root).toAbsolutePath().normalize(), changes)));
+    }
+
+    @Override
+    public void removeFiles(String root, List<String> paths) {
+        onRepository(() -> sink.dispatch(remove(Path.of(root).toAbsolutePath().normalize(), paths)));
+    }
+
+    @Override
+    public void unstage(String root, List<String> paths) {
+        onRepository(() -> {
+            List<String> args = new ArrayList<>(List.of("restore", "--staged", "--"));
+            args.addAll(paths);
+            try {
+                git(Path.of(root), args);
+            } catch (IOException e) {
+                sink.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot unstage " + String.join(", ", paths) + ": " + e.getMessage(), false));
+            }
+        });
+    }
+
+    private void onRepository(Runnable work) {
+        if (closed) {
+            return;
+        }
+        try {
+            repoWrites.execute(() -> {
+                try {
+                    work.run();
+                } catch (RuntimeException e) {
+                    LOG.log(System.Logger.Level.WARNING, "changing a repository failed", e);
+                    sink.dispatch(new Intent.Notify(Notice.Level.ERROR, "Git failed: " + e.getMessage(), false));
+                } finally {
+                    readRepos(true, true);
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            // closing: nothing more is changed
+        }
+    }
+
+    /**
+     * Takes each change back to {@code HEAD}: a version that differs from it goes to the Trash first, and nothing
+     * happens to a file whose version cannot go there; a file {@code HEAD} does not have goes to the Trash and out of
+     * the index; a renamed file's old path comes back. Answers the notice saying what came of it.
+     */
+    Intent.Notify rollBack(Path root, List<RepoStatus.FileChange> changes) {
+        List<String> failed = new ArrayList<>();
+        int done = 0;
+        int trashed = 0;
+        String last = "";
+        for (RepoStatus.FileChange c : changes) {
+            Path file = inside(root, c.path());
+            String name = Path.of(c.path()).getFileName().toString();
+            if (file == null) {
+                failed.add(c.path() + ": not in the repository");
+                continue;
+            }
+            try {
+                boolean there = Files.exists(file, LinkOption.NOFOLLOW_LINKS);
+                switch (c.kind()) {
+                    case UNTRACKED -> toTrash(file);
+                    case ADDED, COPIED -> {
+                        if (there) {
+                            toTrash(file);
+                        }
+                        git(root, List.of("rm", "--cached", "-q", "--ignore-unmatch", "--", c.path()));
+                    }
+                    case RENAMED -> {
+                        if (there) {
+                            toTrash(file);
+                        }
+                        git(root, List.of("rm", "--cached", "-q", "--ignore-unmatch", "--", c.path()));
+                        git(root, List.of("restore", "--source=HEAD", "--staged", "--worktree", "--", c.from()));
+                    }
+                    default -> {
+                        if (there) {
+                            toTrash(file);
+                        }
+                        git(root, List.of("restore", "--source=HEAD", "--staged", "--worktree", "--", c.path()));
+                    }
+                }
+                trashed += there ? 1 : 0;
+                done++;
+                last = name;
+            } catch (IOException e) {
+                failed.add(name + ": " + e.getMessage());
+            }
+        }
+        StringBuilder text = new StringBuilder(done == 0 ? "Nothing rolled back"
+                : "Rolled back " + (done == 1 ? last : done + " files") + " to HEAD");
+        if (trashed > 0) {
+            text.append(trashed == 1 ? "; the version you had is in the Trash" : "; the versions you had are in the Trash");
+        }
+        failed.forEach(f -> text.append("; ").append(f));
+        return new Intent.Notify(failed.isEmpty() ? Notice.Level.INFO : Notice.Level.WARN, text.toString(), false);
+    }
+
+    /** Moves each file to the Trash; one {@code HEAD} does not have also leaves the index. Answers what came of it. */
+    Intent.Notify remove(Path root, List<String> paths) {
+        List<String> failed = new ArrayList<>();
+        int done = 0;
+        String last = "";
+        for (String p : paths) {
+            Path file = inside(root, p);
+            String name = Path.of(p).getFileName().toString();
+            if (file == null || !Files.exists(file, LinkOption.NOFOLLOW_LINKS)) {
+                failed.add(name + (file == null ? ": not in the repository" : ": no such file"));
+                continue;
+            }
+            try {
+                toTrash(file);
+                if (git.run(root, List.of("cat-file", "-e", "HEAD:" + p)).exit() != 0) {
+                    git(root, List.of("rm", "--cached", "-q", "--ignore-unmatch", "--", p));
+                }
+                done++;
+                last = name;
+            } catch (IOException e) {
+                failed.add(name + ": " + e.getMessage());
+            }
+        }
+        StringBuilder text = new StringBuilder(done == 0 ? "Nothing moved to the Trash"
+                : "Moved " + (done == 1 ? last : done + " files") + " to the Trash");
+        failed.forEach(f -> text.append("; ").append(f));
+        return new Intent.Notify(failed.isEmpty() ? Notice.Level.INFO : Notice.Level.WARN, text.toString(), false);
+    }
+
+    /** {@code relative} under {@code root}, or null when it is the root itself or leaves it. */
+    private static Path inside(Path root, String relative) {
+        Path p = root.resolve(relative).normalize();
+        return p.startsWith(root) && !p.equals(root) ? p : null;
+    }
+
+    /** Moves {@code file} to the Trash; throws, leaving it in place, when the desktop has none. */
+    private void toTrash(Path file) throws IOException {
+        if (!trash.moveToTrash(file)) {
+            throw new IOException("this desktop has no Trash; left as it is");
+        }
+    }
+
+    /** Runs git in {@code root}; throws with git's own words when it fails or takes too long. */
+    private void git(Path root, List<String> args) throws IOException {
+        Git.Run r = git.run(root, args);
+        if (r.exit() != 0) {
+            throw new IOException(r.exit() < 0 ? "git took too long" : r.err().isBlank() ? "git exited with " + r.exit() : r.err().strip());
+        }
+    }
+
+    /**
      * Moves {@code paths} to the Trash, off the caller's thread, then takes each moved entry's own lines out of the
      * nearest listing file above it ({@link FolderRoot#listedIn}), and reads the open folders again. Never deletes for
      * good: without a Trash nothing moves. An entry inside another one asked for goes with it.
@@ -667,6 +824,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         closed = true;
         folderPoll.shutdownNow();
         changeReads.shutdownNow();
+        repoWrites.shutdownNow();
         git.close();
         Map<Process, List<ProcessHandle>> trees = new HashMap<>();
         for (Process p : List.copyOf(running.values())) {

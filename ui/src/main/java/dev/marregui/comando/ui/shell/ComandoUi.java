@@ -268,7 +268,20 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         widgets.register("text", ViewSpec.Text.class, c -> new TextWidget());
         widgets.register("tree", ViewSpec.Tree.class, TreeWidget::new);
         widgets.register("console", ViewSpec.Console.class, c -> new ConsoleWidget(c, deps.consoles()));
-        widgets.register("changes", ViewSpec.Changes.class, c -> new ChangesWidget(c, repoChanges, this::openFile));
+        widgets.register("changes", ViewSpec.Changes.class, c -> new ChangesWidget(c, repoChanges, this::openFile, new ChangesWidget.Actions() {
+            // the comparison window drops its edits to a file rolled back or removed, and closes
+            @Override
+            public void rollBack(String root, List<RepoStatus.FileChange> changes) {
+                diffWindow.drop(root, changes.stream().map(RepoStatus.FileChange::path).toList());
+                deps.intents().dispatch(new Intent.RollBack(root, changes));
+            }
+
+            @Override
+            public void remove(String root, List<String> paths) {
+                diffWindow.drop(root, paths);
+                deps.intents().dispatch(new Intent.RemoveFiles(root, paths));
+            }
+        }, ResourceActions.Questions.MODAL));
 
         frame = new JFrame("comando");
         frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
@@ -307,7 +320,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             boolean on = !workspace.light();
             workspace.light(on);
             editorThemeChanged(on);
-        });
+        }, deps.intents(), deps.texts()::write, ResourceActions.Questions.MODAL);
         AppIcon.install(frame);
         livePlots = new LivePlots(deps.intents(), deps.results());
         Thread.ofVirtual().name("pty-preload").start(TerminalWidget::preload);
@@ -1017,7 +1030,16 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     /** An Edit command: runs the focused component's own action for {@code key}; enabled when it has one. */
     private void edit(String id, String label, KeyStroke key) {
-        cmd(id, label, key, () -> Keys.forward(focusOwnerInFrame(), key, true), () -> Keys.forward(focusOwnerInFrame(), key, false));
+        cmd(id, label, key, () -> Keys.forward(editTarget(), key, true), () -> Keys.forward(editTarget(), key, false));
+    }
+
+    /**
+     * What an Edit command acts on: the comparison window's text while it has the keyboard, since macOS's menu bar takes
+     * the command's key before that window sees it; else the main window's.
+     */
+    private Component editTarget() {
+        Component c = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+        return c != null && diffWindow != null && diffWindow.holds(c) ? c : focusOwnerInFrame();
     }
 
     private static KeyStroke key(int code, int modifiers) {
@@ -1538,6 +1560,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             return;
         }
         tornDown = true;
+        if (diffWindow != null) {
+            diffWindow.saveNow(); // the comparison's edits reach their file before the store closes
+        }
         stopListening();
         lower.terminals().closeAll();
         livePlots.stopAll();

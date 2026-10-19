@@ -237,7 +237,7 @@ by delta), `FakeResult`.
 | `gradle-<run>`, `tool-output-<run>`, `tool-kill-<run>` | virtual | a run's process and output; SIGKILL what a stop left alive after 2 s |
 | `folder-read` | virtual | folder reads |
 | `folder-poll` | platform, daemon | every 5 s reads the watched git repositories, then the open folders; sends each only when it changed |
-| `repo-read`, `change-read` | virtual | the repositories read when the Changes view opens or closes; a changed file's two versions, one at a time |
+| `repo-read`, `change-read`, `repo-write` | virtual | the repositories read when the Changes view opens or closes; a changed file's two versions, one at a time; rolling back, removing and unstaging files with git and the Trash, one at a time, then the repositories read again |
 | `diff-compute` | virtual | the comparison window's line and word match, stopped at 2 s |
 | `store`, `store-secrets` | platform | atomic writes of the store files; panel text 800 ms after the first unsaved change; a check of open panels' files and `folders.json` every second; keychain calls apart, so an unlock prompt never holds back panel text |
 | `mermaid` | platform, daemon | `mmdc`, one diagram at a time, 30 s bound |

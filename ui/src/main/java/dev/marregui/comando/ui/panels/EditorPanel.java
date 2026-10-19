@@ -23,6 +23,7 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.layout.ShrinkingRow;
 import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
+import dev.marregui.comando.ui.kit.text.RenderedMarkdown;
 import dev.marregui.comando.ui.kit.text.LocalLinks;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -91,7 +92,9 @@ public final class EditorPanel extends JPanel {
     /** Opens an HTML document in the browser, which renders it; shown for HTML only. */
     private final JButton browser = iconButton();
     private boolean previewing;
-    private final HtmlPane rendered = new HtmlPane();
+    /** The rendered Markdown, as the comparison window renders it too. */
+    private final RenderedMarkdown preview = new RenderedMarkdown();
+    private final HtmlPane rendered = preview.pane();
     private final JPanel center = new JPanel(new CardLayout());
     private Path file;
     private boolean document;
@@ -100,7 +103,7 @@ public final class EditorPanel extends JPanel {
     private AppState state;
     private BiConsumer<Path, String> opener = (f, heading) -> {
     };
-    private final JScrollPane renderedScroll = new JScrollPane(rendered);
+    private final JScrollPane renderedScroll = preview.scroll();
     /** A heading the preview scrolls to once it is laid out; null when none waits. EDT only. */
     private String pendingHeading;
 
@@ -169,9 +172,7 @@ public final class EditorPanel extends JPanel {
         header.add(left, BorderLayout.CENTER);
         header.add(right, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
-        rendered.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD * 2, Theme.PAD, Theme.PAD * 2));
         rendered.setLinkHandler(href -> linkedDocument(file, href).ifPresent(f -> opener.accept(f, linkedHeading(href))));
-        renderedScroll.setBorder(null);
         // a panel opened for a link to one of its headings is laid out after it is made
         renderedScroll.addComponentListener(new ComponentAdapter() {
             @Override
@@ -373,8 +374,7 @@ public final class EditorPanel extends JPanel {
         previewing = on;
         showMode();
         if (on) {
-            rendered.setMarkdown(editor.text(), folder());
-            rendered.setCaretPosition(0);
+            preview.show(editor.text(), folder());
         } else {
             pendingHeading = null;
         }
@@ -419,7 +419,7 @@ public final class EditorPanel extends JPanel {
     /** The light editor theme or the dark one, for the text and its rendered Markdown. */
     public void light(boolean on) {
         editor.light(on);
-        rendered.setLight(on);
+        preview.light(on);
         showTheme(on);
     }
 

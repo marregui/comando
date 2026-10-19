@@ -766,6 +766,26 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         return done;
     }
 
+    /** Writes a file the diff window edited, on the writer thread, so it never races a panel's write of the same file. */
+    @Override
+    public CompletableFuture<String> write(Path file, String text) {
+        CompletableFuture<String> done = new CompletableFuture<>();
+        try {
+            writer.execute(() -> {
+                try {
+                    PanelFiles.replace(file.toAbsolutePath().normalize(), text);
+                    done.complete(null);
+                } catch (IOException | RuntimeException e) {
+                    LOG.log(System.Logger.Level.ERROR, "cannot write " + file + ": " + e.getMessage(), e);
+                    done.complete(reason(e));
+                }
+            });
+        } catch (RejectedExecutionException e) {
+            done.complete("comando is closing");
+        }
+        return done;
+    }
+
     @Override
     public CompletableFuture<String> saveNow() {
         CompletableFuture<String> done = new CompletableFuture<>();

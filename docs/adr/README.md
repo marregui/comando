@@ -78,3 +78,4 @@ that names the one it replaces; the old record stays as written, and this index'
 | [69](0069-a-window-edits-the-files-tab-folders.md) | A window edits the Files tab's folders | Miguel, Claude | proposed; where it opens replaced, 71 |
 | [70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | The sidebar's tabs in one row, with a menu each | Miguel, Claude | proposed |
 | [71](0071-repositories-in-the-files-tab.md) | Repositories in the Files tab | Miguel, Claude | proposed |
+| [72](0072-the-comparison-window-edits-rolls-back-and-removes.md) | The comparison window edits, rolls back and removes | Miguel, Claude | proposed |

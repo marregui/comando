@@ -7,6 +7,7 @@ import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.tree.TreeView;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 import dev.marregui.comando.ui.widget.Widget;
@@ -28,6 +29,8 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -39,7 +42,8 @@ import java.util.function.Consumer;
  * per repository with its branch and its count (one repository only, or one folder of it, when the view says so), then
  * up to three groups, Changed, Untracked and Removed, each by folder (a chain of folders holding only one folder is one
  * row), its files named in git's colour for how they changed. A double
- * click or Enter on a file compares it with its {@code HEAD} version side by side; moving the selection moves a
+ * click or Enter on a file compares it with its {@code HEAD} version side by side; the menu of the selection rolls back
+ * every file in it, or under a folder in it, to {@code HEAD}, or moves them to the Trash, after one question; moving the selection moves a
  * comparison already shown to the file selected. The view follows the repositories as they are read: every row is open
  * but those the user closed, known by their folders' path so a chain of folders that splits or joins stays as the
  * user left it, and the file selected stays selected.
@@ -63,10 +67,34 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
     record Target(String root, RepoStatus.FileChange change) {
     }
 
+    /** What rolling back and removing files does; the window that shows one of them drops its edits first. */
+    public interface Actions {
+        void rollBack(String root, List<RepoStatus.FileChange> changes);
+
+        void remove(String root, List<String> paths);
+
+        /** The intents, as is. */
+        static Actions of(IntentSink intents) {
+            return new Actions() {
+                @Override
+                public void rollBack(String root, List<RepoStatus.FileChange> changes) {
+                    intents.dispatch(new Intent.RollBack(root, changes));
+                }
+
+                @Override
+                public void remove(String root, List<String> paths) {
+                    intents.dispatch(new Intent.RemoveFiles(root, paths));
+                }
+            };
+        }
+    }
+
     private final TreeView tree = new TreeView();
     private final IntentSink intents;
     private final RepoChanges changes;
     private final Consumer<Path> openFile;
+    private final Actions actions;
+    private final ResourceActions.Questions questions;
     private final Runnable unlisten;
     private final Map<String, Target> targets = new HashMap<>();
     /** The rows the user closed, by {@link #key}: every other row is open. */
@@ -78,9 +106,16 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
     private boolean rendering;
 
     public ChangesWidget(WidgetContext context, RepoChanges changes, Consumer<Path> openFile) {
+        this(context, changes, openFile, Actions.of(context.intents()), ResourceActions.Questions.MODAL);
+    }
+
+    /** With what rolling back and removing do, and the question asked first; tests answer it. */
+    public ChangesWidget(WidgetContext context, RepoChanges changes, Consumer<Path> openFile, Actions actions, ResourceActions.Questions questions) {
         this.intents = context.intents();
         this.changes = changes;
         this.openFile = openFile;
+        this.actions = actions;
+        this.questions = questions;
         tree.tree().setRootVisible(false);
         tree.tree().getAccessibleContext().setAccessibleName(ViewSpec.Changes.TITLE);
         tree.icons(this::icon);
@@ -343,16 +378,85 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
     }
 
     private void menu(ViewSpec.TreeNode n, MouseEvent e) {
+        JPopupMenu menu = menuFor(n);
+        if (menu.getComponentCount() > 0) {
+            menu.show(e.getComponent(), e.getX(), e.getY());
+        }
+    }
+
+    /**
+     * The menu of {@code n}, right-clicked inside the selection: a file alone compares or opens; any selection rolls
+     * back or removes its files, a folder's, a group's or a repository's row standing for every file under it.
+     */
+    JPopupMenu menuFor(ViewSpec.TreeNode n) {
+        JPopupMenu menu = new JPopupMenu();
         Target t = targets.get(n.link());
-        if (t == null) {
+        List<Target> chosen = chosen();
+        if (t != null && chosen.size() <= 1) {
+            menu.add(item("Compare with HEAD", "diff", () -> compare(n, ChangeAsk.OPEN)));
+            if (t.change().kind() != RepoStatus.Kind.DELETED) {
+                menu.add(item("Open in a panel", "text", () -> openFile.accept(Path.of(t.root()).resolve(t.change().path()))));
+            }
+        }
+        if (chosen.isEmpty()) {
+            return menu;
+        }
+        if (menu.getComponentCount() > 0) {
+            menu.addSeparator();
+        }
+        menu.add(item("Roll back " + what(chosen) + " to HEAD…", "rollback", () -> rollBack(chosen)));
+        List<Target> removable = chosen.stream().filter(x -> x.change().kind() != RepoStatus.Kind.DELETED).toList();
+        JMenuItem trash = item(removable.isEmpty() ? "Move to the Trash…" : "Move " + what(removable) + " to the Trash…", "trash",
+                () -> remove(removable));
+        trash.setEnabled(!removable.isEmpty());
+        menu.add(trash);
+        return menu;
+    }
+
+    /** The files of the selection: each file's row, and every file under a selected folder's, group's or repository's row. */
+    List<Target> chosen() {
+        TreePath[] selected = tree.tree().getSelectionPaths();
+        Set<Target> out = new LinkedHashSet<>();
+        for (TreePath p : selected == null ? new TreePath[0] : selected) {
+            if (((DefaultMutableTreeNode) p.getLastPathComponent()).getUserObject() instanceof ViewSpec.TreeNode n) {
+                collect(n, out);
+            }
+        }
+        return List.copyOf(out);
+    }
+
+    private void collect(ViewSpec.TreeNode n, Set<Target> out) {
+        Target t = targets.get(n.link());
+        if (t != null) {
+            out.add(t);
+        }
+        n.children().forEach(c -> collect(c, out));
+    }
+
+    private static String what(List<Target> files) {
+        return files.size() == 1 ? Path.of(files.getFirst().change().path()).getFileName().toString() : files.size() + " files";
+    }
+
+    private void rollBack(List<Target> files) {
+        String text = "Roll back " + what(files) + " to HEAD? The versions you have go to the Trash, and so do files HEAD does not have.";
+        if (questions.ask(tree.tree(), text, "Roll back", new Object[] {"Roll back", "Cancel"}) != 0) {
             return;
         }
-        JPopupMenu menu = new JPopupMenu();
-        menu.add(item("Compare with HEAD", "diff", () -> compare(n, ChangeAsk.OPEN)));
-        if (t.change().kind() != RepoStatus.Kind.DELETED) {
-            menu.add(item("Open in a panel", "text", () -> openFile.accept(Path.of(t.root()).resolve(t.change().path()))));
+        byRoot(files).forEach((root, list) -> actions.rollBack(root, list.stream().map(Target::change).toList()));
+    }
+
+    private void remove(List<Target> files) {
+        String text = "Move " + what(files) + " to the Trash? " + (files.size() == 1 ? "It" : "They") + " can be put back from there.";
+        if (questions.ask(tree.tree(), text, "Remove", new Object[] {"Move to Trash", "Cancel"}) != 0) {
+            return;
         }
-        menu.show(e.getComponent(), e.getX(), e.getY());
+        byRoot(files).forEach((root, list) -> actions.remove(root, list.stream().map(x -> x.change().path()).toList()));
+    }
+
+    private static Map<String, List<Target>> byRoot(List<Target> files) {
+        Map<String, List<Target>> out = new LinkedHashMap<>();
+        files.forEach(f -> out.computeIfAbsent(f.root(), k -> new ArrayList<>()).add(f));
+        return out;
     }
 
     private static JMenuItem item(String text, String icon, Runnable r) {

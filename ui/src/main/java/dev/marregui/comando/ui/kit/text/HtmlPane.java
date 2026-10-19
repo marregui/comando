@@ -252,6 +252,8 @@ public class HtmlPane extends JEditorPane {
 
     /** The Markdown shown, so a diagram drawn later refreshes the pane only while it still shows the same text. */
     private String markdown;
+    /** What is shaded as changed in {@link #markdown}; kept through a redraw. */
+    private MarkdownHtml.Marks marks = MarkdownHtml.Marks.NONE;
 
     /** The folder the Markdown's relative image links are read from; null for Markdown that is no file's. */
     private Path folder;
@@ -285,7 +287,7 @@ public class HtmlPane extends JEditorPane {
         this.markdown = markdown;
         sizedFor = -1;
         waitingFor.clear();
-        setHtml(MarkdownHtml.render(markdown, this::diagram, light, this::picture));
+        setHtml(MarkdownHtml.render(markdown, this::diagram, light, this::picture, marks));
     }
 
     /**
@@ -293,7 +295,13 @@ public class HtmlPane extends JEditorPane {
      * the file or by its full path, shows the picture.
      */
     public void setMarkdown(String markdown, Path folder) {
+        setMarkdown(markdown, folder, MarkdownHtml.Marks.NONE);
+    }
+
+    /** As {@link #setMarkdown(String, Path)}, what {@code marks} names shaded as changed, in the theme's colours. */
+    public void setMarkdown(String markdown, Path folder, MarkdownHtml.Marks marks) {
         this.folder = folder;
+        this.marks = marks;
         anchored = null;
         setMarkdown(markdown);
     }

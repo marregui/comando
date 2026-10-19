@@ -11,9 +11,12 @@ import dev.marregui.comando.ui.widget.WidgetContext;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreePath;
+import java.awt.Component;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -146,6 +149,68 @@ class ChangesWidgetTest {
         w.unmount();
         changes.set(List.of());
         assertThat(tree.getRowCount()).as("unmounted: no longer follows").isGreaterThan(1);
+    }
+
+    @Test
+    void theSelectionsMenuRollsBackOrRemovesEveryFileInItAfterOneQuestion() {
+        List<String> calls = new ArrayList<>();
+        List<String> asked = new ArrayList<>();
+        int[] answer = {1};
+        ChangesWidget.Actions recorder = new ChangesWidget.Actions() {
+            @Override
+            public void rollBack(String root, List<RepoStatus.FileChange> changes) {
+                calls.add("rollBack " + root + " " + String.join(",", changes.stream().map(RepoStatus.FileChange::path).toList()));
+            }
+
+            @Override
+            public void remove(String root, List<String> paths) {
+                calls.add("remove " + root + " " + String.join(",", paths));
+            }
+        };
+        ChangesWidget w = new ChangesWidget(new WidgetContext(sent::add, new ActionRegistry()), changes, opened::add, recorder,
+                (parent, text, title, options) -> {
+                    asked.add(text);
+                    return answer[0];
+                });
+        changes.set(List.of(REPO));
+        JTree tree = w.tree().tree();
+        TreePath group = tree.getPathForRow(rowOf(tree, ChangesWidget.CHANGED));
+        TreePath note = tree.getPathForRow(rowOf(tree, "x.md"));
+        tree.setSelectionPaths(new TreePath[] {group, note});
+        assertThat(w.chosen()).as("a group stands for every file under it").extracting(t -> t.change().path())
+                .containsExactly("server/src/main/java/a/A.java", "server/src/main/java/a/B.java", "notes/x.md");
+        JPopupMenu menu = w.menuFor(node(group));
+        assertThat(items(menu)).containsExactly("Roll back 3 files to HEAD…", "Move 3 files to the Trash…");
+
+        ((JMenuItem) menu.getComponent(0)).doClick();
+        assertThat(calls).as("cancelled").isEmpty();
+        answer[0] = 0;
+        ((JMenuItem) menu.getComponent(0)).doClick();
+        assertThat(asked.getLast()).startsWith("Roll back 3 files to HEAD? The versions you have go to the Trash");
+        assertThat(calls).containsExactly("rollBack /w/edge server/src/main/java/a/A.java,server/src/main/java/a/B.java,notes/x.md");
+        ((JMenuItem) menu.getComponent(1)).doClick();
+        assertThat(calls.getLast()).isEqualTo("remove /w/edge server/src/main/java/a/A.java,server/src/main/java/a/B.java,notes/x.md");
+
+        TreePath readme = tree.getPathForRow(rowOf(tree, "README.md"));
+        tree.setSelectionPath(readme);
+        JPopupMenu one = w.menuFor(node(readme));
+        assertThat(items(one)).containsExactly("Compare with HEAD", "Roll back README.md to HEAD…", "Move to the Trash…");
+        assertThat(one.getComponents()).filteredOn(c -> c instanceof JMenuItem m && m.getText().equals("Move to the Trash…"))
+                .as("a removed file is not removed again").allMatch(c -> !c.isEnabled());
+    }
+
+    private static ViewSpec.TreeNode node(TreePath p) {
+        return (ViewSpec.TreeNode) ((DefaultMutableTreeNode) p.getLastPathComponent()).getUserObject();
+    }
+
+    private static List<String> items(JPopupMenu menu) {
+        List<String> out = new ArrayList<>();
+        for (Component c : menu.getComponents()) {
+            if (c instanceof JMenuItem m) {
+                out.add(m.getText());
+            }
+        }
+        return out;
     }
 
     private static int rowOf(JTree tree, String label) {

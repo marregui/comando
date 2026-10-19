@@ -20,6 +20,7 @@ import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
@@ -35,11 +36,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Two versions of a text side by side, as IDEs compare them: each in a read-only editor with its syntax colours and
+ * Two versions of a text side by side, as IDEs compare them: each in an editor with its syntax colours and
  * line numbers, the lines one side lost in red and those the other gained in green, the words that changed inside a
  * changed line marked more strongly, and a band between the two joining each difference to its place on the other
  * side. Scrolling either side scrolls the other to the matching line; neither side is padded, so line numbers and
- * copied text are the file's own.
+ * copied text are the file's own. The left side is read only; the right one may be edited, its differences marked
+ * again from a comparison worked out for its new text ({@link #remark}).
  */
 public final class SplitDiff {
 
@@ -71,6 +73,8 @@ public final class SplitDiff {
     private final RTextScrollPane rightScroll = Editors.scroll(right, true);
     private final JLabel leftTitle = new JLabel();
     private final JLabel rightTitle = new JLabel();
+    /** Beside the right side's title: whether its edits wait to be written, or were. */
+    private final JLabel rightStatus = new JLabel();
     private final Connector connector = new Connector();
     private final JPanel panel = new JPanel(new GridBagLayout());
     private List<Chunk> chunks = List.of();
@@ -97,7 +101,10 @@ public final class SplitDiff {
         c.gridx = 0;
         panel.add(leftTitle, c);
         c.gridx = 2;
-        panel.add(rightTitle, c);
+        JPanel rightHead = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
+        rightHead.add(rightTitle);
+        rightHead.add(rightStatus);
+        panel.add(rightHead, c);
         c.gridy = 1;
         c.weighty = 1;
         c.gridx = 0;
@@ -125,6 +132,11 @@ public final class SplitDiff {
 
     public List<Chunk> chunks() {
         return chunks;
+    }
+
+    /** The comparison shown. */
+    public Model model() {
+        return model;
     }
 
     /**
@@ -268,6 +280,38 @@ public final class SplitDiff {
         } else if (!chunks.isEmpty()) {
             Edt.later(() -> reveal(0));
         }
+    }
+
+    /** Says {@code text} beside the right side's title, in {@code colour}; empty says nothing. */
+    public void rightStatus(String text, Color colour, String tip) {
+        rightStatus.setText(text);
+        rightStatus.setForeground(colour);
+        rightStatus.setToolTipText(text.isEmpty() ? null : tip);
+    }
+
+    /** What the right side's status says; for tests. */
+    public String rightStatus() {
+        return rightStatus.getText();
+    }
+
+    /** Whether the right side may be edited. */
+    public void editable(boolean on) {
+        right.setEditable(on);
+    }
+
+    /**
+     * Marks {@code model}'s differences on the texts shown, without setting them, so the right side keeps its caret,
+     * scroll and undo history while it is edited; a model worked out for other texts than those shown is ignored.
+     */
+    public void remark(Model model) {
+        if (!model.compared() || !left.getText().equals(model.before()) || !right.getText().equals(model.after())) {
+            return;
+        }
+        chunks = model.chunks();
+        current = -1;
+        this.model = model;
+        mark(model);
+        connector.repaint();
     }
 
     /** {@link #compute} without a deadline, then {@link #show}; for tests and small texts. */

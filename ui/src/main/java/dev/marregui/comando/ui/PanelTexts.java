@@ -52,6 +52,14 @@ public interface PanelTexts {
         return CompletableFuture.completedFuture(null);
     }
 
+    /**
+     * Replaces {@code file}'s text, written whole or not at all, off the caller's thread; completes with null once
+     * written, or with the reason it was not. A panel open on the file takes the new text as any change made outside it.
+     */
+    default CompletableFuture<String> write(Path file, String text) {
+        return CompletableFuture.completedFuture("files are not written here");
+    }
+
     /** The panel's file, once it has one; it stays known after the panel closed. */
     default Optional<Path> file(PanelId panel) {
         return Optional.empty();

@@ -146,6 +146,27 @@ public sealed interface Effect {
         }
     }
 
+    /** Takes {@code changes} of the repository at {@code root} back to {@code HEAD}: changed versions to the Trash first, new files to the Trash. */
+    record RollBack(String root, List<RepoStatus.FileChange> changes) implements Effect {
+        public RollBack {
+            changes = List.copyOf(changes);
+        }
+    }
+
+    /** Moves {@code paths}, relative to the repository at {@code root}, to the desktop's Trash. */
+    record RemoveFiles(String root, List<String> paths) implements Effect {
+        public RemoveFiles {
+            paths = List.copyOf(paths);
+        }
+    }
+
+    /** Takes {@code paths}, relative to the repository at {@code root}, out of its index. */
+    record Unstage(String root, List<String> paths) implements Effect {
+        public Unstage {
+            paths = List.copyOf(paths);
+        }
+    }
+
     /** Shows a folder's tree in the sidebar's Files tab, when the folder still has the settings it was read with. */
     record ShowFolder(FolderRoot folder, ViewSpec.TreeNode tree) implements Effect {
     }

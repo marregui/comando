@@ -81,6 +81,18 @@ class StoreTest {
     }
 
     @Test
+    void aFileIsWrittenWholeOnTheWritersThreadEvenWhereItsFolderIsGone() throws Exception {
+        Path file = home.resolve("repo/docs/gone/a.md");
+        try (Store store = new Store(home)) {
+            assertThat(store.write(file, "# a\n").get(10, TimeUnit.SECONDS)).as("written").isNull();
+            assertThat(Files.readString(file)).isEqualTo("# a\n");
+            assertThat(store.write(file, "# b\n").get(10, TimeUnit.SECONDS)).isNull();
+            assertThat(Files.readString(file)).isEqualTo("# b\n");
+            assertThat(Files.list(file.getParent())).as("no temporary file left").extracting(p -> p.getFileName().toString()).containsExactly("a.md");
+        }
+    }
+
+    @Test
     void theFilesTabsFoldersHaveADefaultAndAreKeptAsSavedEvenEmpty() throws Exception {
         try (Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("no folders.json: the default").isEqualTo(FolderRoot.defaults(CLAUDE_DIR));

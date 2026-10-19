@@ -427,6 +427,31 @@ public sealed interface Intent {
         }
     }
 
+    /**
+     * Takes {@code changes} of the repository at {@code root} back to their {@code HEAD} state, in the working tree and
+     * the index: a changed or removed file comes back as committed, its changed version first moved to the Trash; a new
+     * file, untracked or added, goes to the Trash. Paths relative to {@code root}; refused when one leaves it.
+     */
+    record RollBack(String root, List<RepoStatus.FileChange> changes) implements Intent {
+        public RollBack {
+            changes = List.copyOf(changes);
+        }
+    }
+
+    /** Moves files of the repository at {@code root} to the desktop's Trash; paths relative to it, a new file also unstaged. */
+    record RemoveFiles(String root, List<String> paths) implements Intent {
+        public RemoveFiles {
+            paths = List.copyOf(paths);
+        }
+    }
+
+    /** Takes {@code paths} of the repository at {@code root} out of the index, back to {@code HEAD}'s; the files stay as they are. */
+    record Unstage(String root, List<String> paths) implements Intent {
+        public Unstage {
+            paths = List.copyOf(paths);
+        }
+    }
+
     /** The plan's usage limits as read from Claude Code, every few minutes. */
     record PlanUsageRead(PlanUsage usage) implements Intent {
     }

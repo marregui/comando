@@ -42,4 +42,16 @@ public interface ToolPort {
      * lines out of the folder's listing file; says how it went, and the open folders show it.
      */
     void deleteFiles(FolderRoot folder, List<String> paths);
+
+    /**
+     * Takes {@code changes} of the repository at {@code root} back to {@code HEAD}, a changed version going to the Trash
+     * first, a new file to the Trash; says how it went, and the repositories are read again.
+     */
+    void rollBack(String root, List<RepoStatus.FileChange> changes);
+
+    /** Moves {@code paths}, relative to the repository at {@code root}, to the desktop's Trash; says how it went. */
+    void removeFiles(String root, List<String> paths);
+
+    /** Takes {@code paths}, relative to the repository at {@code root}, out of its index; the files stay. */
+    void unstage(String root, List<String> paths);
 }

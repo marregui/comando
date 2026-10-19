@@ -270,17 +270,35 @@ final class PanelFiles {
                 LOG.log(System.Logger.Level.WARNING, "panel file changed outside comando, kept aside [file=" + f + ", aside=" + aside + "]");
                 notices.accept(f.getFileName() + " changed outside comando; that version is kept as " + aside.getFileName());
             }
-            try {
-                Files.move(tmp, f, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
-            }
+            moveInto(tmp, f);
         } finally {
             Files.deleteIfExists(tmp);
         }
         stamps.put(id, stamp(f));
         reported.remove(id);
         gone.remove(id);
+    }
+
+    /** Replaces {@code f}'s text, or writes it new with its folders: through a temporary file beside it, so whole or not at all. */
+    static void replace(Path f, String text) throws IOException {
+        if (!Files.isDirectory(f.getParent())) {
+            Files.createDirectories(f.getParent());
+        }
+        Path tmp = Files.createTempFile(f.getParent(), "." + f.getFileName(), ".tmp");
+        try {
+            Files.writeString(tmp, text, StandardCharsets.UTF_8);
+            moveInto(tmp, f);
+        } finally {
+            Files.deleteIfExists(tmp);
+        }
+    }
+
+    private static void moveInto(Path tmp, Path f) throws IOException {
+        try {
+            Files.move(tmp, f, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
+        }
     }
 
     /** {@code base}, else {@code base 2}, {@code base 3}…: not a file in the folder, nor the name of another open panel. */

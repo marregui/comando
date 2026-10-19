@@ -1,6 +1,10 @@
 package dev.marregui.comando.ui.kit.text;
 
+import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.Test;
+
+import java.util.List;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -60,5 +64,24 @@ class MarkdownHtmlTest {
     @Test
     void linksStayLinks() {
         assertThat(MarkdownHtml.render("[docs](https://example.org/a)")).contains("href=\"https://example.org/a\">docs</a>");
+    }
+
+    @Test
+    void marksShadeTheChangedBlocksAndTheirChangedWordsAsAComparisonDoes() {
+        String md = "# Title\n\nFirst para.\n\nSecond para has words.\n\n- a\n- b\n\n| x | y |\n|---|---|\n| 1 | 2 |\n\n```java\nint x;\n```\n";
+        int word = md.indexOf("words");
+        MarkdownHtml.Marks marks = new MarkdownHtml.Marks(Set.of(4, 7, 11, 14), List.of(new int[] {word, word + 5}), true);
+        String html = MarkdownHtml.render(md, null, false, MarkdownHtml.Pictures.NONE, marks);
+        String line = "background-color: " + Theme.hex(Theme.DIFF_ADDED);
+        String strong = "background-color: " + Theme.hex(Theme.DIFF_ADDED_WORD);
+        assertThat(html).contains("<p style=\"" + line + "\">Second para has <span style=\"" + strong + "\">words</span>.</p>")
+                .contains("<li style=\"" + line + "\">b</li>", "<li>a</li>", "<p>First para.</p>", ">Title</h1>")
+                .contains("<td style=\"" + line + "\">1</td>", "<td style=\"" + line + "\">2</td>")
+                .contains("<pre class=\"code\" style=\"" + line + "\">");
+
+        String older = MarkdownHtml.render("Gone\n", null, true, MarkdownHtml.Pictures.NONE, new MarkdownHtml.Marks(Set.of(0), List.of(), false));
+        assertThat(older).as("the older side in red, in the light theme's").contains("<p style=\"background-color: " + Theme.hex(Theme.DIFF_REMOVED_LIGHT) + "\">Gone</p>");
+        assertThat(MarkdownHtml.render(md, null, false, MarkdownHtml.Pictures.NONE, MarkdownHtml.Marks.NONE))
+                .as("no marks: as ever").isEqualTo(MarkdownHtml.render(md));
     }
 }

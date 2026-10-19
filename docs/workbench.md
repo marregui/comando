@@ -354,6 +354,27 @@ inside that folder alone ([record 71](adr/0071-repositories-in-the-files-tab.md)
   terminal with the keyboard keeps ⌘K, its Clear Buffer. The comparison takes the editors' theme; its ◑ button is the
   panels' one, and switches every editor.
   The file's menu also opens it in a panel.
+- **Editing** ([record 72](adr/0072-the-comparison-window-edits-rolls-back-and-removes.md)). The working tree's side is
+  an editor, the only one of the two: the differences are worked out again 250 ms after typing pauses, and ⌘Z and ⌘⇧Z
+  (⌘Y) go back and forth through every edit made there since the file was shown; the window has no buttons for them. The
+  text is written every second while it has edits, on ⌘S, and on leaving the file: another file, the window closing,
+  comando quitting (waiting up to 2 s). Beside the working tree's title, "● edited" (amber) shows while edits wait, "✓
+  saved" (green) once they are written, "✗ not saved" (red) when a write fails, which a notice explains and the next
+  second tries again; on macOS the window's close button carries a dot meanwhile. A read of the file while it has
+  unsaved edits is not shown; a panel open on the same file takes the saved text as any change made outside it. A
+  removed file stays removed while its text is empty. Links, binary files and files not compared are not edited.
+- **Markdown.** A `.md` file's window offers both sides rendered (its eye button, ⌘⇧M), with the renderer an editor
+  panel's preview uses, scrolled together by the share of their length; editing happens on the texts. What changed is
+  shaded as in the texts: a block (paragraph, heading, list item, table cell, code block, diagram) whose source lines
+  differ is red on `HEAD`'s side and green on the working tree's, and the words that changed inside it more strongly.
+- **Rolling back and removing.** The working tree's right-click menu offers both. Roll back to HEAD gives a changed or
+  removed file `HEAD`'s text as one edit that undo takes back, saves it and unstages the file. A file `HEAD` does not
+  have, a renamed or copied one, or a file the window does not edit, goes back through git after a question: its version
+  to the Trash first, then `git restore --source=HEAD --staged --worktree` (a renamed file's old path comes back; an
+  added one leaves the index). Move to the Trash… moves the file to the Trash after a question, and out of the index
+  when `HEAD` does not have it. In the view, the menu of the selection (⌘- or ⇧-click for several) rolls back or removes
+  every file in it, a folder's, a group's or a repository's row standing for every file under it, after one question.
+  Without a Trash nothing changes. Edit ▸ Undo, Redo, Cut, Copy and Paste act on the window while it has the keyboard.
 
 ## 6. Persistence
 

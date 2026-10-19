@@ -363,7 +363,25 @@ public final class Snapshot {
         await(loop, st -> dialogShown(diffTitle), 10_000);
         clickInDialog(diffTitle, "Dark editors");
         flushEdt();
-        closeDialog(diffTitle);
+        // a Markdown file's two sides rendered, what changed shaded as in the texts
+        loop.dispatch(new Intent.OpenChange(sampleRepo.toString(), new RepoStatus.FileChange("README.md", "", RepoStatus.Kind.MODIFIED), ChangeAsk.OPEN));
+        String readmeTitle = "README.md — compared with HEAD";
+        if (await(loop, st -> dialogShown(readmeTitle), 15_000) == null) {
+            List<String> titles = new ArrayList<>();
+            SwingUtilities.invokeAndWait(() -> {
+                for (Window w : Window.getWindows()) {
+                    if (w instanceof JDialog d && d.isVisible()) {
+                        titles.add(d.getTitle());
+                    }
+                }
+            });
+            throw new IllegalStateException("no README comparison; dialogs shown: " + titles);
+        }
+        flushEdt();
+        clickInDialog(readmeTitle, "Show rendered");
+        flushEdt();
+        flushEdt();
+        shootDialog(readmeTitle, out.resolve("02m3-diff-rendered.png"));
         loop.state().views().stream().filter(v -> v.spec() instanceof ViewSpec.Changes).findFirst()
                 .ifPresent(v -> loop.dispatch(new Intent.CloseView(v.id())));
         selectSidebarTab("Sessions");
@@ -509,7 +527,8 @@ public final class Snapshot {
         Files.writeString(src.resolve("Lane.java"), lane);
         Files.writeString(src.resolve("Old.java"), "package demo;\n\nfinal class Old {\n}\n");
         Files.writeString(repo.resolve(".gitignore"), "dist/\n");
-        Files.writeString(repo.resolve("README.md"), "# Demo\n");
+        Files.writeString(repo.resolve("README.md"), "# Demo\n\nA small lane of work.\n\n- one writer\n- many readers\n\n"
+                + "| part | owner |\n|---|---|\n| lane | demo |\n");
         git(repo, "init", "-q");
         git(repo, "add", "-A");
         git(repo, "commit", "-q", "-m", "first");
@@ -519,6 +538,8 @@ public final class Snapshot {
                 .replace("        stamp2 = v * 2;", "        stamp2 = v << 1;");
         Files.writeString(src.resolve("Lane.java"), changed);
         Files.writeString(src.resolve("Ring.java"), "package demo;\n\nfinal class Ring {\n}\n");
+        Files.writeString(repo.resolve("README.md"), "# Demo\n\nA small lane of work, read by many.\n\n- one writer\n- many readers\n"
+                + "- a stamp per read\n\n| part | owner |\n|---|---|\n| lane | demo team |\n");
         git(repo, "add", "src/main/java/demo/Ring.java");
         Files.delete(src.resolve("Old.java"));
         Files.writeString(Files.createDirectories(repo.resolve("notes")).resolve("todo.md"), "# To do\n");

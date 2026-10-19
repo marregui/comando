@@ -15,6 +15,7 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -93,6 +94,71 @@ class ToolsAdapterReposTest {
             tools.watchFolders(List.of(folder("plain", plain)));
             Intent.FolderLoaded loaded = sink.await(Intent.FolderLoaded.class, WAIT);
             assertThat(loaded.tree().children()).extracting(ViewSpec.TreeNode::label).containsExactly("dist");
+        }
+    }
+
+    /** A Trash that moves each file into {@code bin}, keeping what went there by its old path. */
+    private static ToolsAdapter.Trash binIn(Path bin, List<Path> moved) {
+        return file -> {
+            Files.createDirectories(bin);
+            Files.move(file, bin.resolve(moved.size() + "-" + file.getFileName()));
+            moved.add(file);
+            return true;
+        };
+    }
+
+    private ToolsAdapter adapter(ToolsAdapter.Trash trash) {
+        return new ToolsAdapter(sink, new ConsoleRegistry(), () -> new ToolSettings(Optional.empty(), System.getProperty("java.home")), trash);
+    }
+
+    @Test
+    void rollingBackTakesEveryKindOfChangeToHeadAndKeepsWhatItReplacedInTheTrash(@TempDir Path dir) throws Exception {
+        Path root = GitTest.repo(Files.createDirectories(dir.resolve("repo")).toRealPath());
+        List<Path> moved = new CopyOnWriteArrayList<>();
+        List<RepoStatus.FileChange> all;
+        try (Git git = new Git()) {
+            all = git.status(root).status().changes();
+        }
+        try (ToolsAdapter tools = adapter(binIn(dir.resolve("bin"), moved))) {
+            tools.rollBack(root.toString(), all);
+            Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
+            assertThat(n.text()).startsWith("Rolled back 5 files to HEAD; the versions you had are in the Trash");
+        }
+        try (Git git = new Git()) {
+            assertThat(git.status(root).status().changes()).as("nothing left to commit").isEmpty();
+        }
+        assertThat(Files.readString(root.resolve("src/main/A.java"))).contains("x = 1");
+        assertThat(Files.readString(root.resolve("gone.txt"))).isEqualTo("bye\n");
+        assertThat(Files.readString(root.resolve("old.txt"))).isEqualTo("same\n");
+        assertThat(moved).extracting(p -> root.relativize(p).toString())
+                .containsExactlyInAnyOrder("added.txt", "new name.txt", "notes/deep/n.md", "src/main/A.java");
+    }
+
+    @Test
+    void withoutATrashAChangedFileStaysAsItIs(@TempDir Path dir) throws Exception {
+        Path root = GitTest.repo(dir.toRealPath());
+        try (ToolsAdapter tools = adapter(ToolsAdapter.Trash.NONE)) {
+            tools.rollBack(root.toString(), List.of(new RepoStatus.FileChange("src/main/A.java", "", RepoStatus.Kind.MODIFIED)));
+            Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
+            assertThat(n.text()).isEqualTo("Nothing rolled back; A.java: this desktop has no Trash; left as it is");
+        }
+        assertThat(Files.readString(root.resolve("src/main/A.java"))).contains("x = 2");
+    }
+
+    @Test
+    void removingSendsFilesToTheTrashAndANewOneOutOfTheIndex(@TempDir Path dir) throws Exception {
+        Path root = GitTest.repo(Files.createDirectories(dir.resolve("repo")).toRealPath());
+        List<Path> moved = new CopyOnWriteArrayList<>();
+        try (ToolsAdapter tools = adapter(binIn(dir.resolve("bin"), moved))) {
+            tools.removeFiles(root.toString(), List.of("added.txt", "src/main/A.java"));
+            Intent.Notify n = sink.await(Intent.Notify.class, WAIT);
+            assertThat(n.text()).isEqualTo("Moved 2 files to the Trash");
+        }
+        try (Git git = new Git()) {
+            assertThat(git.status(root).status().changes())
+                    .as("the added file is gone from the index too; the tracked one is a removal to commit")
+                    .contains(new RepoStatus.FileChange("src/main/A.java", "", RepoStatus.Kind.DELETED))
+                    .extracting(RepoStatus.FileChange::path).doesNotContain("added.txt");
         }
     }
 }

@@ -90,4 +90,26 @@ class ReducerChangesTest {
         assertThat(effects).containsExactly(new Effect.ShowChange(texts, ChangeAsk.OPEN));
         assertThat(state).isSameAs(before);
     }
+
+    @Test
+    void rollingBackRemovingAndUnstagingGoToTheToolsOnlyForPathsInsideTheRepository() {
+        RepoStatus.FileChange a = new RepoStatus.FileChange("src/A.java", "", RepoStatus.Kind.MODIFIED);
+        apply(new Intent.RollBack("/r", List.of(a)));
+        assertThat(effects).containsExactly(new Effect.RollBack("/r", List.of(a)));
+        apply(new Intent.RemoveFiles("/r", List.of("notes/x.md")));
+        assertThat(effects).containsExactly(new Effect.RemoveFiles("/r", List.of("notes/x.md")));
+        apply(new Intent.Unstage("/r", List.of("src/A.java")));
+        assertThat(effects).containsExactly(new Effect.Unstage("/r", List.of("src/A.java")));
+
+        apply(new Intent.RemoveFiles("/r", List.of()));
+        assertThat(effects).as("nothing asked, nothing done").isEmpty();
+        for (String bad : List.of("../elsewhere.txt", "/etc/hosts", ".")) {
+            apply(new Intent.RemoveFiles("/r", List.of(bad)));
+            assertThat(effects).as(bad + ": nothing reaches the tools").noneMatch(Effect.RemoveFiles.class::isInstance);
+            assertThat(state.notice().text()).as(bad).contains("not a file of the repository");
+        }
+        apply(new Intent.RollBack("relative", List.of(a)));
+        assertThat(effects).noneMatch(Effect.RollBack.class::isInstance);
+        assertThat(state.notice().text()).contains("no repository's top folder");
+    }
 }

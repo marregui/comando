@@ -12,6 +12,7 @@ import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.model.Status;
@@ -40,6 +41,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.LongFunction;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.stream.Stream;
 
@@ -211,6 +213,10 @@ public final class Reducer {
                     ? new Transition(s, List.of(new Effect.ShowFolder(i.folder(), i.tree()))) : Transition.of(s);
             case Intent.ReposLoaded i -> new Transition(s, List.of(new Effect.ShowRepos(i.repos())));
             case Intent.OpenChange i -> new Transition(s, List.of(new Effect.ReadChange(i.root(), i.change(), i.ask())));
+            case Intent.RollBack i -> inRepository(s, i.root(), i.changes().stream().map(RepoStatus.FileChange::path).toList(), "roll back",
+                    () -> new Effect.RollBack(i.root(), i.changes()));
+            case Intent.RemoveFiles i -> inRepository(s, i.root(), i.paths(), "move to the Trash", () -> new Effect.RemoveFiles(i.root(), i.paths()));
+            case Intent.Unstage i -> inRepository(s, i.root(), i.paths(), "unstage", () -> new Effect.Unstage(i.root(), i.paths()));
             case Intent.ChangeRead i -> new Transition(s, List.of(new Effect.ShowChange(i.texts(), i.ask())));
             case Intent.PlanUsageRead i -> new Transition(s, List.of(new Effect.ShowPlanUsage(i.usage())));
             case Intent.OpenFile i -> new Transition(s, List.of(new Effect.ShowFile(i.session(), i.path(),
@@ -760,6 +766,26 @@ public final class Reducer {
     /** The configured folders named, in the configuration's order; a name no folder has is skipped. */
     private static List<FolderRoot> folders(AppState s, List<String> names) {
         return s.folders().stream().filter(f -> names.contains(f.name())).toList();
+    }
+
+    /**
+     * An action on files of the repository at {@code root}: refused, with a notice, when the root is no full path or a
+     * path is not relative to it or leaves it; nothing asked for is nothing done.
+     */
+    private Transition inRepository(AppState s, String root, List<String> paths, String verb, Supplier<Effect> effect) {
+        if (paths.isEmpty()) {
+            return Transition.of(s);
+        }
+        if (root.isEmpty() || !Path.of(root).isAbsolute()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "Cannot " + verb + ": no repository's top folder given", ""));
+        }
+        for (String p : paths) {
+            Path path = Path.of(p);
+            if (p.isEmpty() || path.isAbsolute() || path.normalize().startsWith("..") || path.normalize().toString().isEmpty()) {
+                return Transition.of(notice(s, Notice.Level.ERROR, "Cannot " + verb + " " + p + ": not a file of the repository; nothing was done", ""));
+            }
+        }
+        return new Transition(s, List.of(effect.get()));
     }
 
     /** Entries of a deletable folder to the Trash: refused for any other folder, for the folder itself and for a path outside it. */
