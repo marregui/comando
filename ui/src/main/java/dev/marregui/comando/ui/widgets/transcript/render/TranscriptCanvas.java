@@ -233,9 +233,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             parentOf.put(hook, group);
             shown = group;
         }
-        if (parent == null && (b instanceof Block.TurnEnd || b instanceof Block.UserPrompt)) {
-            markConclusion();
-        }
         // thinking says only that something takes time: it shows until the next item in its list takes its place
         while (!(shown instanceof Items.ThinkingItem) && !siblings.isEmpty() && siblings.getLast() instanceof Items.ThinkingItem thought) {
             if (parent != null) {
@@ -273,24 +270,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         List<Placed> boxes = new ArrayList<>();
         item.collect(0, 0, boxes);
         return boxes.stream().anyMatch(p -> p.box() == anchorBox || p.box() == focusBox);
-    }
-
-    /**
-     * The turn that is ending: its last answer, when nothing but notes and thinking follow it, is its conclusion. A
-     * turn that ends on a tool call has none.
-     */
-    private void markConclusion() {
-        for (int i = items.size() - 1; i >= 0; i--) {
-            Item item = items.get(i);
-            if (item instanceof Items.TextItem text) {
-                text.conclusion();
-                return;
-            }
-            if (!(item instanceof Items.NoteItem || item instanceof Items.HookGroupItem || item instanceof Items.ThinkingItem
-                    || item instanceof Items.TurnItem)) {
-                return;
-            }
-        }
     }
 
     /** The writer replaced the block at {@code index}. */

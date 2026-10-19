@@ -71,6 +71,9 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     public TranscriptWidget(WidgetContext context) {
         this.context = context;
         scroll.setBorder(null);
+        // the canvas paints no ground of its own: the viewport's shows through it
+        scroll.getViewport().setBackground(Theme.TRANSCRIPT);
+        scroll.getViewport().setOpaque(true);
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         earlier.putClientProperty("JButton.buttonType", "borderless");

@@ -10,13 +10,18 @@ import dev.marregui.comando.testkit.RecordingSink;
 import dev.marregui.comando.testkit.SyntheticSession;
 import dev.marregui.comando.ui.kit.action.ActionRegistry;
 import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.JLabel;
+import javax.swing.JViewport;
+import java.awt.Color;
+import java.awt.Graphics2D;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -38,6 +43,24 @@ class TranscriptWidgetTest {
                 t.append(steps.get(i).block());
             }
         }
+    }
+
+    @Test
+    void theTranscriptIsDrawnOnItsOwnGround() {
+        Transcript t = new Transcript();
+        fill(t, 0, 10);
+        widget.render(new TranscriptView("s", t));
+        JViewport viewport = (JViewport) widget.canvas().getParent();
+        viewport.setSize(400, 300);
+        BufferedImage image = new BufferedImage(400, 300, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g = image.createGraphics();
+        try {
+            viewport.paint(g);
+        } finally {
+            g.dispose();
+        }
+        assertThat(widget.canvas().isOpaque()).as("the canvas paints no ground; the viewport's shows through").isFalse();
+        assertThat(new Color(image.getRGB(399, 299))).as("a corner no block reaches").isEqualTo(Theme.TRANSCRIPT);
     }
 
     @Test

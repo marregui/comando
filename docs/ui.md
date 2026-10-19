@@ -149,12 +149,16 @@ While text streams, paragraphs equal to earlier ones keep their layout; only the
 `TranscriptCanvas` holds one item per top-level block, a subagent's blocks inside its tool card. Changed and visible
 items are laid out at once; after a width or zoom change the rest get an estimated height and an idle pass lays them
 out in 8 ms slices, nearest the viewport first, keeping the first visible line in place. Painting finds the items in the
-clip by binary search.
+clip by binary search. The canvas paints no ground of its own; the viewport under it is dark (`Theme.TRANSCRIPT`), so
+text and cards stand out more than on the window's grey; it is near-black (`#121212`), as on pure black bright text
+blurs at its edges. Every text outside the prompt bubble and the tool cards (Claude's text, thinking, notes, hook lines,
+the turn's time) is a soft amber (`Theme.TRANSCRIPT_TEXT`, `#E0C48A`, 11.1:1 on the ground): warm and low in
+saturation, for long reading. Errors stay red, links blue, code its highlighting.
 
 | Item | Paints |
 |---|---|
 | prompt | a bubble, with the panel it came from |
-| text | paragraphs, highlighted code, tables; a turn's conclusion (its last text before the turn end, a live one or one read from a stored conversation) in gold |
+| text | paragraphs, highlighted code, tables, quotes |
 | thinking | only while it is the latest item of its list; collapsed with its token count once it ends |
 | tool card | running, done or failed; a one-line summary; "running · 12 s", or "waiting for your approval · ⌃2"; open: input, result (400 lines), a subagent's blocks; opens by itself for edits, errors and running subagents. A subagent card adds the tool calls its blocks made, at any depth, and the latest: "running · 1 min 04 s · 9 tools · Read docs/ui.md" (the latest drops first when the card is narrow), then "done · 1 min 30 s · 12 tools". An Agent call whose result says it launched its subagent into the background reads "running in background · …" while the session lists that subagent among its open tasks, and done once it leaves the list. A card with no nested blocks shows no count: a stored conversation keeps a subagent's blocks in a file of its own. Its header links to its stored conversation |
 | note | an icon by kind and the first line; error notes start open |

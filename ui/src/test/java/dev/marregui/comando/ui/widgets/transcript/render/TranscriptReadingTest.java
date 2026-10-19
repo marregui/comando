@@ -284,14 +284,14 @@ class TranscriptReadingTest {
     // ---- turn ends
 
     @Test
-    void anInterruptedTurnReadsMutedNotAsAFailure() {
+    void anInterruptedTurnReadsLikeAnyTextNotAsAFailure() {
         int stopped = add(new Block.TurnEnd(0.12, 12_000, 1, true, "interrupted"));
         int failed = add(new Block.TurnEnd(0.12, 12_000, 1, true, "API error"));
         Style s = Style.of(0);
         Items.TurnItem interrupted = (Items.TurnItem) canvas.itemAt(stopped);
         Items.TurnItem failure = (Items.TurnItem) canvas.itemAt(failed);
         assertThat(interrupted.summary()).isEqualTo("interrupted · 12.0 s");
-        assertThat(interrupted.color(s)).isEqualTo(Theme.MUTED);
+        assertThat(interrupted.color(s)).isEqualTo(Theme.TRANSCRIPT_TEXT);
         assertThat(failure.color(s)).isEqualTo(Theme.DANGER);
     }
 

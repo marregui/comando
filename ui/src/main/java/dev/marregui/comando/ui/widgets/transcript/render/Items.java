@@ -149,19 +149,6 @@ final class Items {
     static final class TextItem extends Item {
         private List<Paras.View> views = List.of();
         private int[] tops = new int[0];
-        /** The answer that ends its turn: its text reads in gold. */
-        private boolean conclusion;
-
-        boolean isConclusion() {
-            return conclusion;
-        }
-
-        void conclusion() {
-            if (!conclusion) {
-                conclusion = true;
-                invalidate();
-            }
-        }
 
         TextItem(Block.AssistantText b) {
             super(b);
@@ -179,7 +166,7 @@ final class Items {
 
         @Override
         int doLayout(int w, Style style) {
-            Style s = conclusion ? style.conclusion() : style;
+            Style s = style.outside();
             tops = new int[views.size()];
             int y = 4;
             for (int i = 0; i < views.size(); i++) {
@@ -279,12 +266,12 @@ final class Items {
                 Block.Thinking t = thinking();
                 String tokens = t.tokens() > 0 ? " · " + Labels.tokens(t.tokens()) + " tokens" : "";
                 String arrow = t.text().isEmpty() ? "" : fold.isOpen() ? "  ▾" : "  ▸";
-                header = new TextBox(new Rich(s.body, Theme.THINKING).append((t.streaming() ? "Thinking…" : "Thought") + tokens + arrow));
+                header = new TextBox(new Rich(s.body, s.outside).append((t.streaming() ? "Thinking…" : "Thought") + tokens + arrow));
                 List<String> lines = List.of(t.text().split("\n", -1));
                 List<TextBox> boxes = new ArrayList<>(lines.size());
                 for (int i = 0; i < lines.size(); i++) {
                     boolean same = built == s && i < bodyLines.size() && bodyLines.get(i).equals(lines.get(i));
-                    boxes.add(same ? body.get(i) : new TextBox(new Rich(s.italic, s.muted).append(lines.get(i))));
+                    boxes.add(same ? body.get(i) : new TextBox(new Rich(s.italic, s.outside).append(lines.get(i))));
                 }
                 body = boxes;
                 bodyLines = lines;
@@ -1038,7 +1025,7 @@ final class Items {
             if (built != s) {
                 built = s;
                 Block.Note n = note();
-                Color color = n.kind() == Block.NoteKind.ERROR ? Theme.DANGER : s.muted;
+                Color color = n.kind() == Block.NoteKind.ERROR ? Theme.DANGER : s.outside;
                 String t = shown();
                 int eol = t.indexOf('\n');
                 more = eol >= 0;
@@ -1093,7 +1080,7 @@ final class Items {
             }
             if (expandable) {
                 TextLayout arrow = fold.isOpen() ? arrowOpen : arrowClosed;
-                g.setColor(style().muted);
+                g.setColor(style().outside);
                 arrow.draw(g, x + arrowX(), y + 2 + arrow.getAscent());
             }
         }
@@ -1185,7 +1172,7 @@ final class Items {
 
         @Override
         int doLayout(int w, Style s) {
-            header = new TextBox(new Rich(s.small, s.muted).append(title() + (fold.isOpen() ? "  ▾" : "  ▸"))).noWrap();
+            header = new TextBox(new Rich(s.small, s.outside).append(title() + (fold.isOpen() ? "  ▾" : "  ▸"))).noWrap();
             int inner = Math.max(40, w - TEXT_X);
             int h = 2 + Math.max(14, header.layout(inner, s)) + 2;
             if (fold.isOpen()) {
@@ -1263,7 +1250,7 @@ final class Items {
             return (Block.TurnEnd) block;
         }
 
-        /** The user stopped the turn: not a failure, so it reads in the muted colour. */
+        /** The user stopped the turn: not a failure, so it reads as any text outside a card. */
         boolean interrupted() {
             return turn().error() && turn().text().equals("interrupted");
         }
@@ -1287,7 +1274,7 @@ final class Items {
         }
 
         Color color(Style s) {
-            return turn().error() && !interrupted() ? Theme.DANGER : s.muted;
+            return turn().error() && !interrupted() ? Theme.DANGER : s.outside;
         }
 
         @Override

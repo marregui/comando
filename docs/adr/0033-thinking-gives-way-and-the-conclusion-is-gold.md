@@ -25,3 +25,8 @@ the tool cards and the conclusion, and the conclusion to stand out.
 
 A turn that ends on a tool call shows no conclusion. While a turn streams, its latest text is white; it turns gold
 when the turn ends.
+
+Superseded in its colour on 2026-10-19 (Miguel): the transcript's ground is near-black (`#121212`) and every text
+outside the prompt bubble and the tool cards is one soft amber (`#E0C48A`, 11.1:1), the conclusion included, so nothing
+marks the conclusion any more. Chosen for long reading: warm and low in saturation, below the contrast at which text
+tires the eye, on a ground that does not make bright text blur. Thinking still gives way.

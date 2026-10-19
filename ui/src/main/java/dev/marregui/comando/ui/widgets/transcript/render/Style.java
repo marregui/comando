@@ -34,7 +34,9 @@ public final class Style {
     final int pad;
 
     final Color text;
-    final Color muted = Theme.MUTED;
+    final Color muted;
+    /** Every text drawn outside a bubble or a card, in one colour on the transcript's ground. */
+    final Color outside = Theme.TRANSCRIPT_TEXT;
     final Color accent = Theme.ACCENT;
     final Color link = Theme.ACCENT;
     final Color codeBackground = new Color(0x1E1F22);
@@ -46,17 +48,18 @@ public final class Style {
 
     private final Font base;
     private final Font monoBase;
-    /** This style with the conclusion's text colour; made once, so layouts made with it stay valid. */
-    private Style conclusion;
+    /** This style with every text colour {@link #outside}; made once, so layouts made with it stay valid. */
+    private Style outsideStyle;
 
     Style(Font base, Font monoBase, int zoom) {
-        this(base, monoBase, zoom, color("Label.foreground", new Color(0xDFE1E5)));
+        this(base, monoBase, zoom, color("Label.foreground", new Color(0xDFE1E5)), Theme.MUTED);
     }
 
-    private Style(Font base, Font monoBase, int zoom, Color text) {
+    private Style(Font base, Font monoBase, int zoom, Color text, Color muted) {
         this.base = base;
         this.monoBase = monoBase;
         this.text = text;
+        this.muted = muted;
         this.zoom = zoom;
         float size = Zoomable.clampSize(base.getSize2D() + zoom);
         float monoSize = Zoomable.clampSize(monoBase.getSize2D() - 1f + zoom);
@@ -99,12 +102,12 @@ public final class Style {
         return base;
     }
 
-    /** The same style with the text in {@link Theme#GOLD}: a turn's conclusion. */
-    Style conclusion() {
-        if (conclusion == null) {
-            conclusion = text.equals(Theme.GOLD) ? this : new Style(base, monoBase, zoom, Theme.GOLD);
+    /** The same style with its text and muted text in {@link #outside}: Claude's answers, quotes included. */
+    Style outside() {
+        if (outsideStyle == null) {
+            outsideStyle = text.equals(outside) && muted.equals(outside) ? this : new Style(base, monoBase, zoom, outside, outside);
         }
-        return conclusion;
+        return outsideStyle;
     }
 
     Font font(int spanStyle, boolean code) {

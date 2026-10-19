@@ -8,6 +8,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
@@ -37,7 +38,7 @@ class TranscriptCanvasTest {
         }
     }
 
-    private void paint(int width, int height) {
+    private BufferedImage paint(int width, int height) {
         canvas.setSize(width, height);
         canvas.ensureLayout(width);
         canvas.setSize(width, canvas.contentHeight());
@@ -47,6 +48,20 @@ class TranscriptCanvasTest {
         g.setClip(0, canvas.contentHeight() - height, width, height);
         canvas.paint(g);
         g.dispose();
+        return img;
+    }
+
+    /** How many pixels of {@code img} are {@code color} itself: the cores of glyphs drawn in it. */
+    private static int pixels(BufferedImage img, Color color) {
+        int n = 0;
+        for (int y = 0; y < img.getHeight(); y++) {
+            for (int x = 0; x < img.getWidth(); x++) {
+                if ((img.getRGB(x, y) | 0xFF000000) == color.getRGB() && (img.getRGB(x, y) >>> 24) == 0xFF) {
+                    n++;
+                }
+            }
+        }
+        return n;
     }
 
     private static Block.Thinking thought(int index, String parent) {
@@ -80,46 +95,37 @@ class TranscriptCanvasTest {
     }
 
     @Test
-    void theLastAnswerOfATurnIsItsConclusion() {
-        canvas.append(0, new Block.UserPrompt("go", "p", ""));
-        canvas.append(1, text("Looking at the store first."));
-        canvas.append(2, call("t1", ""));
-        canvas.append(3, text("Done: the store drops pending retries."));
-        canvas.append(4, thought(0, ""));
-        assertThat(((Items.TextItem) canvas.itemAt(3)).isConclusion()).as("not before the turn ends").isFalse();
-        canvas.append(5, new Block.TurnEnd(0.1, 1_000, 2, false, ""));
-        assertThat(((Items.TextItem) canvas.itemAt(1)).isConclusion()).isFalse();
-        assertThat(((Items.TextItem) canvas.itemAt(3)).isConclusion()).isTrue();
-
-        canvas.append(6, new Block.UserPrompt("again", "p", ""));
-        canvas.append(7, text("Checking."));
-        canvas.append(8, call("t2", ""));
-        canvas.append(9, new Block.TurnEnd(0.1, 1_000, 2, false, ""));
-        assertThat(((Items.TextItem) canvas.itemAt(7)).isConclusion()).as("a turn that ends on a tool call has none").isFalse();
-
-        // a stored conversation's turn end, as its messages record it: the last answer of the file is a conclusion too
-        canvas.append(10, new Block.UserPrompt("history", "", ""));
-        canvas.append(11, text("An old answer."));
-        canvas.append(12, Block.TurnEnd.stored());
-        canvas.append(13, new Block.Note(Block.NoteKind.INFO, "Stored conversation loaded", ""));
-        assertThat(((Items.TextItem) canvas.itemAt(11)).isConclusion()).isTrue();
-        assertThat(((Items.TurnItem) canvas.itemAt(12)).summary()).as("a stored turn records no time").isEmpty();
-        assertThat(((Items.TurnItem) canvas.itemAt(12)).markdown()).isEmpty();
-
-        // a file from a version that stored no stop reasons has no turn ends: the next prompt closes the turn
-        canvas.append(14, new Block.UserPrompt("older", "", ""));
-        canvas.append(15, text("An older answer."));
-        canvas.append(16, new Block.UserPrompt("next", "", ""));
-        assertThat(((Items.TextItem) canvas.itemAt(15)).isConclusion()).isTrue();
-        paint(800, 600);
+    void aStoredTurnEndRecordsNoTime() {
+        // a stored conversation's turn end, as its messages record it
+        canvas.append(0, new Block.UserPrompt("history", "", ""));
+        canvas.append(1, text("An old answer."));
+        canvas.append(2, Block.TurnEnd.stored());
+        canvas.append(3, new Block.Note(Block.NoteKind.INFO, "Stored conversation loaded", ""));
+        assertThat(((Items.TurnItem) canvas.itemAt(2)).summary()).as("a stored turn records no time").isEmpty();
+        assertThat(((Items.TurnItem) canvas.itemAt(2)).markdown()).isEmpty();
+        paint(800, 300);
     }
 
     @Test
-    void aConclusionIsLaidOutInGold() {
+    void everyTextOutsideABubbleOrACardReadsInOneColour() {
         Style s = Style.of(0);
-        assertThat(s.conclusion().text).isEqualTo(Theme.GOLD);
-        assertThat(s.conclusion()).as("made once, so its layouts stay valid").isSameAs(s.conclusion());
-        assertThat(s.conclusion().body).isEqualTo(s.body);
+        assertThat(s.outside().text).isEqualTo(Theme.TRANSCRIPT_TEXT);
+        assertThat(s.outside().muted).as("quotes too").isEqualTo(Theme.TRANSCRIPT_TEXT);
+        assertThat(s.outside()).as("made once, so its layouts stay valid").isSameAs(s.outside());
+        assertThat(s.outside().body).isEqualTo(s.body);
+
+        canvas.append(0, new Block.UserPrompt("go", "p", ""));
+        canvas.append(1, call("t1", ""));
+        assertThat(pixels(paint(800, 300), Theme.TRANSCRIPT_TEXT)).as("a bubble and a card keep their colours").isZero();
+
+        canvas.append(2, text("Done: the store drops pending retries."));
+        canvas.append(3, new Block.TurnEnd(0.1, 1_000, 2, false, ""));
+        int answer = pixels(paint(800, 300), Theme.TRANSCRIPT_TEXT);
+        assertThat(answer).as("the turn's last answer and its time").isPositive();
+        assertThat(pixels(paint(800, 300), Theme.GOLD)).isZero();
+
+        canvas.append(4, new Block.Note(Block.NoteKind.INFO, "Stored conversation loaded", ""));
+        assertThat(pixels(paint(800, 300), Theme.TRANSCRIPT_TEXT)).as("a note").isGreaterThan(answer);
     }
 
     @Test
