@@ -24,7 +24,7 @@ it. It also holds the Gradle tasks that run, paint, replay and package the appli
 | `IntentLog` | with `-Dcomando.recordIntents=true`, every intent as a JSON line after the starting state, passwords blanked |
 | `Logging` | `System.Logger` to `logs/comando-<n>.log` (10 files of 1 MiB), warnings to stderr, uncaught exceptions logged |
 | `EmbeddedQuestDb` | `ui`'s `ServerToggle`: a QuestDB server in `questdb/`, every listener on `127.0.0.1` |
-| `KitSetup` | `ui`'s `Setup`: `folders.json` and `claude`'s `Kit` as the menus reach them |
+| `KitSetup` | `ui`'s `Setup`: `claude`'s `Kit` as the menus reach it |
 | `Welcome` | the first panel's text on a fresh data root |
 
 **Build and close order** ([Architecture §7](../docs/architecture.md#7-ownership-and-exit)):

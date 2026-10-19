@@ -3,10 +3,13 @@ package dev.marregui.comando.core.intent;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.model.ChangeAsk;
+import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
+import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.LowerTab;
@@ -130,6 +133,17 @@ public sealed interface Intent {
 
     /** Adds a folder to the Files tab, as the kit does; refused when one has its name. */
     record AddFolder(FolderRoot spec) implements Intent {
+    }
+
+    /**
+     * The Files tab's folders as the folders window saves them, all of them in order; {@code base} is the list the
+     * window started from, so a change to {@code folders.json} made while it was open is said to be replaced.
+     */
+    record SaveFolders(List<FolderRoot> folders, List<FolderRoot> base) implements Intent {
+        public SaveFolders {
+            folders = List.copyOf(folders);
+            base = List.copyOf(base);
+        }
     }
 
     /** The Files tab's folders as {@code folders.json} now has them, read again after it changed. */
@@ -386,6 +400,21 @@ public sealed interface Intent {
      * is not shown under the edited folder.
      */
     record FolderLoaded(FolderRoot folder, ViewSpec.TreeNode tree) implements Intent {
+    }
+
+    /** The git repositories watched, each as read: those of the open Files tab folders, and of every folder while the Changes view is open. */
+    record ReposLoaded(List<RepoStatus> repos) implements Intent {
+        public ReposLoaded {
+            repos = List.copyOf(repos);
+        }
+    }
+
+    /** Compares a changed file with its {@code HEAD} version, side by side; {@code ask} says why. */
+    record OpenChange(String root, RepoStatus.FileChange change, ChangeAsk ask) implements Intent {
+    }
+
+    /** A changed file's two versions as read, to be shown side by side as {@code ask} says. */
+    record ChangeRead(ChangeTexts texts, ChangeAsk ask) implements Intent {
     }
 
     /**

@@ -14,13 +14,13 @@ JediTerm, pty4j, Jackson), never on `db`, `claude`, `mcp` or `tools`.
 
 ```
 dev.marregui.comando.ui
-├── kit/        theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, desktop
+├── kit/        theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, desktop, vcs
 ├── widget/     the contract: Widget, WidgetContext, WidgetRegistry; capability/ (Searchable, Copyable, …)
-├── widgets/    one package per widget: approval, console, diff, editor, markdown, plot, table, terminal, text,
+├── widgets/    one package per widget: approval, changes, console, diff, editor, markdown, plot, table, terminal, text,
 │               transcript, tree
 ├── panels/     the window's regions: Workspace, EditorPanel, LowerPanel, SessionsSidebar, FilesTab, SidePane, …
-├── dialogs/    resource/ (one dialog for connections and sessions), sessions/ (import)
-├── shell/      ComandoUi (the frame and the UI port), Menus, Keys, HelpActions, LivePlots, Notifier, WindowLayout, …
+├── dialogs/    folders/ (the Files tab's folders), resource/ (one dialog for connections and sessions), sessions/ (import)
+├── shell/      ComandoUi (the frame and the UI port), Menus, Keys, HelpActions, LivePlots, Notifier, WindowLayout, DiffWindow, …
 └── PanelTexts  editor text between saves (implemented in app)
 ```
 
@@ -55,7 +55,7 @@ flowchart LR
 
 | Interface | Methods | Caller |
 |---|---|---|
-| `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showPlanUsage`; each hands its work to the EDT, a virtual thread (`showFile`) or the store (`forgetPanel`, `deletePanel`) and returns | the reducer's effects, through `EffectRouter` |
+| `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showRepos`, `showChange`, `showPlanUsage`; each hands its work to the EDT, a virtual thread (`showFile`) or the store (`forgetPanel`, `deletePanel`) and returns | the reducer's effects, through `EffectRouter` |
 | `ComandoUi(Dependencies)`, `start()`, `offerKit(offer)`, `close()` | builds and shows the window from any thread; asks about the Claude Code kit; closes terminals, live plots, the EDT watchdog and the window | `app` |
 | `MermaidDiagrams.install(cache)`, `LocalImages.install(cache)` and their `shutdown()` | the drawing services Markdown previews use, with their caches under the data root | `app` |
 | `DesktopTrash.moveToTrash(file)` | the desktop's Trash | `app` passes it to `tools` as its `Trash` |

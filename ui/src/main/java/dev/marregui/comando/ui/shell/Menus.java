@@ -18,8 +18,8 @@ import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
  * Tools, which ends in Help. Every other command keeps its key, its control and the palette, and is listed by its
  * area ("Session", "Results") in the palette and the keyboard shortcuts.
  * <p>
- * Every item and submenu has an icon and a tooltip that says what it does, where its result goes and what else does
- * the same; macOS shows both in its menu bar.
+ * Every item and submenu has an icon and a one-line tooltip: what it does, and one fact its label does not say;
+ * macOS shows both in its menu bar.
  */
 final class Menus {
 
@@ -28,6 +28,7 @@ final class Menus {
             // Files
             Map.entry("panel.openSpec", "open-file"),
             Map.entry("files.settings", "folders"),
+            Map.entry("files.repositories", "repositories"),
             Map.entry("view.export", "export"),
             // Edit
             Map.entry("edit.undo", "undo"),
@@ -54,50 +55,37 @@ final class Menus {
             Map.entry("panel.new", "add"),
             Map.entry("file.close", "close"),
             Map.entry("session.toggle", "plug"),
+            Map.entry("view.changes", "diff"),
             Map.entry("connection.toggle", "plug"));
 
-    /** What each item of the bar does, as its tooltip. */
+    /** What each item of the bar does, as its tooltip: one line. */
     static final Map<String, String> TIPS = Map.ofEntries(
-            Map.entry("panel.openSpec", "Opens a file chosen anywhere in a panel of its own, to read and edit; the panel that has it already comes"
-                    + " forward. Markdown opens rendered. A binary file, or one too large for a panel, shows in the side pane. The Files tab"
-                    + " opens its files with a double click."),
-            Map.entry("files.settings", "Opens folders.json, the Files tab's list of folders, in a panel. Add, remove or reorder folders there;"
-                    + " the tab follows the file as it is saved."),
-            Map.entry("view.export", "Saves the view in front to a file you choose: a table as CSV, a plot as PNG, a diff as a .diff file,"
-                    + " Markdown as Markdown."),
-            Map.entry("edit.undo", "Undoes the last change in the text that has the keyboard: an editor, a field or a note."),
-            Map.entry("edit.redo", "Does again what Undo undid in the text that has the keyboard."),
-            Map.entry("edit.cut", "Moves the selected text to the clipboard."),
-            Map.entry("edit.copy", "Copies the selection to the clipboard: text, table cells, transcript blocks, or a session's details in the"
-                    + " Sessions tab."),
-            Map.entry("edit.paste", "Puts the clipboard's text where the caret is."),
-            Map.entry("edit.selectAll", "Selects all of the text, table or transcript that has the keyboard."),
-            Map.entry("view.palette", "Lists every command that can run now, with its key and where it belongs. Type a few letters to narrow"
-                    + " the list; Enter runs the one selected. The way to reach a command that is in no menu."),
-            Map.entry("terminal.restart", "Ends the focused panel's shell and starts a new one in the working directory of the panel's"
-                    + " session; what ran in it stops. The Terminal tab shows it."),
-            Map.entry("run.plotStop", "Stops every plot that refreshes itself (Plot, refreshing…: ⌘⇧J). The plots stay as they are."),
-            Map.entry("server.start", "Starts a QuestDB server in the questdb folder of comando's data root, on QuestDB's default ports"
-                    + " (PostgreSQL wire 8812, console 9000), reachable from this machine only, with QuestDB's default login."),
-            Map.entry("server.stop", "Stops the embedded QuestDB server; its data stays in the questdb folder. It also stops when comando quits."),
-            Map.entry("help.tutorial", "comando in ten minutes, opened as a document: from an empty window to a database, a Claude session,"
-                    + " approvals and plots."),
-            Map.entry("help.keys", "The table of every key, in the side pane: each command's, then those of approval cards, the find bar,"
-                    + " the transcript, the sessions list, the Files tab and the dialogs."),
-            Map.entry("help.markdown", "What a panel's Markdown may hold and what its preview shows, in the side pane beside the work: text,"
-                    + " lists, tables, links, pictures, code and Mermaid diagrams, and how a panel tells a prompt from SQL."),
-            Map.entry("help.kit", "The Claude Code kit comando ships: what it holds (memory, knowledge base, scratchpad, /reflect), what is"
-                    + " installed here, and an install when anything is missing or older."),
-            Map.entry("help.log", "Opens comando's log in a panel, read-only, following its end: what started and stopped, errors, and the"
-                    + " times the window stopped responding."),
-            Map.entry("help.dataRoot", "Shows comando's data root in the Finder: panels, sessions, connections, settings, logs, caches and"
-                    + " the embedded QuestDB's data."));
+            Map.entry("panel.openSpec", "Open any file in a panel of its own; Markdown opens rendered"),
+            Map.entry("files.settings", "Add, remove, reorder and set the Files tab's folders in ~/.claude"),
+            Map.entry("files.repositories", "Add, remove, reorder and set the git repositories the Files tab shows"),
+            Map.entry("view.export", "Save the view in front: a table as CSV, a plot as PNG, a diff as .diff"),
+            Map.entry("edit.undo", "Undo the last change in the focused text"),
+            Map.entry("edit.redo", "Redo what Undo undid in the focused text"),
+            Map.entry("edit.cut", "Move the selected text to the clipboard"),
+            Map.entry("edit.copy", "Copy the selection: text, cells, transcript blocks or a session's details"),
+            Map.entry("edit.paste", "Paste the clipboard's text at the caret"),
+            Map.entry("edit.selectAll", "Select all of the focused text, table or transcript"),
+            Map.entry("view.palette", "Run any command by typing part of its name"),
+            Map.entry("terminal.restart", "Start a new shell in the focused panel; what runs in it stops"),
+            Map.entry("run.plotStop", "Stop every refreshing plot; the plots stay as they are"),
+            Map.entry("server.start", "Start QuestDB on this machine: PostgreSQL wire 8812, console 9000"),
+            Map.entry("server.stop", "Stop the embedded QuestDB; its data stays"),
+            Map.entry("help.tutorial", "comando in ten minutes, as a document"),
+            Map.entry("help.keys", "Every key, in the side pane"),
+            Map.entry("help.markdown", "What a panel's Markdown may hold and how its preview shows it"),
+            Map.entry("help.kit", "The Claude Code kit: what it holds, what is installed, install or update"),
+            Map.entry("help.log", "comando's log, read-only, following its end"),
+            Map.entry("help.dataRoot", "Show comando's data root: panels, sessions, settings, logs"));
 
     /** The tooltips of the submenus, by title. */
     static final Map<String, String> MENU_TIPS = Map.of(
-            "Embedded QuestDB", "A QuestDB server comando runs itself, with its data in comando's data root; the connection local QuestDB"
-                    + " reaches it.",
-            "Help", "The tutorial, the keyboard and Markdown sheets, the Claude Code kit, the log and the data root.");
+            "Embedded QuestDB", "A QuestDB server comando runs; the connection local QuestDB reaches it",
+            "Help", "The tutorial, keys, Markdown, the kit, the log and the data root");
 
     /** Where each command in no menu belongs, named in the palette and the keyboard shortcuts. */
     static final Map<String, String> AREAS = areas();
@@ -129,7 +117,7 @@ final class Menus {
                         SEPARATOR,
                         "help.log", "help.dataRoot")));
         return List.of(
-                menu("Files", null, "panel.openSpec", "files.settings", SEPARATOR, "view.export"),
+                menu("Files", null, "panel.openSpec", "files.settings", "files.repositories", SEPARATOR, "view.export"),
                 menu("Edit", null, "edit.undo", "edit.redo", SEPARATOR, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll"),
                 menu("Tools", null, tools.toArray()));
     }
@@ -149,7 +137,7 @@ final class Menus {
         put(a, "Connection", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog");
         put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive");
         put(a, "Edit", "view.copy", "view.find", "view.findNext", "view.findPrevious", "edit.complete", "edit.completeAlt");
-        put(a, "Window", "view.sidebar", "view.sidePane", "view.files", "view.restoreLayout", "view.session", "view.approvals",
+        put(a, "Window", "view.sidebar", "view.sidePane", "view.files", "view.changes", "view.restoreLayout", "view.session", "view.approvals",
                 "view.terminal", "view.results", "view.nextTab", "view.previousTab", "view.closeLower", "view.zoomIn", "view.zoomOut",
                 "view.zoomReset", "view.notices", "view.session.alt", "view.approvals.alt", "view.terminal.alt", "view.results.alt");
         put(a, "comando", "app.about", "app.quit");

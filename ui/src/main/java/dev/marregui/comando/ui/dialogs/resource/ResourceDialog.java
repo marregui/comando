@@ -202,7 +202,7 @@ public final class ResourceDialog<S> {
         right.add(formScroll, BorderLayout.CENTER);
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
         if (config.test() != null) {
-            actions.add(button("Test", "check", "Tries the form's values without saving them", this::testForm));
+            actions.add(button("Test", "check", "Try the values without saving them", this::testForm));
         }
         if (config.open() != null) {
             actions.add(openClose);
@@ -213,11 +213,11 @@ public final class ResourceDialog<S> {
         }
         if (config.assign() != null) {
             actions.add(button("Assign to panel", "pin", KeyText.of(session
-                            ? "Saves when needed, then opens the session in a panel: its own, else the focused one when it has none, else a new one (⌘⏎)"
-                            : "Saves when needed, then binds the " + noun + " to the focused panel (⌘⏎)"),
+                            ? "Save if changed, then open the session in a panel (⌘⏎)"
+                            : "Save if changed, then bind it to the focused panel (⌘⏎)"),
                     this::assign));
         }
-        save = button("Save", "check", "Saves the form (⏎)", this::save);
+        save = button("Save", "check", "Save the form (⏎)", this::save);
         save.putClientProperty("JButton.buttonType", "default");
         actions.add(save);
         JPanel south = new JPanel(new BorderLayout(0, Theme.GAP));
@@ -671,7 +671,7 @@ public final class ResourceDialog<S> {
         boolean open = st.isUsable();
         openClose.setText(open ? (session ? "Stop" : "Disconnect") : (session ? "Start" : "Connect"));
         openClose.setIcon(Icons.get(open ? (session ? "stop" : "unplug") : (session ? "play" : "plug")));
-        openClose.setToolTipText(open ? null : "Saves the form when it has changes, then " + (session ? "starts the session" : "connects"));
+        openClose.setToolTipText(open ? null : "Save if changed, then " + (session ? "start the session" : "connect"));
     }
 
     private void setAdvancedOpen(boolean open) {

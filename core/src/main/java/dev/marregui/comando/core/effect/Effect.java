@@ -3,10 +3,13 @@ package dev.marregui.comando.core.effect;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.model.ChangeAsk;
+import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
+import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.Layout;
@@ -145,6 +148,31 @@ public sealed interface Effect {
 
     /** Shows a folder's tree in the sidebar's Files tab, when the folder still has the settings it was read with. */
     record ShowFolder(FolderRoot folder, ViewSpec.TreeNode tree) implements Effect {
+    }
+
+    /**
+     * Reads from now on the git repositories of {@code folders}, every configured folder: those of the open folders, and
+     * of all while {@code changesShown}, every few seconds; the others less often.
+     */
+    record WatchRepos(List<FolderRoot> folders, boolean changesShown) implements Effect {
+        public WatchRepos {
+            folders = List.copyOf(folders);
+        }
+    }
+
+    /** Reads a changed file's two versions, {@code HEAD}'s and the working tree's. */
+    record ReadChange(String root, RepoStatus.FileChange change, ChangeAsk ask) implements Effect {
+    }
+
+    /** Shows the watched repositories' changes: the Changes view, and the Files tab's colours. */
+    record ShowRepos(List<RepoStatus> repos) implements Effect {
+        public ShowRepos {
+            repos = List.copyOf(repos);
+        }
+    }
+
+    /** Shows a changed file's two versions side by side, as {@code ask} says. */
+    record ShowChange(ChangeTexts texts, ChangeAsk ask) implements Effect {
     }
 
     /** Shows the plan's usage limits in the status bar. */

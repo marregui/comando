@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
@@ -21,8 +22,8 @@ import java.util.stream.Stream;
  * A folder of the Files tab as a tree, every level ordered the same way: folders not named after a date first, by
  * name; then date-named folders ({@code yyyy-MM-dd}) oldest first; then files by name, ignoring case. The folder's
  * index file, when it sits at the top level, comes before everything else there. A file links to
- * itself; a folder has no link and its label has no trailing slash. Hidden entries and the folder's excluded names
- * are left out; a symbolic link to a folder is listed as a folder and not followed into. A subfolder that cannot be
+ * itself; a folder has no link and its label has no trailing slash. Hidden entries, the folder's excluded names and
+ * the entries a caller skips (those git ignores) are left out; a symbolic link to a folder is listed as a folder and not followed into. A subfolder that cannot be
  * read says so and the rest of the tree stands. The depth and the number of entries are bounded, and so is the read:
  * at most {@link #MAX_ENTRIES} entries are listed and looked at in the whole tree, so a folder read every few seconds
  * while open costs a bounded read however large it is. Past either bound a folder ends with
@@ -32,7 +33,7 @@ final class FolderTree {
 
     static final int MAX_DEPTH = 12;
     /** Entries read per folder at most; past it a folder ends with {@link ViewSpec.TreeNode#MORE}. */
-    static final int MAX_ENTRIES = 5_000;
+    static final int MAX_ENTRIES = 20_000;
     /**
      * Names listed per folder at most, hidden and left-out ones included: a folder of millions of hidden entries costs
      * a bounded listing too.
@@ -60,12 +61,17 @@ final class FolderTree {
 
     /** The folder's tree; throws when the folder itself cannot be read. */
     static ViewSpec.TreeNode tree(FolderRoot folder) throws IOException {
-        return tree(folder, Files::list);
+        return tree(folder, Files::list, p -> false);
     }
 
     static ViewSpec.TreeNode tree(FolderRoot folder, Lister lister) throws IOException {
+        return tree(folder, lister, p -> false);
+    }
+
+    /** The folder's tree without the entries {@code skip} names, such as those git ignores. */
+    static ViewSpec.TreeNode tree(FolderRoot folder, Lister lister, Predicate<Path> skip) throws IOException {
         return new ViewSpec.TreeNode(folder.name(), HomeDir.shorten(folder.path()),
-                children(folder, Path.of(folder.path()), 1, new Budget(), lister));
+                children(folder, Path.of(folder.path()), 1, new Budget(), lister, skip));
     }
 
     /** What a folder that cannot be read shows: its name and path, and one entry saying why, marked as an error. */
@@ -89,7 +95,8 @@ final class FolderTree {
      * The entries of {@code dir}, ordered, within what {@code budget} leaves: no more names are listed than it allows
      * (plus one, to know there are more), and no more entries are looked at or sorted than it shows.
      */
-    private static List<ViewSpec.TreeNode> children(FolderRoot folder, Path dir, int depth, Budget budget, Lister lister) throws IOException {
+    private static List<ViewSpec.TreeNode> children(FolderRoot folder, Path dir, int depth, Budget budget, Lister lister,
+                                                    Predicate<Path> skip) throws IOException {
         if (budget.listed <= 0 || budget.entries <= 0) {
             // the tree's bound is spent: the folder is not listed at all
             return List.of(new ViewSpec.TreeNode(ViewSpec.TreeNode.MORE, "more entries than the tab reads", List.of()));
@@ -104,7 +111,7 @@ final class FolderTree {
         budget.listed -= listed.size();
         List<Path> shown = listed.stream().filter(p -> {
             String name = p.getFileName().toString();
-            return !name.startsWith(".") && !folder.excludes(name);
+            return !name.startsWith(".") && !folder.excludes(name) && !skip.test(p);
         }).toList();
         int canShow = Math.min(shown.size(), Math.max(budget.entries, 0));
         more |= shown.size() > canShow;
@@ -123,7 +130,7 @@ final class FolderTree {
             } else {
                 List<ViewSpec.TreeNode> kids;
                 try {
-                    kids = children(folder, e.path(), depth + 1, budget, lister);
+                    kids = children(folder, e.path(), depth + 1, budget, lister, skip);
                 } catch (IOException ex) {
                     kids = List.of(error(ex));
                 }

@@ -32,6 +32,20 @@ public final class Theme {
     public static final Color GOLD = new Color(0xD9B44A);
     public static final Color DIFF_ADDED = new Color(0x2C4A33);
     public static final Color DIFF_REMOVED = new Color(0x5A2E2E);
+    /** The words that changed inside a changed line, over {@link #DIFF_ADDED} and {@link #DIFF_REMOVED}. */
+    public static final Color DIFF_ADDED_WORD = new Color(0x3F7350);
+    public static final Color DIFF_REMOVED_WORD = new Color(0x8A4242);
+    /** The same four on the light editor theme's paper. */
+    public static final Color DIFF_ADDED_LIGHT = new Color(0xD6ECD2);
+    public static final Color DIFF_REMOVED_LIGHT = new Color(0xF4D8D3);
+    public static final Color DIFF_ADDED_WORD_LIGHT = new Color(0xA9D9A0);
+    public static final Color DIFF_REMOVED_WORD_LIGHT = new Color(0xEBADA4);
+    /** A file's name as git sees it, against {@code HEAD}: changed, new, gone, untracked, in conflict. */
+    public static final Color VCS_MODIFIED = new Color(0x6897BB);
+    public static final Color VCS_ADDED = new Color(0x629755);
+    public static final Color VCS_DELETED = new Color(0x8C8C8C);
+    public static final Color VCS_UNTRACKED = new Color(0xD1675A);
+    public static final Color VCS_CONFLICTED = new Color(0xE0525C);
     public static final Color CARD = new Color(0x2B2D30);
     public static final Color CARD_BORDER = new Color(0x3C3F41);
     public static final Color USER_BUBBLE = new Color(0x2E3A4A);

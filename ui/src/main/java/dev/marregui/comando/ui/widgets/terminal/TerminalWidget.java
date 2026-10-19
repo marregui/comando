@@ -131,16 +131,21 @@ public final class TerminalWidget implements Zoomable, Searchable {
     /**
      * True when {@code key}, pressed in {@code c}, belongs to the shell of a terminal that holds {@code c}: Ctrl alone
      * with a letter, {@code [}, {@code \}, {@code ]} or space, the control characters a shell reads. On macOS no
-     * command uses them; elsewhere Ctrl is ⌘'s key, and in a terminal the shell keeps it, as it keeps ⌃ on macOS.
+     * command uses them; elsewhere Ctrl is ⌘'s key, and in a terminal the shell keeps it, as it keeps ⌃ on macOS. On
+     * macOS the terminal also keeps ⌘K, its Clear Buffer, as macOS terminals do.
      */
     public static boolean keepsKey(Component c, KeyStroke key) {
+        boolean inTerminal = c != null && (c instanceof JediTermWidget || SwingUtilities.getAncestorOfClass(JediTermWidget.class, c) != null);
+        int code = key.getKeyCode();
+        if ((key.getModifiers() & MODIFIERS) == InputEvent.META_DOWN_MASK && code == KeyEvent.VK_K && Platform.isMac()) {
+            return inTerminal;
+        }
         if ((key.getModifiers() & MODIFIERS) != InputEvent.CTRL_DOWN_MASK) {
             return false;
         }
-        int code = key.getKeyCode();
         boolean control = code >= KeyEvent.VK_A && code <= KeyEvent.VK_Z || code == KeyEvent.VK_OPEN_BRACKET
                 || code == KeyEvent.VK_BACK_SLASH || code == KeyEvent.VK_CLOSE_BRACKET || code == KeyEvent.VK_SPACE;
-        return control && c != null && (c instanceof JediTermWidget || SwingUtilities.getAncestorOfClass(JediTermWidget.class, c) != null);
+        return control && inTerminal;
     }
 
     public boolean isStarted() {

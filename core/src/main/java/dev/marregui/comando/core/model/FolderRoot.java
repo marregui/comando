@@ -23,8 +23,11 @@ import java.util.Set;
  * @param deletable whether the Files tab moves the folder's files and subfolders to the Trash; never the folder itself
  * @param listedIn  a file name, such as {@code ALPHA.md}, that lists the entries beside it: an entry moved to the Trash
  *                  leaves the nearest such file above it, without its own lines; empty when none
+ * @param repository whether the folder is a git repository's top folder shown under the Files tab's Repositories, rather
+ *                   than a folder of Claude Code's own ({@link HomeDir#claudeDir})
  */
-public record FolderRoot(String name, String path, String index, List<String> excludes, String icon, boolean deletable, String listedIn) {
+public record FolderRoot(String name, String path, String index, List<String> excludes, String icon, boolean deletable, String listedIn,
+                         boolean repository) {
 
     /** The plain folder icon, the default. */
     public static final String FOLDER = "folder";
@@ -42,6 +45,11 @@ public record FolderRoot(String name, String path, String index, List<String> ex
         excludes = excludes == null ? List.of() : excludes.stream().map(String::strip).filter(e -> !e.isEmpty()).toList();
         icon = icon == null || icon.isBlank() ? FOLDER : icon.strip();
         listedIn = listedIn == null ? "" : listedIn.strip();
+    }
+
+    /** A folder that is no repository of the Repositories node. */
+    public FolderRoot(String name, String path, String index, List<String> excludes, String icon, boolean deletable, String listedIn) {
+        this(name, path, index, excludes, icon, deletable, listedIn, false);
     }
 
     /** A folder whose entries stay where they are. */
@@ -84,11 +92,16 @@ public record FolderRoot(String name, String path, String index, List<String> ex
     }
 
     public FolderRoot withName(String newName) {
-        return new FolderRoot(newName, path, index, excludes, icon, deletable, listedIn);
+        return new FolderRoot(newName, path, index, excludes, icon, deletable, listedIn, repository);
     }
 
     /** A folder whose entries go to the Trash from the Files tab, each leaving its lines in {@code listing}, if set. */
     public FolderRoot withTrash(String listing) {
-        return new FolderRoot(name, path, index, excludes, icon, true, listing);
+        return new FolderRoot(name, path, index, excludes, icon, true, listing, repository);
+    }
+
+    /** The same folder as a repository of the Files tab's Repositories node. */
+    public FolderRoot asRepository() {
+        return new FolderRoot(name, path, index, excludes, icon, deletable, listedIn, true);
     }
 }

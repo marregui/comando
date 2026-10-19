@@ -91,7 +91,9 @@ either empty. Several panels may share a connection; a session has at most one p
 
 ### 1.3 The sidebar
 
-Four tabs in two fixed rows: Panels and Files, then Sessions and Connections; the tab in front is kept across restarts.
+Four tabs in one row, each an icon named by its tooltip: Sessions, Connections, Panels, Files; the tab in front is
+kept across restarts. A right click on a tab selects it and opens its menu: the tab's own actions, the window's
+commands for it with their keys, and Hide the sidebar ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md)).
 Panels, Sessions and Connections have a bar of buttons above their list (`ResourceActions`): add and import on the
 left, edit, clone and remove of the selected row on the right, off while nothing is selected
 ([record 37](adr/0037-session-actions-act-on-the-selected-row.md)); the Files tab has none ([§5](#5-the-files-tab)). Removing something in use asks
@@ -265,25 +267,37 @@ edited and saved like any other; a `.log` stays read-only.
 
 - **Folders** are resources ([§1.1](#11-one-model-for-connections-sessions-and-folders)): a unique name, a full path,
   an optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge,
-  skills, plugin), whether its entries go to the Trash (`deletable`) and the file name that lists them (`listedIn`).
+  skills, plugin), whether its entries go to the Trash (`deletable`), the file name that lists them (`listedIn`), and
+  whether it is a repository (`repository`).
   The kit's Scratchpad is deletable and listed in `ALPHA.md`; the kit adds only folders that are missing, so a
   Scratchpad entry written before gains the two keys by editing `folders.json`. Without `folders.json` there is one folder, `~/.claude`, opening `CLAUDE.md` and leaving out Claude
   Code's transcripts, caches and per-session state; an emptied list stays empty.
-- **Configuring.** Files ▸ Files tab folders opens `folders.json` in a panel (written with the tab's folders
-  when missing). The store checks it every second: a change it did not write is read again and the tab follows; an
+- **Repositories.** The folders configured as repositories are rows of one node, Repositories (its own icon), after the
+  other folders, which lie inside `~/.claude` ([record 71](adr/0071-repositories-in-the-files-tab.md)).
+- **Configuring.** The Files tab's menu (a right click on its header), or the Files menu, opens the folders window
+  (Files tab folders…) or the repositories window (Repositories…)
+  ([records 69, 71](adr/0069-a-window-edits-the-files-tab-folders.md)): the entries in the tab's order on the left (+
+  chooses a folder first and names it after it, − takes one out, ↑ ↓ or ⌥↑ ⌥↓ move it), the selected one's fields on
+  the right, each checked as it is typed (a name used once in `folders.json`, a folder that exists and can be read, set
+  only by choosing it: inside `~/.claude` for a folder, a git repository's top folder for a repository; an index inside
+  it, a listing file name), with what git makes of the folder below them. A repository has a name, its folder, an index
+  file and the names left out; a folder has every field. Save, on only when every entry passes, writes `folders.json`
+  once, keeping the entries of the other window; Cancel or Esc drop the edits, asking first. The store checks `folders.json` every second: a change it did not write is read again and the tab follows; an
   entry that breaks the rules is left out with a notice; a file that does not parse keeps the tab's folders, says why
   and stays where it is. The kit adds its folders there too. A `readOnly` key from older versions is ignored.
 - **Order.** At a folder's top level its index file comes first. Every level then lists folders not named after a date,
   date-named folders (`yyyy-MM-dd`) oldest first, then files, by name ignoring case. Hidden entries, `node_modules`,
-  `build`, `target`, `__pycache__`, `out` and the folder's own exclusions are left out; a link to a folder is listed,
-  not followed.
-- **Bounds.** 12 levels; at most 20 000 names listed and 5 000 entries kept per folder tree; past a bound the folder ends
+  `build`, `target`, `__pycache__`, `out` and the folder's own exclusions are left out, and so is what git ignores in
+  a repository (a folder git ignores as a whole shows all it holds); a link to a folder is listed, not followed.
+- **Bounds.** 12 levels; at most 80 000 names listed and 20 000 entries kept per folder tree; past a bound the folder ends
   with `…`. An unreadable subfolder says why and the rest stands.
 - **Clicks.** A click selects and opens nothing; a double click opens a folder, or a file in a panel (Enter opens a
   file). A text file of at most 2 MB opens in a panel bound to it; a larger one (to 4 MB) or a binary one shows in the
   side pane. Opening a folder opens no file; the first time, its newest date-named folder opens too.
-- **Menus.** A file's: Open in a panel, and Edit in a panel (its text rather than rendered). A folder row's: its index
-  file.
+- **Menus.** A file's: Open in a panel, Edit in a panel (its text rather than rendered), and Compare with HEAD when it
+  changed. A folder row's: its index file. A folder row's and a subfolder's: Show changes in it (off, as No changes in
+  it, when it holds none): the Changes view of the repository holding it, `~/.claude` for a folder, inside it alone,
+  its row named after the folder's row and the subfolders leading to it.
 - **Trash.** In a deletable folder, a file's or subfolder's menu moves the selection (⌘- or ⇧-click for several) to the
   desktop's Trash after one question naming it; the folder's row never goes, and a selection reaching another folder
   offers nothing. Without a Trash nothing moves; nothing is deleted for good. With `listedIn` set, each entry moved
@@ -294,6 +308,14 @@ edited and saved like any other; a `.log` stays read-only.
   when something changed. A tree carries the settings it was read with and
   is dropped if the folder was edited since; reads are ticketed so an older one never overwrites a newer one. The tree
   keeps what the user opened and selected.
+- **Git.** In a git repository a file that differs from `HEAD` takes git's colour for how (changed blue, added green,
+  untracked red), and so does a folder that holds one. A repository's top folder (a folder row or a subfolder) has the
+  git icon (under Repositories, where every row is one, a plain folder), and a rising arrow after its name while the
+  repository has changes; hovering it says its branch (or a detached `HEAD`) and what it holds uncommitted, by kind
+  ("On main · 3 uncommitted: 2 modified, 1 untracked"); a double click on it opens the Changes view
+  of that repository alone, or a balloon says there is nothing to see, and opens or closes
+  nothing. The open folders' repositories are read with
+  them every 5 s, the others every 30 s ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)).
 - **Filter.** A field above the tree finds entries by name across every folder, reading never-read folders once; a
   second tree shows the matches with the folders leading to them; Esc returns to the tree as left. The palette's Files
   command puts the keyboard there.
@@ -301,9 +323,37 @@ edited and saved like any other; a `.log` stays read-only.
 | Entry | Icon |
 |---|---|
 | a folder row | its icon setting: folder; a pencil, chip, book, bolt or puzzle piece on it |
+| Repositories; a repository's row | two folders with git's mark; a folder |
 | a folder; `work` | folder; folder with a gear |
 | `*plan*.md`; `READ-*`; an index file name; Markdown | plan; book; index; Markdown |
 | code; data (`.json`, `.yaml`, …); shell; `.sql`; `.csv`; images; diffs; `.txt`, `.log` | code; braces; terminal; database; table; image; diff; text |
+
+### 5.1 Changes
+
+The Changes view, always titled Uncommitted changes, in the side pane, lists what the repositories of the Files tab's
+folders hold that their last commits do not, read only, as IntelliJ's commit view does
+([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)). ⌘K opens it on every repository, and closes it when it
+shows them all; a repository's double click in the Files tab shows that repository alone, a folder's menu the changes
+inside that folder alone ([record 71](adr/0071-repositories-in-the-files-tab.md)), each replacing what the view showed:
+
+- **Repositories.** The one holding a folder, else those directly inside it; one row each, with its branch and its
+  count, however many folders share it. Read every 5 s while the view is open, with the `git` command line
+  (`status --porcelain=v2`, no optional locks, 10 s per run); a repository that cannot be read says why.
+- **Rows.** Up to three groups, each with its icon (a folder with a pencil, a plus or a minus): Changed (the working
+  tree and the index together against `HEAD`: modified, added, renamed, copied, in conflict), Untracked (new files
+  git does not track) and Removed (deleted), each by folder, a chain of single folders in one row; a file is named in its colour, with how it changed and the path it had when renamed.
+  At most 2 000 changes per repository. New rows come open; what the user closed and selected stays.
+- **Comparing.** A double click or Enter on a file, or Compare with HEAD in its menu, opens it side by side with its
+  `HEAD` version in one window floating over comando's, reused for every file; moving the selection moves an open
+  window along without taking the keyboard. Lost lines are red, gained lines green, the words that changed inside a
+  changed stretch marked; a band joins each difference across; scrolling one side scrolls the other to the matching
+  line. F7 and ⇧F7 go from difference to difference, Esc closes. While it shows, the file is read again every 3 s, so
+  a session's edits show where the user scrolled to. The line match stops after 2 s and the texts are then compared as
+  a whole; line ends are compared as git commits them (`core.autocrlf`), a link as its target. A binary file, a version
+  over 4 MB, a line over 10 000 characters, a Git LFS file or a submodule is not compared, and the window says why. A
+  terminal with the keyboard keeps ⌘K, its Clear Buffer. The comparison takes the editors' theme; its ◑ button is the
+  panels' one, and switches every editor.
+  The file's menu also opens it in a panel.
 
 ## 6. Persistence
 

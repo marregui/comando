@@ -260,7 +260,7 @@ public final class LowerPanel {
         clearSession.setVisible(shown);
         clearSession.setEnabled(shown && !busy && t != null && t.size() > 0);
         clearSession.setToolTipText(busy ? "Clear the Session tab once the turn has ended"
-                : "Clear the Session tab; the conversation goes on, and Claude Code keeps it whole");
+                : "Clear the Session tab; the conversation itself goes on");
     }
 
     /** For tests: whether Clear is shown and acts. */

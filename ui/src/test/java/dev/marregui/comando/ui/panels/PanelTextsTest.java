@@ -66,10 +66,10 @@ class PanelTextsTest {
     void theCheckpointButtonIsPurpleOnlyWhenDue() {
         SessionState x = SessionState.closed(States.WORK);
         assertThat(EditorPanel.checkpointIcon(x)).isEqualTo("checkpoint");
-        assertThat(EditorPanel.checkpointTip(x)).isEqualTo("Checkpoint: send /reflect to the session");
+        assertThat(EditorPanel.checkpointTip(x)).isEqualTo("Checkpoint: sends /reflect");
         SessionState due = x.withReflection(Reflection.FRESH.afterTurn(700_000L, 1_000_000L));
         assertThat(EditorPanel.checkpointIcon(due)).isEqualTo("checkpoint-due");
-        assertThat(EditorPanel.checkpointTip(due)).startsWith("Checkpoint due: the context passed 60% of the window");
+        assertThat(EditorPanel.checkpointTip(due)).isEqualTo("Checkpoint due, context past 60%: sends /reflect");
     }
 
     @Test

@@ -1,0 +1,93 @@
+package dev.marregui.comando.core.reduce;
+
+import dev.marregui.comando.core.effect.Effect;
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.ChangeAsk;
+import dev.marregui.comando.core.model.ChangeTexts;
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.RepoStatus;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.ViewState;
+import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.testkit.FakeClock;
+import dev.marregui.comando.testkit.States;
+import org.junit.jupiter.api.Test;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class ReducerChangesTest {
+
+    private final Reducer reducer = new Reducer(new FakeClock());
+    private AppState state = States.twoPanels();
+    private List<Effect> effects = List.of();
+
+    private void apply(Intent intent) {
+        Transition t = reducer.apply(state, intent);
+        state = t.state();
+        effects = t.effects();
+    }
+
+    private long changesView() {
+        return state.views().stream().filter(v -> v.spec() instanceof ViewSpec.Changes).map(ViewState::id).findFirst().orElseThrow();
+    }
+
+    @Test
+    void everyFoldersRepositoriesAreWatchedOftenWhileTheChangesViewIsOpen() {
+        FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
+        FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
+        apply(new Intent.FoldersRead(List.of(kb)));
+        assertThat(effects).as("the folders changed").containsExactly(new Effect.WatchRepos(List.of(kb), false));
+
+        apply(new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes(), Placement.SIDE));
+        assertThat(effects).containsExactly(new Effect.WatchRepos(List.of(kb), true));
+
+        apply(new Intent.FoldersRead(List.of(kb, notes)));
+        assertThat(effects).as("open: a folder added is watched").containsExactly(new Effect.WatchRepos(List.of(kb, notes), true));
+
+        apply(new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes(), Placement.SIDE));
+        assertThat(effects).as("shown again: already watched").isEmpty();
+
+        apply(new Intent.CloseView(changesView()));
+        assertThat(effects).containsExactly(new Effect.WatchRepos(List.of(kb, notes), false));
+    }
+
+    @Test
+    void theFoldersWindowsListReplacesTheFoldersAndIsSavedSayingWhenItReplacedAChangeMadeMeanwhile() {
+        FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
+        FolderRoot notes = new FolderRoot("Notes", "/n", "", List.of());
+        apply(new Intent.FoldersRead(List.of(kb)));
+        apply(new Intent.SaveFolders(List.of(notes, kb), List.of(kb)));
+        assertThat(state.folders()).containsExactly(notes, kb);
+        assertThat(effects).containsExactly(new Effect.SaveFolders(List.of(notes, kb)), new Effect.WatchRepos(List.of(notes, kb), false));
+        assertThat(state.notice().text()).isEqualTo("Saved the Files tab's folders");
+
+        apply(new Intent.SaveFolders(List.of(kb), List.of(kb)));
+        assertThat(state.notice().text()).contains("replacing a change to folders.json");
+
+        AppState before = state;
+        apply(new Intent.SaveFolders(List.of(kb, new FolderRoot("KB", "/other", "", List.of())), List.of(kb)));
+        assertThat(state.folders()).as("one name twice: nothing saved").isEqualTo(before.folders());
+        assertThat(effects).noneMatch(x -> x instanceof Effect.SaveFolders);
+        assertThat(state.notice().text()).isEqualTo("Two folders are called KB: nothing saved");
+    }
+
+    @Test
+    void reposAndChangesPassToTheirPortsAndLeaveTheStateAsItWas() {
+        AppState before = state;
+        RepoStatus repo = new RepoStatus("/r", "main", List.of(new RepoStatus.FileChange("a", "", RepoStatus.Kind.MODIFIED)), false, "");
+        apply(new Intent.ReposLoaded(List.of(repo)));
+        assertThat(effects).containsExactly(new Effect.ShowRepos(List.of(repo)));
+
+        RepoStatus.FileChange c = repo.changes().getFirst();
+        apply(new Intent.OpenChange("/r", c, ChangeAsk.FOLLOW));
+        assertThat(effects).containsExactly(new Effect.ReadChange("/r", c, ChangeAsk.FOLLOW));
+
+        ChangeTexts texts = new ChangeTexts("/r", c, "1\n", "2\n", "");
+        apply(new Intent.ChangeRead(texts, ChangeAsk.OPEN));
+        assertThat(effects).containsExactly(new Effect.ShowChange(texts, ChangeAsk.OPEN));
+        assertThat(state).isSameAs(before);
+    }
+}

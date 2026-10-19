@@ -66,7 +66,31 @@ public final class Reducer {
     }
 
     public Transition apply(AppState s, Intent intent) {
-        return withDesktopError(s, reduce(s, intent));
+        return withDesktopError(s, withRepoWatch(s, reduce(s, intent)));
+    }
+
+    /**
+     * The git repositories of every folder are read, often while the Changes view is open: opening it, closing it, or
+     * changing the folders tells the tools which to read and how often.
+     */
+    private static Transition withRepoWatch(AppState before, Transition t) {
+        boolean was = showsChanges(before);
+        boolean is = showsChanges(t.state());
+        if (was == is && before.folders().equals(t.state().folders())) {
+            return t;
+        }
+        List<Effect> effects = new ArrayList<>(t.effects());
+        effects.add(new Effect.WatchRepos(t.state().folders(), is));
+        return new Transition(t.state(), effects);
+    }
+
+    private static boolean showsChanges(AppState s) {
+        for (ViewState v : s.views()) {
+            if (v.spec() instanceof ViewSpec.Changes) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -111,6 +135,7 @@ public final class Reducer {
             case Intent.SaveConnection i -> saveConnection(s, i);
             case Intent.RemoveConnection i -> removeConnection(s, i.name());
             case Intent.AddFolder i -> addFolder(s, i.spec());
+            case Intent.SaveFolders i -> saveFolders(s, i);
             case Intent.FoldersRead i -> i.folders().equals(s.folders()) ? Transition.of(s) : Transition.of(s.withFolders(i.folders()));
             case Intent.OpenConnection i -> openConnection(s, i.name());
             case Intent.CloseConnection i -> closeConnection(s, i.name());
@@ -184,6 +209,9 @@ public final class Reducer {
             // a tree read with settings since edited, or of a folder since removed, is dropped: the tab shows only current folders
             case Intent.FolderLoaded i -> s.folders().contains(i.folder())
                     ? new Transition(s, List.of(new Effect.ShowFolder(i.folder(), i.tree()))) : Transition.of(s);
+            case Intent.ReposLoaded i -> new Transition(s, List.of(new Effect.ShowRepos(i.repos())));
+            case Intent.OpenChange i -> new Transition(s, List.of(new Effect.ReadChange(i.root(), i.change(), i.ask())));
+            case Intent.ChangeRead i -> new Transition(s, List.of(new Effect.ShowChange(i.texts(), i.ask())));
             case Intent.PlanUsageRead i -> new Transition(s, List.of(new Effect.ShowPlanUsage(i.usage())));
             case Intent.OpenFile i -> new Transition(s, List.of(new Effect.ShowFile(i.session(), i.path(),
                     s.session(i.session()).map(x -> x.spec().workDir()).orElse(HomeDir.home()), i.line())));
@@ -757,6 +785,23 @@ public final class Reducer {
             }
         }
         return new Transition(s, List.of(new Effect.DeleteFiles(f, i.paths())));
+    }
+
+    /**
+     * The folders window's list replaces the folders and is saved; a list naming one folder twice changes nothing. A
+     * change to {@code folders.json} read while the window was open is replaced, and the notice says so.
+     */
+    private Transition saveFolders(AppState s, Intent.SaveFolders i) {
+        Set<String> names = new HashSet<>();
+        for (FolderRoot f : i.folders()) {
+            if (!names.add(f.name())) {
+                return Transition.of(notice(s, Notice.Level.ERROR, "Two folders are called " + f.name() + ": nothing saved", Notice.folder(f.name())));
+            }
+        }
+        AppState next = s.withFolders(i.folders());
+        String text = s.folders().equals(i.base()) ? "Saved the Files tab's folders"
+                : "Saved the Files tab's folders, replacing a change to folders.json made while the window was open";
+        return new Transition(notice(next, Notice.Level.INFO, text), List.of(new Effect.SaveFolders(next.folders())));
     }
 
     /** A folder after the others, saved to {@code folders.json}. */

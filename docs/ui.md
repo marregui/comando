@@ -18,11 +18,12 @@ The package layers are in [Architecture §8](architecture.md#8-ui-packages).
 | `icon` | `Icons` (one SVG set under `/icons`, HiDPI), `SpinnerIcon` (one shared wheel, advanced by its owner's timer) |
 | `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority`, `ToolButton` ([§2](#2-commands-and-keys)) |
 | `resource` | `ResourceActions`: the bar above a list of resources ([Workbench §1.3](workbench.md#13-the-sidebar)) |
-| `overlay` | `Overlay`: the empty, loading and error states a widget switches between |
+| `overlay` | `Overlay`: the empty, loading and error states a widget switches between; `Balloon`: a short word beside a component that asks for nothing, gone after 2.5 s or at the next click or key |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` (below) |
 | `format` | `Labels` (times, uptimes, counts, short paths), `Json`, `KeyText` (keys named as the desktop names them) |
-| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `MarkdownHtml`, `HtmlPane`, `LocalImages`, `LocalLinks`, `MermaidDiagrams`, `SourceLinks`, `Plain`, `EditorThemes`, `Fences` (below) |
-| `tree`, `layout`, `tabs` | `TreeView` (the one tree; a double click activates a leaf, Enter the selected node); `ShrinkingRow` (chips give up width before buttons); `FixedRowTabs` (tab headers in fixed rows); `MovableTabs` (a tab dragged along the row reports where it lands) |
+| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `SplitDiff`, `MarkdownHtml`, `HtmlPane`, `LocalImages`, `LocalLinks`, `MermaidDiagrams`, `SourceLinks`, `Plain`, `EditorThemes`, `Fences` (below) |
+| `tree`, `layout`, `tabs` | `TreeView` (the one tree; a double click activates a leaf, Enter the selected node; per node a label colour, an icon, a trailing icon after the name, and nodes whose double click the caller keeps); `ShrinkingRow` (chips give up width before buttons); `TabStrip` (tab headers in one row, icons named by their tooltips; a right click asks for a tab's menu); `MovableTabs` (a tab dragged along the row reports where it lands) |
+| `vcs` | `RepoChanges`: the watched git repositories on the EDT, looked up by path (a file's change, a folder holding one), git's colour for each kind; the Files tab and the Changes view each keep one |
 | `desktop` | `ExternalEditor` (IntelliJ, else the default application), `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser`, `DesktopTrash` (the Files tab's Trash) |
 
 Threads:
@@ -42,16 +43,20 @@ Text:
 | `TextSearch` | find in a text area with every match marked |
 | `Highlighter` | syntax colours for text painted outside a text area (the transcript); any thread |
 | `Diffs`, `DiffPane` | unified diff with three lines of context, coloured |
+| `SplitDiff` | two versions side by side in read-only editors with their syntax colours and own line numbers: lost lines red, gained green, changed words marked, a band joining each difference, scrolling kept in step by the diff's line mapping; F7 and ⇧F7 move between differences; `compute` works the match out off the EDT, stopped at a deadline ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)) |
 | `MarkdownHtml`, `HtmlPane` | CommonMark with tables to HTML for Swing; raw HTML escaped; an image is its picture when it is a file on this machine (`LocalImages`: PNG, JPEG, GIF as they are, an SVG drawn by jsvg into `cache/images/`), else its alt text; fences coloured as the editors; a light page or a dark one, each pane with its own style sheet; headings carry GitHub's ids; a web link opens in the browser at a click, a `#` link scrolls to its heading at a double click and keeps it there as pictures arrive until the reader scrolls, any other goes to the pane's owner at a double click (`Workspace.headingWhenOpen` scrolls another document's panel to the heading its link names) |
 | `MermaidDiagrams` | Mermaid blocks drawn by `mmdc` into `cache/mermaid/`, once per diagram text, one at a time; a diagram or picture not ready yet stands as an element of its own, which the picture replaces when it arrives, the rest of the page untouched |
 | `SourceLinks` | `path/File.java:42` becomes a link that opens the file at the line |
 | `Plain` | `Plain.only(c)` turns HTML rendering off before text is set; `Plain.text(s)` guards a string starting with `<html>` |
 
 Rules: colours, fonts and spacing come from `Theme` (excepted: the transcript's `Style`, the terminal's palette, the
-light page `HtmlPane` draws documents on, and the selected tab of `FixedRowTabs`); placeholder, spinner and error states
+light page `HtmlPane` draws documents on); placeholder, spinner and error states
 are `Overlay` (excepted: the terminal, whose placeholder starts the shell on a click and whose exit bar offers a
 restart); a user action is a `Command`; work from other threads reaches Swing
-through `Edt` or a `Coalescer`.
+through `Edt` or a `Coalescer`; a tooltip is one line of at most 80 characters, imperative and without a closing period,
+saying what the control does and one fact it does not show (its key through `KeyText`, where the result goes, what it
+costs), and a tooltip reporting live state keeps its data
+([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md)).
 
 ## 2. Commands and keys
 
@@ -106,6 +111,7 @@ the view closes; a view tab has a pin toggle and a close button.
 |---|---|---|
 | `table` | `TableViewWidget` over `GridTable` | rows; sort and find run on the EDT, so they stop at 200 000 rows; a growing result appends rows |
 | `plot` | `PlotWidget` over `PlotCanvas` | series over shared axes, each pixel column reduced to min and max; more than 100 000 points are sorted off the EDT; time axes on clock steps; drag to zoom, double-click resets |
+| `changes` | `ChangesWidget` | the Files tab's git repositories: changes and untracked files by folder; a file opens the side-by-side window ([Workbench §5.1](workbench.md#51-changes)) |
 | `diff` | `DiffWidget` | a unified diff |
 | `markdown` | `MarkdownWidget` | rendered Markdown |
 | `text` | `TextWidget` | a file or text, read-only, highlighted, at a line; a header button opens it in IntelliJ |

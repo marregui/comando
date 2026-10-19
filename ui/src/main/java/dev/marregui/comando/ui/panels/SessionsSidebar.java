@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.resource.ConnectionKind;
@@ -17,7 +18,7 @@ import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
-import dev.marregui.comando.ui.kit.tabs.FixedRowTabs;
+import dev.marregui.comando.ui.kit.tabs.TabStrip;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -61,6 +62,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -128,14 +130,18 @@ public final class SessionsSidebar {
     private final JList<ConnectionState> connections = emptyText(new JList<>(connectionModel),
             "No connections yet. + adds one.");
     public static final int SESSIONS = 0;
-    public static final int PANELS = 1;
-    public static final int CONNECTIONS = 2;
+    public static final int CONNECTIONS = 1;
+    public static final int PANELS = 2;
     public static final int FILES = 3;
 
     private final ResourceActions<SessionState> sessionActions;
     private final ResourceActions<ConnectionState> connectionActions;
     private final PanelsTab panelsTab;
-    private final FixedRowTabs tabs = new FixedRowTabs("Sidebar");
+    private final TabStrip tabs = new TabStrip("Sidebar");
+    /** Adds the window's own commands to a tab's menu, before Hide the sidebar. */
+    private BiConsumer<Integer, JPopupMenu> moreForTab = (tab, menu) -> {
+    };
+    private final Runnable toggle;
     private final FilesTab files;
     private final JPanel rail;
     private final JPanel root = new JPanel(new BorderLayout());
@@ -162,6 +168,7 @@ public final class SessionsSidebar {
     SessionsSidebar(IntentSink intents, Dialogs dialogs, PanelTexts texts, Runnable toggle, ResourceActions.Questions questions) {
         this.intents = intents;
         this.dialogs = dialogs;
+        this.toggle = toggle;
         this.panelsTab = new PanelsTab(intents, texts, questions);
         sessions.getAccessibleContext().setAccessibleName("Sessions");
         connections.getAccessibleContext().setAccessibleName("Connections");
@@ -282,14 +289,15 @@ public final class SessionsSidebar {
         connectionActions = new ResourceActions<>(connections,
                 ResourceActions.Rows.of(ConnectionKind.INSTANCE, ConnectionState::name, ConnectionState::status, "Disconnect", () -> state),
                 dialogs.connections(), name -> intents.dispatch(new Intent.RemoveConnection(name)), questions);
-        tabs.add("Sessions", "session", "Claude Code sessions", section(new JScrollPane(sessions), sessionActions.component()));
-        tabs.add("Panels", "text", "comando's own panels, open and closed; double-click opens one",
+        // one row of icons (Miguel, 2026-10-19): the resources, then the documents; a click moves nothing
+        tabs.add("Sessions", "session", "Claude Code sessions; right-click to add, import or sort", section(new JScrollPane(sessions), sessionActions.component()));
+        tabs.add("Connections", "database", "databases; right-click to add one", section(new JScrollPane(connections), connectionActions.component()));
+        tabs.add("Panels", "text", "every panel, open or closed; double-click one to open it",
                 section(new JScrollPane(panelsTab.list()), panelsTab.actions()));
-        tabs.add("Connections", "database", "database connections", section(new JScrollPane(connections), connectionActions.component()));
-        tabs.add("Files", "folder", "the folders you chose; a double click on a file opens it in a panel",
+        tabs.add("Files", "folder", "your folders and their git changes; double-click a file to open it",
                 section(files.component(), null));
-        // two fixed rows (Miguel, 2026-10-15): the documents on top, the resources below; a click moves nothing
-        tabs.arrange(new int[][]{{PANELS, FILES}, {SESSIONS, CONNECTIONS}}, ToolButton.of("more", KeyText.of("Hide the sidebar (⌘B)"), toggle));
+        tabs.trailing(ToolButton.of("more", KeyText.of("Hide the sidebar (⌘B)"), toggle));
+        tabs.onMenu((tab, e) -> tabMenu(tab).show(e.getComponent(), e.getX(), e.getY()));
         rail = new JPanel(new BorderLayout());
         rail.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(4, 1, 0, 1)));
@@ -330,6 +338,46 @@ public final class SessionsSidebar {
         files.show(folder, tree);
     }
 
+    /** The watched git repositories as read: the Files tab colours their files. */
+    public void showRepos(List<RepoStatus> repos) {
+        files.showRepos(repos);
+    }
+
+    /** Adds the window's own commands to each tab's menu: {@code more} gets the tab and the menu built so far. */
+    public void onTabMenu(BiConsumer<Integer, JPopupMenu> more) {
+        moreForTab = more;
+    }
+
+    /**
+     * What a tab's header offers on a right click: the tab's own actions (a new session or connection, importing
+     * conversations, sorting the sessions; closing every folder), the window's commands for it (with their keys), then
+     * hiding the sidebar.
+     */
+    JPopupMenu tabMenu(int tab) {
+        JPopupMenu menu = new JPopupMenu();
+        switch (tab) {
+            case SESSIONS -> {
+                menu.add(menuItem("New session…", "add", sessionActions::addNew));
+                menu.add(menuItem("Import stored conversations…", "import", dialogs::importSessions));
+                menu.add(menuItem("Sort: running first, then by name", "sort", () -> order(false)));
+            }
+            case CONNECTIONS -> menu.add(menuItem("New connection…", "add", connectionActions::addNew));
+            case FILES -> menu.add(menuItem("Close every folder", "tree", files::collapseAll));
+            default -> {
+            }
+        }
+        moreForTab.accept(tab, menu);
+        menu.addSeparator();
+        menu.add(menuItem(KeyText.of("Hide the sidebar (⌘B)"), "more", toggle));
+        return menu;
+    }
+
+    private static JMenuItem menuItem(String text, String icon, Runnable r) {
+        JMenuItem i = new JMenuItem(text, Icons.get(icon));
+        i.addActionListener(a -> r.run());
+        return i;
+    }
+
     /** Puts the keyboard in the Files tab's filter. */
     public void focusFilesFilter() {
         files.filter().requestFocusInWindow();
@@ -358,7 +406,7 @@ public final class SessionsSidebar {
         files.render(s);
     }
 
-    private static final String SORT_TIP = "Sort the sessions: running first, then by name";
+    private static final String SORT_TIP = "Sort: running first, then by name";
 
     /** Whether the user's order stands (a drag set it) rather than running first, then by name; kept across restarts by the owner. */
     public boolean manualOrder() {
@@ -373,8 +421,7 @@ public final class SessionsSidebar {
     private void order(boolean manual) {
         manualOrder = manual;
         sort.setEnabled(manual);
-        sort.setToolTipText(manual ? SORT_TIP + "; a drag orders them by hand again"
-                : "Sorted: running first, then by name; drag a session to order them by hand");
+        sort.setToolTipText(manual ? SORT_TIP + "; drag to order by hand again" : "Sorted: running first, then by name; drag to reorder");
         if (state != null) {
             sync(sessionModel, ordered(state.sessions(), manual), sessions);
         }

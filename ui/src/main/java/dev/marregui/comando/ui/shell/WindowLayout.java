@@ -68,8 +68,21 @@ final class WindowLayout {
         return prefs.getBoolean("window.maximized", false);
     }
 
+    /**
+     * The sidebar tab in front when the window closed. {@code sidebar.tab} held it before the tabs took one row
+     * (Sessions, Panels, Connections, Files); it is read once, in that order, until {@code sidebar.front} is saved.
+     */
     int sidebarTab() {
-        return prefs.getInt("sidebar.tab", SessionsSidebar.SESSIONS);
+        int front = prefs.getInt("sidebar.front", -1);
+        if (front >= 0) {
+            return front;
+        }
+        return switch (prefs.getInt("sidebar.tab", 0)) {
+            case 1 -> SessionsSidebar.PANELS;
+            case 2 -> SessionsSidebar.CONNECTIONS;
+            case 3 -> SessionsSidebar.FILES;
+            default -> SessionsSidebar.SESSIONS;
+        };
     }
 
     boolean manualOrder() {
@@ -127,7 +140,7 @@ final class WindowLayout {
             prefs.putInt("divider.sidebar", s.sidebarDivider());
         }
         prefs.putBoolean("sidebar.visible", s.sidebarShown());
-        prefs.putInt("sidebar.tab", s.sidebarTab());
+        prefs.putInt("sidebar.front", s.sidebarTab());
         prefs.putBoolean("sessions.manualOrder", s.manualOrder());
         prefs.putBoolean("sidePane.hidden", s.sidePaneHidden());
         prefs.putInt("divider.lower", s.lowerDivider());

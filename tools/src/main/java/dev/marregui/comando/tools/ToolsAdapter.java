@@ -3,7 +3,10 @@ package dev.marregui.comando.tools;
 import dev.marregui.comando.core.console.Console;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.ChangeAsk;
+import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.ToolPort;
 import dev.marregui.comando.core.state.Notice;
@@ -20,24 +23,30 @@ import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
  * Runs the development tools. Each run is a child process on a virtual thread that copies its output
  * into the run's console and sends {@link Intent.CommandFinished} at the end; nothing blocks the caller.
  * Reading a folder also happens on a virtual thread and ends in a view, and so does moving a folder's entries to the
- * Trash, which ends in a notice and a read of the open folders.
+ * Trash, which ends in a notice and a read of the open folders. The git repositories of the open folders, and of every
+ * folder while the Changes view is open, are read with the folders; what git ignores is left out of their trees.
  */
 public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
@@ -57,6 +66,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     /** Read at each run, so a kit installed while comando runs serves the next run. */
     private final Supplier<ToolSettings> settings;
     private final Trash trash;
+    private final Git git;
     /** One move to the Trash at a time, so two never edit one listing file together. */
     private final ReentrantLock trashing = new ReentrantLock();
     private final Map<Long, Process> running = new ConcurrentHashMap<>();
@@ -77,10 +87,16 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     public ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, Supplier<ToolSettings> settings, Trash trash) {
+        this(sink, consoles, settings, trash, new Git());
+    }
+
+    /** With the git it runs; tests name one that is missing. */
+    ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, Supplier<ToolSettings> settings, Trash trash, Git git) {
         this.sink = sink;
         this.consoles = consoles;
         this.settings = settings;
         this.trash = trash;
+        this.git = git;
     }
 
     @Override
@@ -327,7 +343,11 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         }
         List<FolderRoot> added = folders.stream().filter(f -> !before.contains(f)).toList();
         if (!added.isEmpty()) {
-            readFolders(added);
+            // the repositories first, so the new folders' trees leave out what git ignores and their colours come with them
+            Thread.ofVirtual().name("folder-read").start(() -> {
+                readRepos(false, false);
+                added.forEach(f -> readFolder(f, true));
+            });
         }
     }
 
@@ -338,6 +358,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     public void pollFolders(Duration every) {
         folderPoll.scheduleWithFixedDelay(() -> {
             try {
+                readRepos(false, polls++ % COLD_POLLS == 0);
                 watchedFolders.forEach(f -> readFolder(f, false));
             } catch (RuntimeException e) {
                 // a task that throws is never run again: log and keep polling
@@ -356,7 +377,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         long ticket = readTickets.incrementAndGet();
         ViewSpec.TreeNode tree;
         try {
-            tree = FolderTree.tree(folder);
+            tree = FolderTree.tree(folder, Files::list, ignoredIn(folder));
         } catch (IOException | RuntimeException e) {
             tree = FolderTree.unreadable(folder, e);
         }
@@ -380,6 +401,151 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             // under the lock, so two sends of one folder reach the state loop in the order their reads were ticketed
             sink.dispatch(new Intent.FolderLoaded(folder, tree));
         }
+    }
+
+    // ---- git repositories
+
+    /** A status read, and when it was read. */
+    private record RepoRead(Git.Read read, long at) {
+    }
+
+    /** A status read this recently serves a folder read instead of running git again. */
+    static final long REPO_FRESH_MILLIS = 30_000;
+
+    /** The latest read of each repository by its root. Guarded by {@link #repoReading}. */
+    private final Map<Path, RepoRead> repoReads = new HashMap<>();
+    /** The repositories as last sent, null before the first send. Guarded by {@link #repoReading}. */
+    private List<RepoStatus> sentRepos;
+    /** One status read at a time: the poll's, a newly watched folder's, a folder read for the filter. */
+    private final ReentrantLock repoReading = new ReentrantLock();
+    /** Every configured folder, whose repositories are read: the watched ones every poll, the others every {@link #COLD_POLLS}. */
+    private volatile List<FolderRoot> repoFolders = List.of();
+    /** Whether the Changes view is open: then every folder's repository is read every poll. */
+    private volatile boolean changesShown;
+    /** A repository of a closed folder, while the Changes view is closed, is read once in this many polls. */
+    static final int COLD_POLLS = 6;
+    /** Polls so far. Poll thread only. */
+    private long polls;
+
+    /** From now on the poll reads the repositories of {@code folders}, often while {@code changesShown}; all are read at once. */
+    @Override
+    public void watchRepos(List<FolderRoot> folders, boolean changesShown) {
+        repoFolders = List.copyOf(folders);
+        this.changesShown = changesShown;
+        Thread.ofVirtual().name("repo-read").start(() -> readRepos(true, true));
+    }
+
+    /**
+     * Reads the repositories of every configured folder and sends them when any changed since the last send, or always
+     * when {@code force}. Those of the watched folders, and every one while the Changes view is open, are read now; the
+     * others when {@code all}, or when never read, else they keep their last read.
+     */
+    private void readRepos(boolean force, boolean all) {
+        repoReading.lock();
+        try {
+            if (closed) {
+                return;
+            }
+            // the folders as they are now, under the lock: a read that waited for another never sends an older set after it
+            List<Path> roots = new ArrayList<>();
+            Set<FolderRoot> folders = new LinkedHashSet<>(repoFolders);
+            folders.addAll(watchedFolders);
+            for (FolderRoot f : folders) {
+                for (Path r : Git.repos(Path.of(f.path()))) {
+                    if (!roots.contains(r)) {
+                        roots.add(r);
+                    }
+                }
+            }
+            Set<Path> hot = new HashSet<>();
+            for (FolderRoot f : changesShown ? folders : new LinkedHashSet<>(watchedFolders)) {
+                hot.addAll(Git.repos(Path.of(f.path())));
+            }
+            repoReads.keySet().retainAll(roots);
+            List<RepoStatus> statuses = new ArrayList<>(roots.size());
+            for (Path r : roots) {
+                RepoRead read = repoReads.get(r);
+                if (read == null || all || hot.contains(r)) {
+                    read = new RepoRead(git.status(r), System.currentTimeMillis());
+                    repoReads.put(r, read);
+                }
+                statuses.add(read.read().status());
+            }
+            if (force || !statuses.equals(sentRepos)) {
+                sentRepos = List.copyOf(statuses);
+                // under the lock, so sends reach the state loop in the order they were read
+                sink.dispatch(new Intent.ReposLoaded(sentRepos));
+            }
+        } finally {
+            repoReading.unlock();
+        }
+    }
+
+    /**
+     * The entries git ignores in the repositories {@code folder} belongs to, which its tree leaves out: from a read of
+     * the last {@link #REPO_FRESH_MILLIS}, else from one made now. A folder git ignores as a whole (one inside a build
+     * folder, say) leaves nothing out: the user asked for it.
+     */
+    private Predicate<Path> ignoredIn(FolderRoot folder) {
+        Path top = Path.of(folder.path()).toAbsolutePath().normalize();
+        List<Path> roots = Git.repos(top);
+        if (roots.isEmpty()) {
+            return p -> false;
+        }
+        Set<Path> ignored = new HashSet<>();
+        repoReading.lock();
+        try {
+            for (Path r : roots) {
+                RepoRead read = repoReads.get(r);
+                if (read == null || System.currentTimeMillis() - read.at() > REPO_FRESH_MILLIS) {
+                    if (closed) {
+                        break;
+                    }
+                    read = new RepoRead(git.status(r), System.currentTimeMillis());
+                    repoReads.put(r, read);
+                }
+                ignored.addAll(read.read().ignored());
+            }
+        } finally {
+            repoReading.unlock();
+        }
+        for (Path p = top; p != null; p = p.getParent()) {
+            if (ignored.contains(p)) {
+                return x -> false;
+            }
+        }
+        return ignored.isEmpty() ? p -> false : p -> ignored.contains(p.toAbsolutePath().normalize());
+    }
+
+    /**
+     * Reads changes one at a time, in the order asked: the selection moving fast through the Changes view ends on the
+     * file it ends on, never on one whose read finished late.
+     */
+    private final ExecutorService changeReads =
+            Executors.newSingleThreadExecutor(r -> Thread.ofVirtual().name("change-read").unstarted(r));
+
+    /** Reads {@code change}'s two versions off the caller's thread and sends them. */
+    @Override
+    public void readChange(String root, RepoStatus.FileChange change, ChangeAsk ask) {
+        if (closed) {
+            return;
+        }
+        try {
+            changeReads.execute(() -> readChange(Path.of(root), change, ask));
+        } catch (RejectedExecutionException e) {
+            // closing: nothing is shown any more
+        }
+    }
+
+    private void readChange(Path root, RepoStatus.FileChange change, ChangeAsk ask) {
+        ChangeTexts texts;
+        try {
+            texts = git.texts(root, change);
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot read a change [path=" + change.path() + ']', e);
+            texts = ChangeTexts.noted(root.toString(), change, "cannot be read: " + e.getMessage());
+        }
+        sink.dispatch(new Intent.ChangeRead(texts, ask));
     }
 
     /**
@@ -500,6 +666,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     public void close() {
         closed = true;
         folderPoll.shutdownNow();
+        changeReads.shutdownNow();
+        git.close();
         Map<Process, List<ProcessHandle>> trees = new HashMap<>();
         for (Process p : List.copyOf(running.values())) {
             trees.put(p, terminate(p, false));

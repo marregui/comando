@@ -90,22 +90,6 @@ final class HelpActions {
     }
 
     /**
-     * Opens {@code folders.json} in a panel, as any document, written with the tab's folders first when missing; the
-     * tab follows the file as it is saved.
-     */
-    void openFolderSettings() {
-        List<FolderRoot> shown = deps.state().get().folders();
-        Thread.ofVirtual().name("folder-settings").start(() -> {
-            try {
-                Path file = deps.setup().folderSettings(shown);
-                Edt.later(() -> openFile.accept(file));
-            } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open the Files tab's folders: " + e.getMessage(), false));
-            }
-        });
-    }
-
-    /**
      * About comando: the card of {@link About}, over the window; when it is open already it comes forward. The Claude
      * Code version is the one the most recent session reported; before any session started there is none to show.
      */

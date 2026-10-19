@@ -119,7 +119,7 @@ class ReducerTest {
         apply(new Intent.AddFolder(kb));
         apply(new Intent.AddFolder(notes));
         assertThat(state.folders()).containsExactly(kb, notes);
-        assertThat(effects).containsExactly(new Effect.SaveFolders(List.of(kb, notes)));
+        assertThat(effects).containsExactly(new Effect.SaveFolders(List.of(kb, notes)), new Effect.WatchRepos(List.of(kb, notes), false));
 
         apply(new Intent.AddFolder(notes.withName("KB")));
         assertThat(state.folders()).containsExactly(kb, notes);
@@ -159,7 +159,8 @@ class ReducerTest {
         FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
         apply(new Intent.FoldersRead(List.of(kb)));
         assertThat(state.folders()).containsExactly(kb);
-        assertThat(effects).as("the file is the user's: not written back").isEmpty();
+        assertThat(effects).as("the file is the user's: not written back; its repositories are read")
+                .containsExactly(new Effect.WatchRepos(List.of(kb), false));
         AppState before = state;
         apply(new Intent.FoldersRead(List.of(kb)));
         assertThat(state).as("the same folders change nothing").isSameAs(before);

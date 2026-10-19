@@ -68,7 +68,7 @@ final class SessionRow extends JPanel {
         fresh.setIcon(Icons.get("fresh", 14));
         checkpoint.setIcon(Icons.get("checkpoint", 14));
         compact.setIcon(Icons.get("compact", 14));
-        compact.setToolTipText("Compact the conversation: send " + SessionSpec.COMPACT_COMMAND + " to the session");
+        compact.setToolTipText(COMPACT_TIP);
         clear.setIcon(Icons.get("clear-conversation", 14));
         copy.setIcon(Icons.get("copy", 14));
         copy.setToolTipText("Copy the session's details: name, folder, conversation, uptime, context");
@@ -109,14 +109,13 @@ final class SessionRow extends JPanel {
         power.setIcon(Icons.get(running ? "plug" : "unplug", 14));
         power.setToolTipText(running ? "Connected; click to disconnect (stops the session)" : "Disconnected; click to connect (starts the session)");
         fresh.setVisible(EditorPanel.showsFresh(s));
-        fresh.setToolTipText("Start a new conversation; the current one (" + s.spec().claudeSessionId() + ") stays importable");
+        fresh.setToolTipText(freshTip(s));
         checkpoint.setVisible(EditorPanel.showsCheckpoint(s));
         checkpoint.setIcon(Icons.get(EditorPanel.checkpointIcon(s), 14));
         checkpoint.setToolTipText(EditorPanel.checkpointTip(s));
         compact.setVisible(running);
         clear.setVisible(running);
-        clear.setToolTipText("Clear the conversation: send " + SessionSpec.CLEAR_COMMAND + "; a new one starts"
-                + (s.spec().claudeSessionId().isEmpty() ? "" : ", the current one (" + s.spec().claudeSessionId() + ") stays importable"));
+        clear.setToolTipText(clearTip(s));
         model.setText(modelName(s) + " ▾");
         model.setToolTipText("Model: " + modelName(s) + "; click to change");
         effort.setText(effortName(s) + " ▾");
@@ -284,6 +283,22 @@ final class SessionRow extends JPanel {
                 layOut(k);
             }
         }
+    }
+
+    static final String COMPACT_TIP = "Compact the conversation to free context (sends " + SessionSpec.COMPACT_COMMAND + ")";
+
+    static String freshTip(SessionState s) {
+        return "Start a new conversation" + keeps(s);
+    }
+
+    static String clearTip(SessionState s) {
+        return "Send " + SessionSpec.CLEAR_COMMAND + ": a new conversation starts" + keeps(s);
+    }
+
+    /** Where the current conversation goes: the start of its id, to find it among the importable ones. */
+    private static String keeps(SessionState s) {
+        String id = s.spec().claudeSessionId();
+        return id.isEmpty() ? "" : "; this one, " + id.substring(0, Math.min(8, id.length())) + ", stays importable";
     }
 
     /** The model the session asked for, else the one Claude Code reported, else "default"; a full id by its family. */

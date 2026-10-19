@@ -40,7 +40,6 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
-import java.awt.Desktop;
 import java.awt.Frame;
 import java.awt.KeyEventDispatcher;
 import java.awt.KeyboardFocusManager;
@@ -253,7 +252,7 @@ class UiKeysTest {
         boolean mac = keys.equals("mac");
         focusEditor(w);
         press(w, KeyEvent.VK_3, mac ? CTRL : ALT); // the Terminal tab
-        Component shell = await("the terminal has the keyboard", () -> inTerminal(focusOwner()) ? focusOwner() : null, WAIT_MILLIS);
+        Component shell = await("the terminal has the keyboard", () -> inTerminal(focusOwner(w)) ? focusOwner(w) : null, WAIT_MILLIS);
         int panels = onEdt(() -> w.loop().state().panels().size());
         boolean sidebar = onEdt(() -> sidebarShown(w.frame()));
         // a dispatcher added after comando's sees a key only when comando's claimed none, so the terminal gets it
@@ -277,7 +276,7 @@ class UiKeysTest {
         assertThat(reached).as("Ctrl with a letter reached the shell").containsExactlyElementsOf(boxed(SHELL_LETTERS));
         assertThat(onEdt(() -> w.loop().state().panels().size())).as("^W and ^T closed or opened no panel").isEqualTo(panels);
         assertThat(onEdt(() -> sidebarShown(w.frame()))).as("^B left the sidebar").isEqualTo(sidebar);
-        assertThat(inTerminal(focusOwner())).as("^E and ^F left the keyboard in the terminal").isTrue();
+        assertThat(inTerminal(focusOwner(w))).as("^E and ^F left the keyboard in the terminal").isTrue();
 
         // the commands' own keys still work from the terminal: the Session tab, then back to the terminal
         press(w, KeyEvent.VK_1, mac ? CTRL : ALT);
@@ -354,6 +353,43 @@ class UiKeysTest {
         }
     }
 
+    /** Every tooltip is one short line: what the control does and one fact it does not show (live status aside). */
+    @Test
+    void everyTooltipInTheWindowIsOneShortLine() throws Exception {
+        Window w = open("mac");
+        settle(w);
+        List<String> tips = onEdt(() -> {
+            List<String> out = new ArrayList<>();
+            tips(w.frame().getContentPane(), out);
+            for (int i = 0; i < w.frame().getJMenuBar().getMenuCount(); i++) {
+                tips(w.frame().getJMenuBar().getMenu(i), out);
+            }
+            return out;
+        });
+        assertThat(tips).as("tooltips found").hasSizeGreaterThan(20);
+        assertThat(tips).as("one line of at most 80 characters")
+                .allSatisfy(t -> assertThat(t).doesNotContain("\n", "<br>").hasSizeLessThanOrEqualTo(80));
+    }
+
+    private static void tips(Component c, List<String> out) {
+        if (c instanceof JComponent j && j.getToolTipText() != null && !j.getToolTipText().isBlank()) {
+            out.add(j.getToolTipText());
+        }
+        if (c instanceof JMenu m) {
+            for (int i = 0; i < m.getItemCount(); i++) {
+                JMenuItem item = m.getItem(i);
+                if (item != null) {
+                    tips(item, out);
+                }
+            }
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                tips(child, out);
+            }
+        }
+    }
+
     private static void texts(Component c, List<String> out) {
         if (c instanceof JComponent j && j.getToolTipText() != null) {
             out.add(j.getToolTipText());
@@ -394,24 +430,17 @@ class UiKeysTest {
         return out;
     }
 
-    /** Brings the window forward and gives the focused panel's editor the keyboard. */
+    /** Gives the focused panel's editor the window's keyboard, as a click in it would. */
     private static RSyntaxTextArea focusEditor(Window w) throws Exception {
-        if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_REQUEST_FOREGROUND)) {
-            Desktop.getDesktop().requestForeground(true);
-        }
         RSyntaxTextArea editor = await("an editor", () -> find(w.frame(), RSyntaxTextArea.class).orElse(null), WAIT_MILLIS);
-        SwingUtilities.invokeAndWait(() -> {
-            w.frame().toFront();
-            w.frame().requestFocus();
-            editor.requestFocusInWindow();
-        });
-        return await("the editor has the keyboard", () -> focusOwner() == editor ? editor : null, WAIT_MILLIS);
+        SwingUtilities.invokeAndWait(editor::requestFocusInWindow);
+        return await("the editor has the keyboard", () -> focusOwner(w) == editor ? editor : null, WAIT_MILLIS);
     }
 
     /** Presses {@code code} with {@code modifiers} in the component that has the keyboard, as a typist would. */
     private static void press(Window w, int code, int modifiers) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
-            Component target = focusOwner();
+            Component target = focusOwner(w);
             assertThat(target).as("a component has the keyboard").isNotNull();
             long now = System.currentTimeMillis();
             target.dispatchEvent(new KeyEvent(target, KeyEvent.KEY_PRESSED, now, modifiers, code, KeyEvent.CHAR_UNDEFINED));
@@ -420,8 +449,15 @@ class UiKeysTest {
         settle(w);
     }
 
-    private static Component focusOwner() {
-        return KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
+    /**
+     * The component with the window's keyboard: its focus owner while the window is the desktop's active one, else the
+     * one that gets the keyboard when it is. The tests never bring the process forward: on a desktop in use another
+     * application takes the front back at any moment, which left the process without a focus owner mid-test. Keys go to
+     * this component directly, and comando routes them by the component they are pressed in, so nothing here needs the
+     * desktop's focus.
+     */
+    private static Component focusOwner(Window w) {
+        return onEdtUnchecked(() -> w.frame().getMostRecentFocusOwner());
     }
 
     private static boolean inTerminal(Component c) {

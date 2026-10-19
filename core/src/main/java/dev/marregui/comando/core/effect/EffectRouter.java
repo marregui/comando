@@ -55,12 +55,16 @@ public final class EffectRouter implements StateLoop.EffectHandler {
             case Effect.ShowFile e -> ui.showFile(e.session(), e.path(), e.baseDir(), e.line());
             case Effect.ShowFolder e -> ui.showFolder(e.folder(), e.tree());
             case Effect.ShowPlanUsage e -> ui.showPlanUsage(e.usage());
+            case Effect.ShowRepos e -> ui.showRepos(e.repos());
+            case Effect.ShowChange e -> ui.showChange(e.texts(), e.ask());
             case Effect.RunGradle e -> tools.runGradle(e.runId(), e.workDir(), e.tasks());
             case Effect.CancelCommand e -> tools.cancelRun(e.runId());
             case Effect.ForgetCommand e -> tools.forgetRun(e.runId());
             case Effect.ReadFolders e -> tools.readFolders(e.folders());
             case Effect.WatchFolders e -> tools.watchFolders(e.folders());
             case Effect.DeleteFiles e -> tools.deleteFiles(e.folder(), e.paths());
+            case Effect.WatchRepos e -> tools.watchRepos(e.folders(), e.changesShown());
+            case Effect.ReadChange e -> tools.readChange(e.root(), e.change(), e.ask());
             case Effect.SaveConnections e -> persistence.saveConnections(e.specs());
             case Effect.SaveFolders e -> persistence.saveFolders(e.folders());
             case Effect.SaveSessions e -> persistence.saveSessions(e.specs());

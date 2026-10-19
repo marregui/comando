@@ -33,7 +33,7 @@ test trees, and a browser over folders of documents.
 | `db` | JDBC lanes (one thread per connection), cancel, columnar results, schema reading, queries for Claude | `core`, pgjdbc |
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, the Claude Code kit (`Kit`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log | `core`, Jackson |
-| `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash | `core` |
+| `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash, the folders' git repositories (the `git` command line) | `core` |
 | `ui` | the Swing shell, panels, dialogs, the kit, the widgets | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
 | `app` | wiring, the store files, the keychain, the intent log, the embedded QuestDB, `main` | all, QuestDB |
 
@@ -77,7 +77,7 @@ flowchart LR
   CC["Claude Code"] -->|"MCP calls"| MC
   CL --- CC
   MC -->|"ShowView, ApprovalRequested"| Q
-  TL -->|"CommandFinished, FolderLoaded"| Q
+  TL -->|"CommandFinished, FolderLoaded, ReposLoaded"| Q
 ```
 
 Principles:
@@ -130,7 +130,7 @@ A record of the sealed interface `Intent`; anything that changes the state is on
 | Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
 | Views | `ShowView`, `RefreshView`, `CloseView`, `PinView`, `SelectLowerTab`, `Arrange`, `SessionLayout`, `SessionFocus` |
 | Editor and files | `EditPanel`, `OpenFile`, `OpenSubagent` |
-| Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `DeleteFiles` (the Files tab's move to the Trash) |
+| Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `SaveFolders`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `DeleteFiles` (the Files tab's move to the Trash), `ReposLoaded`, `OpenChange`, `ChangeRead` |
 | Notices | `Notify`, `DismissNotice` |
 
 A null panel in `RunText`, `RunGradle` or `EditPanel` means the focused panel.
@@ -150,6 +150,10 @@ it throw: an intent naming a missing panel, connection or session changes nothin
   stays until dismissed, replaced by another error, or settled by its own subject. An event that settles a subject
   clears its notice (a run completing, a connection opening, a turn succeeding, an approval answered). A new ERROR also
   asks for a desktop notification while the window is behind.
+- **Repositories.** After any intent, folders that changed or a Changes view that appeared or went add `WatchRepos`
+  with every folder and whether the view shows; `App` sends the first at start.
+- **The folders window.** `SaveFolders` replaces the folders and saves them; its notice says when it replaced a change
+  to `folders.json` read while the window was open; a list naming one folder twice saves nothing.
 - **The user's file.** `FoldersRead`, `folders.json` read again after the user changed it, replaces the folders and
   saves nothing; `AddFolder`, the kit's, saves.
 
@@ -163,9 +167,9 @@ queues and returns.
 | `DatabasePort` | `OpenDb`, `CloseDb`, `ForgetSchema`, `TestDb`, `ExecuteSql`, `CancelSql`, `ReleaseResult`, `LoadSchema` |
 | `ClaudePort` | `StartClaude`, `StopClaude`, `SendToClaude`, `InterruptClaude`, `LoadHistory`, `ClearTranscript`, `ForgetSession`, `ShowSubagent` |
 | `ApprovalPort` | `ResolveApproval` |
-| `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `DeletePanel`, `ShowFile`, `Arrange`, `ShowFolder`, `ShowPlanUsage` |
+| `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `DeletePanel`, `ShowFile`, `Arrange`, `ShowFolder`, `ShowRepos`, `ShowChange`, `ShowPlanUsage` |
 | `PersistencePort` | `SaveConnections`, `SaveSessions`, `SaveFolders`, `SavePanels` |
-| `ToolPort` | `RunGradle`, `CancelCommand`, `ForgetCommand`, `ReadFolders`, `WatchFolders`, `DeleteFiles` |
+| `ToolPort` | `RunGradle`, `CancelCommand`, `ForgetCommand`, `ReadFolders`, `WatchFolders`, `DeleteFiles`, `WatchRepos`, `ReadChange` |
 
 `StateLoop` runs one intent at a time: observers (the intent log), the reducer, the effects in order, then the state
 listeners (the UI's coalesced render). The reducer, each effect and each listener are guarded, so a failure is logged and
@@ -206,8 +210,8 @@ transcript text.
 | `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `clearTranscript`, `loadHistory`, `forget` | `ClaudeAdapter` |
 | `McpGateway` | `register(session)` gives the URL and bearer token a session's CLI uses; `unregister` | `McpServer` |
 | `ApprovalPort` | `resolve` | `McpServer` |
-| `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles` | `ToolsAdapter` |
-| `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showPlanUsage` | `ComandoUi` |
+| `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles`, `watchRepos`, `readChange` | `ToolsAdapter` |
+| `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showRepos`, `showChange`, `showPlanUsage` | `ComandoUi` |
 | `PersistencePort` | `saveConnections`, `saveSessions`, `saveFolders`, `savePanels` | `Store` |
 
 `testkit` holds what every module's tests share: `RecordingPorts` (every effect port, each call recorded as a line),
@@ -232,7 +236,9 @@ by delta), `FakeResult`.
 | MCP requests | virtual, one per request | JSON-RPC; an `approve` call waits for its card |
 | `gradle-<run>`, `tool-output-<run>`, `tool-kill-<run>` | virtual | a run's process and output; SIGKILL what a stop left alive after 2 s |
 | `folder-read` | virtual | folder reads |
-| `folder-poll` | platform, daemon | every 5 s reads the open folders, sends a tree only when it changed |
+| `folder-poll` | platform, daemon | every 5 s reads the watched git repositories, then the open folders; sends each only when it changed |
+| `repo-read`, `change-read` | virtual | the repositories read when the Changes view opens or closes; a changed file's two versions, one at a time |
+| `diff-compute` | virtual | the comparison window's line and word match, stopped at 2 s |
 | `store`, `store-secrets` | platform | atomic writes of the store files; panel text 800 ms after the first unsaved change; a check of open panels' files and `folders.json` every second; keychain calls apart, so an unlock prompt never holds back panel text |
 | `mermaid` | platform, daemon | `mmdc`, one diagram at a time, 30 s bound |
 | `local-images` | platform, daemon | reads the pictures a Markdown view names and draws SVGs into `cache/images/`, one at a time |
@@ -299,14 +305,14 @@ too; the second call does nothing.
 
 ```
 dev.marregui.comando.ui
-├── kit/            theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, desktop
+├── kit/            theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, desktop, vcs
 ├── widget/         the contract: Widget, WidgetContext, WidgetRegistry; capability/ (Searchable, Copyable, …)
-├── widgets/        one package per widget: approval, console, diff, editor, markdown, plot, table, terminal, text,
+├── widgets/        one package per widget: approval, changes, console, diff, editor, markdown, plot, table, terminal, text,
 │                   transcript (with doc/ and render/), tree
 ├── panels/         the window's regions: Workspace, EditorPanel, LowerPanel, SessionsSidebar, PanelsTab, FilesTab,
 │                   SidePane, StatusBar, ResultsView, TerminalTabs, ViewTabs, …
-├── dialogs/        resource/ (ResourceDialog, one dialog for connections and sessions; folders are edited in folders.json), sessions/ (import)
-├── shell/          ComandoUi (the frame and the UI port), WindowLayout, HelpActions, Menus, Keys, LivePlots, Notifier, HelpFiles, OpenFiles, …
+├── dialogs/        folders/ (the Files tab's folders: FoldersEditor, FoldersDialog), resource/ (ResourceDialog, one dialog for connections and sessions), sessions/ (import)
+├── shell/          ComandoUi (the frame and the UI port), WindowLayout, HelpActions, Menus, Keys, LivePlots, Notifier, HelpFiles, OpenFiles, DiffWindow, …
 └── PanelTexts      editor text between saves
 ```
 

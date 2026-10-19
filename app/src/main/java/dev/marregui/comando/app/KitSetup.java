@@ -25,11 +25,6 @@ final class KitSetup implements Setup {
     }
 
     @Override
-    public Path folderSettings(List<FolderRoot> shown) throws IOException {
-        return store.foldersFile(shown);
-    }
-
-    @Override
     public KitOffer kit() throws IOException {
         return offer(kit.status());
     }

@@ -84,11 +84,13 @@ class StoreTest {
     void theFilesTabsFoldersHaveADefaultAndAreKeptAsSavedEvenEmpty() throws Exception {
         try (Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("no folders.json: the default").isEqualTo(FolderRoot.defaults(CLAUDE_DIR));
-            store.saveFolders(List.of(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools"))));
+            store.saveFolders(List.of(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")),
+                    new FolderRoot("app", "/app", "", List.of()).asRepository()));
         }
-        assertThat(Files.readString(home.resolve("folders.json"))).contains("\"index\" : \"ALPHA.md\"", "\"tools\"");
+        assertThat(Files.readString(home.resolve("folders.json"))).contains("\"index\" : \"ALPHA.md\"", "\"tools\"", "\"repository\" : true");
         try (Store store = new Store(home)) {
-            assertThat(store.loadFolders(CLAUDE_DIR)).containsExactly(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")));
+            assertThat(store.loadFolders(CLAUDE_DIR)).as("a repository stays one")
+                    .containsExactly(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")), new FolderRoot("app", "/app", "", List.of()).asRepository());
             store.saveFolders(List.of());
         }
         try (Store store = new Store(home)) {
@@ -164,19 +166,6 @@ class StoreTest {
             store.saveFolders(List.of(new FolderRoot("Own", "/o", "", List.of())));
             store.checkFilesNow().get(5, TimeUnit.SECONDS);
             assertThat(read).as("the store's own write is not a change of the user's").hasSize(1);
-        }
-    }
-
-    @Test
-    void theFoldersFileIsWrittenWithTheFoldersShownWhenMissing() throws Exception {
-        FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of(), "knowledge");
-        try (Store store = new Store(home)) {
-            Path file = store.foldersFile(List.of(kb));
-            assertThat(file).isEqualTo(home.resolve("folders.json"));
-            assertThat(store.loadFolders(CLAUDE_DIR)).containsExactly(kb);
-            Files.writeString(file, "[]");
-            store.foldersFile(List.of(kb));
-            assertThat(file).as("an existing file is left as it is").hasContent("[]");
         }
     }
 

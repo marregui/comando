@@ -10,12 +10,16 @@ import javax.swing.JComponent;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
+import java.util.HashMap;
+import java.util.Map;
 
-/** Views placed beside the editor: files Claude opened, diffs, plots. Hidden when it holds none. */
+/** Views placed beside the editor: files Claude opened, diffs, plots, the Changes view. Hidden when it holds none. */
 public final class SidePane {
 
     private final JTabbedPane tabs = named(new JTabbedPane(), "side");
     private final ViewTabs views;
+    /** Each side view's version at the last render, so a view shown again comes forward. */
+    private Map<Long, Long> versions = Map.of();
 
     public SidePane(WidgetContext context, WidgetRegistry registry) {
         tabs.putClientProperty("JTabbedPane.tabType", "underlined");
@@ -45,15 +49,22 @@ public final class SidePane {
     public boolean render(AppState s) {
         boolean changed = views.render(s.views());
         if (changed) {
-            // the newest side view is shown
-            ViewState newest = null;
+            // the side view new or shown again is brought forward, the newest of them when several
+            ViewState shown = null;
+            Map<Long, Long> now = new HashMap<>();
             for (ViewState v : s.views()) {
-                if (v.placement() == Placement.SIDE && (newest == null || v.id() > newest.id())) {
-                    newest = v;
+                if (v.placement() != Placement.SIDE) {
+                    continue;
+                }
+                now.put(v.id(), v.version());
+                Long before = versions.get(v.id());
+                if ((before == null || before < v.version()) && (shown == null || v.id() > shown.id())) {
+                    shown = v;
                 }
             }
-            if (newest != null) {
-                int i = views.indexOf(newest.id());
+            versions = now;
+            if (shown != null) {
+                int i = views.indexOf(shown.id());
                 if (i >= 0) {
                     tabs.setSelectedIndex(i);
                 }

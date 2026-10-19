@@ -140,6 +140,8 @@ public final class App implements AutoCloseable {
         loop.start();
         ui.start();
         // the Files tab's open folders stay in sync whether the tab shows or not; closed ones are not read
+        // every folder's repository, for the Files tab's git marks; the reducer says when the folders or the Changes view change
+        tools.watchRepos(loop.state().folders(), false);
         tools.pollFolders(FOLDERS_EVERY);
         claude.watchPlanUsage(PLAN_USAGE_EVERY);
         List<SessionSpec> withHistory = loop.state().sessions().stream().map(SessionState::spec)
@@ -216,6 +218,9 @@ public final class App implements AutoCloseable {
         return ui;
     }
 
+    /** A part closing this long or longer is named in the log. */
+    static final long SLOW_CLOSE_MILLIS = 100;
+
     private <T extends AutoCloseable> T own(T resource) {
         owned.push(resource);
         return resource;
@@ -228,15 +233,22 @@ public final class App implements AutoCloseable {
             return;
         }
         closed = true;
+        long start = System.nanoTime();
         while (!owned.isEmpty()) {
             AutoCloseable c = owned.pop();
+            long partStart = System.nanoTime();
             try {
                 c.close();
             } catch (Exception e) {
                 LOG.log(System.Logger.Level.WARNING, "close failed [part=" + c.getClass().getSimpleName() + "]: " + e.getMessage(), e);
             }
+            long millis = (System.nanoTime() - partStart) / 1_000_000;
+            if (millis >= SLOW_CLOSE_MILLIS) {
+                // a quit that takes long says which part held it
+                LOG.log(System.Logger.Level.INFO, "closed slowly [part=" + c.getClass().getSimpleName() + ", millis=" + millis + ']');
+            }
         }
-        LOG.log(System.Logger.Level.INFO, "comando closed");
+        LOG.log(System.Logger.Level.INFO, "comando closed [millis=" + (System.nanoTime() - start) / 1_000_000 + ']');
     }
 
     /** The reducer needs its effect handler before the adapters that implement it exist. */

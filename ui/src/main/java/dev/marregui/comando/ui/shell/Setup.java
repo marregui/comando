@@ -15,9 +15,6 @@ import java.util.List;
  */
 public interface Setup {
 
-    /** The Files tab's folders file ({@code folders.json}), written with the folders {@code shown} first when missing. */
-    Path folderSettings(List<FolderRoot> shown) throws IOException;
-
     /** What the kit is on this machine. */
     KitOffer kit() throws IOException;
 
@@ -29,11 +26,6 @@ public interface Setup {
 
     /** For a window without them (the replay tests): every call fails. */
     Setup NONE = new Setup() {
-        @Override
-        public Path folderSettings(List<FolderRoot> shown) throws IOException {
-            throw new IOException("no settings in this window");
-        }
-
         @Override
         public KitOffer kit() throws IOException {
             throw new IOException("no kit in this window");

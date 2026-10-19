@@ -46,7 +46,7 @@ that names the one it replaces; the old record stays as written, and this index'
 | [37](0037-session-actions-act-on-the-selected-row.md) | Session and connection actions act on the selected row | Miguel, Claude | accepted |
 | [38](0038-a-session-has-one-panel.md) | A session has one panel | Miguel, Claude | accepted |
 | [39](0039-panels-are-kept-until-removed.md) | Panels are kept until removed | Miguel, Claude | accepted |
-| [40](0040-one-resource-per-dialog-and-two-tab-rows.md) | One resource per dialog, and the sidebar's tabs in two rows | Miguel, Claude | accepted; the Scratchpad tab became Files, 49 |
+| [40](0040-one-resource-per-dialog-and-two-tab-rows.md) | One resource per dialog, and the sidebar's tabs in two rows | Miguel, Claude | accepted; the Scratchpad tab became Files, 49; the two rows replaced by one, 70 |
 | [41](0041-a-session-can-prompt-another.md) | A session can prompt another | Miguel, Claude | accepted; consent replaced by 44 |
 | [42](0042-tabs-show-their-sessions-state.md) | Tabs show their session's state, and comando has its own icon | Miguel, Claude | accepted; a waiting status added by 43 |
 | [43](0043-a-session-waiting-on-background-work-shows-it.md) | A session waiting on background work shows it | Miguel, Claude | accepted |
@@ -73,3 +73,7 @@ that names the one it replaces; the old record stays as written, and this index'
 | [64](0064-sub-agents-are-shown-live.md) | Sub-agents are shown live | Miguel, Claude | accepted; following and large files amended 2026-10-18 |
 | [65](0065-keys-on-desktops-other-than-macos.md) | Keys on desktops other than macOS | Miguel, Claude | accepted |
 | [66](0066-the-reducer-is-watched-as-the-edt-is.md) | The reducer is watched as the EDT is | Miguel, Claude | accepted |
+| [68](0068-git-changes-and-a-side-by-side-diff.md) | Git changes and a side-by-side diff | Miguel, Claude | proposed; a repository's double click, the view's title and groups replaced, 71 |
+| [69](0069-a-window-edits-the-files-tab-folders.md) | A window edits the Files tab's folders | Miguel, Claude | proposed; where it opens replaced, 71 |
+| [70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | The sidebar's tabs in one row, with a menu each | Miguel, Claude | proposed |
+| [71](0071-repositories-in-the-files-tab.md) | Repositories in the Files tab | Miguel, Claude | proposed |

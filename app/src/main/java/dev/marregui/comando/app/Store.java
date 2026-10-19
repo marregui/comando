@@ -505,27 +505,6 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
 
     /**
-     * {@code folders.json}, written with {@code shown} first when it is missing, so the user edits the folders the tab
-     * has. Blocks until the file is there; call it off the EDT.
-     */
-    Path foldersFile(List<FolderRoot> shown) throws IOException {
-        try {
-            CompletableFuture.runAsync(() -> {
-                if (!folders.exists()) {
-                    write(folders, List.copyOf(shown));
-                    foldersSeen = Stamp.of(folders.path());
-                }
-            }, writer).get(5, TimeUnit.SECONDS);
-        } catch (ExecutionException | TimeoutException | RejectedExecutionException e) {
-            throw new IOException("cannot write " + folders.path() + ": " + e.getMessage(), e);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            throw new IOException("interrupted while writing " + folders.path(), e);
-        }
-        return folders.path();
-    }
-
-    /**
      * Reads {@code folders.json} again when it changed since the store last read or wrote it: a change of the user's,
      * in a panel or another editor. A file that does not read keeps the tab's folders and says why; a missing one keeps
      * them silently.

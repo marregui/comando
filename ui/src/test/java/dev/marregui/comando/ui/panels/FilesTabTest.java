@@ -1,23 +1,32 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.swing.AbstractButton;
+import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollBar;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.tree.DefaultMutableTreeNode;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -129,7 +138,7 @@ class FilesTabTest {
         assertThat(f.intents).containsExactly(new Intent.WatchFolders(List.of()));
 
         f.render();
-        assertThat(f.labels()).containsExactly("No folders yet: Files ▸ Files tab folders opens folders.json");
+        assertThat(f.labels()).containsExactly("No folders yet: right-click the Files tab to add some");
     }
 
     @Test
@@ -185,8 +194,8 @@ class FilesTabTest {
         f.edt(() -> assertThat(f.tab.menuFor(new ViewSpec.TreeNode("Memory", "/m", List.of())).getComponents())
                 .extracting(c -> ((JMenuItem) c).getText()).containsExactly("Open MEMORY.md"));
         f.edt(() -> f.tree().setSelectionRow(1));
-        f.edt(() -> assertThat(f.tab.menuFor(new ViewSpec.TreeNode("KB", "/kb", List.of())).getComponentCount())
-                .as("a folder without an index: no menu").isZero());
+        f.edt(() -> assertThat(items(f.tab.menuFor(new ViewSpec.TreeNode("KB", "/kb", List.of()))))
+                .as("a folder without an index, in no repository: nothing").isEmpty());
 
         assertThat(f.tab.rowIcon(new ViewSpec.TreeNode("Memory", "/m", List.of()))).contains("folder-memory");
         assertThat(f.tab.rowIcon(new ViewSpec.TreeNode("KB", "/kb", List.of()))).contains("folder-knowledge");
@@ -223,8 +232,8 @@ class FilesTabTest {
         f.edt(() -> f.tree().setSelectionRow(4));
         f.edt(() -> assertThat(items(f.tab.menuFor(folder("work", file("a.py"))))).as("a subfolder alone").containsExactly("Move work to the Trash…"));
         f.edt(() -> f.tree().setSelectionRow(0));
-        f.edt(() -> assertThat(f.tab.menuFor(new ViewSpec.TreeNode("Scratchpad", "/s", List.of())).getComponentCount())
-                .as("the folder's own row never goes").isZero());
+        f.edt(() -> assertThat(items(f.tab.menuFor(new ViewSpec.TreeNode("Scratchpad", "/s", List.of()))))
+                .as("the folder's own row never goes").isEmpty());
         f.edt(() -> f.tree().setSelectionRows(new int[]{3, 5}));
         f.edt(() -> assertThat(items(f.tab.menuFor(file("READ-01.md")))).as("a selection reaching another folder").containsExactly("Open in a panel", "Edit in a panel"));
         f.edt(() -> f.tree().expandRow(5));
@@ -308,6 +317,140 @@ class FilesTabTest {
         f.render(new FolderRoot("Base", "/kb", "", List.of()), new FolderRoot("Notes", "/n", "", List.of()));
         assertThat(f.labels()).containsExactly("Base", "a.md", "Notes");
         assertThat(f.intents).containsExactly(new Intent.WatchFolders(List.of("Base")));
+    }
+
+    @Test
+    void aChangedFileAndTheFoldersHoldingItTakeGitsColours() throws Exception {
+        Fixture f = new Fixture(new FolderRoot("Repo", "/s", "", List.of()));
+        f.edt(() -> f.tree().expandRow(0));
+        f.edt(() -> f.show("Repo", folder("Repo", folder("src", new ViewSpec.TreeNode("A.java", "", "comando-file:/s/src/A.java#0", List.of())),
+                file("new.md"), file("same.md"))));
+        f.edt(() -> f.tree().expandRow(1));
+        assertThat(f.labels()).containsExactly("Repo", "src", "A.java", "new.md", "same.md");
+        Color[] before = new Color[1];
+        f.edt(() -> before[0] = f.tab.colorOf(node(f.tree(), 2)));
+        assertThat(before[0]).as("no repository read yet").isNull();
+        f.edt(() -> f.tab.showRepos(List.of(new RepoStatus("/s", "main", List.of(
+                new RepoStatus.FileChange("src/A.java", "", RepoStatus.Kind.MODIFIED),
+                new RepoStatus.FileChange("new.md", "", RepoStatus.Kind.UNTRACKED)), false, ""))));
+        Color[] colors = new Color[5];
+        f.edt(() -> {
+            for (int i = 0; i < 5; i++) {
+                colors[i] = f.tab.colorOf(node(f.tree(), i));
+            }
+        });
+        assertThat(colors).containsExactly(Theme.VCS_MODIFIED, Theme.VCS_MODIFIED, Theme.VCS_MODIFIED, Theme.VCS_UNTRACKED, null);
+    }
+
+    @Test
+    void aRepositoryRowHasTheGitIconAFlagWhileItHasChangesAndItsDoubleClickOpensTheChangesView() throws Exception {
+        Fixture f = new Fixture(new FolderRoot("Repo", "/s", "", List.of()), new FolderRoot("Plain", "/p", "", List.of()));
+        List<String> told = new CopyOnWriteArrayList<>();
+        f.edt(() -> f.tab.tell((owner, at, text) -> told.add(text)));
+        f.edt(() -> f.show("Repo", folder("Repo", folder("src", file("A.java")))));
+        RepoStatus changed = new RepoStatus("/s", "main", List.of(new RepoStatus.FileChange("src/A.java", "", RepoStatus.Kind.MODIFIED)), false, "");
+        f.edt(() -> f.tab.showRepos(List.of(changed)));
+        boolean[] marks = new boolean[4];
+        f.edt(() -> {
+            marks[0] = f.tab.repoAt(node(f.tree(), 0)).isPresent();
+            marks[1] = f.tab.repoAt(node(f.tree(), 1)).isPresent();
+        });
+        assertThat(marks[0]).as("the repository's row").isTrue();
+        assertThat(marks[1]).as("a folder that is no repository's root").isFalse();
+
+        f.intents.clear();
+        f.edt(() -> doubleClick(f.tree(), 0));
+        assertThat(f.intents).as("that repository alone, its row named after it")
+                .containsExactly(new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes("/s", "", "Repo"), Placement.SIDE));
+        assertThat(told).isEmpty();
+
+        f.intents.clear();
+        f.edt(() -> f.tab.showRepos(List.of(new RepoStatus("/s", "main", List.of(), false, ""))));
+        f.edt(() -> doubleClick(f.tree(), 0));
+        assertThat(f.intents).as("nothing to see: no view").isEmpty();
+        assertThat(told).containsExactly("No changes to see in Repo: its working tree matches HEAD");
+        f.edt(() -> doubleClick(f.tree(), 1));
+        assertThat(told).as("a folder that is no repository says nothing").hasSize(1);
+    }
+
+    @Test
+    void theRepositoriesAreRowsOfTheirOwnNodeAndAFoldersMenuShowsItsOwnChanges() throws Exception {
+        Fixture f = new Fixture(new FolderRoot("Memory", "/c/MEMORY", "", List.of()), new FolderRoot("app", "/r", "", List.of()).asRepository(),
+                new FolderRoot("lib", "/l", "", List.of()).asRepository());
+        assertThat(f.labels()).containsExactly("Memory", "Repositories", "app", "lib");
+        f.edt(() -> assertThat(FilesTab.isRepositories(node(f.tree(), 1))).isTrue());
+        f.edt(() -> assertThat(f.tab.rowIcon(new ViewSpec.TreeNode("app", "/r", List.of()))).contains("folder"));
+
+        f.intents.clear();
+        f.edt(() -> f.tree().expandRow(2));
+        assertThat(f.intents).as("an open repository is read").containsExactly(new Intent.WatchFolders(List.of("app")));
+        ViewSpec.TreeNode java = new ViewSpec.TreeNode("A.java", "", "comando-file:/r/A.java#0", List.of());
+        f.edt(() -> f.show("app", folder("app", java)));
+        assertThat(f.labels()).containsExactly("Memory", "Repositories", "app", "A.java", "lib");
+        f.intents.clear();
+        f.edt(() -> f.tree().collapseRow(1));
+        assertThat(f.intents).as("closing Repositories closes its rows").containsExactly(new Intent.WatchFolders(List.of()));
+        f.edt(() -> f.tree().expandRow(1));
+
+        RepoStatus.FileChange changed = new RepoStatus.FileChange("A.java", "", RepoStatus.Kind.MODIFIED);
+        f.edt(() -> f.tab.showRepos(List.of(
+                new RepoStatus("/c", "master", List.of(new RepoStatus.FileChange("MEMORY/a.md", "", RepoStatus.Kind.MODIFIED)), false, ""),
+                new RepoStatus("/r", "main", List.of(changed), false, ""))));
+        f.edt(() -> {
+            Rectangle r = f.tree().getRowBounds(2);
+            String tip = f.tree().getToolTipText(new MouseEvent(f.tree(), MouseEvent.MOUSE_MOVED, 0, 0, r.x + 4, r.y + r.height / 2, 0, false));
+            assertThat(tip).as("a repository's row says its branch and what it holds").isEqualTo("On main · 1 uncommitted: 1 modified");
+        });
+        f.edt(() -> {
+            Component cell = f.tree().getCellRenderer().getTreeCellRendererComponent(f.tree(), node(f.tree(), 2), false, false, false, 2, false);
+            Container row = (Container) cell;
+            assertThat(((JLabel) row.getComponent(0)).getIcon()).as("under Repositories a plain folder").isSameAs(Icons.get("folder"));
+            assertThat(((JLabel) row.getComponent(1)).getIcon()).as("the mark of changes").isSameAs(Icons.get(FilesTab.CHANGES_ICON));
+        });
+        f.intents.clear();
+        f.edt(() -> doubleClick(f.tree(), 2));
+        assertThat(f.intents).containsExactly(new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes("/r", "", "app"), Placement.SIDE));
+
+        f.intents.clear();
+        f.edt(() -> f.tree().setSelectionRow(3));
+        f.edt(() -> {
+            JPopupMenu menu = f.tab.menuFor(java);
+            assertThat(items(menu)).containsExactly("Open in a panel", "Edit in a panel", "Compare with HEAD");
+            ((JMenuItem) menu.getComponent(2)).doClick();
+        });
+        assertThat(f.intents).containsExactly(new Intent.OpenChange("/r", changed, ChangeAsk.OPEN));
+
+        f.intents.clear();
+        f.edt(() -> f.tree().setSelectionRow(0));
+        f.edt(() -> {
+            JPopupMenu menu = f.tab.menuFor(new ViewSpec.TreeNode("Memory", "/c/MEMORY", List.of()));
+            assertThat(items(menu)).as("the changes of the repository holding it, inside it").containsExactly("Show changes in Memory");
+            ((JMenuItem) menu.getComponent(0)).doClick();
+        });
+        assertThat(f.intents).containsExactly(new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes("/c", "MEMORY", "Memory"), Placement.SIDE));
+    }
+
+    @Test
+    void aRepositorysTooltipSaysItsBranchAndWhatItHoldsUncommitted() {
+        RepoStatus.FileChange a = new RepoStatus.FileChange("a", "", RepoStatus.Kind.MODIFIED);
+        RepoStatus.FileChange b = new RepoStatus.FileChange("b", "", RepoStatus.Kind.UNTRACKED);
+        RepoStatus.FileChange c = new RepoStatus.FileChange("c", "", RepoStatus.Kind.MODIFIED);
+        assertThat(FilesTab.repoTip(new RepoStatus("/r", "main", List.of(a, b, c), false, "")))
+                .isEqualTo("On main · 3 uncommitted: 2 modified, 1 untracked");
+        assertThat(FilesTab.repoTip(new RepoStatus("/r", "main", List.of(), false, ""))).isEqualTo("On main · nothing to commit");
+        assertThat(FilesTab.repoTip(new RepoStatus("/r", "(detached)", List.of(), false, ""))).isEqualTo("Detached HEAD · nothing to commit");
+        assertThat(FilesTab.repoTip(new RepoStatus("/r", "main", List.of(a), true, ""))).startsWith("On main · 1+ uncommitted");
+        assertThat(FilesTab.repoTip(new RepoStatus("/r", "", List.of(), false, "not a git repository"))).isEqualTo("Git: cannot be read: not a git repository");
+    }
+
+    private static void doubleClick(JTree tree, int row) {
+        Rectangle r = tree.getRowBounds(row);
+        tree.dispatchEvent(new MouseEvent(tree, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0,
+                r.x + 4, r.y + r.height / 2, 2, false, MouseEvent.BUTTON1));
+    }
+
+    private static DefaultMutableTreeNode node(JTree tree, int row) {
+        return (DefaultMutableTreeNode) tree.getPathForRow(row).getLastPathComponent();
     }
 
     /** A tab built and rendered on the event thread, recording what it sends and opens. */

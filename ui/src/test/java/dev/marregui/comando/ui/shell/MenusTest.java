@@ -43,7 +43,7 @@ class MenusTest {
         List<MenuEntry.Menu> bar = Menus.bar(true);
         assertThat(bar).extracting(MenuEntry.Menu::title).containsExactly("Files", "Edit", "Tools");
         assertThat(ids(bar)).containsExactly(
-                "panel.openSpec", "files.settings", "view.export",
+                "panel.openSpec", "files.settings", "files.repositories", "view.export",
                 "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
                 // a menu's own items, then its submenus'
                 "view.palette", "terminal.restart", "run.plotStop", "server.start", "server.stop",

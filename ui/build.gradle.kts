@@ -16,6 +16,7 @@ dependencies {
     runtimeOnly(libs.slf4j.jdk14)
     testImplementation(project(":testkit"))
     testImplementation(libs.archunit)
+    testImplementation(libs.awaitility)
 }
 
 // Help ▸ Tutorial shows the tutorial from the docs, so the app and the docs never disagree.

@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widgets.terminal;
 
+import dev.marregui.comando.ui.kit.desktop.Platform;
 import com.jediterm.terminal.ui.JediTermWidget;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import org.junit.jupiter.api.Test;
@@ -48,6 +49,14 @@ class TerminalKeysTest {
         assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_EQUALS, CTRL))).as("zoom").isFalse();
         assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_W, CTRL | InputEvent.ALT_DOWN_MASK))).isFalse();
         assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_W, InputEvent.META_DOWN_MASK))).as("⌘W on macOS").isFalse();
+    }
+
+    @Test
+    void onMacOsTheTerminalKeepsCommandKAsItsClearBufferAndTheChangesViewHasItElsewhere() {
+        KeyStroke cmdK = key(KeyEvent.VK_K, InputEvent.META_DOWN_MASK);
+        assertThat(TerminalWidget.keepsKey(inside, cmdK)).isEqualTo(Platform.isMac());
+        assertThat(TerminalWidget.keepsKey(new JTextField(), cmdK)).isFalse();
+        assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_K, InputEvent.META_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK))).isFalse();
     }
 
     @Test

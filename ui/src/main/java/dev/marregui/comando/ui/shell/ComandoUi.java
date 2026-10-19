@@ -5,10 +5,13 @@ import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
+import dev.marregui.comando.core.model.ChangeAsk;
+import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
+import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
@@ -26,6 +29,7 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
+import dev.marregui.comando.core.state.ViewState;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Clip;
@@ -34,6 +38,7 @@ import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.PanelTexts;
+import dev.marregui.comando.ui.dialogs.folders.FoldersDialog;
 import dev.marregui.comando.ui.dialogs.resource.ResourceDialog;
 import dev.marregui.comando.ui.dialogs.sessions.ImportSessionsDialog;
 import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
@@ -51,6 +56,7 @@ import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 import dev.marregui.comando.ui.panels.EditorPanel;
 import dev.marregui.comando.ui.panels.LowerPanel;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
@@ -66,6 +72,7 @@ import dev.marregui.comando.ui.widget.capability.Exportable;
 import dev.marregui.comando.ui.widget.capability.FindBar;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
+import dev.marregui.comando.ui.widgets.changes.ChangesWidget;
 import dev.marregui.comando.ui.widgets.console.ConsoleWidget;
 import dev.marregui.comando.ui.widgets.diff.DiffWidget;
 import dev.marregui.comando.ui.widgets.markdown.MarkdownWidget;
@@ -77,8 +84,10 @@ import dev.marregui.comando.ui.widgets.tree.TreeWidget;
 
 import javax.swing.JFrame;
 import javax.swing.JMenuBar;
+import javax.swing.JMenuItem;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
 import javax.swing.JSplitPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
@@ -192,6 +201,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private KeyPriority keyPriority;
     /** The user or Claude hid the side pane; a change in the side views shows it again. */
     private boolean sidePaneHidden;
+    /** The watched git repositories as last read, for the Changes view. */
+    private final RepoChanges repoChanges = new RepoChanges();
+    /** A changed file compared with HEAD, floating over the window. */
+    private DiffWindow diffWindow;
     /** The side views at the last render, by id, with their versions. */
     private Map<Long, Long> sideVersions = Map.of();
     /** Refreshes what changes with time alone: elapsed times, the server state. */
@@ -255,6 +268,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         widgets.register("text", ViewSpec.Text.class, c -> new TextWidget());
         widgets.register("tree", ViewSpec.Tree.class, TreeWidget::new);
         widgets.register("console", ViewSpec.Console.class, c -> new ConsoleWidget(c, deps.consoles()));
+        widgets.register("changes", ViewSpec.Changes.class, c -> new ChangesWidget(c, repoChanges, this::openFile));
 
         frame = new JFrame("comando");
         frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
@@ -283,6 +297,17 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }));
         }
         notifier = new Notifier(frame);
+        diffWindow = new DiffWindow(frame, () -> {
+            if (diffWindow.change() != null) {
+                deps.intents().dispatch(new Intent.OpenChange(diffWindow.root(), currentChange(diffWindow.root(), diffWindow.change()),
+                        ChangeAsk.REFRESH));
+            }
+        }, () -> {
+            // the comparison's theme button is a panel's: every editor switches, and the choice is kept
+            boolean on = !workspace.light();
+            workspace.light(on);
+            editorThemeChanged(on);
+        });
         AppIcon.install(frame);
         livePlots = new LivePlots(deps.intents(), deps.results());
         Thread.ofVirtual().name("pty-preload").start(TerminalWidget::preload);
@@ -290,7 +315,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.onAttention(notifier::attention);
         workspace.onClose(this::closePanel);
         workspace.onOpenFile(this::openFile);
-        workspace.onThemeChanged(windowLayout::lightEditors);
+        workspace.onThemeChanged(this::editorThemeChanged);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
         workspace.onRunsProgram(id -> lower.terminals().runningJob(id).isPresent());
@@ -327,6 +352,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 ComandoUi.this.openFile(file);
             }
         }, deps.texts(), () -> actions.run("view.sidebar"));
+        sidebar.onTabMenu(this::tabMenu);
         status = new StatusBar(deps.intents());
         findBar = new FindBar();
         top = new JPanel(new BorderLayout());
@@ -630,6 +656,91 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     @Override
+    public void showRepos(List<RepoStatus> repos) {
+        Edt.run(() -> {
+            repoChanges.set(repos);
+            if (sidebar != null) {
+                sidebar.showRepos(repos);
+            }
+        });
+    }
+
+    /** A change read for the comparison window; one that follows the selection, or is read again, shows only in a window already open. */
+    @Override
+    public void showChange(ChangeTexts texts, ChangeAsk ask) {
+        Edt.run(() -> {
+            if (diffWindow == null || ask != ChangeAsk.OPEN && !diffWindow.isShowing()) {
+                return;
+            }
+            diffWindow.show(texts, ask);
+        });
+    }
+
+    /**
+     * {@code shown}'s path as the repositories were last read: staged, committed or removed since it was opened, the
+     * file is read again as it now differs; a file that no longer differs is read as changed, and shows no differences.
+     */
+    private RepoStatus.FileChange currentChange(String root, RepoStatus.FileChange shown) {
+        for (RepoStatus r : repoChanges.repos()) {
+            if (r.root().equals(root)) {
+                for (RepoStatus.FileChange c : r.changes()) {
+                    if (c.path().equals(shown.path())) {
+                        return c;
+                    }
+                }
+                // a deletion committed stays a file that is not there
+                return new RepoStatus.FileChange(shown.path(), "",
+                        shown.kind() == RepoStatus.Kind.DELETED ? RepoStatus.Kind.DELETED : RepoStatus.Kind.MODIFIED);
+            }
+        }
+        return shown;
+    }
+
+    /** Every editor took the light theme or the dark one: the choice is kept, and the comparison window follows. */
+    private void editorThemeChanged(boolean light) {
+        windowLayout.lightEditors(light);
+        if (diffWindow != null) {
+            diffWindow.light(light);
+        }
+    }
+
+    /** A sidebar tab's menu gains the window's commands for that tab, each with its key and enabled as it can run. */
+    private void tabMenu(int tab, JPopupMenu menu) {
+        List<String> ids = switch (tab) {
+            case SessionsSidebar.SESSIONS -> List.of("session.dialog");
+            case SessionsSidebar.CONNECTIONS -> deps.server() == null ? List.of("connection.dialog")
+                    : List.of("connection.dialog", "server.start", "server.stop");
+            case SessionsSidebar.PANELS -> List.of("panel.new", "panel.reopen");
+            case SessionsSidebar.FILES -> List.of("files.settings", "files.repositories", "view.changes");
+            default -> List.of();
+        };
+        for (String id : ids) {
+            Command c = actions.get(id);
+            if (c != null) {
+                JMenuItem item = new JMenuItem(ActionRegistry.action(c));
+                item.setEnabled(c.enabled().getAsBoolean());
+                menu.add(item);
+            }
+        }
+    }
+
+    /** The Files tab's folders in their window, {@code select} selected (empty: the first); saving replaces them. */
+    private void editFolders(boolean repositories) {
+        FoldersDialog.show(frame, deps.state().get().folders(), repositories, repoChanges, deps.intents());
+    }
+
+    /** Opens the Changes view of every repository in the side pane; closes it when it shows them all, widens it when it shows one. */
+    private void toggleChanges() {
+        Optional<ViewState> open = deps.state().get().views().stream().filter(v -> v.spec() instanceof ViewSpec.Changes).findFirst();
+        if (open.isPresent() && ((ViewSpec.Changes) open.get().spec()).root().isEmpty()) {
+            deps.intents().dispatch(new Intent.CloseView(open.get().id()));
+        } else {
+            sidePaneHidden = false;
+            deps.intents().dispatch(new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes(), Placement.SIDE));
+        }
+    }
+
+    @Override
     public void showPlanUsage(PlanUsage usage) {
         Edt.run(() -> status.planUsage(usage));
     }
@@ -822,7 +933,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("run.plotStop", "Stop refreshing plots", null, livePlots::stopAll, () -> livePlots.size() > 0);
         // panel: tools that run in its project
         cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, shortcut | ALT), this::runGradle, () -> focusedSession().isPresent());
-        cmd("files.settings", "Files tab folders", null, help::openFolderSettings);
+        cmd("files.settings", "Files tab folders…", null, () -> editFolders(false));
+        cmd("files.repositories", "Repositories…", null, () -> editFolders(true));
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         // view
         cmd("view.palette", "Command palette", key(KeyEvent.VK_P, shortcut | SHIFT), () -> new CommandPalette(actions).show(frame));
@@ -837,6 +949,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             sidePaneHidden = sidePaneShown;
             render();
         }, () -> sidePaneShown || side.hasViews());
+        // ⌘K, IntelliJ's key for its commit view; a focused terminal keeps it as its Clear Buffer
+        cmd("view.changes", "Uncommitted changes", key(KeyEvent.VK_K, shortcut), this::toggleChanges);
         cmd("view.files", "Files", null, () -> {
             if (!sidebar.isShown()) {
                 toggleSidebar();
@@ -1359,6 +1473,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         sidebar.selectTab(windowLayout.sidebarTab());
         sidebar.manualOrder(windowLayout.manualOrder());
         workspace.light(windowLayout.lightEditors());
+        if (diffWindow != null) {
+            diffWindow.light(windowLayout.lightEditors());
+        }
         showSidebar(windowLayout.sidebarShown());
         vertical.setDividerLocation(windowLayout.lowerDivider(h));
         sidePaneHidden = windowLayout.sidePaneHidden();
@@ -1387,6 +1504,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 return;
             }
             teardown();
+            if (diffWindow != null) {
+                diffWindow.dispose();
+            }
             frame.dispose();
         }, CLOSE_BOUND);
         if (!closed) {
@@ -1499,8 +1619,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         }
         quitting = true;
+        long start = System.nanoTime();
         saveLayoutQuietly();
         teardown();
+        long millis = (System.nanoTime() - start) / 1_000_000;
+        LOG.log(System.Logger.Level.INFO, "quitting [window teardown millis=" + millis + ']');
         // the window stays, saying so, until the application has closed (close() disposes it): a relaunch meanwhile
         // finds the lock held, and the user can see why
         frame.setTitle("comando — closing…");

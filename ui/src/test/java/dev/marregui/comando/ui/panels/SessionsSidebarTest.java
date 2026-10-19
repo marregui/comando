@@ -38,6 +38,7 @@ import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -65,40 +66,43 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void theColumnIsFourTabsInTwoFixedRowsAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
+    void theColumnIsFourTabsInOneRowAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
         AtomicInteger toggles = new AtomicInteger();
         SessionsSidebar[] s = new SessionsSidebar[1];
         SwingUtilities.invokeAndWait(() -> s[0] = new SessionsSidebar(intent -> {
         }, NO_DIALOGS, toggles::incrementAndGet));
         SessionsSidebar sidebar = s[0];
+        List<String> order = List.of("Sessions", "Connections", "Panels", "Files");
         Map<String, Rectangle> at = new HashMap<>();
+        Map<String, String> text = new HashMap<>();
         SwingUtilities.invokeAndWait(() -> {
-            sidebar.component().setSize(280, 500);
+            sidebar.component().setSize(420, 500);
             layout(sidebar.component());
-            for (String t : List.of("Sessions", "Panels", "Connections", "Files")) {
-                JToggleButton h = find(sidebar.component(), JToggleButton.class, b -> t.equals(b.getText()));
+            for (String t : order) {
+                JToggleButton h = header(sidebar, t);
                 at.put(t, SwingUtilities.convertRectangle(h.getParent(), h.getBounds(), sidebar.component()));
+                text.put(t, h.getText());
             }
         });
-        assertThat(at.get("Panels").y).as("Panels and Files on the top row").isEqualTo(at.get("Files").y)
-                .isLessThan(at.get("Sessions").y);
-        assertThat(at.get("Sessions").y).as("Sessions and Connections below").isEqualTo(at.get("Connections").y);
-        assertThat(at.get("Panels").x).isLessThan(at.get("Files").x).isEqualTo(at.get("Sessions").x);
-        assertThat(at.get("Sessions").x).isLessThan(at.get("Connections").x);
+        for (int i = 1; i < order.size(); i++) {
+            assertThat(at.get(order.get(i)).y).as("one row").isEqualTo(at.get("Sessions").y);
+            assertThat(at.get(order.get(i)).x).as("in the order " + order).isGreaterThan(at.get(order.get(i - 1)).x);
+        }
+        assertThat(text.values()).as("icons alone").containsOnly("");
+        assertThat(header(sidebar, "Files").getClientProperty("JButton.buttonType")).as("drawn as a tab").isEqualTo("tab");
+        assertThat(at.get("Files").x + at.get("Files").width).as("packed: four icons in a narrow sidebar").isLessThan(160);
+        for (String t : order) {
+            JToggleButton h = header(sidebar, t);
+            assertThat(h.getToolTipText()).as(t + " is named by its tooltip").startsWith(t + ": ").hasSizeLessThanOrEqualTo(80);
+            assertThat(h.getAccessibleContext().getAccessibleName()).isEqualTo(t);
+        }
 
         for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.PANELS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES}) {
             SwingUtilities.invokeAndWait(() -> sidebar.selectTab(tab));
             assertThat(sidebar.selectedTab()).isEqualTo(tab);
         }
-        SwingUtilities.invokeAndWait(() -> find(sidebar.component(), JToggleButton.class, b -> "Panels".equals(b.getText())).doClick());
-        assertThat(sidebar.selectedTab()).as("a click selects; nothing moves").isEqualTo(SessionsSidebar.PANELS);
-        Rectangle panelsAfter = new Rectangle();
-        SwingUtilities.invokeAndWait(() -> {
-            layout(sidebar.component());
-            JToggleButton h = find(sidebar.component(), JToggleButton.class, b -> "Panels".equals(b.getText()));
-            panelsAfter.setBounds(SwingUtilities.convertRectangle(h.getParent(), h.getBounds(), sidebar.component()));
-        });
-        assertThat(panelsAfter).isEqualTo(at.get("Panels"));
+        SwingUtilities.invokeAndWait(() -> header(sidebar, "Panels").doClick());
+        assertThat(sidebar.selectedTab()).as("a click selects").isEqualTo(SessionsSidebar.PANELS);
 
         AbstractButton hide = button(sidebar.component(), KeyText.of("Hide the sidebar (⌘B)"));
         AbstractButton show = button(sidebar.component(), KeyText.of("Show the sidebar (⌘B)"));
@@ -644,6 +648,37 @@ class SessionsSidebarTest {
 
     private static AbstractButton button(Component root, String name) {
         return find(root, AbstractButton.class, b -> name.equals(b.getAccessibleContext().getAccessibleName()));
+    }
+
+    @Test
+    void eachTabsMenuOffersItsOwnActionsThenTheWindowsThenHidingTheSidebar() throws Exception {
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> s[0] = new SessionsSidebar(intent -> {
+        }, NO_DIALOGS, () -> {
+        }));
+        SessionsSidebar sidebar = s[0];
+        sidebar.onTabMenu((tab, menu) -> menu.add(new JMenuItem("window command " + tab)));
+        Map<Integer, List<String>> items = new HashMap<>();
+        SwingUtilities.invokeAndWait(() -> {
+            for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.PANELS, SessionsSidebar.FILES}) {
+                List<String> texts = new ArrayList<>();
+                for (Component c : sidebar.tabMenu(tab).getComponents()) {
+                    texts.add(c instanceof JMenuItem m ? m.getText() : "—");
+                }
+                items.put(tab, texts);
+            }
+        });
+        String hide = KeyText.of("Hide the sidebar (⌘B)");
+        assertThat(items.get(SessionsSidebar.SESSIONS)).containsExactly("New session…", "Import stored conversations…",
+                "Sort: running first, then by name", "window command 0", "—", hide);
+        assertThat(items.get(SessionsSidebar.CONNECTIONS)).containsExactly("New connection…", "window command 1", "—", hide);
+        assertThat(items.get(SessionsSidebar.PANELS)).containsExactly("window command 2", "—", hide);
+        assertThat(items.get(SessionsSidebar.FILES)).containsExactly("Close every folder", "window command 3", "—", hide);
+    }
+
+    /** The tab header named {@code title}: by its accessible name, which stays when a narrow row drops its text. */
+    private static JToggleButton header(SessionsSidebar sidebar, String title) {
+        return find(sidebar.component(), JToggleButton.class, b -> title.equals(b.getAccessibleContext().getAccessibleName()));
     }
 
     private static <T extends Component> T find(Component root, Class<T> type, Predicate<T> match) {

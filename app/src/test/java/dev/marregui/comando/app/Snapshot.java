@@ -7,8 +7,10 @@ import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
+import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
@@ -27,6 +29,7 @@ import javax.swing.JFrame;
 import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
+import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
@@ -43,6 +46,7 @@ import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Window;
+import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
@@ -50,6 +54,7 @@ import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -73,7 +78,7 @@ public final class Snapshot {
         boolean live = args.length > 1 && Boolean.parseBoolean(args[1]);
         Files.createDirectories(out);
         Path home = Files.createTempDirectory("comando-snapshot");
-        sampleFolders(home);
+        Path sampleRepo = sampleFolders(home);
         AppConfig config = new AppConfig(home, ClaudeSettings.findExecutable(),
                 ClaudeSettings.defaultProjectsDir(), true);
         App app = new App(config, "snapshot", () -> {
@@ -292,6 +297,76 @@ public final class Snapshot {
         // About comando, as the application menu opens it: the card alone, at the Retina scale it is seen at
         SwingUtilities.invokeAndWait(() -> app.ui().showAbout());
         shootDialog("About comando", out.resolve("02k-about.png"));
+        // a git repository among the folders: the Files tab in git's colours, the Changes view beside the editor, and a
+        // changed file compared side by side in the window that floats over comando's
+        selectSidebarTab("Files");
+        SwingUtilities.invokeAndWait(() -> {
+            JTree files = tree("Files");
+            for (int i = 0; files != null && i < files.getRowCount(); i++) {
+                if (files.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
+                        && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals("Repo")) {
+                    files.expandRow(i);
+                }
+            }
+        });
+        await(loop, st -> rowShown("Files", "src"), 10_000);
+        SwingUtilities.invokeAndWait(() -> {
+            JTree files = tree("Files");
+            for (int i = 0; files != null && i < files.getRowCount() && i < 60; i++) {
+                if (files.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
+                        && n.getUserObject() instanceof ViewSpec.TreeNode node && !node.children().isEmpty()) {
+                    files.expandRow(i);
+                }
+            }
+        });
+        // the repositories window: the list, the selected repository's fields, its facts
+        SwingUtilities.invokeLater(() -> findCommand("files.repositories"));
+        await(loop, st -> dialogShown("Repositories"), 10_000);
+        SwingUtilities.invokeAndWait(() -> selectInDialogList("Repositories", "Repo"));
+        flushEdt();
+        flushEdt();
+        shootDialog("Repositories", out.resolve("02k2-folders-window.png"));
+        // the repository's row: git icon and flag; a double click opens the Changes view and leaves the row open
+        await(loop, st -> rowExpanded("Files", "Repo") && repoMarked(), 15_000);
+        SwingUtilities.invokeAndWait(() -> doubleClickRow(tree("Files"), "Repo"));
+        await(loop, st -> st.views().stream().anyMatch(v -> v.spec() instanceof ViewSpec.Changes), 10_000);
+        if (!rowExpanded("Files", "Repo")) {
+            throw new IllegalStateException("the double click closed the repository's row");
+        }
+        await(loop, st -> rowShown(ViewSpec.Changes.TITLE, "Lane.java"), 15_000);
+        flushEdt();
+        shoot(out.resolve("02l-changes.png"));
+        loop.dispatch(new Intent.OpenChange(sampleRepo.toString(),
+                new RepoStatus.FileChange("src/main/java/demo/Lane.java", "", RepoStatus.Kind.MODIFIED), ChangeAsk.OPEN));
+        String diffTitle = "src/main/java/demo/Lane.java — compared with HEAD";
+        await(loop, st -> dialogShown(diffTitle), 10_000);
+        // a read again of a file the window no longer shows never takes it back
+        loop.dispatch(new Intent.OpenChange(sampleRepo.toString(),
+                new RepoStatus.FileChange("src/main/java/demo/Ring.java", "", RepoStatus.Kind.ADDED), ChangeAsk.REFRESH));
+        loop.dispatch(new Intent.OpenChange(sampleRepo.toString(),
+                new RepoStatus.FileChange("src/main/java/demo/Lane.java", "", RepoStatus.Kind.MODIFIED), ChangeAsk.REFRESH));
+        await(loop, st -> dialogShown(diffTitle), 10_000);
+        // the diff scrolls to its first difference in a task it posts after the layout that sizes the texts
+        flushEdt();
+        flushEdt();
+        shootDialog(diffTitle, out.resolve("02m-diff-window.png"));
+        // the comparison's theme button switches every editor to the light theme, and the comparison with them
+        loop.dispatch(new Intent.OpenChange(sampleRepo.toString(),
+                new RepoStatus.FileChange("src/main/java/demo/Lane.java", "", RepoStatus.Kind.MODIFIED), ChangeAsk.OPEN));
+        await(loop, st -> dialogShown(diffTitle), 10_000);
+        clickInDialog(diffTitle, "Light editors");
+        flushEdt();
+        flushEdt();
+        shootDialog(diffTitle, out.resolve("02m2-diff-window-light.png"));
+        loop.dispatch(new Intent.OpenChange(sampleRepo.toString(),
+                new RepoStatus.FileChange("src/main/java/demo/Lane.java", "", RepoStatus.Kind.MODIFIED), ChangeAsk.OPEN));
+        await(loop, st -> dialogShown(diffTitle), 10_000);
+        clickInDialog(diffTitle, "Dark editors");
+        flushEdt();
+        closeDialog(diffTitle);
+        loop.state().views().stream().filter(v -> v.spec() instanceof ViewSpec.Changes).findFirst()
+                .ifPresent(v -> loop.dispatch(new Intent.CloseView(v.id())));
+        selectSidebarTab("Sessions");
         loop.dispatch(new Intent.FocusPanel(first));
         Thread.sleep(500);
         long plotId = loop.state().views().stream().filter(v -> v.title().equals("delay")).findFirst().orElseThrow().id();
@@ -387,10 +462,12 @@ public final class Snapshot {
     /**
      * Sample folders for the Files tab, written as {@code folders.json} before the start: a scratchpad of two days
      * whose index is {@code ALPHA.md}, a knowledge base with build output the tab leaves out, a memory whose
-     * index leads it, and a folder of skills and one of a plugin, so every folder icon shows.
+     * index leads it, a folder of skills and one of a plugin, so every folder icon shows, and a git repository with
+     * changes; answers the repository.
      */
-    private static void sampleFolders(Path home) throws Exception {
+    private static Path sampleFolders(Path home) throws Exception {
         Path root = Files.createTempDirectory("comando-snapshot-files");
+        Path repo = sampleRepo(root.resolve("repo"));
         Path pad = root.resolve("SCRATCHPAD");
         for (String day : List.of("2026-10-15", "2026-10-16")) {
             Path d = Files.createDirectories(pad.resolve(day));
@@ -415,7 +492,196 @@ public final class Snapshot {
                 new FolderRoot("KB", kb.toString(), "ALPHA.md", List.of(), "knowledge"),
                 new FolderRoot("Skills", root.resolve("skills").toString(), "", List.of(), "skills"),
                 new FolderRoot("Plugin", root.resolve("plugin").toString(), "", List.of(), "plugin"),
-                new FolderRoot("Notes", root.resolve("notes").toString(), "", List.of()))));
+                new FolderRoot("Notes", root.resolve("notes").toString(), "", List.of()),
+                new FolderRoot("Repo", repo.toString(), "", List.of()).asRepository())));
+        return repo;
+    }
+
+    /** A repository whose working tree has a file changed, one added, one deleted and one untracked, and an ignored folder. */
+    private static Path sampleRepo(Path repo) throws Exception {
+        Path src = Files.createDirectories(repo.resolve("src/main/java/demo"));
+        StringBuilder lane = new StringBuilder("package demo;\n\n/** A lane of work: one writer, many readers. */\nfinal class Lane {\n\n");
+        for (int i = 1; i <= 12; i++) {
+            lane.append("    private long stamp").append(i).append(";\n");
+        }
+        lane.append("\n    long read() {\n        long s = stamp1;\n        return s + stamp2;\n    }\n\n    void write(long v) {\n")
+                .append("        stamp1 = v;\n        stamp2 = v * 2;\n    }\n}\n");
+        Files.writeString(src.resolve("Lane.java"), lane);
+        Files.writeString(src.resolve("Old.java"), "package demo;\n\nfinal class Old {\n}\n");
+        Files.writeString(repo.resolve(".gitignore"), "dist/\n");
+        Files.writeString(repo.resolve("README.md"), "# Demo\n");
+        git(repo, "init", "-q");
+        git(repo, "add", "-A");
+        git(repo, "commit", "-q", "-m", "first");
+        String changed = lane.toString()
+                .replace("    private long stamp7;\n", "")
+                .replace("        return s + stamp2;", "        // the reader takes its stamp before the data\n        return s + stamp2 + stamp3;")
+                .replace("        stamp2 = v * 2;", "        stamp2 = v << 1;");
+        Files.writeString(src.resolve("Lane.java"), changed);
+        Files.writeString(src.resolve("Ring.java"), "package demo;\n\nfinal class Ring {\n}\n");
+        git(repo, "add", "src/main/java/demo/Ring.java");
+        Files.delete(src.resolve("Old.java"));
+        Files.writeString(Files.createDirectories(repo.resolve("notes")).resolve("todo.md"), "# To do\n");
+        Files.writeString(Files.createDirectories(repo.resolve("dist")).resolve("bundle.js"), "x");
+        return repo;
+    }
+
+    private static void git(Path dir, String... args) throws Exception {
+        List<String> cmd = new ArrayList<>(List.of("git", "-c", "user.name=snapshot", "-c", "user.email=s@s", "-c", "commit.gpgsign=false",
+                "-c", "init.defaultBranch=main", "-C", dir.toString()));
+        cmd.addAll(List.of(args));
+        Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
+        p.getInputStream().readAllBytes();
+        if (p.waitFor() != 0) {
+            throw new IllegalStateException("git " + String.join(" ", args) + " failed");
+        }
+    }
+
+    /** Whether the row labelled {@code label} of the tree named {@code name} is open; asked on the event thread. */
+    private static boolean rowExpanded(String name, String label) {
+        boolean[] open = new boolean[1];
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                JTree t = tree(name);
+                for (int i = 0; t != null && i < t.getRowCount(); i++) {
+                    if (t.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
+                            && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals(label)) {
+                        open[0] = t.isExpanded(i);
+                    }
+                }
+            });
+        } catch (Exception e) {
+            return false;
+        }
+        return open[0];
+    }
+
+    /** Whether the Files tab knows the sample repository, so its row has the git icon and the flag. */
+    private static boolean repoMarked() {
+        boolean[] marked = new boolean[1];
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                JTree t = tree("Files");
+                for (int i = 0; t != null && i < t.getRowCount(); i++) {
+                    if (t.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
+                            && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals("Repo")) {
+                        Rectangle r = t.getRowBounds(i);
+                        Component c = t.getCellRenderer().getTreeCellRendererComponent(t, n, false, true, false, i, false);
+                        // the flag rides in a row of its own after the name
+                        marked[0] = r != null && c instanceof JPanel;
+                    }
+                }
+            });
+        } catch (Exception e) {
+            return false;
+        }
+        return marked[0];
+    }
+
+    /** A user's double click on the row labelled {@code label}: press, release and click, twice. */
+    private static void doubleClickRow(JTree t, String label) {
+        for (int i = 0; i < t.getRowCount(); i++) {
+            if (t.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
+                    && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals(label)) {
+                Rectangle r = t.getRowBounds(i);
+                int x = r.x + 30;
+                int y = r.y + r.height / 2;
+                for (int count = 1; count <= 2; count++) {
+                    long now = System.currentTimeMillis();
+                    t.dispatchEvent(new MouseEvent(t, MouseEvent.MOUSE_PRESSED, now, InputEvent.BUTTON1_DOWN_MASK, x, y, count, false, MouseEvent.BUTTON1));
+                    t.dispatchEvent(new MouseEvent(t, MouseEvent.MOUSE_RELEASED, now, 0, x, y, count, false, MouseEvent.BUTTON1));
+                    t.dispatchEvent(new MouseEvent(t, MouseEvent.MOUSE_CLICKED, now, 0, x, y, count, false, MouseEvent.BUTTON1));
+                }
+                return;
+            }
+        }
+        throw new IllegalStateException("no row " + label);
+    }
+
+    /** Clicks the button whose accessible name is {@code name} in the open dialog titled {@code title}. */
+    private static void clickInDialog(String title, String name) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            for (Window w : Window.getWindows()) {
+                if (w instanceof JDialog d && d.isVisible() && title.equals(d.getTitle())) {
+                    AbstractButton b = find(d.getContentPane(), AbstractButton.class, x -> name.equals(x.getAccessibleContext().getAccessibleName()));
+                    if (b == null) {
+                        throw new IllegalStateException("no button " + name + " in " + title);
+                    }
+                    b.doClick();
+                    return;
+                }
+            }
+            throw new IllegalStateException("no dialog " + title);
+        });
+    }
+
+    private static void closeDialog(String title) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            for (Window w : Window.getWindows()) {
+                if (w instanceof JDialog d && d.isVisible() && title.equals(d.getTitle())) {
+                    d.setVisible(false);
+                }
+            }
+        });
+    }
+
+    /** Runs the menu bar's command {@code id}, clicking its item as the user would. */
+    private static void findCommand(String id) {
+        String text = switch (id) {
+            case "files.settings" -> "Files tab folders";
+            case "files.repositories" -> "Repositories";
+            default -> throw new IllegalArgumentException(id);
+        };
+        for (Frame f : Frame.getFrames()) {
+            if (f instanceof JFrame jf && f.isVisible() && jf.getJMenuBar() != null) {
+                for (int m = 0; m < jf.getJMenuBar().getMenuCount(); m++) {
+                    JMenu menu = jf.getJMenuBar().getMenu(m);
+                    for (int i = 0; i < menu.getItemCount(); i++) {
+                        JMenuItem item = menu.getItem(i);
+                        if (item != null && item.getText() != null && item.getText().startsWith(text)) {
+                            item.doClick();
+                            return;
+                        }
+                    }
+                }
+            }
+        }
+        throw new IllegalStateException("no menu item for " + id);
+    }
+
+    /** Selects the entry labelled {@code label} in the list of the open dialog titled {@code title}. */
+    private static void selectInDialogList(String title, String label) {
+        for (Window w : Window.getWindows()) {
+            if (w instanceof JDialog d && d.isVisible() && title.equals(d.getTitle())) {
+                JList<?> l = find(d.getContentPane(), JList.class, x -> true);
+                for (int i = 0; l != null && i < l.getModel().getSize(); i++) {
+                    if (String.valueOf(l.getModel().getElementAt(i)).equals(label)) {
+                        l.setSelectedIndex(i);
+                    }
+                }
+            }
+        }
+    }
+
+    /** Runs every task posted to the event thread before this call. */
+    private static void flushEdt() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+        });
+    }
+
+    /** Whether a dialog titled {@code title} is on screen; asked on the event thread. */
+    private static boolean dialogShown(String title) {
+        boolean[] shown = new boolean[1];
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                for (Window w : Window.getWindows()) {
+                    shown[0] |= w instanceof JDialog d && d.isVisible() && title.equals(d.getTitle());
+                }
+            });
+        } catch (Exception e) {
+            return false;
+        }
+        return shown[0];
     }
 
     /** Whether the visible window's tree named {@code name} shows a row labelled {@code label}; asked on the event thread. */
@@ -659,7 +925,7 @@ public final class Snapshot {
     }
 
     private static JToggleButton header(Component c, String title) {
-        if (c instanceof JToggleButton b && title.equals(b.getText())) {
+        if (c instanceof JToggleButton b && (title.equals(b.getText()) || title.equals(b.getAccessibleContext().getAccessibleName()))) {
             return b;
         }
         if (c instanceof Container k) {

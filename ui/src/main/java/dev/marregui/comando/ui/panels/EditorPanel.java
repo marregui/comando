@@ -14,6 +14,7 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.format.KeyText;
@@ -134,7 +135,7 @@ public final class EditorPanel extends JPanel {
         left.add(sessionClear);
         sessionCompact.setIcon(Icons.get("compact"));
         sessionCompact.getAccessibleContext().setAccessibleName("Compact the conversation");
-        sessionCompact.setToolTipText("Compact the conversation: send " + SessionSpec.COMPACT_COMMAND + " to the session");
+        sessionCompact.setToolTipText(SessionRow.COMPACT_TIP);
         sessionClear.setIcon(Icons.get("clear-conversation"));
         sessionClear.getAccessibleContext().setAccessibleName("Clear the conversation");
         left.add(Box.createHorizontalStrut(Theme.PAD));
@@ -142,7 +143,7 @@ public final class EditorPanel extends JPanel {
         left.add(connectionToggle);
         // icons close together, as the session's at the left
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
-        run.setToolTipText(KeyText.of("Run the selection or the block under the caret (⌘⏎); ⌘⇧⏎ sends to Claude, ⌥⏎ runs as SQL"));
+        run.setToolTipText(KeyText.of("Run the selection or block (⌘⏎); to Claude ⌘⇧⏎, as SQL ⌥⏎"));
         stop.setToolTipText(KeyText.of("Stop the running SQL or interrupt the session (⌘.)"));
         clear.setToolTipText(KeyText.of("Clear the text (⌘Z brings it back)"));
         // a click leaves the keyboard in the editor, ready for the next edit or run: every icon button is unfocusable
@@ -429,8 +430,7 @@ public final class EditorPanel extends JPanel {
 
     private void showTheme(boolean light) {
         theme.setIcon(Icons.get("theme"));
-        String tip = light ? "Dark editors: every panel's text and preview" : "Light editors: every panel's text and preview";
-        theme.setToolTipText(tip);
+        theme.setToolTipText(light ? "Switch every editor to dark" : "Switch every editor to light");
         theme.getAccessibleContext().setAccessibleName(light ? "Dark editors" : "Light editors");
     }
 
@@ -508,7 +508,7 @@ public final class EditorPanel extends JPanel {
             sessionToggle.setToolTipText(ss.status().isUsable() ? "Connected; click to disconnect (stops the session)"
                     : "Disconnected; click to connect (starts the session)");
             sessionFresh.setVisible(showsFresh(ss));
-            sessionFresh.setToolTipText("Start a new conversation; the current one (" + ss.spec().claudeSessionId() + ") stays importable");
+            sessionFresh.setToolTipText(SessionRow.freshTip(ss));
             sessionCheckpoint.setVisible(showsCheckpoint(ss));
             sessionCheckpoint.setEnabled(ss.status() != Status.CLOSING);
             sessionCheckpoint.setIcon(Icons.get(checkpointIcon(ss)));
@@ -516,8 +516,7 @@ public final class EditorPanel extends JPanel {
             // as on the session's row: compact and clear only while it runs
             sessionCompact.setVisible(ss.status().isUsable());
             sessionClear.setVisible(ss.status().isUsable());
-            sessionClear.setToolTipText("Clear the conversation: send " + SessionSpec.CLEAR_COMMAND + "; a new one starts"
-                    + (ss.spec().claudeSessionId().isEmpty() ? "" : ", the current one (" + ss.spec().claudeSessionId() + ") stays importable"));
+            sessionClear.setToolTipText(SessionRow.clearTip(ss));
         } else {
             sessionFresh.setVisible(false);
             sessionCheckpoint.setVisible(false);
@@ -611,8 +610,8 @@ public final class EditorPanel extends JPanel {
     }
 
     static String checkpointTip(SessionState ss) {
-        String send = "send " + ss.spec().checkpoint() + " to the session";
-        return ss.reflection().due() ? "Checkpoint due: the context passed " + Math.round(Reflection.THRESHOLD * 100) + "% of the window; " + send
+        String send = "sends " + Clip.keepStart(ss.spec().checkpoint(), 40);
+        return ss.reflection().due() ? "Checkpoint due, context past " + Math.round(Reflection.THRESHOLD * 100) + "%: " + send
                 : "Checkpoint: " + send;
     }
 

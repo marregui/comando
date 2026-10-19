@@ -6,9 +6,11 @@ import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.AbstractAction;
+import javax.swing.BorderFactory;
 import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
+import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTree;
 import javax.swing.KeyStroke;
@@ -18,7 +20,9 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
+import java.awt.Color;
 import java.awt.Component;
+import java.awt.FlowLayout;
 import java.awt.Rectangle;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
@@ -29,6 +33,7 @@ import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * A {@link ViewSpec.TreeNode} tree: details muted after the label; a double click or Enter activates a
@@ -36,13 +41,46 @@ import java.util.function.Function;
  */
 public final class TreeView {
 
-    private final JTree tree = new JTree(new DefaultTreeModel(new DefaultMutableTreeNode()));
+    private final JTree tree = new JTree(new DefaultTreeModel(new DefaultMutableTreeNode())) {
+        /** Whether the node under the mouse event being handled keeps its double click for itself. */
+        private boolean held;
+
+        @Override
+        protected void processMouseEvent(MouseEvent e) {
+            TreePath p = getPathForLocation(e.getX(), e.getY());
+            held = p != null && noToggle.test((DefaultMutableTreeNode) p.getLastPathComponent());
+            try {
+                super.processMouseEvent(e);
+            } finally {
+                held = false;
+            }
+        }
+
+        @Override
+        public int getToggleClickCount() {
+            // the look asks while it handles the event: a held node's double click opens and closes nothing
+            return held ? 0 : super.getToggleClickCount();
+        }
+    };
     private final JScrollPane scroll = new JScrollPane(tree);
     private Consumer<ViewSpec.TreeNode> onActivate = n -> { };
     private BiConsumer<ViewSpec.TreeNode, MouseEvent> onMenu = (n, e) -> { };
     private Function<ViewSpec.TreeNode, Icon> icons = n -> null;
+    private Function<DefaultMutableTreeNode, Color> colors = n -> null;
+    private Function<DefaultMutableTreeNode, Icon> nodeIcons = n -> null;
+    private Function<DefaultMutableTreeNode, Icon> trailing = n -> null;
+    private Predicate<DefaultMutableTreeNode> noToggle = n -> false;
+    private Function<DefaultMutableTreeNode, String> tips = n -> null;
+    /** A cell with an icon after its name: the look's label with the name, the icon, then the detail, muted. */
+    private final JPanel withTrailing = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
+    private final JLabel trailingIcon = new JLabel();
+    private final JLabel trailingDetail = new JLabel();
 
     public TreeView() {
+        withTrailing.setOpaque(false);
+        trailingIcon.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
+        trailingDetail.setForeground(Theme.MUTED);
+        trailingDetail.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 0));
         tree.setRootVisible(true);
         tree.setShowsRootHandles(true);
         tree.setCellRenderer(new DefaultTreeCellRenderer() {
@@ -55,10 +93,34 @@ public final class TreeView {
                     l.setText(node.detail().isEmpty() && !node.label().startsWith("✗ ") ? Plain.text(node.label())
                             : "<html>" + label + (node.detail().isEmpty() ? "" : "&nbsp;&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>"
                             + MarkdownHtml.escape(node.detail()) + "</span>") + "</html>");
-                    l.setToolTipText(node.link().isEmpty() ? null : "Double-click to open");
-                    Icon icon = icons.apply(node);
+                    String tip = tips.apply(n);
+                    l.setToolTipText(tip != null ? tip : node.link().isEmpty() ? null : "Double-click to open");
+                    Icon icon = nodeIcons.apply(n);
+                    if (icon == null) {
+                        icon = icons.apply(node);
+                    }
                     if (icon != null) {
                         l.setIcon(icon);
+                    }
+                    Color color = sel ? null : colors.apply(n);
+                    if (color != null) {
+                        l.setForeground(color);
+                    }
+                    Icon after = trailing.apply(n);
+                    if (after != null) {
+                        // the mark belongs to the name: the detail, a path that may run past the edge, comes after it
+                        l.setText(Plain.text(node.label()));
+                        trailingIcon.setIcon(after);
+                        trailingDetail.setText(Plain.text(node.detail()));
+                        trailingDetail.setFont(l.getFont());
+                        withTrailing.setToolTipText(l.getToolTipText());
+                        withTrailing.removeAll();
+                        withTrailing.add(l);
+                        withTrailing.add(trailingIcon);
+                        if (!node.detail().isEmpty()) {
+                            withTrailing.add(trailingDetail);
+                        }
+                        return withTrailing;
                     }
                 }
                 return l;
@@ -157,6 +219,34 @@ public final class TreeView {
     /** The icon of each node; null keeps the look's own folder and leaf icons. */
     public void icons(Function<ViewSpec.TreeNode, Icon> icons) {
         this.icons = icons;
+    }
+
+    /**
+     * The colour of each node's label, given its tree node so a caller can look at the nodes above it; null keeps the
+     * look's own. A selected node keeps the selection's colour.
+     */
+    public void colors(Function<DefaultMutableTreeNode, Color> colors) {
+        this.colors = colors;
+    }
+
+    /** The icon of each node, given its tree node; null falls back to {@link #icons}. */
+    public void nodeIcons(Function<DefaultMutableTreeNode, Icon> icons) {
+        this.nodeIcons = icons;
+    }
+
+    /** An icon after a node's text, such as a mark that it holds changes; null for none. */
+    public void trailing(Function<DefaultMutableTreeNode, Icon> trailing) {
+        this.trailing = trailing;
+    }
+
+    /** The tooltip of a node, or null for the default: "Double-click to open" on a node with a link, else none. */
+    public void tips(Function<DefaultMutableTreeNode, String> tips) {
+        this.tips = tips;
+    }
+
+    /** The nodes a double click does not open or close: their double click is the caller's, through its own listener. */
+    public void noToggle(Predicate<DefaultMutableTreeNode> noToggle) {
+        this.noToggle = noToggle;
     }
 
     /** Shows {@code root}, expanded to {@code levels} below it. */

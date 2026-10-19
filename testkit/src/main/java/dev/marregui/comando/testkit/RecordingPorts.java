@@ -3,10 +3,13 @@ package dev.marregui.comando.testkit;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.model.ChangeAsk;
+import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
+import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.ApprovalPort;
 import dev.marregui.comando.core.port.ClaudePort;
@@ -157,6 +160,16 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     }
 
     @Override
+    public void showRepos(List<RepoStatus> repos) {
+        record("ui.repos " + String.join(",", repos.stream().map(RepoStatus::name).toList()));
+    }
+
+    @Override
+    public void showChange(ChangeTexts texts, ChangeAsk ask) {
+        record("ui.change " + texts.change().path() + " " + ask);
+    }
+
+    @Override
     public void showPlanUsage(PlanUsage usage) {
         record("ui.planUsage " + usage.windows().size());
     }
@@ -191,6 +204,16 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     @Override
     public void watchFolders(List<FolderRoot> folders) {
         record("tools.watchFolders " + names(folders));
+    }
+
+    @Override
+    public void watchRepos(List<FolderRoot> folders, boolean changesShown) {
+        record("tools.watchRepos " + names(folders) + (changesShown ? " changes" : ""));
+    }
+
+    @Override
+    public void readChange(String root, RepoStatus.FileChange change, ChangeAsk ask) {
+        record("tools.readChange " + root + " " + change.path() + " " + ask);
     }
 
     @Override

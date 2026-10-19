@@ -150,6 +150,11 @@ public final class ResourceActions<T> {
         enable();
     }
 
+    /** Adds a resource, as the bar's + does; a tab's menu offers it too. */
+    public void addNew() {
+        add.doClick();
+    }
+
     /** The bar: the left group at the left edge, the right group at the right edge. */
     public JComponent component() {
         return bar;

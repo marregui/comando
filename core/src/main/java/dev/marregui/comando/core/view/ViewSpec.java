@@ -156,6 +156,41 @@ public sealed interface ViewSpec {
         }
     }
 
+    /**
+     * What the git repositories of the Files tab's folders hold that their last commits do not. The view carries no
+     * data: the repositories are read while it is open, and its widget shows them as they arrive.
+     *
+     * @param root   the top folder of the one repository shown; empty for every repository
+     * @param folder a folder inside {@code root}, relative to it, whose changes alone are shown; empty for all of them
+     * @param name   what the repository's row is called; empty for its folder's name
+     */
+    record Changes(String root, String folder, String name) implements ViewSpec {
+
+        /** Every Changes view's title, as IntelliJ's commit view: one view, whichever repository or folder it shows. */
+        public static final String TITLE = "Uncommitted changes";
+
+        public Changes {
+            root = root == null ? "" : root;
+            folder = folder == null ? "" : folder;
+            name = name == null ? "" : name;
+        }
+
+        /** Every repository, whole. */
+        public Changes() {
+            this("", "", "");
+        }
+
+        /** The repository at {@code root}, whole, its row called {@code name}. */
+        public static Changes of(String root, String name) {
+            return new Changes(root, "", name);
+        }
+
+        @Override
+        public String type() {
+            return "changes";
+        }
+    }
+
     enum RunState { RUNNING, PASSED, FAILED, CANCELLED }
 
     /**

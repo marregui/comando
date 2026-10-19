@@ -81,7 +81,7 @@ Your data stays in `~/.comando`: panels as Markdown files, connections, sessions
 |---|---|
 | [Tutorial](docs/tutorial.md) | comando in ten minutes, step by step (also Tools ▸ Help ▸ Tutorial) |
 | [Build and run](docs/build-and-run.md) | prerequisites, Gradle tasks, settings |
-| [Workbench](docs/workbench.md) | panels and bindings, running text, the database, the tools, the Files tab, what is kept on disk |
+| [Workbench](docs/workbench.md) | panels and bindings, running text, the database, the tools, the Files tab and git changes, what is kept on disk |
 | [Claude](docs/claude.md) | the `claude -p` bridge, the MCP tools, approvals and safety |
 | [UI](docs/ui.md) | the kit, commands and keys, widgets, the painted transcript |
 | [Architecture](docs/architecture.md) | modules, state and intents, ports, threads, ownership, code rules, quality |
