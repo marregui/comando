@@ -1,0 +1,84 @@
+#!/usr/bin/env bash
+# reflect-report: the before/after measurement of a /reflect run on the memory folder.
+#
+#   t=$(reflect-report begin [<memory directory>])   snapshot the memory folder; prints a token to keep
+#   reflect-report end <token>                        print the delta since the snapshot, then the index check
+#
+# The delta: MEMORY.md bytes and lines before -> after; per changed memory file the lines added and removed, new and
+# deleted files; the files whose only change was added lines ("append-only": the rule is to rewrite an entry, not to
+# append a second one; dated logs such as session_log.md are append-by-design and listed apart, see
+# REFLECT_APPEND_OK); then index-check (or index-check.sh) if on the PATH, whose budget warnings close the report.
+# Read-only on the memory folder. The snapshot lives under the system temp folder and is removed by `end`.
+#
+# Default memory directory: autoMemoryDirectory in Claude Code's settings.json, else MEMORY in Claude Code's folder
+# ($CLAUDE_CONFIG_DIR, else ~/.claude). Env: REFLECT_APPEND_OK, space-separated file names that may grow by appending
+# (default "session_log.md agent_ledger.md").
+set -uo pipefail
+C=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
+APPEND_OK=${REFLECT_APPEND_OK:-"session_log.md agent_ledger.md"}
+
+memory_dir() {
+  local configured
+  configured=$(python3 - "$C/settings.json" 2>/dev/null <<'PY'
+import json, os, sys
+try:
+    v = json.load(open(sys.argv[1], encoding="utf-8-sig")).get("autoMemoryDirectory", "")
+except Exception:
+    v = ""
+print(os.path.expanduser(v) if isinstance(v, str) and v.strip() else "")
+PY
+)
+  printf '%s' "${1:-${configured:-$C/MEMORY}}"
+}
+
+begin() {
+  local m token
+  m=$(memory_dir "${1:-}")
+  [[ -f $m/MEMORY.md ]] || { echo "reflect-report: no MEMORY.md in $m" >&2; exit 2; }
+  token=$(mktemp -d "${TMPDIR:-/tmp}/reflect-report.XXXXXX") || exit 2
+  printf '%s\n' "$m" > "$token/.memory_dir"
+  mkdir -p "$token/snapshot"
+  # Top-level memory files only: archive/ is written by rotation, not by the session's prose.
+  find "$m" -maxdepth 1 -name '*.md' -exec cp {} "$token/snapshot/" \;
+  printf '%s\n' "$token"
+}
+
+count() { wc -l < "$1" | tr -d ' '; }
+
+end() {
+  local token=${1:-} m snap f before after added removed changed=0 append_only=() append_logs=() new=() gone=()
+  [[ -n $token && -f $token/.memory_dir ]] || { echo "reflect-report: no snapshot at '${token}'" >&2; exit 2; }
+  m=$(cat "$token/.memory_dir"); snap=$token/snapshot
+  before=$(wc -c < "$snap/MEMORY.md" | tr -d ' '); after=$(wc -c < "$m/MEMORY.md" | tr -d ' ')
+  printf 'MEMORY.md: %s bytes, %s lines -> %s bytes, %s lines\n' "$before" "$(count "$snap/MEMORY.md")" "$after" "$(count "$m/MEMORY.md")"
+  for f in "$m"/*.md; do
+    f=${f##*/}
+    if [[ ! -f $snap/$f ]]; then new+=("$f"); continue; fi
+    cmp -s "$snap/$f" "$m/$f" && continue
+    added=$(diff "$snap/$f" "$m/$f" | grep -c '^>'); removed=$(diff "$snap/$f" "$m/$f" | grep -c '^<')
+    printf '  %-45s +%-4s -%-4s %s bytes\n' "$f" "$added" "$removed" "$(wc -c < "$m/$f" | tr -d ' ')"
+    changed=$((changed + 1))
+    if (( added > 0 && removed == 0 )); then
+      if [[ " $APPEND_OK " == *" $f "* ]]; then append_logs+=("$f"); else append_only+=("$f"); fi
+    fi
+  done
+  for f in "$snap"/*.md; do f=${f##*/}; [[ -f $m/$f ]] || gone+=("$f"); done
+  (( changed == 0 )) && echo "  no memory file changed"
+  (( ${#new[@]} )) && printf 'new: %s\n' "${new[*]}"
+  (( ${#gone[@]} )) && printf 'deleted: %s\n' "${gone[*]}"
+  (( ${#append_logs[@]} )) && printf 'appended (logs, by design): %s\n' "${append_logs[*]}"
+  if (( ${#append_only[@]} )); then
+    printf 'APPEND-ONLY, reopen and merge into the entry each extends: %s\n' "${append_only[*]}"
+  fi
+  if command -v index-check >/dev/null 2>&1; then index-check "$m"
+  elif command -v index-check.sh >/dev/null 2>&1; then index-check.sh
+  else echo "index-check: not on the PATH"
+  fi
+  rm -rf "$token"
+}
+
+case ${1:-} in
+  begin) shift; begin "$@" ;;
+  end) shift; end "$@" ;;
+  *) sed -n '2,/^set -uo/p' "$0" | sed '$d' | sed 's/^# \{0,1\}//'; exit 2 ;;
+esac

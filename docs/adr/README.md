@@ -73,6 +73,7 @@ that names the one it replaces; the old record stays as written, and this index'
 | [64](0064-sub-agents-are-shown-live.md) | Sub-agents are shown live | Miguel, Claude | accepted; following and large files amended 2026-10-18 |
 | [65](0065-keys-on-desktops-other-than-macos.md) | Keys on desktops other than macOS | Miguel, Claude | accepted |
 | [66](0066-the-reducer-is-watched-as-the-edt-is.md) | The reducer is watched as the EDT is | Miguel, Claude | accepted |
+| [67](0067-reflect-measures-what-it-does-to-the-memory.md) | `/reflect` measures what it does to the memory | Miguel, Claude | accepted |
 | [68](0068-git-changes-and-a-side-by-side-diff.md) | Git changes and a side-by-side diff | Miguel, Claude | proposed; a repository's double click, the view's title and groups replaced, 71 |
 | [69](0069-a-window-edits-the-files-tab-folders.md) | A window edits the Files tab's folders | Miguel, Claude | proposed; where it opens replaced, 71 |
 | [70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | The sidebar's tabs in one row, with a menu each | Miguel, Claude | proposed |

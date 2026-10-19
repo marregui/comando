@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""compact-check: a mechanical no-loss check for a compacted memory file.
+
+  compact-check <original.md> <compacted.md> [<more.md> ...] [--max-bytes N]
+
+Every token of these classes in the original must appear in the compacted file (or in any of the further files, such
+as an archive the compaction moved entries to): dates (YYYY-MM-DD), backtick spans (exact content), double-quoted
+strings of 3+ words (verbatim quotes), ticket ids (ENG-1234, OPS-12), PR and issue numbers (#57), commit hashes
+(7+ hex), URLs, [[links]], numbers of two or more digits or with a decimal point or a unit (2.7×, 16 ms, 55 %),
+headings, and the frontmatter name, description and type. Prints each missing token with its class; exits 1 if any is
+missing, if the compacted file is over --max-bytes (default 30720), or if its frontmatter differs. Exit 0 otherwise,
+with the byte counts.
+
+Read-only. A token may move anywhere in the compacted files: the check is on presence, not on position or order.
+"""
+import pathlib
+import re
+import sys
+
+CLASSES = {
+    "date": re.compile(r"\b20[0-9]{2}-[0-9]{2}-[0-9]{2}\b"),
+    "code": re.compile(r"`([^`\n]+)`"),
+    "quote": re.compile(r"[\"“]([^\"”\n]{3,}?)[\"”]"),
+    "ticket": re.compile(r"\b[A-Z]{2,6}-[0-9]{1,5}\b"),
+    "pr": re.compile(r"#[0-9]{2,6}\b"),
+    "hash": re.compile(r"\b[0-9a-f]{7,40}\b"),
+    "url": re.compile(r"https?://[^\s)>\]]+"),
+    "link": re.compile(r"\[\[[^\]]+\]\]"),
+    "number": re.compile(r"(?<![\w.-])(?:[0-9]{2,}(?:[.,][0-9]+)?|[0-9]+\.[0-9]+|[0-9]+(?=\s?(?:%|ms|s\b|KB|MB|GB|×|x\b|k\b|min\b|h\b)))(?![\w-])"),
+    "heading": re.compile(r"^#{1,6}\s+(.+?)\s*$", re.M),
+}
+
+
+def frontmatter(text):
+    if not text.startswith("---\n"):
+        return None, text
+    end = text.find("\n---\n", 4)
+    if end < 0:
+        return None, text
+    return text[4:end], text[end + 5:]
+
+
+def key_fields(fm):
+    fields = {}
+    for line in (fm or "").splitlines():
+        m = re.match(r"\s*(name|description|type):\s*(.*)$", line)
+        if m:
+            fields[m.group(1)] = m.group(2).strip().strip('"')
+    return fields
+
+
+def tokens(text):
+    out = {}
+    for cls, rx in CLASSES.items():
+        found = set()
+        for m in rx.finditer(text):
+            found.add(m.group(1) if m.groups() else m.group(0))
+        if cls == "quote":
+            found = {q for q in found if len(q.split()) >= 3}
+        out[cls] = found
+    return out
+
+
+def main(argv):
+    max_bytes = 30720
+    files = []
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--max-bytes":
+            max_bytes = int(argv[i + 1]); i += 2
+        else:
+            files.append(pathlib.Path(argv[i])); i += 1
+    if len(files) < 2:
+        print(__doc__); return 2
+    original, compacted, extra = files[0], files[1], files[2:]
+    o_text = original.read_text(encoding="utf-8")
+    c_text = compacted.read_text(encoding="utf-8")
+    all_new = c_text + "\n" + "\n".join(p.read_text(encoding="utf-8") for p in extra if p.exists())
+
+    bad = 0
+    o_fm, o_body = frontmatter(o_text)
+    c_fm, c_body = frontmatter(c_text)
+    if o_fm is None or c_fm is None:
+        print("frontmatter: missing in", "original" if o_fm is None else "compacted"); bad = 1
+    elif key_fields(o_fm) != key_fields(c_fm):
+        print("frontmatter: name, description or type changed"); bad = 1
+
+    o_tok = tokens(o_body)
+    n_tok = tokens(all_new)
+    # headings and quotes may be reflowed: compare on whitespace-normalised, case-insensitive text
+    norm = lambda s: " ".join(s.lower().split())
+    new_norm = norm(all_new)
+    for cls in CLASSES:
+        for tok in sorted(o_tok[cls]):
+            present = tok in n_tok[cls] or (cls in ("heading", "quote") and norm(tok) in new_norm)
+            if not present and cls == "number":
+                present = tok in all_new  # a number inside a changed unit spelling still counts
+            if not present:
+                print(f"missing {cls}: {tok}"); bad = 1
+    size = len(c_text.encode("utf-8"))
+    if size > max_bytes:
+        print(f"size: {size} bytes, over {max_bytes}"); bad = 1
+    print(f"{'FAIL' if bad else 'OK'}: {len(o_text.encode())} -> {size} bytes"
+          + (f" (+{sum(len(p.read_text(encoding='utf-8').encode()) for p in extra if p.exists())} archived)" if extra else ""))
+    return bad
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

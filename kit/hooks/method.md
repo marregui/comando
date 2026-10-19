@@ -17,7 +17,7 @@
 3. An agent is given a spec, copied from `@KIT@/templates/agent-spec.md` to the day's `SCRATCHPAD/…/work/` folder: the context it needs, quoted from memory and the KB (an agent does not see the memory), the files it may touch, what it must not do, and an executable acceptance check. No context or no acceptance, no dispatch. At most 4 agents read in parallel; at most 4 write in parallel, and only on disjoint files.
 4. Gradle runs go through `gradle-serial <checkout> <tasks>` (on the PATH), so parallel runs in one checkout queue instead of breaking each other.
 5. Done means tested, every acceptance passing on the final tree, the review's findings resolved, and the affected docs true again.
-6. Reviews: `/deep-review`. Checkpoints: `/reflect` when comando's checkpoint is due (60% of the context window) and at the end of a session; each one leaves the memory's recall sharper and the KB truer than it found them.
+6. Reviews: `/deep-review`. Checkpoints: `/reflect` when comando's checkpoint is due (60% of the context window) and at the end of a session; each one leaves the memory's recall sharper and the KB truer than it found them, and reports what it did to the memory (`reflect-report`). In a session the user is not watching (a prompt sent from another session, `claude -p`), `/reflect --no-ask`: it queues the changes that need the user instead of asking.
 
 ## Compaction
 

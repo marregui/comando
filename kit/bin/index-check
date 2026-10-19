@@ -46,6 +46,26 @@ if [[ $# -ge 1 || -n $configured || -d $M ]]; then
     if (( bytes > 20480 || lines > 160 )); then
       printf 'warn: MEMORY.md is %s bytes, %s lines: past its budget of 20480 bytes, 160 lines (Claude Code loads 25600, 200)\n' "$bytes" "$lines"
     fi
+    # Per-file budget (32 KB), dated logs excepted (they roll by month, below): a file past it takes no addition until an entry of it is merged or archived. A warning.
+    big=()
+    for f in *.md; do
+      [[ $f == MEMORY.md ]] && continue
+      (( $(grep -cE '^- (\*\*)?20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$f") >= 20 )) && continue   # a dated log: it rolls by month instead
+      b=$(wc -c < "$f" | tr -d ' ')
+      (( b > 32768 )) && big+=("$f ($((b / 1024)) KB)")
+    done
+    if (( ${#big[@]} )); then
+      list=$(printf '%s, ' "${big[@]}"); printf 'warn: memory: %s file(s) past the 32 KB file budget, merge before adding: %s\n' "${#big[@]}" "${list%, }"
+    fi
+    # Dated logs roll by month: lines dated before the previous month belong in archive/<name>_YYYY-MM.md. A warning.
+    cutoff=$(python3 -c 'import datetime as d; t = d.date.today().replace(day=1); print((t - d.timedelta(days=1)).replace(day=1))' 2>/dev/null)
+    for f in *.md; do
+      [[ $f == MEMORY.md || -z $cutoff ]] && continue
+      dated=$(grep -cE '^- (\*\*)?20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$f")
+      (( dated >= 20 )) || continue   # a dated log, not a file that happens to cite a date
+      old=$(grep -oE '^- (\*\*)?20[0-9]{2}-[0-9]{2}-[0-9]{2}' "$f" | grep -oE '20[0-9]{2}-[0-9]{2}-[0-9]{2}' | awk -v c="$cutoff" '$1 < c' | wc -l | tr -d ' ')
+      (( old > 0 )) && printf 'warn: memory: %s holds %s line(s) dated before %s: roll them into archive/%s_YYYY-MM.md\n' "$f" "$old" "$cutoff" "${f%.md}"
+    done
   fi
 fi
 

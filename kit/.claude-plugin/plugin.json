@@ -1,7 +1,7 @@
 {
   "name": "comando",
-  "version": "1.0.0",
-  "description": "The comando method for Claude Code: memory, a knowledge base and a scratchpad kept by /reflect, reviews by /deep-review, agent specs with executable acceptance, serialised Gradle runs",
+  "version": "1.1.0",
+  "description": "The comando method for Claude Code: memory, a knowledge base and a scratchpad kept by /reflect (measured by reflect-report, merged without loss by compact-check, tuned by cue-replay), reviews by /deep-review, agent specs with executable acceptance, serialised Gradle runs",
   "author": {
     "name": "Miguel Arregui"
   },

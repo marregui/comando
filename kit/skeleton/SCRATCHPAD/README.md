@@ -44,3 +44,7 @@ the artefacts it lists, then continue from **Next**, re-verifying any state olde
 `/reflect` consolidates the scratchpad after memory: it folds what a session proved true into the knowledge base,
 deletes the artefacts that are folded or obsolete, rewrites each task entry to carry only what a later session needs,
 and deletes a day folder whose `ALPHA.md` has no task left. A task that still needs the user stays, and its State says so.
+
+Deletes are per artefact, never per folder: parallel sessions write the same day folder, so a session deletes only the
+files and `ALPHA.md` entries it created or consolidated, never runs `rm -rf` on a day folder, and removes a folder with
+`rmdir` once `ls -A` shows just an `ALPHA.md` with no task left.

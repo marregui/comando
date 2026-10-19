@@ -1,0 +1,468 @@
+#!/usr/bin/env python3
+"""cue-replay: measures how well the memory index routes a prompt to the memory files that were opened for it.
+
+The memory index (MEMORY.md) is one line per memory file, a cue saying when to open the file. Its quality is recall:
+given a past prompt, does the index name the files Claude then actually opened? This tool replays the prompts of the
+last N days from Claude Code's transcripts against the index as it is now, with a small headless model as the judge,
+and reports the recall, the files most often opened without their cue matching (the cues to sharpen) and the trend.
+
+  cue-replay                     replay the last 30 days; write the report to today's SCRATCHPAD day folder
+  cue-replay --dry-run           extract the (prompt, files opened) pairs and print the counts; no judge, no report
+  cue-replay --days 14 --limit 50 --model haiku --runs 2 --jobs 4
+  cue-replay --no-report         print the summary only; write nothing
+
+Options:
+  --memory DIR     the memory folder (default: autoMemoryDirectory in Claude Code's settings.json, else MEMORY in
+                   Claude Code's folder: $CLAUDE_CONFIG_DIR, else ~/.claude)
+  --projects DIR   Claude Code's transcripts (default: projects/ in Claude Code's folder)
+  --days N         window of prompts to replay (default 30)
+  --limit N        at most N prompts, the most recent (default: all)
+  --model NAME     the judge (default haiku); --runs N judges each prompt N times and averages (default 1)
+  --jobs N         parallel judge calls (default 4)
+  --budget USD     cap per judge call, passed to claude -p --max-budget-usd (default 0.10)
+  --day-dir DIR    the SCRATCHPAD day folder for the report (default: SCRATCHPAD/<today> in Claude Code's folder)
+  --trigger NAME   how the run was started, for the report (default manual; a scheduler sets its own)
+  --dry-run        extraction only
+  --no-report      no report, no ALPHA entry, no history line
+
+A pair is a user prompt plus the memory files read in the turns that answered it (the Read tool on a path in the
+memory folder, or a Bash command naming one). Sidechains (agents), meta messages, tool results, slash-command
+invocations and prompts under 20 characters are not prompts. Prompts for which no memory file was opened are counted
+but not judged: the replay measures recall, not restraint. The judge sees the index and the prompt only (no tools, no
+settings, no memory, no session persistence), so its runs leave no transcript behind for the next replay to read.
+
+History: one line per run in <Claude Code's folder>/.cue-replay/history.tsv (date, pairs, recall, precision, model,
+runs). Exit 0 after a report; 2 on a usage or environment error.
+"""
+import argparse
+import concurrent.futures
+import datetime as dt
+import json
+import os
+import pathlib
+import re
+import shutil
+import subprocess
+import sys
+from collections import Counter, defaultdict
+
+CLAUDE_DIR = pathlib.Path(os.environ.get("CLAUDE_CONFIG_DIR") or (pathlib.Path.home() / ".claude"))
+PROMPT_MIN_CHARS = 20
+PROMPT_MAX_CHARS = 2000
+JUDGE_MAX_FILES = 8
+MD_NAME = r"[A-Za-z0-9_.-]+\.md"
+
+SYSTEM_PROMPT = """You route a user's prompt to memory files before the prompt is answered.
+
+Below is the memory index: one line per memory file, each with the file name in parentheses and a cue saying when
+to open that file. Reply with the names of the files you would open before answering the prompt, one file name per
+line, at most {max_files}, exactly as written in the index, and nothing else. Reply NONE when no cue applies.
+
+MEMORY INDEX
+{index}"""
+
+
+# --- environment -----------------------------------------------------------------------------------------------------
+
+def configured_memory_dir():
+    """autoMemoryDirectory from Claude Code's settings.json, expanded, or None."""
+    try:
+        settings = json.loads((CLAUDE_DIR / "settings.json").read_text(encoding="utf-8-sig"))
+        value = settings.get("autoMemoryDirectory")
+    except (OSError, ValueError, AttributeError):
+        return None
+    if isinstance(value, str) and value.strip():
+        return pathlib.Path(os.path.expanduser(value.strip()))
+    return None
+
+
+def claude_cli():
+    found = shutil.which("claude")
+    if found:
+        return found
+    for candidate in (pathlib.Path.home() / ".local/bin/claude", pathlib.Path("/opt/homebrew/bin/claude"),
+                      pathlib.Path("/usr/local/bin/claude")):
+        if candidate.exists():
+            return str(candidate)
+    return None
+
+
+# --- extraction ------------------------------------------------------------------------------------------------------
+
+def prompt_text(record):
+    """The user's own text of a transcript record, or None when the record is not a prompt."""
+    if record.get("type") != "user" or record.get("isSidechain") or record.get("isMeta"):
+        return None
+    content = (record.get("message") or {}).get("content")
+    if isinstance(content, str):
+        text = content
+    elif isinstance(content, list):
+        parts = [b.get("text", "") for b in content if isinstance(b, dict) and b.get("type") == "text"]
+        if not parts or any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
+            return None
+        text = "\n".join(parts)
+    else:
+        return None
+    text = text.strip()
+    if "<command-name>" in text or "<command-message>" in text:
+        return None  # a slash command: the skill decides what to open, not the index
+    if text.startswith("<system-reminder>") or text.startswith("Another Claude session sent a message"):
+        return None
+    if len(text) < PROMPT_MIN_CHARS:
+        return None
+    return text
+
+
+def opened_files(record, memory_dir):
+    """Memory files a transcript record's tool calls read: Read on a memory path, or a Bash command naming one."""
+    if record.get("type") != "assistant" or record.get("isSidechain"):
+        return set()
+    found = set()
+    absolute = re.compile(re.escape(str(memory_dir)) + r"/(" + MD_NAME + ")")
+    relative = re.compile(r"(?:^|[\s\"'`(;|])(?:[^\s\"'`]*/)?" + re.escape(memory_dir.name) + r"/(" + MD_NAME + ")")
+    for block in (record.get("message") or {}).get("content") or []:
+        if not isinstance(block, dict) or block.get("type") != "tool_use":
+            continue
+        arguments = block.get("input") or {}
+        if block.get("name") == "Read":
+            path = str(arguments.get("file_path", ""))
+            match = absolute.search(path)
+            if match:
+                found.add(match.group(1))
+        elif block.get("name") == "Bash":
+            command = str(arguments.get("command", ""))
+            found.update(absolute.findall(command))
+            found.update(relative.findall(command))
+    return found
+
+
+def record_time(record):
+    stamp = record.get("timestamp")
+    if not isinstance(stamp, str):
+        return None
+    try:
+        return dt.datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def extract_pairs(projects_dir, memory_dir, since, existing_files):
+    """(prompt, files) pairs from every transcript modified since `since`, newest last; plus extraction counts."""
+    counts = Counter()
+    pairs = []
+    since_ts = since.timestamp()
+    for transcript in sorted(projects_dir.glob("*/*.jsonl"), key=lambda p: p.stat().st_mtime):
+        if transcript.stat().st_mtime < since_ts:
+            continue
+        counts["transcripts"] += 1
+        current = None  # [prompt, files, time]
+        with transcript.open(encoding="utf-8", errors="ignore") as fh:
+            for line in fh:
+                try:
+                    record = json.loads(line)
+                except ValueError:
+                    continue
+                text = prompt_text(record)
+                if text is not None:
+                    if current is not None:
+                        pairs.append(current)
+                    current = [text, set(), record_time(record)]
+                    continue
+                if current is not None:
+                    current[1].update(opened_files(record, memory_dir))
+        if current is not None:
+            pairs.append(current)
+    kept = []
+    for text, files, when in pairs:
+        if when is not None and when < since:
+            continue
+        counts["prompts"] += 1
+        files.discard("MEMORY.md")
+        unknown = {f for f in files if f not in existing_files}
+        counts["opened_files_gone"] += len(unknown)
+        files -= unknown
+        if not files:
+            counts["prompts_without_memory"] += 1
+            continue
+        kept.append((text, frozenset(files)))
+    return kept, counts
+
+
+# --- judging ---------------------------------------------------------------------------------------------------------
+
+def parse_reply(reply, existing_files):
+    names = set()
+    for token in re.findall(MD_NAME, reply or ""):
+        if token in existing_files and token != "MEMORY.md":
+            names.add(token)
+    return names
+
+
+def judge(cli, model, system_prompt, prompt, budget, existing_files):
+    """The files the judge would open for `prompt`, by one headless call. A failed call opens nothing (and is counted)."""
+    command = [cli, "-p", "--model", model, "--tools", "", "--setting-sources", "", "--strict-mcp-config",
+               "--no-session-persistence", "--output-format", "text", "--max-budget-usd", str(budget),
+               "--system-prompt", system_prompt, "--", prompt[:PROMPT_MAX_CHARS]]
+    try:
+        run = subprocess.run(command, capture_output=True, text=True, timeout=180, check=False)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return None, f"{type(e).__name__}: {e}"
+    if run.returncode != 0:
+        return None, (run.stderr or run.stdout or "").strip()[-300:]
+    return parse_reply(run.stdout, existing_files), None
+
+
+def replay(pairs, cli, model, index_text, budget, runs, jobs, existing_files, log):
+    """Per pair: the predicted files (the union over runs, each file weighted by how many runs named it)."""
+    system_prompt = SYSTEM_PROMPT.format(max_files=JUDGE_MAX_FILES, index=index_text)
+    results = [None] * len(pairs)
+    failures = 0
+
+    def one(i):
+        votes = Counter()
+        failed = 0
+        for _ in range(runs):
+            predicted, error = judge(cli, model, system_prompt, pairs[i][0], budget, existing_files)
+            if predicted is None:
+                failed += 1
+                log(f"judge failed on prompt {i}: {error}")
+                continue
+            votes.update(predicted)
+        return i, votes, failed
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, jobs)) as pool:
+        for i, votes, failed in pool.map(one, range(len(pairs))):
+            results[i] = votes
+            failures += failed
+    return results, failures
+
+
+def score(pairs, results, runs):
+    """Recall and precision over all pairs (each file weighted by the fraction of runs that named it), per-file misses."""
+    hit = predicted_total = opened_total = 0.0
+    misses = Counter()
+    spurious = Counter()
+    opened_count = Counter()
+    examples = defaultdict(list)
+    per_prompt = []
+    for (text, opened), votes in zip(pairs, results):
+        weights = {f: n / runs for f, n in votes.items()}
+        opened_total += len(opened)
+        predicted_total += sum(weights.values())
+        prompt_hit = sum(weights.get(f, 0.0) for f in opened)
+        hit += prompt_hit
+        for f in opened:
+            opened_count[f] += 1
+            if weights.get(f, 0.0) <= 0.5:  # a miss unless a strict majority of the runs named the file
+                misses[f] += 1
+                if len(examples[f]) < 2:
+                    examples[f].append(text)
+        for f, w in weights.items():
+            if f not in opened:
+                spurious[f] += w
+        per_prompt.append((text, opened, weights, prompt_hit / len(opened) if opened else 0.0))
+    recall = hit / opened_total if opened_total else 0.0
+    precision = hit / predicted_total if predicted_total else 0.0
+    return {"recall": recall, "precision": precision, "misses": misses, "spurious": spurious,
+            "opened_count": opened_count, "examples": examples, "per_prompt": per_prompt}
+
+
+# --- report ----------------------------------------------------------------------------------------------------------
+
+def one_line(text, width=120):
+    text = " ".join(text.split())
+    return text if len(text) <= width else text[: width - 1] + "…"
+
+
+def history_path():
+    return CLAUDE_DIR / ".cue-replay" / "history.tsv"
+
+
+def append_history(today, n_pairs, recall, precision, model, runs):
+    path = history_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    new = not path.exists()
+    with path.open("a", encoding="utf-8") as fh:
+        if new:
+            fh.write("date\tpairs\trecall\tprecision\tmodel\truns\n")
+        fh.write(f"{today}\t{n_pairs}\t{recall:.3f}\t{precision:.3f}\t{model}\t{runs}\n")
+
+
+def history_rows():
+    path = history_path()
+    if not path.exists():
+        return []
+    rows = [l.split("\t") for l in path.read_text(encoding="utf-8").splitlines()[1:] if l.strip()]
+    return rows[-12:]
+
+
+def write_report(day_dir, today, args, counts, pairs, scored, failures, memory_dir, index_bytes, index_lines):
+    day_dir.mkdir(parents=True, exist_ok=True)
+    n = len(list(day_dir.glob("READ-[0-9][0-9]-*")))
+    mon = today.strftime("%b").upper()
+    report = day_dir / f"READ-{n + 1:02d}-CUEREPLAY-REPORT-{mon}-{today:%d}.md"
+    s = scored
+    lines = [
+        f"# Memory cue replay — {today:%Y-%m-%d}",
+        "",
+        f"> **Last Updated:** {today:%Y-%m-%d} · **Status:** Scratch — measured against `{memory_dir}/MEMORY.md` "
+        f"({index_bytes} bytes, {index_lines} lines) as of this run; judge `{args.model}`, {args.runs} run(s) per prompt; "
+        f"trigger {args.trigger}",
+        "",
+        "## 1. Result",
+        "",
+        "| Measure | Value |",
+        "|---|---|",
+        f"| Transcripts read (last {args.days} days) | {counts['transcripts']} |",
+        f"| Prompts | {counts['prompts']} |",
+        f"| Prompts that opened no memory file (not judged) | {counts['prompts_without_memory']} |",
+        f"| Pairs judged (prompt, files opened) | {len(pairs)} |",
+        f"| Files opened in total | {sum(len(o) for _, o in pairs)} |",
+        f"| **Recall** (opened files the index routed to) | **{s['recall']:.1%}** |",
+        f"| Precision (routed files that were opened) | {s['precision']:.1%} |",
+        f"| Judge calls failed | {failures} |",
+        f"| Opened files no longer in memory (renamed or archived; dropped) | {counts['opened_files_gone']} |",
+        "",
+        "Judge noise measured 2026-10-01 at about 10 points between two runs of the same index; read a change smaller "
+        "than that as no change.",
+        "",
+        "## 2. Cues to sharpen",
+        "",
+        "Files opened for a prompt whose cue the judge did not match, most often first. The example prompts are what "
+        "the cue has to catch.",
+        "",
+        "| File | Opened | Missed | Example prompts |",
+        "|---|---|---|---|",
+    ]
+    for f, missed in s["misses"].most_common(10):
+        ex = " · ".join(f"“{one_line(t, 90)}”" for t in s["examples"][f])
+        lines.append(f"| `{f}` | {s['opened_count'][f]} | {missed} | {ex} |")
+    if not s["misses"]:
+        lines.append("| — | | | no misses |")
+    lines += [
+        "",
+        "## 3. Cues that over-trigger",
+        "",
+        "Files the judge routed to that were not opened (weight summed over prompts). A high count on a file rarely "
+        "opened means its cue is too broad.",
+        "",
+        "| File | Routed but not opened | Opened |",
+        "|---|---|---|",
+    ]
+    for f, w in s["spurious"].most_common(8):
+        lines.append(f"| `{f}` | {w:.1f} | {s['opened_count'][f]} |")
+    if not s["spurious"]:
+        lines.append("| — | | |")
+    lines += ["", "## 4. History", "", "| Date | Pairs | Recall | Precision | Judge | Runs |", "|---|---|---|---|---|---|"]
+    for row in history_rows():
+        if len(row) >= 6:
+            lines.append(f"| {row[0]} | {row[1]} | {float(row[2]):.1%} | {float(row[3]):.1%} | {row[4]} | {row[5]} |")
+    lines += [
+        "",
+        "## 5. For /reflect",
+        "",
+        "1. For each file in §2, add the missing trigger to its cue in `MEMORY.md` (situations, names, error strings "
+        "from the example prompts), within the index budget.",
+        "2. For a file in §3 opened rarely, narrow its cue.",
+        "3. Note the recall figure in the session log; consolidate this report like any artefact.",
+        "",
+    ]
+    report.write_text("\n".join(lines), encoding="utf-8")
+
+    alpha = day_dir / "ALPHA.md"
+    if not alpha.exists():
+        alpha.write_text(f"# Scratchpad — {today:%Y-%m-%d}\n", encoding="utf-8")
+    text = alpha.read_text(encoding="utf-8")
+    task = len(re.findall(r"^## [0-9]+\.", text, flags=re.M)) + 1
+    entry = (
+        f"\n## {task}. Memory cue replay (scheduled)\n\n"
+        f"- **Repo:** `{memory_dir}`, `MEMORY.md` as of {today:%Y-%m-%d}.\n"
+        f"- **State:** measured, run {today:%Y-%m-%d}, {args.trigger} (`cue-replay`): recall {s['recall']:.1%}, "
+        f"precision {s['precision']:.1%} over {len(pairs)} pairs; {len(s['misses'])} files with a missed cue.\n"
+        f"- **Next:** `/reflect` applies §5 of the report (sharpen the §2 cues), then consolidates it.\n"
+        f"- **Resume from:** this entry and the report.\n\n"
+        f"| Artefact | Holds |\n|---|---|\n| `{report.name}` | recall, cues to sharpen with example prompts, history |\n"
+    )
+    alpha.write_text(text.rstrip("\n") + "\n" + entry, encoding="utf-8")
+    return report
+
+
+# --- main ------------------------------------------------------------------------------------------------------------
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__.split("\n\n")[0], add_help=True)
+    parser.add_argument("--memory")
+    parser.add_argument("--projects")
+    parser.add_argument("--days", type=int, default=30)
+    parser.add_argument("--limit", type=int, default=0)
+    parser.add_argument("--model", default="haiku")
+    parser.add_argument("--runs", type=int, default=1)
+    parser.add_argument("--jobs", type=int, default=4)
+    parser.add_argument("--budget", type=float, default=0.10)
+    parser.add_argument("--day-dir")
+    parser.add_argument("--trigger", default="manual")
+    parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--no-report", action="store_true")
+    args = parser.parse_args(argv)
+
+    memory_dir = pathlib.Path(args.memory).expanduser() if args.memory else (configured_memory_dir() or CLAUDE_DIR / "MEMORY")
+    projects_dir = pathlib.Path(args.projects).expanduser() if args.projects else CLAUDE_DIR / "projects"
+    index = memory_dir / "MEMORY.md"
+    if not index.exists():
+        print(f"cue-replay: no MEMORY.md in {memory_dir}", file=sys.stderr)
+        return 2
+    if not projects_dir.is_dir():
+        print(f"cue-replay: no transcripts folder {projects_dir}", file=sys.stderr)
+        return 2
+    existing_files = {p.name for p in memory_dir.glob("*.md")}
+    today = dt.date.today()
+    since = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=args.days)
+
+    pairs, counts = extract_pairs(projects_dir, memory_dir, since, existing_files)
+    if args.limit and len(pairs) > args.limit:
+        pairs = pairs[-args.limit:]
+    summary = (f"transcripts {counts['transcripts']}, prompts {counts['prompts']}, "
+               f"without memory {counts['prompts_without_memory']}, pairs {len(pairs)}, "
+               f"files opened {sum(len(o) for _, o in pairs)}")
+    if args.dry_run:
+        print(summary)
+        for text, opened in pairs[-10:]:
+            print(f"  {one_line(text, 80)}  ->  {', '.join(sorted(opened))}")
+        return 0
+    if not pairs:
+        print(f"cue-replay: no pairs to judge ({summary})")
+        return 0
+
+    cli = claude_cli()
+    if cli is None:
+        print("cue-replay: the claude CLI is not on the PATH", file=sys.stderr)
+        return 2
+    log_dir = CLAUDE_DIR / ".cue-replay"
+    log_dir.mkdir(parents=True, exist_ok=True)
+    log_file = log_dir / f"{today:%Y-%m-%d}.log"
+
+    def log(message):
+        with log_file.open("a", encoding="utf-8") as fh:
+            fh.write(f"{dt.datetime.now():%F %T} {message}\n")
+
+    log(f"start: {summary}; judge {args.model} x{args.runs}, jobs {args.jobs}, trigger {args.trigger}")
+    index_text = index.read_text(encoding="utf-8")
+    results, failures = replay(pairs, cli, args.model, index_text, args.budget, args.runs, args.jobs, existing_files, log)
+    scored = score(pairs, results, args.runs)
+    line = (f"cue-replay {today:%Y-%m-%d}: recall {scored['recall']:.1%}, precision {scored['precision']:.1%} "
+            f"over {len(pairs)} pairs ({failures} judge calls failed); cues to sharpen: "
+            + (", ".join(f for f, _ in scored["misses"].most_common(5)) or "none"))
+    log(line)
+    print(line)
+    if args.no_report:
+        return 0
+    append_history(f"{today:%Y-%m-%d}", len(pairs), scored["recall"], scored["precision"], args.model, args.runs)
+    day_dir = pathlib.Path(args.day_dir).expanduser() if args.day_dir else CLAUDE_DIR / "SCRATCHPAD" / f"{today:%Y-%m-%d}"
+    report = write_report(day_dir, today, args, counts, pairs, scored, failures, memory_dir,
+                          len(index_text.encode("utf-8")), index_text.count("\n"))
+    print(f"report: {report}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
