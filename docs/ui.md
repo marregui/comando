@@ -56,7 +56,8 @@ restart); a user action is a `Command`; work from other threads reaches Swing
 through `Edt` or a `Coalescer`; a tooltip is one line of at most 80 characters, imperative and without a closing period,
 saying what the control does and one fact it does not show (its key through `KeyText`, where the result goes, what it
 costs), and a tooltip reporting live state keeps its data
-([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md)).
+([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md)); a form's field name explains its field in at
+most four short lines ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)).
 
 ## 2. Commands and keys
 

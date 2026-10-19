@@ -6,13 +6,18 @@ import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.swing.AbstractButton;
 import javax.swing.JCheckBox;
+import javax.swing.JLabel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
+import java.awt.Component;
+import java.awt.Container;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -40,8 +45,17 @@ class FoldersEditorTest {
 
     private FoldersEditor editor(List<FolderRoot> folders, boolean repositories, Path claudeDir, RepoChanges repos) throws Exception {
         AtomicReference<FoldersEditor> e = new AtomicReference<>();
-        SwingUtilities.invokeAndWait(() -> e.set(new FoldersEditor(folders, repositories, claudeDir, repos,
-                (owner, start) -> chosen.isEmpty() ? Optional.empty() : Optional.of(chosen.removeFirst()))));
+        SwingUtilities.invokeAndWait(() -> e.set(new FoldersEditor(folders, repositories, claudeDir, repos, new FoldersEditor.Chooser() {
+            @Override
+            public Optional<Path> folder(Component owner, Path start) {
+                return chosen.isEmpty() ? Optional.empty() : Optional.of(chosen.removeFirst());
+            }
+
+            @Override
+            public Optional<Path> file(Component owner, Path start) {
+                return folder(owner, start);
+            }
+        })));
         return e.get();
     }
 
@@ -98,7 +112,7 @@ class FoldersEditorTest {
     @Test
     void addingChoosesTheFolderFirstAndNamesItUniquelyWithItsIndex(@TempDir Path dir) throws Exception {
         Path notes = Files.createDirectories(dir.resolve("x").resolve("notes"));
-        Files.writeString(notes.resolve("ALPHA.md"), "# a\n");
+        Files.writeString(notes.resolve("INDEX.md"), "# a\n");
         Files.writeString(notes.resolve("MEMORY.md"), "# m\n");
         FolderRoot taken = new FolderRoot("notes", Files.createDirectories(dir.resolve("notes")).toString(), "", List.of());
         FoldersEditor e = editor(List.of(taken), new RepoChanges());
@@ -109,7 +123,7 @@ class FoldersEditorTest {
         assertThat(saved).hasSize(2);
         assertThat(saved.get(1).name()).isEqualTo("notes 2");
         assertThat(saved.get(1).path()).isEqualTo(notes.toString());
-        assertThat(saved.get(1).index()).as("the first guess found").isEqualTo("ALPHA.md");
+        assertThat(saved.get(1).index()).as("the first guess found").isEqualTo("INDEX.md");
         assertThat(on(e, (FoldersEditor x) -> x.list().getSelectedIndex())).as("the new one is selected").isEqualTo(1);
         assertThat(on(e, FoldersEditor::dirty)).isTrue();
 
@@ -139,7 +153,7 @@ class FoldersEditorTest {
         FoldersEditor e = editor(List.of(pad), new RepoChanges());
         settled(e);
         type(e, FoldersEditor.LISTED_IN, "sub/ALPHA.md");
-        assertThat(on(e, (FoldersEditor x) -> x.problemShown(FoldersEditor.LISTED_IN))).isEqualTo("a file name, such as ALPHA.md");
+        assertThat(on(e, (FoldersEditor x) -> x.problemShown(FoldersEditor.LISTED_IN))).isEqualTo("a file name, such as INDEX.md");
         SwingUtilities.invokeAndWait(() -> ((JCheckBox) e.field(FoldersEditor.DELETABLE)).doClick());
         assertThat(on(e, (FoldersEditor x) -> x.problemShown(FoldersEditor.LISTED_IN))).as("no Trash: no listing to check").isEmpty();
         assertThat(on(e, (FoldersEditor x) -> x.field(FoldersEditor.LISTED_IN).isEnabled())).isFalse();
@@ -157,11 +171,11 @@ class FoldersEditorTest {
         FoldersEditor e = editor(List.of(new FolderRoot("R", repo.toString(), "", List.of()),
                 new FolderRoot("D", inside.toString(), "", List.of()), new FolderRoot("P", plain.toString(), "", List.of())), repos);
         settled(e);
-        assertThat(on(e, FoldersEditor::factsShown)).isEqualTo("git repository · main · 1 change");
+        assertThat(on(e, FoldersEditor::factsShown)).isEqualTo("repo: " + repo + " · main · 1 uncommitted");
         SwingUtilities.invokeAndWait(() -> e.select("D"));
-        assertThat(on(e, FoldersEditor::factsShown)).startsWith("inside the git repository ").endsWith(" · main · 1 change");
+        assertThat(on(e, FoldersEditor::factsShown)).as("the repository holding it").isEqualTo("repo: " + repo + " · main · 1 uncommitted");
         SwingUtilities.invokeAndWait(() -> e.select("P"));
-        assertThat(on(e, FoldersEditor::factsShown)).isEqualTo("not in a git repository");
+        assertThat(on(e, FoldersEditor::factsShown)).isEqualTo("repo: none");
         assertThat(on(e, (FoldersEditor x) -> x.problemsOfAll())).isEqualTo(Map.of());
     }
 
@@ -216,5 +230,90 @@ class FoldersEditorTest {
         List<FolderRoot> saved = on(e, FoldersEditor::folders).orElseThrow();
         assertThat(saved).extracting(FolderRoot::name).containsExactly("Memory", "app", "lib");
         assertThat(saved.get(2).repository()).as("added as a repository").isTrue();
+    }
+
+    @Test
+    void onlyFoldersInsideTheConfigFolderArePickedAndARefusedPickChangesNothing(@TempDir Path dir) throws Exception {
+        Path claude = Files.createDirectories(dir.resolve(".claude"));
+        FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(claude.resolve("MEMORY")).toString(), "", List.of());
+        FoldersEditor e = editor(List.of(memory), false, claude, new RepoChanges());
+        settled(e);
+        chosen.add(Files.createDirectories(dir.resolve("elsewhere")));
+        SwingUtilities.invokeAndWait(e::add);
+        assertThat(on(e, (FoldersEditor x) -> x.list().getModel().getSize())).as("not added").isEqualTo(1);
+        assertThat(on(e, FoldersEditor::messageShown)).endsWith("elsewhere is outside " + claude + ": not added");
+        assertThat(on(e, FoldersEditor::dirty)).isFalse();
+
+        chosen.add(dir.resolve("elsewhere").resolve("x.md"));
+        SwingUtilities.invokeAndWait(() -> button(e, "Choose a file in the folder").doClick());
+        assertThat(on(e, (FoldersEditor x) -> ((JTextField) x.field(FoldersEditor.INDEX)).getText())).as("not taken").isEmpty();
+        assertThat(on(e, FoldersEditor::messageShown)).endsWith("x.md is outside the folder: not taken as its index");
+
+        Files.writeString(claude.resolve("MEMORY").resolve("MEMORY.md"), "# Memory\n");
+        chosen.add(claude.resolve("MEMORY").resolve("MEMORY.md"));
+        SwingUtilities.invokeAndWait(() -> button(e, "Choose a file in the folder").doClick());
+        assertThat(on(e, (FoldersEditor x) -> ((JTextField) x.field(FoldersEditor.INDEX)).getText())).as("relative to the folder").isEqualTo("MEMORY.md");
+        await().atMost(Duration.ofSeconds(10)).until(() -> on(e, FoldersEditor::messageShown).isEmpty());
+    }
+
+    @Test
+    void anIndexNamedButMissingIsCreatedAtSaveUnlessItsFolderIsMissing(@TempDir Path dir) throws Exception {
+        Path claude = Files.createDirectories(dir.resolve(".claude"));
+        FolderRoot skills = new FolderRoot("Skills", Files.createDirectories(claude.resolve("skills")).toString(), "", List.of());
+        FoldersEditor e = editor(List.of(skills), false, claude, new RepoChanges());
+        settled(e);
+        type(e, FoldersEditor.INDEX, "INDEX.md");
+        await().atMost(Duration.ofSeconds(10)).until(() -> on(e, FoldersEditor::messageShown).equals("INDEX.md does not exist yet: Save creates it"));
+        assertThat(on(e, FoldersEditor::valid)).as("a note, not a problem").isTrue();
+
+        type(e, FoldersEditor.INDEX, "gone/INDEX.md");
+        await().atMost(Duration.ofSeconds(10)).until(() -> on(e, (FoldersEditor x) -> x.problemShown(FoldersEditor.INDEX)).equals("its folder does not exist"));
+        assertThat(on(e, FoldersEditor::messageShown)).isEqualTo("Index file: its folder does not exist");
+        assertThat(on(e, (FoldersEditor x) -> x.field(FoldersEditor.INDEX).getClientProperty("JComponent.outline"))).isEqualTo("error");
+        assertThat(on(e, FoldersEditor::valid)).isFalse();
+    }
+
+    @Test
+    void everyFieldsNameExplainsItUnderTheMouse(@TempDir Path dir) throws Exception {
+        FoldersEditor e = editor(List.of(new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of())),
+                new RepoChanges());
+        settled(e);
+        Map<String, String> tips = on(e, (FoldersEditor x) -> {
+            Map<String, String> out = new LinkedHashMap<>();
+            labels(x.component(), out);
+            return out;
+        });
+        assertThat(tips.keySet()).containsExactly("Name", "Folder", "Index file", "Leave out", "Icon", "Trash", "Listed in");
+        assertThat(tips.values()).allSatisfy(t -> assertThat(t).isNotBlank());
+        assertThat(tips.get("Index file")).contains("Named but missing: Save creates it").contains("Empty: the folder has no index");
+        assertThat(tips.get("Listed in")).contains("An entry moved to the Trash takes its lines out");
+    }
+
+    private static void labels(Component c, Map<String, String> out) {
+        if (c instanceof JLabel l && l.getLabelFor() != null) {
+            out.put(l.getText(), l.getToolTipText());
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                labels(child, out);
+            }
+        }
+    }
+
+    private static AbstractButton button(FoldersEditor e, String tip) {
+        List<AbstractButton> found = new ArrayList<>();
+        find(e.component(), tip, found);
+        return found.getFirst();
+    }
+
+    private static void find(Component c, String tip, List<AbstractButton> found) {
+        if (c instanceof AbstractButton b && tip.equals(b.getToolTipText())) {
+            found.add(b);
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                find(child, tip, found);
+            }
+        }
     }
 }

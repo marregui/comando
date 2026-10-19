@@ -18,6 +18,7 @@ import javax.swing.JPanel;
 import javax.swing.KeyStroke;
 import javax.swing.WindowConstants;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Dialog;
 import java.awt.FlowLayout;
 import java.awt.Window;
@@ -25,11 +26,12 @@ import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
 
 /**
- * The Files tab's folders, or its repositories, in a window over comando's: the {@link FoldersEditor}, Cancel and Save.
+ * The Files tab's folders inside Claude Code's folder, or its repositories, in a window over comando's: the {@link FoldersEditor}, Cancel and Save.
  * Save writes {@code folders.json} once and is on only while every entry passes; Cancel, Esc and the window's close drop
  * the edits, asking first when there are any. EDT only.
  */
@@ -45,9 +47,19 @@ public final class FoldersDialog {
     private FoldersDialog(Window owner, List<FolderRoot> folders, boolean repositories, RepoChanges repos, IntentSink intents) {
         this.intents = intents;
         this.questions = ResourceActions.Questions.MODAL;
-        this.title = repositories ? "Repositories" : "Files tab folders";
-        editor = new FoldersEditor(folders, repositories, HomeDir.claudeDir(), repos, (parent, start) -> FileChoosers.directory(parent,
-                repositories ? "Choose a git repository's top folder" : "Choose a folder inside ~/.claude", start));
+        this.title = title(repositories);
+        String claude = HomeDir.shorten(HomeDir.claudeDir().toString());
+        editor = new FoldersEditor(folders, repositories, HomeDir.claudeDir(), repos, new FoldersEditor.Chooser() {
+            @Override
+            public Optional<Path> folder(Component parent, Path start) {
+                return FileChoosers.directory(parent, repositories ? "Choose a git repository's top folder" : "Choose a folder inside " + claude, start);
+            }
+
+            @Override
+            public Optional<Path> file(Component parent, Path start) {
+                return FileChoosers.open(parent, "Choose a file in the folder", start);
+            }
+        });
         dialog = new JDialog(owner, title, Dialog.ModalityType.APPLICATION_MODAL);
         dialog.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         dialog.addWindowListener(new WindowAdapter() {
@@ -82,6 +94,11 @@ public final class FoldersDialog {
         dialog.setLocationRelativeTo(owner);
     }
 
+    /** The window's title: Repositories, or Claude Code's folder's folders ("~/.claude folders"). */
+    public static String title(boolean repositories) {
+        return repositories ? "Repositories" : HomeDir.shorten(HomeDir.claudeDir().toString()) + " folders";
+    }
+
     /** Opens the window over {@code owner}, of the repositories or of the folders; returns when it closes. */
     public static void show(Window owner, List<FolderRoot> folders, boolean repositories, RepoChanges repos, IntentSink intents) {
         new FoldersDialog(owner, folders, repositories, repos, intents).dialog.setVisible(true);
@@ -101,7 +118,7 @@ public final class FoldersDialog {
     private void cancel() {
         if (editor.dirty()) {
             Object[] options = {"Discard", "Keep editing"};
-            if (questions.ask(dialog, "Discard the changes to the " + (editor.repositories() ? "repositories?" : "Files tab's folders?"), title, options) != 0) {
+            if (questions.ask(dialog, "Discard the changes to the " + (editor.repositories() ? "repositories?" : title + "?"), title, options) != 0) {
                 return;
             }
         }

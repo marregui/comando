@@ -2,11 +2,11 @@ package dev.marregui.comando.ui.dialogs.folders;
 
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
-import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
@@ -61,13 +61,18 @@ import java.util.Set;
  */
 public final class FoldersEditor {
 
-    /** Picks a folder for {@code +}; the desktop's chooser, or a test's answer. */
+    /** Picks a folder for {@code +}, or a file for the index and the listing; the desktop's choosers, or a test's answers. */
     public interface Chooser {
         Optional<Path> folder(Component owner, Path start);
+
+        /** A file, starting in {@code start}; none by default. */
+        default Optional<Path> file(Component owner, Path start) {
+            return Optional.empty();
+        }
     }
 
     /** The index files a new folder takes, the first found in it. */
-    static final List<String> INDEX_GUESSES = List.of("README.md", "ALPHA.md", "MEMORY.md");
+    static final List<String> INDEX_GUESSES = List.of("00_START_HERE.md", "INDEX.md", "README.md", "MEMORY.md");
 
     static final String NAME = "name";
     static final String PATH = "path";
@@ -80,6 +85,10 @@ public final class FoldersEditor {
 
     /** What a folder's path is on disk, as looked up off the event thread. */
     record Facts(boolean exists, boolean readable, Path gitRoot) {
+    }
+
+    /** What an index file is on disk, as looked up off the event thread. */
+    record IndexFacts(boolean exists, boolean folderExists) {
     }
 
     /** A folder of the list as edited: its fields by {@link FolderKind}'s attribute names. */
@@ -114,11 +123,18 @@ public final class FoldersEditor {
     private final JTextField path = new JTextField(24);
     private final JButton choosePath = new JButton("…");
     private final JTextField index = new JTextField(24);
+    private final JButton chooseIndex = new JButton("…");
     private final JTextField excludes = new JTextField(24);
     private final JComboBox<String> icon = new JComboBox<>(FolderRoot.ICONS.toArray(String[]::new));
     private final JCheckBox deletable = new JCheckBox("its files and subfolders can go to the Trash");
     private final JTextField listedIn = new JTextField(24);
-    private final Map<String, JLabel> problems = new HashMap<>();
+    private final JButton chooseListing = new JButton("…");
+    /** The fields by key, outlined in red while they fail. */
+    private final Map<String, JComponent> inputs = new HashMap<>();
+    /** The labels by key, naming each field in the message line. */
+    private final Map<String, String> labels = new HashMap<>();
+    /** One line under the form: the selected entry's first problem in red, else a note in grey. */
+    private final JLabel message = new JLabel(" ");
     private final JLabel facts = new JLabel(" ");
     private final JButton add;
     private final JButton remove;
@@ -127,6 +143,10 @@ public final class FoldersEditor {
     private final JPanel body = new JPanel(new BorderLayout(Theme.GAP, Theme.GAP));
     /** Each path's facts as last looked up; a path not yet looked up is being checked. EDT only. */
     private final Map<String, Facts> looked = new HashMap<>();
+    /** Each index file's facts as last looked up, by its full path. EDT only. */
+    private final Map<String, IndexFacts> indexes = new HashMap<>();
+    /** A pick refused, said in the message line until the next edit; empty when none. */
+    private String refused = "";
     private Runnable changed = () -> {
     };
     /** True while code fills the fields, so filling them is not taken for an edit. */
@@ -144,7 +164,7 @@ public final class FoldersEditor {
         this.repos = repos;
         this.chooser = chooser;
         String one = repositories ? "repository" : "folder";
-        add = tool("add", repositories ? "Add a repository: choose its top folder" : "Add a folder: choose it inside ~/.claude");
+        add = tool("add", repositories ? "Add a repository: choose its top folder" : "Add a folder: choose it inside " + configShown());
         remove = tool("close", "Take the selected " + one + " out of the Files tab; nothing on disk changes");
         up = tool("↑", KeyText.of("Move the selected " + one + " up (⌥↑)"));
         down = tool("↓", KeyText.of("Move the selected " + one + " down (⌥↓)"));
@@ -154,7 +174,10 @@ public final class FoldersEditor {
             }
         }
         build();
-        rows.elements().asIterator().forEachRemaining(r -> lookUp(r.get(PATH)));
+        rows.elements().asIterator().forEachRemaining(r -> {
+            lookUp(r.get(PATH));
+            lookUpIndex(r);
+        });
         if (!rows.isEmpty()) {
             list.setSelectedIndex(0);
         }
@@ -289,11 +312,16 @@ public final class FoldersEditor {
         String ix = r.get(INDEX).strip();
         if (!ix.isEmpty() && (Path.of(ix).isAbsolute() || Path.of(ix).normalize().startsWith(".."))) {
             out.put(INDEX, "must be inside the folder");
+        } else if (!ix.isEmpty() && !out.containsKey(PATH)) {
+            IndexFacts f = indexes.get(indexPath(r).toString());
+            if (f != null && !f.exists() && !f.folderExists()) {
+                out.put(INDEX, "its folder does not exist");
+            }
         }
         String listing = r.get(LISTED_IN).strip();
         if (Boolean.parseBoolean(r.get(DELETABLE)) && !listing.isEmpty()
                 && (listing.contains("/") || listing.contains("\\") || listing.equals(".") || listing.equals(".."))) {
-            out.put(LISTED_IN, "a file name, such as ALPHA.md");
+            out.put(LISTED_IN, "a file name, such as INDEX.md");
         }
         if (out.isEmpty()) {
             try {
@@ -317,9 +345,13 @@ public final class FoldersEditor {
         chooser.folder(body, start).ifPresent(this::add);
     }
 
-    /** Adds {@code folder} after the others, selected. */
+    /** Adds {@code folder} after the others, selected; a folder outside {@code ~/.claude} is refused, for the folders. */
     void add(Path folder) {
         Path dir = folder.toAbsolutePath().normalize();
+        if (!repositories && !dir.startsWith(claudeDir)) {
+            refuse(HomeDir.shorten(dir.toString()) + " is outside " + configShown() + ": not added");
+            return;
+        }
         String base = dir.getFileName() == null ? dir.toString() : dir.getFileName().toString();
         String n = base;
         for (int k = 2; nameTaken(n); k++) {
@@ -343,6 +375,7 @@ public final class FoldersEditor {
         fields.put(REPOSITORY, Boolean.toString(repositories));
         rows.addElement(new Row(fields));
         lookUp(fields.get(PATH));
+        lookUpIndex(rows.lastElement());
         list.setSelectedIndex(rows.size() - 1);
         list.ensureIndexIsVisible(rows.size() - 1);
         edited();
@@ -402,9 +435,15 @@ public final class FoldersEditor {
         };
     }
 
-    /** The text beside field {@code key}: its problem, or empty. */
+    /** The selected entry's problem with field {@code key}, as its outline and the message line show it; empty when none. */
     String problemShown(String key) {
-        return problems.get(key).getText().strip();
+        int i = list.getSelectedIndex();
+        return i < 0 ? "" : problems(i).getOrDefault(key, "");
+    }
+
+    /** The message line under the form. */
+    String messageShown() {
+        return message.getText().strip();
     }
 
     String factsShown() {
@@ -428,6 +467,30 @@ public final class FoldersEditor {
         });
     }
 
+    /** Looks up whether {@code r}'s index file and its folder exist, then checks again. */
+    private void lookUpIndex(Row r) {
+        String ix = r.get(INDEX).strip();
+        String p = HomeDir.expand(r.get(PATH).strip());
+        if (ix.isEmpty() || p.isEmpty() || !Path.of(p).isAbsolute() || Path.of(ix).isAbsolute()) {
+            return;
+        }
+        Path file = indexPath(r);
+        if (indexes.containsKey(file.toString())) {
+            return;
+        }
+        Thread.ofVirtual().name("folder-facts").start(() -> {
+            IndexFacts f = new IndexFacts(Files.isRegularFile(file), file.getParent() != null && Files.isDirectory(file.getParent()));
+            Edt.later(() -> {
+                indexes.put(file.toString(), f);
+                refresh();
+            });
+        });
+    }
+
+    private static Path indexPath(Row r) {
+        return Path.of(HomeDir.expand(r.get(PATH).strip())).resolve(r.get(INDEX).strip()).toAbsolutePath().normalize();
+    }
+
     static Facts facts(Path p) {
         boolean exists = Files.isDirectory(p);
         Path git = null;
@@ -440,7 +503,7 @@ public final class FoldersEditor {
         return new Facts(exists, exists && Files.isReadable(p), git);
     }
 
-    /** What the selected folder's path is: a repository's top folder, inside one, or in none; with its branch and changes when read. */
+    /** The git repository holding the selected folder: "repo: ~/.claude · master · 1 uncommitted", as read; "repo: none". */
     String factsOf(Row r) {
         String p = HomeDir.expand(r.get(PATH).strip());
         Facts f = looked.get(p);
@@ -448,15 +511,12 @@ public final class FoldersEditor {
             return " ";
         }
         if (f.gitRoot() == null) {
-            return "not in a git repository";
+            return "repo: none";
         }
-        Optional<RepoStatus> read = repos.repoAt(f.gitRoot());
-        String state = read.map(s -> (s.branch().isEmpty() ? "" : " · " + s.branch())
-                + " · " + (s.changes().isEmpty() ? "no changes" : s.changes().size() + (s.changes().size() == 1 ? " change" : " changes")))
-                .orElse("");
-        return f.gitRoot().equals(Path.of(p).toAbsolutePath().normalize())
-                ? "git repository" + state
-                : "inside the git repository " + HomeDir.shorten(f.gitRoot().toString()) + state;
+        String state = repos.repoAt(f.gitRoot()).map(s -> s.error().isEmpty()
+                ? " · " + (s.branch().isEmpty() ? "detached HEAD" : s.branch()) + " · " + s.changes().size() + (s.truncated() ? "+" : "") + " uncommitted"
+                : " · cannot be read").orElse("");
+        return "repo: " + HomeDir.shorten(f.gitRoot().toString()) + state;
     }
 
     // ---- the form
@@ -492,7 +552,7 @@ public final class FoldersEditor {
         down.addActionListener(e -> move(1));
 
         JScrollPane listScroll = new JScrollPane(list);
-        listScroll.setPreferredSize(new Dimension(220, 320));
+        listScroll.setPreferredSize(new Dimension(220, 220));
         JPanel listButtons = new JPanel(new FlowLayout(FlowLayout.LEADING, 2, 0));
         listButtons.add(add);
         listButtons.add(remove);
@@ -512,39 +572,62 @@ public final class FoldersEditor {
                 return c;
             }
         });
-        choosePath.setToolTipText(repositories ? "Choose the repository's top folder" : "Choose a folder inside ~/.claude");
+        choosePath.setToolTipText(repositories ? "Choose the repository's top folder" : "Choose a folder inside " + configShown());
         path.setEditable(false); // chosen, never typed: it exists when chosen
         choosePath.addActionListener(e -> {
             String p = HomeDir.expand(path.getText().strip());
             Path start = p.isEmpty() || !Path.of(p).isAbsolute() ? (repositories ? Path.of(HomeDir.home()) : claudeDir) : Path.of(p);
-            chooser.folder(body, start).ifPresent(dir -> path.setText(HomeDir.shorten(dir.toAbsolutePath().normalize().toString())));
+            chooser.folder(body, start).map(dir -> dir.toAbsolutePath().normalize()).ifPresent(dir -> {
+                if (!repositories && !dir.startsWith(claudeDir)) {
+                    refuse(HomeDir.shorten(dir.toString()) + " is outside " + configShown() + ": not taken");
+                } else {
+                    path.setText(HomeDir.shorten(dir.toString()));
+                }
+            });
         });
-        excludes.setToolTipText("Names to leave out, comma-separated; always out: hidden entries, "
-                + String.join(", ", FolderRoot.ALWAYS_EXCLUDED.stream().sorted().toList()));
+        chooseIndex.setToolTipText("Choose a file in the folder");
+        chooseIndex.addActionListener(e -> chooseInFolder("index").ifPresent(f -> index.setText(f.toString().replace('\\', '/'))));
+        chooseListing.setToolTipText("Choose a file in the folder; its name is taken");
+        chooseListing.addActionListener(e -> chooseInFolder("listing").ifPresent(f -> listedIn.setText(f.getFileName().toString())));
 
+        String home = configShown();
         JPanel form = new JPanel(new GridBagLayout());
         int y = 0;
-        y = row(form, y, "Name", name, NAME, "unique; the row's name in the Files tab");
-        JPanel pathRow = new JPanel(new BorderLayout(4, 0));
-        pathRow.add(path, BorderLayout.CENTER);
-        pathRow.add(choosePath, BorderLayout.EAST);
-        y = row(form, y, repositories ? "Repository" : "Folder", pathRow, PATH, "");
-        y = row(form, y, "Index file", index, INDEX, "a file in the folder, opened from its row's menu");
-        y = row(form, y, "Leave out", excludes, EXCLUDES, "comma-separated; build output and hidden entries always are");
+        y = row(form, y, "Name", name, NAME, "The row's name in the Files tab; unique across folders and repositories");
+        y = row(form, y, repositories ? "Repository" : "Folder", withButton(path, choosePath), PATH, repositories
+                ? "The repository's top folder; chosen with …, it must exist and hold .git"
+                : "The folder the row shows; chosen with …, only inside " + home);
+        y = row(form, y, "Index file", withButton(index, chooseIndex), INDEX, repositories
+                ? lines("The folder's own index, such as README.md: listed first, opened by Open in the row's menu",
+                        "Missing: the row's menu still names it, and opening it says it is not there",
+                        "Empty: the repository has no index")
+                : lines("The folder's catalogue, one line per entry: listed first, opened by Open in the row's menu",
+                        "Named but missing: Save creates it, and /reflect keeps a line in it for each entry",
+                        "Empty: the folder has no index"));
+        y = row(form, y, "Leave out", excludes, EXCLUDES, lines("Names hidden from the tree wherever they appear, comma-separated, any case",
+                "Always hidden: names starting with a dot, " + String.join(", ", FolderRoot.ALWAYS_EXCLUDED.stream().sorted().toList())));
         if (!repositories) {
-            y = row(form, y, "Icon", icon, ICON, "");
-            y = row(form, y, "Trash", deletable, DELETABLE, "");
-            y = row(form, y, "Listed in", listedIn, LISTED_IN, "a file name; an entry moved to the Trash leaves the nearest one above it");
+            y = row(form, y, "Icon", icon, ICON, "The icon of the folder's row");
+            y = row(form, y, "Trash", deletable, DELETABLE, "Whether the Files tab moves the folder's files and subfolders to the Trash; never the folder");
+            y = row(form, y, "Listed in", withButton(listedIn, chooseListing), LISTED_IN,
+                    lines("The name of the file that, in each subfolder, lists the entries beside it, such as INDEX.md",
+                            "An entry moved to the Trash takes its lines out of the nearest such file above it",
+                            "Missing in a subfolder: nothing to take out there; /reflect creates it with its first line",
+                            "Empty, or Trash off: no file is changed"));
         }
         GridBagConstraints g = new GridBagConstraints();
         g.gridx = 1;
         g.gridy = y;
         g.anchor = GridBagConstraints.LINE_START;
         g.insets = new Insets(Theme.GAP, 0, 0, 0);
+        message.getAccessibleContext().setAccessibleName("Problem");
+        form.add(message, g);
+        g.gridy = y + 1;
+        g.insets = new Insets(2, 0, 0, 0);
         facts.setForeground(Theme.MUTED_STRONG);
         facts.getAccessibleContext().setAccessibleName("Folder facts");
         form.add(facts, g);
-        g.gridy = y + 1;
+        g.gridy = y + 2;
         g.weighty = 1;
         form.add(new JPanel(), g);
 
@@ -574,32 +657,67 @@ public final class FoldersEditor {
         body.add(form, BorderLayout.CENTER);
     }
 
-    /** A labelled field with its problem below it; answers the next free grid row. */
-    private int row(JPanel form, int y, String label, JComponent field, String key, String hint) {
+    /** A labelled field, its label and the field explaining it under the mouse; answers the next free grid row. */
+    private int row(JPanel form, int y, String label, JComponent field, String key, String tip) {
         GridBagConstraints g = new GridBagConstraints();
         g.gridx = 0;
         g.gridy = y;
         g.anchor = GridBagConstraints.LINE_END;
-        g.insets = new Insets(4, 0, 0, Theme.GAP);
-        form.add(new JLabel(label), g);
+        g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, Theme.GAP);
+        JLabel caption = new JLabel(label);
+        caption.setToolTipText(tip);
+        form.add(caption, g);
         g.gridx = 1;
         g.anchor = GridBagConstraints.LINE_START;
         g.fill = GridBagConstraints.HORIZONTAL;
         g.weightx = 1;
-        g.insets = new Insets(4, 0, 0, 0);
+        g.insets = new Insets(y == 0 ? 0 : 2, 0, 0, 0);
         form.add(field, g);
-        if (!hint.isEmpty()) {
-            field.setToolTipText(field.getToolTipText() == null ? hint : field.getToolTipText());
+        JComponent input = field(key);
+        input.setToolTipText(tip);
+        input.getAccessibleContext().setAccessibleName(label);
+        caption.setLabelFor(input);
+        inputs.put(key, input);
+        labels.put(key, label);
+        return y + 1;
+    }
+
+    private static JPanel withButton(JComponent field, JButton button) {
+        JPanel p = new JPanel(new BorderLayout(4, 0));
+        p.add(field, BorderLayout.CENTER);
+        p.add(button, BorderLayout.EAST);
+        return p;
+    }
+
+    /** A tooltip of a few lines. */
+    private static String lines(String... lines) {
+        return "<html>" + String.join("<br>", List.of(lines).stream().map(MarkdownHtml::escape).toList()) + "</html>";
+    }
+
+    /** {@code ~/.claude}, or Claude Code's folder wherever it is, as shown. */
+    private String configShown() {
+        return HomeDir.shorten(claudeDir.toString());
+    }
+
+    /** A file chosen in the selected entry's folder, relative to it; one outside is refused, saying so. */
+    private Optional<Path> chooseInFolder(String what) {
+        Row r = list.getSelectedValue();
+        if (r == null || r.get(PATH).isBlank()) {
+            return Optional.empty();
         }
-        JLabel problem = new JLabel(" ");
-        problem.setForeground(Theme.DANGER);
-        problem.setFont(problem.getFont().deriveFont(problem.getFont().getSize2D() - 1f));
-        problems.put(key, problem);
-        g.gridy = y + 1;
-        g.insets = new Insets(0, 0, 0, 0);
-        form.add(problem, g);
-        field.getAccessibleContext().setAccessibleName(label);
-        return y + 2;
+        Path dir = Path.of(HomeDir.expand(r.get(PATH).strip())).toAbsolutePath().normalize();
+        Optional<Path> chosen = chooser.file(body, dir).map(f -> f.toAbsolutePath().normalize());
+        if (chosen.isPresent() && !chosen.get().startsWith(dir)) {
+            refuse(HomeDir.shorten(chosen.get().toString()) + " is outside the folder: not taken as its " + what);
+            return Optional.empty();
+        }
+        return chosen.map(dir::relativize);
+    }
+
+    /** Says in the message line why a pick was not taken, until the next edit. */
+    private void refuse(String why) {
+        refused = why;
+        refresh();
     }
 
     /** Fills the fields with the selected folder's; with none selected they are empty and off. */
@@ -608,7 +726,7 @@ public final class FoldersEditor {
         loading = true;
         try {
             boolean on = r != null;
-            for (JComponent c : List.of(name, path, choosePath, index, excludes, icon, deletable, listedIn, remove)) {
+            for (JComponent c : List.of(name, path, choosePath, index, chooseIndex, excludes, icon, deletable, listedIn, chooseListing, remove)) {
                 c.setEnabled(on);
             }
             name.setText(on ? r.get(NAME) : "");
@@ -637,7 +755,9 @@ public final class FoldersEditor {
         r.fields.put(ICON, String.valueOf(icon.getSelectedItem()));
         r.fields.put(DELETABLE, Boolean.toString(deletable.isSelected()));
         r.fields.put(LISTED_IN, listedIn.getText());
+        refused = "";
         lookUp(path.getText());
+        lookUpIndex(r);
         edited();
     }
 
@@ -650,17 +770,30 @@ public final class FoldersEditor {
     private void refresh() {
         int i = list.getSelectedIndex();
         Map<String, String> p = i < 0 ? Map.of() : problems(i);
-        for (Map.Entry<String, JLabel> e : problems.entrySet()) {
-            String text = p.getOrDefault(e.getKey(), "");
-            e.getValue().setText(text.isEmpty() ? " " : Plain.text(text));
-            e.getValue().setForeground("checking…".equals(text) ? Theme.MUTED : Theme.DANGER);
-        }
+        inputs.forEach((key, field) -> field.putClientProperty("JComponent.outline",
+                p.containsKey(key) && !"checking…".equals(p.get(key)) ? "error" : null));
+        Map.Entry<String, String> first = p.entrySet().stream().findFirst().orElse(null);
+        String note = i < 0 ? "" : note(rows.get(i));
+        String text = !refused.isEmpty() ? refused : first != null ? labels.get(first.getKey()) + ": " + first.getValue() : note;
+        message.setText(text.isEmpty() ? " " : Plain.text(text));
+        message.setForeground(refused.isEmpty() && (first == null || "checking…".equals(first.getValue())) ? Theme.MUTED_STRONG : Theme.DANGER);
         listedIn.setEnabled(i >= 0 && deletable.isSelected());
+        chooseListing.setEnabled(listedIn.isEnabled());
         up.setEnabled(i > 0);
         down.setEnabled(i >= 0 && i < rows.size() - 1);
         facts.setText(i < 0 ? " " : Plain.text(factsOf(rows.get(i))));
         list.repaint();
         changed.run();
+    }
+
+    /** What Save does with {@code r} beyond {@code folders.json}: an index file named but missing is created, for a folder. */
+    private String note(Row r) {
+        String ix = r.get(INDEX).strip();
+        IndexFacts f = ix.isEmpty() ? null : indexes.get(indexPath(r).toString());
+        if (f == null || f.exists()) {
+            return "";
+        }
+        return repositories ? ix + " is not in the repository" : ix + " does not exist yet: Save creates it";
     }
 
     private String rowIcon(Row r) {

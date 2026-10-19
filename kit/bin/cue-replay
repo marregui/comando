@@ -23,7 +23,7 @@ Options:
   --day-dir DIR    the SCRATCHPAD day folder for the report (default: SCRATCHPAD/<today> in Claude Code's folder)
   --trigger NAME   how the run was started, for the report (default manual; a scheduler sets its own)
   --dry-run        extraction only
-  --no-report      no report, no ALPHA entry, no history line
+  --no-report      no report, no INDEX entry, no history line
 
 A pair is a user prompt plus the memory files read in the turns that answered it (the Read tool on a path in the
 memory folder, or a Bash command naming one). Sidechains (agents), meta messages, tool results, slash-command
@@ -369,7 +369,7 @@ def write_report(day_dir, today, args, counts, pairs, scored, failures, memory_d
     ]
     report.write_text("\n".join(lines), encoding="utf-8")
 
-    alpha = day_dir / "ALPHA.md"
+    alpha = day_dir / "INDEX.md"
     if not alpha.exists():
         alpha.write_text(f"# Scratchpad — {today:%Y-%m-%d}\n", encoding="utf-8")
     text = alpha.read_text(encoding="utf-8")

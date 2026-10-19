@@ -269,22 +269,29 @@ edited and saved like any other; a `.log` stays read-only.
   an optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge,
   skills, plugin), whether its entries go to the Trash (`deletable`), the file name that lists them (`listedIn`), and
   whether it is a repository (`repository`).
-  The kit's Scratchpad is deletable and listed in `ALPHA.md`; the kit adds only folders that are missing, so a
+  The kit's Scratchpad is deletable and listed in `INDEX.md`, its knowledge base indexed by `00_START_HERE.md`; the kit adds only folders that are missing, so a
   Scratchpad entry written before gains the two keys by editing `folders.json`. Without `folders.json` there is one folder, `~/.claude`, opening `CLAUDE.md` and leaving out Claude
   Code's transcripts, caches and per-session state; an emptied list stays empty.
 - **Repositories.** The folders configured as repositories are rows of one node, Repositories (its own icon), after the
   other folders, which lie inside `~/.claude` ([record 71](adr/0071-repositories-in-the-files-tab.md)).
-- **Configuring.** The Files tab's menu (a right click on its header), or the Files menu, opens the folders window
-  (Files tab folders…) or the repositories window (Repositories…)
-  ([records 69, 71](adr/0069-a-window-edits-the-files-tab-folders.md)): the entries in the tab's order on the left (+
-  chooses a folder first and names it after it, − takes one out, ↑ ↓ or ⌥↑ ⌥↓ move it), the selected one's fields on
-  the right, each checked as it is typed (a name used once in `folders.json`, a folder that exists and can be read, set
-  only by choosing it: inside `~/.claude` for a folder, a git repository's top folder for a repository; an index inside
-  it, a listing file name), with what git makes of the folder below them. A repository has a name, its folder, an index
+- **Configuring.** The Files tab's menu (a right click on its header), or the Files menu, opens the `~/.claude` folders
+  window (its title names Claude Code's folder wherever it is) or the repositories window (Repositories…) ([records 69,
+  71, 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)): the entries in the tab's order on the
+  left (+ chooses a folder first and names it after it, − takes one out, ↑ ↓ or ⌥↑ ⌥↓ move it), the selected one's
+  fields on the right, each field's name explaining it under the mouse. Each is checked as it is typed (a name used once
+  in `folders.json`, a folder that exists and can be read, set only by choosing it: inside `~/.claude` for a folder, a
+  git repository's top folder for a repository; an index inside it whose own folder exists, a listing file name); a
+  field that fails is outlined in red and one line under the form says why, or notes what Save will do. A pick outside
+  `~/.claude`, or a file outside the entry's folder, is not taken, and that line says so. The index file and the listing
+  file are typed or picked (…); a picked listing file gives its name. Under that line, the git repository holding the
+  folder: `repo: ~/.claude · master · 1 uncommitted`, or `repo: none`. A repository has a name, its folder, an index
   file and the names left out; a folder has every field. Save, on only when every entry passes, writes `folders.json`
-  once, keeping the entries of the other window; Cancel or Esc drop the edits, asking first. The store checks `folders.json` every second: a change it did not write is read again and the tab follows; an
-  entry that breaks the rules is left out with a notice; a file that does not parse keeps the tab's folders, says why
-  and stays where it is. The kit adds its folders there too. A `readOnly` key from older versions is ignored.
+  once, keeping the entries of the other window, and creates the index file a folder inside `~/.claude` names but does
+  not have, with a title and one line on how it is kept; `/reflect` and `index-check` then keep one line per entry in
+  it, and one per entry of a subfolder in that subfolder's listing file. Cancel or Esc drop the edits, asking first. The
+  store checks `folders.json` every second: a change it did not write is read again and the tab follows; an entry that
+  breaks the rules is left out with a notice; a file that does not parse keeps the tab's folders, says why and stays
+  where it is. The kit adds its folders there too. A `readOnly` key from older versions is ignored.
 - **Order.** At a folder's top level its index file comes first. Every level then lists folders not named after a date,
   date-named folders (`yyyy-MM-dd`) oldest first, then files, by name ignoring case. Hidden entries, `node_modules`,
   `build`, `target`, `__pycache__`, `out` and the folder's own exclusions are left out, and so is what git ignores in

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Structural checks of the memory directory, the knowledge base and the scratchpad. Read-only. Prints only defects;
-# exit 1 if any.
+# Structural checks of the memory directory, the knowledge base, the scratchpad and the indexes of comando's Files tab
+# folders (~/.comando/folders.json, $COMANDO_FOLDERS). Read-only. Prints only defects; exit 1 if any.
 #
 #   index-check [<memory directory>]      default: the autoMemoryDirectory in Claude Code's settings, else MEMORY in
 #                                         Claude Code's folder, where the comando kit keeps it
@@ -71,20 +71,130 @@ fi
 
 # --- knowledge base ---
 if [[ -d $K ]]; then
-  cd "$K" || exit 2
-  [[ -f ALPHA.md ]] || say "KB: no ALPHA.md"
-  for f in $(find . -name '*.md' -not -path './README.md' -not -path './ALPHA.md' | sed 's#^\./##'); do
-    grep -qF "($f)" ALPHA.md 2>/dev/null || say "KB: $f is not in ALPHA.md"
-  done
-  for f in $(find . -name '*.md' | sed 's#^\./##'); do
-    head -8 "$f" | grep -q 'Status:' || say "KB: $f has no Status header"
-    grep -qE '\.(java|kt|kts|py|ts|tsx|js|go|rs|sh|xml|yaml|yml|gradle|toml|json|md|proto):[0-9]' "$f" \
-      && say "KB: $f has a file:line anchor"
-    d=$(dirname "$f")
-    for l in $(grep -oE '\]\([^)#: ]+\.md' "$f" | sed 's/](//'); do
-      [[ -e $d/$l ]] || say "KB: dead link $f -> $l"
-    done
-  done
+  found=$(python3 -I - "$K" <<'PY'
+# The knowledge base is a tree of sets: a folder holding 00_START_HERE.md (its documents, one line each) and
+# 99_MAINTENANCE.md (Rules, Source register, Drift check with its checks table, Change log). A document belongs to the
+# nearest set at or above its folder; a folder holding SOURCES.md holds raw copies, of which only SOURCES.md is a
+# document. One defect per line.
+import os, re, sys
+kb = os.path.realpath(os.path.expanduser(sys.argv[1]))
+ENTRY, MAINT = "00_START_HERE.md", "99_MAINTENANCE.md"
+HEADINGS = ["Rules", "Source register", "Drift check", "Change log"]
+KINDS = {"code", "document", "web", "toolchain", "slack", "none"}
+CADENCES = {"weekly", "monthly", "never"}
+CHECKERS = {"kb-drift", "slack-sweep", "none"}
+
+def read(p):
+    with open(p, encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+def rel(p):
+    return os.path.relpath(p, kb)
+
+docs, sets, raw = [], [], set()
+for d, subdirs, files in os.walk(kb):
+    subdirs[:] = sorted(s for s in subdirs if not s.startswith("."))
+    if "SOURCES.md" in files:
+        raw.add(d)
+    if ENTRY in files or MAINT in files:
+        sets.append(d)
+    for f in sorted(files):
+        if f.endswith(".md") and not f.startswith("."):
+            docs.append(os.path.join(d, f))
+docs = [p for p in docs if not any(p.startswith(r + os.sep) for r in raw) or os.path.basename(p) == "SOURCES.md"]
+setset = set(sets)
+if docs and kb not in setset:
+    print("KB: the root is not a set: no 00_START_HERE.md")
+
+def owner(path):
+    d = os.path.dirname(path)
+    while True:
+        if d in setset:
+            return d
+        if d == kb or len(d) < len(kb):
+            return None
+        d = os.path.dirname(d)
+
+def linked(entry_text, target):
+    return f"({target})" in entry_text or f"(./{target})" in entry_text
+
+entries = {}
+for s in sets:
+    for f in (ENTRY, MAINT):
+        if not os.path.isfile(os.path.join(s, f)):
+            print(f"KB: set {rel(s)} has no {f}")
+    if os.path.isfile(os.path.join(s, ENTRY)):
+        entries[s] = read(os.path.join(s, ENTRY))
+
+for s in sets:
+    if s == kb:
+        continue
+    parent = owner(os.path.join(os.path.dirname(s), "x"))
+    if parent in entries and not linked(entries[parent], os.path.relpath(os.path.join(s, ENTRY), parent)):
+        print(f"KB: set {rel(s)} is not in {rel(os.path.join(parent, ENTRY))}")
+
+for p in docs:
+    if os.path.basename(p) == ENTRY and os.path.dirname(p) in setset:
+        continue
+    o = owner(p)
+    if o is None:
+        print(f"KB: {rel(p)} belongs to no set")
+    elif o in entries and not linked(entries[o], os.path.relpath(p, o)):
+        print(f"KB: {rel(p)} is not in {rel(os.path.join(o, ENTRY))}")
+
+for s in sets:
+    mp = os.path.join(s, MAINT)
+    if not os.path.isfile(mp):
+        continue
+    text = read(mp)
+    titles = [re.sub(r"^\d+(\.\d+)*\.?\s+", "", h).strip() for h in re.findall(r"^## (.+)$", text, re.M)]
+    at = 0
+    for want in HEADINGS:
+        found = next((i for i in range(at, len(titles)) if titles[i].startswith(want)), None)
+        if found is None:
+            print(f'KB: {rel(mp)} lacks "{want}" (after the ones before it)')
+        else:
+            at = found + 1
+    m = re.search(r"^## (?:\d+\.\s+)?Drift check.*?$(.*?)(?=^## |\Z)", text, re.M | re.S)
+    if not m:
+        continue
+    rows = []
+    for l in m.group(1).strip("\n").split("\n"):
+        if l.startswith("|"):
+            rows.append(l)
+        elif rows or l.strip():
+            break
+    if not rows or not re.match(r"\|\s*Source\s*\|\s*Kind\s*\|\s*Where\s*\|\s*Recorded\s*\|\s*Cadence\s*\|\s*Checker\s*\|", rows[0]):
+        print(f"KB: {rel(mp)} Drift check does not open with the checks table")
+        continue
+    body = [r for r in rows[1:] if not re.match(r"^\|\s*-", r)]
+    if not body:
+        print(f"KB: {rel(mp)} checks table has no row")
+    for r in body:
+        cells = [c.strip() for c in r.strip().strip("|").split("|")]
+        if len(cells) != 6:
+            print(f"KB: {rel(mp)} checks row has {len(cells)} cells, not 6: {r[:60]}")
+            continue
+        for value, allowed, what in ((cells[1], KINDS, "Kind"), (cells[4], CADENCES, "Cadence"), (cells[5], CHECKERS, "Checker")):
+            if value not in allowed:
+                print(f'KB: {rel(mp)} checks row "{cells[0]}": {what} "{value}" is not one of {", ".join(sorted(allowed))}')
+
+anchor = re.compile(r"\.(java|kt|kts|py|ts|tsx|js|go|rs|sh|xml|xsd|yaml|yml|gradle|toml|json|md|tf|proto):[0-9]")
+memory = re.compile(r"(^|[^A-Za-z/])memory/[A-Za-z0-9_.-]+\.md", re.I | re.M)
+for p in docs:
+    text = read(p)
+    if "Status:" not in "\n".join(text.split("\n")[:8]):
+        print(f"KB: {rel(p)} has no Status header")
+    if anchor.search(text):
+        print(f"KB: {rel(p)} has a file:line anchor")
+    if memory.search(text):
+        print(f"KB: {rel(p)} references MEMORY/")
+    for link in re.findall(r"\]\(([^)#: ]+\.md)", text):
+        if not os.path.exists(os.path.join(os.path.dirname(p), link)):
+            print(f"KB: dead link {rel(p)} -> {link}")
+PY
+)
+  while IFS= read -r l; do [[ -n $l ]] && say "$l"; done <<< "$found"
 fi
 
 # --- scratchpad ---
@@ -93,13 +203,78 @@ if [[ -d $S ]]; then
   for d in *; do
     [[ $d == README.md ]] && continue
     [[ -d $d && $d =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || { say "scratchpad: $d is not a YYYY-MM-DD folder"; continue; }
-    [[ -f $d/ALPHA.md ]] || { say "scratchpad: $d has no ALPHA.md"; continue; }
+    [[ -f $d/INDEX.md ]] || { say "scratchpad: $d has no INDEX.md"; continue; }
     for a in "$d"/*; do
       a=${a#"$d"/}
-      [[ $a == ALPHA.md ]] && continue
+      [[ $a == INDEX.md ]] && continue
       [[ $a == work || $a =~ ^READ-[0-9]{2}-.*\.md$ ]] || say "scratchpad: $d/$a is neither a READ-NN- document nor work/"
-      grep -qF "\`$a" "$d/ALPHA.md" || say "scratchpad: $d/$a is not in its ALPHA.md"
+      grep -qF "\`$a" "$d/INDEX.md" || say "scratchpad: $d/$a is not in its INDEX.md"
     done
   done
 fi
+
+# --- comando's folders ---
+found=$(python3 -I - "${COMANDO_FOLDERS:-$HOME/.comando/folders.json}" "$C" "$M/MEMORY.md" "$K/00_START_HERE.md" "$S" <<'PY'
+# comando's folders.json names more indexes: a folder's `index` lists every entry at its top level, and a deletable
+# folder's `listedIn` file, in each subfolder, lists the entries beside it. Folders inside Claude Code's folder only;
+# repositories and the indexes checked above (the arguments after the first two) are left out. One defect per line.
+import json, os, sys
+cfg, claude, *skip = sys.argv[1:]
+claude = os.path.realpath(os.path.expanduser(claude))
+skip = {os.path.realpath(os.path.expanduser(p)) for p in skip}
+always = {"node_modules", "build", "target", "__pycache__", "out"}
+try:
+    folders = json.load(open(os.path.expanduser(cfg), encoding="utf-8"))
+except FileNotFoundError:
+    sys.exit(0)
+except Exception as e:
+    print(f"folders: {cfg} does not read: {e}")
+    sys.exit(0)
+
+def entries(d, excludes, own):
+    for n in sorted(os.listdir(d)):
+        if not (n.startswith(".") or n.lower() in always or n.lower() in excludes or n == own):
+            yield n
+
+def listed(text, n):
+    return any(s in text for s in (f"({n})", f"({n}/", f"`{n}`", f"`{n}/`"))
+
+def read(p):
+    with open(p, encoding="utf-8", errors="replace") as f:
+        return f.read()
+
+for f in folders if isinstance(folders, list) else []:
+    root = os.path.realpath(os.path.expanduser(f.get("path") or ""))
+    if f.get("repository") or not root.startswith(claude + os.sep) or not os.path.isdir(root):
+        continue
+    name = f.get("name") or root
+    excludes = {e.strip().lower() for e in f.get("excludes") or [] if e.strip()}
+    index = (f.get("index") or "").strip()
+    if index and os.path.realpath(os.path.join(root, index)) not in skip:
+        p = os.path.realpath(os.path.join(root, index))
+        if not os.path.isfile(p):
+            print(f"folders: {name}: its index {index} is missing")
+        else:
+            text = read(p)
+            for n in entries(root, excludes, os.path.basename(p) if os.path.dirname(p) == root else None):
+                if not (listed(text, n) or listed(text, os.path.relpath(os.path.join(root, n), os.path.dirname(p)))):
+                    print(f"folders: {name}: {n} is not in {index}")
+    listing = (f.get("listedIn") or "").strip()
+    if f.get("deletable") and listing and root not in skip:
+        for d in entries(root, excludes, None):
+            sub = os.path.join(root, d)
+            if not os.path.isdir(sub) or os.path.islink(sub):
+                continue
+            kids = list(entries(sub, excludes, listing))
+            if not os.path.isfile(os.path.join(sub, listing)):
+                if kids:
+                    print(f"folders: {name}: {d}/ has no {listing}")
+                continue
+            text = read(os.path.join(sub, listing))
+            for n in kids:
+                if not listed(text, n):
+                    print(f"folders: {name}: {d}/{n} is not in its {listing}")
+PY
+)
+while IFS= read -r l; do [[ -n $l ]] && say "$l"; done <<< "$found"
 exit $bad

@@ -11,7 +11,7 @@ agents are given specs with an executable acceptance check; Gradle runs in one c
 | `skills/deep-review` | `/deep-review`: an adversarial review against the stated requirements, every finding proved |
 | `templates/agent-spec.md` | the spec an agent is given: files, limits, executable acceptance |
 | `bin/gradle-serial` | one Gradle run per checkout at a time; on Claude's PATH, and what comando runs Gradle through |
-| `bin/index-check` | checks that every memory file, knowledge-base document and scratchpad artefact is in its index; warns when the memory index, a memory file or a dated log passes its budget |
+| `bin/index-check` | checks that every memory file, knowledge-base document and scratchpad artefact is in its index, and every entry of a folder comando's Files tab shows in the folder's index file and listing files; warns when the memory index, a memory file or a dated log passes its budget |
 | `bin/reflect-report` | `begin` snapshots the memory before a `/reflect`; `end` prints what the run did to it: the index's size, lines added and removed per file, files that only grew, the budget warnings |
 | `bin/compact-check` | the no-loss check of a memory file merged or compacted by `/reflect`: every date, backtick span, quote, ticket, number, link and heading of the original must survive in the result or its archive |
 | `bin/cue-replay` | replays the last month's prompts against the memory index with a small headless judge and reports its recall and the cues to sharpen, to the day's scratchpad folder; run it monthly |

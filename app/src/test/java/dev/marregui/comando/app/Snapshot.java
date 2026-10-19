@@ -19,6 +19,7 @@ import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.dialogs.folders.FoldersDialog;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.text.LocalImages;
 
@@ -165,7 +166,7 @@ public final class Snapshot {
             }
         });
         // opening the row opens no panel; its tree is read meanwhile
-        await(loop, st -> rowShown("Files", "ALPHA.md"), 10_000);
+        await(loop, st -> rowShown("Files", "INDEX.md"), 10_000);
         shoot(out.resolve("02c-sidebar-files.png"));
         // its filter, typed as a user would, then cleared; it applies on the event thread: done when the call returns
         SwingUtilities.invokeAndWait(() -> filesFilter().setText("lane"));
@@ -479,7 +480,7 @@ public final class Snapshot {
 
     /**
      * Sample folders for the Files tab, written as {@code folders.json} before the start: a scratchpad of two days
-     * whose index is {@code ALPHA.md}, a knowledge base with build output the tab leaves out, a memory whose
+     * whose index is {@code INDEX.md}, a knowledge base with build output the tab leaves out, a memory whose
      * index leads it, a folder of skills and one of a plugin, so every folder icon shows, and a git repository with
      * changes; answers the repository.
      */
@@ -489,15 +490,15 @@ public final class Snapshot {
         Path pad = root.resolve("SCRATCHPAD");
         for (String day : List.of("2026-10-15", "2026-10-16")) {
             Path d = Files.createDirectories(pad.resolve(day));
-            Files.writeString(d.resolve("ALPHA.md"), "# " + day + "\n");
+            Files.writeString(d.resolve("INDEX.md"), "# " + day + "\n");
             Files.writeString(d.resolve("READ-01-LANE-REVIEW.md"), "# Lane review\n");
             Files.writeString(Files.createDirectories(d.resolve("work")).resolve("LANE-SPEC.md"), "# spec\n");
         }
-        Files.writeString(pad.resolve("ALPHA.md"), "# Scratchpad\n");
+        Files.writeString(pad.resolve("INDEX.md"), "# Scratchpad\n");
         Path kb = root.resolve("KB");
         Files.writeString(Files.createDirectories(kb.resolve("architecture")).resolve("00_START_HERE.md"), "# Architecture\n");
         Files.writeString(Files.createDirectories(kb.resolve("build")).resolve("generated.html"), "x");
-        Files.writeString(kb.resolve("ALPHA.md"), "# KB\n");
+        Files.writeString(kb.resolve("00_START_HERE.md"), "# KB\n");
         Path memory = root.resolve("MEMORY");
         Files.writeString(Files.createDirectories(memory.resolve("archive")).resolve("session_log_2026-09.md"), "# September\n");
         Files.writeString(memory.resolve("agent_ledger.md"), "# Agent ledger\n");
@@ -505,9 +506,9 @@ public final class Snapshot {
         Files.writeString(Files.createDirectories(root.resolve("skills").resolve("reflect")).resolve("SKILL.md"), "# reflect\n");
         Files.writeString(Files.createDirectories(root.resolve("plugin").resolve("bin")).resolve("gradle-serial"), "#!/bin/sh\n");
         Files.writeString(home.resolve("folders.json"), JsonFile.JSON.writeValueAsString(List.of(
-                new FolderRoot("Scratchpad", pad.toString(), "ALPHA.md", List.of(), "scratchpad"),
+                new FolderRoot("Scratchpad", pad.toString(), "INDEX.md", List.of(), "scratchpad"),
                 new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory"),
-                new FolderRoot("KB", kb.toString(), "ALPHA.md", List.of(), "knowledge"),
+                new FolderRoot("KB", kb.toString(), "00_START_HERE.md", List.of(), "knowledge"),
                 new FolderRoot("Skills", root.resolve("skills").toString(), "", List.of(), "skills"),
                 new FolderRoot("Plugin", root.resolve("plugin").toString(), "", List.of(), "plugin"),
                 new FolderRoot("Notes", root.resolve("notes").toString(), "", List.of()),
@@ -649,7 +650,7 @@ public final class Snapshot {
     /** Runs the menu bar's command {@code id}, clicking its item as the user would. */
     private static void findCommand(String id) {
         String text = switch (id) {
-            case "files.settings" -> "Files tab folders";
+            case "files.settings" -> FoldersDialog.title(false);
             case "files.repositories" -> "Repositories";
             default -> throw new IllegalArgumentException(id);
         };

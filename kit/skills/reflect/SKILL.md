@@ -75,7 +75,7 @@ replacement of your own lines), never a full-file Write: a concurrent change the
 
 10. **Ask once, briefly,** before changing `feedback` and `user` files: one line per change; the user's reply settles
     all of them. Write the rest without asking. With `--no-ask`, or in a session the user is not watching, these changes
-    are neither written nor asked: they go as one task entry in today's day folder's `ALPHA.md`
+    are neither written nor asked: they go as one task entry in today's day folder's `INDEX.md`
     (`## N. Pending memory changes from /reflect --no-ask`, one line per change, **State:** waiting on the user); the
     next `/reflect` the user watches asks them first and deletes the entry.
 
@@ -94,22 +94,25 @@ entries it rewrote, which the report carries. Without a fork, steps 6–7 run he
    against the code. Unchecked suspicions are not written anywhere.
 
 7. **Consolidate the scratchpad, after memory** (rules: `SCRATCHPAD/README.md`). For each day folder this session wrote
-   to, and each older one whose tasks it touched, go task by task through its `ALPHA.md`: fold what the session proved
-   true against the code into the KB document it belongs to (or a new one, listed in `KB/ALPHA.md`); delete the
+   to, and each older one whose tasks it touched, go task by task through its `INDEX.md`: fold what the session proved
+   true against the code into the KB document it belongs to (or a new one, with its line in its set's `00_START_HERE.md`); delete the
    artefacts that are folded or obsolete, noting in the entry what was dropped and why; rewrite the entry to carry only
    what a later session needs (State, Next, artefacts kept), or delete it when nothing is left, never renumbering the
    others. A task that still needs the user (an open decision, an unverified finding) stays, and its State says so.
 
    **Deletes are per artefact, never per folder.** `rm -rf` is never run on a day folder: delete only the files and
-   `ALPHA.md` entries this session created or consolidated; an artefact this session does not know, or newer than this
+   `INDEX.md` entries this session created or consolidated; an artefact this session does not know, or newer than this
    session's last write to the folder, belongs to another session and stays. A day folder goes only when `ls -A` shows
-   just an `ALPHA.md` with no task left: delete that file, then `rmdir`.
+   just an `INDEX.md` with no task left: delete that file, then `rmdir`.
 
 ## D. Indexes and report
 
 8. **Indexes are part of the write.** Every memory file created, renamed or deleted changes its line in `MEMORY.md` in
-   the same step; every KB document its row in `KB/ALPHA.md`; every scratchpad artefact its line in its day's
-   `ALPHA.md`. `index-check` (on the PATH) must report no defect this session caused.
+   the same step; every KB document its line in its set's `00_START_HERE.md`, and a new set its line in its parent's; every scratchpad artefact its line in its day's
+   `INDEX.md`; in a folder comando's Files tab shows (`~/.comando/folders.json`, inside Claude Code's folder), every
+   entry at the folder's top level its line in the folder's `index` file (comando creates the file when it is named and
+   missing), and, in a folder whose entries go to the Trash, every entry of a subfolder its line in that subfolder's
+   `listedIn` file, created with its first line. `index-check` (on the PATH) must report no defect this session caused.
 
 11. **Report:** the output of `reflect-report end $t` (`MEMORY.md` before → after, lines added and removed per file,
     the append-only list, the budget warnings, the index check), then at most four lines: files written; KB documents

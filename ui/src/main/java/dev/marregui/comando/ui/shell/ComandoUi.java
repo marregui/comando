@@ -946,7 +946,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("run.plotStop", "Stop refreshing plots", null, livePlots::stopAll, () -> livePlots.size() > 0);
         // panel: tools that run in its project
         cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, shortcut | ALT), this::runGradle, () -> focusedSession().isPresent());
-        cmd("files.settings", "Files tab folders…", null, () -> editFolders(false));
+        cmd("files.settings", FoldersDialog.title(false) + "…", null, () -> editFolders(false));
         cmd("files.repositories", "Repositories…", null, () -> editFolders(true));
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         // view

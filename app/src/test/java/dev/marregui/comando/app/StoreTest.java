@@ -378,4 +378,27 @@ class StoreTest {
         }
         assertThat(k.read(name)).isEmpty();
     }
+
+    @Test
+    void anIndexNamedButMissingInsideTheConfigFolderIsCreatedOnceAndNothingElseIs() throws Exception {
+        Path claude = Files.createDirectories(home.resolve(".claude"));
+        Path skills = Files.createDirectories(claude.resolve("skills"));
+        Path memory = Files.createDirectories(claude.resolve("MEMORY"));
+        Files.writeString(memory.resolve("MEMORY.md"), "kept\n");
+        Path repo = Files.createDirectories(home.resolve("repo"));
+        List<FolderRoot> folders = List.of(
+                new FolderRoot("Skills", skills.toString(), "INDEX.md", List.of()),
+                new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of()),
+                new FolderRoot("Deep", skills.toString(), "gone/INDEX.md", List.of()),
+                new FolderRoot("Repo", repo.toString(), "README.md", List.of()).asRepository(),
+                new FolderRoot("Outside", repo.toString(), "INDEX.md", List.of()));
+
+        assertThat(Store.createIndexes(folders, claude)).containsExactly(skills.resolve("INDEX.md"));
+        assertThat(Files.readString(skills.resolve("INDEX.md"))).startsWith("# Skills\n").contains("`/reflect` keeps it current");
+        assertThat(Files.readString(memory.resolve("MEMORY.md"))).as("an index that exists is left").isEqualTo("kept\n");
+        assertThat(skills.resolve("gone")).as("no folder is made for it").doesNotExist();
+        assertThat(repo.resolve("README.md")).doesNotExist();
+        assertThat(repo.resolve("INDEX.md")).as("outside Claude Code's folder").doesNotExist();
+        assertThat(Store.createIndexes(folders, claude)).as("once").isEmpty();
+    }
 }

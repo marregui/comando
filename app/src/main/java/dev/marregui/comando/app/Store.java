@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.type.TypeReference;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.PersistencePort;
@@ -14,8 +15,10 @@ import dev.marregui.comando.ui.PanelTexts.Opened;
 import dev.marregui.comando.ui.PanelTexts.Outside;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -496,7 +499,35 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         submit(() -> {
             write(folders, List.copyOf(specs));
             foldersSeen = Stamp.of(folders.path());
+            createIndexes(specs, HomeDir.claudeDir()).forEach(f -> LOG.log(System.Logger.Level.INFO, "created the index " + f));
         });
+    }
+
+    /**
+     * Creates the index file each folder inside {@code claudeDir} names but does not have, when the file's own folder
+     * exists: a title and how the file is kept, which {@code /reflect} then fills. Repositories, folders elsewhere and
+     * files that exist are left as they are; a file that cannot be written is logged. Answers the files created.
+     */
+    static List<Path> createIndexes(List<FolderRoot> specs, Path claudeDir) {
+        Path claude = claudeDir.toAbsolutePath().normalize();
+        List<Path> created = new ArrayList<>();
+        for (FolderRoot f : specs) {
+            Path dir = Path.of(f.path()).toAbsolutePath().normalize();
+            Optional<Path> index = f.indexFile().map(i -> i.toAbsolutePath().normalize());
+            if (f.repository() || !dir.startsWith(claude) || index.isEmpty() || !index.get().startsWith(dir)
+                    || Files.exists(index.get()) || !Files.isDirectory(index.get().getParent())) {
+                continue;
+            }
+            try {
+                Files.writeString(index.get(), "# " + f.name() + "\n\nThe index of `" + HomeDir.shorten(dir.toString())
+                        + "`: one line per entry, `- [name](path) — what it holds`. `/reflect` keeps it current.\n",
+                        StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
+                created.add(index.get());
+            } catch (IOException | RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot create the index " + index.get(), e);
+            }
+        }
+        return created;
     }
 
     /** Where the folders go when the user changed {@code folders.json}: once a second at most, from the writer thread. */

@@ -1,7 +1,7 @@
 # <TASK-NAME> — agent spec (<MON-DD>)
 
 <!-- Copy to SCRATCHPAD/YYYY-MM-DD/work/<TASK-NAME>-<MON-DD>.md in Claude Code's folder ($CLAUDE_CONFIG_DIR, else
-     ~/.claude) and list it in that folder's ALPHA.md.
+     ~/.claude) and list it in that folder's INDEX.md.
      Every section is required. A spec without an executable Acceptance section is not dispatched. Delete these
      comments. -->
 

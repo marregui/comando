@@ -8,7 +8,7 @@ import java.util.Set;
 
 /**
  * A folder the Files tab shows at its top level, configured like a connection: a name, the folder, the file its name
- * opens (its index, such as {@code ALPHA.md}), the names of entries left out besides {@link #ALWAYS_EXCLUDED}, the
+ * opens (its index, such as {@code 00_START_HERE.md}), the names of entries left out besides {@link #ALWAYS_EXCLUDED}, the
  * icon of its row, whether its entries may go to the Trash and the file each of its folders lists them in. The
  * folders are configured in {@code folders.json}; the Files tab shows them, and moves entries of a deletable folder to
  * the Trash.
@@ -21,7 +21,7 @@ import java.util.Set;
  * @param excludes folder or file names left out wherever they appear, matched ignoring case
  * @param icon      one of {@link #ICONS}; {@link #FOLDER} when none is set
  * @param deletable whether the Files tab moves the folder's files and subfolders to the Trash; never the folder itself
- * @param listedIn  a file name, such as {@code ALPHA.md}, that lists the entries beside it: an entry moved to the Trash
+ * @param listedIn  a file name, such as {@code INDEX.md}, that lists the entries beside it: an entry moved to the Trash
  *                  leaves the nearest such file above it, without its own lines; empty when none
  * @param repository whether the folder is a git repository's top folder shown under the Files tab's Repositories, rather
  *                   than a folder of Claude Code's own ({@link HomeDir#claudeDir})

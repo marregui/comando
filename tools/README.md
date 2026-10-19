@@ -19,7 +19,7 @@ in an intent. It depends on `core` only.
 | `Args` | splits the tasks the user typed as a POSIX shell splits words, without expansion |
 | `TestReports` | JUnit XML written since the run started, as a tree with failures first, each linked to its source line |
 | `FolderTree` | a folder as a tree, ordered and bounded (12 levels; 80 000 names listed, 20 000 entries kept), without the entries a caller skips |
-| `ListingLines` | the lines a listing file (such as a scratchpad day's `ALPHA.md`) gives an entry, taken out once the entry went to the Trash |
+| `ListingLines` | the lines a listing file (such as a scratchpad day's `INDEX.md`) gives an entry, taken out once the entry went to the Trash |
 | `ToolSettings` | where the tools are, by convention: the kit's `gradle-serial` when it is executable, and the JDK for child processes |
 
 - **A Gradle run.** The process runs on a virtual thread that copies its output into the run's `Console` (past 4 MB

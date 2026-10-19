@@ -29,7 +29,7 @@ class KitTest {
         FILES.put("bin/gradle-serial", "#!/bin/sh\n");
         FILES.put("hooks/mermaid-check.py", "print()\n");
         FILES.put("hooks/method.md", "# method\n");
-        FILES.put("skeleton/KB/ALPHA.md", "> **Last Updated:** <date>\n");
+        FILES.put("skeleton/KB/00_START_HERE.md", "> **Last Updated:** <date>\n");
         FILES.put("skeleton/SCRATCHPAD/README.md", "# scratchpad\n");
     }
 
@@ -146,7 +146,7 @@ class KitTest {
     void statusListsEveryChangeAnInstallWouldMake(@TempDir Path tmp) throws Exception {
         Path claude = tmp.resolve("claude");
         Files.createDirectories(claude.resolve("KB"));
-        Files.writeString(claude.resolve("KB/ALPHA.md"), "mine");
+        Files.writeString(claude.resolve("KB/00_START_HERE.md"), "mine");
         ScriptedCli cli = notInstalled();
         Kit kit = new Kit(bundle(FILES), cli, tmp.resolve("kit"), claude);
 
@@ -193,7 +193,7 @@ class KitTest {
         Path claude = tmp.resolve("claude");
         Path dir = tmp.resolve("kit");
         Files.createDirectories(claude.resolve("KB"));
-        Files.writeString(claude.resolve("KB/ALPHA.md"), "mine");
+        Files.writeString(claude.resolve("KB/00_START_HERE.md"), "mine");
         ScriptedCli cli = notInstalled();
         Kit kit = new Kit(bundle(FILES), cli, dir, claude);
 
@@ -202,7 +202,7 @@ class KitTest {
         assertThat(cli.runs).containsExactly("plugin list --json", "plugin marketplace list --json",
                 "plugin marketplace add " + dir + " --json", "plugin install comando@comando -y --json");
         assertThat(Files.isExecutable(dir.resolve("bin/gradle-serial"))).as("the copy is written before it is registered").isTrue();
-        assertThat(Files.readString(claude.resolve("KB/ALPHA.md"))).as("an existing file is never replaced").isEqualTo("mine");
+        assertThat(Files.readString(claude.resolve("KB/00_START_HERE.md"))).as("an existing file is never replaced").isEqualTo("mine");
         assertThat(Files.readString(claude.resolve("SCRATCHPAD/README.md"))).isEqualTo("# scratchpad\n");
         assertThat(done).containsExactly("Set autoMemoryDirectory to " + claude.resolve("MEMORY"),
                 "Registered the marketplace 'comando' at " + dir, "Installed comando@comando 1.2.3",
@@ -215,7 +215,7 @@ class KitTest {
         Path claude = tmp.resolve("claude");
         new Kit(bundle(FILES), notInstalled(), tmp.resolve("kit"), claude).install();
 
-        assertThat(Files.readString(claude.resolve("KB/ALPHA.md"))).isEqualTo("> **Last Updated:** " + LocalDate.now() + "\n");
+        assertThat(Files.readString(claude.resolve("KB/00_START_HERE.md"))).isEqualTo("> **Last Updated:** " + LocalDate.now() + "\n");
     }
 
     @Test
@@ -256,7 +256,7 @@ class KitTest {
         assertThat(status.loadsFrom()).isEqualTo("/k/kit");
         assertThat(status.fromCopy()).as("a folder other than comando's copy").isFalse();
         assertThat(status.loadsCopy()).isFalse();
-        assertThat(status.changes()).containsExactly(setMemory(tmp.resolve("claude")), "Create " + tmp.resolve("claude/KB/ALPHA.md"),
+        assertThat(status.changes()).containsExactly(setMemory(tmp.resolve("claude")), "Create " + tmp.resolve("claude/KB/00_START_HERE.md"),
                 "Create " + tmp.resolve("claude/SCRATCHPAD/README.md"));
         kit.install();
         assertThat(cli.changes()).as("nothing but the skeleton").isEmpty();
@@ -344,13 +344,13 @@ class KitTest {
         assertThatThrownBy(() -> new Kit(bundle(FILES), cli, tmp.resolve("kit"), claude).install())
                 .isInstanceOf(IOException.class)
                 .hasMessageStartingWith("cannot create " + claude.resolve("SCRATCHPAD/README.md") + ": ")
-                .hasMessageEndingWith("; undone: deleted " + claude.resolve("KB/ALPHA.md") + ", uninstalled comando@comando,"
+                .hasMessageEndingWith("; undone: deleted " + claude.resolve("KB/00_START_HERE.md") + ", uninstalled comando@comando,"
                         + " removed the marketplace 'comando', took autoMemoryDirectory out of " + claude.resolve("settings.json"));
         assertThat(cli.changes()).containsExactly("plugin marketplace add " + tmp.resolve("kit") + " --json",
                 "plugin install comando@comando -y --json", "plugin uninstall comando@comando -y --json",
                 "plugin marketplace remove comando --json");
         assertThat(Files.readString(claude.resolve("settings.json"))).as("as Claude Code wrote it").isEqualTo(CLAUDE_SETTINGS);
-        assertThat(claude.resolve("KB/ALPHA.md")).doesNotExist();
+        assertThat(claude.resolve("KB/00_START_HERE.md")).doesNotExist();
     }
 
     @Test
@@ -425,9 +425,9 @@ class KitTest {
 
             @Override
             public byte[] read(String file) throws IOException {
-                if (file.equals("skeleton/ZZ/README.md") && Files.exists(claude.resolve("KB/ALPHA.md"))) {
+                if (file.equals("skeleton/ZZ/README.md") && Files.exists(claude.resolve("KB/00_START_HERE.md"))) {
                     // the user edits the first skeleton file before the last one fails
-                    Files.writeString(claude.resolve("KB/ALPHA.md"), "mine now");
+                    Files.writeString(claude.resolve("KB/00_START_HERE.md"), "mine now");
                     throw new IOException("unreadable");
                 }
                 return bundle(files).read(file);
@@ -435,8 +435,8 @@ class KitTest {
         };
 
         assertThatThrownBy(() -> new Kit(bundle, notInstalled(), tmp.resolve("kit"), claude).install())
-                .hasMessageContaining("; NOT undone: Created " + claude.resolve("KB/ALPHA.md") + " (written to since; kept)");
-        assertThat(Files.readString(claude.resolve("KB/ALPHA.md"))).isEqualTo("mine now");
+                .hasMessageContaining("; NOT undone: Created " + claude.resolve("KB/00_START_HERE.md") + " (written to since; kept)");
+        assertThat(Files.readString(claude.resolve("KB/00_START_HERE.md"))).isEqualTo("mine now");
     }
 
     /** A settings file as Claude Code writes it: JSON.stringify with two spaces, and a newline. */
@@ -615,7 +615,7 @@ class KitTest {
         Kit kit = new Kit(bundle, new ScriptedCli(), Path.of("/nowhere"), Path.of("/nowhere"));
         assertThat(kit.version()).matches("\\d+\\.\\d+\\.\\d+");
         assertThat(kit.folders()).extracting(f -> f.indexFile().orElseThrow().getFileName().toString())
-                .as("each folder opens a file the skeleton writes").containsExactly("MEMORY.md", "ALPHA.md", "README.md");
-        assertThat(bundle.files()).contains("skeleton/MEMORY/MEMORY.md", "skeleton/KB/ALPHA.md", "skeleton/SCRATCHPAD/README.md");
+                .as("each folder opens a file the skeleton writes").containsExactly("MEMORY.md", "00_START_HERE.md", "README.md");
+        assertThat(bundle.files()).contains("skeleton/MEMORY/MEMORY.md", "skeleton/KB/00_START_HERE.md", "skeleton/SCRATCHPAD/README.md");
     }
 }

@@ -23,13 +23,13 @@ class SetupTest {
 
     @Test
     void anOfferListsEveryChangeAndHowToUndoIt() {
-        Setup.KitOffer o = offer("", List.of(), List.of("Register ~/.comando/kit", "Create ~/.claude/KB/ALPHA.md"))
+        Setup.KitOffer o = offer("", List.of(), List.of("Register ~/.comando/kit", "Create ~/.claude/KB/00_START_HERE.md"))
                 .withFolders(List.of("Add Knowledge base (~/.claude/KB) to the Files tab"));
 
         assertThat(o.pending()).isTrue();
         assertThat(o.message()).startsWith("comando's Claude Code kit 1.0.0 sets Claude Code up")
                 .contains("It comes whole: every change below,\none memory shared by all your projects included, or none.")
-                .contains("Installing it will:\n• Register ~/.comando/kit\n• Create ~/.claude/KB/ALPHA.md\n"
+                .contains("Installing it will:\n• Register ~/.comando/kit\n• Create ~/.claude/KB/00_START_HERE.md\n"
                         + "• Add Knowledge base (~/.claude/KB) to the Files tab\n")
                 .endsWith("To remove the kit: claude plugin uninstall comando@comando, then claude plugin marketplace remove comando;"
                         + " take autoMemoryDirectory out of settings.json to go back to a memory per project.");
@@ -68,7 +68,7 @@ class SetupTest {
     void aFolderShownThroughALinkIsTheSameFolder(@TempDir Path tmp) throws Exception {
         Path kb = Files.createDirectories(tmp.resolve("claude/KB"));
         Path link = Files.createSymbolicLink(tmp.resolve("kb-link"), kb);
-        FolderRoot kit = new FolderRoot("Knowledge base", link.toString(), "ALPHA.md", List.of());
+        FolderRoot kit = new FolderRoot("Knowledge base", link.toString(), "00_START_HERE.md", List.of());
 
         assertThat(Setup.missingFolders(List.of(new FolderRoot("Mine", kb.toString(), "", List.of())), List.of(kit))).isEmpty();
     }
@@ -92,7 +92,7 @@ class SetupTest {
 
     @Test
     void theKitsFoldersAreAddedUnlessAFolderShowsTheirPathOrHasTheirName() {
-        FolderRoot kb = new FolderRoot("Knowledge base", "/u/.claude/KB", "ALPHA.md", List.of());
+        FolderRoot kb = new FolderRoot("Knowledge base", "/u/.claude/KB", "00_START_HERE.md", List.of());
         FolderRoot pad = new FolderRoot("Scratchpad", "/u/.claude/SCRATCHPAD", "README.md", List.of());
 
         assertThat(Setup.missingFolders(List.of(), List.of(kb, pad))).containsExactly(kb, pad);

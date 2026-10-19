@@ -16,7 +16,7 @@ import javax.swing.SwingUtilities;
 import java.awt.Point;
 import java.nio.file.Files;
 
-/** Rendered Markdown: READ- documents, ALPHA.md, Claude's notes. */
+/** Rendered Markdown: READ- documents, INDEX.md, Claude's notes. */
 public final class MarkdownWidget implements Widget<ViewSpec.Markdown>, Copyable, Exportable {
 
     private final HtmlPane pane = new HtmlPane();
