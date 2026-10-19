@@ -62,7 +62,7 @@ comando can run a QuestDB server for you, so you need nothing else installed.
 
 1. Press **⌘⇧P**, type `embedded`, press **⏎** on **Start** (Tools ▸ Embedded QuestDB).
    *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few seconds; **Stop**, in the same places, stops it. The server keeps its data in `~/.comando/questdb` and listens on this machine only.
-2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Click **+** above the list in the sidebar's **Connections** tab: the dialog opens on a new connection. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
+2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Right-click the sidebar's **Connections** tab and choose **New connection…**: the dialog opens on a new connection. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
    *You should see* `tutorial ○` in the panel header and `○ tutorial` in the sidebar.
 3. Click the plug button next to `tutorial` in the panel header.
    *You should see* the dot turn to `●` and the plug turn from grey to green. If the connection fails, the status bar says why in red.
@@ -132,7 +132,7 @@ When a statement fails, Results shows the database's error as text you can selec
 
 A session is a Claude Code process that comando starts for you in a working directory, with a model and a budget you choose.
 
-1. Click **+** above the list in the sidebar's **Sessions** tab: it opens the session dialog on a new session, titled **New session**. The keyboard is in **Name**, its default selected. Fill in:
+1. Right-click the sidebar's **Sessions** tab and choose **New session…**: it opens the session dialog on a new session, titled **New session**. The keyboard is in **Name**, its default selected. Fill in:
 
    | Field | Value |
    |---|---|

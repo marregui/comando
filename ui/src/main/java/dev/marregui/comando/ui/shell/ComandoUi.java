@@ -720,11 +720,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** A sidebar tab's menu gains the window's commands for that tab, each with its key and enabled as it can run. */
     private void tabMenu(int tab, JPopupMenu menu) {
         List<String> ids = switch (tab) {
-            case SessionsSidebar.SESSIONS -> List.of("session.dialog");
-            case SessionsSidebar.CONNECTIONS -> deps.server() == null ? List.of("connection.dialog")
-                    : List.of("connection.dialog", "server.start", "server.stop");
+            case SessionsSidebar.CONNECTIONS -> deps.server() == null ? List.<String>of() : List.of("server.start", "server.stop");
             case SessionsSidebar.PANELS -> List.of("panel.new", "panel.reopen");
-            case SessionsSidebar.FILES -> List.of("files.settings", "files.repositories", "view.changes");
+            case SessionsSidebar.FILES -> List.of("files.settings", "files.repositories");
             default -> List.of();
         };
         for (String id : ids) {
@@ -946,8 +944,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("run.plotStop", "Stop refreshing plots", null, livePlots::stopAll, () -> livePlots.size() > 0);
         // panel: tools that run in its project
         cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, shortcut | ALT), this::runGradle, () -> focusedSession().isPresent());
-        cmd("files.settings", FoldersDialog.title(false) + "…", null, () -> editFolders(false));
-        cmd("files.repositories", "Repositories…", null, () -> editFolders(true));
+        cmd("files.settings", "Configure " + FoldersDialog.title(false), null, () -> editFolders(false));
+        cmd("files.repositories", "Configure repositories", null, () -> editFolders(true));
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         // view
         cmd("view.palette", "Command palette", key(KeyEvent.VK_P, shortcut | SHIFT), () -> new CommandPalette(actions).show(frame));

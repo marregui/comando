@@ -24,6 +24,7 @@ import javax.swing.AbstractButton;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.LookAndFeel;
@@ -42,7 +43,9 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Predicate;
 
@@ -232,7 +235,7 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void sessionsAndConnectionsCarryTheSameButtonsAndOnlySessionsImport() throws Exception {
+    void tabMenusAddAndRowMenusEditCloneAndRemoveWithNoBarOfButtons() throws Exception {
         List<String> opened = new CopyOnWriteArrayList<>();
         SessionsSidebar.Dialogs dialogs = new Dialogs() {
             @Override
@@ -265,30 +268,47 @@ class SessionsSidebarTest {
             s[0].render(state);
         });
         Component root = s[0].component();
-        JList<?> connections = find(root, JList.class, l -> "Connections".equals(l.getAccessibleContext().getAccessibleName()));
-        JList<?> sessions = find(root, JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+        assertThat(search(root, AbstractButton.class, b -> b.getToolTipText() != null && b.getToolTipText().contains("selected")))
+                .as("no bar of buttons over a list").isNull();
+        SessionsSidebar sidebar = s[0];
 
-        button(root, "New session…").doClick();
-        button(root, "Import stored conversations…").doClick();
-        button(root, "New connection…").doClick();
-        assertThat(search(root, AbstractButton.class, b -> b.getAccessibleContext().getAccessibleName() != null
-                && b.getAccessibleContext().getAccessibleName().startsWith("Import") && b != button(root, "Import stored conversations…")))
-                .as("one import, on the sessions").isNull();
         SwingUtilities.invokeAndWait(() -> {
-            sessions.setSelectedIndex(0);
-            connections.setSelectedIndex(0);
+            menuItem(sidebar.tabMenu(SessionsSidebar.SESSIONS), "New session…").doClick();
+            menuItem(sidebar.tabMenu(SessionsSidebar.SESSIONS), "Import stored conversations…").doClick();
+            menuItem(sidebar.tabMenu(SessionsSidebar.CONNECTIONS), "New connection…").doClick();
+            menuItem(sidebar.sessionMenu(edge), "Edit…").doClick();
+            menuItem(sidebar.connectionMenu(local), "Clone…").doClick();
         });
-        button(root, "Edit the selected session…").doClick();
-        button(root, "Clone the selected connection…").doClick();
         assertThat(opened).containsExactly("new session", "import", "new connection", "edit session edge", "clone connection local");
 
-        button(root, "Remove the selected connection…").doClick();
+        SwingUtilities.invokeAndWait(() -> menuItem(sidebar.connectionMenu(local), "Remove…").doClick());
         assertThat(asked).as("an open connection is disconnected first, or left")
                 .containsExactly("Remove local: [Disconnect and remove, Leave it]");
         assertThat(intents).containsExactly(new Intent.RemoveConnection("local"));
         intents.clear();
-        button(root, "Remove the selected session…").doClick();
+        SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(edge), "Remove…").doClick());
         assertThat(intents).containsExactly(new Intent.RemoveSession("edge"));
+    }
+
+    private static <T> T on(Callable<T> c) throws Exception {
+        AtomicReference<T> out = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                out.set(c.call());
+            } catch (Exception e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        return out.get();
+    }
+
+    private static JMenuItem menuItem(JPopupMenu menu, String text) {
+        for (Component c : menu.getComponents()) {
+            if (c instanceof JMenuItem m && text.equals(m.getText())) {
+                return m;
+            }
+        }
+        throw new AssertionError("no item " + text);
     }
 
     private static ResourceActions.Editor recording(String noun, List<String> opened) {
@@ -352,9 +372,9 @@ class SessionsSidebarTest {
         });
         SessionsSidebar sidebar = s[0];
         JList<?> list = find(sidebar.component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
-        AbstractButton sort = button(sidebar.component(), "Sort the sessions");
+        String sortItem = "Sort: running first, then by name";
         assertThat(names(list)).containsExactly("gamma", "Alpha", "beta");
-        assertThat(sort.isEnabled()).as("already sorted").isFalse();
+        assertThat(on(() -> menuItem(sidebar.tabMenu(SessionsSidebar.SESSIONS), sortItem).isEnabled())).as("already sorted").isFalse();
 
         // beta dragged by its text above gamma
         SwingUtilities.invokeAndWait(() -> {
@@ -377,14 +397,14 @@ class SessionsSidebarTest {
         assertThat(names(list)).containsExactly("beta", "gamma", "Alpha");
         assertThat(list.getSelectedValue()).isEqualTo(beta);
         assertThat(sidebar.manualOrder()).isTrue();
-        assertThat(sort.isEnabled()).isTrue();
+        assertThat(on(() -> menuItem(sidebar.tabMenu(SessionsSidebar.SESSIONS), sortItem).isEnabled())).isTrue();
 
         // the stored order comes back from the reducer and stands, a session starting or not
         SessionState alphaRunning = alpha.withStatus(Status.OPEN, "");
         SwingUtilities.invokeAndWait(() -> sidebar.render(state.withSessions(List.of(beta, gamma, alphaRunning))));
         assertThat(names(list)).containsExactly("beta", "gamma", "Alpha");
 
-        SwingUtilities.invokeAndWait(sort::doClick);
+        SwingUtilities.invokeAndWait(() -> menuItem(sidebar.tabMenu(SessionsSidebar.SESSIONS), sortItem).doClick());
         assertThat(sidebar.manualOrder()).isFalse();
         assertThat(names(list)).containsExactly("Alpha", "gamma", "beta");
 
@@ -668,12 +688,11 @@ class SessionsSidebarTest {
                 items.put(tab, texts);
             }
         });
-        String hide = KeyText.of("Hide the sidebar (⌘B)");
         assertThat(items.get(SessionsSidebar.SESSIONS)).containsExactly("New session…", "Import stored conversations…",
-                "Sort: running first, then by name", "window command 0", "—", hide);
-        assertThat(items.get(SessionsSidebar.CONNECTIONS)).containsExactly("New connection…", "window command 1", "—", hide);
-        assertThat(items.get(SessionsSidebar.PANELS)).containsExactly("window command 2", "—", hide);
-        assertThat(items.get(SessionsSidebar.FILES)).containsExactly("Close every folder", "window command 3", "—", hide);
+                "Sort: running first, then by name", "window command 0");
+        assertThat(items.get(SessionsSidebar.CONNECTIONS)).containsExactly("New connection…", "window command 1");
+        assertThat(items.get(SessionsSidebar.PANELS)).as("its window commands: a new panel, a reopened one").containsExactly("window command 2");
+        assertThat(items.get(SessionsSidebar.FILES)).as("the two configuration windows alone").containsExactly("window command 3");
     }
 
     /** The tab header named {@code title}: by its accessible name, which stays when a narrow row drops its text. */

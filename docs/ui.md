@@ -17,7 +17,7 @@ The package layers are in [Architecture §8](architecture.md#8-ui-packages).
 | `theme` | `Theme`: FlatLaf dark (`FlatMacDarkLaf` on macOS), the colour tokens (accent, Claude, ok, warn, danger, muted, thinking, diff, card, the plot palette), spacing, the monospaced font. Dark only; the macOS appearance is set dark by a JVM option at launch |
 | `icon` | `Icons` (one SVG set under `/icons`, HiDPI), `SpinnerIcon` (one shared wheel, advanced by its owner's timer) |
 | `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority`, `ToolButton` ([§2](#2-commands-and-keys)) |
-| `resource` | `ResourceActions`: the bar above a list of resources ([Workbench §1.3](workbench.md#13-the-sidebar)) |
+| `resource` | `ResourceActions`: a list of resources' add (from its tab's menu) and its removal question (from a row's menu); no bar of buttons ([Workbench §1.3](workbench.md#13-the-sidebar)) |
 | `overlay` | `Overlay`: the empty, loading and error states a widget switches between; `Balloon`: a short word beside a component that asks for nothing, gone after 2.5 s or at the next click or key |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` (below) |
 | `format` | `Labels` (times, uptimes, counts, short paths), `Json`, `KeyText` (keys named as the desktop names them) |

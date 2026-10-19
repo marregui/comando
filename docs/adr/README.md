@@ -43,7 +43,7 @@ that names the one it replaces; the old record stays as written, and this index'
 | [34](0034-a-deleted-document-closes-its-panel.md) | A deleted document closes its panel | Miguel, Claude | accepted |
 | [35](0035-mermaid-diagrams-drawn-by-mmdc.md) | Mermaid diagrams drawn by mmdc | Miguel, Claude | accepted; refresh amended 2026-10-18 |
 | [36](0036-five-menus-by-subject.md) | Five menus, by subject | Miguel, Claude | superseded by 59 |
-| [37](0037-session-actions-act-on-the-selected-row.md) | Session and connection actions act on the selected row | Miguel, Claude | accepted |
+| [37](0037-session-actions-act-on-the-selected-row.md) | Session and connection actions act on the selected row | Miguel, Claude | accepted; the bar replaced by menus, 74 |
 | [38](0038-a-session-has-one-panel.md) | A session has one panel | Miguel, Claude | accepted |
 | [39](0039-panels-are-kept-until-removed.md) | Panels are kept until removed | Miguel, Claude | accepted |
 | [40](0040-one-resource-per-dialog-and-two-tab-rows.md) | One resource per dialog, and the sidebar's tabs in two rows | Miguel, Claude | accepted; the Scratchpad tab became Files, 49; the two rows replaced by one, 70 |
@@ -76,7 +76,8 @@ that names the one it replaces; the old record stays as written, and this index'
 | [67](0067-reflect-measures-what-it-does-to-the-memory.md) | `/reflect` measures what it does to the memory | Miguel, Claude | accepted |
 | [68](0068-git-changes-and-a-side-by-side-diff.md) | Git changes and a side-by-side diff | Miguel, Claude | proposed; a repository's double click, the view's title and groups replaced, 71 |
 | [69](0069-a-window-edits-the-files-tab-folders.md) | A window edits the Files tab's folders | Miguel, Claude | proposed; where it opens replaced, 71; title, problems line and index creation amended, 73 |
-| [70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | The sidebar's tabs in one row, with a menu each | Miguel, Claude | proposed |
+| [70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | The sidebar's tabs in one row, with a menu each | Miguel, Claude | proposed; the Files tab's menu replaced, 73; Hide the sidebar out of the tab menus, 74 |
 | [71](0071-repositories-in-the-files-tab.md) | Repositories in the Files tab | Miguel, Claude | proposed |
 | [72](0072-the-comparison-window-edits-rolls-back-and-removes.md) | The comparison window edits, rolls back and removes | Miguel, Claude | proposed |
 | [73](0073-the-claude-folders-window-explains-and-creates-the-index.md) | The ~/.claude folders window explains its fields and creates the index | Miguel, Claude | proposed |
+| [74](0074-the-sidebars-lists-have-no-bar-of-buttons.md) | The sidebar's lists have no bar of buttons | Miguel, Claude | proposed |

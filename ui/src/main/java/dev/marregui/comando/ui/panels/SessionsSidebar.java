@@ -66,15 +66,14 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
- * The left column, four tabs in two fixed rows (Panels and Files, then Sessions and Connections): Sessions (every
- * session with its project, branch, state, context, conversation and pending approvals, and controls to connect or
- * disconnect it, compact or clear its conversation and change its model or effort), Panels (comando's own panels, open
- * and closed), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). Above the panels, the
- * sessions and the connections, the same {@link ResourceActions}: add (and, for sessions, import and sort) on the left;
- * edit, clone and remove of the selected row on the right. Double-click on a session opens it in a panel
- * ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. Sessions are listed running first, then
- * by name, until the user drags one: from then on in the order the user left them, until the sort button. Hidden, the
- * column collapses to a rail whose button shows it again.
+ * The left column, four tabs in one row of icons: Sessions (every session with its project, branch, state, context,
+ * conversation and pending approvals, and controls to connect or disconnect it, compact or clear its conversation and
+ * change its model or effort), Connections, Panels (comando's own panels, open and closed), and Files (the folders the
+ * user chose, as trees: {@link FilesTab}). No tab has a bar of buttons: a tab's menu adds (and, for sessions, imports
+ * and sorts), and a row's menu edits, clones and removes, through the same {@link ResourceActions}. Double-click on a
+ * session opens it in a panel ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. Sessions are
+ * listed running first, then by name, until the user drags one: from then on in the order the user left them, until
+ * the tab menu's Sort. Hidden, the column collapses to a rail whose button shows it again.
  */
 public final class SessionsSidebar {
 
@@ -148,7 +147,6 @@ public final class SessionsSidebar {
     private AppState state;
     /** The sessions are listed in their stored order, which a drag sets, rather than running first, then by name. */
     private boolean manualOrder;
-    private final JButton sort;
     /** Where copied details go; the system clipboard, or a test's list. */
     Consumer<String> clipboard = text -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(text), null);
 
@@ -279,23 +277,21 @@ public final class SessionsSidebar {
             }
         });
         files = new FilesTab(intents, dialogs::openFile, dialogs::editFile, questions);
-        sort = ToolButton.of("sort", SORT_TIP, () -> order(false));
-        sort.getAccessibleContext().setAccessibleName("Sort the sessions");
         sessionActions = new ResourceActions<>(sessions,
                 ResourceActions.Rows.of(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop", () -> state),
-                dialogs.sessions(), name -> intents.dispatch(new Intent.RemoveSession(name)), questions,
-                ToolButton.of("import", "Import stored conversations…", dialogs::importSessions), sort);
+                dialogs.sessions(), name -> intents.dispatch(new Intent.RemoveSession(name)), questions);
         order(false);
         connectionActions = new ResourceActions<>(connections,
                 ResourceActions.Rows.of(ConnectionKind.INSTANCE, ConnectionState::name, ConnectionState::status, "Disconnect", () -> state),
                 dialogs.connections(), name -> intents.dispatch(new Intent.RemoveConnection(name)), questions);
-        // one row of icons (Miguel, 2026-10-19): the resources, then the documents; a click moves nothing
-        tabs.add("Sessions", "session", "Claude Code sessions; right-click to add, import or sort", section(new JScrollPane(sessions), sessionActions.component()));
-        tabs.add("Connections", "database", "databases; right-click to add one", section(new JScrollPane(connections), connectionActions.component()));
-        tabs.add("Panels", "text", "every panel, open or closed; double-click one to open it",
-                section(new JScrollPane(panelsTab.list()), panelsTab.actions()));
+        // one row of icons (Miguel, 2026-10-19): the resources, then the documents; a click moves nothing. No bar of
+        // buttons: a tab's menu adds, a row's menu edits, clones and removes
+        tabs.add("Sessions", "session", "Claude Code sessions; right-click to add, import or sort", section(new JScrollPane(sessions)));
+        tabs.add("Connections", "database", "databases; right-click to add one", section(new JScrollPane(connections)));
+        tabs.add("Panels", "text", "every panel, open or closed; right-click to add one",
+                section(new JScrollPane(panelsTab.list())));
         tabs.add("Files", "folder", "your folders and their git changes; double-click a file to open it",
-                section(files.component(), null));
+                section(files.component()));
         tabs.trailing(ToolButton.of("more", KeyText.of("Hide the sidebar (⌘B)"), toggle));
         tabs.onMenu((tab, e) -> tabMenu(tab).show(e.getComponent(), e.getX(), e.getY()));
         rail = new JPanel(new BorderLayout());
@@ -350,8 +346,8 @@ public final class SessionsSidebar {
 
     /**
      * What a tab's header offers on a right click: the tab's own actions (a new session or connection, importing
-     * conversations, sorting the sessions; closing every folder), the window's commands for it (with their keys), then
-     * hiding the sidebar.
+     * conversations, sorting the sessions while a drag ordered them by hand), then the window's commands for it, with
+     * their keys (a new or reopened panel; the Files tab's two configuration windows). Hiding the sidebar is ⌘B or ⋯.
      */
     JPopupMenu tabMenu(int tab) {
         JPopupMenu menu = new JPopupMenu();
@@ -359,16 +355,15 @@ public final class SessionsSidebar {
             case SESSIONS -> {
                 menu.add(menuItem("New session…", "add", sessionActions::addNew));
                 menu.add(menuItem("Import stored conversations…", "import", dialogs::importSessions));
-                menu.add(menuItem("Sort: running first, then by name", "sort", () -> order(false)));
+                JMenuItem sorting = menuItem(SORT_TIP, "sort", () -> order(false));
+                sorting.setEnabled(manualOrder); // sorted already: nothing to do until a drag orders them by hand
+                menu.add(sorting);
             }
             case CONNECTIONS -> menu.add(menuItem("New connection…", "add", connectionActions::addNew));
-            case FILES -> menu.add(menuItem("Close every folder", "tree", files::collapseAll));
             default -> {
             }
         }
         moreForTab.accept(tab, menu);
-        menu.addSeparator();
-        menu.add(menuItem(KeyText.of("Hide the sidebar (⌘B)"), "more", toggle));
         return menu;
     }
 
@@ -420,8 +415,6 @@ public final class SessionsSidebar {
 
     private void order(boolean manual) {
         manualOrder = manual;
-        sort.setEnabled(manual);
-        sort.setToolTipText(manual ? SORT_TIP + "; drag to order by hand again" : "Sorted: running first, then by name; drag to reorder");
         if (state != null) {
             sync(sessionModel, ordered(state.sessions(), manual), sessions);
         }
@@ -708,7 +701,7 @@ public final class SessionsSidebar {
                 + "<br><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>" + MarkdownHtml.escape(Clip.keepEnd(c.spec().label(), 36)) + "</span></html>";
     }
 
-    private JPopupMenu sessionMenu(SessionState s) {
+    JPopupMenu sessionMenu(SessionState s) {
         JPopupMenu m = new JPopupMenu();
         m.add(item("Open in a panel", "claude", () -> intents.dispatch(new Intent.OpenSession(s.name(), state.focused(), PanelId.random()))));
         m.addSeparator();
@@ -739,7 +732,7 @@ public final class SessionsSidebar {
         return m;
     }
 
-    private JPopupMenu connectionMenu(ConnectionState c) {
+    JPopupMenu connectionMenu(ConnectionState c) {
         JPopupMenu m = new JPopupMenu();
         m.add(item("Bind to the focused panel", "database", () -> intents.dispatch(new Intent.BindConnection(state.focused(), c.name()))));
         m.addSeparator();
@@ -809,16 +802,13 @@ public final class SessionsSidebar {
         return i >= 0 && list.getCellBounds(i, i).contains(e.getPoint()) ? list.getModel().getElementAt(i) : null;
     }
 
-    /** A tab's content: its bar of buttons at the top, when it has one, then the content. */
-    private static JPanel section(JComponent content, JComponent actions) {
+    /** A tab's content, filling it. */
+    private static JPanel section(JComponent content) {
         if (content instanceof JScrollPane sp) {
             sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
             sp.setBorder(null);
         }
         JPanel p = new JPanel(new BorderLayout());
-        if (actions != null) {
-            p.add(actions, BorderLayout.NORTH);
-        }
         p.add(content, BorderLayout.CENTER);
         return p;
     }

@@ -75,7 +75,7 @@ import java.util.stream.Stream;
  *
  * <p>The tab has no buttons, and a file's menu opens it, rendered or as text; the folders are configured in {@code
  * folders.json}, through the windows the tab's own menu opens. In a folder configured as deletable, the menu also moves the selected files and subfolders to the
- * Trash, after asking; that is the only thing the tab writes. The filter above the tree finds files and folders by name across every folder:
+ * Trash, after asking; that is the only thing the tab writes. The filter under the tree finds files and folders by name across every folder:
  * while it has text, a second tree shows the matches with the folders leading to them, and every folder is read once
  * so the closed ones are searched too. Clearing it (Esc) brings back the tree as the user left it.</p>
  */
@@ -224,14 +224,14 @@ final class FilesTab {
 
         center.add(tree.component(), "tree");
         center.add(found.component(), "found");
-        JPanel top = new JPanel(new BorderLayout());
-        top.setBorder(BorderFactory.createEmptyBorder(0, 4, 4, 4));
-        top.add(filter, BorderLayout.CENTER);
-        body.add(top, BorderLayout.NORTH);
+        JPanel bottom = new JPanel(new BorderLayout());
+        bottom.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
+        bottom.add(filter, BorderLayout.CENTER);
         body.add(center, BorderLayout.CENTER);
+        body.add(bottom, BorderLayout.SOUTH); // under the tree (Miguel, 2026-10-19)
     }
 
-    /** The filter above the tree. */
+    /** The tree, the filter under it. */
     JComponent component() {
         return body;
     }
@@ -344,13 +344,6 @@ final class FilesTab {
 
     RepoChanges changes() {
         return changes;
-    }
-
-    /** Closes every folder row; the tab then reads none of them until one is opened again. */
-    void collapseAll() {
-        for (int i = tree.tree().getRowCount() - 1; i >= 0; i--) {
-            tree.tree().collapseRow(i);
-        }
     }
 
     /** For tests: where the words beside a row go. */

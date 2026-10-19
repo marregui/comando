@@ -18,7 +18,6 @@ import javax.swing.JList;
 import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
-import java.awt.Container;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
@@ -128,14 +127,12 @@ class PanelsTabTest {
                 .isEqualTo("Remove panel main? Its file m.md is deleted. The panel closes first. Its session standard keeps running without a panel.");
 
         answer.set(1);
-        SwingUtilities.invokeAndWait(() -> tab.list().setSelectedIndex(0));
-        SwingUtilities.invokeAndWait(() -> sidebarButton(tab, "Remove the selected panel…"));
+        SwingUtilities.invokeAndWait(() -> rowItem(tab, 0, "Remove…"));
         assertThat(asked.getLast()).endsWith("[Close and remove, Leave it]");
         assertThat(intents).isEmpty();
 
         answer.set(0);
-        SwingUtilities.invokeAndWait(() -> tab.list().setSelectedIndex(1));
-        SwingUtilities.invokeAndWait(() -> sidebarButton(tab, "Remove the selected panel…"));
+        SwingUtilities.invokeAndWait(() -> rowItem(tab, 1, "Remove…"));
         assertThat(asked.getLast()).endsWith("[Remove, Cancel]");
         assertThat(intents).containsExactly(new Intent.RemovePanel(REVIEWS));
     }
@@ -144,8 +141,7 @@ class PanelsTabTest {
     void cloneCopiesTheTextAndTheConnectionButNotTheSession() throws Exception {
         texts.changed(REVIEWS, "# notes");
         PanelsTab tab = tab();
-        SwingUtilities.invokeAndWait(() -> tab.list().setSelectedIndex(1));
-        SwingUtilities.invokeAndWait(() -> sidebarButton(tab, "Clone the selected panel…"));
+        SwingUtilities.invokeAndWait(() -> rowItem(tab, 1, "Clone"));
         assertThat(intents).hasSize(2);
         Intent.AddPanel add = (Intent.AddPanel) intents.get(0);
         assertThat(add.title()).isEqualTo("reviews copy");
@@ -153,16 +149,15 @@ class PanelsTabTest {
         assertThat(intents.get(1)).isEqualTo(new Intent.BindConnection(add.panel(), "local"));
     }
 
-    private static void sidebarButton(PanelsTab tab, String name) {
-        for (var c : ((Container) tab.actions()).getComponents()) {
-            for (var b : ((Container) c).getComponents()) {
-                if (b instanceof AbstractButton button && name.equals(button.getAccessibleContext().getAccessibleName())) {
-                    button.doClick();
-                    return;
-                }
+    /** Clicks the item named {@code text} in the menu of row {@code index}, as a right click on that row offers it. */
+    private static void rowItem(PanelsTab tab, int index, String text) {
+        for (var c : tab.menu(tab.list().getModel().getElementAt(index)).getComponents()) {
+            if (c instanceof AbstractButton item && text.equals(item.getText())) {
+                item.doClick();
+                return;
             }
         }
-        throw new AssertionError("no button " + name);
+        throw new AssertionError("no item " + text);
     }
 
     private static void doubleClick(JList<?> list, int index) throws Exception {

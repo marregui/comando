@@ -15,7 +15,6 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
-import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenuItem;
@@ -35,8 +34,8 @@ import java.util.Optional;
 
 /**
  * The sidebar's Panels tab: comando's own panels, open and closed, as one flat list by title, as a folder of files
- * would show them; documents opened from elsewhere are not here. Above it, the bar every resource list has: new
- * panel; rename, clone and remove of the selected one. Double-click opens a closed panel or brings an open one forward.
+ * would show them; documents opened from elsewhere are not here. No bar of buttons: the tab's menu adds a panel, and a
+ * row's menu renames, clones or removes it. Double-click opens a closed panel or brings an open one forward.
  */
 final class PanelsTab {
 
@@ -118,10 +117,6 @@ final class PanelsTab {
         return list;
     }
 
-    JComponent actions() {
-        return actions.component();
-    }
-
     void render(AppState s) {
         state = s;
         List<Row> rows = new ArrayList<>();
@@ -164,7 +159,8 @@ final class PanelsTab {
         intents.dispatch(new Intent.BindConnection(id, r.panel().connection()));
     }
 
-    private JPopupMenu menu(Row r) {
+    /** A row's menu: open or bring forward, rename, clone, remove. */
+    JPopupMenu menu(Row r) {
         JPopupMenu m = new JPopupMenu();
         m.add(item(r.open() ? "Bring forward" : "Open", "file", () -> open(r)));
         m.addSeparator();

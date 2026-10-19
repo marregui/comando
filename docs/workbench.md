@@ -93,11 +93,12 @@ either empty. Several panels may share a connection; a session has at most one p
 
 Four tabs in one row, each an icon named by its tooltip: Sessions, Connections, Panels, Files; the tab in front is
 kept across restarts. A right click on a tab selects it and opens its menu: the tab's own actions, the window's
-commands for it with their keys, and Hide the sidebar ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md)).
-Panels, Sessions and Connections have a bar of buttons above their list (`ResourceActions`): add and import on the
-left, edit, clone and remove of the selected row on the right, off while nothing is selected
-([record 37](adr/0037-session-actions-act-on-the-selected-row.md)); the Files tab has none ([§5](#5-the-files-tab)). Removing something in use asks
-**Stop and remove**, **Disconnect and remove** or **Close and remove**, or **Leave it**.
+commands for it with their keys ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md)): New session…, Import stored
+conversations… and Sort (on only after a drag ordered them by hand); New connection…; the new and reopened panel; the
+Files tab's two windows, Configure ~/.claude folders and Configure repositories ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)).
+No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)): a row's menu edits (renames a panel),
+clones and removes it (`ResourceActions`). Removing something in use asks **Stop and remove**, **Disconnect and remove**
+or **Close and remove**, or **Leave it** ([record 37](adr/0037-session-actions-act-on-the-selected-row.md)). ⌘B and the ⋯ button hide the sidebar.
 
 - **Sessions:** name, where it is bound ("headless" when nowhere), status, current activity or what it waits on,
   pending approvals; directory and branch; `ctx` and the context % (purple from 60%), the Claude Code version the
@@ -275,7 +276,7 @@ edited and saved like any other; a `.log` stays read-only.
 - **Repositories.** The folders configured as repositories are rows of one node, Repositories (its own icon), after the
   other folders, which lie inside `~/.claude` ([record 71](adr/0071-repositories-in-the-files-tab.md)).
 - **Configuring.** The Files tab's menu (a right click on its header), or the Files menu, opens the `~/.claude` folders
-  window (its title names Claude Code's folder wherever it is) or the repositories window (Repositories…) ([records 69,
+  window (its title names Claude Code's folder wherever it is) or the repositories window (Configure repositories) ([records 69,
   71, 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)): the entries in the tab's order on the
   left (+ chooses a folder first and names it after it, − takes one out, ↑ ↓ or ⌥↑ ⌥↓ move it), the selected one's
   fields on the right, each field's name explaining it under the mouse. Each is checked as it is typed (a name used once
@@ -323,7 +324,7 @@ edited and saved like any other; a `.log` stays read-only.
   of that repository alone, or a balloon says there is nothing to see, and opens or closes
   nothing. The open folders' repositories are read with
   them every 5 s, the others every 30 s ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)).
-- **Filter.** A field above the tree finds entries by name across every folder, reading never-read folders once; a
+- **Filter.** A field under the tree finds entries by name across every folder, reading never-read folders once; a
   second tree shows the matches with the folders leading to them; Esc returns to the tree as left. The palette's Files
   command puts the keyboard there.
 

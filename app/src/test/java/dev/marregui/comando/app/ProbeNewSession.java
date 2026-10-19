@@ -14,10 +14,13 @@ import java.awt.Robot;
 import java.awt.Window;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
+import java.time.Duration;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.awaitility.Awaitility.await;
 /** Throwaway probe: Add session, click the name field, type, report text, caret and focus. */
 public final class ProbeNewSession {
     public static void main(String[] args) throws Exception {
@@ -64,15 +67,30 @@ public final class ProbeNewSession {
     static void scenario(Robot r, String label, String addTip, boolean selectAllFirst, boolean click) throws Exception {
         System.out.println("=== " + label);
         if (addTip != null) {
+            // no bar of buttons since 2026-10-19: the Sessions tab's menu holds New session…
             SwingUtilities.invokeAndWait(() -> {
                 for (Window w : Window.getWindows()) {
-                    AbstractButton b = find(w, addTip);
-                    if (b != null && !(w instanceof JDialog)) {
-                        b.doClick();
+                    AbstractButton tab = findNamed(w, "Sessions");
+                    if (tab != null && !(w instanceof JDialog)) {
+                        tab.dispatchEvent(new MouseEvent(tab, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(),
+                                0, 4, 4, 1, true, MouseEvent.BUTTON3));
                         return;
                     }
                 }
             });
+            AtomicReference<AbstractButton> item = new AtomicReference<>();
+            await().atMost(Duration.ofSeconds(5)).until(() -> {
+                SwingUtilities.invokeAndWait(() -> {
+                    for (Window w : Window.getWindows()) {
+                        AbstractButton b = findText(w, addTip);
+                        if (b != null && b.isShowing()) {
+                            item.set(b);
+                        }
+                    }
+                });
+                return item.get() != null;
+            });
+            SwingUtilities.invokeAndWait(() -> item.get().doClick());
             Thread.sleep(1200);
         }
         AtomicReference<JTextField> name = new AtomicReference<>();
@@ -111,6 +129,36 @@ public final class ProbeNewSession {
 
     static String describe(Component c) {
         return c == null ? "null" : c.getClass().getSimpleName() + "(" + c.getName() + ")";
+    }
+
+    static AbstractButton findNamed(Component c, String name) {
+        if (c instanceof AbstractButton b && name.equals(b.getAccessibleContext().getAccessibleName())) {
+            return b;
+        }
+        if (c instanceof Container k) {
+            for (Component x : k.getComponents()) {
+                AbstractButton b = findNamed(x, name);
+                if (b != null) {
+                    return b;
+                }
+            }
+        }
+        return null;
+    }
+
+    static AbstractButton findText(Component c, String text) {
+        if (c instanceof AbstractButton b && text.equals(b.getText())) {
+            return b;
+        }
+        if (c instanceof Container k) {
+            for (Component x : k.getComponents()) {
+                AbstractButton b = findText(x, text);
+                if (b != null) {
+                    return b;
+                }
+            }
+        }
+        return null;
     }
 
     static AbstractButton find(Component c, String tip) {

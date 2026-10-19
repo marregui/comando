@@ -8,20 +8,15 @@ import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.ui.kit.action.ToolButton;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import javax.swing.AbstractButton;
 import javax.swing.DefaultListModel;
-import javax.swing.JButton;
 import javax.swing.JList;
 import javax.swing.LookAndFeel;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
-import java.awt.Component;
-import java.awt.Container;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -66,40 +61,10 @@ class ResourceActionsTest {
     };
 
     @Test
-    void addAndWhatBringsResourcesInOnTheLeftAndTheSelectedRowsActionsOnTheRight() throws Exception {
-        SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
-        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(), List.of(edge));
-        JList<SessionState> list = new JList<>(model(edge));
-        JButton more = ToolButton.of("import", "Import…", () -> opened.add("import"));
-        Container bar = (Container) actions(list, state, more).component();
-        AbstractButton add = button(bar, "New session…");
-        AbstractButton edit = button(bar, "Edit the selected session…");
-        AbstractButton clone = button(bar, "Clone the selected session…");
-        AbstractButton remove = button(bar, "Remove the selected session…");
-
-        SwingUtilities.invokeAndWait(() -> {
-            bar.setSize(300, 30);
-            layout(bar);
-        });
-        assertThat(add.getParent()).as("add and import, one group").isSameAs(more.getParent()).isNotSameAs(edit.getParent());
-        assertThat(List.of(clone.getParent(), remove.getParent())).allMatch(p -> p == edit.getParent());
-        assertThat(add.getParent().getX()).as("on the left").isLessThan(10);
-        assertThat(edit.getParent().getX() + edit.getParent().getWidth()).as("on the right").isGreaterThan(290);
-        assertThat(more.getX() + more.getWidth()).as("a gap between the groups").isLessThan(edit.getParent().getX());
-
-        assertThat(List.of(edit, clone, remove)).as("nothing selected, nothing to act on").noneMatch(AbstractButton::isEnabled);
-        add.doClick();
-        more.doClick();
-        assertThat(opened).as("+ only adds").containsExactly("new", "import");
-
-        SwingUtilities.invokeAndWait(() -> list.setSelectedIndex(0));
-        assertThat(List.of(edit, clone, remove)).allMatch(AbstractButton::isEnabled);
-        edit.doClick();
-        clone.doClick();
-        assertThat(opened).containsExactly("new", "import", "edit edge", "clone edge");
-
-        SwingUtilities.invokeAndWait(list::clearSelection);
-        assertThat(List.of(edit, clone, remove)).noneMatch(AbstractButton::isEnabled);
+    void addOpensTheEditorOnANewResource() throws Exception {
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(), List.of());
+        actions(new JList<>(), state).addNew();
+        assertThat(opened).containsExactly("new");
     }
 
     @Test
@@ -130,21 +95,16 @@ class ResourceActionsTest {
         answer.set(0);
         actions.remove(work);
         assertThat(removed).containsExactly("work");
-
-        removed.clear();
-        SwingUtilities.invokeAndWait(() -> list.setSelectedIndex(0));
-        button((Container) actions.component(), "Remove the selected session…").doClick();
-        assertThat(removed).as("the button removes the selected row, with the same question").containsExactly("edge");
     }
 
-    private ResourceActions<SessionState> actions(JList<SessionState> list, AppState state, JButton... more) throws Exception {
+    private ResourceActions<SessionState> actions(JList<SessionState> list, AppState state) throws Exception {
         AtomicReference<ResourceActions<SessionState>> a = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> a.set(new ResourceActions<>(list,
                 ResourceActions.Rows.of(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop", () -> state),
                 editor, removed::add, (parent, text, title, options) -> {
                     asked.add(title + ": " + text + " " + List.of(options));
                     return answer.get();
-                }, more)));
+                })));
         return a.get();
     }
 
@@ -152,29 +112,5 @@ class ResourceActionsTest {
         DefaultListModel<SessionState> m = new DefaultListModel<>();
         m.addAll(List.of(items));
         return m;
-    }
-
-    private static void layout(Component c) {
-        if (c instanceof Container k) {
-            k.doLayout();
-            for (Component child : k.getComponents()) {
-                layout(child);
-            }
-        }
-    }
-
-    private static AbstractButton button(Container root, String name) {
-        for (Component c : root.getComponents()) {
-            if (c instanceof AbstractButton b && name.equals(b.getAccessibleContext().getAccessibleName())) {
-                return b;
-            }
-            if (c instanceof Container k) {
-                AbstractButton found = button(k, name);
-                if (found != null) {
-                    return found;
-                }
-            }
-        }
-        return null;
     }
 }

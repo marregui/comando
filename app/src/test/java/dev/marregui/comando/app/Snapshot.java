@@ -650,8 +650,8 @@ public final class Snapshot {
     /** Runs the menu bar's command {@code id}, clicking its item as the user would. */
     private static void findCommand(String id) {
         String text = switch (id) {
-            case "files.settings" -> FoldersDialog.title(false);
-            case "files.repositories" -> "Repositories";
+            case "files.settings" -> "Configure " + FoldersDialog.title(false);
+            case "files.repositories" -> "Configure repositories";
             default -> throw new IllegalArgumentException(id);
         };
         for (Frame f : Frame.getFrames()) {
