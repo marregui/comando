@@ -64,7 +64,7 @@ public final class Hero {
             }
         });
 
-        Snapshot.menuItem("Tools", "Embedded QuestDB", "Start");
+        Snapshot.menuItem("Actions", "Start embedded QuestDB");
         require(Snapshot.await(loop, s -> s.notice() != null && s.notice().text().startsWith("QuestDB is up"), 60_000), "QuestDB did not start");
         loop.dispatch(new Intent.OpenConnection(CONNECTION));
         require(Snapshot.await(loop, s -> s.connection(CONNECTION).map(c -> c.status() == Status.OPEN).orElse(false), 30_000),

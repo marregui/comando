@@ -20,7 +20,7 @@ agents are given specs with an executable acceptance check; Gradle runs in one c
 
 ## Install
 
-From comando: Tools ▸ Help ▸ Claude Code kit. comando keeps a copy of this folder in its own folder (`~/.comando/kit`), sets
+From comando: Actions ▸ Claude Code kit. comando keeps a copy of this folder in its own folder (`~/.comando/kit`), sets
 Claude Code's `autoMemoryDirectory` to `~/.claude/MEMORY` (one memory for every project; the one key comando writes in
 Claude Code's `settings.json`, never over a value you set), registers it with Claude Code as the marketplace `comando`, installs the plugin `comando@comando` for the user, writes
 the skeleton files that are missing (never over an existing file) and adds the memory, the knowledge base and the

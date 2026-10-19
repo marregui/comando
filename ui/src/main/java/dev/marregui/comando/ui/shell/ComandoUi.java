@@ -932,8 +932,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 name -> deps.intents().dispatch(new Intent.BindConnection(deps.state().get().focused(), name))));
         cmd("connection.dialog", "Connection settings…", key(KeyEvent.VK_O, shortcut | SHIFT), () -> openConnections(deps.state().get().focusedPanel().connection()));
         if (deps.server() != null) {
-            cmd("server.start", "Start", null, () -> deps.server().toggle(), () -> !deps.server().isRunning());
-            cmd("server.stop", "Stop", null, () -> deps.server().toggle(), () -> deps.server().isRunning());
+            cmd("server.start", "Start embedded QuestDB", null, () -> deps.server().toggle(), () -> !deps.server().isRunning());
+            cmd("server.stop", "Stop embedded QuestDB", null, () -> deps.server().toggle(), () -> deps.server().isRunning());
         }
         // panel: its results
         cmd("run.insertResult", "Attach to the editor", key(KeyEvent.VK_I, shortcut | SHIFT), this::insertLastResult, this::hasRun);

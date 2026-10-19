@@ -208,7 +208,7 @@ only, formatting cells into one reused buffer.
 | Key | Does |
 |---|---|
 | ⌘J | plots the last result: x is the first time column, else the first numeric one; up to eight more numeric columns as series; at most 2 000 000 rows |
-| ⌘⇧J | the same, re-running the query each period (default 5 s) while it is not running; another run in the panel or a failed query or connection stops it with a notice; closing its tab stops it quietly; Tools ▸ Stop refreshing plots stops them all, the plots staying as they are |
+| ⌘⇧J | the same, re-running the query each period (default 5 s) while it is not running; another run in the panel or a failed query or connection stops it with a notice; closing its tab stops it quietly; Actions ▸ Stop refreshing plots stops them all, the plots staying as they are |
 | ⌘⇧R | keeps the result in a tab of its own (at most 100 000 rows) |
 | ⌘⇧I | attaches the result to the editor ([§2.4](#24-where-things-land)) |
 | ⌘⇧S | exports the grid as CSV in the order shown, written off the EDT |
@@ -238,7 +238,7 @@ Runs go through `ToolPort` (`tools` module); the terminal lives in the UI becaus
 JediTerm on a pseudo-terminal from pty4j, one per panel, started the first time it is shown, as `$SHELL -l` (else
 `/bin/zsh`, else `/bin/sh`) in the session's directory, else home; `TERM=xterm-256color`, `TERM_PROGRAM=comando`. ⌃3
 shows it; ⌃⏎ in the editor types the selection or line into it and presses Enter, waiting until a starting shell has
-written and then been quiet for 200 ms (at most 3 s). An exited shell offers a restart bar; Tools ▸ Restart the shell
+written and then been quiet for 200 ms (at most 3 s). An exited shell offers a restart bar; Actions ▸ Restart the shell
 ends the focused panel's shell and starts a new one in the session's directory.
 
 ### 4.2 Gradle runs
@@ -275,7 +275,7 @@ edited and saved like any other; a `.log` stays read-only.
   Code's transcripts, caches and per-session state; an emptied list stays empty.
 - **Repositories.** The folders configured as repositories are rows of one node, Repositories (its own icon), after the
   other folders, which lie inside `~/.claude` ([record 71](adr/0071-repositories-in-the-files-tab.md)).
-- **Configuring.** The Files tab's menu (a right click on its header), or the Files menu, opens the `~/.claude` folders
+- **Configuring.** The Files tab's menu (a right click on its header) opens the `~/.claude` folders
   window (its title names Claude Code's folder wherever it is) or the repositories window (Configure repositories) ([records 69,
   71, 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)): the entries in the tab's order on the
   left (+ chooses a folder first and names it after it, − takes one out, ↑ ↓ or ⌥↑ ⌥↓ move it), the selected one's
@@ -397,7 +397,7 @@ inside that folder alone ([record 71](adr/0071-repositories-in-the-files-tab.md)
 | `comando.lock` | held while comando runs; a second start on the same root refuses |
 | `run/` | MCP configurations of running sessions (`0600`) |
 | `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision |
-| `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Tools ▸ Help ▸ Show the log opens it read-only |
+| `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Actions ▸ Show the log opens it read-only |
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |

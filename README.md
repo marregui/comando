@@ -57,7 +57,7 @@ A block is a run of lines between blank lines. comando decides where it goes and
 | **Databases** | PostgreSQL and QuestDB over the PostgreSQL wire protocol, with an embedded QuestDB one click away. One lane per connection, cancel within two seconds, results stored by column (millions of rows), plots and live plots, `EXPLAIN` trees, a schema explorer. |
 | **Documents** | The folders you choose as trees in one tab, searchable by name and kept in sync while open; a double click opens a file in a panel to read and edit (Markdown rendered with Mermaid diagrams, an HTML page one click from the browser, source coloured by language); the folders are set in `folders.json`, and the tab follows its changes. |
 | **Development tools** | A terminal per panel; Gradle runs with test results as a tree and failures sent to Claude. |
-| **A Claude Code kit** | A Claude Code plugin ([`kit/`](kit/README.md)) for the way of working comando is built for: one memory for every project, a knowledge base and scratchpad kept current by `/reflect`, reviews by `/deep-review`. Tools ▸ Help ▸ Claude Code kit shows what it would change and installs it through Claude Code's own plugin commands. |
+| **A Claude Code kit** | A Claude Code plugin ([`kit/`](kit/README.md)) for the way of working comando is built for: one memory for every project, a knowledge base and scratchpad kept current by `/reflect`, reviews by `/deep-review`. Actions ▸ Claude Code kit shows what it would change and installs it through Claude Code's own plugin commands. |
 
 ![comando's documents and approvals: a Markdown plan rendered with its Mermaid diagram, a diff Claude placed in the side pane, and two approval cards, one for a shell command and one for a question](docs/images/documents-and-approvals.png)
 
@@ -71,7 +71,7 @@ You need macOS, JDK 25 and the [Claude Code](https://github.com/anthropics/claud
 ./gradlew :app:dmg     # an unsigned macOS disk image in app/build/dmg
 ```
 
-Then open **Tools ▸ Help ▸ Tutorial**: *comando in ten minutes* takes you from an empty window to a database, a Claude session, approvals and plots. [Build and run](docs/build-and-run.md) lists every task and setting.
+Then open **Actions ▸ Tutorial**: *comando in ten minutes* takes you from an empty window to a database, a Claude session, approvals and plots. [Build and run](docs/build-and-run.md) lists every task and setting.
 
 Your data stays in `~/.comando`: panels as Markdown files, connections, sessions, logs. Connection passwords go to the macOS keychain.
 
@@ -79,7 +79,7 @@ Your data stays in `~/.comando`: panels as Markdown files, connections, sessions
 
 | Document | Contents |
 |---|---|
-| [Tutorial](docs/tutorial.md) | comando in ten minutes, step by step (also Tools ▸ Help ▸ Tutorial) |
+| [Tutorial](docs/tutorial.md) | comando in ten minutes, step by step (also Actions ▸ Tutorial) |
 | [Build and run](docs/build-and-run.md) | prerequisites, Gradle tasks, settings |
 | [Workbench](docs/workbench.md) | panels and bindings, running text, the database, the tools, the Files tab and git changes, what is kept on disk |
 | [Claude](docs/claude.md) | the `claude -p` bridge, the MCP tools, approvals and safety |

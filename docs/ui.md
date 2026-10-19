@@ -62,10 +62,11 @@ most four short lines ([record 73](adr/0073-the-claude-folders-window-explains-a
 ## 2. Commands and keys
 
 Every user action is a `Command`: id, label, icon, key, menu path or area, action, enablement. The menu bar is built
-from `Menus`: Files, Edit and Tools (with Embedded QuestDB and Help), holding only what has no key or control in the
-window and what macOS expects in a menu ([record 59](adr/0059-three-menus-for-what-has-no-key.md)). Every item and
-submenu has an icon and a tooltip saying what it does. A command in no menu is named by its area (Panels, Run,
-Session, Session ▸ Model, Session ▸ Effort, Connection, Results, Edit, Window, comando) in the palette and the keyboard
+from `Menus`: after the application menu macOS draws, Edit and Actions, flat, Actions in groups split by separators
+(the palette; the shell and the plots; the embedded QuestDB; help), holding only what has no key or control in the
+window and what macOS expects in a menu ([records 59, 75](adr/0075-the-menu-bar-is-edit-and-actions-flat.md)). Every
+item has an icon and a tooltip saying what it does. A command in no menu is named by its area (Panels, Run, Session,
+Session ▸ Model, Session ▸ Effort, Connection, Results, Edit, Files, Window, comando) in the palette and the keyboard
 shortcuts; the registry refuses a command with neither. Key bindings and the palette (⌘⇧P) come from the registry.
 
 The application menu's About comando, and the palette's, open `About`'s card: drawn by hand (warm charcoal, a gold

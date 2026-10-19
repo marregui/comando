@@ -54,13 +54,13 @@ The window opens with one panel, **scratch**, holding a short welcome text. Its 
 
 One idea runs through the whole tool: **a panel is bound to at most one connection and one session**. SQL you run in the panel goes to its connection; anything else goes to its session.
 
-The command palette lists every command that can run now, with its key. Press **⌘⇧P**, type a few letters, press **⏎**. When you forget a key, use the palette, or **⌘⇧/** for the table of keys: every command's, with its menu or area, then the keys of an approval card and of single places (find bar, transcript, sessions list, Files tab, dialogs). **Tools ▸ Help ▸ Markdown sheet** puts beside the editor what Markdown the preview draws, and how a prompt reaches Claude. The menus hold only what has no key or button: **Files** (open a file, the Files tab's folders, export), **Edit**, and **Tools** (the palette, restarting the shell, stopping live plots, the embedded QuestDB, and **Help**). Each item's tooltip says what it does; the menus grey out what cannot run now.
+The command palette lists every command that can run now, with its key. Press **⌘⇧P**, type a few letters, press **⏎**. When you forget a key, use the palette, or **⌘⇧/** for the table of keys: every command's, with its menu or area, then the keys of an approval card and of single places (find bar, transcript, sessions list, Files tab, dialogs). **Actions ▸ Markdown sheet** puts beside the editor what Markdown the preview draws, and how a prompt reaches Claude. The menus hold only what has no key or button: **Files** (open a file, the Files tab's folders, export), **Edit**, and **Tools** (the palette, restarting the shell, stopping live plots, the embedded QuestDB, and **Help**). Each item's tooltip says what it does; the menus grey out what cannot run now.
 
 ## 2. A database
 
 comando can run a QuestDB server for you, so you need nothing else installed.
 
-1. Press **⌘⇧P**, type `embedded`, press **⏎** on **Start** (Tools ▸ Embedded QuestDB).
+1. Press **⌘⇧P**, type `embedded`, press **⏎** on **Start embedded QuestDB** (also in the Actions menu).
    *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few seconds; **Stop**, in the same places, stops it. The server keeps its data in `~/.comando/questdb` and listens on this machine only.
 2. A new comando already has a connection, **local QuestDB**, bound to the panel. You will make your own to learn the dialog. Right-click the sidebar's **Connections** tab and choose **New connection…**: the dialog opens on a new connection. A new connection starts with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. (**⏎** saves, **⌘⏎** saves and assigns; Esc asks before it drops unsaved changes.)
    *You should see* `tutorial ○` in the panel header and `○ tutorial` in the sidebar.
@@ -189,7 +189,7 @@ Other permission requests, such as a shell command or a file edit, appear as the
    *You should see* your panels, their text and their bindings as you left them. Sessions come back stopped, with their transcripts, and the next prompt resumes the same conversation: type `What was the first question I asked you?` in the editor and press **⌘⇧⏎**.
    Connections come back closed, and the embedded QuestDB does not start by itself: start it again from the palette (step 2) before you connect. The window comes back where it was, with the sidebar shown or hidden as you left it. Views (plots, files, kept results) belong to one run: the side pane comes back empty.
 
-Your data lives in `~/.comando`: `connections.json`, `sessions.json`, `panels.json`, and each panel's text as its own Markdown file in `panels/`, named after the panel (**⌘O** opens one as a panel; edit one in another editor and its panel shows the change within a second), the embedded QuestDB's data in `questdb/`, this tutorial in `help/`, the Files tab's folders in `folders.json` (Files ▸ ~/.claude folders and Files ▸ Repositories edit them), comando's Claude Code kit in `kit/` (Tools ▸ Help ▸ Claude Code kit installs it into Claude Code), and the logs in `logs/`; Tools ▸ Help ▸ Reveal comando folder opens it. Connection passwords are kept in the macOS keychain, not in the files.
+Your data lives in `~/.comando`: `connections.json`, `sessions.json`, `panels.json`, and each panel's text as its own Markdown file in `panels/`, named after the panel (**⌘O** opens one as a panel; edit one in another editor and its panel shows the change within a second), the embedded QuestDB's data in `questdb/`, this tutorial in `help/`, the Files tab's folders in `folders.json` (the Files tab's menu, Configure ~/.claude folders and Configure repositories, edits them), comando's Claude Code kit in `kit/` (Actions ▸ Claude Code kit installs it into Claude Code), and the logs in `logs/`; Actions ▸ Reveal comando folder opens it. Connection passwords are kept in the macOS keychain, not in the files.
 
 ## Cheat sheet
 
@@ -224,7 +224,7 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌘⇧C, ⌘⇧S | copy, export the view |
 | ⌘S | save the panel now |
 | ⌥⌘G | run Gradle tasks |
-| ⌘⇧/ | the table of every key; Tools ▸ Help ▸ Markdown sheet for Markdown |
+| ⌘⇧/ | the table of every key; Actions ▸ Markdown sheet for Markdown |
 | ⏎ or A / D or ⎋ / S / L twice / ↑ ↓ | on an approval card: allow, run, answer or approve / deny / for session, on a tool card / always, on a tool card that offers it / previous or next card |
 | ⌘/ | comment or uncomment the line, in the editor |
 | ⌘= ⌘- ⌘0 | zoom |

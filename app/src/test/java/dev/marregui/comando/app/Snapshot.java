@@ -271,7 +271,7 @@ public final class Snapshot {
         Thread.sleep(1500);
         shoot(out.resolve("02f-source-colours.png"));
         // Help's tutorial and log open as documents from their files: the tutorial rendered, the log read-only at its end
-        menuItem("Tools", "Help", "Tutorial");
+        menuItem("Actions", "Tutorial");
         showing(loop, "tutorial");
         shoot(out.resolve("02g-help-tutorial.png"));
         // the snapshot logs to the console only: a log file as comando writes one
@@ -283,13 +283,13 @@ public final class Snapshot {
                 "2026-10-16 08:40:02.003 INFO  [edt-watchdog] dev.marregui.comando.ui.shell.ComandoUi the EDT was busy for 310 ms [drawing] in=SunToolkit.awtLock comando=Items.fillRound:77",
                 "2026-10-16 08:40:05.871 INFO  [claude-comando] dev.marregui.comando.claude.ClaudeAdapter claude started [session=comando, pid=4242, mode=RESUME]",
                 ""));
-        menuItem("Tools", "Help", "Show the log");
+        menuItem("Actions", "Show the log");
         showing(loop, "comando-0.log");
         shoot(out.resolve("02h-help-log.png"));
         // Help's two sheets, each in the side pane: the keys, then Markdown
         for (String[] sheet : new String[][]{{"Keyboard shortcuts", "Keyboard shortcuts", "02i-help-keys.png"},
                 {"Markdown sheet", "Markdown", "02j-help-markdown.png"}}) {
-            menuItem("Tools", "Help", sheet[0]);
+            menuItem("Actions", sheet[0]);
             await(loop, st -> st.views().stream().anyMatch(v -> v.title().equals(sheet[1])), 5_000);
             // the view is drawn on the event thread after the state that holds it: done once the queue is through
             SwingUtilities.invokeAndWait(() -> { });
@@ -647,7 +647,10 @@ public final class Snapshot {
         });
     }
 
-    /** Runs the menu bar's command {@code id}, clicking its item as the user would. */
+    /**
+     * Runs the Files tab's command {@code id} as the user would: a right click on the tab's header, then its item in the
+     * menu that opens. EDT only.
+     */
     private static void findCommand(String id) {
         String text = switch (id) {
             case "files.settings" -> "Configure " + FoldersDialog.title(false);
@@ -655,12 +658,13 @@ public final class Snapshot {
             default -> throw new IllegalArgumentException(id);
         };
         for (Frame f : Frame.getFrames()) {
-            if (f instanceof JFrame jf && f.isVisible() && jf.getJMenuBar() != null) {
-                for (int m = 0; m < jf.getJMenuBar().getMenuCount(); m++) {
-                    JMenu menu = jf.getJMenuBar().getMenu(m);
-                    for (int i = 0; i < menu.getItemCount(); i++) {
-                        JMenuItem item = menu.getItem(i);
-                        if (item != null && item.getText() != null && item.getText().startsWith(text)) {
+            if (f instanceof JFrame jf && f.isVisible()) {
+                AbstractButton tab = named(jf, "Files");
+                if (tab != null) {
+                    tab.dispatchEvent(new MouseEvent(tab, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(), 0, 4, 4, 1, true, MouseEvent.BUTTON3));
+                    for (Window w : Window.getWindows()) {
+                        AbstractButton item = withText(w, text);
+                        if (item != null) {
                             item.doClick();
                             return;
                         }
@@ -668,7 +672,37 @@ public final class Snapshot {
                 }
             }
         }
-        throw new IllegalStateException("no menu item for " + id);
+        throw new IllegalStateException("no Files tab item for " + id);
+    }
+
+    private static AbstractButton named(Component c, String name) {
+        if (c instanceof AbstractButton b && name.equals(b.getAccessibleContext().getAccessibleName())) {
+            return b;
+        }
+        if (c instanceof Container k) {
+            for (Component x : k.getComponents()) {
+                AbstractButton b = named(x, name);
+                if (b != null) {
+                    return b;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static AbstractButton withText(Component c, String text) {
+        if (c instanceof JMenuItem b && text.equals(b.getText()) && b.isShowing()) {
+            return b;
+        }
+        if (c instanceof Container k) {
+            for (Component x : k.getComponents()) {
+                AbstractButton b = withText(x, text);
+                if (b != null) {
+                    return b;
+                }
+            }
+        }
+        return null;
     }
 
     /** Selects the entry labelled {@code label} in the list of the open dialog titled {@code title}. */
@@ -902,7 +936,7 @@ public final class Snapshot {
         });
     }
 
-    /** Clicks the item at {@code path} in the window's menu bar ("Tools", "Help", "Tutorial"), as a user would. */
+    /** Clicks the item at {@code path} in the window's menu bar ("Actions", "Tutorial"), as a user would. */
     static void menuItem(String... path) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             for (Frame f : Frame.getFrames()) {

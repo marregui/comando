@@ -39,18 +39,17 @@ class MenusTest {
     }
 
     @Test
-    void threeMenusHoldingOnlyWhatHasNoKeyOrControlAndWhatMacOsExpects() {
+    void editThenActionsFlatInGroupsHelpAmongThem() {
         List<MenuEntry.Menu> bar = Menus.bar(true);
-        assertThat(bar).extracting(MenuEntry.Menu::title).containsExactly("Files", "Edit", "Tools");
+        assertThat(bar).extracting(MenuEntry.Menu::title).as("after macOS's application menu").containsExactly("Edit", "Actions");
         assertThat(ids(bar)).containsExactly(
-                "panel.openSpec", "files.settings", "files.repositories", "view.export",
                 "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
-                // a menu's own items, then its submenus'
                 "view.palette", "terminal.restart", "run.plotStop", "server.start", "server.stop",
                 "help.tutorial", "help.keys", "help.markdown", "help.kit", "help.log", "help.dataRoot");
-        assertThat(submenus(bar)).extracting(MenuEntry.Menu::title).containsExactly("Embedded QuestDB", "Help");
-        assertThat(ids(Menus.bar(false))).as("no embedded server, no submenu for it").doesNotContain("server.start", "server.stop");
-        assertThat(submenus(Menus.bar(false))).extracting(MenuEntry.Menu::title).containsExactly("Help");
+        assertThat(submenus(bar)).as("flat").isEmpty();
+        assertThat(bar.get(1).entries().stream().filter(e -> !(e instanceof MenuEntry.Item)).count())
+                .as("separators between the palette, the shell and plots, the server, help").isEqualTo(3);
+        assertThat(ids(Menus.bar(false))).as("no embedded server, no items for it").doesNotContain("server.start", "server.stop");
     }
 
     @Test
