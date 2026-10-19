@@ -95,16 +95,16 @@ final class SessionRow extends JPanel {
     /**
      * Shows {@code s}; {@code bound} names the panels it is bound to, "headless" when none, in the accent colour when
      * {@code focused} (one of them is the focused panel); {@code approvals} counts the waiting approvals; {@code hovered}
-     * shows the copy button.
+     * shows the copy button; {@code newestCli} is the newest Claude Code version a running session reported.
      */
     SessionRow show(SessionState s, String bound, boolean focused, int approvals, boolean selected, boolean hovered,
-                    Color background, Color foreground) {
+                    Color background, Color foreground, String newestCli) {
         setOpaque(true);
         setBackground(background);
         title.setForeground(foreground);
         body.setForeground(foreground);
         title.setText(titleHtml(s, bound, focused, approvals));
-        body.setText(bodyHtml(s, System.currentTimeMillis()));
+        body.setText(bodyHtml(s, System.currentTimeMillis(), newestCli));
         boolean running = s.status().isUsable();
         power.setIcon(Icons.get(running ? "plug" : "unplug", 14));
         power.setToolTipText(running ? "Connected; click to disconnect (stops the session)" : "Disconnected; click to connect (starts the session)");
@@ -134,6 +134,55 @@ final class SessionRow extends JPanel {
         return started <= 0L || !s.status().isUsable() ? "" : "up " + Labels.uptime(nowMillis - started);
     }
 
+    /**
+     * The Claude Code version the session reported when it started, "claude 2.1.303", while it runs; empty before it
+     * reports one. Each start runs the CLI installed then, so sessions started before an update run the older one.
+     */
+    static String cliText(SessionState s) {
+        String v = s.info().cliVersion();
+        return v.isEmpty() || !s.status().isUsable() ? "" : "claude " + v;
+    }
+
+    /** The newest Claude Code version among the running sessions; empty when none has reported one. */
+    static String newestCli(List<SessionState> sessions) {
+        String newest = "";
+        for (SessionState s : sessions) {
+            if (!cliText(s).isEmpty() && compareVersions(s.info().cliVersion(), newest) > 0) {
+                newest = s.info().cliVersion();
+            }
+        }
+        return newest;
+    }
+
+    /** Whether {@code s} runs an older Claude Code than {@code newestCli}: it started before the CLI was updated. */
+    static boolean olderCli(SessionState s, String newestCli) {
+        return !cliText(s).isEmpty() && compareVersions(s.info().cliVersion(), newestCli) < 0;
+    }
+
+    /** Compares "2.1.302" and "2.1.303" by their numbers; a part that is not a number counts as 0, an empty text is oldest. */
+    static int compareVersions(String a, String b) {
+        if (a.isEmpty() || b.isEmpty()) {
+            return Boolean.compare(!a.isEmpty(), !b.isEmpty());
+        }
+        String[] x = a.split("\\.");
+        String[] y = b.split("\\.");
+        for (int i = 0; i < Math.max(x.length, y.length); i++) {
+            int c = Integer.compare(number(x, i), number(y, i));
+            if (c != 0) {
+                return c;
+            }
+        }
+        return 0;
+    }
+
+    private static int number(String[] parts, int i) {
+        try {
+            return i < parts.length ? Integer.parseInt(parts[i].replaceAll("\\D.*", "")) : 0;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
     /** How full the context is, "42%", once a turn has reported it; empty before. */
     static String contextText(SessionState s) {
         return s.contextWindow() <= 0L || s.contextTokens() <= 0L ? ""
@@ -142,9 +191,9 @@ final class SessionRow extends JPanel {
 
     /**
      * What the copy button, the menu's Copy details and ⌘C put on the clipboard: what a decision on the session (go on,
-     * compact, clear, stop) needs, one fact a line.
+     * compact, clear, stop) needs, one fact a line; {@code newestCli} as in {@link #show}.
      */
-    static String details(SessionState s, long nowMillis, ZoneId zone) {
+    static String details(SessionState s, long nowMillis, ZoneId zone, String newestCli) {
         StringBuilder sb = new StringBuilder();
         sb.append("Session: ").append(s.name()).append('\n');
         sb.append("Path: ").append(s.spec().workDir()).append('\n');
@@ -161,6 +210,13 @@ final class SessionRow extends JPanel {
         sb.append("Context: ").append(context.isEmpty() ? "unknown until a turn ends"
                 : context + " (" + Labels.tokens(s.contextTokens()) + " of " + Labels.tokens(s.contextWindow()) + " tokens)").append('\n');
         sb.append("Model: ").append(modelName(s)).append(", effort ").append(effortName(s)).append('\n');
+        if (!cliText(s).isEmpty()) {
+            sb.append("Claude Code: ").append(s.info().cliVersion());
+            if (olderCli(s, newestCli)) {
+                sb.append(", older than the ").append(newestCli).append(" another session runs; start this one again to use it");
+            }
+            sb.append('\n');
+        }
         return sb.toString();
     }
 
@@ -263,18 +319,25 @@ final class SessionRow extends JPanel {
 
     /**
      * Lines that never wrap, clipped at the edge: the folder and branch; then how full the context is (purple from the
-     * checkpoint's threshold) and how long it has run, whatever is known, a line only when something is, so a
-     * disconnected row has its controls right under its folder. The conversation's id is in the tooltip and the copied
-     * details.
+     * checkpoint's threshold), the Claude Code version it runs (amber, with an arrow, when another running session runs
+     * a newer one) and how long it has run, whatever is known, a line only when something is, so a disconnected
+     * row has its controls right under its folder. The conversation's id is in the tooltip and the copied details.
      */
-    static String bodyHtml(SessionState s, long nowMillis) {
+    static String bodyHtml(SessionState s, long nowMillis, String newestCli) {
         String branch = s.branch().isEmpty() ? "" : " ⎇ " + MarkdownHtml.escape(s.branch());
         String muted = Theme.hex(Theme.MUTED);
-        List<String> facts = new ArrayList<>(2);
+        List<String> facts = new ArrayList<>(3);
         String context = contextText(s);
         if (!context.isEmpty()) {
             boolean full = s.contextTokens() >= Reflection.THRESHOLD * s.contextWindow();
             facts.add("<span style='color:" + Theme.hex(full ? Theme.THINKING : Theme.MUTED) + "'>ctx " + context + "</span>");
+        }
+        // before the uptime, which the tooltip also gives: at the sidebar's usual width the line is clipped after these two
+        String cli = cliText(s);
+        if (!cli.isEmpty()) {
+            boolean older = olderCli(s, newestCli);
+            facts.add("<span style='color:" + Theme.hex(older ? Theme.WARN : Theme.MUTED) + "'>" + MarkdownHtml.escape(cli)
+                    + (older ? " ↑" : "") + "</span>");
         }
         String uptime = uptimeText(s, nowMillis);
         if (!uptime.isEmpty()) {

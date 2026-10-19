@@ -10,10 +10,12 @@ import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -201,7 +203,7 @@ class SessionsSidebarTest {
         assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Disconnected; click to connect (starts the session)");
         Rectangle row = cell(list, 0);
         assertThat(list.getToolTipText(event(list, new Rectangle(row.x + 30, row.y + 4, 4, 4), 0)))
-                .as("over the text: the details as Copy details copies them").isEqualTo(SessionRow.detailsTip(SessionRow.details(edge, 0L, ZoneOffset.UTC)));
+                .as("over the text: the details as Copy details copies them").isEqualTo(SessionRow.detailsTip(SessionRow.details(edge, 0L, ZoneOffset.UTC, "")));
 
         intents.clear();
         click(list, power, 2);
@@ -438,7 +440,7 @@ class SessionsSidebarTest {
                         .resumable("e41164bc-160c-4e3e-b43b-3218489da4e1"))
                 .withStatus(Status.OPEN, "").withStarted(started).withBranch("main")
                 .withUsage(0.0, 84_000L, 200_000L, started);
-        String details = SessionRow.details(running, started + (3 * 60 + 5) * 60_000L, ZoneOffset.UTC);
+        String details = SessionRow.details(running, started + (3 * 60 + 5) * 60_000L, ZoneOffset.UTC, "");
         assertThat(details).isEqualTo("""
                 Session: edge
                 Path: /w/edge
@@ -449,7 +451,7 @@ class SessionsSidebarTest {
                 Context: 42% (84.0k of 200.0k tokens)
                 Model: opus, effort default
                 """);
-        assertThat(SessionRow.details(SessionState.closed(SessionSpec.fresh("new", "/w/new")), started, ZoneOffset.UTC))
+        assertThat(SessionRow.details(SessionState.closed(SessionSpec.fresh("new", "/w/new")), started, ZoneOffset.UTC, ""))
                 .contains("Session id: none yet\n", "Status: closed\n", "Context: unknown until a turn ends\n").doesNotContain("Uptime");
         assertThat(SessionRow.detailsTip("Session: a<b>\nPath: /w\n")).as("the same lines, as text")
                 .isEqualTo("<html>Session: a&lt;b&gt;<br>Path: /w</html>");
@@ -460,11 +462,40 @@ class SessionsSidebarTest {
         long started = 1_760_000_000_000L;
         SessionState running = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").resumable("e41164bc-160c-4e3e-b43b-3218489da4e1"))
                 .withStatus(Status.OPEN, "").withStarted(started).withUsage(0.0, 84_000L, 200_000L, started);
-        String[] lines = SessionRow.bodyHtml(running, started + 65 * 60_000L).split("<br>");
+        String[] lines = SessionRow.bodyHtml(running, started + 65 * 60_000L, "").split("<br>");
         assertThat(lines).hasSize(2);
         assertThat(lines[1]).contains(">ctx 42%<", "up 1 h 05 min").doesNotContain("context", "e41164bc");
-        String[] fresh = SessionRow.bodyHtml(SessionState.closed(SessionSpec.fresh("new", "/w/new")), started).split("<br>");
+        String[] fresh = SessionRow.bodyHtml(SessionState.closed(SessionSpec.fresh("new", "/w/new")), started, "").split("<br>");
         assertThat(fresh).as("nothing known: no empty line, the controls come up under the folder").hasSize(1);
+    }
+
+    @Test
+    void aRowSaysWhichCliVersionItRunsAndWhenAnotherSessionRunsANewerOne() {
+        long started = 1_760_000_000_000L;
+        SessionState older = running("edge", "2.1.302", started);
+        SessionState newer = running("docs", "2.1.303", started);
+        String newest = SessionRow.newestCli(List.of(older, newer, SessionState.closed(SessionSpec.fresh("new", "/w/new"))));
+        assertThat(newest).isEqualTo("2.1.303");
+
+        assertThat(SessionRow.bodyHtml(newer, started, newest)).contains("claude 2.1.303<").doesNotContain("↑", Theme.hex(Theme.WARN));
+        assertThat(SessionRow.bodyHtml(older, started, newest)).as("started before the update: amber, with an arrow")
+                .contains("color:" + Theme.hex(Theme.WARN) + "'>claude 2.1.302 ↑<");
+        assertThat(SessionRow.details(older, started, ZoneOffset.UTC, newest))
+                .contains("Claude Code: 2.1.302, older than the 2.1.303 another session runs; start this one again to use it\n");
+        assertThat(SessionRow.details(newer, started, ZoneOffset.UTC, newest)).contains("Claude Code: 2.1.303\n");
+        assertThat(SessionRow.bodyHtml(older.withStatus(Status.CLOSED, ""), started, newest))
+                .as("a stopped session runs no Claude Code").doesNotContain("claude 2.1");
+
+        assertThat(SessionRow.compareVersions("2.1.303", "2.1.302")).isPositive();
+        assertThat(SessionRow.compareVersions("2.2.0", "2.1.303")).isPositive();
+        assertThat(SessionRow.compareVersions("2.1.10", "2.1.9")).as("by number, not text").isPositive();
+        assertThat(SessionRow.compareVersions("", "2.1.303")).isNegative();
+        assertThat(SessionRow.newestCli(List.of())).isEmpty();
+    }
+
+    private static SessionState running(String name, String cliVersion, long started) {
+        return SessionState.closed(SessionSpec.fresh(name, "/w/" + name)).withStatus(Status.OPEN, "").withStarted(started)
+                .withInfo(new SessionInfo("id-" + name, "claude-opus-5-5", "/w/" + name, cliVersion, "auto", List.of()), started);
     }
 
     private static List<String> names(JList<?> list) throws Exception {

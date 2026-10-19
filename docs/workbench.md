@@ -98,12 +98,14 @@ left, edit, clone and remove of the selected row on the right, off while nothing
 **Stop and remove**, **Disconnect and remove** or **Close and remove**, or **Leave it**.
 
 - **Sessions:** name, where it is bound ("headless" when nowhere), status, current activity or what it waits on,
-  pending approvals; directory and branch; `ctx` and the context % (purple from 60%), how long it has run, a line
-  only when either is known, so a disconnected row has its controls under its folder. Over the
+  pending approvals; directory and branch; `ctx` and the context % (purple from 60%), the Claude Code version the
+  session runs (from its `system/init`; amber with ↑ when another running session runs a newer one, as after an update
+  of the CLI: each start runs the CLI installed then), how long it has run, a line only when one of them is known, so a
+  disconnected row has its controls under its folder. Over the
   row's text the tooltip shows the details Copy details copies, the full session id among them. At the left a plug, fresh start, checkpoint, and while running compact and clear (`/compact`, `/clear`
   sent from the session's panel); at the right the model and effort as menus (a change saves and, on a running session,
   sends `/model` or `/effort`). A copy button at the row's top right under the mouse, Copy details in its menu and ⌘C
-  copy name, path, branch, full id, status, uptime and start, context with tokens, model and effort. Listed running
+  copy name, path, branch, full id, status, uptime and start, context with tokens, model and effort, and the Claude Code version. Listed running
   first, then by name, until a row is dragged; the order then stands (saved in `sessions.json`) until the sort button
   ([record 53](adr/0053-session-rows-compact-clear-copy-and-an-order-of-your-own.md)). Import lists stored
   conversations.

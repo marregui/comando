@@ -169,7 +169,8 @@ public final class SessionsSidebar {
         connections.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         sessions.setCellRenderer((list, s, index, selected, focus) -> row(s).show(s, boundText(s), boundToFocused(s),
                 state == null ? 0 : state.pendingApprovals(s.name()), selected, index == ((SessionList) list).hover,
-                selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground()));
+                selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground(),
+                newestCli()));
         // ⌘C, and Edit ▸ Copy, which forwards it, copy the selected session's details
         sessions.setTransferHandler(new TransferHandler() {
             @Override
@@ -339,9 +340,18 @@ public final class SessionsSidebar {
         return rail.getPreferredSize().width;
     }
 
+    /** The newest Claude Code version the rows were last painted against. */
+    private String paintedNewestCli = "";
+
     public void render(AppState s) {
         state = s;
         sync(sessionModel, ordered(s.sessions(), manualOrder), sessions);
+        // a session reporting a newer CLI version changes the other rows too: theirs is older now
+        String newest = newestCli();
+        if (!newest.equals(paintedNewestCli)) {
+            paintedNewestCli = newest;
+            sessions.repaint();
+        }
         rows.keySet().retainAll(s.sessions().stream().map(SessionState::name).toList());
         sync(connectionModel, s.connections(), connections);
         panelsTab.render(s);
@@ -398,7 +408,12 @@ public final class SessionsSidebar {
 
     /** What a session's copy puts on the clipboard. */
     private String details(SessionState s) {
-        return SessionRow.details(s, System.currentTimeMillis(), ZoneId.systemDefault());
+        return SessionRow.details(s, System.currentTimeMillis(), ZoneId.systemDefault(), newestCli());
+    }
+
+    /** The newest Claude Code version a running session reported; empty before any has. */
+    private String newestCli() {
+        return state == null ? "" : SessionRow.newestCli(state.sessions());
     }
 
     /** The uptimes the session rows last showed, so the shell's one-second tick repaints them only when one moved on. */
