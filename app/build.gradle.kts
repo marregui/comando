@@ -32,6 +32,8 @@ application {
     mainClass = "dev.marregui.comando.app.Main"
     applicationName = "comando"
     applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED", "-Dfile.encoding=UTF-8", "-Dapple.awt.application.name=comando",
+        // QuestDB 10's workers run on the JDK's internal continuations
+        "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED",
         // the live heap is about 50 MB: start small, and let G1 give back what an idle minute leaves unused
         "-Xms64m", "-Xmx4g", "-XX:G1PeriodicGCInterval=60000",
         // AppKit reads the appearance when it starts, before any Java code of ours: comando's palette is dark only
@@ -68,7 +70,7 @@ tasks.register<JavaExec>("snapshot") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass = "dev.marregui.comando.app.Snapshot"
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-snapshot")
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-snapshot")
     args(
         (project.findProperty("out") ?: layout.buildDirectory.dir("snapshots").get().asFile.path).toString(),
         (project.findProperty("live") ?: "false").toString(),
@@ -84,7 +86,7 @@ tasks.register<JavaExec>("hero") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass = "dev.marregui.comando.app.Hero"
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-hero")
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-hero")
     args((project.findProperty("out") ?: layout.buildDirectory.dir("snapshots").get().asFile.path).toString())
 }
 
@@ -104,7 +106,7 @@ val uiTest = tasks.register<Test>("uiTest") {
     systemProperty("java.awt.headless", "false")
     systemProperty("comando.uiTests", "true")
     systemProperty("comando.prefsNode", "dev/marregui/comando-test")
-    jvmArgs("--enable-native-access=ALL-UNNAMED")
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED")
 }
 
 // An unsigned macOS disk image with its own Java runtime: ./gradlew :app:dmg (output in build/dmg).
@@ -148,6 +150,7 @@ tasks.register<Exec>("dmg") {
         "--add-modules", "java.base,java.desktop,java.logging,java.naming,java.prefs,java.security.jgss,java.sql,jdk.httpserver,jdk.jfr," +
                 "jdk.management,jdk.management.jfr,jdk.management.agent,jdk.unsupported,jdk.localedata,jdk.charsets,jdk.zipfs",
         "--java-options", "--enable-native-access=ALL-UNNAMED",
+        "--java-options", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED",
         "--java-options", "-Xms64m",
         "--java-options", "-Xmx4g",
         "--java-options", "-XX:G1PeriodicGCInterval=60000",

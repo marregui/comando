@@ -34,7 +34,8 @@ subprojects {
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
         systemProperty("java.awt.headless", "true")
-        jvmArgs("--enable-native-access=ALL-UNNAMED")
+        // QuestDB 10's workers run on the JDK's internal continuations
+        jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED")
         systemProperty("comando.home", layout.buildDirectory.dir("test-home").get().asFile.absolutePath)
         // opt-in: the keychain test writes and deletes one item in the login keychain
         systemProperty("comando.keychainTest", providers.gradleProperty("keychainTest").getOrElse("false"))
