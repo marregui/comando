@@ -43,7 +43,7 @@ Text:
 | `Highlighter` | syntax colours for text painted outside a text area (the transcript); any thread |
 | `Diffs`, `DiffPane` | unified diff with three lines of context, coloured |
 | `MarkdownHtml`, `HtmlPane` | CommonMark with tables to HTML for Swing; raw HTML escaped; an image is its picture when it is a file on this machine (`LocalImages`: PNG, JPEG, GIF as they are, an SVG drawn by jsvg into `cache/images/`), else its alt text; fences coloured as the editors; a light page or a dark one, each pane with its own style sheet; headings carry GitHub's ids; a web link opens in the browser at a click, a `#` link scrolls to its heading at a double click and keeps it there as pictures arrive until the reader scrolls, any other goes to the pane's owner at a double click (`Workspace.headingWhenOpen` scrolls another document's panel to the heading its link names) |
-| `MermaidDiagrams` | Mermaid blocks drawn by `mmdc` into `cache/mermaid/`, once per diagram text, one at a time |
+| `MermaidDiagrams` | Mermaid blocks drawn by `mmdc` into `cache/mermaid/`, once per diagram text, one at a time; a diagram or picture not ready yet stands as an element of its own, which the picture replaces when it arrives, the rest of the page untouched |
 | `SourceLinks` | `path/File.java:42` becomes a link that opens the file at the line |
 | `Plain` | `Plain.only(c)` turns HTML rendering off before text is set; `Plain.text(s)` guards a string starting with `<html>` |
 

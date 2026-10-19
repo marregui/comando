@@ -132,7 +132,8 @@ public final class LocalImages {
 
     /**
      * The picture {@code file} holds, or why there is none; when it is not read yet, reading starts and {@code
-     * whenReady} runs, on the reading thread, once it is read or refused.
+     * whenReady} runs, on the reading thread, once it is read or refused: once, however often the same callback is
+     * handed in meanwhile.
      */
     public Picture picture(Path file, Runnable whenReady) {
         Key key;
@@ -152,7 +153,10 @@ public final class LocalImages {
         waiting.compute(key, (k, list) -> {
             List<Runnable> l = list == null ? new ArrayList<>() : list;
             first[0] = list == null;
-            l.add(whenReady);
+            // a preview rendered again while it waits hands in the same callback: told once, not once per render
+            if (!l.contains(whenReady)) {
+                l.add(whenReady);
+            }
             return l;
         });
         if (first[0]) {

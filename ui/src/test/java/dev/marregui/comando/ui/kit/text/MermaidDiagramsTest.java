@@ -72,6 +72,37 @@ class MermaidDiagramsTest {
     }
 
     @Test
+    void theSameCallbackHandedInAgainWhileTheDiagramIsDrawnRunsOnce() throws Exception {
+        Path picture = dir.resolve("picture.png");
+        ImageIO.write(new BufferedImage(400, 120, BufferedImage.TYPE_INT_ARGB), "png", picture.toFile());
+        Path gate = dir.resolve("gate");
+        MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
+                out=""
+                while [ $# -gt 0 ]; do
+                  if [ "$1" = "-o" ]; then out="$2"; fi
+                  shift
+                done
+                while [ ! -f '%s' ]; do sleep 0.02; done
+                cp '%s' "$out"
+                """.formatted(gate, picture)));
+        try {
+            AtomicInteger told = new AtomicInteger();
+            Runnable preview = told::incrementAndGet;
+            for (int i = 0; i < 3; i++) {
+                assertThat(diagrams.diagram(FLOW, preview)).as("held at the gate").isInstanceOf(MermaidDiagrams.Diagram.Pending.class);
+            }
+            CountDownLatch other = new CountDownLatch(1);
+            diagrams.diagram("flowchart LR\n    X --> Y\n", other::countDown);
+            Files.createFile(gate);
+            // one drawing at a time: once the next is heard, every callback of the first has run
+            assertThat(other.await(10, TimeUnit.SECONDS)).isTrue();
+            assertThat(told).hasValue(1);
+        } finally {
+            diagrams.close();
+        }
+    }
+
+    @Test
     void aDiagramMmdcRejectsSaysWhyAndIsNotDrawnAgain() throws Exception {
         MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), fakeMmdc(true));
         try {

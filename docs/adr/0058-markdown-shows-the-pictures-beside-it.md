@@ -20,7 +20,7 @@ draws PNG, JPEG and GIF; it does not draw SVG.
 | PNG, JPEG, GIF | shown as they are; only the size is read from the header, then the `<img>` names the file | Swing draws them |
 | SVG | drawn by jsvg 2.1.0 into `~/.comando/cache/images/<hash>.png`, twice its size for Retina, shown at its own size; no larger than 4096 points a side; 300 points a side when it states no size or view box | Swing draws no SVG; jsvg is a pure-Java renderer (784 KB) already on the classpath, through `flatlaf-extras` for comando's SVG icons; declared now as a direct dependency |
 | what an SVG loads | only files beside it (jsvg's `ALLOW_RELATIVE`): an `<image>`, `<use>`, a style sheet or a paint naming the network is not fetched | an SVG may come from anywhere |
-| when | the first time a preview shows the link: read on one `local-images` thread; the preview shows "loading chart.png…" and is redrawn, where the reader left it, when the picture is ready | the preview never waits on the disk |
+| when | the first time a preview shows the link: read on one `local-images` thread; the preview shows "loading chart.png…" and puts the picture in its place, where the reader left the view, when it is ready | the preview never waits on the disk |
 | a changed file | a picture is known by its path, modification time and size: a file changed on disk is read again at the next render | |
 | width | no wider than the pane; the height kept in proportion | |
 | security | the alt text and the file's URI are escaped as attribute values, quotes included | an alt text cannot add an attribute |

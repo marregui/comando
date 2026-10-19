@@ -41,7 +41,7 @@ that names the one it replaces; the old record stays as written, and this index'
 | [32](0032-session-rows-carry-their-controls.md) | Session rows carry their controls | Miguel, Claude | accepted; edit control and plug icons replaced by 37 |
 | [33](0033-thinking-gives-way-and-the-conclusion-is-gold.md) | Thinking gives way, and the conclusion is gold | Miguel, Claude | accepted |
 | [34](0034-a-deleted-document-closes-its-panel.md) | A deleted document closes its panel | Miguel, Claude | accepted |
-| [35](0035-mermaid-diagrams-drawn-by-mmdc.md) | Mermaid diagrams drawn by mmdc | Miguel, Claude | accepted |
+| [35](0035-mermaid-diagrams-drawn-by-mmdc.md) | Mermaid diagrams drawn by mmdc | Miguel, Claude | accepted; refresh amended 2026-10-18 |
 | [36](0036-five-menus-by-subject.md) | Five menus, by subject | Miguel, Claude | superseded by 59 |
 | [37](0037-session-actions-act-on-the-selected-row.md) | Session and connection actions act on the selected row | Miguel, Claude | accepted |
 | [38](0038-a-session-has-one-panel.md) | A session has one panel | Miguel, Claude | accepted |

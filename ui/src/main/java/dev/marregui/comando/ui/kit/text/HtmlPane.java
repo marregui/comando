@@ -10,11 +10,13 @@ import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.event.HyperlinkEvent;
+import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Element;
 import javax.swing.text.ElementIterator;
 import javax.swing.text.View;
 import javax.swing.text.html.HTML;
+import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
 import java.awt.Color;
@@ -26,10 +28,16 @@ import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.MouseEvent;
 import java.awt.geom.Rectangle2D;
+import java.io.IOException;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 /**
  * A read-only HTML pane styled from the theme, for rendered Markdown. A web link opens in the browser at a click; a
@@ -37,6 +45,8 @@ import java.util.Optional;
  * {@link LinkHandler} at a double click.
  */
 public class HtmlPane extends JEditorPane {
+
+    private static final System.Logger LOG = System.getLogger(HtmlPane.class.getName());
 
     /** Receives the links that are not web links, double-clicked or activated from the keyboard: a file beside the document. */
     public interface LinkHandler {
@@ -252,10 +262,29 @@ public class HtmlPane extends JEditorPane {
     private String anchored;
     private int anchoredY = -1;
 
+    /**
+     * The diagrams and pictures of the page shown that were not ready when it was rendered: the id of the element that
+     * stands in for each, and its HTML once it is ready, else null. Emptied at every render.
+     */
+    private final Map<String, Supplier<String>> waitingFor = new LinkedHashMap<>();
+    private int waitingIds;
+    /** Whether a fill is posted to the EDT: the arrivals of a burst are put in place by one fill. */
+    private final AtomicBoolean fillPosted = new AtomicBoolean();
+    /**
+     * Runs, on a drawing or reading thread, when a diagram or picture the page waits for is ready. The one callback the
+     * pane hands out, so the pane waits once for each, however often the page is rendered meanwhile.
+     */
+    private final Runnable arrived = () -> {
+        if (fillPosted.compareAndSet(false, true)) {
+            Edt.later(this::fill);
+        }
+    };
+
     /** Shows {@code markdown} rendered; its Mermaid diagrams as pictures once {@link MermaidDiagrams} has drawn them. */
     public void setMarkdown(String markdown) {
         this.markdown = markdown;
         sizedFor = -1;
+        waitingFor.clear();
         setHtml(MarkdownHtml.render(markdown, this::diagram, light, this::picture));
     }
 
@@ -281,15 +310,84 @@ public class HtmlPane extends JEditorPane {
 
     /** The HTML of an image link: its picture when it names one on this machine, else null for its alt text. */
     private String picture(String destination, String alt) {
-        Optional<Path> file = LocalImages.resolve(folder, destination);
-        if (file.isEmpty()) {
+        Optional<Path> found = LocalImages.resolve(folder, destination);
+        if (found.isEmpty()) {
             return null;
         }
-        String shown = markdown;
-        LocalImages.Picture p = LocalImages.current().picture(file.get(), () -> Edt.later(() -> redraw(shown)));
+        Path file = found.get();
+        LocalImages.Picture p = LocalImages.current().picture(file, arrived);
         sizedFor = getWidth();
+        String html = pictureHtml(p, alt, file, pictureWidth());
+        if (!(p instanceof LocalImages.Picture.Pending)) {
+            return html;
+        }
+        String id = waiting(() -> {
+            LocalImages.Picture now = LocalImages.current().picture(file, arrived);
+            return now instanceof LocalImages.Picture.Pending ? null : pictureHtml(now, alt, file, pictureWidth());
+        });
+        // inline: the picture may sit in a line of text
+        return "<span id=\"" + id + "\">" + html + "</span>";
+    }
+
+    /** The widest a picture or diagram is shown, in points; zero or less when the pane has no width yet. */
+    private int pictureWidth() {
         Insets in = getInsets();
-        return pictureHtml(p, alt, file.get(), getWidth() - in.left - in.right - 8);
+        return getWidth() - in.left - in.right - 8;
+    }
+
+    /** Records what stands in for a diagram or picture not ready yet; returns the id of the element standing in. */
+    private String waiting(Supplier<String> ready) {
+        // a heading's id is GitHub's slug, which has no colon: the two cannot meet
+        String id = "comando:waiting:" + waitingIds++;
+        waitingFor.put(id, ready);
+        return id;
+    }
+
+    /**
+     * Puts each diagram and picture that is ready in place of the element standing in for it, with the view where the
+     * reader left it. The rest of the page is not rendered again: on a long page with many diagrams that takes seconds,
+     * once for every diagram drawn.
+     */
+    private void fill() {
+        fillPosted.set(false);
+        Map<String, String> ready = new LinkedHashMap<>();
+        for (Iterator<Map.Entry<String, Supplier<String>>> it = waitingFor.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<String, Supplier<String>> w = it.next();
+            String html = w.getValue().get();
+            if (html != null) {
+                ready.put(w.getKey(), html);
+                it.remove();
+            }
+        }
+        if (ready.isEmpty() || !(getDocument() instanceof HTMLDocument doc)) {
+            return;
+        }
+        keepingView(() -> {
+            for (Map.Entry<String, String> r : ready.entrySet()) {
+                Element stand = doc.getElement(r.getKey());
+                if (stand == null) {
+                    continue;
+                }
+                try {
+                    doc.setOuterHTML(stand, inItsLink(stand, r.getValue()));
+                } catch (BadLocationException | IOException e) {
+                    // not expected of Swing's own document; the whole page drawn again shows it all the same
+                    LOG.log(System.Logger.Level.DEBUG, "cannot put a picture in place [id=" + r.getKey() + "]: " + e.getMessage());
+                    String shown = markdown;
+                    Edt.later(() -> redraw(shown));
+                    return;
+                }
+            }
+        });
+    }
+
+    /** {@code html} inside the link the element standing for it is in, if any: replacing the element drops its link. */
+    private static String inItsLink(Element stand, String html) {
+        if (stand.getAttributes().getAttribute(HTML.Tag.A) instanceof AttributeSet a
+                && a.getAttribute(HTML.Attribute.HREF) instanceof String href) {
+            return "<a href=\"" + attribute(href) + "\">" + html + "</a>";
+        }
+        return html;
     }
 
     /** {@code text} as an attribute's value: escaped, quotes included, so it cannot end the attribute and add another. */
@@ -312,24 +410,38 @@ public class HtmlPane extends JEditorPane {
     }
 
     private String diagram(String source) {
-        String shown = markdown;
-        MermaidDiagrams.Diagram d = MermaidDiagrams.current().diagram(source, light, () -> Edt.later(() -> redraw(shown)));
+        boolean drawnLight = light;
+        MermaidDiagrams.Diagram d = MermaidDiagrams.current().diagram(source, drawnLight, arrived);
         sizedFor = getWidth();
-        Insets in = getInsets();
-        return diagramHtml(source, d, getWidth() - in.left - in.right - 8);
+        String html = diagramHtml(source, d, pictureWidth());
+        if (!(d instanceof MermaidDiagrams.Diagram.Pending)) {
+            return html;
+        }
+        String id = waiting(() -> {
+            MermaidDiagrams.Diagram now = MermaidDiagrams.current().diagram(source, drawnLight, arrived);
+            return now instanceof MermaidDiagrams.Diagram.Pending ? null : diagramHtml(source, now, pictureWidth());
+        });
+        return "<div id=\"" + id + "\">" + html + "</div>";
     }
 
-    /** A diagram was drawn: the same text again, with the view where the reader left it. */
+    /** The same text again, at a new width or in new colours, with the view where the reader left it. */
     private void redraw(String shown) {
         if (shown == null || !shown.equals(markdown)) {
             return;
         }
+        keepingView(() -> {
+            int caret = getCaretPosition();
+            setMarkdown(shown);
+            setCaretPosition(Math.min(caret, getDocument().getLength()));
+        });
+    }
+
+    /** Runs {@code change} to the page, then puts the view back where the reader left it. */
+    private void keepingView(Runnable change) {
         Point at = getParent() instanceof JViewport vp ? vp.getViewPosition() : null;
         // taken to a heading and not scrolled since: the heading, wherever the new pictures put it
         String heading = at != null && anchored != null && at.y == anchoredY ? anchored : null;
-        int caret = getCaretPosition();
-        setMarkdown(shown);
-        setCaretPosition(Math.min(caret, getDocument().getLength()));
+        change.run();
         if (heading != null) {
             SwingUtilities.invokeLater(() -> scrollToHeading(heading));
         } else if (at != null) {

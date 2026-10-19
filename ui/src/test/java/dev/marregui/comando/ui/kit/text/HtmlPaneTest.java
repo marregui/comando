@@ -276,6 +276,90 @@ class HtmlPaneTest {
         }
     }
 
+    @Test
+    void diagramsDrawnLaterTakeTheirPlaceAndTheRestOfThePageIsNotRenderedAgain(@TempDir Path dir) throws Exception {
+        Path picture = dir.resolve("picture.png");
+        ImageIO.write(new BufferedImage(400, 120, BufferedImage.TYPE_INT_ARGB), "png", picture.toFile());
+        Path gate = dir.resolve("gate");
+        // a stand-in for mmdc that draws nothing until the test opens the gate, so every diagram waits
+        Path mmdc = dir.resolve("bin").resolve("mmdc");
+        Files.createDirectories(mmdc.getParent());
+        Files.writeString(mmdc, """
+                #!/bin/sh
+                echo run >> '%s'
+                out=""
+                while [ $# -gt 0 ]; do
+                  if [ "$1" = "-o" ]; then out="$2"; fi
+                  shift
+                done
+                while [ ! -f '%s' ]; do sleep 0.02; done
+                cp '%s' "$out"
+                """.formatted(dir.resolve("runs"), gate, picture));
+        mmdc.toFile().setExecutable(true);
+        Path chart = dir.resolve("chart.png");
+        ImageIO.write(new BufferedImage(64, 32, BufferedImage.TYPE_INT_RGB), "png", chart.toFile());
+        List<String> sources = List.of("flowchart LR\n    A --> B\n", "flowchart LR\n    B --> C\n", "flowchart LR\n    C --> D\n");
+        StringBuilder md = new StringBuilder("# Plan\n\n[![the chart](chart.png)](other.md)\n\n");
+        for (String s : sources) {
+            md.append("```mermaid\n").append(s).append("```\n\n");
+        }
+        MermaidDiagrams.install(dir.resolve("mermaid"), mmdc);
+        LocalImages.install(dir.resolve("images"));
+        try {
+            HtmlPane[] pane = new HtmlPane[1];
+            Element[] heading = new Element[1];
+            SwingUtilities.invokeAndWait(() -> {
+                pane[0] = new HtmlPane();
+                pane[0].setSize(800, 600);
+                pane[0].setMarkdown(md.toString(), dir);
+                assertThat(pane[0].getText().split("id=\"comando:waiting:", -1)).as("each diagram and the chart stood in for")
+                        .hasSize(sources.size() + 2);
+                heading[0] = element(pane[0], "plan");
+            });
+            Files.createFile(gate);
+            // the pane asked first, so its fill is posted before the last of these is heard
+            for (String s : sources) {
+                CountDownLatch drawn = new CountDownLatch(1);
+                if (MermaidDiagrams.current().diagram(s, false, drawn::countDown) instanceof MermaidDiagrams.Diagram.Pending) {
+                    assertThat(drawn.await(10, TimeUnit.SECONDS)).isTrue();
+                }
+            }
+            CountDownLatch read = new CountDownLatch(1);
+            if (LocalImages.current().picture(chart, read::countDown) instanceof LocalImages.Picture.Pending) {
+                assertThat(read.await(10, TimeUnit.SECONDS)).isTrue();
+            }
+            settle();
+            String html = pane[0].getText();
+            assertThat(html).doesNotContain("drawing the diagram").doesNotContain("loading").doesNotContain("comando:waiting");
+            assertThat(images(pane[0])).as("three diagrams and the chart").hasSize(4);
+            SwingUtilities.invokeAndWait(() -> assertThat(element(pane[0], "plan"))
+                    .as("the diagrams put in place, the rest of the page as it was").isSameAs(heading[0]));
+            assertThat(Files.readAllLines(dir.resolve("runs"))).as("each diagram drawn once").hasSize(sources.size());
+            SwingUtilities.invokeAndWait(() -> {
+                Element img = null;
+                ElementIterator it = new ElementIterator(pane[0].getDocument());
+                for (Element e = it.next(); e != null; e = it.next()) {
+                    AttributeSet a = e.getAttributes();
+                    if (a.getAttribute(StyleConstants.NameAttribute) == HTML.Tag.IMG
+                            && String.valueOf(a.getAttribute(HTML.Attribute.SRC)).equals(chart.toUri().toString())) {
+                        img = e;
+                    }
+                }
+                assertThat(img).as("the chart shown").isNotNull();
+                assertThat(img.getAttributes().getAttribute(HTML.Tag.A)).as("still inside its link")
+                        .isInstanceOfSatisfying(AttributeSet.class, a -> assertThat(a.getAttribute(HTML.Attribute.HREF)).isEqualTo("other.md"));
+            });
+        } finally {
+            MermaidDiagrams.install(null, null);
+            LocalImages.install(null);
+        }
+    }
+
+    /** The element of the pane's page whose id is {@code id}. */
+    private static Element element(HtmlPane pane, String id) {
+        return ((HTMLDocument) pane.getDocument()).getElement(id);
+    }
+
     /** Runs what the redraw and the layouts it causes post: each step posts the next while it runs. */
     private static void settle() throws Exception {
         for (int i = 0; i < 4; i++) {

@@ -98,8 +98,13 @@ public final class MermaidDiagrams {
         if (found.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "mmdc not found; Mermaid diagrams show as their source");
         }
+        install(cache, found.orElse(null));
+    }
+
+    /** Draws diagrams into {@code cache} with {@code mmdc} from now on; none without it. For tests. */
+    static void install(Path cache, Path mmdc) {
         installed.close();
-        installed = new MermaidDiagrams(cache, found.orElse(null));
+        installed = new MermaidDiagrams(cache, mmdc);
     }
 
     /** Stops drawing: the diagram being drawn is abandoned and its {@code mmdc} stopped. */
@@ -109,7 +114,8 @@ public final class MermaidDiagrams {
 
     /**
      * The picture of {@code source}, or why there is none; when it is not drawn yet, drawing starts and
-     * {@code whenReady} runs, on the drawing thread, once it is drawn or rejected.
+     * {@code whenReady} runs, on the drawing thread, once it is drawn or rejected: once, however often the same
+     * callback is handed in meanwhile.
      */
     public Diagram diagram(String source, Runnable whenReady) {
         return diagram(source, false, whenReady);
@@ -140,7 +146,10 @@ public final class MermaidDiagrams {
         waiting.compute(key, (k, list) -> {
             List<Runnable> l = list == null ? new ArrayList<>() : list;
             first[0] = list == null;
-            l.add(whenReady);
+            // a preview rendered again while it waits hands in the same callback: told once, not once per render
+            if (!l.contains(whenReady)) {
+                l.add(whenReady);
+            }
             return l;
         });
         if (first[0]) {
