@@ -61,8 +61,13 @@ public final class StateLoop implements IntentSink, AutoCloseable {
      * @param millis how long the intent had been applying, or took when ended
      * @param ended  false for a hang told while the intent still applies, true once the intent is done
      * @param stack  the loop's stack at the hang; empty when ended
+     * @param since  the {@link System#nanoTime} the intent started at, which ties a hang to its end
      */
-    record Stall(String part, long millis, boolean ended, String stack) {
+    record Stall(String part, long millis, boolean ended, String stack, long since) {
+    }
+
+    /** The hang whose stack the log holds: the intent's start and the time just before the entry was written. */
+    private record Logged(long since, long atMillis) {
     }
 
     /** What the loop applies now: the intent's start, the part, the thread; null when idle. */
@@ -88,6 +93,8 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     private long slowestNanos = -1;
     // the watchdog's own: the start of the intent last told as a hang
     private long hangTold = Long.MIN_VALUE;
+    // written by the watchdog's log of a hang, read by the log of its end on the loop's thread
+    private volatile Logged hangLogged;
 
     public StateLoop(AppState initial, Reducer reducer, EffectHandler effects) {
         this(initial, reducer, effects, STALL_MILLIS, HANG_MILLIS, null);
@@ -212,7 +219,7 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         enter(start, null);
         long millis = (System.nanoTime() - start) / 1_000_000;
         if (millis >= stallMillis) {
-            stalls.accept(new Stall(slowestPart, millis, true, ""));
+            stalls.accept(new Stall(slowestPart, millis, true, "", start));
         }
         slowestPart = null;
         slowestNanos = -1;
@@ -232,7 +239,7 @@ public final class StateLoop implements IntentSink, AutoCloseable {
                 long millis = (System.nanoTime() - b.sinceNanos()) / 1_000_000;
                 if (millis >= hangMillis) {
                     hangTold = b.sinceNanos();
-                    stalls.accept(new Stall(b.part(), millis, false, format(b.thread().getStackTrace())));
+                    stalls.accept(new Stall(b.part(), millis, false, format(b.thread().getStackTrace()), b.sinceNanos()));
                 }
             }
         }
@@ -240,16 +247,23 @@ public final class StateLoop implements IntentSink, AutoCloseable {
 
     /**
      * A stall below the hang limit is a line, a hang a warning with the stack while it holds and a warning when it
-     * ends; the user hears of one that lasted the hang limit or more, since nothing in the window changed meanwhile.
+     * ends; the user hears of one that lasted the hang limit or more, since nothing in the window changed meanwhile. A
+     * click on the notice opens the log at the hang's stack, or at the end's line when the hang ended before the
+     * watchdog looked.
      */
     private void log(Stall stall) {
         if (!stall.ended()) {
+            // known before the entry is written: the intent can end while the log writes it
+            hangLogged = new Logged(stall.since(), System.currentTimeMillis());
             LOG.log(System.Logger.Level.WARNING, "the reducer has not finished an intent for " + stall.millis() + " ms [part="
                     + stall.part() + "]:\n" + stall.stack());
         } else if (stall.millis() >= hangMillis) {
+            long at = System.currentTimeMillis();
             LOG.log(System.Logger.Level.WARNING, "the reducer finished an intent after " + stall.millis() + " ms [part=" + stall.part() + ']');
+            Logged hang = hangLogged;
+            long where = hang != null && hang.since() == stall.since() ? hang.atMillis() : at;
             dispatch(new Intent.Notify(Notice.Level.WARN, "comando stopped updating for " + stall.millis()
-                    + " ms; the log has where (Tools ▸ Help ▸ Show the log)", false));
+                    + " ms; click to see where in the log", false, Notice.log(where)));
         } else {
             LOG.log(System.Logger.Level.INFO, "the reducer was busy for " + stall.millis() + " ms [part=" + stall.part() + ']');
         }

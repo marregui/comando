@@ -30,6 +30,7 @@ import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -453,6 +454,66 @@ class WorkspaceTest {
             w[0].focused().rendered().fireHyperlinkUpdate(link(w[0].focused(), "setup.md#2-install"));
         });
         assertThat(top(setupPanel)).as("its open panel scrolled to the heading").isEqualTo(install);
+    }
+
+    @Test
+    void aLogOpenedForAnEntryScrollsToItsLineAndAnOpenOneWaitsForTheEntryToBeWritten() throws Exception {
+        Path file = Path.of("/home/.comando/logs/comando-0.log");
+        long base = Instant.parse("2026-10-20T10:00:00Z").toEpochMilli();
+        StringBuilder log = new StringBuilder();
+        for (int i = 0; i < 300; i++) {
+            log.append(Instant.ofEpochMilli(base + i * 1_000L)).append(" INFO StateLoop line ").append(i).append('\n');
+            if (i == 120) {
+                log.append("\tat dev.marregui.comando.Hang.here(Hang.java:7)\n");
+            }
+        }
+        long hang = base + 120_000 - 3; // read just before the entry was written
+        Documents texts = new Documents(Map.of(P, file), Map.of(P, log.toString()));
+        Workspace[] w = new Workspace[1];
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(intent -> {
+            }, texts, new SchemaRegistry());
+            w[0].entryWhenOpen(file, hang);
+            w[0].render(AppState.initial(List.of(new PanelState(P, "comando-0.log", "", "", true)), List.of(), List.of()));
+            layOut(w[0].component(), 900, 500);
+        });
+        EditorPanel panel = w[0].focused();
+        int entry = log.indexOf(Instant.ofEpochMilli(base + 120_000L) + " INFO");
+        assertThat(caret(panel)).as("at the entry's line, not the log's end").isEqualTo(entry);
+        assertThat(lineShown(panel, entry)).as("in the upper part of the view").isBetween(0, 250);
+
+        // open, following its end: an entry not written yet is shown once the file is read again with it
+        long later = base + 400_000;
+        SwingUtilities.invokeAndWait(() -> {
+            panel.editor().area().setCaretPosition(panel.editor().area().getDocument().getLength());
+            w[0].entryWhenOpen(file, later);
+        });
+        assertThat(caret(panel)).as("still at the end").isEqualTo(log.length());
+        String grown = log.toString() + Instant.ofEpochMilli(later + 2) + " WARNING ComandoUi the EDT has not answered\n"
+                + Instant.ofEpochMilli(later + 900) + " INFO StateLoop after\n";
+        SwingUtilities.invokeAndWait(() -> panel.reload(grown));
+        assertThat(caret(panel)).as("at the new entry, which starts where the old text ended; not following to the end")
+                .isEqualTo(log.length()).isLessThan(grown.length());
+    }
+
+    private static int caret(EditorPanel p) throws Exception {
+        int[] at = new int[1];
+        SwingUtilities.invokeAndWait(() -> at[0] = p.editor().area().getCaretPosition());
+        return at[0];
+    }
+
+    /** How far below the top of the view the line at {@code offset} is drawn. */
+    private static int lineShown(EditorPanel p, int offset) throws Exception {
+        int[] y = new int[1];
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                JViewport port = (JViewport) p.editor().area().getParent();
+                y[0] = (int) p.editor().area().modelToView2D(offset).getY() - port.getViewPosition().y;
+            } catch (BadLocationException e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        return y[0];
     }
 
     private static HyperlinkEvent link(EditorPanel p, String href) {

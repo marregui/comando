@@ -236,7 +236,11 @@ class ChangeEditorTest {
         run(e, x -> x.diff().right().insert("x", 0));
         run(e, ChangeEditor::save);
         assertThat(str(e, ChangeEditor::status)).isEqualTo("✗ not saved");
-        assertThat(sent).containsExactly(new Intent.Notify(Notice.Level.ERROR, "Cannot save A.java: disk full", false));
+        assertThat(sent).singleElement().isInstanceOfSatisfying(Intent.Notify.class, n -> {
+            assertThat(n.level()).isEqualTo(Notice.Level.ERROR);
+            assertThat(n.text()).isEqualTo("Cannot save A.java: disk full");
+            assertThat(n.subject()).as("its click opens the log at the entry").startsWith("log:");
+        });
         assertThat(is(e, ChangeEditor::edited)).as("tried again at the next second").isTrue();
         failing.set(null);
         await().atMost(Duration.ofSeconds(3)).until(() -> str(e, ChangeEditor::status).equals("✓ saved"));

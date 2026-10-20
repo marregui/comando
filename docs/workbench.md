@@ -299,8 +299,10 @@ edited and saved like any other; a `.log` stays read-only.
   a repository (a folder git ignores as a whole shows all it holds); a link to a folder is listed, not followed.
 - **Bounds.** 12 levels; at most 80 000 names listed and 20 000 entries kept per folder tree; past a bound the folder ends
   with `…`. An unreadable subfolder says why and the rest stands.
-- **Clicks.** A click selects and opens nothing; a double click opens a folder, or a file in a panel (Enter opens a
-  file). A text file of at most 2 MB opens in a panel bound to it; a larger one (to 4 MB) or a binary one shows in the
+- **Clicks.** A click on a folder opens or closes it; on a file it selects. A double click opens a file in a panel (Enter
+  opens a file); on a folder's row (a folder of `~/.claude` or a repository) it shows the row's changes instead and
+  leaves the row open or closed as it was; on a subfolder it does nothing more than its first click
+  ([record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)). A text file of at most 2 MB opens in a panel bound to it; a larger one (to 4 MB) or a binary one shows in the
   side pane. Opening a folder opens no file; the first time, its newest date-named folder opens too.
 - **Menus.** A file's: Open in a panel, Edit in a panel (its text rather than rendered), and Compare with HEAD when it
   changed. A folder row's: its index file. A folder row's and a subfolder's: Show changes in it (off, as No changes in
@@ -317,12 +319,20 @@ edited and saved like any other; a `.log` stays read-only.
   is dropped if the folder was edited since; reads are ticketed so an older one never overwrites a newer one. The tree
   keeps what the user opened and selected.
 - **Git.** In a git repository a file that differs from `HEAD` takes git's colour for how (changed blue, added green,
-  untracked red), and so does a folder that holds one. A repository's top folder (a folder row or a subfolder) has the
+  untracked gold, in conflict red), and a folder that holds one is blue. A new (untracked) file and every folder on the
+  way down to it carry a gold dot after the name, so the closed folders to open are marked from the folder's row down.
+  Once the new file is opened (in a panel or the side pane, from any place) it reads as any other file, without gold
+  or dot, and counts for its folders no more; comando keeps the opened files in `opened-files`
+  ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)). A repository's top folder (a folder row or a subfolder) has the
   git icon (under Repositories, where every row is one, a plain folder), and a rising arrow after its name while the
   repository has changes; hovering it says its branch (or a detached `HEAD`) and what it holds uncommitted, by kind
-  ("On main · 3 uncommitted: 2 modified, 1 untracked"); a double click on it opens the Changes view
-  of that repository alone, or a balloon says there is nothing to see, and opens or closes
-  nothing. The open folders' repositories are read with
+  ("On main · 3 uncommitted: 2 modified, 1 untracked"). A folder's row inside a repository (KB, Memory, any folder
+  of `~/.claude`) has the same arrow while what it holds differs from `HEAD`, and says so for what it holds ("On master
+  · 2 uncommitted here: 1 modified, 1 untracked"); a row holding both a change and a new file not opened yet shows the
+  arrow, then the dot. A double click on a row opens the Changes view of what it holds: a repository's row all of the
+  repository, a folder's row its folder only (KB's shows `KB/`, not the whole of `~/.claude`); with nothing to show,
+  or no repository holding the folder, a balloon says so ([record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)).
+  The open folders' repositories are read with
   them every 5 s, the others every 30 s ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)).
 - **Filter.** A field under the tree finds entries by name across every folder, reading never-read folders once; a
   second tree shows the matches with the folders leading to them; Esc returns to the tree as left. The palette's Files
@@ -397,7 +407,7 @@ inside that folder alone ([record 71](adr/0071-repositories-in-the-files-tab.md)
 | `comando.lock` | held while comando runs; a second start on the same root refuses |
 | `run/` | MCP configurations of running sessions (`0600`) |
 | `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision |
-| `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Actions ▸ Show the log opens it read-only |
+| `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Actions ▸ Show the log opens it read-only, a click on a notice that names an entry opens it at that entry |
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |
@@ -439,7 +449,7 @@ in Git.
 | close | the text is written; a panel of comando's own stays in `panels.json` as closed; a document is let go |
 | remove | the panel's own file is deleted; a document's file never is |
 | a write that fails | the text waits in `panels.json` and is retried every 5 s and on every save |
-| ⌘O, or a double click in the Files tab | opens the file in a panel titled after it; a file of `panels/` bound by name, any other by absolute path; a file already open brings its panel forward |
+| ⌘O, or a double click in the Files tab | opens the file in a panel titled after it; a file of `panels/` bound by name and titled without `.md`, any other bound by absolute path and titled with its extension (`reviewer.md`), so it never takes a session's or a panel's name; when that title is taken, the folder follows it (`README.md · docs`), then a number; a file already open brings its panel forward ([record 77](adr/0077-a-files-panel-keeps-its-extension.md)) |
 | edited outside comando | checked once a second; reloads into its panel when the panel has no unsaved edits (the caret stays, ⌘Z restores) ([record 27](adr/0027-panels-reload-files-changed-outside.md)); otherwise the next save moves the outside version aside as `<name> (outside comando <date time>).md` |
 | deleted outside comando | the panel is removed, unless it has unsaved edits, which its save writes back ([record 34](adr/0034-a-deleted-document-closes-its-panel.md)) |
 | a file of `panels/` no panel names, at start | becomes a closed panel, with a notice |

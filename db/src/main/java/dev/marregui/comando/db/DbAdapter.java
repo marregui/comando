@@ -36,6 +36,8 @@ import java.util.function.Predicate;
  */
 public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
 
+    private static final System.Logger LOG = System.getLogger(DbAdapter.class.getName());
+
     private final IntentSink sink;
     private final ResultRegistry results;
     private final SchemaRegistry schemas;
@@ -231,8 +233,8 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
                         return;
                     }
                     if (e != null) {
-                        sink.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot read the schema of " + spec.name() + ": "
-                                + rootMessage(e), false));
+                        sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot read the schema of " + spec.name() + ": "
+                                + rootMessage(e), e));
                         return;
                     }
                     // checked and kept as one step against a close or forget: an overtaken load keeps nothing

@@ -1,12 +1,16 @@
 package dev.marregui.comando.ui.kit.tree;
 
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.JLabel;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreePath;
+import java.awt.Component;
+import java.awt.Container;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -64,6 +68,34 @@ class TreeViewTest {
         });
         assertThat(opened).as("a folder is not activated: the tree opens it").containsExactly("notes.md");
         assertThat(tree.getToggleClickCount()).as("a folder opens on a double click").isEqualTo(2);
+    }
+
+    @Test
+    void aRowIsPlainLabelsNeverHtmlAndTheTreeNamesANodeByItsLabel() throws Exception {
+        TreeView view = new TreeView();
+        JTree tree = view.tree();
+        SwingUtilities.invokeAndWait(() -> view.setRoot(dir("root", new ViewSpec.TreeNode("notes.md", "3 kB", List.of()), leaf("✗ unreadable"), leaf("plain")), 1));
+        SwingUtilities.invokeAndWait(() -> {
+            Component withDetail = tree.getCellRenderer().getTreeCellRendererComponent(tree, node(tree, 1), false, false, true, 1, false);
+            List<JLabel> labels = new ArrayList<>();
+            for (Component c : ((Container) withDetail).getComponents()) {
+                labels.add((JLabel) c);
+            }
+            assertThat(labels).extracting(JLabel::getText).as("the name, then the detail in a label of its own").containsExactly("notes.md", "3 kB");
+            assertThat(labels.get(1).getForeground()).isEqualTo(Theme.MUTED);
+            JLabel failed = (JLabel) tree.getCellRenderer().getTreeCellRendererComponent(tree, node(tree, 2), true, false, true, 2, false);
+            assertThat(failed.getText()).isEqualTo("✗ unreadable");
+            assertThat(failed.getForeground()).as("an error reads red, selected or not").isEqualTo(Theme.DANGER);
+            JLabel plain = (JLabel) tree.getCellRenderer().getTreeCellRendererComponent(tree, node(tree, 3), false, false, true, 3, false);
+            assertThat(List.of(labels.get(0).getText(), labels.get(1).getText(), failed.getText(), plain.getText()))
+                    .as("no label parses HTML at every paint").noneMatch(text -> text.startsWith("<html>"));
+            assertThat(tree.convertValueToText(node(tree, 0), false, true, false, 0, false))
+                    .as("a node's name, not its record's text with the whole subtree").isEqualTo("root");
+        });
+    }
+
+    private static DefaultMutableTreeNode node(JTree tree, int row) {
+        return (DefaultMutableTreeNode) tree.getPathForRow(row).getLastPathComponent();
     }
 
     /** A left click of {@code count} on row {@code row}; the press before it needs a display, which tests do without. */

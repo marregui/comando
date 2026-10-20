@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.text.LogLines;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,6 +11,7 @@ import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Optional;
 
 /**
  * The files behind Tools ▸ Help, so each opens in a panel as any document does, and can be opened as a file too: the
@@ -30,6 +32,30 @@ final class HelpFiles {
     /** The log comando writes now; older ones are numbered after it. */
     static Path log(Path logDir) {
         return logDir.resolve("comando-0.log");
+    }
+
+    /** How many logs comando keeps, the one it writes and the older ones: the count its log handler rotates. */
+    static final int LOGS = 10;
+
+    /**
+     * The log that holds the entry written at {@code atMillis} (see {@link LogLines#offsetOf}), the newest first; empty
+     * when none holds it any more. Reads the files: called off the EDT.
+     */
+    static Optional<Path> logHolding(Path logDir, long atMillis) {
+        for (int g = 0; g < LOGS; g++) {
+            Path file = logDir.resolve("comando-" + g + ".log");
+            if (!Files.isRegularFile(file)) {
+                break;
+            }
+            try {
+                if (LogLines.offsetOf(Files.readString(file), atMillis) >= 0) {
+                    return Optional.of(file);
+                }
+            } catch (IOException e) {
+                // rotated away while read, or not text: the older ones may still hold it
+            }
+        }
+        return Optional.empty();
     }
 
     /**

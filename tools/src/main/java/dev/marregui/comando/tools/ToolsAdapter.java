@@ -573,7 +573,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             try {
                 git(Path.of(root), args);
             } catch (IOException e) {
-                sink.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot unstage " + String.join(", ", paths) + ": " + e.getMessage(), false));
+                sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot unstage " + String.join(", ", paths) + ": " + e.getMessage(), e));
             }
         });
     }
@@ -587,8 +587,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                 try {
                     work.run();
                 } catch (RuntimeException e) {
-                    LOG.log(System.Logger.Level.WARNING, "changing a repository failed", e);
-                    sink.dispatch(new Intent.Notify(Notice.Level.ERROR, "Git failed: " + e.getMessage(), false));
+                    sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Git failed: " + e.getMessage(), e));
                 } finally {
                     readRepos(true, true);
                 }

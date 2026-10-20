@@ -149,7 +149,9 @@ it throw: an intent naming a missing panel, connection or session changes nothin
 - **Notices.** Every notice joins the history. A new notice replaces the standing one, except that a standing ERROR
   stays until dismissed, replaced by another error, or settled by its own subject. An event that settles a subject
   clears its notice (a run completing, a connection opening, a turn succeeding, an approval answered). A new ERROR also
-  asks for a desktop notification while the window is behind.
+  asks for a desktop notification while the window is behind. The subject is also where a click on the notice goes:
+  `log:<millis>` names an entry of the log, found by its time ([record 79](adr/0079-a-notice-takes-you-to-what-it-is-about.md));
+  `Intent.Notify.logged` writes a failure to the log and names that entry.
 - **Repositories.** After any intent, folders that changed or a Changes view that appeared or went add `WatchRepos`
   with every folder and whether the view shows; `App` sends the first at start.
 - **The folders window.** `SaveFolders` replaces the folders and saves them; its notice says when it replaced a change
@@ -239,6 +241,7 @@ by delta), `FakeResult`.
 | `folder-poll` | platform, daemon | every 5 s reads the watched git repositories, then the open folders; sends each only when it changed |
 | `repo-read`, `change-read`, `repo-write` | virtual | the repositories read when the Changes view opens or closes; a changed file's two versions, one at a time; rolling back, removing and unstaging files with git and the Trash, one at a time, then the repositories read again |
 | `diff-compute` | virtual | the comparison window's line and word match, stopped at 2 s |
+| `opened-files` | virtual | writes `opened-files` after a file is opened for the first time, one write at a time |
 | `store`, `store-secrets` | platform | atomic writes of the store files; panel text 800 ms after the first unsaved change; a check of open panels' files and `folders.json` every second; keychain calls apart, so an unlock prompt never holds back panel text |
 | `mermaid` | platform, daemon | `mmdc`, one diagram at a time, 30 s bound |
 | `local-images` | platform, daemon | reads the pictures a Markdown view names and draws SVGs into `cache/images/`, one at a time |
@@ -271,8 +274,8 @@ Bounded waits:
 | Desktop notification (`osascript`) | 10 s | killed, not shown |
 | Keychain calls | 10 s | killed; the connection loads without its password, the item is kept |
 | Closing the window at quit | 5 s | quit anyway |
-| The EDT | 200 ms | a stall, one INFO line when it ends; past 1 s (2 s in the JDK's drawing) a hang, logged with the EDT's stack |
-| One intent in the reducer | 200 ms | a stall, one INFO line when it ends naming its slowest part; past 1 s a hang, logged with the reducer's stack while it holds, a WARNING and the user's notice when it ends |
+| The EDT | 200 ms | a stall, one INFO line when it ends; past 1 s (2 s in the JDK's drawing) a hang, logged with the EDT's stack; a stall of 1 s or more a notice whose click opens the log at the stack, or at the stall's line |
+| One intent in the reducer | 200 ms | a stall, one INFO line when it ends naming its slowest part; past 1 s a hang, logged with the reducer's stack while it holds, a WARNING and the user's notice when it ends, whose click opens the log at the stack |
 
 ## 7. Ownership and exit
 

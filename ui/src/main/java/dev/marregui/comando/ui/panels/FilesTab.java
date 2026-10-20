@@ -11,15 +11,18 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.icon.RowIcon;
 import dev.marregui.comando.ui.kit.overlay.Balloon;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.tree.TreeView;
+import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 
 import javax.swing.BorderFactory;
+import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
@@ -84,6 +87,9 @@ final class FilesTab {
     /** A git repository's top folder outside Repositories: its icon; any repository's mark after its name while it has changes. */
     static final String GIT_ICON = "folder-git";
     static final String CHANGES_ICON = "changes";
+    /** After the name of a new (untracked) file and of each folder on the way down to one. */
+    static final String NEW_ICON = "new-file";
+    static final String NEW_TIP = "Open to reach the new files inside, which git does not track yet";
     /** The node holding the folders configured as repositories, and its icon. */
     static final String REPOSITORIES = "Repositories";
     static final String REPOSITORIES_ICON = "repositories";
@@ -121,6 +127,15 @@ final class FilesTab {
 
     /** The git repositories of the open folders, as last read: their files' and folders' colours. */
     private final RepoChanges changes = new RepoChanges();
+    /** The files the user opened: a new file opened once is marked no more. */
+    private OpenedFiles opened = OpenedFiles.inMemory();
+    private Runnable stopHearingOpened = () -> { };
+    /** The folders holding a marked file: a change, or a new file not opened yet. Made when either changes. */
+    private Set<Path> marked = Set.of();
+    /** The folders on the way down to a new file not opened yet. */
+    private Set<Path> towardsNew = Set.of();
+    /** The arrow and the dot after one name, made once. */
+    private Icon changedAndNew;
 
     private List<FolderRoot> folders = List.of();
     /** The folders' index file names, lower case, as each cell's icon asks: made when the folders change. */
@@ -158,17 +173,18 @@ final class FilesTab {
             t.colors(this::colorOf);
             // under Repositories every row is one: the plain folder says enough
             t.nodeIcons(n -> repoAt(n).isPresent() && !isRepositories(n.getParent()) ? Icons.get(GIT_ICON) : null);
-            t.tips(n -> repoAt(n).map(FilesTab::repoTip).orElse(null));
-            t.trailing(n -> repoAt(n).filter(r -> !r.changes().isEmpty()).isPresent() ? Icons.get(CHANGES_ICON) : null);
-            t.noToggle(n -> repoAt(n).isPresent());
+            t.tips(n -> repoAt(n).map(FilesTab::repoTip).or(() -> rowTip(n)).orElse(holdsNew(n) ? NEW_TIP : null));
+            t.trailing(this::marks);
+            // one click opens or closes a folder; a double click on a folder's row shows its changes instead
+            t.toggleOnClick(true);
             t.tree().addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
                     if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
                         TreePath p = t.tree().getPathForLocation(e.getX(), e.getY());
-                        if (p != null) {
-                            DefaultMutableTreeNode n = (DefaultMutableTreeNode) p.getLastPathComponent();
-                            repoAt(n).ifPresent(r -> openChanges(t, p, r, title(p)));
+                        if (p != null && isRow(p.getPath())) {
+                            t.undoClickToggle(p);
+                            openChanges(t, p);
                         }
                     }
                 }
@@ -337,8 +353,49 @@ final class FilesTab {
         List<RepoStatus> before = changes.repos();
         changes.set(repos);
         if (changes.repos() != before) {
-            tree.tree().repaint();
-            found.tree().repaint();
+            remark();
+        }
+    }
+
+    /** The files the user opens from now on, and those opened before: a new file among them is marked no more. */
+    void watchOpened(OpenedFiles files) {
+        stopHearingOpened.run();
+        opened = files;
+        stopHearingOpened = files.listen(this::remark);
+        remark();
+    }
+
+    /** Works out which folders hold a marked file, then repaints. */
+    private void remark() {
+        Set<Path> holding = new HashSet<>();
+        Set<Path> towards = new HashSet<>();
+        for (RepoStatus r : changes.repos()) {
+            Path root = Path.of(r.root()).toAbsolutePath().normalize();
+            for (RepoStatus.FileChange c : r.changes()) {
+                Path file = root.resolve(c.path()).normalize();
+                boolean fresh = c.kind() == RepoStatus.Kind.UNTRACKED;
+                if (fresh && opened.contains(file)) {
+                    continue;
+                }
+                addFolders(file, root, holding);
+                if (fresh) {
+                    addFolders(file, root, towards);
+                }
+            }
+        }
+        marked = holding;
+        towardsNew = towards;
+        // a mark that appears or goes changes a row's width, which a repaint alone would not take
+        tree.rowsChanged();
+        found.rowsChanged();
+    }
+
+    /** Adds the folders from {@code file}'s up to {@code root} to {@code into}, stopping at one already there. */
+    private static void addFolders(Path file, Path root, Set<Path> into) {
+        for (Path p = file.getParent(); p != null && p.startsWith(root); p = p.getParent()) {
+            if (!into.add(p)) {
+                return;
+            }
         }
     }
 
@@ -353,16 +410,31 @@ final class FilesTab {
 
     /**
      * The colour of a node's name: a file's for how it differs from {@code HEAD}, a folder's (or a folder row's) when
-     * it holds a changed or untracked file; none for anything else.
+     * it holds a changed file or a new one; none for anything else, a new file the user opened included.
      */
     Color colorOf(DefaultMutableTreeNode n) {
         if (!(n.getUserObject() instanceof ViewSpec.TreeNode node) || changes.repos().isEmpty()) {
             return null;
         }
         if (node.link().startsWith(SourceLinks.SCHEME)) {
-            return changes.of(Path.of(SourceLinks.path(node.link()))).map(RepoChanges::color).orElse(null);
+            Path file = Path.of(SourceLinks.path(node.link()));
+            return changes.of(file).filter(k -> k != RepoStatus.Kind.UNTRACKED || !opened.contains(file)).map(RepoChanges::color).orElse(null);
         }
-        return folderPath(n).filter(changes::holdsChanges).map(p -> Theme.VCS_MODIFIED).orElse(null);
+        return folderPath(n).filter(p -> marked.contains(p.toAbsolutePath().normalize())).map(p -> Theme.VCS_MODIFIED).orElse(null);
+    }
+
+    /** Whether {@code n} is a file git does not track yet and the user has not opened. */
+    boolean isNew(DefaultMutableTreeNode n) {
+        if (!(n.getUserObject() instanceof ViewSpec.TreeNode node) || !node.link().startsWith(SourceLinks.SCHEME)) {
+            return false;
+        }
+        Path file = Path.of(SourceLinks.path(node.link()));
+        return changes.of(file).filter(k -> k == RepoStatus.Kind.UNTRACKED).isPresent() && !opened.contains(file);
+    }
+
+    /** Whether {@code n} is a folder (a folder row or a subfolder) on the way down to a new file not opened yet. */
+    boolean holdsNew(DefaultMutableTreeNode n) {
+        return folderPath(n).filter(p -> towardsNew.contains(p.toAbsolutePath().normalize())).isPresent();
     }
 
     /** The repository whose top folder node {@code n} is, a folder row or a subfolder; empty for any other node. */
@@ -399,17 +471,62 @@ final class FilesTab {
     }
 
     /**
-     * A repository's row double-clicked: the Changes view of that repository, its row called {@code title}, when it has
-     * changes, else a word beside the row that there are none.
+     * A folder's row double-clicked: the Changes view of what the repository holding it has changed inside it, all of it
+     * for a repository's own row, when there is any; else a word beside the row that there is none.
      */
-    private void openChanges(TreeView t, TreePath row, RepoStatus repo, String title) {
-        if (!repo.error().isEmpty()) {
-            tell.tell(t.tree(), below(t, row), title + " cannot be read: " + repo.error());
-        } else if (repo.changes().isEmpty()) {
-            tell.tell(t.tree(), below(t, row), "No changes to see in " + title + ": its working tree matches HEAD");
-        } else {
-            showChanges(repo, "", title);
+    private void openChanges(TreeView t, TreePath row) {
+        String title = title(row);
+        Optional<Path> folder = folderPath((DefaultMutableTreeNode) row.getLastPathComponent()).map(p -> p.toAbsolutePath().normalize());
+        Optional<RepoStatus> repo = folder.flatMap(changes::repoOf);
+        if (repo.isEmpty()) {
+            tell.tell(t.tree(), below(t, row), "No changes to see in " + title + ": no git repository holds it");
+            return;
         }
+        RepoStatus r = repo.get();
+        String inside = inside(r, folder.get());
+        if (!r.error().isEmpty()) {
+            tell.tell(t.tree(), below(t, row), title + " cannot be read: " + r.error());
+        } else if (RepoChanges.changesIn(r, inside).isEmpty()) {
+            tell.tell(t.tree(), below(t, row), "No changes to see in " + title + (inside.isEmpty() ? ": its working tree matches HEAD" : ": it matches HEAD"));
+        } else {
+            showChanges(r, inside, title);
+        }
+    }
+
+    /** {@code folder}'s path inside {@code repo}, relative to its top folder; empty for the top folder itself. */
+    private static String inside(RepoStatus repo, Path folder) {
+        return Path.of(repo.root()).toAbsolutePath().normalize().relativize(folder).toString().replace('\\', '/');
+    }
+
+    /** Whether {@code n} is a folder's top-level row: a folder of {@code ~/.claude} or a repository. */
+    private static boolean isRow(DefaultMutableTreeNode n) {
+        return isRow(n.getPath());
+    }
+
+    /**
+     * The marks after a node's name: a row's rising arrow while what it holds differs from {@code HEAD} (a repository's
+     * top folder's anywhere), and the dot on the way down to a new file not opened yet; both on a row that has both.
+     */
+    private Icon marks(DefaultMutableTreeNode n) {
+        boolean changed = repoAt(n).filter(r -> !r.changes().isEmpty()).isPresent()
+                || isRow(n) && folderPath(n).filter(changes::holdsChanges).isPresent();
+        boolean fresh = isNew(n) || holdsNew(n);
+        if (changed && fresh) {
+            if (changedAndNew == null) {
+                changedAndNew = new RowIcon(Icons.get(CHANGES_ICON), Icons.get(NEW_ICON));
+            }
+            return changedAndNew;
+        }
+        return changed ? Icons.get(CHANGES_ICON) : fresh ? Icons.get(NEW_ICON) : null;
+    }
+
+    /** What a folder's row inside a repository says on hover: the branch, and what it holds that the last commit does not. */
+    private Optional<String> rowTip(DefaultMutableTreeNode n) {
+        if (!isRow(n)) {
+            return Optional.empty();
+        }
+        Optional<Path> folder = folderPath(n).map(p -> p.toAbsolutePath().normalize());
+        return folder.flatMap(changes::repoOf).map(r -> changesTip(r, RepoChanges.changesIn(r, inside(r, folder.get())), " here"));
     }
 
     /**
@@ -458,19 +575,24 @@ final class FilesTab {
 
     /** What a repository's top folder says on hover: its branch, and what it holds that its last commit does not. */
     static String repoTip(RepoStatus r) {
+        return changesTip(r, r.changes(), "");
+    }
+
+    /** {@code r}'s branch and its {@code changes}, counted by kind; {@code where} follows the count, " here" for a folder. */
+    private static String changesTip(RepoStatus r, List<RepoStatus.FileChange> changes, String where) {
         if (!r.error().isEmpty()) {
             return Plain.text(Clip.keepStart("Git: cannot be read: " + r.error(), 80));
         }
         String on = r.branch().isEmpty() || r.branch().equals("(detached)") ? "Detached HEAD" : "On " + r.branch();
-        if (r.changes().isEmpty()) {
-            return Plain.text(on + " · nothing to commit");
+        if (changes.isEmpty()) {
+            return Plain.text(on + " · nothing to commit" + where);
         }
         Map<RepoStatus.Kind, Integer> kinds = new EnumMap<>(RepoStatus.Kind.class);
-        r.changes().forEach(c -> kinds.merge(c.kind(), 1, Integer::sum));
+        changes.forEach(c -> kinds.merge(c.kind(), 1, Integer::sum));
         List<String> parts = new ArrayList<>();
         kinds.forEach((k, n) -> parts.add(n + " " + RepoChanges.describe(k)));
-        int n = r.changes().size();
-        return Plain.text(Clip.keepStart(on + " · " + n + (r.truncated() ? "+" : "") + " uncommitted: " + String.join(", ", parts), 80));
+        int n = changes.size();
+        return Plain.text(Clip.keepStart(on + " · " + n + (r.truncated() ? "+" : "") + " uncommitted" + where + ": " + String.join(", ", parts), 80));
     }
 
     private static Point below(TreeView t, TreePath row) {
@@ -692,7 +814,7 @@ final class FilesTab {
             return;
         }
         String title = title(at);
-        String inside = Path.of(repo.get().root()).toAbsolutePath().normalize().relativize(folder.get()).toString().replace('\\', '/');
+        String inside = inside(repo.get(), folder.get());
         JMenuItem item = changes.holdsChanges(folder.get())
                 ? item("Show changes in " + title, "diff", () -> showChanges(repo.get(), inside, title))
                 : item("No changes in " + title, "diff", () -> {

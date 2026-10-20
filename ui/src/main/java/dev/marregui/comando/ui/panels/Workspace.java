@@ -107,6 +107,8 @@ public final class Workspace {
     private final Set<Path> toEdit = new HashSet<>();
     /** Files a link opens at one of their headings, with the heading, until their panel shows. EDT only. */
     private final Map<Path, String> toHeading = new HashMap<>();
+    /** Log files whose panel shows an entry, by its time, at the render that shows the panel. */
+    private final Map<Path, Long> toEntry = new HashMap<>();
     /** The state last rendered, for a deleted file of a closed panel, which has no tab. EDT only. */
     private AppState shown;
 
@@ -422,6 +424,21 @@ public final class Workspace {
         toHeading.put(file, heading);
     }
 
+    /**
+     * The panel that holds the log {@code file} shows its entry written at {@code atMillis} (see
+     * {@link EditorPanel#showLogEntry}): an open one now, one that opens or reopens at the render that shows it.
+     * Called on the EDT.
+     */
+    public void entryWhenOpen(Path file, long atMillis) {
+        for (Map.Entry<PanelId, EditorPanel> e : panels.entrySet()) {
+            if (texts.file(e.getKey()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
+                e.getValue().showLogEntry(atMillis);
+                return;
+            }
+        }
+        toEntry.put(file, atMillis);
+    }
+
     private String takeHeading(Path file) {
         for (Iterator<Map.Entry<Path, String>> it = toHeading.entrySet().iterator(); it.hasNext(); ) {
             Map.Entry<Path, String> e = it.next();
@@ -553,6 +570,15 @@ public final class Workspace {
                 String heading = file == null ? null : takeHeading(file);
                 if (heading != null) {
                     view.showHeading(heading);
+                }
+                if (file != null && !toEntry.isEmpty()) {
+                    for (Iterator<Map.Entry<Path, Long>> it = toEntry.entrySet().iterator(); it.hasNext(); ) {
+                        Map.Entry<Path, Long> e = it.next();
+                        if (PanelTexts.samePath(e.getKey(), file)) {
+                            it.remove();
+                            view.showLogEntry(e.getValue());
+                        }
+                    }
                 }
                 view.render(p, s);
             }

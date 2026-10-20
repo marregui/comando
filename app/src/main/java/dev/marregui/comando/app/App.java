@@ -170,9 +170,8 @@ public final class App implements AutoCloseable {
         try {
             changed = kit.refresh();
         } catch (IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot write the Claude Code kit [dir=" + kit.dir() + "]: " + e.getMessage(), e);
-            loop.dispatch(new Intent.Notify(Notice.Level.WARN, "comando could not write its Claude Code kit into " + kit.dir() + ": "
-                    + e.getMessage() + "; Gradle runs use ./gradlew", false));
+            loop.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "comando could not write its Claude Code kit into " + kit.dir()
+                    + ": " + e.getMessage() + "; Gradle runs use ./gradlew", e));
             return;
         }
         if (!offerKit) {

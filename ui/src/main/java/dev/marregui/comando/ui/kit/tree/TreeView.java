@@ -1,7 +1,6 @@
 package dev.marregui.comando.ui.kit.tree;
 
 import dev.marregui.comando.core.view.ViewSpec;
-import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -16,6 +15,8 @@ import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
+import javax.swing.event.TreeExpansionEvent;
+import javax.swing.event.TreeExpansionListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
@@ -33,7 +34,6 @@ import java.util.List;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
-import java.util.function.Predicate;
 
 /**
  * A {@link ViewSpec.TreeNode} tree: details muted after the label; a double click or Enter activates a
@@ -42,26 +42,43 @@ import java.util.function.Predicate;
 public final class TreeView {
 
     private final JTree tree = new JTree(new DefaultTreeModel(new DefaultMutableTreeNode())) {
-        /** Whether the node under the mouse event being handled keeps its double click for itself. */
-        private boolean held;
+        /** The click count of the mouse event being handled; 0 outside one. */
+        private int clicks;
 
         @Override
         protected void processMouseEvent(MouseEvent e) {
-            TreePath p = getPathForLocation(e.getX(), e.getY());
-            held = p != null && noToggle.test((DefaultMutableTreeNode) p.getLastPathComponent());
+            clicks = e.getClickCount();
+            firstPress = e.getID() == MouseEvent.MOUSE_PRESSED && clicks == 1;
+            if (firstPress) {
+                toggledByPress = null;
+            }
             try {
                 super.processMouseEvent(e);
             } finally {
-                held = false;
+                clicks = 0;
+                firstPress = false;
             }
         }
 
         @Override
+        public String convertValueToText(Object value, boolean selected, boolean expanded, boolean leaf, int row, boolean focus) {
+            // a node's name, which the look asks for at every row: the record's own text prints the whole subtree
+            return value instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof ViewSpec.TreeNode node
+                    ? node.label() : super.convertValueToText(value, selected, expanded, leaf, row, focus);
+        }
+
+        @Override
         public int getToggleClickCount() {
-            // the look asks while it handles the event: a held node's double click opens and closes nothing
-            return held ? 0 : super.getToggleClickCount();
+            // the look asks while it handles a press: with toggleOnClick only a sequence's first click opens or closes
+            return toggleOnClick ? (clicks == 1 ? 1 : 0) : super.getToggleClickCount();
         }
     };
+    /** Whether one click opens or closes a folder; else a double click does, as the look has it. */
+    private boolean toggleOnClick;
+    /** Whether the first press of a click sequence is being handled. */
+    private boolean firstPress;
+    /** The node that first press opened or closed, so a double click can put it back; null when it toggled none. */
+    private TreePath toggledByPress;
     private final JScrollPane scroll = new JScrollPane(tree);
     private Consumer<ViewSpec.TreeNode> onActivate = n -> { };
     private BiConsumer<ViewSpec.TreeNode, MouseEvent> onMenu = (n, e) -> { };
@@ -69,30 +86,44 @@ public final class TreeView {
     private Function<DefaultMutableTreeNode, Color> colors = n -> null;
     private Function<DefaultMutableTreeNode, Icon> nodeIcons = n -> null;
     private Function<DefaultMutableTreeNode, Icon> trailing = n -> null;
-    private Predicate<DefaultMutableTreeNode> noToggle = n -> false;
     private Function<DefaultMutableTreeNode, String> tips = n -> null;
-    /** A cell with an icon after its name: the look's label with the name, the icon, then the detail, muted. */
-    private final JPanel withTrailing = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
-    private final JLabel trailingIcon = new JLabel();
-    private final JLabel trailingDetail = new JLabel();
+    /** A cell with more than a name: the look's label with the name, the mark after it if any, then the detail, muted. */
+    private final JPanel cell = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
+    private final JLabel mark = new JLabel();
+    private final JLabel detail = new JLabel();
 
     public TreeView() {
-        withTrailing.setOpaque(false);
-        trailingIcon.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
-        trailingDetail.setForeground(Theme.MUTED);
-        trailingDetail.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 0));
+        cell.setOpaque(false);
+        mark.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
+        detail.setForeground(Theme.MUTED);
+        detail.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 0));
         tree.setRootVisible(true);
         tree.setShowsRootHandles(true);
+        tree.addTreeExpansionListener(new TreeExpansionListener() {
+            @Override
+            public void treeExpanded(TreeExpansionEvent e) {
+                pressed(e.getPath());
+            }
+
+            @Override
+            public void treeCollapsed(TreeExpansionEvent e) {
+                pressed(e.getPath());
+            }
+
+            private void pressed(TreePath p) {
+                if (firstPress) {
+                    toggledByPress = p;
+                }
+            }
+        });
         tree.setCellRenderer(new DefaultTreeCellRenderer() {
             @Override
             public Component getTreeCellRendererComponent(JTree t, Object value, boolean sel, boolean expanded, boolean leaf, int row, boolean focus) {
                 JLabel l = (JLabel) super.getTreeCellRendererComponent(t, value, sel, expanded, leaf, row, focus);
                 if (value instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof ViewSpec.TreeNode node) {
-                    String label = node.label().startsWith("✗ ") ? "<span style='color:" + Theme.hex(Theme.DANGER) + "'>" + MarkdownHtml.escape(node.label()) + "</span>"
-                            : MarkdownHtml.escape(node.label());
-                    l.setText(node.detail().isEmpty() && !node.label().startsWith("✗ ") ? Plain.text(node.label())
-                            : "<html>" + label + (node.detail().isEmpty() ? "" : "&nbsp;&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>"
-                            + MarkdownHtml.escape(node.detail()) + "</span>") + "</html>");
+                    // plain text only: a label holding HTML parses it again for every row it renders
+                    boolean failed = node.label().startsWith("✗ ");
+                    l.setText(Plain.text(node.label()));
                     String tip = tips.apply(n);
                     l.setToolTipText(tip != null ? tip : node.link().isEmpty() ? null : "Double-click to open");
                     Icon icon = nodeIcons.apply(n);
@@ -102,25 +133,26 @@ public final class TreeView {
                     if (icon != null) {
                         l.setIcon(icon);
                     }
-                    Color color = sel ? null : colors.apply(n);
+                    Color color = failed ? Theme.DANGER : sel ? null : colors.apply(n);
                     if (color != null) {
                         l.setForeground(color);
                     }
                     Icon after = trailing.apply(n);
-                    if (after != null) {
+                    if (after != null || !node.detail().isEmpty()) {
                         // the mark belongs to the name: the detail, a path that may run past the edge, comes after it
-                        l.setText(Plain.text(node.label()));
-                        trailingIcon.setIcon(after);
-                        trailingDetail.setText(Plain.text(node.detail()));
-                        trailingDetail.setFont(l.getFont());
-                        withTrailing.setToolTipText(l.getToolTipText());
-                        withTrailing.removeAll();
-                        withTrailing.add(l);
-                        withTrailing.add(trailingIcon);
-                        if (!node.detail().isEmpty()) {
-                            withTrailing.add(trailingDetail);
+                        cell.removeAll();
+                        cell.add(l);
+                        if (after != null) {
+                            mark.setIcon(after);
+                            cell.add(mark);
                         }
-                        return withTrailing;
+                        if (!node.detail().isEmpty()) {
+                            detail.setText(Plain.text(node.detail()));
+                            detail.setFont(l.getFont());
+                            cell.add(detail);
+                        }
+                        cell.setToolTipText(l.getToolTipText());
+                        return cell;
                     }
                 }
                 return l;
@@ -244,9 +276,38 @@ public final class TreeView {
         this.tips = tips;
     }
 
-    /** The nodes a double click does not open or close: their double click is the caller's, through its own listener. */
-    public void noToggle(Predicate<DefaultMutableTreeNode> noToggle) {
-        this.noToggle = noToggle;
+    /**
+     * Lays out every shown row again, for a caller whose cells changed width while the tree did not: a mark appeared
+     * after a name. A repaint alone keeps each row's first width and cuts what the wider cell adds.
+     */
+    public void rowsChanged() {
+        DefaultTreeModel model = (DefaultTreeModel) tree.getModel();
+        for (int i = 0; i < tree.getRowCount(); i++) {
+            model.nodeChanged((DefaultMutableTreeNode) tree.getPathForRow(i).getLastPathComponent());
+        }
+    }
+
+    /**
+     * One click opens or closes a folder, and the second click of a double click does neither; off by default, where a
+     * double click opens or closes it.
+     */
+    public void toggleOnClick(boolean on) {
+        toggleOnClick = on;
+    }
+
+    /**
+     * Puts {@code path} back as it was before the double click whose first click opened or closed it, for a caller whose
+     * double click on that node does something else; nothing when that click toggled no node or another.
+     */
+    public void undoClickToggle(TreePath path) {
+        if (path.equals(toggledByPress)) {
+            if (tree.isExpanded(path)) {
+                tree.collapsePath(path);
+            } else {
+                tree.expandPath(path);
+            }
+        }
+        toggledByPress = null;
     }
 
     /** Shows {@code root}, expanded to {@code levels} below it. */

@@ -44,7 +44,11 @@ public final class Theme {
     public static final Color VCS_MODIFIED = new Color(0x6897BB);
     public static final Color VCS_ADDED = new Color(0x629755);
     public static final Color VCS_DELETED = new Color(0x8C8C8C);
-    public static final Color VCS_UNTRACKED = new Color(0xD1675A);
+    /**
+     * A new file: the transcript text's amber hue, more saturated so that it stands out on the sidebar's grey as that
+     * text does on the transcript's near-black.
+     */
+    public static final Color VCS_UNTRACKED = new Color(0xF0BA4C);
     public static final Color VCS_CONFLICTED = new Color(0xE0525C);
     public static final Color CARD = new Color(0x2B2D30);
     public static final Color CARD_BORDER = new Color(0x3C3F41);

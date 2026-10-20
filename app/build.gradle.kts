@@ -100,6 +100,7 @@ val uiTest = tasks.register<Test>("uiTest") {
     filter {
         includeTestsMatching("*UiReplayTest")
         includeTestsMatching("*UiKeysTest")
+        includeTestsMatching("*TreeClicksUiTest")
     }
     // one JVM per class: each class starts from a fresh AWT state, whichever window the desktop put in front last
     forkEvery = 1

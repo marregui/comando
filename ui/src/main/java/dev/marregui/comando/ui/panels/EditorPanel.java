@@ -21,13 +21,16 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.layout.ShrinkingRow;
+import dev.marregui.comando.ui.kit.overlay.Flash;
 import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.text.RenderedMarkdown;
 import dev.marregui.comando.ui.kit.text.LocalLinks;
+import dev.marregui.comando.ui.kit.text.LogLines;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.editor.CommandEditor;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -36,14 +39,19 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
+import javax.swing.text.BadLocationException;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
 import java.awt.FlowLayout;
+import java.awt.Rectangle;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.geom.Rectangle2D;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
@@ -106,6 +114,11 @@ public final class EditorPanel extends JPanel {
     private final JScrollPane renderedScroll = preview.scroll();
     /** A heading the preview scrolls to once it is laid out; null when none waits. EDT only. */
     private String pendingHeading;
+    /** How long a log entry asked for waits for the text to hold it and the panel to be laid out. */
+    static final long ENTRY_WAIT_MILLIS = 5_000;
+    /** The time of the log entry the text scrolls to once it holds it, {@link Long#MIN_VALUE} when none waits. EDT only. */
+    private long pendingEntry = Long.MIN_VALUE;
+    private long pendingEntryUntil;
 
     public EditorPanel(PanelState panel, IntentSink intents, SchemaRegistry schemas) {
         super(new BorderLayout(0, 0));
@@ -178,6 +191,13 @@ public final class EditorPanel extends JPanel {
             @Override
             public void componentResized(ComponentEvent e) {
                 scrollToPendingHeading();
+            }
+        });
+        // a log opened for one of its entries is laid out after it is made
+        editor.component().addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                showPendingEntry();
             }
         });
         center.add(editor.component(), EDIT);
@@ -451,11 +471,53 @@ public final class EditorPanel extends JPanel {
         if (atEnd) {
             followEnd();
         }
+        showPendingEntry();
         if (previewing()) {
             int at = rendered.getCaretPosition();
             rendered.setMarkdown(text, folder());
             rendered.setCaretPosition(Math.min(at, rendered.getDocument().getLength()));
         }
+    }
+
+    /**
+     * Shows the entry of the log written at {@code atMillis} or within {@link LogLines#SLACK_MILLIS} after it: the
+     * caret goes to its line, which scrolls to the upper third of the view and flashes. While the text does not hold it
+     * (the file is read again after the entry is written) or the panel is not laid out, it waits, for
+     * {@link #ENTRY_WAIT_MILLIS}.
+     */
+    public void showLogEntry(long atMillis) {
+        pendingEntry = atMillis;
+        pendingEntryUntil = System.currentTimeMillis() + ENTRY_WAIT_MILLIS;
+        showPendingEntry();
+    }
+
+    private void showPendingEntry() {
+        if (pendingEntry == Long.MIN_VALUE) {
+            return;
+        }
+        if (System.currentTimeMillis() > pendingEntryUntil) {
+            pendingEntry = Long.MIN_VALUE;
+            return;
+        }
+        RSyntaxTextArea area = editor.area();
+        JViewport port = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, area);
+        if (port == null || port.getHeight() <= 0) {
+            return;
+        }
+        int at = LogLines.offsetOf(editor.text(), pendingEntry);
+        if (at < 0) {
+            return;
+        }
+        pendingEntry = Long.MIN_VALUE;
+        area.setCaretPosition(at);
+        try {
+            Rectangle2D line = area.modelToView2D(at);
+            int height = port.getExtentSize().height;
+            area.scrollRectToVisible(new Rectangle(0, Math.max(0, (int) line.getY() - height / 3), 1, height));
+        } catch (BadLocationException e) {
+            return; // the offset was just found in this text
+        }
+        Flash.line(area, at);
     }
 
     /** The failed run whose error position is underlined, so a re-render does not mark it again. */

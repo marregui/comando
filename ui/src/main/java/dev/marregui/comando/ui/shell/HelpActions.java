@@ -84,7 +84,7 @@ final class HelpActions {
                 Path file = HelpFiles.writeTutorial(home);
                 Edt.later(() -> openFile.accept(file));
             } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot show the tutorial: " + e.getMessage(), false));
+                deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot show the tutorial: " + e.getMessage(), e));
             }
         });
     }
@@ -127,7 +127,7 @@ final class HelpActions {
                 Setup.KitOffer offer = deps.setup().kit();
                 Edt.later(() -> askKit(offer, false));
             } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot read the Claude Code kit's state: " + e.getMessage(), false));
+                deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot read the Claude Code kit's state: " + e.getMessage(), e));
             }
         });
     }
@@ -168,7 +168,7 @@ final class HelpActions {
                         ? "The Claude Code kit was already in place"
                         : "Claude Code kit: " + String.join("; ", said) + ". New Claude sessions load it.", false));
             } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "The Claude Code kit install stopped: " + e.getMessage(), false));
+                deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "The Claude Code kit install stopped: " + e.getMessage(), e));
             }
         });
     }
@@ -200,7 +200,7 @@ final class HelpActions {
             try {
                 Desktop.getDesktop().open(dir.toFile());
             } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open " + dir + ": " + e.getMessage(), false));
+                deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot open " + dir + ": " + e.getMessage(), e));
             }
         });
     }

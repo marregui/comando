@@ -82,3 +82,7 @@ that names the one it replaces; the old record stays as written, and this index'
 | [73](0073-the-claude-folders-window-explains-and-creates-the-index.md) | The ~/.claude folders window explains its fields and creates the index | Miguel, Claude | proposed |
 | [74](0074-the-sidebars-lists-have-no-bar-of-buttons.md) | The sidebar's lists have no bar of buttons | Miguel, Claude | proposed |
 | [75](0075-the-menu-bar-is-edit-and-actions-flat.md) | The menu bar is Edit and Actions, flat | Miguel, Claude | proposed |
+| [76](0076-new-files-are-gold-and-marked-from-the-top.md) | New files are gold and marked from the top | Miguel, Claude | proposed |
+| [77](0077-a-files-panel-keeps-its-extension.md) | A file's panel keeps its extension | Miguel, Claude | proposed |
+| [78](0078-a-rows-marks-and-double-click-show-its-changes.md) | A row's marks and double click show its changes; one click opens a folder | Miguel, Claude | proposed; amends 52, 68, 71, 76 |
+| [79](0079-a-notice-takes-you-to-what-it-is-about.md) | A notice takes you to what it is about | Miguel, Claude | proposed |

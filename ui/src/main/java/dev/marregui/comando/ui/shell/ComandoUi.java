@@ -56,6 +56,7 @@ import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 import dev.marregui.comando.ui.panels.EditorPanel;
 import dev.marregui.comando.ui.panels.LowerPanel;
@@ -114,6 +115,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalTime;
+import java.time.ZoneId;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -198,11 +203,15 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private boolean sidePaneShown;
     private LivePlots livePlots;
     private EdtWatchdog watchdog;
+    /** When the stack of the EDT's last hang was logged, read just before; the watchdog thread's own. */
+    private long hangLoggedAt;
     private KeyPriority keyPriority;
     /** The user or Claude hid the side pane; a change in the side views shows it again. */
     private boolean sidePaneHidden;
     /** The watched git repositories as last read, for the Changes view. */
     private final RepoChanges repoChanges = new RepoChanges();
+    /** The files opened in a panel or the side pane: a new file opened once is no longer marked in the Files tab. */
+    private final OpenedFiles openedFiles;
     /** A changed file compared with HEAD, floating over the window. */
     private DiffWindow diffWindow;
     /** The side views at the last render, by id, with their versions. */
@@ -235,6 +244,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     public ComandoUi(Dependencies deps) {
         this.deps = deps;
+        this.openedFiles = deps.home() == null ? OpenedFiles.inMemory() : OpenedFiles.load(deps.home().resolve("opened-files"));
         this.help = new HelpActions(deps, prefs, () -> frame, this::openFile, actions::run, () -> sidePaneHidden = false, actions::all);
     }
 
@@ -366,7 +376,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         }, deps.texts(), () -> actions.run("view.sidebar"));
         sidebar.onTabMenu(this::tabMenu);
-        status = new StatusBar(deps.intents());
+        sidebar.watchOpened(openedFiles);
+        status = new StatusBar(deps.intents(), this::noticeTarget);
         findBar = new FindBar();
         top = new JPanel(new BorderLayout());
         top.add(workspace.component(), BorderLayout.CENTER);
@@ -440,24 +451,76 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             p.editor().requestFocus();
         }
         // started last: a probe posted during the build waits for the rest of it and reports the build itself
-        watchdog = new EdtWatchdog(stall -> LOG.log(System.Logger.Level.WARNING,
-                "the EDT has not answered for " + stall.millis() + " ms " + label(stall) + ":\n" + stall.stack()), this::stalled);
+        watchdog = new EdtWatchdog(this::hung, this::stalled);
+    }
+
+    /** The EDT reached its hang limit: its stack goes to the log, where the stall's notice will take the user. */
+    private void hung(EdtWatchdog.Stall stall) {
+        hangLoggedAt = System.currentTimeMillis();
+        LOG.log(System.Logger.Level.WARNING, "the EDT has not answered for " + stall.millis() + " ms " + label(stall) + ":\n" + stall.stack());
     }
 
     /**
      * A stall of the EDT ended after {@code millis}: a short one is a line with its kind and where the EDT was, a
-     * hang a warning after the stack logged at its limit; the user hears of one that lasted a second or more.
+     * hang a warning after the stack logged at its limit; the user hears of one that lasted a second or more, and a
+     * click on the notice opens the log at the line that says where: the hang's stack, or the short one's line.
      */
     private void stalled(EdtWatchdog.Stall stall, long millis) {
+        long where;
         if (stall.reported()) {
+            // the watchdog reported this stall just before, on this thread
+            where = hangLoggedAt;
             LOG.log(System.Logger.Level.WARNING, "the EDT answered again after " + millis + " ms");
         } else {
+            where = System.currentTimeMillis();
             LOG.log(System.Logger.Level.INFO, "the EDT was busy for " + millis + " ms " + label(stall));
         }
         if (millis >= 1_000) {
-            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN,
-                    "The window stopped responding for " + Labels.elapsed(millis) + "; the log has where (Tools ▸ Help ▸ Show the log)", false));
+            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "The window stopped responding for "
+                    + Labels.elapsed(millis) + "; click to see where in the log", false, Notice.log(where)));
         }
+    }
+
+    /**
+     * Where a click on a notice goes: the log's entry it names, the panel it is about; empty for a notice about
+     * nothing to bring into view.
+     */
+    private Optional<Runnable> noticeTarget(Notice n) {
+        return switch (n.kind()) {
+            case "log" -> deps.logDir() == null ? Optional.empty() : millis(n.key()).map(at -> () -> showLogEntry(at));
+            case "panel" -> deps.state().get().panel(new PanelId(n.key()))
+                    .map(p -> () -> deps.intents().dispatch(new Intent.FocusPanel(p.id())));
+            default -> Optional.empty();
+        };
+    }
+
+    private static Optional<Long> millis(String key) {
+        try {
+            return Optional.of(Long.parseLong(key));
+        } catch (NumberFormatException e) {
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Opens the log that holds the entry written at {@code atMillis}, scrolled to it, its line flashed; the log as Tools
+     * ▸ Help ▸ Show the log opens it, with a notice, when the logs kept no longer hold it.
+     */
+    private void showLogEntry(long atMillis) {
+        Path dir = deps.logDir();
+        Thread.ofVirtual().name("log-entry").start(() -> {
+            Optional<Path> log = HelpFiles.logHolding(dir, atMillis);
+            Edt.later(() -> {
+                if (log.isPresent()) {
+                    workspace.entryWhenOpen(log.get().toAbsolutePath().normalize(), atMillis);
+                    openFile(log.get());
+                } else {
+                    help.showLog();
+                    deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "The logs comando keeps no longer hold the entry of "
+                            + LocalTime.ofInstant(Instant.ofEpochMilli(atMillis), ZoneId.systemDefault()).truncatedTo(ChronoUnit.SECONDS), false));
+                }
+            });
+        });
     }
 
     /** {@code [kind] in=… comando=…}, the part of a stall's line that groups stalls of one cause. */
@@ -647,13 +710,14 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 // it replaces the same file's view in place
                 Edt.run(() -> {
                     sidePaneHidden = false;
+                    openedFiles.add(p);
                     deps.intents().dispatch(new Intent.ShowView(session, file.title(), file.spec(), Placement.SIDE));
                     render.request();
                 });
             } catch (IOException | RuntimeException e) {
                 // a path that is no path (a NUL in it) is told like a file that cannot be read
                 String why = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot open " + path + ": " + why, false));
+                deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot open " + path + ": " + why, e));
             }
         });
     }
@@ -1186,6 +1250,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      */
     public void openFile(Path chosen) {
         Path file = chosen.toAbsolutePath().normalize();
+        openedFiles.add(file);
         for (PanelState p : deps.state().get().panels()) {
             if (deps.texts().file(p.id()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
                 deps.intents().dispatch(new Intent.FocusPanel(p.id()));
@@ -1209,11 +1274,15 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 return;
             }
             PanelId id = PanelId.random();
-            // the title the store gives a panel opened on a file, so the file keeps its name
-            String title = PanelTexts.titleOf(file);
             deps.texts().open(id, file).thenAccept(opened -> {
                 switch (opened.kind()) {
-                    case BOUND -> deps.intents().dispatch(new Intent.AddPanel(id, title, deps.texts().document(id)));
+                    case BOUND -> {
+                        // a file elsewhere keeps its extension, so it never takes a session's or a panel's name; a file of
+                        // the panels' folder is named after its panel's title, so it takes the title without .md
+                        boolean document = deps.texts().document(id);
+                        String title = document ? PanelTexts.documentTitle(file, deps.state().get()::titleTaken) : PanelTexts.titleOf(file);
+                        deps.intents().dispatch(new Intent.AddPanel(id, title, document));
+                    }
                     // a click racing the first one's panel, which comes forward on its own
                     case ALREADY_OPEN -> { }
                     case REFUSED -> deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, opened.reason(), false));
@@ -1231,7 +1300,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             deps.texts().changed(p.panel().id(), p.editor().text());
             deps.texts().saveNow().thenAccept(error -> deps.intents().dispatch(error == null
                     ? new Intent.Notify(Notice.Level.INFO, "Saved " + title + " (panels also save as you type)", false)
-                    : new Intent.Notify(Notice.Level.ERROR, "Cannot save the panels: " + error, false)));
+                    : Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot save the panels: " + error, null)));
         }
     }
 
@@ -1269,7 +1338,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 prefs.put("export.dir", file.toAbsolutePath().getParent().toString());
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "Exported to " + file, false));
             } else {
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot export to " + file + ": " + error, false));
+                deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot export to " + file + ": " + error, null));
             }
         });
     }

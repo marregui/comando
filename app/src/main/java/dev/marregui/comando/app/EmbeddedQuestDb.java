@@ -88,8 +88,7 @@ final class EmbeddedQuestDb implements ServerToggle, AutoCloseable {
                 LOG.log(System.Logger.Level.INFO, "QuestDB started [root=" + root + "]");
                 intents.dispatch(new Intent.Notify(Notice.Level.INFO, "QuestDB is up: PG wire on 8812, console on http://localhost:9000", false));
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.ERROR, "cannot start QuestDB [root=" + root + "]", e);
-                intents.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot start QuestDB: " + e.getMessage(), false));
+                intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot start QuestDB [root=" + root + "]: " + e.getMessage(), e));
             }
         } else {
             stop();

@@ -8,6 +8,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /** Where editor text lives between runs of comando: one file per panel, in one folder. */
 public interface PanelTexts {
@@ -25,10 +26,27 @@ public interface PanelTexts {
         return file.getFileName() != null && file.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".log");
     }
 
-    /** The title a file gives a panel opened on it: its name without a {@code .md} extension. */
+    /**
+     * The title a file of the panels' folder gives the panel opened on it: its name without a {@code .md} extension, as
+     * the panel's own file is named after its title.
+     */
     static String titleOf(Path file) {
         String name = file.getFileName().toString();
         return (name.toLowerCase(Locale.ROOT).endsWith(".md") ? name.substring(0, name.length() - 3) : name).strip();
+    }
+
+    /**
+     * The title a file elsewhere gives the panel opened on it: its name with its extension, so it never reads as a panel
+     * of comando's own or a session's; when {@code taken} says that is some panel's title already, the name and its
+     * folder, {@code README.md · docs}.
+     */
+    static String documentTitle(Path file, Predicate<String> taken) {
+        String name = file.getFileName().toString().strip();
+        Path parent = file.toAbsolutePath().normalize().getParent();
+        if (!taken.test(name) || parent == null) {
+            return name;
+        }
+        return name + " · " + (parent.getFileName() == null ? parent.toString() : parent.getFileName().toString());
     }
 
     String load(PanelId panel);

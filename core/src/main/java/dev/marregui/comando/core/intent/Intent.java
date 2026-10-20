@@ -467,6 +467,22 @@ public sealed interface Intent {
         public Notify(Notice.Level level, String text, boolean desktop) {
             this(level, text, desktop, "");
         }
+
+        /**
+         * A failure told twice: in comando's log, an error for an error and a warning otherwise, with the stack of
+         * {@code cause} when there is one; and as the notice {@code text}, a click on which opens the log at that entry.
+         * The time is read before the entry is written, as {@link Notice#log} needs.
+         */
+        public static Notify logged(System.Logger log, Notice.Level level, String text, Throwable cause) {
+            long at = System.currentTimeMillis();
+            System.Logger.Level as = level == Notice.Level.ERROR ? System.Logger.Level.ERROR : System.Logger.Level.WARNING;
+            if (cause == null) {
+                log.log(as, text);
+            } else {
+                log.log(as, text, cause);
+            }
+            return new Notify(level, text, false, Notice.log(at));
+        }
     }
 
     /** The user dismissed the status bar's notice. */

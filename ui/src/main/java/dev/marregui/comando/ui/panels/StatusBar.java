@@ -26,6 +26,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -40,13 +41,20 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
- * The standing notice on the left, which opens the recent notices when clicked; the plan's usage limits, the focused
- * panel's session, connection and running work on the right.
+ * The standing notice on the left, which takes the user to what it is about when clicked and opens the recent notices
+ * on a right click (or a click, when it is about nothing to go to); the plan's usage limits, the focused panel's
+ * session, connection and running work on the right.
  */
 public final class StatusBar {
+
+    /** Where a click on a notice goes: what it is about, brought into view and flashed; empty when there is nowhere. */
+    public interface Targets {
+        Optional<Runnable> of(Notice notice);
+    }
 
     private final JPanel root = new JPanel(new BorderLayout());
     private final JLabel notice = new JLabel(" ");
@@ -58,11 +66,18 @@ public final class StatusBar {
     private PlanUsage lastUsage;
     private final IntentSink intents;
     private List<Notice> history = List.of();
+    private Notice shown = Notice.NONE;
+    private final Targets targets;
 
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneId.systemDefault());
 
     public StatusBar(IntentSink intents) {
+        this(intents, n -> Optional.empty());
+    }
+
+    public StatusBar(IntentSink intents, Targets targets) {
         this.intents = intents;
+        this.targets = targets;
         root.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(3, Theme.PAD, 3, Theme.PAD)));
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.PAD * 2, 0));
@@ -76,8 +91,25 @@ public final class StatusBar {
         notice.getAccessibleContext().setAccessibleName("Status");
         notice.addMouseListener(new MouseAdapter() {
             @Override
+            public void mousePressed(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showHistory();
+                }
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showHistory();
+                }
+            }
+
+            @Override
             public void mouseClicked(MouseEvent e) {
-                showHistory();
+                // a control-click is the Mac's right click: its press opened the recent notices
+                if (SwingUtilities.isLeftMouseButton(e) && !e.isControlDown()) {
+                    goTo(shown);
+                }
             }
         });
         root.add(notice, BorderLayout.CENTER);
@@ -134,6 +166,11 @@ public final class StatusBar {
         return usage;
     }
 
+    /** The standing notice's label; for tests. */
+    JLabel noticeLabel() {
+        return notice;
+    }
+
     /** "Session 5% (resets 7:19pm) · Week 43% · Fable 17%": the session's reset is the one that comes within hours. */
     static String usageText(PlanUsage u) {
         StringBuilder sb = new StringBuilder();
@@ -163,9 +200,20 @@ public final class StatusBar {
         return (paren < 0 ? t : t.substring(0, paren)).strip();
     }
 
+    /** Goes where {@code n} is about; a notice about nothing to go to opens the recent notices instead. */
+    void goTo(Notice n) {
+        Optional<Runnable> target = n.isEmpty() ? Optional.empty() : targets.of(n);
+        if (target.isPresent()) {
+            target.get().run();
+        } else {
+            showHistory();
+        }
+    }
+
     /**
      * The recent notices, newest first (all the state keeps), each with the time it arrived, in a scrolling list; a
-     * click on one copies its full text. Dismiss clears the standing notice.
+     * click on one goes where it is about, a right click offers to copy its full text. Dismiss clears the standing
+     * notice.
      */
     public void showHistory() {
         JPopupMenu menu = new JPopupMenu();
@@ -185,18 +233,45 @@ public final class StatusBar {
                 if (!selected) {
                     c.setForeground(color(n.level()));
                 }
-                c.setToolTipText(Plain.text(KeyText.of(n.text())));
+                c.setToolTipText(wrapped(KeyText.of(n.text()) + (targets.of(n).isPresent()
+                        ? " · click to go there, right-click to copy" : " · right-click to copy")));
                 return c;
             }
         });
         list.addMouseListener(new MouseAdapter() {
             @Override
+            public void mousePressed(MouseEvent e) {
+                copyMenu(e);
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent e) {
+                copyMenu(e);
+            }
+
+            private void copyMenu(MouseEvent e) {
+                int i = list.locationToIndex(e.getPoint());
+                if (e.isPopupTrigger() && i >= 0) {
+                    Notice n = model.get(i);
+                    list.setSelectedIndex(i);
+                    JPopupMenu copy = new JPopupMenu();
+                    JMenuItem item = new JMenuItem("Copy");
+                    item.addActionListener(a -> Toolkit.getDefaultToolkit().getSystemClipboard()
+                            .setContents(new StringSelection(KeyText.of(n.text())), null));
+                    copy.add(item);
+                    copy.show(list, e.getX(), e.getY());
+                }
+            }
+
+            @Override
             public void mouseClicked(MouseEvent e) {
                 int i = list.locationToIndex(e.getPoint());
-                if (i >= 0) {
-                    Toolkit.getDefaultToolkit().getSystemClipboard()
-                            .setContents(new StringSelection(KeyText.of(model.get(i).text())), null);
-                    menu.setVisible(false);
+                if (i >= 0 && SwingUtilities.isLeftMouseButton(e) && !e.isControlDown()) {
+                    Optional<Runnable> target = targets.of(model.get(i));
+                    if (target.isPresent()) {
+                        menu.setVisible(false);
+                        target.get().run();
+                    }
                 }
             }
         });
@@ -207,7 +282,7 @@ public final class StatusBar {
             none.setEnabled(false);
             menu.add(none);
         } else {
-            JLabel hint = new JLabel("Click a notice to copy it");
+            JLabel hint = new JLabel("Click a notice to go where it is about; right-click to copy it");
             hint.setForeground(Theme.MUTED);
             hint.setBorder(BorderFactory.createEmptyBorder(2, Theme.PAD, 2, Theme.PAD));
             menu.add(hint);
@@ -264,10 +339,12 @@ public final class StatusBar {
 
     public void render(AppState s) {
         Notice n = s.notice();
+        shown = n;
         history = s.notices();
         notice.setText(n.text().isEmpty() ? " " : Plain.text(KeyText.of(n.text())));
         notice.setToolTipText(n.text().isEmpty() ? (history.isEmpty() ? null : "Recent notices")
-                : wrapped(fullLine(n) + " · click for recent notices"));
+                : wrapped(fullLine(n) + (targets.of(n).isPresent()
+                ? " · click to go there, right-click for recent notices" : " · click for recent notices")));
         notice.setForeground(color(n.level()));
         notice.setIcon(n.text().isEmpty() ? null : Icons.get(icon(n.level()), 14));
         PanelState p = s.focusedPanel();

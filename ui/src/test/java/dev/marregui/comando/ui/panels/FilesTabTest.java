@@ -10,11 +10,14 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.icon.RowIcon;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.swing.AbstractButton;
+import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
@@ -30,6 +33,7 @@ import java.awt.event.MouseEvent;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -343,6 +347,70 @@ class FilesTabTest {
     }
 
     @Test
+    void aNewFileAndEveryFolderOnTheWayDownToItCarryTheMarkOfNewFiles() throws Exception {
+        Fixture f = new Fixture(new FolderRoot("Repo", "/s", "", List.of()));
+        f.edt(() -> f.tree().expandRow(0));
+        f.edt(() -> f.show("Repo", folder("Repo",
+                folder("notes", folder("day", new ViewSpec.TreeNode("n.md", "", "comando-file:/s/notes/day/n.md#0", List.of()))),
+                folder("src", new ViewSpec.TreeNode("A.java", "", "comando-file:/s/src/A.java#0", List.of())),
+                file("same.md"))));
+        f.edt(() -> f.tree().expandRow(1));
+        f.edt(() -> f.tree().expandRow(2));
+        f.edt(() -> f.tree().expandRow(4));
+        assertThat(f.labels()).containsExactly("Repo", "notes", "day", "n.md", "src", "A.java", "same.md");
+        f.edt(() -> f.tab.showRepos(List.of(new RepoStatus("/s", "main", List.of(
+                new RepoStatus.FileChange("src/A.java", "", RepoStatus.Kind.MODIFIED),
+                new RepoStatus.FileChange("notes/day/n.md", "", RepoStatus.Kind.UNTRACKED)), false, ""))));
+        Icon[] marks = new Icon[7];
+        Icon[] selected = new Icon[1];
+        f.edt(() -> {
+            for (int i = 0; i < marks.length; i++) {
+                Component cell = f.tree().getCellRenderer().getTreeCellRendererComponent(f.tree(), node(f.tree(), i), false, true, false, i, false);
+                marks[i] = cell instanceof Container row && !(cell instanceof JLabel) ? ((JLabel) row.getComponent(1)).getIcon() : null;
+            }
+            Component cell = f.tree().getCellRenderer().getTreeCellRendererComponent(f.tree(), node(f.tree(), 3), true, false, true, 3, true);
+            selected[0] = ((JLabel) ((Container) cell).getComponent(1)).getIcon();
+        });
+        Icon mark = Icons.get(FilesTab.NEW_ICON);
+        assertThat(marks[0]).as("the repository's row: the mark of changes and the dot, the trail's start").isInstanceOf(RowIcon.class);
+        assertThat(marks[0].getIconWidth()).isEqualTo(Icons.get(FilesTab.CHANGES_ICON).getIconWidth() + 2 + mark.getIconWidth());
+        assertThat(Arrays.copyOfRange(marks, 1, marks.length)).as("the trail runs from it down to the new file")
+                .containsExactly(mark, mark, mark, null, null, null);
+        assertThat(selected[0]).as("a selected row loses its colour, not its mark").isSameAs(mark);
+        f.edt(() -> {
+            Rectangle r = f.tree().getRowBounds(1);
+            String tip = f.tree().getToolTipText(new MouseEvent(f.tree(), MouseEvent.MOUSE_MOVED, 0, 0, r.x + 4, r.y + r.height / 2, 0, false));
+            assertThat(tip).isEqualTo(FilesTab.NEW_TIP);
+        });
+
+
+        // opened once, the new file reads as any other: no gold, no trail, and its folders hold nothing marked
+        OpenedFiles opened = OpenedFiles.inMemory();
+        f.edt(() -> f.tab.watchOpened(opened));
+        f.edt(() -> opened.add(Path.of("/s/notes/day/n.md")));
+        Color[] colors = new Color[7];
+        f.edt(() -> {
+            for (int i = 0; i < marks.length; i++) {
+                Component cell = f.tree().getCellRenderer().getTreeCellRendererComponent(f.tree(), node(f.tree(), i), false, true, false, i, false);
+                marks[i] = cell instanceof Container row && !(cell instanceof JLabel) ? ((JLabel) row.getComponent(1)).getIcon() : null;
+                colors[i] = f.tab.colorOf(node(f.tree(), i));
+            }
+        });
+        assertThat(marks).containsExactly(Icons.get(FilesTab.CHANGES_ICON), null, null, null, null, null, null);
+        assertThat(colors).as("the repository and src still hold the modified file")
+                .containsExactly(Theme.VCS_MODIFIED, null, null, null, Theme.VCS_MODIFIED, Theme.VCS_MODIFIED, null);
+        f.edt(() -> {
+            Rectangle r = f.tree().getRowBounds(1);
+            String tip = f.tree().getToolTipText(new MouseEvent(f.tree(), MouseEvent.MOUSE_MOVED, 0, 0, r.x + 4, r.y + r.height / 2, 0, false));
+            assertThat(tip).isNull();
+        });
+
+        f.edt(() -> f.tab.showRepos(List.of(new RepoStatus("/s", "main", List.of(
+                new RepoStatus.FileChange("notes/day/m.md", "", RepoStatus.Kind.UNTRACKED)), false, ""))));
+        f.edt(() -> assertThat(f.tab.holdsNew(node(f.tree(), 1))).as("another new file in the same folder lights the trail again").isTrue());
+    }
+
+    @Test
     void aRepositoryRowHasTheGitIconAFlagWhileItHasChangesAndItsDoubleClickOpensTheChangesView() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Repo", "/s", "", List.of()), new FolderRoot("Plain", "/p", "", List.of()));
         List<String> told = new CopyOnWriteArrayList<>();
@@ -370,7 +438,49 @@ class FilesTabTest {
         assertThat(f.intents).as("nothing to see: no view").isEmpty();
         assertThat(told).containsExactly("No changes to see in Repo: its working tree matches HEAD");
         f.edt(() -> doubleClick(f.tree(), 1));
-        assertThat(told).as("a folder that is no repository says nothing").hasSize(1);
+        assertThat(f.intents).isEmpty();
+        assertThat(told).as("a folder's row in no repository says so").containsExactly(
+                "No changes to see in Repo: its working tree matches HEAD", "No changes to see in Plain: no git repository holds it");
+    }
+
+    @Test
+    void aFolderRowInARepositoryHasTheMarkOfItsChangesSaysThemAndItsDoubleClickShowsOnlyThose() throws Exception {
+        Fixture f = new Fixture(new FolderRoot("Memory", "/c/MEMORY", "", List.of()), new FolderRoot("KB", "/c/KB", "", List.of()));
+        List<String> told = new CopyOnWriteArrayList<>();
+        f.edt(() -> f.tab.tell((owner, at, text) -> told.add(text)));
+        f.edt(() -> f.tab.showRepos(List.of(new RepoStatus("/c", "master", List.of(
+                new RepoStatus.FileChange("MEMORY/a.md", "", RepoStatus.Kind.MODIFIED),
+                new RepoStatus.FileChange("MEMORY/new.md", "", RepoStatus.Kind.UNTRACKED),
+                new RepoStatus.FileChange("CLAUDE.md", "", RepoStatus.Kind.MODIFIED)), false, ""))));
+        assertThat(f.labels()).containsExactly("Memory", "KB");
+        f.edt(() -> {
+            Component marked = f.tree().getCellRenderer().getTreeCellRendererComponent(f.tree(), node(f.tree(), 0), false, false, false, 0, false);
+            assertThat(f.tree().getRowBounds(0).width).as("a row widens for the marks after its name, its path not cut")
+                    .isGreaterThanOrEqualTo(marked.getPreferredSize().width);
+        });
+        f.edt(() -> {
+            Component memory = f.tree().getCellRenderer().getTreeCellRendererComponent(f.tree(), node(f.tree(), 0), false, false, false, 0, false);
+            assertThat(((JLabel) ((Container) memory).getComponent(1)).getIcon()).as("a change and a new file inside").isInstanceOf(RowIcon.class);
+            Component kb = f.tree().getCellRenderer().getTreeCellRendererComponent(f.tree(), node(f.tree(), 1), false, false, false, 1, false);
+            assertThat(((Container) kb).getComponents()).as("nothing changed inside: its name and path, no mark")
+                    .noneMatch(c -> c instanceof JLabel label && label.getIcon() != null && label != ((Container) kb).getComponent(0));
+            assertThat(tip(f.tree(), 0)).isEqualTo("On master · 2 uncommitted here: 1 modified, 1 untracked");
+            assertThat(tip(f.tree(), 1)).isEqualTo("On master · nothing to commit here");
+        });
+
+        f.intents.clear();
+        f.edt(() -> doubleClick(f.tree(), 0));
+        assertThat(f.intents).as("the changes inside Memory only, not the whole of the repository")
+                .containsExactly(new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes("/c", "MEMORY", "Memory"), Placement.SIDE));
+        f.intents.clear();
+        f.edt(() -> doubleClick(f.tree(), 1));
+        assertThat(f.intents).isEmpty();
+        assertThat(told).containsExactly("No changes to see in KB: it matches HEAD");
+    }
+
+    private static String tip(JTree tree, int row) {
+        Rectangle r = tree.getRowBounds(row);
+        return tree.getToolTipText(new MouseEvent(tree, MouseEvent.MOUSE_MOVED, 0, 0, r.x + 4, r.y + r.height / 2, 0, false));
     }
 
     @Test

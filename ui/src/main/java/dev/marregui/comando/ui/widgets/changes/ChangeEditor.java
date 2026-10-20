@@ -64,6 +64,8 @@ import java.util.concurrent.CompletableFuture;
  */
 public final class ChangeEditor {
 
+    private static final System.Logger LOG = System.getLogger(ChangeEditor.class.getName());
+
     /** Writes a file's text; completes with null once written, or with why it was not. */
     @FunctionalInterface
     public interface Writer {
@@ -367,7 +369,7 @@ public final class ChangeEditor {
     private void saved(String r, RepoStatus.FileChange c, String text, String reason) {
         boolean here = Objects.equals(root, r) && change != null && change.path().equals(c.path());
         if (reason != null) {
-            intents.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot save " + Path.of(c.path()).getFileName() + ": " + reason, false));
+            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot save " + Path.of(c.path()).getFileName() + ": " + reason, null));
             if (here) {
                 edited = true;
                 updateButtons();

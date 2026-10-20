@@ -283,6 +283,10 @@ class ReducerTest {
         assertThat(state.panel(readme).orElseThrow().title()).isEqualTo("One 2");
         apply(new Intent.RenamePanel(P2, "ONE"));
         assertThat(state.panel(P2).orElseThrow().title()).isEqualTo("two");
+        assertThat(state.titleTaken("one 2")).as("ignoring case").isTrue();
+        assertThat(state.titleTaken("three")).isFalse();
+        apply(new Intent.ClosePanel(P2));
+        assertThat(state.titleTaken("TWO")).as("a closed panel keeps its title").isTrue();
     }
 
     @Test

@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.FileTime;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -63,5 +64,16 @@ class HelpFilesTest {
     @Test
     void theLogIsTheOneBeingWritten() {
         assertThat(HelpFiles.log(Path.of("/h/logs"))).isEqualTo(Path.of("/h/logs/comando-0.log"));
+    }
+
+    @Test
+    void theLogHoldingAnEntryIsTheNewestThatDoesAndNoneOnceRotatedAway(@TempDir Path logs) throws Exception {
+        long t = Instant.parse("2026-10-20T10:00:00Z").toEpochMilli();
+        Files.writeString(logs.resolve("comando-0.log"), Instant.ofEpochMilli(t + 60_000) + " INFO A newest\n");
+        Files.writeString(logs.resolve("comando-1.log"), Instant.ofEpochMilli(t + 5) + " WARNING A the hang\n");
+        assertThat(HelpFiles.logHolding(logs, t + 60_000)).contains(logs.resolve("comando-0.log"));
+        assertThat(HelpFiles.logHolding(logs, t)).as("rotated into the older one").contains(logs.resolve("comando-1.log"));
+        assertThat(HelpFiles.logHolding(logs, t - 3_600_000)).isEmpty();
+        assertThat(HelpFiles.logHolding(logs.resolve("none"), t)).isEmpty();
     }
 }

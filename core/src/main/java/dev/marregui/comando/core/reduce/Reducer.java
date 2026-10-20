@@ -249,7 +249,7 @@ public final class Reducer {
             return Transition.of(s);
         }
         PanelState current = s.focusedPanel();
-        // a title names a panel to the tools and keys its plots: a second file of the same name gets "README 2"
+        // a title names a panel to the tools and keys its plots: a title already taken gets a number, "README.md 2"
         String title = i.title().isBlank() ? defaultTitle(s) : uniqueTitle(s, i.title().strip());
         List<PanelState> panels = new ArrayList<>(s.panels());
         panels.add(new PanelState(i.panel(), title, current.connection(), "", i.document()));
@@ -441,7 +441,7 @@ public final class Reducer {
     /** "panel N", N the open panels plus one, else the next number no panel, open or closed, has as its title. */
     private static String defaultTitle(AppState s) {
         int n = s.panels().size() + 1;
-        while (titleTaken(s, "panel " + n)) {
+        while (s.titleTaken("panel " + n)) {
             n++;
         }
         return "panel " + n;
@@ -450,14 +450,10 @@ public final class Reducer {
     /** {@code title}, or the first of "title 2", "title 3"… no panel has, open or closed. */
     private static String uniqueTitle(AppState s, String title) {
         String candidate = title;
-        for (int n = 2; titleTaken(s, candidate); n++) {
+        for (int n = 2; s.titleTaken(candidate); n++) {
             candidate = title + " " + n;
         }
         return candidate;
-    }
-
-    private static boolean titleTaken(AppState s, String title) {
-        return Stream.concat(s.panels().stream(), s.closed().stream()).anyMatch(p -> p.title().equalsIgnoreCase(title));
     }
 
     // ---- running text

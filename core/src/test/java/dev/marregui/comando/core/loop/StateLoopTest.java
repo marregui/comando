@@ -130,6 +130,32 @@ class StateLoopTest {
             assertThat(end.ended()).isTrue();
             assertThat(end.part()).isEqualTo("effect ExecuteSql");
             assertThat(end.millis()).isGreaterThanOrEqualTo(700);
+            assertThat(end.since()).isEqualTo(told.since());
+        }
+    }
+
+    @Test
+    void aHangsNoticeNamesTheLogEntryWithItsStack() throws Exception {
+        CountDownLatch noticed = new CountDownLatch(1);
+        StateLoop.EffectHandler blocking = e -> {
+            if (e instanceof Effect.ExecuteSql) {
+                hold(700);
+            }
+        };
+        long before = System.currentTimeMillis();
+        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), blocking, 50, 300, null).start()) {
+            loop.addListener((previous, next) -> {
+                if (next.notice().kind().equals("log")) {
+                    noticed.countDown();
+                }
+            });
+            loop.dispatch(new Intent.RunText(States.P1, "SELECT 1", Target.AUTO));
+            assertThat(noticed.await(5, TimeUnit.SECONDS)).isTrue();
+
+            // the stack is logged at the hang limit, about 300 ms in; the end's line about 700 ms in
+            long at = Long.parseLong(loop.state().notice().key());
+            assertThat(at - before).isBetween(250L, 650L);
+            assertThat(loop.state().notice().text()).startsWith("comando stopped updating for ");
         }
     }
 

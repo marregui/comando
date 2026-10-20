@@ -22,6 +22,7 @@ import dev.marregui.comando.ui.kit.tabs.TabStrip;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
@@ -337,6 +338,11 @@ public final class SessionsSidebar {
     /** The watched git repositories as read: the Files tab colours their files. */
     public void showRepos(List<RepoStatus> repos) {
         files.showRepos(repos);
+    }
+
+    /** The files the user opens: a new file opened once is no longer marked in the Files tab. */
+    public void watchOpened(OpenedFiles opened) {
+        files.watchOpened(opened);
     }
 
     /** Adds the window's own commands to each tab's menu: {@code more} gets the tab and the menu built so far. */

@@ -140,6 +140,11 @@ public record AppState(
         return find(closed, p -> p.id().equals(id));
     }
 
+    /** Whether a panel, open or closed, has this title, ignoring case: a title names one panel to the tools. */
+    public boolean titleTaken(String title) {
+        return panels.stream().anyMatch(p -> p.title().equalsIgnoreCase(title)) || closed.stream().anyMatch(p -> p.title().equalsIgnoreCase(title));
+    }
+
     /** The closed panel bound to the session, if any. */
     public Optional<PanelState> closedPanelOfSession(String session) {
         return session.isEmpty() ? Optional.empty() : find(closed, p -> p.session().equals(session));
