@@ -360,7 +360,7 @@ over HTTP.
 | Opt-in test | Enabled by | Why |
 |---|---|---|
 | keychain round trip | `./gradlew test -PkeychainTest=true` | writes and deletes a login keychain item |
-| window replay | `./gradlew :app:uiTest` | needs a display |
+| window replay | `./gradlew :app:uiTest` | needs a display; its windows open on no screen and take no focus |
 | the kit with the real Claude Code | `COMANDO_KIT_LIVE=true ./gradlew :claude:test --tests '*KitLiveTest'` | runs the installed `claude` in a throwaway `CLAUDE_CONFIG_DIR` |
 
 Gates:

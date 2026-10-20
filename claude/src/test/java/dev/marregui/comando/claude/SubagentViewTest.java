@@ -28,8 +28,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SubagentViewTest {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
+    /** The follow period here, shorter than the app's so the suite does not wait out its 2 s. */
+    private static final long PERIOD_MILLIS = 100;
     /** Long enough for at least three follow periods. */
-    private static final Duration QUIET = Duration.ofMillis(3 * ClaudeAdapter.TAIL_EVERY_MILLIS + 500);
+    private static final Duration QUIET = Duration.ofMillis(3 * PERIOD_MILLIS + 500);
 
     @TempDir
     Path tmp;
@@ -48,6 +50,7 @@ class SubagentViewTest {
         exe.toFile().setExecutable(true);
         adapter = new ClaudeAdapter(sink, new TranscriptRegistry(), McpGateway.NONE,
                 new ClaudeSettings(exe.toString(), tmp.resolve("run"), projects, UiInstructions.TEXT));
+        adapter.tailEveryMillis = PERIOD_MILLIS;
     }
 
     @AfterEach

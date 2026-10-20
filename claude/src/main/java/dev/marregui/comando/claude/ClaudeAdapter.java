@@ -64,6 +64,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     /** The most sub-agent views that follow their file at once; opening another stops the oldest. */
     static final int TAILS = 4;
     static final long TAIL_EVERY_MILLIS = 2_000;
+    /** The follow period in force; tests shorten it. */
+    long tailEveryMillis = TAIL_EVERY_MILLIS;
     /**
      * A sub-agent's file that has not grown for this long stops being followed, a backstop: a sub-agent writes nothing
      * while a tool runs or the model answers, often for minutes, so its end is read from the stream or its meta file.
@@ -388,7 +390,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 LOG.log(System.Logger.Level.ERROR, "sub-agent follow failed [session=" + t.session + ", toolUseId=" + toolUseId + ']', e);
                 stopTail(toolUseId, null);
             }
-        }, TAIL_EVERY_MILLIS, TAIL_EVERY_MILLIS, TimeUnit.MILLISECONDS);
+        }, tailEveryMillis, tailEveryMillis, TimeUnit.MILLISECONDS);
     }
 
     /**

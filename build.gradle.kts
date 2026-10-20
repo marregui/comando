@@ -45,6 +45,12 @@ subprojects {
         }
     }
 
+    // a module's unit tests in up to three JVMs, while the other modules run theirs (gradle.properties);
+    // :app:uiTest keeps one JVM at a time, as its windows share one desktop
+    tasks.named<Test>("test") {
+        maxParallelForks = 3
+    }
+
     dependencies {
         "compileOnly"(libs.findLibrary("annotations").get())
         "testCompileOnly"(libs.findLibrary("annotations").get())

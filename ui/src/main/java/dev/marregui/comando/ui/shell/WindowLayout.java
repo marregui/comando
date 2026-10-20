@@ -20,19 +20,38 @@ final class WindowLayout {
                  int lowerDivider, int sideDivider) {
     }
 
+    /**
+     * True opens the window on no screen and never takes the desktop's focus, for tests that need a real window while
+     * the desktop is in use: {@code ./gradlew :app:uiTest} sets it.
+     */
+    static final String OFF_SCREEN_PROPERTY = "comando.offScreen";
+
     private final Preferences prefs;
+    private final boolean offScreen;
 
     WindowLayout(Preferences prefs) {
         this.prefs = prefs;
+        this.offScreen = Boolean.getBoolean(OFF_SCREEN_PROPERTY);
     }
 
     /**
      * Puts the window where it was, kept on a screen that still exists: a window saved on a detached display opens
-     * centred on the main one. Returns the height it opens at.
+     * centred on the main one. Returns the height it opens at. Off screen, the window is undecorated, as macOS moves a
+     * titled window back onto a screen, and left of every screen.
      */
     int restoreBounds(JFrame frame) {
         int w = prefs.getInt("window.width", 1500);
         int h = prefs.getInt("window.height", 950);
+        if (offScreen) {
+            Rectangle screens = new Rectangle();
+            for (GraphicsDevice d : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+                screens = screens.union(d.getDefaultConfiguration().getBounds());
+            }
+            frame.setUndecorated(true);
+            frame.setAutoRequestFocus(false);
+            frame.setBounds(screens.x - w - 1_000, screens.y, w, h);
+            return h;
+        }
         int x = prefs.getInt("window.x", Integer.MIN_VALUE);
         int y = prefs.getInt("window.y", Integer.MIN_VALUE);
         Rectangle saved = new Rectangle(x, y, w, h);
@@ -64,8 +83,9 @@ final class WindowLayout {
         return best;
     }
 
+    /** Whether the window was maximized; never off screen, where maximized would put it on one. */
     boolean maximized() {
-        return prefs.getBoolean("window.maximized", false);
+        return !offScreen && prefs.getBoolean("window.maximized", false);
     }
 
     /**

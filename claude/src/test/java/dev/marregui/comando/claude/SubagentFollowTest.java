@@ -31,8 +31,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SubagentFollowTest {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
+    /** The follow period here, shorter than the app's so the suite does not wait out its 2 s. */
+    private static final long PERIOD_MILLIS = 100;
     /** Three follow periods without growth: the old rule stopped a view after any quiet spell. */
-    private static final Duration QUIET = Duration.ofMillis(3 * ClaudeAdapter.TAIL_EVERY_MILLIS + 500);
+    private static final Duration QUIET = Duration.ofMillis(3 * PERIOD_MILLIS + 500);
 
     @TempDir
     Path tmp;
@@ -51,6 +53,7 @@ class SubagentFollowTest {
         exe.toFile().setExecutable(true);
         adapter = new ClaudeAdapter(sink, new TranscriptRegistry(), McpGateway.NONE,
                 new ClaudeSettings(exe.toString(), tmp.resolve("run"), projects, UiInstructions.TEXT));
+        adapter.tailEveryMillis = PERIOD_MILLIS;
         adapter.start(SessionSpec.fresh("work", tmp.toString()));
         sink.await(Intent.SessionStarted.class, WAIT);
     }
@@ -174,7 +177,7 @@ class SubagentFollowTest {
 
     @Test
     void theIdleBackstopStopsAndSaysSo() throws Exception {
-        adapter.tailIdleMillis = 2 * ClaudeAdapter.TAIL_EVERY_MILLIS;
+        adapter.tailIdleMillis = 2 * PERIOD_MILLIS;
         stream("agent:idle");
         agent("idle", "first step");
 

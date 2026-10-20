@@ -106,6 +106,9 @@ val uiTest = tasks.register<Test>("uiTest") {
     forkEvery = 1
     systemProperty("java.awt.headless", "false")
     systemProperty("comando.uiTests", "true")
+    // the windows open on no screen, without a Dock icon, and never take the desktop's focus
+    systemProperty("comando.offScreen", "true")
+    systemProperty("apple.awt.UIElement", "true")
     systemProperty("comando.prefsNode", "dev/marregui/comando-test")
     jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED")
 }

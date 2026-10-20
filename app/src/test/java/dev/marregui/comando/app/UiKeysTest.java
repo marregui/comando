@@ -41,8 +41,10 @@ import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
+import java.awt.GraphicsEnvironment;
 import java.awt.KeyEventDispatcher;
 import java.awt.KeyboardFocusManager;
+import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.nio.file.Path;
@@ -198,7 +200,7 @@ class UiKeysTest {
     // ---- the key map
 
     @Test
-    void theOtherDesktopsKeysAreMacOssWithCtrlForCmdButForTheMovedOnes() throws Exception {
+    void theOtherDesktopsKeysAreMacOssWithCtrlForCmdButForTheMovedOnesAndNoTwoCommandsShareAKey() throws Exception {
         Map<String, KeyStroke> mac;
         try (Window w = open("mac")) {
             mac = keys(w);
@@ -209,6 +211,8 @@ class UiKeysTest {
             other = keys(w);
         }
         open.clear();
+        assertThat(sharedKeys(mac)).as("mac keys").isEmpty();
+        assertThat(sharedKeys(other)).as("linux keys").isEmpty();
         // on macOS the application menu owns ⌘Q; elsewhere Quit has a key of its own
         KeyStroke quit = other.remove("app.quit");
         mac.remove("app.quit");
@@ -230,13 +234,24 @@ class UiKeysTest {
         }
     }
 
-    @ParameterizedTest
-    @ValueSource(strings = {"mac", "linux"})
-    void noTwoCommandsShareAKey(String keys) throws Exception {
-        Window w = open(keys);
-        Map<KeyStroke, List<String>> byKey = keys(w).entrySet().stream()
+    /** The commands that share a key with another, grouped by key. */
+    private static List<List<String>> sharedKeys(Map<String, KeyStroke> keys) {
+        Map<KeyStroke, List<String>> byKey = keys.entrySet().stream()
                 .collect(Collectors.groupingBy(Map.Entry::getValue, LinkedHashMap::new, Collectors.mapping(Map.Entry::getKey, Collectors.toList())));
-        assertThat(byKey.values().stream().filter(ids -> ids.size() > 1).toList()).as(keys + " keys").isEmpty();
+        return byKey.values().stream().filter(ids -> ids.size() > 1).toList();
+    }
+
+    // ---- the window
+
+    @Test
+    @EnabledIfSystemProperty(named = "comando.offScreen", matches = "true")
+    void offScreenTheWindowIsOnNoScreenAndShowing() throws Exception {
+        Window w = open("mac");
+        Rectangle bounds = onEdt(w.frame()::getBounds);
+        List<Rectangle> screens = Stream.of(GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices())
+                .map(d -> d.getDefaultConfiguration().getBounds()).toList();
+        assertThat(screens).noneMatch(bounds::intersects);
+        assertThat(onEdt(w.frame()::isShowing)).as("a real window, painted and given keys").isTrue();
     }
 
     // ---- the terminal

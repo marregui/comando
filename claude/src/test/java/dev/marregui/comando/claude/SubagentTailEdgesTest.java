@@ -47,6 +47,7 @@ class SubagentTailEdgesTest {
         exe.toFile().setExecutable(true);
         adapter = new ClaudeAdapter(sink, new TranscriptRegistry(), McpGateway.NONE,
                 new ClaudeSettings(exe.toString(), tmp.resolve("run"), projects, UiInstructions.TEXT));
+        adapter.tailEveryMillis = 100; // the app's 2 s period, shortened so the suite does not wait it out
     }
 
     @AfterEach
