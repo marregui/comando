@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-21 | proposed; replaces the panel tabs' tooltip | Miguel (a card on a panel tab instead of its tooltip: what the tooltip said, plus one line Haiku wrote on what the panel's session works on; a button that reads it again; the card stays until it is clicked; the line refreshed every 10 s for the panels at work; every panel the same; threads must not compound), Claude (the topic of a panel without a session from its text, read only when its source changed, one reader thread, the card in the popup layer, the name "topic") |
+| 2026-10-21 | accepted (Miguel, after trying it); replaces the panel tabs' tooltip | Miguel (a card on a panel tab instead of its tooltip: what the tooltip said, plus one line Haiku wrote on what the panel's session works on; a button that reads it again; the card stays until it is clicked; the line refreshed every 10 s for the panels at work; every panel the same; threads must not compound), Claude (the topic of a panel without a session from its text, read only when its source changed, one reader thread, the card in the popup layer, the name "topic") |
 
 ## 1. Context
 
