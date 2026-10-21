@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-20 | proposed | Miguel (a file opened elsewhere than `panels/` is titled with its extension; the folder breaks a tie, not a number), Claude (how: the title chosen after the bind, one "title taken" rule in `AppState`) |
+| 2026-10-20 | accepted | Miguel (a file opened elsewhere than `panels/` is titled with its extension; the folder breaks a tie, not a number), Claude (how: the title chosen after the bind, one "title taken" rule in `AppState`) |
 
 ## 1. Context
 

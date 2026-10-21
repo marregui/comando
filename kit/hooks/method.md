@@ -7,7 +7,7 @@
 | What | Where | Holds |
 |---|---|---|
 | Memory | Claude Code's auto memory, one folder for every project: the `autoMemoryDirectory` your system prompt names (the kit sets it to `@CLAUDE@/MEMORY` unless you chose another); `MEMORY.md` is its index, loaded into every session up to 200 lines or 25 KB | working context that accrues across projects: the user's preferences, corrections, lessons, the state of ongoing work. One fact per file, with frontmatter; one line per file in the index, a cue saying when to open it. Open a file when its cue matches the task. Never a copy of the KB or of the code |
-| Knowledge base | `@CLAUDE@/KB/`, a tree of sets; `00_START_HERE.md` is its root index, each set's lists its documents | self-contained documents about the products and code the user works on; each must match the published code. Rules: `@CLAUDE@/KB/README.md` |
+| Knowledge base | `@CLAUDE@/KB/`, a tree of sets; `00_START_HERE.md` is its root index, each set's lists its documents | self-contained documents about the products and code the user works on; each must match the published code. Rules: `@CLAUDE@/KB/99_MAINTENANCE.md` |
 | Scratchpad | `@CLAUDE@/SCRATCHPAD/YYYY-MM-DD/`; each day's `INDEX.md` is its index | provisional reports, agent specs and results, not yet checked against the code. Rules: `@CLAUDE@/SCRATCHPAD/README.md` |
 
 ## Working a task

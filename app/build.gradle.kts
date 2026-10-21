@@ -20,6 +20,7 @@ dependencies {
     testImplementation(libs.jediterm.core)
     testImplementation(libs.jediterm.ui)
     testImplementation(libs.awaitility)
+    testImplementation(libs.archunit)
 }
 
 tasks.jar {
@@ -70,7 +71,9 @@ tasks.register<JavaExec>("snapshot") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass = "dev.marregui.comando.app.Snapshot"
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-snapshot")
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-snapshot",
+        // painted from its root pane, so the window opens on no screen and never takes the desktop's focus
+        "-Dcomando.offScreen=true", "-Dapple.awt.UIElement=true")
     args(
         (project.findProperty("out") ?: layout.buildDirectory.dir("snapshots").get().asFile.path).toString(),
         (project.findProperty("live") ?: "false").toString(),
@@ -86,7 +89,9 @@ tasks.register<JavaExec>("hero") {
     classpath = sourceSets["test"].runtimeClasspath
     mainClass = "dev.marregui.comando.app.Hero"
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
-    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-hero")
+    jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-hero",
+        // painted from its root pane, so the window opens on no screen and never takes the desktop's focus
+        "-Dcomando.offScreen=true", "-Dapple.awt.UIElement=true")
     args((project.findProperty("out") ?: layout.buildDirectory.dir("snapshots").get().asFile.path).toString())
 }
 
@@ -101,6 +106,7 @@ val uiTest = tasks.register<Test>("uiTest") {
         includeTestsMatching("*UiReplayTest")
         includeTestsMatching("*UiKeysTest")
         includeTestsMatching("*TreeClicksUiTest")
+        includeTestsMatching("*ThreadBudgetTest")
     }
     // one JVM per class: each class starts from a fresh AWT state, whichever window the desktop put in front last
     forkEvery = 1

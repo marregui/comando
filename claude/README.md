@@ -15,12 +15,13 @@ Claude Code kit. It depends on `core` and Jackson.
 | Class | Does |
 |---|---|
 | `ClaudeAdapter` | the port; a `Session` per name, each with its strand, its transcript, its `StreamMapper` and its current process run |
-| `ClaudeCommand` | the argument list of a session's process: stream-JSON in and out, start mode (`--session-id`, `--resume`, `--fork-session`), `--mcp-config`, `--permission-prompt-tool mcp__comando__approve`, `--append-system-prompt`, the spec's model, effort, permission mode, extra directories and budget |
+| `ClaudeCommand` | the argument list of a session's process: stream-JSON in and out with partial messages, sub-agent text and hook events (`--verbose`, `--include-partial-messages`, `--forward-subagent-text`, `--include-hook-events`), start mode (`--session-id`, `--resume`, `--fork-session`), `--name <session>`, `--mcp-config` with `--permission-prompt-tool mcp__comando__approve` and `--append-system-prompt` (only with comando's server), the spec's model, effort, permission mode, extra directories and budget |
 | `ClaudeProcess` | one child process and its threads: stdout lines to the strand, stdin from a queue, the last 40 stderr lines, the exit |
 | `StreamMapper` | stream-JSON events, or a stored conversation's lines, into `Block`s and intents; streaming blocks grow in place and the complete `assistant` event replaces them |
 | `SubagentFiles` | finds and reads a sub-agent's stored conversation (`<session-id>/subagents/agent-<id>.jsonl`), reading only what the file gained since the last read |
 | `SessionCatalogue` | Claude Code's stored conversations for the import dialog, from a bounded read of each file's head and tail |
 | `PlanUsageReader` | the plan's usage limits from `claude --safe-mode -p /usage`, which sends no prompt |
+| `ClaudeTopics` | the tabs' topics: one line each from Haiku (`claude --safe-mode -p --model haiku`, no tools, no thinking, no saved session), one read at a time, one ask waiting per tab |
 | `ClaudeVersion` | `claude --version` against the tested line (2.1.296 up to 2.2.0): a warning outside it, not a refusal |
 | `GitBranch` | the working directory's branch from `.git/HEAD`, without running git |
 | `Kit` | comando's Claude Code plugin (the repository's `kit/`), copied into the data root and installed through Claude Code's plugin commands with the user's consent |
@@ -73,26 +74,36 @@ start sessions without comando's tools) and `ClaudeSettings`.
 conversation as a lower view, followed while it grows), `Notify`.
 
 **Reads, never writes:** Claude Code's `~/.claude/projects/`. **Writes outside the data root:** only what `Kit.install`
-does after the user consents (Claude Code's plugin commands, the skeleton files that are missing, one settings key).
+does after the user consents (Claude Code's plugin commands, the skeleton files that are missing, one settings key),
+and a temporary file in the system temp folder for each plan-usage read, each topic read and each process's stderr,
+deleted after it.
 
 ## 3. Threads
 
 | Thread | Does |
 |---|---|
-| `claude-strand-<session>` | virtual, single-threaded: every change to the session |
-| `claude-out-`, `-in-`, `-err-`, `-exit-<session>` | per process: stdout lines, the stdin queue, the stderr tail, the exit |
-| `claude-timer` | the stop sequence: SIGTERM 3 s after the interrupt, SIGKILL 2 s later |
-| `subagent-tail` | follows up to 4 sub-agent conversations every 2 s while they run |
-| `plan-usage` | the periodic `/usage` read |
+| `claude-out-<session>` | platform, the one a session costs: stdout lines (a pipe read holds its thread even on a virtual thread) |
+| `claude-in-`, `claude-exit-<session>` | virtual forks: the stdin queue; the exit, then the stderr tail read from its file in the temp folder, which is deleted |
+| `claude-strand-<session>` | strand: every change to the session |
+| `claude-timer` | timed strand: the stop sequence, SIGTERM 3 s after the interrupt, SIGKILL 2 s later |
+| `subagent-tail` | timed strand: follows up to 4 sub-agent conversations every 2 s while they run |
+| `plan-usage` | timed strand: the periodic `/usage` read |
+| `topic-reader` | strand: the tabs' topic reads, one at a time |
+| `claude-version`, `claude-output` | forks: `claude --version`'s output; one `claude plugin` run's output for `Kit`, bounded at 60 s |
 
 `close()` stops every process (SIGTERM, SIGKILL 2 s later) and deletes every MCP configuration file.
 
 ## 4. Tests
 
-- `ClaudeAdapterTest`, `SubagentFollowTest` and `SubagentTailEdgesTest` run the adapter against fake CLI scripts in
-  `src/test/resources` (`fake-claude.sh`, `fake-claude-crash.sh`, `fake-claude-agents.sh`).
-- `StreamMapperTest` replays `testkit`'s recorded streams; `SubagentFilesTest` and the sub-agent tests read the
-  fixtures in `src/test/resources/subagents/`; `SubagentFilesProbeTest` feeds `SubagentFiles` generated inputs.
+- `ClaudeAdapterTest`, `SubagentViewTest`, `SubagentFollowTest` and `SubagentTailEdgesTest` run the adapter against
+  fake CLI scripts in `src/test/resources` (`fake-claude.sh`, `fake-claude-crash.sh`, `fake-claude-agents.sh`), and
+  one `ClaudeAdapterTest` writes its own (a process that dies mid-tool). The sub-agent tests shorten the 2 s follow
+  period to 100 ms.
+- `StreamMapperTest` replays `testkit`'s recorded streams; `SubagentFilesTest` reads the fixtures in
+  `src/test/resources/subagents/`, the other sub-agent tests write their files into a temporary projects folder as
+  they go; `SubagentFilesProbeTest` feeds `SubagentFiles` generated inputs.
+- `PlanUsageReaderTest` and `ClaudeTopicsTest` run their reads against fake scripts written in a temporary folder;
+  `ClaudeTopicsTest` also paces a stubbed read to check one read at a time, the replacement of a waiting ask and the close.
 - `KitLiveTest` runs the installed `claude` in a throwaway `CLAUDE_CONFIG_DIR`, only with `COMANDO_KIT_LIVE=true`.
 
 Further reading: [Claude §1](../docs/claude.md#1-the-claude-bridge), [the kit](../kit/README.md).

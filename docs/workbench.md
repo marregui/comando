@@ -15,12 +15,13 @@ what is kept on disk.
 ### 1.1 One model for connections, sessions and folders
 
 A connection, a session and a folder of the Files tab are resources: configured, stored and listed in the sidebar.
-Each is written once as a resource kind. Connections and sessions are edited in one dialog; folders in `folders.json`
+Each is written once as a resource kind. Connections and sessions are edited in one dialog; folders in two windows of
+their own, Configure ~/.claude folders and Configure repositories, which keep them in `folders.json`
 ([§5](#5-the-files-tab)).
 
 | Layer | Connection | Session | Folder |
 |---|---|---|---|
-| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, permission mode, extra directories, budget, checkpoint command, conversation id, next start (new, resume, fork) | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file |
+| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, permission mode, extra directories, budget, checkpoint command, conversation id, next start (new, resume, fork) | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository |
 | Kind (`core.resource`) | `ConnectionKind` | `SessionKind` (a clone forks the conversation) | `FolderKind` |
 | Live state (`core.state`) | `ConnectionState`: closed, opening, open, closing, failed, last error | `SessionState`: the same, plus turns, context, activity, branch, background tasks | — |
 | Store file | `connections.json` | `sessions.json` | `folders.json` |
@@ -65,8 +66,8 @@ either empty. Several panels may share a connection; a session has at most one p
   Edit (Markdown), the editor theme, Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A
   production connection frames the panel in red ([record 57](adr/0057-a-light-editor-and-a-header-of-icons.md)).
 - **The editor theme** is dark (IntelliJ's Dark) or light (IntelliJ's Light) for every panel at once: the text, its
-  gutter, its rendered Markdown (code blocks in the theme's colours, Mermaid diagrams drawn in Mermaid's default
-  theme). The rest of the window stays dark. The choice is kept across restarts.
+  gutter, its rendered Markdown (code blocks in the theme's colours, Mermaid diagrams drawn in Mermaid's dark
+  theme, or its default theme with light editors). The rest of the window stays dark. The choice is kept across restarts.
 - **Pictures in Markdown**: an image link to a PNG, JPEG, GIF or SVG on this machine, named from the document's folder
   (`images/chart.png`, `../img/flow.svg`) or by its full path, shows the picture, no wider than the panel; it is read on
   a thread of its own and shown when ready, and read again when the file changes. A web address shows the alt text;
@@ -94,11 +95,11 @@ either empty. Several panels may share a connection; a session has at most one p
 Four tabs in one row, each an icon named by its tooltip: Sessions, Connections, Panels, Files; the tab in front is
 kept across restarts. A right click on a tab selects it and opens its menu: the tab's own actions, the window's
 commands for it with their keys ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md)): New session…, Import stored
-conversations… and Sort (on only after a drag ordered them by hand); New connection…; the new and reopened panel; the
+conversations… and Sort (on only after a drag ordered them by hand); New connection…, and Start or Stop embedded QuestDB; the new and reopened panel; the
 Files tab's two windows, Configure ~/.claude folders and Configure repositories ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)).
 No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)): a row's menu edits (renames a panel),
 clones and removes it (`ResourceActions`). Removing something in use asks **Stop and remove**, **Disconnect and remove**
-or **Close and remove**, or **Leave it** ([record 37](adr/0037-session-actions-act-on-the-selected-row.md)). ⌘B and the ⋯ button hide the sidebar.
+or **Close and remove**, or **Leave it** ([record 37](adr/0037-session-actions-act-on-the-selected-row.md)).
 
 - **Sessions:** name, where it is bound ("headless" when nowhere), status, current activity or what it waits on,
   pending approvals; directory and branch; `ctx` and the context % (purple from 60%), the Claude Code version the
@@ -109,8 +110,8 @@ or **Close and remove**, or **Leave it** ([record 37](adr/0037-session-actions-a
   sent from the session's panel); at the right the model and effort as menus (a change saves and, on a running session,
   sends `/model` or `/effort`). A copy button at the row's top right under the mouse, Copy details in its menu and ⌘C
   copy name, path, branch, full id, status, uptime and start, context with tokens, model and effort, and the Claude Code version. Listed running
-  first, then by name, until a row is dragged; the order then stands (saved in `sessions.json`) until the sort button
-  ([record 53](adr/0053-session-rows-compact-clear-copy-and-an-order-of-your-own.md)). Import lists stored
+  first, then by name, until a row is dragged; the order then stands (saved in `sessions.json`) until **Sort: running first, then by name** in the Sessions tab's
+  menu ([record 53](adr/0053-session-rows-compact-clear-copy-and-an-order-of-your-own.md), [record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)). Import lists stored
   conversations.
 - **Panels:** comando's own panels, open and closed, with session, connection and file name. Clone copies text and
   connection, not the session. Removing deletes the panel's file; removing the last open panel leaves an empty one.
@@ -163,7 +164,7 @@ The run keys act while the keyboard is in the focused panel's editor.
 
 Keys are written as macOS writes them. On other desktops each is the same with Ctrl for ⌘ (⌘⇧P is Ctrl+Shift+P), but
 for two that would be another command's there: the lower tabs ⌃1–⌃4 are Alt+1–4, and ⌃⏎ is Ctrl+Alt+⏎. In the
-terminal Ctrl with a letter, `[`, `\` or `]` goes to the shell, as ⌃ does on macOS; comando's other keys work there.
+terminal Ctrl with a letter, `[`, `\`, `]` or space goes to the shell, as ⌃ does on macOS; comando's other keys work there.
 The palette, the shortcuts table and every text in the window name the desktop's own keys
 ([record 65](adr/0065-keys-on-desktops-other-than-macos.md)).
 
@@ -225,7 +226,7 @@ columns of the bound connection) and the explorer (⌘⇧E): a tree in the side 
 
 ### 3.4 Embedded QuestDB
 
-A toggle starts a QuestDB server in `questdb/` of the data root, on QuestDB's default ports (PG wire 8812, console 9000,
+**Actions ▸ Start embedded QuestDB** (also in the Connections tab's menu) starts a QuestDB server in `questdb/` of the data root, on QuestDB's default ports (PG wire 8812, console 9000,
 ILP 9009). Every listener binds `127.0.0.1` and ILP over UDP is off, through `QDB_` environment overrides, because
 QuestDB binds all interfaces by default and its default login is public. It stops at exit, after the lanes.
 
@@ -386,10 +387,10 @@ inside that folder alone ([record 71](adr/0071-repositories-in-the-files-tab.md)
   shaded as in the texts: a block (paragraph, heading, list item, table cell, code block, diagram) whose source lines
   differ is red on `HEAD`'s side and green on the working tree's, and the words that changed inside it more strongly.
 - **Rolling back and removing.** The working tree's right-click menu offers both. Roll back to HEAD gives a changed or
-  removed file `HEAD`'s text as one edit that undo takes back, saves it and unstages the file. A file `HEAD` does not
-  have, a renamed or copied one, or a file the window does not edit, goes back through git after a question: its version
-  to the Trash first, then `git restore --source=HEAD --staged --worktree` (a renamed file's old path comes back; an
-  added one leaves the index). Move to the Trash… moves the file to the Trash after a question, and out of the index
+  removed file the window edits `HEAD`'s text as one edit that undo takes back, saves it and unstages the file. Any
+  other file goes back through git after a question, its version to the Trash first: an untracked file goes no further;
+  an added or copied one leaves the index (`git rm --cached`); a renamed one leaves the index and its old path comes
+  back; the rest take `git restore --source=HEAD --staged --worktree`. Move to the Trash… moves the file to the Trash after a question, and out of the index
   when `HEAD` does not have it. In the view, the menu of the selection (⌘- or ⇧-click for several) rolls back or removes
   every file in it, a folder's, a group's or a repository's row standing for every file under it, after one question.
   Without a Trash nothing changes. Edit ▸ Undo, Redo, Cut, Copy and Paste act on the window while it has the keyboard.
@@ -410,12 +411,14 @@ inside that folder alone ([record 71](adr/0071-repositories-in-the-files-tab.md)
 | `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Actions ▸ Show the log opens it read-only, a click on a notice that names an entry opens it at that entry |
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
+| `opened-files` | the files opened in comando, one path per line, at most 20 000: a new (untracked) file listed here is no longer marked in the Files tab ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)) |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |
 | `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |
 | `kit/` | comando's copy of its Claude Code kit, made equal to the build's at start ([record 50](adr/0050-comando-ships-a-claude-code-kit.md)) |
 | `questdb/` | the embedded QuestDB's data |
 
-Outside it: connection passwords in the macOS keychain ([Claude §3.3](claude.md#33-secrets)); window layout and recent
+Outside it: connection passwords in the macOS keychain for the default data root (elsewhere, or off macOS, they stay
+in `connections.json`; [Claude §3.3](claude.md#33-secrets)); window layout and recent
 inputs in Java preferences (node `dev/marregui/comando`; tests use `comando.prefsNode`); Claude Code's conversations in
 `~/.claude/projects/`, read, never written; the kit's skeleton files in Claude Code's folder, written only when missing.
 

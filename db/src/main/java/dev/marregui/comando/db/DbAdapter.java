@@ -2,6 +2,7 @@ package dev.marregui.comando.db;
 
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.port.DatabasePort;
 import dev.marregui.comando.core.port.IntentSink;
@@ -66,7 +67,7 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
         this.schemas = schemas;
         this.settings = settings;
         this.maxCatalogueTables = maxCatalogueTables;
-        this.timer = Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("db-timer").daemon(true).unstarted(r));
+        this.timer = Threads.timedStrand("db-timer");
         long period = settings.healthPeriodSeconds();
         timer.scheduleWithFixedDelay(this::checkHealth, period, period, TimeUnit.SECONDS);
     }

@@ -23,6 +23,7 @@ import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.Command;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.shell.ComandoUi;
+import dev.marregui.comando.ui.shell.ServerToggle;
 import dev.marregui.comando.ui.shell.Setup;
 import org.awaitility.Awaitility;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
@@ -66,6 +67,8 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.prefs.Preferences;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -165,11 +168,16 @@ class UiKeysTest {
     }
 
     private Window open(String keys) throws Exception {
-        return open(keys, TopicPort.NONE);
+        return open(keys, null);
+    }
+
+    /** A window whose embedded server is {@code server}, or none when null. */
+    private Window open(String keys, ServerToggle server) throws Exception {
+        return open(keys, server, TopicPort.NONE);
     }
 
     /** A window whose tabs' topics {@code topics} reads. */
-    private Window open(String keys, TopicPort topics) throws Exception {
+    private Window open(String keys, ServerToggle server, TopicPort topics) throws Exception {
         System.setProperty(Platform.KEYS_PROPERTY, keys);
         System.setProperty("comando.prefsNode", PREFS);
         IntentLog.Replay replay = IntentLog.read(Path.of(getClass().getResource("/replay/snapshot.jsonl").toURI()));
@@ -182,7 +190,7 @@ class UiKeysTest {
             loop.dispatch(i);
         };
         ComandoUi ui = new ComandoUi(new ComandoUi.Dependencies(recording, loop::state, loop, new TranscriptRegistry(), new ResultRegistry(),
-                new ConsoleRegistry(), new SchemaRegistry(), new Texts(), List::of, null, Setup.NONE, "keys", null, null, () -> { }));
+                new ConsoleRegistry(), new SchemaRegistry(), new Texts(), List::of, server, Setup.NONE, "keys", null, null, () -> { }));
         effects.target = new EffectRouter(ports, ports, ports, ui, ports, ports);
         open.add(() -> {
             ui.close();
@@ -253,6 +261,45 @@ class UiKeysTest {
     }
 
     // ---- the window
+
+    /** The first panel on a fresh data root names menu items; each must be one the menu bar has. */
+    @Test
+    void theWelcomeTextNamesOnlyMenuItemsTheBarHas() throws Exception {
+        Window w = open("mac", new ServerToggle() {
+            @Override
+            public String name() {
+                return "QuestDB";
+            }
+
+            @Override
+            public boolean isRunning() {
+                return false;
+            }
+
+            @Override
+            public void toggle() {
+            }
+        });
+        // a command in no menu is grouped by its area ("Panels"), which is no menu of the bar
+        List<String> menus = onEdt(() -> {
+            List<String> names = new ArrayList<>();
+            for (int i = 0; i < w.frame().getJMenuBar().getMenuCount(); i++) {
+                names.add(w.frame().getJMenuBar().getMenu(i).getText());
+            }
+            return names;
+        });
+        List<String> items = w.ui().commands().stream().filter(c -> c.group() != null && menus.contains(c.group().split(" ▸ ")[0]))
+                .map(c -> c.group() + " ▸ " + c.label()).toList();
+        List<String> named = new ArrayList<>();
+        Matcher m = Pattern.compile("\\b\\p{Lu}\\p{L}+ ▸ ").matcher(Welcome.TEXT);
+        while (m.find()) {
+            named.add(Welcome.TEXT.substring(m.start()));
+        }
+        assertThat(named).as("the welcome names menu items").isNotEmpty();
+        for (String path : named) {
+            assertThat(items).as("a menu item at the start of: " + path.lines().findFirst().orElse(path)).anyMatch(path::startsWith);
+        }
+    }
 
     @Test
     @EnabledIfSystemProperty(named = "comando.offScreen", matches = "true")
@@ -383,7 +430,7 @@ class UiKeysTest {
     @Test
     void restingOnATabShowsItsCardWithTheTopicWhichStaysUntilTheCardIsClicked() throws Exception {
         List<String> sources = new CopyOnWriteArrayList<>();
-        Window w = open("mac", (key, source, urgent, done) -> {
+        Window w = open("mac", null, (key, source, urgent, done) -> {
             sources.add(source);
             done.accept(new Topic("Replaying the snapshot session", 1L, ""));
         });

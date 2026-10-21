@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.kit.vcs;
 
+import dev.marregui.comando.ui.kit.async.UiErrands;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -22,7 +24,7 @@ public final class OpenedFiles {
     /** The paths kept; past it the oldest are dropped. */
     public static final int MAX = 20_000;
     private static final System.Logger LOG = System.getLogger(OpenedFiles.class.getName());
-    private static final Executor WRITER = task -> Thread.ofVirtual().name("opened-files").start(task);
+    private static final Executor WRITER = task -> UiErrands.start("opened-files", task);
 
     /** Where the paths are kept; null keeps them in memory only. */
     private final Path file;

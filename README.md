@@ -21,7 +21,7 @@
 
 ![comando at work: a query in the editor, coloured as SQL because the database is open; the prompt below it went to a Claude Code session, which ran the query through comando's tools and plotted the result beside the editor](docs/images/hero.png)
 
-<p align="center"><sub>A real turn, unedited. The query is coloured as SQL because the panel's QuestDB is open. The prompt under it went to a Claude Code session (haiku), which ran the query with comando's <code>db_run_sql</code> tool and placed the plot in the side pane with <code>ui_plot</code>: three tool calls, 9.8 s.</sub></p>
+<p align="center"><sub>A real turn, unedited. The query is coloured as SQL because the panel's QuestDB is open. The prompt under it went to a Claude Code session (haiku), which ran the query with comando's <code>db_run_sql</code> tool and placed the plot in the side pane with <code>ui_plot</code>: three tool calls, 13.8 s.</sub></p>
 
 ## Why
 
@@ -51,11 +51,11 @@ A block is a run of lines between blank lines. comando decides where it goes and
 |---|---|
 | **One editor, two targets** | SQL and prompts in one Markdown file per panel, each block coloured as what it is (SQL only while the panel's database is open). SQL completion from the live schema. |
 | **Claude Code, headless** | One `claude -p` process per session: start, resume, fork, start fresh, compact, clear, interrupt, stop; model and effort per session; each session's context and uptime on its row, its id in the row's tooltip, all copied with a click; stored conversations import from `~/.claude/projects`. A checkpoint button sends `/reflect` (or your command) and turns purple at 60% of the context window. |
-| **A painted transcript** | Prompts, text, tool calls with results, nested subagents, notes and turn ends, painted with Java2D so long sessions stream within a frame. Thinking gives way to the answer; the conclusion reads in gold. |
+| **A painted transcript** | Prompts, text, tool calls with results, nested subagents, notes and turn ends, painted with Java2D so long sessions stream within a frame. Thinking gives way to the answer; the text reads in one soft amber on a near-black ground. |
 | **Claude drives the window** | An MCP server inside the app: tables, plots, diffs, files, Markdown and trees on screen; text into the editor; SQL under a lexical policy (writes refused on production connections); the window's state. Sessions can prompt one another and read each other's transcripts. |
 | **Sessions at a glance** | Tab icons for working, waiting on background work, needs you, failed and finished; the Dock bounces when you are needed or something failed. The status bar shows the plan's usage limits; no spend is shown anywhere. |
 | **Databases** | PostgreSQL and QuestDB over the PostgreSQL wire protocol, with an embedded QuestDB one click away. One lane per connection, cancel within two seconds, results stored by column (millions of rows), plots and live plots, `EXPLAIN` trees, a schema explorer. |
-| **Documents** | The folders you choose as trees in one tab, searchable by name and kept in sync while open; a double click opens a file in a panel to read and edit (Markdown rendered with Mermaid diagrams, an HTML page one click from the browser, source coloured by language); the folders are set in `folders.json`, and the tab follows its changes. |
+| **Documents and changes** | The folders and repositories you choose as trees in one tab, searchable by name and kept in sync while open; a double click opens a file in a panel to read and edit (Markdown rendered with Mermaid diagrams, an HTML page one click from the browser, source coloured by language). A folder or repository row marks what is uncommitted, and ⌘K opens Uncommitted changes with a side-by-side diff that edits, rolls back and removes. The tab's menu configures its folders and repositories (kept in `folders.json`, whose outside edits the tab follows). |
 | **Development tools** | A terminal per panel; Gradle runs with test results as a tree and failures sent to Claude. |
 | **A Claude Code kit** | A Claude Code plugin ([`kit/`](kit/README.md)) for the way of working comando is built for: one memory for every project, a knowledge base and scratchpad kept current by `/reflect`, reviews by `/deep-review`. Actions ▸ Claude Code kit shows what it would change and installs it through Claude Code's own plugin commands. |
 

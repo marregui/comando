@@ -2,6 +2,7 @@ package dev.marregui.comando.app;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.type.TypeReference;
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
@@ -32,7 +33,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
@@ -83,18 +83,19 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     private final ScheduledExecutorService writer = writer();
     /**
      * Connection saves talk to the keychain, which can wait on an unlock prompt for its whole bound; they get a
-     * thread of their own, so panel text and sessions are never queued behind a prompt nobody answers.
+     * strand of their own, so panel text and sessions are never queued behind a prompt nobody answers.
      */
-    private final ExecutorService secretsWriter =
-            Executors.newSingleThreadExecutor(r -> Thread.ofPlatform().name("store-secrets").daemon(false).unstarted(r));
+    private final ExecutorService secretsWriter = Threads.strand("store-secrets");
     private final ConcurrentHashMap<String, String> texts = new ConcurrentHashMap<>();
 
     /**
-     * The writer thread. A delayed write still waiting at shutdown is dropped, not run: {@link #close} writes
-     * everything at once, and a retry run later would write into the folder after the store closed.
+     * The writer, a timed strand. A delayed write still waiting at shutdown is dropped, not run: {@link #close} writes
+     * everything at once, and a retry run later would write into the folder after the store closed. Its thread is
+     * virtual, so a daemon: what is queued is written because {@link #close} waits for it, at a quit and in the
+     * shutdown hook alike, not because the thread keeps the JVM alive.
      */
     private static ScheduledExecutorService writer() {
-        ScheduledThreadPoolExecutor e = new ScheduledThreadPoolExecutor(1, r -> Thread.ofPlatform().name("store").daemon(false).unstarted(r));
+        ScheduledThreadPoolExecutor e = (ScheduledThreadPoolExecutor) Threads.timedStrand("store");
         e.setExecuteExistingDelayedTasksAfterShutdownPolicy(false);
         return e;
     }

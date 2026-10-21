@@ -29,7 +29,7 @@ test trees, and a browser over folders of documents.
 | Module | Holds | Depends on |
 |---|---|---|
 | `core` | state, intents, reducer, effects, ports, the stores outside the state, the SQL-or-prompt classifier | JDK only |
-| `testkit` | fakes for every port, recorded Claude streams, a synthetic session, a recording intent sink | `core` |
+| `testkit` | fakes for every effect port, a fake clock, recorded Claude streams, a synthetic session, a recording intent sink | `core` |
 | `db` | JDBC lanes (one thread per connection), cancel, columnar results, schema reading, queries for Claude | `core`, pgjdbc |
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, the Claude Code kit (`Kit`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log | `core`, Jackson |
@@ -83,7 +83,7 @@ flowchart LR
 Principles:
 
 1. **Ports and adapters.** `core` names every outside system as a port; adapters implement them; tests replace each
-   with a fake from `testkit`.
+   effect port with a fake from `testkit`; `McpGateway.NONE` and a test's own `QueryPort` stand in for the other two.
 2. **One state, one direction.** `AppState` is immutable; only the reducer replaces it, one intent at a time.
 3. **Request identity.** Every SQL run and command run has an id the reducer assigns; every approval has an id the MCP
    server assigns. A late event for a superseded id is dropped.
@@ -105,7 +105,7 @@ One immutable record of metadata and ids. Lists are tens of entries, so lookups 
 | `focused` | the panel the user works in; the lower panel follows it |
 | `connections` | each connection's spec, status (closed, opening, open, closing, failed) and last error |
 | `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, process and turn start, last turn error, background tasks, whether a checkpoint is due |
-| `folders` | the Files tab's folders in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file |
+| `folders` | the Files tab's folders and repositories in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository (shown under Repositories) |
 | `runs` | at most one SQL run per panel: request id, SQL, status, counts, timings, error, whether it is a live plot's background refresh |
 | `approvals` | permission prompts waiting for an answer, from every session |
 | `views` | views placed by Claude or the user: id, title, spec, placement (lower or side), pinned, owning session, version |
@@ -130,7 +130,7 @@ A record of the sealed interface `Intent`; anything that changes the state is on
 | Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
 | Views | `ShowView`, `RefreshView`, `CloseView`, `PinView`, `SelectLowerTab`, `Arrange`, `SessionLayout`, `SessionFocus` |
 | Editor and files | `EditPanel`, `OpenFile`, `OpenSubagent` |
-| Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `SaveFolders`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `DeleteFiles` (the Files tab's move to the Trash), `ReposLoaded`, `OpenChange`, `ChangeRead` |
+| Tools and folders | `RunGradle`, `CommandFinished`, `CancelCommand`, `AddFolder`, `SaveFolders`, `FoldersRead`, `BrowseFolders`, `WatchFolders`, `FolderLoaded`, `DeleteFiles` (the Files tab's move to the Trash), `ReposLoaded`, `OpenChange`, `ChangeRead`, `RollBack`, `RemoveFiles`, `Unstage` (the git writes of the Changes view and the comparison window) |
 | Notices | `Notify`, `DismissNotice` |
 
 A null panel in `RunText`, `RunGradle` or `EditPanel` means the focused panel.
@@ -149,8 +149,10 @@ it throw: an intent naming a missing panel, connection or session changes nothin
 - **Notices.** Every notice joins the history. A new notice replaces the standing one, except that a standing ERROR
   stays until dismissed, replaced by another error, or settled by its own subject. An event that settles a subject
   clears its notice (a run completing, a connection opening, a turn succeeding, an approval answered). A new ERROR also
-  asks for a desktop notification while the window is behind. The subject is also where a click on the notice goes:
-  `log:<millis>` names an entry of the log, found by its time ([record 79](adr/0079-a-notice-takes-you-to-what-it-is-about.md));
+  asks for a desktop notification while the window is behind. The subject is also where a click on the notice goes,
+  where the window has a target: `log:<millis>` opens the log at that entry, found by its time, and `panel:<id>` focuses
+  the panel ([record 79](adr/0079-a-notice-takes-you-to-what-it-is-about.md)); a notice of another subject opens the recent
+  notices;
   `Intent.Notify.logged` writes a failure to the log and names that entry.
 - **Repositories.** After any intent, folders that changed or a Changes view that appeared or went add `WatchRepos`
   with every folder and whether the view shows; `App` sends the first at start.
@@ -171,7 +173,7 @@ queues and returns.
 | `ApprovalPort` | `ResolveApproval` |
 | `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `DeletePanel`, `ShowFile`, `Arrange`, `ShowFolder`, `ShowRepos`, `ShowChange`, `ShowPlanUsage` |
 | `PersistencePort` | `SaveConnections`, `SaveSessions`, `SaveFolders`, `SavePanels` |
-| `ToolPort` | `RunGradle`, `CancelCommand`, `ForgetCommand`, `ReadFolders`, `WatchFolders`, `DeleteFiles`, `WatchRepos`, `ReadChange` |
+| `ToolPort` | `RunGradle`, `CancelCommand`, `ForgetCommand`, `ReadFolders`, `WatchFolders`, `DeleteFiles`, `WatchRepos`, `ReadChange`, `RollBack`, `RemoveFiles`, `Unstage` |
 
 `StateLoop` runs one intent at a time: observers (the intent log), the reducer, the effects in order, then the state
 listeners (the UI's coalesced render). The reducer, each effect and each listener are guarded, so a failure is logged and
@@ -209,10 +211,10 @@ transcript text.
 | `Clock` | `millis` | `Clock.SYSTEM` |
 | `DatabasePort` | `open`, `close`, `forgetSchema`, `test`, `execute`, `cancel`, `release`, `loadSchema` | `DbAdapter` |
 | `QueryPort` | `query`, `describe` (futures of text rows, for Claude) | `DbAdapter` |
-| `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `clearTranscript`, `loadHistory`, `forget` | `ClaudeAdapter` |
+| `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `clearTranscript`, `loadHistory`, `forget`, `showSubagent` | `ClaudeAdapter` |
 | `McpGateway` | `register(session)` gives the URL and bearer token a session's CLI uses; `unregister` | `McpServer` |
 | `ApprovalPort` | `resolve` | `McpServer` |
-| `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles`, `watchRepos`, `readChange` | `ToolsAdapter` |
+| `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles`, `watchRepos`, `readChange`, `rollBack`, `removeFiles`, `unstage` | `ToolsAdapter` |
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showRepos`, `showChange`, `showPlanUsage` | `ComandoUi` |
 | `PersistencePort` | `saveConnections`, `saveSessions`, `saveFolders`, `savePanels` | `Store` |
 
@@ -223,40 +225,62 @@ by delta), `FakeResult`.
 
 ## 6. Threads
 
+comando's threads are of six kinds ([record 82](adr/0082-threads-by-kind-with-a-budget.md)). Only the first three use
+operating-system threads, and their number is fixed: **two, plus one per running Claude session**, whatever the number
+of connections, folders, panels, diagrams or runs. `ThreadBudgetTest` (in `:app:uiTest`) holds the budget with five
+sessions and checks nothing is left after the close; `ThreadRulesTest` fails the build when code outside the kinds below
+starts a thread or an executor.
+
+| # | Kind | Is | Threads |
+|---|---|---|---|
+| K1 | Event loop | owns state or the toolkit; never blocks | the EDT (AWT's); `comando-reducer` (platform) |
+| K2 | Watchdog | must run while what it watches is held | one `watchdog` (platform) for the EDT and the reducer, from `Watchdog.shared()`; started with the first look, ended after the last |
+| K3 | Session reader | reads a pipe live: a pipe read holds its operating-system thread even on a virtual thread (measured on JDK 25: 100 blocked readers, 101 carriers) | `claude-out-<session>` (platform), one per running session |
+| K4 | Strand | sequential work on one resource; its waits hold no operating-system thread | one virtual thread each, from `Threads.strand` or, with timers, `Threads.timedStrand` (the JDK's one delay thread keeps the timers) |
+| K5 | Errand | one blocking call started by a gesture or an event, then gone | a virtual thread from its owner's `Errands` (`App`, `ToolsAdapter`, `EmbeddedQuestDb`, the window's `UiErrands`), interrupted and waited for at the owner's close |
+| K6 | Fork | a thread its caller collects in the same call, with a bound | a virtual thread from `Threads.fork` |
+
+The rest of a running process is not comando's: the JVM's (GC, compiler, VM; about 30), AWT's and Java2D's (6), the
+virtual threads' scheduler (its carriers: one per core while busy, plus one for each virtual thread held in file or
+pipe I/O, which is why a session's reader is a platform thread), the JDK's `process reaper` (one per child
+process), the MCP server's dispatcher and the libraries' (JNA, a `java.util.Timer`). The GC threads were measured too:
+halving them to two lengthened the G1 pause p99 from 6 to 30–48 ms on `:ui:transcriptGate`, so the JVM keeps its
+default.
+
 | Thread | Kind | Does |
 |---|---|---|
-| EDT | AWT | renders the state, turns input into intents; owns every Swing component |
-| `comando-reducer` | platform | applies intents in order; the only writer of `AppState` |
-| `reducer-watchdog` | platform, daemon | looks at the reducer every 100 ms; an intent still applying at 1 s is logged with the reducer's stack |
-| `db-<connection>` | platform, one per connection | opens the connection, runs statements one at a time, fetches rows |
-| `db-timer` | platform | health checks every 60 s; the abort after an unanswered cancel |
-| `claude-strand-<session>` | virtual, single-threaded | every change to a session: start, send, interrupt, stop, history; the transcript's one writer |
-| `claude-out-`, `-in-`, `-err-`, `-exit-<session>` | platform, per process | stdout lines, the stdin queue, the last 40 stderr lines, the exit |
-| `claude-timer` | platform | the stop sequence's deadlines |
-| `subagent-tail` | platform, daemon | finds and renders a sub-agent's stored conversation; follows up to 4 of them every 2 s while they run, reading only what their files gained |
-| `plan-usage` | platform, daemon | `claude --safe-mode -p /usage` at start and every 5 minutes, stopped after 30 s |
-| MCP requests | virtual, one per request | JSON-RPC; an `approve` call waits for its card |
-| `gradle-<run>`, `tool-output-<run>`, `tool-kill-<run>` | virtual | a run's process and output; SIGKILL what a stop left alive after 2 s |
-| `folder-read` | virtual | folder reads |
-| `folder-poll` | platform, daemon | every 5 s reads the watched git repositories, then the open folders; sends each only when it changed |
-| `repo-read`, `change-read`, `repo-write` | virtual | the repositories read when the Changes view opens or closes; a changed file's two versions, one at a time; rolling back, removing and unstaging files with git and the Trash, one at a time, then the repositories read again |
-| `diff-compute` | virtual | the comparison window's line and word match, stopped at 2 s |
-| `opened-files` | virtual | writes `opened-files` after a file is opened for the first time, one write at a time |
-| `store`, `store-secrets` | platform | atomic writes of the store files; panel text 800 ms after the first unsaved change; a check of open panels' files and `folders.json` every second; keychain calls apart, so an unlock prompt never holds back panel text |
-| `mermaid` | platform, daemon | `mmdc`, one diagram at a time, 30 s bound |
-| `local-images` | platform, daemon | reads the pictures a Markdown view names and draws SVGs into `cache/images/`, one at a time |
-| `edt-watchdog` | platform, daemon | a probe to the EDT every 100 ms |
-| `exit`, `shutdown` | platform | close the application after Quit, or from the shutdown hook |
-| short virtual threads | virtual | one blocking call each off the EDT: opening a file, the tutorial, stored conversations, links, the external editor, notifications, the kit, exports, preparing a large plot, moving files to the Trash (`file-trash`) |
+| EDT | K1 | renders the state, turns input into intents; owns every Swing component |
+| `comando-reducer` | K1 | applies intents in order; the only writer of `AppState` |
+| `watchdog` | K2 | every 100 ms: a probe to the EDT, a look at the reducer; an EDT held 200 ms or an intent applying 1 s is a stall, logged |
+| `claude-out-<session>` | K3 | stdout lines of the session's process; stderr goes to a file, read once at the exit |
+| `claude-strand-<session>` | K4 | every change to a session: start, send, interrupt, stop, history; the transcript's one writer |
+| `claude-timer` | K4, timed | the stop sequence's deadlines |
+| `subagent-tail` | K4, timed | finds and renders a sub-agent's stored conversation; follows up to 4 of them every 2 s while they run, reading only what their files gained |
+| `plan-usage` | K4, timed | `claude --safe-mode -p /usage` at start and every 5 minutes, stopped after 30 s |
+| `topic-reader` | K4 | the tabs' topics with Haiku, one `claude --safe-mode -p --model haiku` at a time; at most one ask waiting per tab, the card shown first |
+| `db-<connection>` | K4 | opens the connection, runs statements one at a time, fetches rows |
+| `db-timer` | K4, timed | health checks every 60 s; the abort after an unanswered cancel |
+| `folder-poll` | K4, timed | every 5 s reads the watched git repositories, then the open folders; sends each only when it changed |
+| `change-read`, `repo-write` | K4 | a changed file's two versions, one at a time; rolling back, removing and unstaging files with git and the Trash, one at a time |
+| `store` | K4, timed | atomic writes of the store files; panel text 800 ms after the first unsaved change; a check of open panels' files and `folders.json` every second |
+| `store-secrets` | K4 | keychain calls apart, so an unlock prompt never holds back panel text |
+| `mermaid`, `local-images` | K4 | `mmdc`, one diagram at a time, 30 s bound; the pictures a Markdown view names, SVGs drawn into `cache/images/` |
+| `claude-in-`, `claude-exit-<session>` | K6 | the stdin queue; the wait for the process's exit, then the stderr tail |
+| `git-out`, `git-err`, `tool-output-<run>`, `keychain-output`, `claude-output`, `claude-version` | K6 | one process's output while its caller waits for it, bounded |
+| `gradle-<run>`, `tool-kill-<run>`, `folder-read`, `repo-read`, `file-trash` | K5 (`ToolsAdapter`) | a run's process; SIGKILL what a stop left alive after 2 s; folder and repository reads; moving files to the Trash |
+| `claude-version`, `kit`, `questdb-toggle` | K5 (`App`, `EmbeddedQuestDb`) | the start-up checks; one start or stop of the embedded QuestDB |
+| `open-file`, `show-file`, `log-entry`, `open-link`, `external-editor`, `notify`, `export`, `plot-prepare`, `diff-compute`, `folder-facts`, `read-conversations`, `opened-files`, the tutorial's and the kit's | K5 (`UiErrands`) | one blocking call each off the EDT |
+| MCP requests; a connection test, a cancel | owned per-task executors | JSON-RPC (an `approve` call waits for its card); `DbAdapter`'s testers and cancellers |
+| `exit`, `shutdown` | platform, at quit only | close the application after Quit, or from the shutdown hook |
 
 How work crosses threads:
 
 - **Into the reducer.** `IntentSink.dispatch` puts the intent on an unbounded queue; intents from one thread keep their
   order.
-- **Out of the reducer.** Ports queue work on their own executors and return.
+- **Out of the reducer.** Ports queue work on their strands and return.
 - **To the EDT.** One state listener requests a render through a `Coalescer`: many state changes become at most one
   pending `invokeLater`. Growing stores (transcripts, consoles) ask for repaints the same way.
-- **From the EDT.** Input becomes an intent; blocking work moves to a virtual thread.
+- **From the EDT.** Input becomes an intent; blocking work moves to an errand.
 
 Bounded waits:
 
@@ -271,7 +295,9 @@ Bounded waits:
 | Tool run stop | SIGKILL 2 s after SIGTERM | the run ends as stopped |
 | Output after a process exits (tools, Claude) | 2 s | a child holding the pipe no longer holds the run or session |
 | `claude --version` | 5 s | a warning |
+| A tab's topic read (Haiku) | 30 s | killed; the card says Haiku did not answer |
 | Desktop notification (`osascript`) | 10 s | killed, not shown |
+| A `git` command | 10 s | killed and its whole tree with it; the read or write says git took too long |
 | Keychain calls | 10 s | killed; the connection loads without its password, the item is kept |
 | Closing the window at quit | 5 s | quit anyway |
 | The EDT | 200 ms | a stall, one INFO line when it ends; past 1 s (2 s in the JDK's drawing) a hang, logged with the EDT's stack; a stall of 1 s or more a notice whose click opens the log at the stack, or at the stall's line |
@@ -308,7 +334,8 @@ too; the second call does nothing.
 
 ```
 dev.marregui.comando.ui
-├── kit/            theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, desktop, vcs
+├── kit/            theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, layout, resource
+│                   actions, desktop, vcs
 ├── widget/         the contract: Widget, WidgetContext, WidgetRegistry; capability/ (Searchable, Copyable, …)
 ├── widgets/        one package per widget: approval, changes, console, diff, editor, markdown, plot, table, terminal, text,
 │                   transcript (with doc/ and render/), tree
@@ -332,7 +359,9 @@ a `Command`.
 ## 9. Code rules
 
 1. A change to state is an intent; the reducer is the only writer of `AppState`.
-2. Every thread a part starts ends when the part closes, or is a daemon.
+2. A thread is of one of the six kinds of §6 and comes from `Threads`, an owner's `Errands` or `Watchdog`; a new
+   platform thread needs a new kind. Every thread a part starts ends when the part closes. Repeated work goes to a
+   part's strand, at most one ask waiting per key, never to a thread of its own per occurrence.
 3. Every wait has a bound and an action on expiry.
 4. Nothing in `ui` imports an adapter module; no widget imports another widget.
 5. Nothing blocks the EDT: process runs, network, reads of unknown size and keychain calls go to other threads; Swing

@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | proposed; replaces the tab rows and headers of [record 40](0040-one-resource-per-dialog-and-two-tab-rows.md) | Miguel (one row of icons drawn as tabs, packed, the order, a menu on a right click, tooltips that are short and useful), Claude (how: the header's look, each menu's items, the tooltip bound, the saved tab) |
+| 2026-10-19 | accepted; replaces the tab rows and headers of [record 40](0040-one-resource-per-dialog-and-two-tab-rows.md) | Miguel (one row of icons drawn as tabs, packed, the order, a menu on a right click, tooltips that are short and useful), Claude (how: the header's look, each menu's items, the tooltip bound, the saved tab) |
 
 ## 1. Context
 

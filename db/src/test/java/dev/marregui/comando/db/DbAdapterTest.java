@@ -1,6 +1,7 @@
 package dev.marregui.comando.db;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.port.QueryPort;
 import dev.marregui.comando.core.result.ColumnKind;
@@ -348,7 +349,7 @@ class DbAdapterTest {
     }
 
     private static Optional<Thread> laneThread(String connection) {
-        return Thread.getAllStackTraces().keySet().stream().filter(t -> t.getName().equals("db-" + connection)).findFirst();
+        return Threads.alive("db-" + connection).stream().findFirst();
     }
 
     private static void sleep(long millis) {

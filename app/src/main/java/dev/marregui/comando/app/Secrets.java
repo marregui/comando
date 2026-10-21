@@ -1,5 +1,6 @@
 package dev.marregui.comando.app;
 
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 
 import java.io.IOException;
@@ -127,7 +128,7 @@ interface Secrets {
                 Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
                 p.getOutputStream().close();
                 CompletableFuture<byte[]> out = new CompletableFuture<>();
-                Thread.ofVirtual().name("keychain-output").start(() -> {
+                Threads.fork("keychain-output", () -> {
                     try (InputStream in = p.getInputStream()) {
                         out.complete(in.readAllBytes());
                     } catch (IOException e) {

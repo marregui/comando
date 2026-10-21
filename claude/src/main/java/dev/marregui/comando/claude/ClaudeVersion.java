@@ -1,5 +1,7 @@
 package dev.marregui.comando.claude;
 
+import dev.marregui.comando.core.loop.Threads;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -66,7 +68,7 @@ public record ClaudeVersion(int major, int minor, int patch) implements Comparab
             p.getOutputStream().close();
             // read on a thread of its own: a child the CLI left running can hold the output open after the exit
             StringBuffer read = new StringBuffer();
-            Thread reader = Thread.ofVirtual().name("claude-version").start(() -> {
+            Thread reader = Threads.fork("claude-version", () -> {
                 try (BufferedReader lines = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
                     for (String line = lines.readLine(); line != null; line = lines.readLine()) {
                         read.append(line).append('\n');

@@ -35,7 +35,8 @@ class KitLiveTest {
         assertThat(kit.status().changes()).isEmpty();
         String details = cli.run(List.of("plugin", "details", Kit.PLUGIN)).text();
         assertThat(details).contains("Skills (2)", "deep-review", "reflect", "Hooks (2)  SessionStart, PostToolUse");
-        assertThat(config.resolve("KB/README.md")).exists();
+        assertThat(config.resolve("KB/00_START_HERE.md")).exists();
+        assertThat(config.resolve("KB/99_MAINTENANCE.md")).exists();
         assertThat(Files.readString(config.resolve("settings.json"))).contains("\"autoMemoryDirectory\": \"" + config.resolve("MEMORY") + "\"")
                 .as("Claude Code's own entries beside it").contains("\"enabledPlugins\"");
         assertThat(config.resolve("MEMORY/MEMORY.md")).exists();

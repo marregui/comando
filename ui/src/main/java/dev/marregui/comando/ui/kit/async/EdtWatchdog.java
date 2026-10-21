@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.kit.async;
 
+import dev.marregui.comando.core.loop.Watchdog;
 
 import javax.swing.SwingUtilities;
 import java.util.Locale;
@@ -20,7 +21,7 @@ import java.util.function.Predicate;
  */
 public final class EdtWatchdog implements AutoCloseable {
 
-    public static final long PERIOD_MILLIS = 100;
+    public static final long PERIOD_MILLIS = Watchdog.PERIOD_MILLIS;
     public static final long THRESHOLD_MILLIS = 200;
     /** A stall this long is reported with its stack. */
     public static final long HANG_LIMIT_MILLIS = 1_000;
@@ -61,7 +62,8 @@ public final class EdtWatchdog implements AutoCloseable {
         }
     }
 
-    private final Thread thread;
+    /** The look at the EDT on the shared {@link Watchdog}, from the construction to the close. */
+    private final AutoCloseable watching;
     private final Consumer<Stall> report;
     /** Receives every stall with its whole length once it ends. */
     private final ObjLongConsumer<Stall> ended;
@@ -73,15 +75,19 @@ public final class EdtWatchdog implements AutoCloseable {
     private volatile long answered;
     private volatile boolean running = true;
     private final CountDownLatch firstAnswer = new CountDownLatch(1);
+    // the watchdog thread's own: the probe waiting for its answer (0 when none), the stall it has made, since when
+    private long probe;
+    private Stall stall;
+    private long blockedSince;
 
-    /** Starts watching; {@code report} receives each hang, on the watchdog thread. */
+    /** Starts watching; {@code report} receives each hang, on the shared watchdog's thread. */
     public EdtWatchdog(Consumer<Stall> report) {
         this(report, (stall, millis) -> { });
     }
 
     /**
      * Starts watching; {@code report} receives a hang at its limit, and {@code ended} every stall with its whole
-     * length when it ends. Both run on the watchdog thread.
+     * length when it ends. Both run on the shared watchdog's thread.
      */
     public EdtWatchdog(Consumer<Stall> report, ObjLongConsumer<Stall> ended) {
         this(report, ended, EdtWatchdog::drawingOnly, HANG_LIMIT_MILLIS, DRAWING_LIMIT_MILLIS);
@@ -94,7 +100,9 @@ public final class EdtWatchdog implements AutoCloseable {
         this.drawing = drawing;
         this.hangLimitMillis = hangLimitMillis;
         this.drawingLimitMillis = drawingLimitMillis;
-        this.thread = Thread.ofPlatform().daemon(true).name("edt-watchdog").start(this::watch);
+        // the first probe now, as the window's build may still hold the EDT; the watchdog's looks follow it
+        post(System.nanoTime());
+        this.watching = Watchdog.shared().watch(this::look);
     }
 
     /** How long the latest probe has waited for the EDT, 0 once answered; for tests, which hold the EDT until it is seen. */
@@ -154,41 +162,44 @@ public final class EdtWatchdog implements AutoCloseable {
         return c.substring(c.lastIndexOf('.') + 1) + "." + f.getMethodName();
     }
 
-    private void watch() {
-        while (running) {
-            long probe = System.nanoTime();
-            posted = probe;
-            SwingUtilities.invokeLater(() -> {
-                edt = Thread.currentThread();
-                answered = probe;
-                firstAnswer.countDown();
-            });
-            Stall stall = null;
-            long blockedSince = probe;
-            while (running && answered != probe) {
-                sleep(PERIOD_MILLIS);
-                if (answered == probe) {
-                    break; // answered during the sleep: the wait ended below the threshold, or was already looked at
-                }
-                long waited = (System.nanoTime() - blockedSince) / 1_000_000;
-                if (stall == null && waited >= THRESHOLD_MILLIS) {
-                    stall = look(waited, false);
-                }
-                if (stall != null && !stall.reported() && waited >= limitOf(stall)) {
-                    stall = look(waited, true); // a hang: the stack where the EDT is held now
-                    report.accept(stall);
-                }
-            }
-            if (stall != null) {
-                long total = (System.nanoTime() - blockedSince) / 1_000_000;
-                ended.accept(stall, total);
-            }
-            // the next probe a period after this one was posted, not a period after its answer was seen
-            long left = PERIOD_MILLIS - (System.nanoTime() - probe) / 1_000_000;
-            if (left > 0) {
-                sleep(left);
-            }
+    /**
+     * One look, every period on the shared watchdog's thread. A probe answered ends its stall, if it made one, with the
+     * whole wait, and the next probe is posted; a probe still waiting past the threshold is a stall, looked at once to
+     * tell its kind, and again with its stack when it reaches its limit, a hang.
+     */
+    private void look() {
+        if (!running) {
+            return;
         }
+        long now = System.nanoTime();
+        if (probe == 0 || answered == probe) {
+            if (stall != null) {
+                ended.accept(stall, (now - blockedSince) / 1_000_000);
+                stall = null;
+            }
+            post(now);
+            return;
+        }
+        long waited = (now - blockedSince) / 1_000_000;
+        if (stall == null && waited >= THRESHOLD_MILLIS) {
+            stall = look(waited, false);
+        }
+        if (stall != null && !stall.reported() && waited >= limitOf(stall)) {
+            stall = look(waited, true); // a hang: the stack where the EDT is held now
+            report.accept(stall);
+        }
+    }
+
+    private void post(long now) {
+        long p = now;
+        probe = p;
+        blockedSince = p;
+        posted = p;
+        SwingUtilities.invokeLater(() -> {
+            edt = Thread.currentThread();
+            answered = p;
+            firstAnswer.countDown();
+        });
     }
 
     private Stall look(long waited, boolean reported) {
@@ -232,17 +243,13 @@ public final class EdtWatchdog implements AutoCloseable {
         return sb.toString();
     }
 
-    private static void sleep(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
-    }
-
     @Override
     public void close() {
         running = false;
-        thread.interrupt();
+        try {
+            watching.close();
+        } catch (Exception e) {
+            // the look is a list entry; removing it does not fail
+        }
     }
 }

@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-13 | proposed, for Miguel to accept or reverse | Claude, from the UX review of 2026-10-13 |
+| 2026-10-13 | accepted, for Miguel to accept or reverse | Claude, from the UX review of 2026-10-13 |
 
 ## 1. Context
 

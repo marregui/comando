@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 
 import java.awt.AWTException;
@@ -41,7 +42,7 @@ final class Notifier {
             return;
         }
         String script = "display notification \"" + escape(text) + "\" with title \"comando\" subtitle \"" + escape(title) + "\"";
-        Thread.ofVirtual().name("notify").start(() -> run(List.of("osascript", "-e", script), TIMEOUT));
+        UiErrands.start("notify", () -> run(List.of("osascript", "-e", script), TIMEOUT));
     }
 
     /**

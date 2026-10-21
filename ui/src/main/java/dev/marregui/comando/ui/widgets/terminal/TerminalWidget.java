@@ -15,6 +15,7 @@ import com.jediterm.terminal.ui.TerminalPanel;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import com.jediterm.terminal.ui.settings.SettingsProvider;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
@@ -192,7 +193,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         if (!gate.isOpen()) {
             gatePoll.start();
         }
-        Thread.ofVirtual().name("terminal-exit").start(() -> {
+        UiErrands.start("terminal-exit", () -> {
             try {
                 int code = started.process().waitFor();
                 Edt.later(() -> exited(started, code));

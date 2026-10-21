@@ -1,6 +1,6 @@
 # Scratchpad — provisional artefacts
 
-> **Last Updated:** <date> · **Status:** Current
+> **Last Updated:** @DATE@ · **Status:** Current
 
 Reports, findings, agent specs and agent results that a task produced and that are worth keeping, but that have not yet
 been checked against the code or folded into the knowledge base. Everything here is **provisional**: read it as
@@ -25,7 +25,8 @@ SCRATCHPAD/
 
 ## 2. INDEX.md
 
-Each day folder has an `INDEX.md`, and every artefact in the folder appears in it. It opens with **To read**: each
+Each day folder has an `INDEX.md`, and every artefact in the folder appears in it by name in backticks
+(`` `READ-01-…` ``, `` `work/` ``), which is how `index-check` finds it. It opens with **To read**: each
 `READ-NN-…` document in order, with two or three lines on its main ideas. Then one section per task, `## N. <title>`:
 
 | Line | Holds |

@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.widget.capability;
 
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 
 import javax.swing.JComponent;
@@ -108,7 +109,7 @@ public final class Capabilities {
         }
         Path file = chosen.get();
         Exportable.Export export = e.prepare();
-        Thread.ofVirtual().name("export").start(() -> {
+        UiErrands.start("export", () -> {
             String error = null;
             try {
                 export.writeTo(file);

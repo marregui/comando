@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | proposed; replaces the bar of [record 37](0037-session-actions-act-on-the-selected-row.md) and amends the tab menus of [record 70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | Miguel (no bar over the Panels, Sessions and Connections lists; add from the tab's menu, the rest from each row's menu; no Hide the sidebar in any tab menu; the Files tab's filter under the tree), Claude (how: `ResourceActions` keeps add and the removal question, Sort enabled only after a drag) |
+| 2026-10-19 | accepted; replaces the bar of [record 37](0037-session-actions-act-on-the-selected-row.md) and amends the tab menus of [record 70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | Miguel (no bar over the Panels, Sessions and Connections lists; add from the tab's menu, the rest from each row's menu; no Hide the sidebar in any tab menu; the Files tab's filter under the tree), Claude (how: `ResourceActions` keeps add and the removal question, Sort enabled only after a drag) |
 
 ## 1. Context
 

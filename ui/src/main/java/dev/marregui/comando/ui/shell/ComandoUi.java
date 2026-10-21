@@ -50,6 +50,7 @@ import dev.marregui.comando.ui.kit.action.KeyPriority;
 import dev.marregui.comando.ui.kit.async.Coalescer;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.EdtWatchdog;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
@@ -341,7 +342,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }, deps.intents(), deps.texts()::write, ResourceActions.Questions.MODAL);
         AppIcon.install(frame);
         livePlots = new LivePlots(deps.intents(), deps.results());
-        Thread.ofVirtual().name("pty-preload").start(TerminalWidget::preload);
+        UiErrands.start("pty-preload", TerminalWidget::preload);
         workspace = new Workspace(deps.intents(), deps.texts(), deps.schemas());
         workspace.onAttention(notifier::attention);
         workspace.onClose(this::closePanel);
@@ -512,12 +513,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /**
-     * Opens the log that holds the entry written at {@code atMillis}, scrolled to it, its line flashed; the log as Tools
-     * ▸ Help ▸ Show the log opens it, with a notice, when the logs kept no longer hold it.
+     * Opens the log that holds the entry written at {@code atMillis}, scrolled to it, its line flashed; the log as Actions
+     * ▸ Show the log opens it, with a notice, when the logs kept no longer hold it.
      */
     private void showLogEntry(long atMillis) {
         Path dir = deps.logDir();
-        Thread.ofVirtual().name("log-entry").start(() -> {
+        UiErrands.start("log-entry", () -> {
             Optional<Path> log = HelpFiles.logHolding(dir, atMillis);
             Edt.later(() -> {
                 if (log.isPresent()) {
@@ -711,7 +712,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     @Override
     public void showFile(String session, String path, String baseDir, int line) {
-        Thread.ofVirtual().name("show-file").start(() -> {
+        UiErrands.start("show-file", () -> {
             try {
                 Path p = FileView.resolve(path, baseDir);
                 FileView file = FileView.read(p, line);
@@ -1276,7 +1277,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (!openingFiles.add(file)) {
             return;
         }
-        Thread.ofVirtual().name("open-file").start(() -> {
+        UiErrands.start("open-file", () -> {
             if (!OpenFiles.isText(file)) {
                 deps.intents().dispatch(new Intent.OpenFile("", file.toString(), 0));
                 Edt.later(() -> openingFiles.remove(file));
@@ -1611,6 +1612,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             LOG.log(System.Logger.Level.WARNING, "the window did not close within " + CLOSE_BOUND.toSeconds()
                     + " s: the event thread is busy; quitting without it");
         }
+        // the gestures' errands still running: interrupted and waited for, bounded
+        UiErrands.closeAll();
     }
 
     /** Asks for one of {@code names}; nothing happens when there are none or the user cancels. */

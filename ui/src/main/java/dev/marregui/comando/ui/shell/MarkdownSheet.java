@@ -7,7 +7,7 @@ import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 
-/** Tools ▸ Help ▸ Markdown sheet: what a panel's Markdown may hold and what its preview shows, beside the work. */
+/** Actions ▸ Markdown sheet: what a panel's Markdown may hold and what its preview shows, beside the work. */
 final class MarkdownSheet {
 
     private MarkdownSheet() {

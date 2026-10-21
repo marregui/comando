@@ -10,6 +10,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -41,6 +42,34 @@ class ClaudeProcessTest {
             for (String pid : lines) {
                 ProcessHandle.of(Long.parseLong(pid.strip())).ifPresent(ProcessHandle::destroyForcibly);
             }
+        }
+    }
+
+    /** stderr goes to a file, not a thread: its last lines are kept at the exit and the file is deleted. */
+    @Test
+    void stderrsLastLinesAreKeptAtTheExitAndItsFileIsDeleted(@TempDir Path dir) throws Exception {
+        CountDownLatch exited = new CountDownLatch(1);
+        AtomicReference<ClaudeProcess> process = new AtomicReference<>();
+        process.set(ClaudeProcess.start("t", List.of("sh", "-c", "i=0; while [ $i -lt 100 ]; do echo \"err $i\" 1>&2; i=$((i+1)); done; exit 1"),
+                dir, Map.of(), line -> { }, c -> exited.countDown()));
+        assertThat(exited.await(10, TimeUnit.SECONDS)).isTrue();
+        // read before the exit is told, so it is there once it has been
+        List<String> tail = process.get().stderrTail().lines().toList();
+        assertThat(tail).hasSize(40).startsWith("err 60").endsWith("err 99");
+        assertThat(process.get().stderrFile()).as("the stderr file is deleted").doesNotExist();
+    }
+
+    @Test
+    void aSessionsOnlyPlatformThreadIsItsStdoutReader(@TempDir Path dir) throws Exception {
+        CountDownLatch exited = new CountDownLatch(1);
+        ClaudeProcess p = ClaudeProcess.start("budget", List.of("sh", "-c", "read x; exit 0"), dir, Map.of(), line -> { }, c -> exited.countDown());
+        try {
+            List<String> platform = Thread.getAllStackTraces().keySet().stream().filter(t -> !t.isVirtual())
+                    .map(Thread::getName).filter(n -> n.startsWith("claude-")).toList();
+            assertThat(platform).containsExactly("claude-out-budget");
+        } finally {
+            p.send("bye");
+            assertThat(exited.await(10, TimeUnit.SECONDS)).isTrue();
         }
     }
 }

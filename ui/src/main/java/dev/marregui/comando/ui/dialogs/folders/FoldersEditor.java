@@ -4,6 +4,7 @@ import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
@@ -458,7 +459,7 @@ public final class FoldersEditor {
         if (p.isEmpty() || !Path.of(p).isAbsolute() || looked.containsKey(p)) {
             return;
         }
-        Thread.ofVirtual().name("folder-facts").start(() -> {
+        UiErrands.start("folder-facts", () -> {
             Facts f = facts(Path.of(p));
             Edt.later(() -> {
                 looked.put(p, f);
@@ -478,7 +479,7 @@ public final class FoldersEditor {
         if (indexes.containsKey(file.toString())) {
             return;
         }
-        Thread.ofVirtual().name("folder-facts").start(() -> {
+        UiErrands.start("folder-facts", () -> {
             IndexFacts f = new IndexFacts(Files.isRegularFile(file), file.getParent() != null && Files.isDirectory(file.getParent()));
             Edt.later(() -> {
                 indexes.put(file.toString(), f);

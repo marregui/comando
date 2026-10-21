@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-20 | proposed; amends the colours of [record 68](0068-git-changes-and-a-side-by-side-diff.md) | Miguel (new files in the Session tab's gold, stronger on the sidebar's grey; a trail of icons from the top down to them; a new file opened once reads as any other), Claude (how: one colour token, a dot after the name of each folder on the way down, the opened files kept in `opened-files`) |
+| 2026-10-20 | accepted; amends the colours of [record 68](0068-git-changes-and-a-side-by-side-diff.md) | Miguel (new files in the Session tab's gold, stronger on the sidebar's grey; a trail of icons from the top down to them; a new file opened once reads as any other), Claude (how: one colour token, a dot after the name of each folder on the way down, the opened files kept in `opened-files`) |
 
 ## 1. Context
 

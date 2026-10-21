@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-20 | proposed; amends the clicks of [record 52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md), the double click of [records 68](0068-git-changes-and-a-side-by-side-diff.md) and [71](0071-repositories-in-the-files-tab.md), and the repository row's marks of [record 76](0076-new-files-are-gold-and-marked-from-the-top.md) | Miguel (the changes mark on the `~/.claude` folders' rows too; one click opens or closes a folder; a double click on a row shows the changes of that row's subtree, on rows only), Claude (how: the arrow and the dot together on a row that has both; the double click's first click undone) |
+| 2026-10-20 | accepted; amends the clicks of [record 52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md), the double click of [records 68](0068-git-changes-and-a-side-by-side-diff.md) and [71](0071-repositories-in-the-files-tab.md), and the repository row's marks of [record 76](0076-new-files-are-gold-and-marked-from-the-top.md) | Miguel (the changes mark on the `~/.claude` folders' rows too; one click opens or closes a folder; a double click on a row shows the changes of that row's subtree, on rows only), Claude (how: the arrow and the dot together on a row that has both; the double click's first click undone) |
 
 ## 1. Context
 

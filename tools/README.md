@@ -1,8 +1,9 @@
 # `tools`
 
 The development tools behind `core`'s `ToolPort`: Gradle runs with their console and test tree, the Files tab's
-folders read as trees and their entries moved to the Trash, and the git repositories of those folders read. Everything runs outside the reducer and the EDT and ends
-in an intent. It depends on `core` only.
+folders read as trees and their entries moved to the Trash, and the git repositories of those folders read, and
+changed on request from the comparison window (roll back, remove, unstage). Everything runs outside the reducer and
+the EDT and ends in an intent. It depends on `core` only.
 
 1. [Architecture](#1-architecture)
 2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
@@ -13,8 +14,8 @@ in an intent. It depends on `core` only.
 
 | Class | Does |
 |---|---|
-| `ToolsAdapter` | the port: Gradle runs as child processes, folder reads, the folder poll, moves to the Trash, the repositories' reads |
-| `Git` | the `git` command line, read only: the repositories a folder belongs to, `git status --porcelain=v2` parsed into a `RepoStatus` and the ignored entries, a changed file's `HEAD` and working-tree versions; each run bounded (10 s, 32 MB), without optional locks or prompts, killed at close |
+| `ToolsAdapter` | the port: Gradle runs as child processes, folder reads, the folder poll, moves to the Trash, the repositories' reads, and roll back, removal and unstaging through git and the Trash |
+| `Git` | the `git` command line: the repositories a folder belongs to, `git status --porcelain=v2` parsed into a `RepoStatus` and the ignored entries, a changed file's `HEAD` and working-tree versions, and the runs behind roll back, remove and unstage (`restore`, `rm --cached`); each run bounded (10 s, 32 MB), without optional locks or prompts, killed at close |
 | `GradleBuild` | the build a directory belongs to (the nearest directory at or above it with an executable `gradlew`) and the command: `<gradle-serial> <root> <tasks>`, else `<root>/gradlew --console=plain <tasks>` |
 | `Args` | splits the tasks the user typed as a POSIX shell splits words, without expansion |
 | `TestReports` | JUnit XML written since the run started, as a tree with failures first, each linked to its source line |
@@ -55,7 +56,7 @@ flowchart LR
 
 | Interface | Methods | Caller |
 |---|---|---|
-| `ToolPort` | `runGradle(runId, workDir, tasks)`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles(folder, paths)`, `watchRepos(folders, changesShown)`, `readChange(root, change, follow)` | the reducer's effects, through `EffectRouter` |
+| `ToolPort` | `runGradle(runId, workDir, tasks)`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles(folder, paths)`, `watchRepos(folders, changesShown)`, `readChange(root, change, ask)`, `rollBack(root, changes)`, `removeFiles(root, paths)`, `unstage(root, paths)` | the reducer's effects, through `EffectRouter` |
 | `ToolsAdapter.pollFolders(every)` | starts the folder poll | `app` at start (every 5 s) |
 | `ToolsAdapter.Trash` | `moveToTrash(file)`; `Trash.NONE` for tests and desktops without one | implemented in `ui` (`DesktopTrash`), passed in by `app`, so `tools` never imports Swing or AWT |
 
@@ -72,17 +73,16 @@ The terminal is not here: JediTerm is a Swing component and lives in `ui`.
 
 | Thread | Does |
 |---|---|
-| `gradle-<run>`, `tool-output-<run>`, `tool-kill-<run>` | virtual: the run's process, its output, the SIGKILL after a stop |
-| `folder-read` | virtual: a read asked for now |
-| `folder-poll` | platform, daemon: reads the watched folders every period |
-| `file-trash` | virtual: moves to the Trash and the listing edits |
-| `repo-read` | virtual: the repositories read at once when `watchRepos` changes them |
-| `change-read` | virtual, one at a time: a changed file's two versions |
-| `repo-write` | virtual, one at a time: `RollBack`, `RemoveFiles`, `Unstage` through git (`restore`, `rm --cached`) and the Trash, then the repositories read again |
-| `git-out`, `git-err` | virtual, per git run: its output and the start of its errors |
+| `gradle-<run>`, `tool-kill-<run>` | errands of the adapter: the run's process; the SIGKILL after a stop |
+| `tool-output-<run>` | fork: the run's output while the run waits for its process |
+| `folder-read`, `repo-read`, `file-trash` | errands: a read asked for now; the repositories read at once when `watchRepos` changes them; moves to the Trash and the listing edits |
+| `folder-poll` | timed strand: reads the watched folders every period |
+| `change-read` | strand: a changed file's two versions, one at a time |
+| `repo-write` | strand: `RollBack`, `RemoveFiles`, `Unstage` through git (`restore`, `rm --cached`) and the Trash, then the repositories read again |
+| `git-out`, `git-err` | forks, per git run: its output and the start of its errors |
 
-`close()` stops every run's process tree (SIGTERM, SIGKILL 2 s later), the folder poll, the change reads and every git
-run.
+`close()` stops every run's process tree (SIGTERM, SIGKILL 2 s later), the folder poll, the change reads, the
+repository writes, every git run and, last, the errands.
 
 ## 4. Tests
 

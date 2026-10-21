@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | proposed; extends [record 68](0068-git-changes-and-a-side-by-side-diff.md)'s read-only window | Miguel (Markdown rendered on both sides, its changes shaded as in the texts, with the code the panels render with; the working tree's side edited, saved on closing the window or comando and every second, no buttons for saving, undo, redo, roll back or removing, a cue for edits waiting and for edits saved; undo and redo of every edit made there; for any file; roll back to the committed state and remove; several files at once, from the view's items), Claude (how: the body as `ChangeEditor`, the writes, roll back as an undoable edit, what goes through git, the Trash first, the questions, the Edit menu's target) |
+| 2026-10-19 | accepted; extends [record 68](0068-git-changes-and-a-side-by-side-diff.md)'s read-only window | Miguel (Markdown rendered on both sides, its changes shaded as in the texts, with the code the panels render with; the working tree's side edited, saved on closing the window or comando and every second, no buttons for saving, undo, redo, roll back or removing, a cue for edits waiting and for edits saved; undo and redo of every edit made there; for any file; roll back to the committed state and remove; several files at once, from the view's items), Claude (how: the body as `ChangeEditor`, the writes, roll back as an undoable edit, what goes through git, the Trash first, the questions, the Edit menu's target) |
 
 ## 1. Context
 

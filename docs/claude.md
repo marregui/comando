@@ -38,6 +38,9 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   writer.
 - **Instructions.** `--append-system-prompt` carries `UiInstructions`: the tools and when to use them (a view when a
   table, plot or diff shows a result better than text; explanations stay in text).
+- **Other runs.** Besides one process per running session, comando runs `claude --safe-mode -p /usage` at start and
+  every 5 minutes for the plan's usage (no prompt, no saved session; 30 s bound), `claude --version` once at start
+  ([§1.3](#13-turns-interrupt-stop)), and `claude plugin …` when the kit is installed or updated.
 
 ### 1.2 Mapping the stream
 
@@ -52,7 +55,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
 | `user` with `tool_result` | the result on its tool card; the card turns done or failed |
 | `user` with text | the compaction summary, local command output or the interrupt marker, as notes |
 | `system/compact_boundary`, `hook_response`, `api_retry`, `permission_denied` | a note of that kind |
-| `result` | a turn end (duration only, no cost shown); `SessionTurnEnded` with the queued turn count, cost, context size and context window. The context size is the input of the turn's last main-thread call; after `compact_boundary`, the compacted size; after `conversation_reset`, 0 |
+| `result` | a turn end (its duration, after the error text when it failed or was interrupted; no cost shown); `SessionTurnEnded` with the queued turn count, cost, context size and context window. The context size is the input of the turn's last main-thread call; after `compact_boundary`, the compacted size; after `conversation_reset`, 0 |
 | `rate_limit_event` | a note when its status is not `allowed` |
 | `conversation_reset` | a note "Conversation cleared"; the context size becomes 0 until a call reports the new one |
 
@@ -62,11 +65,13 @@ text and shown to 400 lines.
 ### 1.3 Turns, interrupt, stop
 
 - **Turns.** A prompt sent mid-turn is folded into the running turn; `result.queued_turn_count` reports what is still
-  queued. comando counts pending turns per session and resets the count at each turn end; the session is busy while it
-  is above zero. A turn that ends with nothing queued posts "Turn finished" or "Turn failed" as a desktop notification while
-  the window is not active.
-- **Interrupt** writes a `control_request` with subtype `interrupt`. The turn ends with a `result` marked interrupted,
-  shown muted; the session stays open and no "Turn failed" notification is sent.
+  queued. comando counts pending turns per session and sets the count to `queued_turn_count` at each turn end; the session is
+  busy while it is above zero. A turn that ends with nothing queued posts "Turn finished" or "Turn failed: <message>" as a
+  desktop notification while the window is not active; a turn that handed its work to the background notifies when the
+  turn Claude Code starts after that work ends, and a result while no turn ran notifies nothing.
+- **Interrupt** writes a `control_request` with subtype `interrupt`. The turn ends with a `result` marked interrupted;
+  its turn end reads "interrupted · <time>" in the transcript's amber, not red; the session stays open and no "Turn
+  failed" notification is sent.
 - **Stop** interrupts, closes stdin, sends SIGTERM after 3 s and SIGKILL 2 s later. A prompt sent while stopping is
   refused with a notice and stays in the editor. A process that cannot start is reported once, naming `COMANDO_CLAUDE`
   or the run directory when those are the cause. A tool call left running when the process ends reads "no result: the

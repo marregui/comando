@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
 
@@ -133,7 +134,7 @@ public final class Kit {
                 p.getOutputStream().close();
                 // read on a thread of its own, so the bound holds whatever the process does with its output
                 FutureTask<byte[]> output = new FutureTask<>(() -> p.getInputStream().readAllBytes());
-                Thread.ofVirtual().name("claude-output").start(output);
+                Threads.fork("claude-output", output);
                 try {
                     if (!p.waitFor(bound)) {
                         p.descendants().forEach(ProcessHandle::destroyForcibly);
@@ -381,7 +382,8 @@ public final class Kit {
                 if (Files.exists(target)) {
                     continue;
                 }
-                String text = new String(bundle.read(SKELETON + f), StandardCharsets.UTF_8).replace("<date>", today);
+                // @DATE@ marks the install date; a "<date>" in the text is a format the rules show, kept as written
+                String text = new String(bundle.read(SKELETON + f), StandardCharsets.UTF_8).replace("@DATE@", today);
                 try {
                     Files.createDirectories(target.getParent());
                 } catch (IOException e) {

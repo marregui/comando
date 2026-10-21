@@ -29,7 +29,7 @@ class KitTest {
         FILES.put("bin/gradle-serial", "#!/bin/sh\n");
         FILES.put("hooks/mermaid-check.py", "print()\n");
         FILES.put("hooks/method.md", "# method\n");
-        FILES.put("skeleton/KB/00_START_HERE.md", "> **Last Updated:** <date>\n");
+        FILES.put("skeleton/KB/00_START_HERE.md", "> **Last Updated:** @DATE@\n\nA status line reads `> **Last Updated:** <date>`.\n");
         FILES.put("skeleton/SCRATCHPAD/README.md", "# scratchpad\n");
     }
 
@@ -211,11 +211,13 @@ class KitTest {
     }
 
     @Test
-    void installDatesTheSkeletonFiles(@TempDir Path tmp) throws Exception {
+    void installDatesTheSkeletonFilesAndKeepsTheFormatTheyShow(@TempDir Path tmp) throws Exception {
         Path claude = tmp.resolve("claude");
         new Kit(bundle(FILES), notInstalled(), tmp.resolve("kit"), claude).install();
 
-        assertThat(Files.readString(claude.resolve("KB/00_START_HERE.md"))).isEqualTo("> **Last Updated:** " + LocalDate.now() + "\n");
+        assertThat(Files.readString(claude.resolve("KB/00_START_HERE.md")))
+                .as("the install date in its place; the format the rules show kept as written")
+                .isEqualTo("> **Last Updated:** " + LocalDate.now() + "\n\nA status line reads `> **Last Updated:** <date>`.\n");
     }
 
     @Test

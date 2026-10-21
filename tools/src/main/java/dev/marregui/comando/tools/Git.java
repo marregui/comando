@@ -1,5 +1,6 @@
 package dev.marregui.comando.tools;
 
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.RepoStatus;
 
@@ -311,8 +312,8 @@ final class Git implements AutoCloseable {
         try {
             Bounded out = new Bounded(p.getInputStream(), MAX_OUTPUT);
             Bounded err = new Bounded(p.getErrorStream(), 4_096);
-            Thread outReader = Thread.ofVirtual().name("git-out").start(out);
-            Thread errReader = Thread.ofVirtual().name("git-err").start(err);
+            Thread outReader = Threads.fork("git-out", out);
+            Thread errReader = Threads.fork("git-err", err);
             boolean ended;
             try {
                 ended = p.waitFor(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);

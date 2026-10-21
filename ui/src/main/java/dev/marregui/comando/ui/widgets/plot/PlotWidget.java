@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.widgets.plot;
 
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
@@ -53,7 +54,7 @@ public final class PlotWidget implements Widget<ViewSpec.Plot>, Zoomable, Export
                 overlay.showLoading("Plotting " + points + " points…");
             }
             // sorting millions of points takes the event thread half a second or more; a live plot does it every period
-            Thread.ofVirtual().name("plot-prepare").start(() -> {
+            UiErrands.start("plot-prepare", () -> {
                 PlotCanvas.Prepared p = PlotCanvas.prepare(view);
                 Edt.later(() -> {
                     if (g == generation) {

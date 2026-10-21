@@ -3,6 +3,8 @@ package dev.marregui.comando.tools;
 import dev.marregui.comando.core.console.Console;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Errands;
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.FolderRoot;
@@ -32,7 +34,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -67,6 +68,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     private final Supplier<ToolSettings> settings;
     private final Trash trash;
     private final Git git;
+    /** Runs, reads and moves to the Trash under way, each on a virtual thread; closed with the adapter. */
+    private final Errands errands = new Errands("tools");
     /** One move to the Trash at a time, so two never edit one listing file together. */
     private final ReentrantLock trashing = new ReentrantLock();
     private final Map<Long, Process> running = new ConcurrentHashMap<>();
@@ -102,7 +105,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     @Override
     public void runGradle(long runId, String workDir, String tasks) {
         active.add(runId);
-        Thread.ofVirtual().name("gradle-" + runId).start(() -> guarded(runId, () -> {
+        Runnable runIt = () -> guarded(runId, () -> {
             Console out = consoles.of(runId);
             ToolSettings tools = settings.get();
             Optional<Path> root = GradleBuild.root(Path.of(workDir));
@@ -116,7 +119,11 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             int exit = run(runId, GradleBuild.command(root.get(), tasks, tools.gradleSerial()), root.get(), out, tools);
             TestReports reports = exit == Integer.MIN_VALUE ? TestReports.NONE : TestReports.collect(root.get(), start);
             finish(runId, exit, start, reports);
-        }));
+        });
+        if (errands.start("gradle-" + runId, runIt) == null) {
+            // closed: the run starts no process, and says so at once, here
+            runIt.run();
+        }
     }
 
     /** Runs a run's body so that it always ends with {@link Intent.CommandFinished}, even when the body fails. */
@@ -158,7 +165,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             cancelRun(runId); // the stop, or comando's close, came while the process was starting
         }
         Output output = new Output(out);
-        Thread reader = Thread.ofVirtual().name("tool-output-" + runId).start(() -> output.copy(p));
+        Thread reader = Threads.fork("tool-output-" + runId, () -> output.copy(p));
         try {
             p.getOutputStream().close();
             int exit = p.waitFor();
@@ -255,7 +262,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             return;
         }
         List<ProcessHandle> tree = terminate(p, false);
-        Thread.ofVirtual().name("tool-kill-" + runId).start(() -> {
+        errands.start("tool-kill-" + runId, () -> {
             try {
                 Thread.sleep(KILL_AFTER_MILLIS);
             } catch (InterruptedException e) {
@@ -323,13 +330,13 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     private volatile List<FolderRoot> watchedFolders = List.of();
 
     private final ScheduledExecutorService folderPoll =
-            Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("folder-poll").daemon(true).unstarted(r));
+            Threads.timedStrand("folder-poll");
 
     /** Reads {@code folders} now, off the caller's thread, and sends each tree even when it did not change. */
     @Override
     public void readFolders(List<FolderRoot> folders) {
         List<FolderRoot> copy = List.copyOf(folders);
-        Thread.ofVirtual().name("folder-read").start(() -> copy.forEach(f -> readFolder(f, true)));
+        errands.start("folder-read", () -> copy.forEach(f -> readFolder(f, true)));
     }
 
     /** From now on the poll reads {@code folders} only; a folder newly watched is read at once. */
@@ -344,7 +351,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         List<FolderRoot> added = folders.stream().filter(f -> !before.contains(f)).toList();
         if (!added.isEmpty()) {
             // the repositories first, so the new folders' trees leave out what git ignores and their colours come with them
-            Thread.ofVirtual().name("folder-read").start(() -> {
+            errands.start("folder-read", () -> {
                 readRepos(false, false);
                 added.forEach(f -> readFolder(f, true));
             });
@@ -432,7 +439,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     public void watchRepos(List<FolderRoot> folders, boolean changesShown) {
         repoFolders = List.copyOf(folders);
         this.changesShown = changesShown;
-        Thread.ofVirtual().name("repo-read").start(() -> readRepos(true, true));
+        errands.start("repo-read", () -> readRepos(true, true));
     }
 
     /**
@@ -522,7 +529,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * file it ends on, never on one whose read finished late.
      */
     private final ExecutorService changeReads =
-            Executors.newSingleThreadExecutor(r -> Thread.ofVirtual().name("change-read").unstarted(r));
+            Threads.strand("change-read");
 
     /** Reads {@code change}'s two versions off the caller's thread and sends them. */
     @Override
@@ -553,7 +560,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
      * repositories again so the Files tab and the Changes view show the result.
      */
     private final ExecutorService repoWrites =
-            Executors.newSingleThreadExecutor(r -> Thread.ofVirtual().name("repo-write").unstarted(r));
+            Threads.strand("repo-write");
 
     @Override
     public void rollBack(String root, List<RepoStatus.FileChange> changes) {
@@ -716,7 +723,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         // only an entry that goes itself takes the ones inside it along: the folder, refused, takes nothing
         List<Path> items = asked.stream().filter(p -> asked.stream()
                 .noneMatch(o -> !o.equals(p) && p.startsWith(o) && o.startsWith(root) && !o.equals(root))).toList();
-        Thread.ofVirtual().name("file-trash").start(() -> {
+        errands.start("file-trash", () -> {
             trashing.lock();
             try {
                 sink.dispatch(trash(folder, items));
@@ -838,5 +845,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             }
             forceRemaining(e.getKey(), e.getValue());
         }
+        // last: a run's errand ends once its process has, above
+        errands.close();
     }
 }

@@ -9,6 +9,7 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.action.Command;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.text.Plain;
 
@@ -67,7 +68,7 @@ final class HelpActions {
         if (home == null) {
             return;
         }
-        Thread.ofVirtual().name("write-tutorial").start(() -> {
+        UiErrands.start("write-tutorial", () -> {
             try {
                 HelpFiles.writeTutorial(home);
             } catch (IOException | RuntimeException e) {
@@ -79,7 +80,7 @@ final class HelpActions {
     /** The tutorial in a panel, as a document: its file in comando's folder, written from this build's copy first. */
     void showTutorial() {
         Path home = deps.home();
-        Thread.ofVirtual().name("show-tutorial").start(() -> {
+        UiErrands.start("show-tutorial", () -> {
             try {
                 Path file = HelpFiles.writeTutorial(home);
                 Edt.later(() -> openFile.accept(file));
@@ -120,9 +121,9 @@ final class HelpActions {
         }
     }
 
-    /** Tools ▸ Help ▸ Claude Code kit: what the kit is here, and an install when there is anything to install. */
+    /** Actions ▸ Claude Code kit…: what the kit is here, and an install when there is anything to install. */
     void showKit() {
-        Thread.ofVirtual().name("kit").start(() -> {
+        UiErrands.start("kit", () -> {
             try {
                 Setup.KitOffer offer = deps.setup().kit();
                 Edt.later(() -> askKit(offer, false));
@@ -157,7 +158,7 @@ final class HelpActions {
         if (!offer.pending() || pick != Setup.DO) {
             return;
         }
-        Thread.ofVirtual().name("kit-install").start(() -> {
+        UiErrands.start("kit-install", () -> {
             try {
                 List<String> said = new ArrayList<>(deps.setup().installKit());
                 List<String> added = addKitFolders();
@@ -196,7 +197,7 @@ final class HelpActions {
     }
 
     void reveal(Path dir) {
-        Thread.ofVirtual().name("reveal").start(() -> {
+        UiErrands.start("reveal", () -> {
             try {
                 Desktop.getDesktop().open(dir.toFile());
             } catch (IOException | RuntimeException e) {

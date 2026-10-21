@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | proposed; amends the window of [record 69](0069-a-window-edits-the-files-tab-folders.md) and [record 71](0071-repositories-in-the-files-tab.md), and the Files tab's menu of [record 70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | Miguel (the title; a tooltip on each field's name, the index file's saying what a missing file means; the repository line; a tighter form; picks only inside `~/.claude`; an index named but missing created and kept; the listing file likewise), Claude (how: one message line and red outlines, the pickers, the store creating the file, `/reflect` and `index-check` keeping it) |
+| 2026-10-19 | accepted; amends the window of [record 69](0069-a-window-edits-the-files-tab-folders.md) and [record 71](0071-repositories-in-the-files-tab.md), and the Files tab's menu of [record 70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | Miguel (the title; a tooltip on each field's name, the index file's saying what a missing file means; the repository line; a tighter form; picks only inside `~/.claude`; an index named but missing created and kept; the listing file likewise), Claude (how: one message line and red outlines, the pickers, the store creating the file, `/reflect` and `index-check` keeping it) |
 
 ## 1. Context
 

@@ -15,7 +15,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
-/** Keys the shell forwards to the focused component, and the table Tools ▸ Help ▸ Keyboard shortcuts shows. */
+/** Keys the shell forwards to the focused component, and the table Actions ▸ Keyboard shortcuts shows. */
 final class Keys {
 
     private Keys() {

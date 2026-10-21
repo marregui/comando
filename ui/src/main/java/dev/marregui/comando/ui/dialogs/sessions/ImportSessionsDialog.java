@@ -7,6 +7,7 @@ import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -148,7 +149,7 @@ public final class ImportSessionsDialog {
             dialog.setLocationRelativeTo(dialog.getOwner());
         }
         dialog.setVisible(true);
-        Thread.ofVirtual().name("read-conversations").start(() -> {
+        UiErrands.start("read-conversations", () -> {
             try {
                 List<StoredConversation> read = catalogue.get();
                 Edt.later(() -> {

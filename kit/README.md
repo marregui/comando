@@ -11,12 +11,12 @@ agents are given specs with an executable acceptance check; Gradle runs in one c
 | `skills/deep-review` | `/deep-review`: an adversarial review against the stated requirements, every finding proved |
 | `templates/agent-spec.md` | the spec an agent is given: files, limits, executable acceptance |
 | `bin/gradle-serial` | one Gradle run per checkout at a time; on Claude's PATH, and what comando runs Gradle through |
-| `bin/index-check` | checks that every memory file, knowledge-base document and scratchpad artefact is in its index, and every entry of a folder comando's Files tab shows in the folder's index file and listing files; warns when the memory index, a memory file or a dated log passes its budget |
+| `bin/index-check` | checks that every memory file, knowledge-base document and scratchpad artefact is in its index, and every entry of a Files-tab folder inside Claude Code's folder (repositories excepted) in the folder's index file and listing files; warns when the memory index, a memory file or a dated log passes its budget |
 | `bin/reflect-report` | `begin` snapshots the memory before a `/reflect`; `end` prints what the run did to it: the index's size, lines added and removed per file, files that only grew, the budget warnings |
 | `bin/compact-check` | the no-loss check of a memory file merged or compacted by `/reflect`: every date, backtick span, quote, ticket, number, link and heading of the original must survive in the result or its archive |
 | `bin/cue-replay` | replays the last month's prompts against the memory index with a small headless judge and reports its recall and the cues to sharpen, to the day's scratchpad folder; run it monthly |
 | `hooks/mermaid-check.py` | after Claude writes a Markdown file, renders its Mermaid diagrams with `mmdc` and reports a parse error |
-| `skeleton/` | the memory index's header, the rules of the knowledge base and the scratchpad, written to `KB/` and `SCRATCHPAD/` in Claude Code's folder (`$CLAUDE_CONFIG_DIR`, else `~/.claude`) when missing |
+| `skeleton/` | the memory index's header, written to the memory folder (`MEMORY.md`), and the rules of the knowledge base and the scratchpad, written to `KB/` and `SCRATCHPAD/` in Claude Code's folder (`$CLAUDE_CONFIG_DIR`, else `~/.claude`); each only when missing, by comando's install |
 
 ## Install
 
@@ -35,8 +35,13 @@ claude plugin marketplace add <clone>/kit
 claude plugin install comando@comando
 ```
 
+Then copy the skeleton's files that are missing: `skeleton/KB/` and `skeleton/SCRATCHPAD/` into `~/.claude/`, and
+`skeleton/MEMORY/MEMORY.md` into `~/.claude/MEMORY/`, with today's date for each `@DATE@`.
+The method points at their rules.
+
 Remove it with `claude plugin uninstall comando@comando` and `claude plugin marketplace remove comando`; take
 `autoMemoryDirectory` out of `~/.claude/settings.json` to go back to a memory per project. The knowledge base, the
 scratchpad and the memory stay.
 
-Requirements: `python3` for the Mermaid check, `mmdc` to draw diagrams (`npm i -g @mermaid-js/mermaid-cli`).
+Requirements: `python3` for the Mermaid check, `index-check`, `compact-check` and `cue-replay`; the `claude` CLI for
+`cue-replay`'s judge; `mmdc` to draw diagrams (`npm i -g @mermaid-js/mermaid-cli`).

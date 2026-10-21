@@ -15,7 +15,7 @@ card. It depends on `core` and Jackson.
 | Class | Does |
 |---|---|
 | `McpServer` | HTTP and JSON-RPC: `POST /mcp`, protocol versions `2025-03-26`, `2025-06-18`, `2025-11-25`; `initialize`, `tools/list`, `tools/call`, `ping`; the token-to-session map; 401 for an unknown token, 403 for a foreign `Origin` |
-| `McpTools` | the tools: validates arguments, sends intents, answers; parks the calling thread for an approval or a database write |
+| `McpTools` | the tools: validates arguments, sends intents, answers; parks the calling thread for an approval and for every database call |
 | `ViewSpecs` | view arguments into `core`'s `ViewSpec` records; an invalid spec is a tool error naming the problem and never reaches the reducer |
 | `SqlPolicy` | the lexical check of what Claude may run without asking; errs towards "not read-only" |
 | `TranscriptText` | another session's transcript as numbered text blocks after a cursor, for `session_read` |
@@ -27,8 +27,8 @@ Tools: `approve`; `ui_show_table`, `ui_plot`, `ui_show_view`, `ui_set_editor`, `
 `session_read`. Their arguments and limits are in [Claude §2.2](../docs/claude.md#22-the-tools).
 
 - **A UI tool** validates its input, sends one intent and returns at once; the reducer decides what the window does
-  (an unpinned view of the same title is replaced, a pinned one never is).
-- **An approval** gets an id from comando's own counter (from 1 000 000), a future, and an `ApprovalRequested` intent;
+  (that session's unpinned view with the same title and placement is replaced, a pinned one never is).
+- **An approval** gets an id from comando's own counter (ids above 1 000 000), a future, and an `ApprovalRequested` intent;
   the request's virtual thread waits on the future until the user answers or 55 minutes pass.
 
 ```mermaid
@@ -46,7 +46,8 @@ sequenceDiagram
 ```
 
 A card is withdrawn (`ApprovalWithdrawn`) and its call denied when the call is cancelled, the process exits, the session
-is removed, or the wait expires; at exit every waiting card is denied.
+is removed, or the wait expires; a SQL card is also denied when its session's turn ends with nothing queued and no
+background work; at exit every waiting card is denied.
 
 ## 2. Interface with the rest of the app
 
@@ -79,7 +80,9 @@ through `QueryPort`.
 
 ## 3. Threads
 
-One virtual thread per HTTP request; an approval or a database write parks it on a future with an absolute deadline.
+One virtual thread per HTTP request. An approval parks it on a future for up to 55 min; every `db_run_sql` and
+`db_describe` parks it on the query's future (90 s, 60 s), a write after its card; `session_read` with `wait_seconds`
+polls every 200 ms until its deadline.
 `close()` denies every waiting approval and stops the server.
 
 | Wait | Bound |
@@ -91,7 +94,7 @@ One virtual thread per HTTP request; an approval or a database write parks it on
 
 ## 4. Tests
 
-`McpServerTest` drives the server over HTTP; `SqlPolicyTest` covers the policy; `PermissionRulesTest` the derived
-rules; `McpToolsFormatTest` the text the tools return.
+`McpServerTest` drives the server and every tool over HTTP; `SqlPolicyTest` covers the policy; `PermissionRulesTest`
+the derived rules; `McpToolsFormatTest` the rows text the database tools return, within its budget.
 
 Further reading: [Claude §2–§3](../docs/claude.md#2-mcp-tools).

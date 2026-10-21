@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | proposed; the double click on a repository's row, the view's title and its groups replaced by [record 71](0071-repositories-in-the-files-tab.md) | Miguel (the feature as IntelliJ has it: a project view, a changes view on the right, a floating side-by-side diff; changes per repository, whole repository; against `HEAD`; one diff window, reused; a repository's row marked with a git icon and a flag while it has changes, its double click opening the Changes view or saying there are none; the comparison in the editors' theme, with the panels' theme button, global), Claude (how: the git command line, the polling, the Files tab's ignored entries and bound, the view, the window, ⌘K) |
+| 2026-10-19 | accepted; the double click on a repository's row, the view's title and its groups replaced by [record 71](0071-repositories-in-the-files-tab.md) | Miguel (the feature as IntelliJ has it: a project view, a changes view on the right, a floating side-by-side diff; changes per repository, whole repository; against `HEAD`; one diff window, reused; a repository's row marked with a git icon and a flag while it has changes, its double click opening the Changes view or saying there are none; the comparison in the editors' theme, with the panels' theme button, global), Claude (how: the git command line, the polling, the Files tab's ignored entries and bound, the view, the window, ⌘K) |
 
 ## 1. Context
 

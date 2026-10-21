@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | proposed; replaces the bar of [record 59](0059-three-menus-for-what-has-no-key.md) | Miguel (no Files menu; comando, then Edit, then a menu renamed from Tools, Actions by his choice; no submenus: one flat list in groups, help one of them), Claude (how: the groups, the server's items named in full, where the Files menu's commands live now) |
+| 2026-10-19 | accepted; replaces the bar of [record 59](0059-three-menus-for-what-has-no-key.md) | Miguel (no Files menu; comando, then Edit, then a menu renamed from Tools, Actions by his choice; no submenus: one flat list in groups, help one of them), Claude (how: the groups, the server's items named in full, where the Files menu's commands live now) |
 
 ## 1. Context
 

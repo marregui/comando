@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.kit.desktop;
 
+import dev.marregui.comando.ui.kit.async.UiErrands;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -44,7 +46,7 @@ public final class ExternalEditor {
 
     public static void open(Path file, int line) {
         List<String> cmd = command(launcher(), file, line);
-        Thread.ofVirtual().name("external-editor").start(() -> {
+        UiErrands.start("external-editor", () -> {
             try {
                 new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
             } catch (IOException e) {

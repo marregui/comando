@@ -7,7 +7,7 @@ import java.util.function.BooleanSupplier;
 /**
  * One user action: menus, key bindings and the command palette are all built from these.
  *
- * @param group the menu path the command sits at ("Tools ▸ Help"), set when the menu bar places it; for a command in no
+ * @param group the menu path the command sits at ("Actions"), set when the menu bar places it; for a command in no
  *              menu, reached by its key or the palette, the area it belongs to ("Session"); empty until either is set
  * @param key   key stroke, or null
  */

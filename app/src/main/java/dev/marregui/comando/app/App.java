@@ -11,6 +11,7 @@ import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.effect.EffectRouter;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -62,6 +63,7 @@ public final class App implements AutoCloseable {
     static final Duration PLAN_USAGE_EVERY = Duration.ofMinutes(5);
     private final StateLoop loop;
     private final ClaudeAdapter claude;
+    private final Errands errands;
     private final ComandoUi ui;
     private final ToolsAdapter tools;
     private final String claudeExecutable;
@@ -74,6 +76,8 @@ public final class App implements AutoCloseable {
         offerKit = config.offerKit();
         try {
             Store store = own(new Store(config.home(), config.keychain() ? Secrets.forPlatform() : Secrets.NONE));
+            // the start-up checks run as errands, closed just before the store
+            errands = own(new Errands("app"));
             Store.Loaded loaded = store.load();
             AppState initial = AppState.initial(loaded.panels(),
                     loaded.connections().stream().map(ConnectionState::closed).toList(),
@@ -153,14 +157,14 @@ public final class App implements AutoCloseable {
             claude.loadHistory(s);
         }
         String executable = claudeExecutable;
-        Thread.ofVirtual().name("claude-version").start(() -> {
+        errands.start("claude-version", () -> {
             String problem = ClaudeVersion.check(executable);
             if (!problem.isEmpty()) {
                 LOG.log(System.Logger.Level.WARNING, problem);
                 loop.dispatch(new Intent.Notify(Notice.Level.WARN, problem, false));
             }
         });
-        Thread.ofVirtual().name("kit").start(this::checkKit);
+        errands.start("kit", this::checkKit);
     }
 
     /**

@@ -24,7 +24,7 @@ import java.nio.file.Path;
  * panel's SQL reads in colour; a real Claude Code turn (haiku) that runs the panel's query through comando's tools and
  * plots it in the side pane; the Session tab showing that turn. Every approval is allowed.
  *
- * <pre>./gradlew :app:hero -Pout=docs/images</pre>
+ * <pre>./gradlew :app:hero -Pout=$PWD/docs/images</pre> (a relative path is under {@code app/})
  */
 public final class Hero {
 
@@ -71,7 +71,10 @@ public final class Hero {
                 "no connection to " + CONNECTION);
 
         String repo = Path.of(System.getProperty("user.dir")).getParent().toString();
-        loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("comando", repo).withModel("haiku")));
+        // the default permission mode, whatever the painter's own Claude Code sets: the turn's approvals are allowed below
+        SessionSpec spec = SessionSpec.fresh("comando", repo).withModel("haiku");
+        loop.dispatch(new Intent.SaveSession("", new SessionSpec(spec.name(), spec.workDir(), spec.model(), spec.effort(), "default",
+                spec.addDirs(), spec.budgetUsd(), spec.claudeSessionId(), spec.startMode(), spec.checkpoint())));
         loop.dispatch(new Intent.BindSession(loop.state().focused(), "comando"));
         loop.dispatch(new Intent.EditPanel(loop.state().focused(), TEXT, EditMode.REPLACE, ""));
 

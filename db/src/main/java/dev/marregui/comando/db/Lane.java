@@ -1,6 +1,7 @@
 package dev.marregui.comando.db;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.QueryPort;
@@ -18,7 +19,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -83,7 +83,7 @@ final class Lane implements AutoCloseable {
         this.timer = timer;
         this.cancellers = cancellers;
         this.onRetired = onRetired;
-        this.thread = Executors.newSingleThreadExecutor(r -> Thread.ofPlatform().name("db-" + name).daemon(true).unstarted(r));
+        this.thread = Threads.strand("db-" + name);
     }
 
     /** False when the lane has stopped; so for every method that queues work. */

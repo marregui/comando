@@ -190,7 +190,7 @@ public final class Snapshot {
                         row.x + 4, row.y + row.height / 2, 2, false, MouseEvent.BUTTON1));
             }
         });
-        await(loop, st -> st.panels().stream().anyMatch(p -> p.title().equals("MEMORY")), 10_000);
+        await(loop, st -> st.panels().stream().anyMatch(p -> p.title().equals("MEMORY.md")), 10_000);
         shoot(out.resolve("02c3-sidebar-files-memory.png"));
         selectSidebarTab("Sessions");
         // files opened from the Files tab: a Markdown document opens rendered, its code in the editors' colours,
@@ -265,14 +265,14 @@ public final class Snapshot {
         }
         Files.writeString(docs.resolve("ROLLOUT.md"), rollout);
         followLink("Lane report", "ROLLOUT.md#7-rollback");
-        showing(loop, "ROLLOUT");
+        showing(loop, "ROLLOUT.md");
         shoot(out.resolve("02e4-link-to-a-heading.png"));
         SwingUtilities.invokeAndWait(() -> app.ui().openFile(source));
         Thread.sleep(1500);
         shoot(out.resolve("02f-source-colours.png"));
         // Help's tutorial and log open as documents from their files: the tutorial rendered, the log read-only at its end
         menuItem("Actions", "Tutorial");
-        showing(loop, "tutorial");
+        showing(loop, "tutorial.md");
         shoot(out.resolve("02g-help-tutorial.png"));
         // the snapshot logs to the console only: a log file as comando writes one
         Path log = config.logDir().resolve("comando-0.log");

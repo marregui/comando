@@ -2,8 +2,9 @@
 
 The Swing window: the shell, the editor panels, the lower panel and side pane, the sidebar, the dialogs, the widgets
 and the kit they share. It renders `core`'s `AppState`, turns input into intents, and does the effects addressed to
-the window. It depends on `core` and the UI libraries (FlatLaf, jsvg, RSyntaxTextArea, CommonMark, java-diff-utils,
-JediTerm, pty4j, Jackson), never on `db`, `claude`, `mcp` or `tools`.
+the window. It depends on `core` and the UI libraries (FlatLaf and its extras, jsvg, RSyntaxTextArea and AutoComplete,
+CommonMark with its tables extension, java-diff-utils, JediTerm, pty4j, Jackson; slf4j-jdk14 at run time), never on
+`db`, `claude`, `mcp` or `tools`.
 
 1. [Architecture](#1-architecture)
 2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
@@ -14,10 +15,11 @@ JediTerm, pty4j, Jackson), never on `db`, `claude`, `mcp` or `tools`.
 
 ```
 dev.marregui.comando.ui
-├── kit/        theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, desktop, vcs
+├── kit/        theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, desktop, vcs, layout,
+│               resource actions
 ├── widget/     the contract: Widget, WidgetContext, WidgetRegistry; capability/ (Searchable, Copyable, …)
 ├── widgets/    one package per widget: approval, changes, console, diff, editor, markdown, plot, table, terminal, text,
-│               transcript, tree
+│               transcript (doc/, render/), tree
 ├── panels/     the window's regions: Workspace, EditorPanel, LowerPanel, SessionsSidebar, FilesTab, SidePane, …
 ├── dialogs/    folders/ (the Files tab's folders), resource/ (one dialog for connections and sessions), sessions/ (import)
 ├── shell/      ComandoUi (the frame and the UI port), Menus, Keys, HelpActions, LivePlots, Notifier, WindowLayout, DiffWindow, …
@@ -25,7 +27,9 @@ dev.marregui.comando.ui
 ```
 
 A layer uses only the layers above it in this list; a widget imports no other widget. `UiArchitectureTest`
-(ArchUnit) fails the build on a breach, and on any reference to `db`, `claude`, `mcp`, `tools` or `java.sql`.
+(ArchUnit) fails the build when a widget imports another widget, `panels`, `shell` or `dialogs`; when `kit` imports
+`widget`, `widgets`, `panels` or `shell`; and on any reference to `db`, `claude`, `mcp`, `tools` or `java.sql`. The
+rest of the order is kept by review.
 
 - **Render.** `ComandoUi` registers a `StateLoop.Listener`; each state change requests a render through a
   `Coalescer`, so many changes become at most one pending `invokeLater`, which reads the latest state. Growing stores
@@ -33,7 +37,7 @@ A layer uses only the layers above it in this list; a widget imports no other wi
 - **Input.** Every user action is a `Command` in the `ActionRegistry` (menus, keys, palette); a command dispatches an
   intent. Blocking work (opening a file, links, exports, the kit) moves to a virtual thread.
 - **Views.** `WidgetRegistry` maps a placed view's type (`table`, `plot`, `diff`, `markdown`, `text`, `tree`,
-  `console`) to a widget; `ViewTabs` creates it when the view appears, renders it when its version changes, unmounts
+  `console`, `changes`) to a widget; `ViewTabs` creates it when the view appears, renders it when its version changes, unmounts
   it when it closes.
 - **Text from outside** (Claude, a database, a file) reaches Swing as text, never as HTML (`Plain`, `MarkdownHtml`).
 
@@ -56,7 +60,7 @@ flowchart LR
 | Interface | Methods | Caller |
 |---|---|---|
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showRepos`, `showChange`, `showPlanUsage`; each hands its work to the EDT, a virtual thread (`showFile`) or the store (`forgetPanel`, `deletePanel`) and returns | the reducer's effects, through `EffectRouter` |
-| `ComandoUi(Dependencies)`, `start()`, `offerKit(offer)`, `close()` | builds and shows the window from any thread; asks about the Claude Code kit; closes terminals, live plots, the EDT watchdog and the window | `app` |
+| `ComandoUi(Dependencies)`, `topics(port)`, `start()`, `offerKit(offer)`, `close()` | builds and shows the window from any thread; reads the tabs' topics through `topics`' port, set before `start()`; asks about the Claude Code kit; closes terminals, live plots, the EDT watchdog and the window | `app` |
 | `MermaidDiagrams.install(cache)`, `LocalImages.install(cache)` and their `shutdown()` | the drawing services Markdown previews use, with their caches under the data root | `app` |
 | `DesktopTrash.moveToTrash(file)` | the desktop's Trash | `app` passes it to `tools` as its `Trash` |
 
@@ -69,16 +73,18 @@ flowchart LR
 | `texts` | `PanelTexts`: each panel's file and text (`app`'s `Store`) |
 | `catalogue` | the stored conversations for the import dialog, as `StoredConversation` (`app` maps `claude`'s `SessionCatalogue`) |
 | `server` | `ServerToggle`: the embedded QuestDB (`app`'s `EmbeddedQuestDb`) |
-| `setup` | `Setup`: `folders.json` and the Claude Code kit (`app`'s `KitSetup`) |
-| `version`, `home`, `logDir`, `onQuit` | for About, Help and the log; what quitting runs once the window has asked |
+| `setup` | `Setup`: the Claude Code kit, its install and the folders it adds to the Files tab (`app`'s `KitSetup`) |
+| `version`, `home`, `logDir`, `onQuit` | for About, Help and the log; `home` also holds `opened-files`, the files opened once, which the Files tab no longer marks new; what quitting runs once the window has asked |
 
-`PanelTexts`, `ServerToggle`, `Setup` and `StoredConversation` are declared here and implemented in `app`, so the
-window reaches the store, QuestDB and the kit without importing them.
+`PanelTexts`, `ServerToggle` and `Setup` are declared here and implemented in `app`, and `StoredConversation` is a
+record declared here that `app` fills, so the window reaches the store, QuestDB, the kit and the stored conversations
+without importing them.
 
 **Sends back.** The user's intents: panels, running text, connections, sessions, approvals answered, views, editor
 edits, files, Gradle runs, folders, notices ([Architecture §4.2](../docs/architecture.md#42-intents)).
 
-**Resources.** `icons/` (SVG); `shell/about.md` (the About card's words); `shell/markdown-sheet.md`; the tutorial,
+**Resources.** `icons/` (SVG, and the app's `comando.png`); `shell/about.md` (the About card's words);
+`shell/markdown-sheet.md`; `kit/text/editor-dark.xml` and `editor-light.xml` (the editors' themes); the tutorial,
 copied from `docs/tutorial.md` by `ui/build.gradle.kts` so Help and the docs never disagree.
 
 ## 3. Threads
@@ -86,10 +92,10 @@ copied from `docs/tutorial.md` by `ui/build.gradle.kts` so Help and the docs nev
 | Thread | Does |
 |---|---|
 | EDT | renders, handles input; owns every Swing component |
-| `edt-watchdog` | probes the EDT every 100 ms; 200 ms is a stall, 1 s (2 s in the JDK's drawing) a hang logged with the EDT's stack |
-| `mermaid` | `mmdc`, one diagram at a time, 30 s bound |
-| `local-images` | pictures a Markdown view names; SVGs drawn into `cache/images/` |
-| `pty-preload`, short virtual threads | one blocking call each off the EDT |
+| `watchdog` | the shared one (`core`'s `Watchdog`): `EdtWatchdog` probes the EDT every 100 ms; 200 ms is a stall, 1 s (2 s in the JDK's drawing) a hang logged with the EDT's stack |
+| `mermaid` | strand: `mmdc`, one diagram at a time, 30 s bound |
+| `local-images` | strand: pictures a Markdown view names; SVGs drawn into `cache/images/` |
+| `opened-files`, `pty-preload` and the gestures' calls | errands of the window (`UiErrands`): one blocking call each off the EDT; `ComandoUi.close()` interrupts and waits for those still running |
 
 ## 4. Tests
 

@@ -1,8 +1,8 @@
 # `db`
 
 The database adapter: SQL over the PostgreSQL wire protocol (QuestDB, PostgreSQL) through the PostgreSQL JDBC driver.
-It runs the user's statements and Claude's, stores rows by column, reads schemas, and reports every outcome as an
-intent. It depends on `core` and pgjdbc.
+It runs the user's statements and Claude's, stores rows by column, reads schemas, reports the outcome of every user
+run, open and test as an intent, and answers Claude's queries as futures of rows. It depends on `core` and pgjdbc.
 
 1. [Architecture](#1-architecture)
 2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
@@ -65,9 +65,9 @@ when `loadSchema` is asked to show it), `Notify`.
 
 | Thread | Does |
 |---|---|
-| `db-<connection>` | the lane: opens, statements, fetches, closes, health checks |
-| `db-timer` | health checks every 60 s; the abort after an unanswered cancel |
-| virtual | connection tests (`isValid(10)` on a connection of their own); `Statement.cancel()` calls |
+| `db-<connection>` | strand, one per connection: opens, statements, fetches, closes, health checks; its socket waits hold no operating-system thread |
+| `db-timer` | timed strand: health checks every 60 s; the abort after an unanswered cancel |
+| virtual, per task | connection tests (`isValid(10)` on a connection of their own); `Statement.cancel()` calls |
 
 `close()` cancels running statements and closes every connection.
 

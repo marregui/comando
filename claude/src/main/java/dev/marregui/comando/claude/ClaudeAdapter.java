@@ -3,6 +3,7 @@ package dev.marregui.comando.claude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
@@ -33,7 +34,6 @@ import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -55,11 +55,11 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     private final ObjectMapper json = new ObjectMapper();
     private final ConcurrentHashMap<String, Session> sessions = new ConcurrentHashMap<>();
     private final ScheduledExecutorService timer =
-            Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("claude-timer").daemon(true).unstarted(r));
+            Threads.timedStrand("claude-timer");
     private volatile boolean closed;
     /** Reads the plan's usage limits; a thread of its own, as a read can take seconds. */
     private final ScheduledExecutorService planUsage =
-            Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("plan-usage").daemon(true).unstarted(r));
+            Threads.timedStrand("plan-usage");
 
     /** The most sub-agent views that follow their file at once; opening another stops the oldest. */
     static final int TAILS = 4;
@@ -82,7 +82,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             + " newer sub-agent views follow theirs. The transcript link on its card follows it again._";
     /** Reads sub-agent files and follows the open ones; a thread of its own, as a read can take a while. */
     private final ScheduledExecutorService subagents =
-            Executors.newSingleThreadScheduledExecutor(r -> Thread.ofPlatform().name("subagent-tail").daemon(true).unstarted(r));
+            Threads.timedStrand("subagent-tail");
     /** The sub-agent views following their file, by tool-use id, oldest first. Confined to {@link #subagents}. */
     private final LinkedHashMap<String, Tail> tails = new LinkedHashMap<>();
     /**
@@ -148,7 +148,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             this.name = name;
             this.transcript = transcripts.of(name);
             this.mapper = new StreamMapper(name, transcript, sink, json);
-            this.strand = Executors.newSingleThreadExecutor(Thread.ofVirtual().name("claude-strand-" + name).factory());
+            this.strand = Threads.strand("claude-strand-" + name);
         }
 
         void run(Runnable task) {

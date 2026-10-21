@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.kit.text;
 
+import dev.marregui.comando.core.loop.Threads;
 import com.github.weisj.jsvg.SVGDocument;
 import com.github.weisj.jsvg.parser.LoaderContext;
 import com.github.weisj.jsvg.parser.SVGLoader;
@@ -34,7 +35,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
@@ -83,7 +83,7 @@ public final class LocalImages {
     /** Keys being read, with who waits for each. */
     private final Map<Key, List<Runnable>> waiting = new ConcurrentHashMap<>();
     private final ExecutorService reader =
-            Executors.newSingleThreadExecutor(r -> Thread.ofPlatform().name("local-images").daemon(true).unstarted(r));
+            Threads.strand("local-images");
 
     /** Pictures read from disk, SVGs drawn into {@code cache}; without a cache an SVG is not shown. */
     LocalImages(Path cache) {

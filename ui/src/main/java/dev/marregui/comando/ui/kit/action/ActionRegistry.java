@@ -85,7 +85,7 @@ public final class ActionRegistry {
     }
 
     /**
-     * The menu bar of {@code menus}. Each command it places is named by its path ("Tools ▸ Help") for the palette and
+     * The menu bar of {@code menus}. Each command it places is named by its path ("Actions") for the palette and
      * the shortcuts list, and gets its key as its item's accelerator; {@link #bind} binds the others. Items grey out,
      * as the palette hides them, when their command cannot run now: each menu asks its items as it opens. An item's
      * tooltip is {@code tips} of its command's id, a submenu's {@code menuTips} of its title; null for none.

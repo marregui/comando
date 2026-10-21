@@ -126,9 +126,9 @@ public final class SessionsSidebar {
      */
     private final Map<String, SessionRow> rows = new HashMap<>();
     private final JList<SessionState> sessions = emptyText(new SessionList(sessionModel),
-            "No sessions yet. + creates one; the import button brings in stored Claude Code conversations.");
+            "No sessions yet. Right-click the tab to add one or import stored Claude Code conversations.");
     private final JList<ConnectionState> connections = emptyText(new JList<>(connectionModel),
-            "No connections yet. + adds one.");
+            "No connections yet. Right-click the tab to add one.");
     public static final int SESSIONS = 0;
     public static final int CONNECTIONS = 1;
     public static final int PANELS = 2;

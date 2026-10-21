@@ -17,8 +17,8 @@ it. It also holds the Gradle tasks that run, paint, replay and package the appli
 | `Main` | sets the dark appearance before AWT starts, reads `AppConfig`, configures logging, takes the data root's lock (`comando.lock`; a second instance on the same root refuses), builds and starts `App`, and adds a shutdown hook that closes it |
 | `App` | builds every part in dependency order on a stack and closes them in reverse, each once; a failed constructor step closes what was built and rethrows |
 | `AppConfig` | the data root and its folders (`run`, `logs`, `audit`, `questdb`, `kit`), the `claude` executable, the keychain and kit switches |
-| `Store` | implements `core`'s `PersistencePort` and `ui`'s `PanelTexts`: `connections.json`, `sessions.json`, `folders.json`, `panels.json`, and a Markdown file per panel; writes from immutable snapshots on its own threads |
-| `PanelFiles` | each panel's text as a file: named after the title, follows renames, never overwrites an edit made outside comando |
+| `Store` | implements `core`'s `PersistencePort` and `ui`'s `PanelTexts`: `connections.json`, `sessions.json`, `folders.json`, `panels.json`, and the panels' text: a Markdown file in `panels/` for a panel of comando's own, the file itself for a document; writes from immutable snapshots on its own threads |
+| `PanelFiles` | each panel's text as a file: a panel of comando's own is named after its title and follows renames; a document is bound to its path and never renamed or deleted; no file is overwritten after an edit made outside comando |
 | `JsonFile` | one store file: atomic replace through a temporary file; an unreadable file is renamed aside, not overwritten |
 | `Secrets` | connection passwords in the macOS login keychain through `/usr/bin/security`; elsewhere `Secrets.NONE` |
 | `IntentLog` | with `-Dcomando.recordIntents=true`, every intent as a JSON line after the starting state, passwords blanked |
@@ -40,7 +40,7 @@ it. It also holds the Gradle tasks that run, paint, replay and package the appli
 | 8 | `ClaudeAdapter` | 2 |
 | 9 | `ToolsAdapter` | 1 |
 | 10 | `EmbeddedQuestDb` | 10, after the lanes it may serve |
-| 11 | `ComandoUi` | 11, greyed and titled "closing…" until the rest has closed |
+| 11 | `ComandoUi` | 11, greyed and titled "comando — closing…" until the rest has closed |
 
 `EffectRouter` needs the adapters, and the loop needs an effect handler before they exist: `App.DeferredEffects`
 stands in until the router is built.
@@ -74,7 +74,8 @@ What `app` connects, and nothing else does:
 | `mcp` editor tools | `Store` | `McpTools.readOnly`: panels showing a log take no text |
 | `Store` | `StateLoop` | `Notify` for a store warning, `FoldersRead` when `folders.json` changed outside |
 
-**At start** (`App.start`): the reducer starts, the window is built, the Files tab's open folders are read every 5 s,
+**At start** (`App.start`): the reducer starts, the window is built, every folder's git repository is watched for the
+Files tab's marks, the Files tab's open folders are read every 5 s,
 the plan's usage every 5 minutes, every session with a stored conversation loads its transcript, `claude --version` is
 checked, and the kit is refreshed and, on the user's own data root, offered when Claude Code lacks it.
 
@@ -99,20 +100,26 @@ user's plugins. The JVM options (`-Xms64m -Xmx4g`, periodic G1, the QuestDB expo
 
 | Thread | Does |
 |---|---|
-| `store`, `store-secrets` | the store's writes; panel text 800 ms after the first unsaved change; a check of open panels' files and `folders.json` every second; keychain calls apart, so an unlock prompt never holds back panel text |
-| `claude-version`, `kit` | virtual: the start-up checks |
+| `store`, `store-secrets` | timed strand and strand: the store's writes; panel text 800 ms after the first unsaved change; a check of open panels' files and `folders.json` every second; keychain calls apart, so an unlock prompt never holds back panel text. Their threads are virtual, so daemons: `close()` waits for what is queued |
+| `claude-version`, `kit` | errands of `App`: the start-up checks |
+| `questdb-toggle` | errand of `EmbeddedQuestDb`: one start or stop; a toggle meanwhile only says so |
+| `keychain-output` | fork: one `security` call's output, so a keychain call that gets no answer ends after 10 s |
 | `exit`, `shutdown` | close the application after Quit, or from the shutdown hook |
 
 ## 5. Tests and tasks
 
 Tests: `StoreTest`, `StoreSaveNowTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`,
-`KitAtStartTest`, `EmbeddedQuestDbTest`; the window tests `UiReplayTest` (intent logs replayed against the real shell
-with `testkit`'s `RecordingPorts`) and `UiKeysTest` (keys typed into a real window) run only under `:app:uiTest`.
+`KitAtStartTest`, `EmbeddedQuestDbTest`, `ThreadRulesTest` (ArchUnit over every module: platform threads only of
+the kinds that need them, every other thread from `core`'s thread kit); the window tests `UiReplayTest` (intent logs
+replayed against the real shell with `testkit`'s `RecordingPorts`), `UiKeysTest` (keys typed into a real window),
+`TreeClicksUiTest` (a tree's clicks) and `ThreadBudgetTest` (the whole application with five fake sessions: comando's
+own platform threads are the reducer, the watchdog and one reader per session, and none is left after the close) run
+only under `:app:uiTest`.
 
 | Task | Does |
 |---|---|
 | `./gradlew :app:run` | starts comando from a copy of the build output made at launch, so a build while it runs cannot break it |
-| `./gradlew :app:uiTest` | the window tests; needs a display (`xvfb-run` on Linux), one JVM per class |
+| `./gradlew :app:uiTest` | the window tests; needs a display (`xvfb-run` on Linux), one JVM per class; the windows open on no screen and never take the desktop's focus |
 | `./gradlew :app:snapshot -Pout=<dir>` | drives comando with intents and paints its window to PNG files (`-Plive=true` starts a real session) |
 | `./gradlew :app:hero -Pout=<dir>` | paints the README's picture with a live Claude Code turn |
 | `./gradlew :app:dmg` | an unsigned macOS disk image with its own runtime, in `build/dmg` |

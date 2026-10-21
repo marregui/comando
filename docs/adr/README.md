@@ -3,7 +3,8 @@
 One record per decision, dated, with the context, the decision and its consequences, and who decided. Records 1 to 16
 are decisions D1 to D16 of the design plan of 2026-10-12 (kept outside this repository; R, U and M labels in them are
 that plan's). Later records come from implementation and from Miguel's daily use. A decision is changed by a new record
-that names the one it replaces; the old record stays as written, and this index's status column says what replaced it.
+that names the one it replaces, or, for a small change, by a dated paragraph at the end of the record (records 33, 35,
+64); this index's status column says what replaced or amended it.
 
 | Record | Decision | Decided by | Status |
 |---|---|---|---|
@@ -30,7 +31,7 @@ that names the one it replaces; the old record stays as written, and this index'
 | [21](0021-painted-transcript.md) | Painted transcript | Claude | accepted |
 | [22](0022-no-parquet-export.md) | No Parquet export | Claude | accepted |
 | [23](0023-sql-from-claude-lexical-policy-production-refused.md) | SQL from Claude: lexical policy, production refused | Claude | accepted |
-| [24](0024-the-window-belongs-to-the-user.md) | The window belongs to the user | Claude | proposed; item 24.6 replaced by 25 |
+| [24](0024-the-window-belongs-to-the-user.md) | The window belongs to the user | Claude | accepted; item 24.6 replaced by 25 |
 | [25](0025-no-prompt-bar.md) | No prompt bar | Miguel | accepted |
 | [26](0026-a-file-per-panel.md) | A file per panel | Miguel, Claude | file per panel and naming accepted; outside edits replaced by 27, close by 39, specs opened only from `panels/` by 29 |
 | [27](0027-panels-reload-files-changed-outside.md) | Panels reload files changed outside | Miguel, Claude | accepted; deleted documents replaced by 34 |
@@ -42,7 +43,7 @@ that names the one it replaces; the old record stays as written, and this index'
 | [33](0033-thinking-gives-way-and-the-conclusion-is-gold.md) | Thinking gives way, and the conclusion is gold | Miguel, Claude | accepted; the gold superseded 2026-10-19 by one amber text on near-black |
 | [34](0034-a-deleted-document-closes-its-panel.md) | A deleted document closes its panel | Miguel, Claude | accepted |
 | [35](0035-mermaid-diagrams-drawn-by-mmdc.md) | Mermaid diagrams drawn by mmdc | Miguel, Claude | accepted; refresh amended 2026-10-18 |
-| [36](0036-five-menus-by-subject.md) | Five menus, by subject | Miguel, Claude | superseded by 59 |
+| [36](0036-five-menus-by-subject.md) | Five menus, by subject | Miguel, Claude | superseded by 59; Help items carry icons since 47 |
 | [37](0037-session-actions-act-on-the-selected-row.md) | Session and connection actions act on the selected row | Miguel, Claude | accepted; the bar replaced by menus, 74 |
 | [38](0038-a-session-has-one-panel.md) | A session has one panel | Miguel, Claude | accepted |
 | [39](0039-panels-are-kept-until-removed.md) | Panels are kept until removed | Miguel, Claude | accepted |
@@ -55,34 +56,37 @@ that names the one it replaces; the old record stays as written, and this index'
 | [46](0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md) | Clear buttons, text coloured by its kind, a checkpoint that says when it is due | Miguel, Claude | accepted; its rule on the user's setup replaced by 50; the rows' start time moved to the copied details by 53 |
 | [47](0047-help-opens-its-files-as-documents.md) | Help opens its files as documents, with icons of its own | Miguel, Claude | accepted |
 | [48](0048-stalls-are-a-line-hangs-a-stack-the-heap-starts-small.md) | Stalls are a line, hangs a stack; the heap starts small | Miguel, Claude | accepted; its JFR row removed by 54 |
-| [49](0049-the-files-tab-shows-folders-the-user-chooses.md) | The Files tab shows folders the user chooses | Miguel, Claude | accepted; bar, sync interval and order amended by 51; clicks and the index replaced by 52 |
-| [50](0050-comando-ships-a-claude-code-kit.md) | comando ships a Claude Code kit, and relies only on what it installed | Miguel, Claude | accepted; its JFR key removed by 54; own-setup and offer rows replaced by 61 |
-| [51](0051-folder-buttons-together-read-only-folders-icons.md) | Folder buttons together, read-only folders, an icon per folder | Miguel, Claude | accepted; its row "files" replaced and the scratchpad icon added by 52 |
-| [52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md) | Files open on a double click; the bar follows the selection and acts on files | Miguel, Claude | accepted |
+| [49](0049-the-files-tab-shows-folders-the-user-chooses.md) | The Files tab shows folders the user chooses | Miguel, Claude | accepted; bar, sync interval and order amended by 51; clicks and the index replaced by 52; bar, folder dialog and configuration row removed by 55 |
+| [50](0050-comando-ships-a-claude-code-kit.md) | comando ships a Claude Code kit, and relies only on what it installed | Miguel, Claude | accepted; its JFR key removed by 54; own-setup and offer rows replaced by 61; tool paths by 62; install and setup to be replaced by 80 (proposed) |
+| [51](0051-folder-buttons-together-read-only-folders-icons.md) | Folder buttons together, read-only folders, an icon per folder | Miguel, Claude | accepted, the row "files" proposed; bar, files and read-only removed by 55; its row "files" replaced and the scratchpad icon added by 52 |
+| [52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md) | Files open on a double click; the bar follows the selection and acts on files | Miguel, Claude | accepted; bar, tips, clone, remove and read-only removed by 55; clicks amended by 78 |
 | [53](0053-session-rows-compact-clear-copy-and-an-order-of-your-own.md) | Session rows: compact, clear, copy, and an order of the user's own | Miguel, Claude | accepted |
 | [54](0054-comando-knows-nothing-of-jfr.md) | comando knows nothing of JFR | Miguel, Claude | accepted |
-| [55](0055-the-files-tab-only-shows-folders-json-configures-it.md) | The Files tab only shows; folders.json configures it; every file opens to edit | Miguel, Claude | accepted |
+| [55](0055-the-files-tab-only-shows-folders-json-configures-it.md) | The Files tab only shows; folders.json configures it; every file opens to edit | Miguel, Claude | accepted; the Trash for deletable folders, 63; configuration row replaced by 69 |
 | [56](0056-html-opens-in-the-browser-not-in-comando.md) | HTML opens in the browser, not in comando | Miguel, Claude | accepted |
 | [57](0057-a-light-editor-and-a-header-of-icons.md) | A light editor, and a panel header of icons | Miguel, Claude | accepted |
 | [58](0058-markdown-shows-the-pictures-beside-it.md) | Markdown shows the pictures beside it | Miguel, Claude | accepted |
-| [59](0059-three-menus-for-what-has-no-key.md) | Three menus, for what has no key or control | Miguel, Claude | accepted; the bar replaced, 75 |
+| [59](0059-three-menus-for-what-has-no-key.md) | Three menus, for what has no key or control | Miguel, Claude | accepted; Tool settings removed by 62; the bar replaced, 75 |
 | [60](0060-about-is-a-card-worded-by-a-file.md) | About comando is a card worded by a file | Miguel, Claude | accepted |
-| [61](0061-the-kit-overrides-a-setup-of-the-users-own-with-consent.md) | The kit overrides a setup of the user's own, with the user's consent | Miguel, Claude | accepted |
+| [61](0061-the-kit-overrides-a-setup-of-the-users-own-with-consent.md) | The kit overrides a setup of the user's own, with the user's consent | Miguel, Claude | accepted, not built: the kit still keeps out of a user's own setup (50); to be replaced by 80 (proposed) |
 | [62](0062-gradle-runs-by-convention.md) | Gradle runs by convention; no `tools.json` | Miguel, Claude | accepted |
 | [63](0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md) | A tab's menu closes many; a scratchpad's entries go to the Trash | Miguel, Claude | accepted |
 | [64](0064-sub-agents-are-shown-live.md) | Sub-agents are shown live | Miguel, Claude | accepted; following and large files amended 2026-10-18 |
 | [65](0065-keys-on-desktops-other-than-macos.md) | Keys on desktops other than macOS | Miguel, Claude | accepted |
 | [66](0066-the-reducer-is-watched-as-the-edt-is.md) | The reducer is watched as the EDT is | Miguel, Claude | accepted |
 | [67](0067-reflect-measures-what-it-does-to-the-memory.md) | `/reflect` measures what it does to the memory | Miguel, Claude | accepted |
-| [68](0068-git-changes-and-a-side-by-side-diff.md) | Git changes and a side-by-side diff | Miguel, Claude | proposed; a repository's double click, the view's title and groups replaced, 71 |
-| [69](0069-a-window-edits-the-files-tab-folders.md) | A window edits the Files tab's folders | Miguel, Claude | proposed; where it opens replaced, 71; title, problems line and index creation amended, 73 |
-| [70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | The sidebar's tabs in one row, with a menu each | Miguel, Claude | proposed; the Files tab's menu replaced, 73; Hide the sidebar out of the tab menus, 74 |
-| [71](0071-repositories-in-the-files-tab.md) | Repositories in the Files tab | Miguel, Claude | proposed |
-| [72](0072-the-comparison-window-edits-rolls-back-and-removes.md) | The comparison window edits, rolls back and removes | Miguel, Claude | proposed |
-| [73](0073-the-claude-folders-window-explains-and-creates-the-index.md) | The ~/.claude folders window explains its fields and creates the index | Miguel, Claude | proposed |
-| [74](0074-the-sidebars-lists-have-no-bar-of-buttons.md) | The sidebar's lists have no bar of buttons | Miguel, Claude | proposed |
-| [75](0075-the-menu-bar-is-edit-and-actions-flat.md) | The menu bar is Edit and Actions, flat | Miguel, Claude | proposed |
-| [76](0076-new-files-are-gold-and-marked-from-the-top.md) | New files are gold and marked from the top | Miguel, Claude | proposed |
-| [77](0077-a-files-panel-keeps-its-extension.md) | A file's panel keeps its extension | Miguel, Claude | proposed |
-| [78](0078-a-rows-marks-and-double-click-show-its-changes.md) | A row's marks and double click show its changes; one click opens a folder | Miguel, Claude | proposed; amends 52, 68, 71, 76 |
-| [79](0079-a-notice-takes-you-to-what-it-is-about.md) | A notice takes you to what it is about | Miguel, Claude | proposed |
+| [68](0068-git-changes-and-a-side-by-side-diff.md) | Git changes and a side-by-side diff | Miguel, Claude | accepted; a repository's double click, the view's title and groups replaced, 71; window extended, 72; colours amended, 76; double click amended, 78 |
+| [69](0069-a-window-edits-the-files-tab-folders.md) | A window edits the Files tab's folders | Miguel, Claude | accepted; where it opens replaced, 71; title, problems line and index creation amended, 73 |
+| [70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | The sidebar's tabs in one row, with a menu each | Miguel, Claude | accepted; the Files tab's menu replaced, 73; Hide the sidebar out of the tab menus, 74 |
+| [71](0071-repositories-in-the-files-tab.md) | Repositories in the Files tab | Miguel, Claude | accepted; window amended, 73; double click amended, 78 |
+| [72](0072-the-comparison-window-edits-rolls-back-and-removes.md) | The comparison window edits, rolls back and removes | Miguel, Claude | accepted |
+| [73](0073-the-claude-folders-window-explains-and-creates-the-index.md) | The ~/.claude folders window explains its fields and creates the index | Miguel, Claude | accepted |
+| [74](0074-the-sidebars-lists-have-no-bar-of-buttons.md) | The sidebar's lists have no bar of buttons | Miguel, Claude | accepted |
+| [75](0075-the-menu-bar-is-edit-and-actions-flat.md) | The menu bar is Edit and Actions, flat | Miguel, Claude | accepted |
+| [76](0076-new-files-are-gold-and-marked-from-the-top.md) | New files are gold and marked from the top | Miguel, Claude | accepted; marks amended, 78 |
+| [77](0077-a-files-panel-keeps-its-extension.md) | A file's panel keeps its extension | Miguel, Claude | accepted |
+| [78](0078-a-rows-marks-and-double-click-show-its-changes.md) | A row's marks and double click show its changes; one click opens a folder | Miguel, Claude | accepted; amends 52, 68, 71, 76 |
+| [79](0079-a-notice-takes-you-to-what-it-is-about.md) | A notice takes you to what it is about | Miguel, Claude | accepted; amends the status bar's click |
+| [80](0080-the-kit-is-a-whole-setup-installed-reversibly.md) | The kit is a whole Claude Code setup, installed reversibly | Miguel, Claude | proposed; would replace the install and setup rows of 50 and 61 |
+| [81](0081-a-tab-shows-a-card-with-its-topic.md) | A tab shows a card with its topic | Miguel, Claude | proposed; replaces the panel tabs' tooltip |
+| [82](0082-threads-by-kind-with-a-budget.md) | Threads by kind, with a budget | Miguel, Claude | accepted; amends the architecture's thread rule |

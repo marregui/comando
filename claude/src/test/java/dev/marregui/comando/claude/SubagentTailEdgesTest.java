@@ -2,6 +2,7 @@ package dev.marregui.comando.claude;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
@@ -191,13 +192,12 @@ class SubagentTailEdgesTest {
     }
 
     private static boolean tailThreadAlive() {
-        return Thread.getAllStackTraces().keySet().stream().anyMatch(t -> t.getName().equals("subagent-tail") && t.isAlive());
+        return !Threads.alive("subagent-tail").isEmpty();
     }
 
     private static boolean blockedInOpen() {
-        return Thread.getAllStackTraces().entrySet().stream()
-                .filter(e -> e.getKey().getName().equals("subagent-tail"))
-                .anyMatch(e -> Arrays.stream(e.getValue()).anyMatch(s -> (s.getClassName().equals("java.io.RandomAccessFile")
+        return Threads.alive("subagent-tail").stream()
+                .anyMatch(t -> Arrays.stream(t.getStackTrace()).anyMatch(s -> (s.getClassName().equals("java.io.RandomAccessFile")
                         || s.getClassName().startsWith("sun.nio.fs.")) && s.getMethodName().startsWith("open")));
     }
 }

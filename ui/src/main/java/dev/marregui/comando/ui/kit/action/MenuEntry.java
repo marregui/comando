@@ -6,7 +6,7 @@ import java.util.Objects;
 
 /**
  * The shape of the menu bar, by command id: menus hold commands, separators and submenus. The registry builds the
- * bar from it and names each placed command's path ("Tools ▸ Help") for the palette and the shortcuts list.
+ * bar from it and names each placed command's path ("Actions") for the palette and the shortcuts list.
  */
 public sealed interface MenuEntry {
 

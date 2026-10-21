@@ -2,6 +2,7 @@ package dev.marregui.comando.claude;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.Topic;
 import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.view.Clip;
@@ -15,7 +16,6 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -44,7 +44,7 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
     /** Asks not yet read, in reading order, one per key. Guarded by {@code lock}. */
     private final LinkedHashMap<String, Ask> waiting = new LinkedHashMap<>();
     private final ExecutorService worker =
-            Executors.newSingleThreadExecutor(r -> Thread.ofPlatform().name("topic-reader").daemon(true).unstarted(r));
+            Threads.strand("topic-reader");
     /** The last problem logged, so a reader that keeps failing logs once. Worker thread only. */
     private String lastProblem = "";
     private volatile boolean closed;

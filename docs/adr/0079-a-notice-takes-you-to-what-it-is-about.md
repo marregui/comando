@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-20 | proposed; amends the status bar's click of the recent notices | Miguel (a click on a notice brings its source into view, scrolled to the place, with a hint of what to read; every notice follows it; the stall notice opens the log at the stall), Claude (the subject as the target, the log anchor by time, the amber fade, right click for the recent notices, the order of the work) |
+| 2026-10-20 | accepted; amends the status bar's click of the recent notices | Miguel (a click on a notice brings its source into view, scrolled to the place, with a hint of what to read; every notice follows it; the stall notice opens the log at the stall), Claude (the subject as the target, the log anchor by time, the amber fade, right click for the recent notices, the order of the work) |
 
 ## 1. Context
 

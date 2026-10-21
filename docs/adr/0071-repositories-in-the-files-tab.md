@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | proposed; replaces the "where" row of [record 69](0069-a-window-edits-the-files-tab-folders.md) and the double click of [record 68](0068-git-changes-and-a-side-by-side-diff.md) | Miguel (one view titled Uncommitted changes, its three groups; a Repositories node with its icon; the folders window from the Files tab's menu, not a row's; a repository's double click shows that repository alone, titled with its name; a folder's menu shows the changes of `~/.claude` inside it; folders only inside `~/.claude`; repositories that exist, chosen), Claude (how: the `repository` key, two windows, the view's scope, a changed file's Compare with HEAD, the checks) |
+| 2026-10-19 | accepted; replaces the "where" row of [record 69](0069-a-window-edits-the-files-tab-folders.md) and the double click of [record 68](0068-git-changes-and-a-side-by-side-diff.md) | Miguel (one view titled Uncommitted changes, its three groups; a Repositories node with its icon; the folders window from the Files tab's menu, not a row's; a repository's double click shows that repository alone, titled with its name; a folder's menu shows the changes of `~/.claude` inside it; folders only inside `~/.claude`; repositories that exist, chosen), Claude (how: the `repository` key, two windows, the view's scope, a changed file's Compare with HEAD, the checks) |
 
 ## 1. Context
 

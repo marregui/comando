@@ -1,6 +1,7 @@
 package dev.marregui.comando.app;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.ui.shell.ServerToggle;
@@ -36,6 +37,8 @@ final class EmbeddedQuestDb implements ServerToggle, AutoCloseable {
     private final Path root;
     private final IntentSink intents;
     private final Map<String, String> overrides;
+    /** The starts and stops under way, each on a virtual thread; closed with the server. */
+    private final Errands errands = new Errands("questdb");
     /** Written under the monitor; read without it, so the EDT never waits for a start or stop. */
     private volatile ServerMain server;
     /** A start or stop is under way; a toggle meanwhile does nothing but say so. */
@@ -72,7 +75,7 @@ final class EmbeddedQuestDb implements ServerToggle, AutoCloseable {
             intents.dispatch(new Intent.Notify(Notice.Level.INFO, server == null ? "QuestDB is starting" : "QuestDB is stopping", false));
             return;
         }
-        Thread.ofVirtual().name("questdb-toggle").start(() -> {
+        errands.start("questdb-toggle", () -> {
             try {
                 flip();
             } finally {
@@ -131,7 +134,16 @@ final class EmbeddedQuestDb implements ServerToggle, AutoCloseable {
     }
 
     @Override
-    public synchronized void close() {
+    public void close() {
+        // outside the monitor: a start or stop under way holds it, and the close waits for it, bounded
+        try {
+            errands.close();
+        } finally {
+            closeServer();
+        }
+    }
+
+    private synchronized void closeServer() {
         if (server != null) {
             stop();
         }

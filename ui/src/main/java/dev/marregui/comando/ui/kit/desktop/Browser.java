@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.kit.desktop;
 
+import dev.marregui.comando.ui.kit.async.UiErrands;
+
 import java.awt.Desktop;
 import java.net.URI;
 import java.nio.file.Path;
@@ -40,7 +42,7 @@ public final class Browser {
     public static void openFile(Path file) {
         if (Desktop.isDesktopSupported()) {
             URI uri = file.toAbsolutePath().toUri();
-            Thread.ofVirtual().name("open-link").start(() -> {
+            UiErrands.start("open-link", () -> {
                 try {
                     Desktop.getDesktop().browse(uri);
                 } catch (Exception e) {
@@ -61,6 +63,6 @@ public final class Browser {
             LOG.log(System.Logger.Level.WARNING, "cannot open " + href + ": " + e.getMessage());
             return;
         }
-        Thread.ofVirtual().name("open-link").start(() -> browse.accept(uri));
+        UiErrands.start("open-link", () -> browse.accept(uri));
     }
 }

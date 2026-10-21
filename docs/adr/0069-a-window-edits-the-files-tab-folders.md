@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | proposed; replaces the configuration row of [record 55](0055-the-files-tab-only-shows-folders-json-configures-it.md); its "where" row replaced by [record 71](0071-repositories-in-the-files-tab.md) | Miguel (a window from the Files menu, a list with details, Save and Cancel, no JSON route, an Edit folder… item on a folder row, a new folder chosen first, every field shown, Leave out as text, a missing folder blocks Save), Claude (how: the window's parts, keys, what the details show, the intent, an outside edit while it is open) |
+| 2026-10-19 | accepted; replaces the configuration row of [record 55](0055-the-files-tab-only-shows-folders-json-configures-it.md); its "where" row replaced by [record 71](0071-repositories-in-the-files-tab.md) | Miguel (a window from the Files menu, a list with details, Save and Cancel, no JSON route, an Edit folder… item on a folder row, a new folder chosen first, every field shown, Leave out as text, a missing folder blocks Save), Claude (how: the window's parts, keys, what the details show, the intent, an outside edit while it is open) |
 
 ## 1. Context
 

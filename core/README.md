@@ -2,7 +2,7 @@
 
 The domain of comando: one immutable state, the intents that change it, the reducer that applies them, the effects
 it asks for, and the ports through which every outside system is reached. It depends on the JDK only; every other
-module depends on it (`api(project(":core"))`), and none of them depends on another except through `app`.
+module depends on it (`api(project(":core"))`, `implementation` in `app`), and none of them depends on another except through `app`.
 
 1. [Architecture](#1-architecture)
 2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
@@ -28,18 +28,18 @@ transcripts, console output, schemas) lives in registries the state refers to by
 
 | Package | Holds |
 |---|---|
-| `state` | `AppState` and its parts: `PanelState`, `ConnectionState`, `SessionState`, `SqlRun`, `ViewState`, `Notice`, `LowerTab`, `BackgroundTask`, `Reflection` |
+| `state` | `AppState` and its parts: `PanelState`, `ConnectionState`, `SessionState`, `SqlRun`, `ViewState`, `Notice`, `LowerTab`, `BackgroundTask`, `Reflection`, `RunStatus`, `SessionInfo` |
 | `intent` | `Intent`, the sealed interface of every change; `EditMode` |
 | `reduce` | `Reducer` (intent → `Transition`), `Transition` (next state and effects) |
 | `effect` | `Effect`, the sealed interface of work for adapters; `EffectRouter`, which hands each effect to its port |
 | `loop` | `StateLoop`: the queue, the reducer thread, its watchdog, listeners and observers |
 | `port` | the interfaces adapters implement ([§2](#2-interface-with-the-rest-of-the-app)) |
-| `model` | configuration and values shared by every module: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `HomeDir`, `Status`, `StartMode` |
-| `resource` | `ResourceKind` and its kinds (`ConnectionKind`, `SessionKind`, `FolderKind`): the attributes and rules one dialog edits |
+| `model` | configuration and values shared by every module: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `Topic`, `HomeDir`, `Status`, `StartMode`; `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for) |
+| `resource` | `ResourceKind`, its kinds (`ConnectionKind`, `SessionKind`, `FolderKind`) and `Attribute`: the attributes and rules one dialog edits |
 | `dispatch` | `Blocks`, `Statements`, `Classifier`, `Target`: editor text split into blocks and statements, and the SQL-or-prompt decision |
 | `view` | `ViewSpec` (the data of each view type), `Placement`, `Layout`, `FileView`, `Clip` |
 | `result` | `ResultView` (read access to a run's rows), `ResultRegistry`, `ColumnKind`, `Formats` |
-| `transcript` | `Block`, `Transcript` (one writer, many readers), `TranscriptRegistry` |
+| `transcript` | `Block`, `Transcript` (one writer, many readers), `TranscriptRegistry`, `TopicSource` (what a tab's topic is read from) |
 | `console` | `Console` (a command run's output), `ConsoleRegistry` |
 | `schema` | `Schema`, `SchemaRegistry` |
 
@@ -59,6 +59,7 @@ intents.
 | `DatabasePort` | `db` `DbAdapter` | `EffectRouter` |
 | `QueryPort` | `db` `DbAdapter` | `mcp` (`db_run_sql`, `db_describe`) |
 | `ClaudePort` | `claude` `ClaudeAdapter` | `EffectRouter` |
+| `TopicPort` | `claude` `ClaudeTopics` | `ui` (the tabs' cards; a topic is view data and never passes the reducer) |
 | `McpGateway` | `mcp` `McpServer` | `claude` (a ticket per process) |
 | `ApprovalPort` | `mcp` `McpServer` | `EffectRouter` |
 | `ToolPort` | `tools` `ToolsAdapter` | `EffectRouter` |
@@ -76,8 +77,9 @@ intents.
 | `ConsoleRegistry` | `tools` (a run's thread) | `ui` (console views) |
 | `SchemaRegistry` | `db` | `ui` (completion, schema explorer) |
 
-**Shared helpers.** `Classifier` and `Statements` are used by the reducer, by the editor (block colours, gutter) and
-by `mcp`; `HomeDir` decides `~` expansion and Claude Code's folder for every module; `Clip` shortens labels the same
+**Shared helpers.** `Classifier` is used by the reducer, by the editor (block colours, gutter, completion) and by
+`mcp` (DDL detection for `db_run_sql`); `Statements` by the reducer and the editor; `Intent.Notify.logged` writes a
+failure to the log and makes the notice whose click opens it there (`Notice.log`), for every adapter; `HomeDir` decides `~` expansion and Claude Code's folder for every module; `Clip` shortens labels the same
 way in the window and in what Claude is told; `PermissionRules` derives the allow rules an approval adds, for `mcp`
 and the approval card.
 
@@ -88,17 +90,24 @@ and the approval card.
 
 | Thread | Does |
 |---|---|
-| `comando-reducer` | applies intents in order; the only writer of `AppState` |
-| `reducer-watchdog` | looks at the loop every 100 ms; an intent still applying at 1 s is logged with the loop's stack |
+| `comando-reducer` | platform: applies intents in order; the only writer of `AppState` |
+| `watchdog` | platform, shared with the EDT's watchdog (`Watchdog.shared()`): looks at the loop every 100 ms; an intent still applying at 1 s is logged with the loop's stack |
 
-An intent that takes 200 ms or more is a stall, logged once it ends with the slowest part. The reducer, each effect
+`loop` also holds the thread kit every module uses ([Architecture §6](../docs/architecture.md#6-threads)): `Threads`
+makes strands (`strand`, `timedStrand`) and forks on virtual threads and lists the live ones by name for tests;
+`Errands` is one owner's errands, interrupted and waited for at its close; `Watchdog` is the one platform thread that
+runs every watchdog's look.
+
+An intent that takes 200 ms or more is a stall, logged once it ends with the slowest part; one of 1 s or more also
+sets a notice whose click opens the log at the hang. The reducer, each effect
 and each listener are guarded: a failure is logged and the loop goes on.
 
 ## 4. Tests
 
-Unit tests with no I/O: `ReducerTest`, `ReducerNoticeAndLayoutTest`, `ReducerSubagentTest`, `StateLoopTest`
-(`applyNow` drives the loop without its thread), `ClassifierTest`, `BlocksTest`, `StatementsTest`, `TranscriptTest`,
-`ConsoleTest`, `FormatsTest`, `ReflectionTest`, `ResourceKindTest`, `FileViewTest`, `HomeDirTest`, `ClipTest`. They
-use `testkit`'s `FakeClock`, `States` and `RecordingPorts`.
+Unit tests, with no I/O except `FileViewTest`'s temporary files: `ReducerTest`, `ReducerNoticeAndLayoutTest`,
+`ReducerSubagentTest`, `ReducerChangesTest`, `StateLoopTest` (`applyNow` drives the loop without its thread),
+`NotifyLoggedTest`, `ThreadKitTest`, `ClassifierTest`, `BlocksTest`, `StatementsTest`, `TranscriptTest`, `TopicSourceTest`, `ConsoleTest`, `FormatsTest`,
+`ReflectionTest`, `ResourceKindTest`, `FileViewTest`, `HomeDirTest`, `ClipTest`. They use `testkit`'s `FakeClock` and
+`States`.
 
 Further reading: [Architecture §3–§6](../docs/architecture.md#3-the-flow-of-one-command).

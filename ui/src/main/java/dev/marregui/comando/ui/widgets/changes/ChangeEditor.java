@@ -7,6 +7,7 @@ import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
@@ -276,7 +277,7 @@ public final class ChangeEditor {
         long mine = ++asked;
         String before = texts.before();
         String after = texts.after();
-        Thread.ofVirtual().name("diff-compute").start(() -> {
+        UiErrands.start("diff-compute", () -> {
             SplitDiff.Model m = SplitDiff.compute(before, after, DIFF_MILLIS);
             Edt.later(() -> {
                 if (mine == asked) {
@@ -327,7 +328,7 @@ public final class ChangeEditor {
         long mine = ++asked;
         String before = diff.left().getText();
         String after = diff.right().getText();
-        Thread.ofVirtual().name("diff-compute").start(() -> {
+        UiErrands.start("diff-compute", () -> {
             SplitDiff.Model m = SplitDiff.compute(before, after, DIFF_MILLIS);
             Edt.later(() -> {
                 if (mine == asked) {

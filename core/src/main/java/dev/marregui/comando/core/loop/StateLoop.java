@@ -21,7 +21,7 @@ import java.util.function.Consumer;
  * snapshot. Effect handlers and listeners run on this thread and must only hand work off.</p>
  *
  * <p>An intent that takes {@link #STALL_MILLIS} or more is a stall, told once it ends with the part that took
- * longest (the observers, the reducer, an effect, the listeners). A watchdog thread looks at the loop every
+ * longest (the observers, the reducer, an effect, the listeners). The shared {@link Watchdog} looks at the loop every
  * {@link #PERIOD_MILLIS}; an intent still applying at {@link #HANG_MILLIS} is a hang, told then with the loop's stack,
  * so a part that blocks is seen while it blocks, not only if it ever ends.</p>
  */
@@ -30,7 +30,7 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     private static final System.Logger LOG = System.getLogger(StateLoop.class.getName());
     private static final Intent STOP = new Intent.Notify(Notice.Level.INFO, "stop", false);
 
-    public static final long PERIOD_MILLIS = 100;
+    public static final long PERIOD_MILLIS = Watchdog.PERIOD_MILLIS;
     public static final long STALL_MILLIS = 200;
     /** An intent still applying this long is reported with the loop's stack. */
     public static final long HANG_MILLIS = 1_000;
@@ -80,7 +80,8 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     private final Reducer reducer;
     private final EffectHandler effects;
     private final Thread thread;
-    private final Thread watchdog;
+    /** The look at the loop on the shared {@link Watchdog}, from the start to the close. */
+    private volatile AutoCloseable watchdog;
     private final long stallMillis;
     private final long hangMillis;
     private final Consumer<Stall> stalls;
@@ -109,12 +110,11 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         this.hangMillis = hangMillis;
         this.stalls = stalls == null ? this::log : stalls;
         this.thread = Thread.ofPlatform().name("comando-reducer").daemon(true).unstarted(this::run);
-        this.watchdog = Thread.ofPlatform().name("reducer-watchdog").daemon(true).unstarted(this::watch);
     }
 
     public StateLoop start() {
         thread.start();
-        watchdog.start();
+        watchdog = Watchdog.shared().watch(this::look);
         return this;
     }
 
@@ -225,22 +225,17 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         slowestNanos = -1;
     }
 
-    private void watch() {
-        // runs until close interrupts it, after the loop has applied what was queued, so the shutdown is watched too
-        while (true) {
-            try {
-                Thread.sleep(PERIOD_MILLIS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-            Busy b = busy;
-            if (b != null && b.sinceNanos() != hangTold) {
-                long millis = (System.nanoTime() - b.sinceNanos()) / 1_000_000;
-                if (millis >= hangMillis) {
-                    hangTold = b.sinceNanos();
-                    stalls.accept(new Stall(b.part(), millis, false, format(b.thread().getStackTrace()), b.sinceNanos()));
-                }
+    /**
+     * One look at the loop, on the watchdog's thread every period until the close, which comes after the loop has applied
+     * what was queued, so the shutdown is watched too.
+     */
+    private void look() {
+        Busy b = busy;
+        if (b != null && b.sinceNanos() != hangTold) {
+            long millis = (System.nanoTime() - b.sinceNanos()) / 1_000_000;
+            if (millis >= hangMillis) {
+                hangTold = b.sinceNanos();
+                stalls.accept(new Stall(b.part(), millis, false, format(b.thread().getStackTrace()), b.sinceNanos()));
             }
         }
     }
@@ -290,6 +285,13 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
-        watchdog.interrupt();
+        AutoCloseable w = watchdog;
+        if (w != null) {
+            try {
+                w.close();
+            } catch (Exception e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot stop watching the loop: " + e.getMessage());
+            }
+        }
     }
 }

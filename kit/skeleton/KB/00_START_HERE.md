@@ -1,6 +1,6 @@
 # Knowledge base — start here
 
-> **Last Updated:** <date> · **Status:** Current
+> **Last Updated:** @DATE@ · **Status:** Current
 
 What is known about the products and code you work on, written so that any reader (you, a colleague, a coding agent)
 can load one document cold. The knowledge base is a tree of **sets**: each subject folder has its own

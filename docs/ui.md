@@ -15,13 +15,13 @@ The package layers are in [Architecture §8](architecture.md#8-ui-packages).
 | Package | Holds |
 |---|---|
 | `theme` | `Theme`: FlatLaf dark (`FlatMacDarkLaf` on macOS), the colour tokens (accent, Claude, ok, warn, danger, muted, thinking, diff, card, the plot palette), spacing, the monospaced font. Dark only; the macOS appearance is set dark by a JVM option at launch |
-| `icon` | `Icons` (one SVG set under `/icons`, HiDPI), `SpinnerIcon` (one shared wheel, advanced by its owner's timer) |
+| `icon` | `Icons` (one SVG set under `/icons`, HiDPI), `SpinnerIcon` (one shared wheel, advanced by its owner's timer), `RowIcon` (icons in a row: two marks where a cell has room for one, [record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)) |
 | `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority`, `ToolButton` ([§2](#2-commands-and-keys)) |
 | `resource` | `ResourceActions`: a list of resources' add (from its tab's menu) and its removal question (from a row's menu); no bar of buttons ([Workbench §1.3](workbench.md#13-the-sidebar)) |
 | `overlay` | `Overlay`: the empty, loading and error states a widget switches between; `Balloon`: a short word beside a component that asks for nothing, gone after 2.5 s or at the next click or key; `Flash`: the hint on what a click brought into view, the warning amber fading to nothing over 2 s, one at a time on a component, a line's flash painted the text's whole width under the text ([record 79](adr/0079-a-notice-takes-you-to-what-it-is-about.md)) |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` (below) |
 | `format` | `Labels` (times, uptimes, counts, short paths), `Json`, `KeyText` (keys named as the desktop names them) |
-| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `SplitDiff`, `MarkdownHtml`, `HtmlPane`, `RenderedMarkdown` (an `HtmlPane` padded in a scroll pane: a panel's preview, the comparison window's rendered sides, which `MarkdownHtml.Marks` shades where a comparison found changes), `LocalImages`, `LocalLinks`, `MermaidDiagrams`, `SourceLinks`, `Plain`, `EditorThemes`, `Fences` (below), `LogLines` (an entry of comando's log by its time) |
+| `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `SplitDiff`, `MarkdownHtml`, `HtmlPane`, `RenderedMarkdown` (an `HtmlPane` padded in a scroll pane: a panel's preview, the comparison window's rendered sides, which `MarkdownHtml.Marks` shades where a comparison found changes), `LocalImages`, `LocalLinks`, `MermaidDiagrams`, `SourceLinks`, `Plain`, `EditorThemes` (IntelliJ's Dark and Light editor themes), `Fences` (a fenced block's language), `LogLines` (an entry of comando's log by its time) |
 | `tree`, `layout`, `tabs` | `TreeView` (the one tree; a double click activates a leaf, Enter the selected node; per node a label colour, an icon, a trailing icon after the name; optionally one click opens or closes a folder, and a double click's first click can be undone by its caller; `rowsChanged` lays the shown rows out again when a caller's cells change width, as a mark appearing does; a row is plain labels, never HTML, and the tree names a node by its label: HTML in a renderer is parsed again for every row, and a node record's own text prints its whole subtree, 63 µs per row before, 2.5 µs after, 2026-10-20); `ShrinkingRow` (chips give up width before buttons); `TabStrip` (tab headers in one row, icons named by their tooltips; a right click asks for a tab's menu); `MovableTabs` (a tab dragged along the row reports where it lands) |
 | `vcs` | `RepoChanges`: the watched git repositories on the EDT, looked up by path (a file's change, a folder holding one), git's colour for each kind; `OpenedFiles`: the files opened in comando, kept in `opened-files`, so the Files tab stops marking a new file once opened; the Files tab and the Changes view each keep one |
 | `desktop` | `ExternalEditor` (IntelliJ, else the default application), `FileChoosers` (native on macOS), `Platform` (macOS or not, the menu modifier, `PATH` lookup), `Browser`, `DesktopTrash` (the Files tab's Trash) |
@@ -77,7 +77,8 @@ whose `{version}`, `{java}`, `{claude}`, `{system}`, `{home}` and `{year}` take 
 - A command sits in at most one menu and has at most one key; registering an id twice throws.
 - In the main window a command's key is claimed before the focused component sees it (`KeyPriority`), because
   RSyntaxTextArea binds ⌘⏎, ⌘J and ⌘⇧K, which comando's commands also use, and the terminal takes every key; the terminal keeps Ctrl
-  with a letter, `[`, `\`, `]` or space for its shell (`TerminalWidget.keepsKey`), which elsewhere is ⌘'s key. A disabled command leaves its key to
+  with a letter, `[`, `\`, `]` or space for its shell, which elsewhere is ⌘'s key, and on macOS ⌘K for its Clear Buffer
+  (`TerminalWidget.keepsKey`). A disabled command leaves its key to
   the component, so ⌘J (plot) stays enabled and says "The panel has no rows to plot" rather than joining lines; ⌘/ is left to the editor.
 - Run keys act only in the focused panel's editor. Edit commands (undo, redo, cut, copy, paste, select all) run the focused
   component's own binding. Menu items grey out what cannot run; the palette lists only what can, ranked by label match.
@@ -133,7 +134,7 @@ acts on the capability nearest the focused component, else on the lower tab in f
 | Capability | Key | Implemented by |
 |---|---|---|
 | `Searchable` | ⌘F opens the one find bar (finds as you type; ⌘G, ⌘⇧G; Esc closes) | transcript, text, diff, grid, console, editor, terminal |
-| `Copyable` | ⌘⇧C | transcript, text, markdown, diff, tree, grid, console, Results |
+| `Copyable` | ⌘⇧C | transcript, text, markdown, diff, tree, changes, grid, console, Results |
 | `Exportable` | ⌘⇧S (save dialog in the last export directory) | grid (CSV), plot (PNG), markdown, diff |
 | `Zoomable` | ⌘= ⌘- ⌘0 | transcript, text, editor, plot, terminal (8–40 pt) |
 
@@ -171,7 +172,7 @@ saturation, for long reading. Errors stay red, links blue, code its highlighting
 | tool card | running, done or failed; a one-line summary; "running · 12 s", or "waiting for your approval · ⌃2"; open: input, result (400 lines), a subagent's blocks; opens by itself for edits, errors and running subagents. A subagent card adds the tool calls its blocks made, at any depth, and the latest: "running · 1 min 04 s · 9 tools · Read docs/ui.md" (the latest drops first when the card is narrow), then "done · 1 min 30 s · 12 tools". An Agent call whose result says it launched its subagent into the background reads "running in background · …" while the session lists that subagent among its open tasks, and done once it leaves the list. A card with no nested blocks shows no count: a stored conversation keeps a subagent's blocks in a file of its own. Its header links to its stored conversation |
 | note | an icon by kind and the first line; error notes start open |
 | hook group | consecutive hook outputs as one line, "hooks · UserPromptSubmit, SessionStart (3)" |
-| turn end | the duration, no cost ([record 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)); an interrupted turn reads muted |
+| turn end | the duration, no cost ([record 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)); a failed turn its error first, in red; an interrupted turn "interrupted · 12.0 s", in the amber of any text |
 
 ### 4.2 The widget
 
@@ -208,4 +209,5 @@ frames of a 1 500-line code fence whose last 100 lines stream (a growing block k
 the time of a find over 2 000 loaded blocks, for a word in most of them and for a word in a few. An exact layout of
 many blocks, which a find needs for exact positions, spreads them over the cores. On 2026-10-18 (Apple silicon, 12
 cores, JDK 25, headless, 1 798 frames) p99 was 3.39 ms, the thinking block's 1.41 ms and the code fence's 4.75 ms; the
-find took 540 ms and 457 ms (1.4 s on one core: the font code contends, so 12 cores give about 2.7 times). `TranscriptShot` paints the session to a PNG; `docs/images/transcript.png` is its output.
+find took 540 ms and 457 ms (1.4 s on one core: the font code contends, so 12 cores give about 2.7 times). `TranscriptShot <file> <offset> [width] [height]`, a main class in the `ui` test sources with no Gradle task, paints the
+synthetic session at a scroll offset to a PNG.
