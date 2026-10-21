@@ -9,6 +9,7 @@ import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TopicSource;
 import dev.marregui.comando.core.view.Clip;
@@ -495,16 +496,23 @@ public final class Workspace {
         }));
     }
 
-    /** The end of the panel's session's conversation, or else the start of its own text; empty when there is neither. */
+    /**
+     * The end of the panel's session's conversation with where the session works, or else the start of its own text with
+     * its file; empty when there is neither.
+     */
     private String topicSource(PanelState p, EditorPanel view) {
         Transcript t = p.session().isEmpty() ? null : transcripts.apply(p.session());
         if (t != null && t.size() > 0) {
-            String source = TopicSource.ofSession(p.session(), p.title(), t, TopicSource.MAX_CHARS);
+            Optional<SessionState> session = shown == null ? Optional.empty() : shown.session(p.session());
+            String workDir = session.map(x -> x.spec().workDir()).orElse("");
+            String branch = session.map(SessionState::branch).orElse("");
+            String source = TopicSource.ofSession(p.session(), p.title(), workDir, branch, t, TopicSource.MAX_CHARS);
             if (!source.isEmpty()) {
                 return source;
             }
         }
-        return TopicSource.ofText(p.title(), view.textStart(TopicSource.MAX_CHARS), TopicSource.MAX_CHARS);
+        String file = texts.file(p.id()).map(Path::toString).orElse("");
+        return TopicSource.ofText(p.title(), file, view.textStart(TopicSource.MAX_CHARS), TopicSource.MAX_CHARS);
     }
 
     private void updateCardOf(PanelId id) {
@@ -522,13 +530,13 @@ public final class Workspace {
             line = topic.line();
             muted = false;
         } else if (reading) {
-            line = "Reading the topic…";
+            line = "Reading the summary…";
             muted = true;
         } else if (topic != null) {
-            line = "No topic: " + topic.problem();
+            line = "No summary: " + topic.problem();
             muted = true;
         } else {
-            line = "Nothing to read yet";
+            line = "Nothing to summarise yet";
             muted = true;
         }
         card.update(tips.getOrDefault(id, ""), line, muted, reading);

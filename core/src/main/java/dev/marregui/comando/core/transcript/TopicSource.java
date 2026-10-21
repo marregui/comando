@@ -23,8 +23,11 @@ public final class TopicSource {
     private TopicSource() {
     }
 
-    /** The end of {@code session}'s conversation, newest last, at most {@code maxChars}; empty when it has none. */
-    public static String ofSession(String session, String panel, Transcript t, int maxChars) {
+    /**
+     * The end of {@code session}'s conversation, newest last, at most {@code maxChars}, headed by where the session works
+     * ({@code workDir}, and {@code branch} when known) so the summary can name the repository; empty when it has none.
+     */
+    public static String ofSession(String session, String panel, String workDir, String branch, Transcript t, int maxChars) {
         int size = t.size();
         Deque<String> lines = new ArrayDeque<>();
         int used = 0;
@@ -56,16 +59,18 @@ public final class TopicSource {
         if (lines.isEmpty()) {
             return "";
         }
-        return "A coding session named \"" + session + "\", in a panel titled \"" + panel + "\". The end of its conversation, oldest first:\n"
-                + String.join("", lines);
+        String where = workDir.isBlank() ? "" : ", working in " + workDir + (branch.isBlank() ? "" : " (git branch " + branch + ")");
+        return "A coding session named \"" + session + "\"" + where + ", in a panel titled \"" + panel
+                + "\". The end of its conversation, oldest first:\n" + String.join("", lines);
     }
 
-    /** The start of a panel's own text, at most {@code maxChars}; empty when the text is blank. */
-    public static String ofText(String panel, String text, int maxChars) {
+    /** The start of a panel's own text, at most {@code maxChars}, with its file when it has one; empty when the text is blank. */
+    public static String ofText(String panel, String file, String text, int maxChars) {
         if (text.isBlank()) {
             return "";
         }
-        return "A document in a panel titled \"" + panel + "\". Its text begins:\n" + Clip.keepStart(text.strip(), maxChars);
+        return "A document" + (file.isBlank() ? "" : " " + file) + " in a panel titled \"" + panel + "\". Its text begins:\n"
+                + Clip.keepStart(text.strip(), maxChars);
     }
 
     private static String line(Block b) {

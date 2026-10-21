@@ -34,12 +34,12 @@ class ClaudeTopicsTest {
     }
 
     @Test
-    void theAnswersFirstLineIsTheTopicWithoutTheQuotesOrPeriodAModelAdds() {
-        assertThat(ClaudeTopics.parse(answer("\n\"Fixing the flaky key test.\"\nmore", false), 7L, JSON))
-                .isEqualTo(new Topic("Fixing the flaky key test", 7L, ""));
-        assertThat(ClaudeTopics.parse(answer("`Sticky tab cards`", false), 1L, JSON).line()).isEqualTo("Sticky tab cards");
+    void theWholeAnswerIsTheSummaryOnOneParagraphWithoutTheQuotesOrHeadingAModelAdds() {
+        assertThat(ClaudeTopics.parse(answer("\n\"In comando, fixing the flaky key test.\nUiKeysTest reads the focus owner.\"\n", false), 7L, JSON))
+                .isEqualTo(new Topic("In comando, fixing the flaky key test. UiKeysTest reads the focus owner.", 7L, ""));
+        assertThat(ClaudeTopics.parse(answer("Summary: `Sticky tab cards in comando.`", false), 1L, JSON).line()).isEqualTo("Sticky tab cards in comando.");
         assertThat(ClaudeTopics.parse(answer("Waiting...", false), 1L, JSON).line()).isEqualTo("Waiting...");
-        assertThat(ClaudeTopics.parse(answer("x".repeat(300), false), 1L, JSON).line()).hasSize(ClaudeTopics.MAX_LINE);
+        assertThat(ClaudeTopics.parse(answer("x".repeat(600), false), 1L, JSON).line()).hasSize(ClaudeTopics.MAX_TEXT);
     }
 
     @Test

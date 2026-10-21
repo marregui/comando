@@ -40,6 +40,7 @@ import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
@@ -449,7 +450,7 @@ class UiKeysTest {
         });
         JComponent card = await("the tab's card", () -> find(w.frame(), JComponent.class, c -> "tab-card".equals(c.getName()) && c.isShowing())
                 .orElse(null), WAIT_MILLIS);
-        JLabel topic = onEdt(() -> find(card, JLabel.class, l -> "tab-card-topic".equals(l.getName())).orElseThrow());
+        JTextArea topic = onEdt(() -> find(card, JTextArea.class, l -> "tab-card-topic".equals(l.getName())).orElseThrow());
         await("the topic", () -> "Replaying the snapshot session".equals(topic.getText()), WAIT_MILLIS);
         assertThat(sources).singleElement().asString().contains("SELECT 1;");
         assertThat(onEdt(() -> tabs.getToolTipTextAt(0))).as("the card, not a tooltip").isNull();

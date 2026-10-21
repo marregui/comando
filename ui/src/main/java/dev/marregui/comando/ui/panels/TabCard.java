@@ -14,12 +14,15 @@ import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
 import javax.swing.JPanel;
 import javax.swing.JRootPane;
+import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
-import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
@@ -27,20 +30,26 @@ import java.awt.event.MouseEvent;
 import java.util.function.Consumer;
 
 /**
- * A tab's card, in place of its tooltip: what the tooltip said, the panel's topic under it, and a button that reads the
- * topic again. It floats in the window's popup layer under the tab it describes and stays until it is clicked, or
+ * A tab's card, in place of its tooltip: what the tooltip said; under it, set apart, "Summary:" and the panel's topic
+ * in gold, wrapped to a few lines; at the bottom left, a button that reads the summary again and one that closes the
+ * card. It floats in the window's popup layer under the tab it describes and stays until it is closed or clicked, or
  * until another tab's card takes its place; the window moves it with itself. EDT only.
  */
 final class TabCard {
 
     static final int MAX_WIDTH = 640;
+    /** The summary's width: about 70 characters a line, so a summary of 300 takes four lines at most. */
+    static final int SUMMARY_WIDTH = 460;
     private static final int MARGIN = 8;
 
-    private final JPanel card = new JPanel(new BorderLayout(Theme.GAP, 2));
+    private final JPanel card = new JPanel();
     /** Text from a session, a document and Haiku: never rendered as HTML. */
     private final JLabel status = Plain.only(new JLabel());
-    private final JLabel topic = Plain.only(new JLabel());
-    private final JButton refresh = new JButton(Icons.get("refresh", 14));
+    private final JLabel heading = Plain.only(new JLabel("Summary:"));
+    private final JTextArea topic = new JTextArea();
+    private final JButton refresh = button("refresh", "tab-card-refresh", "Summarise the panel again with Haiku (about 2 s)",
+            "Summarise again");
+    private final JButton close = button("close", "tab-card-close", "Close the card", "Close the card");
     private PanelId shown;
     private JLayeredPane layer;
     /** Where the card's top left corner goes, in the tabs' coordinates: under the tab, at its left edge. */
@@ -49,47 +58,70 @@ final class TabCard {
 
     TabCard(Consumer<PanelId> onRefresh) {
         card.setName("tab-card");
+        card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         Color background = UIManager.getColor("ToolTip.background");
         card.setBackground(background == null ? Theme.CARD : background);
         Color border = UIManager.getColor("Component.borderColor");
         card.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(border == null ? Theme.CARD_BORDER : border),
-                BorderFactory.createEmptyBorder(6, 8, 6, 4)));
+                BorderFactory.createEmptyBorder(8, 10, 6, 10)));
         Font font = UIManager.getFont("ToolTip.font");
+        Color foreground = UIManager.getColor("ToolTip.foreground");
         if (font != null) {
             status.setFont(font);
-            topic.setFont(font.deriveFont(Font.BOLD));
+            heading.setFont(font.deriveFont(Font.BOLD));
+            topic.setFont(font);
         }
-        Color foreground = UIManager.getColor("ToolTip.foreground");
         if (foreground != null) {
             status.setForeground(foreground);
-            topic.setForeground(foreground);
         }
+        heading.setForeground(Theme.GOLD);
         topic.setName("tab-card-topic");
-        JPanel lines = new JPanel();
-        lines.setOpaque(false);
-        lines.setLayout(new BoxLayout(lines, BoxLayout.Y_AXIS));
-        lines.add(status);
-        lines.add(Box.createVerticalStrut(3));
-        lines.add(topic);
-        card.add(lines, BorderLayout.CENTER);
-        refresh.setName("tab-card-refresh");
-        refresh.putClientProperty("JButton.buttonType", "toolBarButton");
-        refresh.setToolTipText("Read the panel's topic again with Haiku (about 2 s)");
-        refresh.getAccessibleContext().setAccessibleName("Read the topic again");
-        // the keyboard stays where it was: the card is looked at, not typed into
-        refresh.setFocusable(false);
+        topic.setEditable(false);
+        topic.setFocusable(false);
+        topic.setOpaque(false);
+        topic.setLineWrap(true);
+        topic.setWrapStyleWord(true);
+        topic.setBorder(BorderFactory.createEmptyBorder());
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+        actions.setOpaque(false);
+        actions.add(refresh);
+        actions.add(close);
         refresh.addActionListener(e -> {
             if (shown != null) {
                 onRefresh.accept(shown);
             }
         });
-        card.add(refresh, BorderLayout.EAST);
-        card.addMouseListener(new MouseAdapter() {
+        close.addActionListener(e -> hide());
+        for (JComponent c : new JComponent[]{status, heading, topic, actions}) {
+            c.setAlignmentX(Component.LEFT_ALIGNMENT);
+        }
+        card.add(status);
+        card.add(Box.createVerticalStrut(10));
+        card.add(heading);
+        card.add(Box.createVerticalStrut(2));
+        card.add(topic);
+        card.add(Box.createVerticalStrut(6));
+        card.add(actions);
+        MouseAdapter closeOnPress = new MouseAdapter() {
             @Override
             public void mousePressed(MouseEvent e) {
                 hide();
             }
-        });
+        };
+        card.addMouseListener(closeOnPress);
+        // the summary is a text area, which takes the press itself: a press on it closes the card as on the rest
+        topic.addMouseListener(closeOnPress);
+    }
+
+    private static JButton button(String icon, String name, String tip, String accessible) {
+        JButton b = new JButton(Icons.get(icon, 14));
+        b.setName(name);
+        b.putClientProperty("JButton.buttonType", "toolBarButton");
+        b.setToolTipText(tip);
+        b.getAccessibleContext().setAccessibleName(accessible);
+        // the keyboard stays where it was: the card is looked at, not typed into
+        b.setFocusable(false);
+        return b;
     }
 
     /** Shows the card of {@code id} under {@code tab}, a rectangle of {@code over}, replacing any card shown. */
@@ -117,11 +149,10 @@ final class TabCard {
             return;
         }
         status.setText(Plain.text(statusText));
-        topic.setText(Plain.text(topicText));
+        topic.setText(topicText);
         Font f = topic.getFont();
-        topic.setFont(f.deriveFont(muted ? Font.ITALIC : Font.BOLD));
-        Color foreground = UIManager.getColor("ToolTip.foreground");
-        topic.setForeground(muted ? Theme.MUTED : foreground == null ? status.getForeground() : foreground);
+        topic.setFont(f.deriveFont(muted ? Font.ITALIC : Font.PLAIN));
+        topic.setForeground(muted ? Theme.MUTED : Theme.GOLD);
         refresh.setEnabled(!reading);
         place();
     }
@@ -138,14 +169,27 @@ final class TabCard {
         }
     }
 
+    /**
+     * Sizes the card: as wide as the status line or the summary's width, whichever is wider, within the window; the
+     * summary wraps to that width, and the card is as tall as its lines.
+     */
     private void place() {
         Point at = SwingUtilities.convertPoint(tabs, anchor, layer);
-        int room = Math.max(120, layer.getWidth() - 2 * MARGIN);
-        Dimension size = card.getPreferredSize();
-        int w = Math.min(size.width, Math.min(MAX_WIDTH, room));
+        int room = Math.max(160, layer.getWidth() - 2 * MARGIN);
+        Insets in = card.getInsets();
+        int inner = Math.min(Math.max(status.getPreferredSize().width, SUMMARY_WIDTH), Math.min(MAX_WIDTH, room) - in.left - in.right);
+        topic.setPreferredSize(null);
+        topic.setMaximumSize(null);
+        topic.setSize(inner, Short.MAX_VALUE);
+        int topicHeight = topic.getPreferredSize().height;
+        topic.setPreferredSize(new Dimension(inner, topicHeight));
+        topic.setMaximumSize(new Dimension(inner, topicHeight));
+        int w = inner + in.left + in.right;
+        card.invalidate(); // the box layout keeps its children's sizes until told: the summary's lines changed
+        int h = card.getPreferredSize().height;
         int x = Math.max(MARGIN, Math.min(at.x, layer.getWidth() - w - MARGIN));
-        card.setBounds(x, at.y, w, size.height);
-        card.revalidate();
+        card.setBounds(x, at.y, w, h);
+        card.validate();
         layer.repaint();
     }
 
@@ -180,5 +224,14 @@ final class TabCard {
 
     JButton refreshButton() {
         return refresh;
+    }
+
+    JButton closeButton() {
+        return close;
+    }
+
+    /** The summary's own component, which wraps it; for tests. */
+    JTextArea topicArea() {
+        return topic;
     }
 }

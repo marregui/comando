@@ -23,8 +23,8 @@ import java.util.function.Function;
 
 /**
  * Reads panels' topics with Haiku through Claude Code: {@code claude --safe-mode -p --model haiku} with no tools, no
- * thinking, a one-sentence system prompt and no saved session, the source on its input. Measured on Claude Code
- * 2.1.304: about 1.9 s and US$0.00014 a read. One thread reads every ask, one at a time, so however many panels ask,
+ * thinking, a short system prompt and no saved session, the source on its input; the answer is two or three sentences
+ * naming the repository, the task and its step. Measured on Claude Code 2.1.304: about 1.8 s and US$0.0001–0.0003 a read. One thread reads every ask, one at a time, so however many panels ask,
  * comando runs at most one such process; the asks wait in one queue, at most one per panel.
  */
 public final class ClaudeTopics implements TopicPort, AutoCloseable {
@@ -32,9 +32,12 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
     private static final System.Logger LOG = System.getLogger(ClaudeTopics.class.getName());
     static final Duration TIMEOUT = Duration.ofSeconds(30);
     static final String MODEL = "haiku";
-    static final String SYSTEM = "You name what a coding session is working on, or what a document is about, for a tab's tooltip. "
-            + "Answer with one line of at most 80 characters: no preamble, no quotes, no final period.";
-    static final int MAX_LINE = 120;
+    static final String SYSTEM = "You summarise, for a tab's card, what a coding session is working on, or what a document is about. "
+            + "Write two or three short sentences, at most 300 characters in all: the repository or project by its folder name, "
+            + "the task, and the step it is on now. Be specific: name the files, classes, tickets or commands the text names. "
+            + "Never repeat the full path or the session's name. No preamble, no heading, no quotes, no markdown.";
+    /** A summary longer than this is cut: the card shows about four lines. */
+    static final int MAX_TEXT = 400;
 
     private record Ask(String key, String source, Consumer<Topic> done) {
     }
@@ -164,8 +167,8 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
         if (root.path("is_error").asBoolean(false)) {
             return Topic.failed(text.isBlank() ? "Haiku failed" : Clip.keepStart(firstLine(text), 200), readAtMillis);
         }
-        String line = clean(firstLine(text));
-        return line.isEmpty() ? Topic.failed("an empty answer from Haiku", readAtMillis) : new Topic(Clip.keepStart(line, MAX_LINE), readAtMillis, "");
+        String summary = clean(text.strip().replaceAll("\\s+", " "));
+        return summary.isEmpty() ? Topic.failed("an empty answer from Haiku", readAtMillis) : new Topic(Clip.keepStart(summary, MAX_TEXT), readAtMillis, "");
     }
 
     private static String firstLine(String text) {
@@ -177,14 +180,14 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
         return "";
     }
 
-    /** Without the quotes, backticks or final period a model adds against its instructions. */
-    static String clean(String line) {
-        String s = line.strip();
+    /** Without the quotes, backticks or "Summary:" heading a model adds against its instructions. */
+    static String clean(String text) {
+        String s = text.strip();
+        if (s.regionMatches(true, 0, "summary:", 0, 8)) {
+            s = s.substring(8).strip();
+        }
         while (s.length() >= 2 && "\"'`“”".indexOf(s.charAt(0)) >= 0 && "\"'`“”".indexOf(s.charAt(s.length() - 1)) >= 0) {
             s = s.substring(1, s.length() - 1).strip();
-        }
-        if (s.endsWith(".") && !s.endsWith("..")) {
-            s = s.substring(0, s.length() - 1);
         }
         return s;
     }

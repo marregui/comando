@@ -19,6 +19,7 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.JLayeredPane;
@@ -30,6 +31,7 @@ import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.PlainDocument;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.HeadlessException;
@@ -376,7 +378,7 @@ class WorkspaceTest {
         assertThat(JLayeredPane.getLayer(card.component())).isEqualTo(JLayeredPane.POPUP_LAYER.intValue());
         assertThat(((JTabbedPane) w[0].component()).getToolTipTextAt(0)).as("the card, not a tooltip").isNull();
         assertThat(card.statusText()).startsWith("work · s");
-        assertThat(card.topicText()).isEqualTo("Reading the topic…");
+        assertThat(card.topicText()).isEqualTo("Reading the summary…");
         assertThat(card.refreshButton().isEnabled()).isFalse();
         assertThat(asks.asks).singleElement().satisfies(a -> {
             assertThat(a.key()).isEqualTo("p");
@@ -387,7 +389,18 @@ class WorkspaceTest {
         asks.asks.getFirst().done().accept(new Topic("Making the tab card sticky", 1L, ""));
         SwingUtilities.invokeAndWait(() -> { });
         assertThat(card.topicText()).isEqualTo("Making the tab card sticky");
+        assertThat(card.topicArea().getForeground()).as("the summary is gold").isEqualTo(Theme.GOLD);
         assertThat(card.refreshButton().isEnabled()).isTrue();
+        // the buttons sit at the bottom left, the refresh first, the close beside it; a card never shown lays out by hand
+        SwingUtilities.invokeAndWait(() -> layOut(card.component()));
+        Rectangle cardBounds = card.component().getBounds();
+        Point refreshAt = SwingUtilities.convertPoint(card.refreshButton().getParent(), card.refreshButton().getLocation(), card.component());
+        Point closeAt = SwingUtilities.convertPoint(card.closeButton().getParent(), card.closeButton().getLocation(), card.component());
+        Point summaryAt = SwingUtilities.convertPoint(card.topicArea().getParent(), card.topicArea().getLocation(), card.component());
+        assertThat(refreshAt.y).as("below the summary").isGreaterThan(summaryAt.y);
+        assertThat(refreshAt.x).as("at the left").isLessThan(cardBounds.width / 4);
+        assertThat(closeAt.x).as("next to the refresh").isGreaterThan(refreshAt.x).isLessThan(refreshAt.x + 3 * card.refreshButton().getWidth());
+        assertThat(closeAt.y).isEqualTo(refreshAt.y);
 
         // the ten-second check asks again only once the conversation moved
         now[0] += Workspace.TOPIC_EVERY_MILLIS;
@@ -414,7 +427,14 @@ class WorkspaceTest {
         // a failed read says why
         asks.asks.get(2).done().accept(Topic.failed("Not logged in", 3L));
         SwingUtilities.invokeAndWait(() -> { });
-        assertThat(card.topicText()).isEqualTo("No topic: Not logged in");
+        assertThat(card.topicText()).isEqualTo("No summary: Not logged in");
+
+        // a long summary wraps to a few lines, and the card grows to hold them
+        int oneLine = card.component().getHeight();
+        asks.asks.get(2).done().accept(new Topic("In comando, the tab card: " + "a summary of several clauses, ".repeat(8), 4L, ""));
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(card.component().getHeight()).as("taller for the wrapped summary").isGreaterThan(oneLine);
+        assertThat(card.component().getWidth()).isLessThanOrEqualTo(TabCard.MAX_WIDTH);
 
         // the pointer leaving the tabs leaves the card; a click on it closes it
         SwingUtilities.invokeAndWait(() -> {
@@ -426,6 +446,12 @@ class WorkspaceTest {
         SwingUtilities.invokeAndWait(() -> card.component().dispatchEvent(mouse(card.component(), MouseEvent.MOUSE_PRESSED, 5, 5)));
         assertThat(w[0].cardShown()).isNull();
         assertThat(card.component().getParent()).isNull();
+
+        // the close button closes it too
+        SwingUtilities.invokeAndWait(() -> w[0].showCard(0));
+        assertThat(w[0].cardShown()).isEqualTo(P);
+        SwingUtilities.invokeAndWait(() -> card.closeButton().doClick());
+        assertThat(w[0].cardShown()).isNull();
     }
 
     @Test
@@ -483,7 +509,9 @@ class WorkspaceTest {
         // Haiku's line is text, never HTML
         asks.asks.getLast().done().accept(new Topic("<html><img src='http://example.com/x.png'>", 1L, ""));
         SwingUtilities.invokeAndWait(() -> { });
-        assertThat(w[0].card().topicText()).startsWith("\u200B<html>");
+        // a text area, which never renders HTML: the summary shows as typed
+        assertThat(w[0].card().topicText()).isEqualTo("<html><img src='http://example.com/x.png'>");
+        assertThat(w[0].card().topicArea().getDocument()).isInstanceOf(PlainDocument.class);
     }
 
     private static void mouseMoved(Component c, int x, int y) {
