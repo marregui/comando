@@ -6,18 +6,25 @@ import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.model.Topic;
+import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
+import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.JLayeredPane;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
+import javax.swing.JRootPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
@@ -29,6 +36,8 @@ import java.awt.HeadlessException;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
+import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionListener;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
@@ -327,6 +336,190 @@ class WorkspaceTest {
 
         SwingUtilities.invokeAndWait(() -> menuItem(w[0].tabMenu(1), "Close").doClick());
         assertThat(closedOne).as("Close is the tab's own close, which asks when its shell runs a program").containsExactly(d);
+    }
+
+    /** A topic reader that keeps every ask for the test to answer. */
+    private static final class Asks implements TopicPort {
+        record Ask(String key, String source, boolean urgent, Consumer<Topic> done) {
+        }
+
+        final List<Ask> asks = new CopyOnWriteArrayList<>();
+
+        @Override
+        public void read(String key, String source, boolean urgent, Consumer<Topic> done) {
+            asks.add(new Ask(key, source, urgent, done));
+        }
+    }
+
+    @Test
+    void aTabShowsACardWithItsTooltipAndTopicWhichStaysUntilClickedAndIsReadAgainOnlyWhenItsSessionMoved() throws Exception {
+        TranscriptRegistry transcripts = new TranscriptRegistry();
+        Transcript t = transcripts.of("s");
+        t.append(new Block.UserPrompt("make the tab card sticky", "p", ""));
+        Asks asks = new Asks();
+        long[] now = {100_000L};
+        SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s")), List.of(), List.of(open));
+        Workspace[] w = new Workspace[1];
+        JRootPane root = new JRootPane();
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> now[0]);
+            w[0].topics(asks, transcripts::of);
+            w[0].render(s);
+            root.getContentPane().add(w[0].component());
+            layOut(root, 900, 600);
+            w[0].showCard(0);
+        });
+        TabCard card = w[0].card();
+        assertThat(w[0].cardShown()).isEqualTo(P);
+        assertThat(card.component().getParent()).isSameAs(root.getLayeredPane());
+        assertThat(JLayeredPane.getLayer(card.component())).isEqualTo(JLayeredPane.POPUP_LAYER.intValue());
+        assertThat(((JTabbedPane) w[0].component()).getToolTipTextAt(0)).as("the card, not a tooltip").isNull();
+        assertThat(card.statusText()).startsWith("work · s");
+        assertThat(card.topicText()).isEqualTo("Reading the topic…");
+        assertThat(card.refreshButton().isEnabled()).isFalse();
+        assertThat(asks.asks).singleElement().satisfies(a -> {
+            assertThat(a.key()).isEqualTo("p");
+            assertThat(a.urgent()).as("the card shown is read first").isTrue();
+            assertThat(a.source()).contains("User: make the tab card sticky");
+        });
+
+        asks.asks.getFirst().done().accept(new Topic("Making the tab card sticky", 1L, ""));
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(card.topicText()).isEqualTo("Making the tab card sticky");
+        assertThat(card.refreshButton().isEnabled()).isTrue();
+
+        // the ten-second check asks again only once the conversation moved
+        now[0] += Workspace.TOPIC_EVERY_MILLIS;
+        SwingUtilities.invokeAndWait(() -> w[0].tick());
+        assertThat(asks.asks).hasSize(1);
+        SwingUtilities.invokeAndWait(() -> w[0].tick());
+        t.append(new Block.AssistantText("m1", 0, "The card sits in the popup layer.", false, ""));
+        now[0] += Workspace.TOPIC_EVERY_MILLIS - 1;
+        SwingUtilities.invokeAndWait(() -> w[0].tick());
+        assertThat(asks.asks).as("not before ten seconds").hasSize(1);
+        now[0] += 1;
+        SwingUtilities.invokeAndWait(() -> w[0].tick());
+        assertThat(asks.asks).hasSize(2);
+        assertThat(asks.asks.get(1).source()).contains("The card sits in the popup layer.");
+        assertThat(card.topicText()).as("the last line stays while it is read again").isEqualTo("Making the tab card sticky");
+
+        // the button reads it again, the same source too, ahead of the others
+        asks.asks.get(1).done().accept(new Topic("Placing the card", 2L, ""));
+        SwingUtilities.invokeAndWait(() -> card.refreshButton().doClick());
+        assertThat(asks.asks).hasSize(3);
+        assertThat(asks.asks.get(2).urgent()).isTrue();
+        assertThat(asks.asks.get(2).source()).isEqualTo(asks.asks.get(1).source());
+
+        // a failed read says why
+        asks.asks.get(2).done().accept(Topic.failed("Not logged in", 3L));
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(card.topicText()).isEqualTo("No topic: Not logged in");
+
+        // the pointer leaving the tabs leaves the card; a click on it closes it
+        SwingUtilities.invokeAndWait(() -> {
+            for (MouseListener l : w[0].component().getMouseListeners()) {
+                l.mouseExited(mouse(w[0].component(), MouseEvent.MOUSE_EXITED, 1, 1));
+            }
+        });
+        assertThat(w[0].cardShown()).isEqualTo(P);
+        SwingUtilities.invokeAndWait(() -> card.component().dispatchEvent(mouse(card.component(), MouseEvent.MOUSE_PRESSED, 5, 5)));
+        assertThat(w[0].cardShown()).isNull();
+        assertThat(card.component().getParent()).isNull();
+    }
+
+    @Test
+    void aPressOrTheCloseButtonShowsNoCardAndACardFollowsItsTabAndShowsHtmlAsText() throws Exception {
+        PanelId a = new PanelId("a");
+        PanelId b = new PanelId("b");
+        Asks asks = new Asks();
+        Workspace[] w = new Workspace[1];
+        JRootPane root = new JRootPane();
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry());
+            w[0].topics(asks, name -> null);
+            w[0].render(AppState.initial(List.of(new PanelState(a, "first panel", "", ""), new PanelState(b, "second", "", "")), List.of(), List.of()));
+            root.getContentPane().add(w[0].component());
+            layOut(root, 900, 600);
+        });
+        JTabbedPane tabs = (JTabbedPane) w[0].component();
+        Rectangle first = tabs.getUI().getTabBounds(tabs, 0);
+        Rectangle second = tabs.getUI().getTabBounds(tabs, 1);
+
+        // a press selects the tab: the pointer resting there afterwards shows no card
+        SwingUtilities.invokeAndWait(() -> {
+            mouseMoved(tabs, first.x + 4, first.y + 4);
+            assertThat(w[0].hoverWaiting()).isTrue();
+            for (MouseListener l : tabs.getMouseListeners()) {
+                l.mousePressed(mouse(tabs, MouseEvent.MOUSE_PRESSED, first.x + 4, first.y + 4));
+            }
+        });
+        assertThat(w[0].hoverWaiting()).isFalse();
+        SwingUtilities.invokeAndWait(() -> mouseMoved(tabs, first.x + 6, first.y + 4));
+        assertThat(w[0].hoverWaiting()).as("moving on the same tab does not start it again").isFalse();
+
+        // over the close button the look puts its tooltip on the tab: no card, and the next move waits again
+        SwingUtilities.invokeAndWait(() -> {
+            tabs.setToolTipTextAt(0, "Close the panel");
+            w[0].showCard(0);
+            tabs.setToolTipTextAt(0, null);
+            mouseMoved(tabs, first.x + 8, first.y + 4);
+        });
+        assertThat(w[0].cardShown()).isNull();
+        assertThat(w[0].hoverWaiting()).isTrue();
+
+        // the second tab's card moves left with it when the first tab closes
+        SwingUtilities.invokeAndWait(() -> w[0].showCard(1));
+        int before = w[0].card().component().getX();
+        SwingUtilities.invokeAndWait(() -> {
+            w[0].render(AppState.initial(List.of(new PanelState(b, "second", "", "")), List.of(), List.of()));
+            layOut(root, 900, 600);
+            w[0].tick();
+        });
+        assertThat(w[0].cardShown()).isEqualTo(b);
+        assertThat(w[0].card().component().getX()).isLessThan(before).isLessThanOrEqualTo(Math.max(8, first.x));
+        assertThat(second.x).isGreaterThan(first.x);
+
+        // Haiku's line is text, never HTML
+        asks.asks.getLast().done().accept(new Topic("<html><img src='http://example.com/x.png'>", 1L, ""));
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(w[0].card().topicText()).startsWith("\u200B<html>");
+    }
+
+    private static void mouseMoved(Component c, int x, int y) {
+        MouseEvent e = mouse(c, MouseEvent.MOUSE_MOVED, x, y);
+        for (MouseMotionListener l : c.getMouseMotionListeners()) {
+            l.mouseMoved(e);
+        }
+    }
+
+    @Test
+    void aTabWithoutASessionTakesItsTopicFromItsTextAndAClosedTabTakesItsCardWithIt() throws Exception {
+        PanelId other = new PanelId("o");
+        Asks asks = new Asks();
+        AppState s = AppState.initial(List.of(new PanelState(P, "query", "lab", ""), new PanelState(other, "notes", "", "")), List.of(), List.of());
+        Workspace[] w = new Workspace[1];
+        JRootPane root = new JRootPane();
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry());
+            w[0].topics(asks, name -> null);
+            w[0].render(s);
+            root.getContentPane().add(w[0].component());
+            layOut(root, 900, 600);
+            w[0].showCard(0);
+        });
+        assertThat(asks.asks).singleElement().satisfies(a -> assertThat(a.source())
+                .isEqualTo("A document in a panel titled \"query\". Its text begins:\nSELECT 1;"));
+
+        // a second card replaces the first; the other tab's topic is read on its own
+        SwingUtilities.invokeAndWait(() -> w[0].showCard(1));
+        assertThat(w[0].cardShown()).isEqualTo(other);
+        assertThat(asks.asks).hasSize(2);
+        SwingUtilities.invokeAndWait(() -> w[0].render(AppState.initial(List.of(new PanelState(P, "query", "lab", "")), List.of(), List.of())));
+        assertThat(w[0].cardShown()).as("closing the tab closes its card").isNull();
+        asks.asks.get(1).done().accept(new Topic("late", 1L, ""));
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(w[0].cardShown()).isNull();
     }
 
     private static JMenuItem menuItem(JPopupMenu menu, String text) {

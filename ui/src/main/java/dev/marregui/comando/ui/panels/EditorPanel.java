@@ -44,6 +44,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.Document;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
@@ -241,6 +242,16 @@ public final class EditorPanel extends JPanel {
 
     public CommandEditor editor() {
         return editor;
+    }
+
+    /** The first {@code max} characters of the text, read without copying the rest: a log's text may be large. */
+    String textStart(int max) {
+        Document d = editor.area().getDocument();
+        try {
+            return d.getText(0, Math.min(max, d.getLength()));
+        } catch (BadLocationException e) {
+            return "";
+        }
     }
 
     private static final String EDIT = "edit";

@@ -3,6 +3,7 @@ dependencies {
     api(project(":core"))
     implementation(libs.jackson.databind)
     testImplementation(project(":testkit"))
+    testImplementation(libs.awaitility)
 }
 
 // The Claude Code kit (the repository's kit/ folder) travels in the jar, with an index of its files: a jar cannot list

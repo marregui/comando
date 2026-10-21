@@ -2,11 +2,15 @@ package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.Topic;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.transcript.Transcript;
+import dev.marregui.comando.core.transcript.TopicSource;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.async.Edt;
@@ -27,11 +31,14 @@ import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JTabbedPane;
 import javax.swing.Timer;
+import javax.swing.ToolTipManager;
 import java.awt.Component;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Rectangle;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
@@ -47,6 +54,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.IntConsumer;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
@@ -59,6 +67,10 @@ import java.util.function.Predicate;
  * marked until the user looks at it; a session waiting for the user is marked until answered; a running one spins.
  * A tab's menu closes it, the others, or those to its right or its left; such a close keeps the tabs waiting for the
  * user and those whose shell runs a program.
+ *
+ * <p>A tab shows a {@link TabCard} rather than a tooltip: its status, and the panel's topic, one line Haiku wrote on what
+ * the panel's session works on, or what its text is about. Every open tab's topic is read again, every
+ * {@link #TOPIC_EVERY_MILLIS}, when what it is read from changed since; a tab whose session is idle costs nothing.</p>
  */
 public final class Workspace {
 
@@ -68,6 +80,8 @@ public final class Workspace {
 
     static final int CLOSED_KEPT = 10;
     static final int TITLE_CHARS = 32;
+    /** How often every open tab's topic is checked for a change in what it is read from. */
+    static final long TOPIC_EVERY_MILLIS = 10_000;
 
     private final IntentSink intents;
     private final PanelTexts texts;
@@ -111,6 +125,23 @@ public final class Workspace {
     private final Map<Path, Long> toEntry = new HashMap<>();
     /** The state last rendered, for a deleted file of a closed panel, which has no tab. EDT only. */
     private AppState shown;
+    /** What each tab's tooltip would say, which its card shows. EDT only. */
+    private final Map<PanelId, String> tips = new HashMap<>();
+    /** Reads the panels' topics; none until the shell gives one. */
+    private TopicPort topics = TopicPort.NONE;
+    /** A session's transcript by name, which a session panel's topic is read from. */
+    private Function<String, Transcript> transcripts = name -> null;
+    /** Each panel's topic as last read. EDT only. */
+    private final Map<PanelId, Topic> topicOf = new HashMap<>();
+    /** What each panel's topic was last asked from; the same source is not asked again unless the user asks. EDT only. */
+    private final Map<PanelId, String> topicAsked = new HashMap<>();
+    /** Panels whose topic is being read. EDT only. */
+    private final Set<PanelId> topicReading = new HashSet<>();
+    private long topicCheckedMillis;
+    private final TabCard card = new TabCard(id -> readTopic(id, true));
+    /** The tab the pointer rests on, whose card shows when the hover timer fires; -1 when none. */
+    private int hoverIndex = -1;
+    private final Timer hover = new Timer(ToolTipManager.sharedInstance().getInitialDelay(), e -> showCard(hoverIndex));
 
     public Workspace(IntentSink intents, PanelTexts texts, SchemaRegistry schemas) {
         this(intents, texts, schemas, System::currentTimeMillis);
@@ -156,18 +187,47 @@ public final class Workspace {
         });
         // a dragged tab moves its panel; the render that follows puts the tabs in the state's order
         tabs.onMove((from, to) -> intents.dispatch(new Intent.MovePanel(((EditorPanel) tabs.getComponentAt(from)).panel().id(), to)));
+        hover.setRepeats(false);
+        tabs.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                placeCard();
+            }
+        });
+        tabs.addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                int i = tabs.indexAtLocation(e.getX(), e.getY());
+                if (i != hoverIndex) {
+                    hoverIndex = i;
+                    hover.restart();
+                }
+                if (i < 0) {
+                    hover.stop();
+                }
+            }
+        });
         tabs.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseExited(MouseEvent e) {
+                // the card shown stays until it is clicked; one not yet shown is not shown
+                hoverIndex = -1;
+                hover.stop();
+            }
+
+            @Override
+            public void mousePressed(MouseEvent e) {
+                // a press selects the tab, as a tooltip's would: no card until the pointer rests on another tab
+                hover.stop();
+                popup(e);
+            }
+
             @Override
             public void mouseClicked(MouseEvent e) {
                 int i = tabs.indexAtLocation(e.getX(), e.getY());
                 if (i >= 0 && e.getClickCount() == 2) {
                     rename((EditorPanel) tabs.getComponentAt(i));
                 }
-            }
-
-            @Override
-            public void mousePressed(MouseEvent e) {
-                popup(e);
             }
 
             @Override
@@ -356,6 +416,138 @@ public final class Workspace {
         attention = run;
     }
 
+    /** How the tabs' topics are read, and a session's transcript by name, which a session panel's topic is read from. */
+    public void topics(TopicPort port, Function<String, Transcript> sessions) {
+        topics = port;
+        transcripts = sessions;
+    }
+
+    /**
+     * Shows the card of the tab at {@code index}, replacing any card shown; and reads the panel's topic when it has
+     * none yet or what it is read from changed. Not over the tab's close button, whose own tooltip shows there: the
+     * look puts it on the tab while the pointer is over the button.
+     */
+    void showCard(int index) {
+        if (index >= 0 && index < tabs.getTabCount() && tabs.getToolTipTextAt(index) != null) {
+            hoverIndex = -1; // over the close button: the next move on the tab starts the wait again
+            return;
+        }
+        if (index < 0 || index >= tabs.getTabCount() || !(tabs.getComponentAt(index) instanceof EditorPanel view)) {
+            return;
+        }
+        PanelId id = view.panel().id();
+        Rectangle r = tabs.getUI().getTabBounds(tabs, index);
+        if (r == null) {
+            return;
+        }
+        // shown first, so its read goes ahead of the other tabs'
+        card.show(id, tabs, r, tips.getOrDefault(id, ""), "", false, false);
+        readTopic(id, false);
+        updateCard(id);
+    }
+
+    /** The card shown, under its tab again: tabs move as others close, are dragged, scroll or the window resizes. */
+    private void placeCard() {
+        EditorPanel view = card.shown() == null ? null : panels.get(card.shown());
+        int at = view == null ? -1 : tabs.indexOfComponent(view);
+        Rectangle r = at < 0 ? null : tabs.getUI().getTabBounds(tabs, at);
+        if (r != null) {
+            card.moveUnder(r);
+        }
+    }
+
+    /** Reads every open tab's topic whose source changed since it was last asked. */
+    private void checkTopics() {
+        for (PanelId id : panels.keySet()) {
+            readTopic(id, false);
+        }
+    }
+
+    /**
+     * Asks for the topic of panel {@code id} when what it is read from changed since the last ask, or always when
+     * {@code force}d (the card's button), ahead of the other tabs. A panel with nothing to read has no topic.
+     */
+    private void readTopic(PanelId id, boolean force) {
+        EditorPanel view = panels.get(id);
+        if (view == null) {
+            return;
+        }
+        String source = topicSource(view.panel(), view);
+        if (source.isEmpty()) {
+            topicAsked.remove(id);
+            topicOf.remove(id);
+            updateCardOf(id);
+            return;
+        }
+        if (!force && source.equals(topicAsked.get(id))) {
+            return;
+        }
+        topicAsked.put(id, source);
+        topicReading.add(id);
+        updateCardOf(id);
+        topics.read(id.value(), source, force || id.equals(card.shown()), topic -> Edt.later(() -> {
+            if (!panels.containsKey(id)) {
+                return; // closed while it was read
+            }
+            topicReading.remove(id);
+            topicOf.put(id, topic);
+            updateCardOf(id);
+        }));
+    }
+
+    /** The end of the panel's session's conversation, or else the start of its own text; empty when there is neither. */
+    private String topicSource(PanelState p, EditorPanel view) {
+        Transcript t = p.session().isEmpty() ? null : transcripts.apply(p.session());
+        if (t != null && t.size() > 0) {
+            String source = TopicSource.ofSession(p.session(), p.title(), t, TopicSource.MAX_CHARS);
+            if (!source.isEmpty()) {
+                return source;
+            }
+        }
+        return TopicSource.ofText(p.title(), view.textStart(TopicSource.MAX_CHARS), TopicSource.MAX_CHARS);
+    }
+
+    private void updateCardOf(PanelId id) {
+        if (id.equals(card.shown())) {
+            updateCard(id);
+        }
+    }
+
+    private void updateCard(PanelId id) {
+        boolean reading = topicReading.contains(id);
+        Topic topic = topicOf.get(id);
+        String line;
+        boolean muted;
+        if (topic != null && !topic.line().isEmpty()) {
+            line = topic.line();
+            muted = false;
+        } else if (reading) {
+            line = "Reading the topic…";
+            muted = true;
+        } else if (topic != null) {
+            line = "No topic: " + topic.problem();
+            muted = true;
+        } else {
+            line = "Nothing to read yet";
+            muted = true;
+        }
+        card.update(tips.getOrDefault(id, ""), line, muted, reading);
+    }
+
+    /** The panel whose card shows, null when none; for tests. */
+    PanelId cardShown() {
+        return card.shown();
+    }
+
+    TabCard card() {
+        return card;
+    }
+
+    /** Whether a card waits for the pointer to rest; for tests. */
+    boolean hoverWaiting() {
+        return hover.isRunning();
+    }
+
     /**
      * Refreshes what changes with time alone in every panel, and every tab's status: the elapsed time in a working or
      * waiting tab's tooltip, and the end of the grace a returned background task has to start its reading turn.
@@ -365,6 +557,12 @@ public final class Workspace {
         if (shown == null) {
             return;
         }
+        long now = clock.getAsLong();
+        if (now - topicCheckedMillis >= TOPIC_EVERY_MILLIS) {
+            topicCheckedMillis = now;
+            checkTopics();
+        }
+        placeCard();
         for (PanelState p : shown.panels()) {
             EditorPanel view = panels.get(p.id());
             if (view != null && tabs.indexOfComponent(view) >= 0) {
@@ -514,6 +712,13 @@ public final class Workspace {
                     lastActive.remove(id);
                     unseen.remove(id);
                     statuses.remove(id);
+                    tips.remove(id);
+                    topicOf.remove(id);
+                    topicAsked.remove(id);
+                    topicReading.remove(id);
+                    if (id.equals(card.shown())) {
+                        card.hide();
+                    }
                     tabs.remove(gone);
                     gone.editor().dispose();
                     if (deletedFile != null) {
@@ -587,6 +792,7 @@ public final class Workspace {
                 tabs.setSelectedComponent(focused);
             }
             spinWhileWorking();
+            placeCard();
         } finally {
             rendering = false;
         }
@@ -605,8 +811,8 @@ public final class Workspace {
             tabs.setIconAt(at, icon);
         }
         String tip = tooltip(p, s, status);
-        if (!tip.equals(tabs.getToolTipTextAt(at))) {
-            tabs.setToolTipTextAt(at, tip);
+        if (!tip.equals(tips.put(p.id(), tip)) && p.id().equals(card.shown())) {
+            updateCard(p.id());
         }
     }
 

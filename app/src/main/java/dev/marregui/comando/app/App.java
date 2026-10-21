@@ -2,6 +2,7 @@ package dev.marregui.comando.app;
 
 import dev.marregui.comando.claude.ClaudeAdapter;
 import dev.marregui.comando.claude.ClaudeSettings;
+import dev.marregui.comando.claude.ClaudeTopics;
 import dev.marregui.comando.claude.ClaudeVersion;
 import dev.marregui.comando.claude.Kit;
 import dev.marregui.comando.claude.SessionCatalogue;
@@ -121,6 +122,8 @@ public final class App implements AutoCloseable {
                     () -> catalogue.scan(500).stream().map(e -> new StoredConversation(e.sessionId(), e.cwd(), e.branch(), e.title(),
                             e.lastPrompt(), e.modifiedMillis(), e.sizeBytes())).toList(),
                     questDb, new KitSetup(kit, store), version, config.home(), config.logDir(), onQuit));
+            // the tabs' topics: one reader, one Haiku process at a time, whatever the number of panels
+            ui.topics(own(new ClaudeTopics(config.claudeExecutable(), config.runDir())));
             effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
             // the embedded QuestDB stops last: it may still serve the connections closed above
             owned.addLast(questDb);

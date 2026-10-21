@@ -15,6 +15,7 @@ import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.port.UiPort;
 import dev.marregui.comando.core.resource.ConnectionKind;
 import dev.marregui.comando.core.resource.SessionKind;
@@ -173,6 +174,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private final Dependencies deps;
+    /** Reads the tabs' topics; the build hands it to the workspace. */
+    private volatile TopicPort topics = TopicPort.NONE;
     private final HelpActions help;
     private final ActionRegistry actions = new ActionRegistry();
     private final WidgetRegistry widgets = new WidgetRegistry();
@@ -268,6 +271,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         Edt.later(this::build);
     }
 
+    /** How the tabs' cards read each panel's topic; set before {@link #start()}. None by default. */
+    public void topics(TopicPort port) {
+        topics = port;
+    }
+
     private void build() {
         Theme.install();
         WidgetContext ctx = new WidgetContext(deps.intents(), actions);
@@ -339,6 +347,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.onClose(this::closePanel);
         workspace.onOpenFile(this::openFile);
         workspace.onThemeChanged(this::editorThemeChanged);
+        workspace.topics(topics, deps.transcripts()::of);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
         workspace.onRunsProgram(id -> lower.terminals().runningJob(id).isPresent());

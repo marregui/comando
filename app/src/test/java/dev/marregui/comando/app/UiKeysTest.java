@@ -7,8 +7,10 @@ import dev.marregui.comando.core.effect.EffectRouter;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.Topic;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.reduce.Reducer;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.schema.SchemaRegistry;
@@ -36,8 +38,10 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
+import javax.swing.JTabbedPane;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.ToolTipManager;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
@@ -47,6 +51,7 @@ import java.awt.KeyboardFocusManager;
 import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseEvent;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -160,6 +165,11 @@ class UiKeysTest {
     }
 
     private Window open(String keys) throws Exception {
+        return open(keys, TopicPort.NONE);
+    }
+
+    /** A window whose tabs' topics {@code topics} reads. */
+    private Window open(String keys, TopicPort topics) throws Exception {
         System.setProperty(Platform.KEYS_PROPERTY, keys);
         System.setProperty("comando.prefsNode", PREFS);
         IntentLog.Replay replay = IntentLog.read(Path.of(getClass().getResource("/replay/snapshot.jsonl").toURI()));
@@ -180,6 +190,7 @@ class UiKeysTest {
         });
         List<Frame> before = List.of(Frame.getFrames());
         loop.start();
+        ui.topics(topics);
         ui.start();
         // the frame this start opened; an earlier test's may not be gone yet
         JFrame frame = onEdt(() -> (JFrame) Stream.of(Frame.getFrames())
@@ -369,6 +380,48 @@ class UiKeysTest {
     }
 
     /** Every tooltip is one short line: what the control does and one fact it does not show (live status aside). */
+    @Test
+    void restingOnATabShowsItsCardWithTheTopicWhichStaysUntilTheCardIsClicked() throws Exception {
+        List<String> sources = new CopyOnWriteArrayList<>();
+        Window w = open("mac", (key, source, urgent, done) -> {
+            sources.add(source);
+            done.accept(new Topic("Replaying the snapshot session", 1L, ""));
+        });
+        settle(w);
+        JTabbedPane tabs = await("the panel tabs", () -> find(w.frame(), JTabbedPane.class, t -> "workspace".equals(t.getName())).orElse(null),
+                WAIT_MILLIS);
+        // the first tab's panel holds a text to read its topic from
+        onEdt(() -> {
+            find((Container) tabs.getComponentAt(0), RSyntaxTextArea.class).orElseThrow().setText("-- the snapshot's queries\nSELECT 1;");
+            return null;
+        });
+        Rectangle tab = onEdt(() -> tabs.getUI().getTabBounds(tabs, 0));
+        onEdt(() -> {
+            tabs.dispatchEvent(new MouseEvent(tabs, MouseEvent.MOUSE_MOVED, System.currentTimeMillis(), 0, tab.x + 8, tab.y + tab.height / 2, 0, false));
+            return null;
+        });
+        JComponent card = await("the tab's card", () -> find(w.frame(), JComponent.class, c -> "tab-card".equals(c.getName()) && c.isShowing())
+                .orElse(null), WAIT_MILLIS);
+        JLabel topic = onEdt(() -> find(card, JLabel.class, l -> "tab-card-topic".equals(l.getName())).orElseThrow());
+        await("the topic", () -> "Replaying the snapshot session".equals(topic.getText()), WAIT_MILLIS);
+        assertThat(sources).singleElement().asString().contains("SELECT 1;");
+        assertThat(onEdt(() -> tabs.getToolTipTextAt(0))).as("the card, not a tooltip").isNull();
+
+        onEdt(() -> {
+            tabs.dispatchEvent(new MouseEvent(tabs, MouseEvent.MOUSE_EXITED, System.currentTimeMillis(), 0, -5, -5, 0, false));
+            return null;
+        });
+        // the card stays when the pointer leaves, past the hover delay
+        Awaitility.await("the card staying").during(Duration.ofMillis(ToolTipManager.sharedInstance().getInitialDelay() + 200L))
+                .atMost(Duration.ofSeconds(5)).until(() -> onEdt(card::isShowing));
+        onEdt(() -> {
+            card.dispatchEvent(new MouseEvent(card, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(), InputEvent.BUTTON1_DOWN_MASK, 5, 5, 1, false,
+                    MouseEvent.BUTTON1));
+            return null;
+        });
+        assertThat(onEdt(card::isShowing)).as("a click on the card closes it").isFalse();
+    }
+
     @Test
     void everyTooltipInTheWindowIsOneShortLine() throws Exception {
         Window w = open("mac");
