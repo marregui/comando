@@ -168,11 +168,15 @@ class SubagentTailEdgesTest {
         assertThat(mk.waitFor()).isZero();
 
         adapter.showSubagent("work", "conv-1", "toolu_s");
+        // one sample decides: the tail's thread is virtual, and a virtual thread held in native file I/O does not give
+        // the same stack to every sample
         long deadline = System.nanoTime() + WAIT.toNanos();
-        while (!blockedInOpen() && System.nanoTime() < deadline) {
+        boolean blocked = blockedInOpen();
+        while (!blocked && System.nanoTime() < deadline) {
             Thread.onSpinWait();
+            blocked = blockedInOpen();
         }
-        assertThat(blockedInOpen()).as("tail thread blocked opening the FIFO").isTrue();
+        assertThat(blocked).as("tail thread blocked opening the FIFO").isTrue();
 
         adapter.close();
         int before = sink.intents().size();
