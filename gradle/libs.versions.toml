@@ -1,12 +1,12 @@
 [versions]
 flatlaf = "3.7.2"
 # the SVG renderer FlatLaf's extras use; kept at their version
-jsvg = "2.1.0"
+jsvg = "2.2.0"
 rsyntaxtextarea = "4.0.1"
 autocomplete = "4.0.0"
 commonmark = "0.30.1"
-diffutils = "4.17"
-jackson = "2.22.3"
+diffutils = "4.18"
+jackson = "2.22.4"
 postgresql = "42.7.14"
 questdb = "10.0.1"
 annotations = "26.1.0"
