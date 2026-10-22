@@ -57,6 +57,7 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
@@ -104,6 +105,7 @@ import java.awt.Desktop;
 import java.awt.Frame;
 import java.awt.KeyboardFocusManager;
 import java.awt.Toolkit;
+import java.awt.Window;
 import java.awt.desktop.QuitResponse;
 import java.awt.event.AWTEventListener;
 import java.awt.event.ComponentAdapter;
@@ -351,6 +353,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.topics(topics, deps.transcripts()::of);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
+        lower.onGoldChosen(this::goldChosen);
         workspace.onRunsProgram(id -> lower.terminals().runningJob(id).isPresent());
         side = new SidePane(ctx, widgets);
         sidebar = new SessionsSidebar(deps.intents(), new SessionsSidebar.Dialogs() {
@@ -781,6 +784,25 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         }
         return shown;
+    }
+
+    /** The gold was chosen: kept, and shown at once. */
+    private void goldChosen(Gold gold) {
+        windowLayout.gold(gold);
+        paintIn(gold);
+        // the colours set from the state (the Approvals tab's title, the status bar's approvals) are set again
+        render();
+    }
+
+    /**
+     * Every window in {@code gold} now: what listens to the gold (the transcript, the tab card, rendered Markdown) lays
+     * itself out or recolours in it, and the rest (icons, the Files tab, About) read it as they repaint.
+     */
+    private void paintIn(Gold gold) {
+        Theme.gold(gold);
+        for (Window w : Window.getWindows()) {
+            w.repaint();
+        }
     }
 
     /** Every editor took the light theme or the dark one: the choice is kept, and the comparison window follows. */
@@ -1575,6 +1597,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (diffWindow != null) {
             diffWindow.light(windowLayout.lightEditors());
         }
+        paintIn(windowLayout.gold());
         showSidebar(windowLayout.sidebarShown());
         vertical.setDividerLocation(windowLayout.lowerDivider(h));
         sidePaneHidden = windowLayout.sidePaneHidden();

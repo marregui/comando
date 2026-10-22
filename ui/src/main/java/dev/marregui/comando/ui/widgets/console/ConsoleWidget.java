@@ -126,7 +126,7 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
         switch (view.state()) {
             case RUNNING -> {
                 status.setText("running");
-                status.setForeground(Theme.WARN);
+                status.setForeground(Theme.warn());
             }
             case PASSED -> {
                 status.setText("passed in " + seconds);

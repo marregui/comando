@@ -323,7 +323,7 @@ final class SessionRow extends JPanel {
     /** The state, name, where it is bound, pending approvals and what it is doing; never wraps, clipped at the edge. */
     private static String titleHtml(SessionState s, String bound, boolean focused, int approvals) {
         String dot = "<span style='color:" + Theme.hex(EditorPanel.color(s.status())) + "'>" + EditorPanel.dot(s.status()) + "</span>";
-        String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.WARN) + "'>⚑" + approvals + "</span>";
+        String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.warn()) + "'>⚑" + approvals + "</span>";
         String where = "&nbsp;<span style='color:" + Theme.hex(focused ? Theme.ACCENT : Theme.MUTED_STRONG)
                 + "'>· " + MarkdownHtml.escape(Clip.keepEnd(bound, 24)) + "</span>";
         String doing = s.isBusy() ? TabStatus.working(s) : s.isWaiting() ? TabStatus.waiting(s) : "";
@@ -351,7 +351,7 @@ final class SessionRow extends JPanel {
         String cli = cliText(s);
         if (!cli.isEmpty()) {
             boolean older = olderCli(s, newestCli);
-            facts.add("<span style='color:" + Theme.hex(older ? Theme.WARN : Theme.MUTED) + "'>" + MarkdownHtml.escape(cli)
+            facts.add("<span style='color:" + Theme.hex(older ? Theme.warn() : Theme.MUTED) + "'>" + MarkdownHtml.escape(cli)
                     + (older ? " ↑" : "") + "</span>");
         }
         String uptime = uptimeText(s, nowMillis);

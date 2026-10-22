@@ -7,6 +7,7 @@ import dev.marregui.comando.core.effect.EffectRouter;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Topic;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
@@ -16,15 +17,20 @@ import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingPorts;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.Command;
 import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.theme.Gold;
+import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.shell.ComandoUi;
 import dev.marregui.comando.ui.shell.ServerToggle;
 import dev.marregui.comando.ui.shell.Setup;
+import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
 import org.awaitility.Awaitility;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.junit.jupiter.api.AfterEach;
@@ -39,6 +45,7 @@ import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
+import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
@@ -47,6 +54,7 @@ import javax.swing.ToolTipManager;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
+import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
 import java.awt.KeyEventDispatcher;
 import java.awt.KeyboardFocusManager;
@@ -54,12 +62,14 @@ import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -135,7 +145,7 @@ class UiKeysTest {
     }
 
     /** A started window with one panel, and the intents it sent. */
-    private record Window(StateLoop loop, ComandoUi ui, List<Intent> intents, JFrame frame) implements AutoCloseable {
+    private record Window(StateLoop loop, ComandoUi ui, List<Intent> intents, JFrame frame, TranscriptRegistry transcripts) implements AutoCloseable {
         @Override
         public void close() {
             ui.close();
@@ -158,6 +168,7 @@ class UiKeysTest {
         restore(Platform.KEYS_PROPERTY, keys);
         restore("comando.prefsNode", prefs);
         Preferences.userRoot().node(PREFS).removeNode();
+        Theme.gold(Gold.TREASURE);
     }
 
     private static void restore(String property, String value) {
@@ -190,7 +201,8 @@ class UiKeysTest {
             sent.add(i);
             loop.dispatch(i);
         };
-        ComandoUi ui = new ComandoUi(new ComandoUi.Dependencies(recording, loop::state, loop, new TranscriptRegistry(), new ResultRegistry(),
+        TranscriptRegistry transcripts = new TranscriptRegistry();
+        ComandoUi ui = new ComandoUi(new ComandoUi.Dependencies(recording, loop::state, loop, transcripts, new ResultRegistry(),
                 new ConsoleRegistry(), new SchemaRegistry(), new Texts(), List::of, server, Setup.NONE, "keys", null, null, () -> { }));
         effects.target = new EffectRouter(ports, ports, ports, ui, ports, ports);
         open.add(() -> {
@@ -204,7 +216,7 @@ class UiKeysTest {
         // the frame this start opened; an earlier test's may not be gone yet
         JFrame frame = onEdt(() -> (JFrame) Stream.of(Frame.getFrames())
                 .filter(f -> f instanceof JFrame && f.isShowing() && !before.contains(f)).findFirst().orElseThrow());
-        return new Window(loop, ui, sent, frame);
+        return new Window(loop, ui, sent, frame, transcripts);
     }
 
     private static Map<String, KeyStroke> keys(Window w) {
@@ -468,6 +480,80 @@ class UiKeysTest {
             return null;
         });
         assertThat(onEdt(card::isShowing)).as("a click on the card closes it").isFalse();
+    }
+
+    @Test
+    void theGoldIsChosenBesideTheSessionsClearAndKeptForTheNextWindow() throws Exception {
+        Window w = open("mac");
+        settle(w);
+        AbstractButton gold = await("the gold button", () -> find(w.frame(), AbstractButton.class,
+                b -> "Choose the gold".equals(b.getAccessibleContext().getAccessibleName())).orElse(null), WAIT_MILLIS);
+        List<String> row = onEdt(() -> Stream.of(gold.getParent().getComponents())
+                .map(c -> ((JComponent) c).getAccessibleContext().getAccessibleName()).toList());
+        assertThat(row).as("left of Clear").containsExactly("Choose the gold", "Clear the Session tab");
+        assertThat(Theme.gold()).as("by default").isEqualTo(Gold.TREASURE);
+        // a session bound to the panel, with a turn whose answer is its report, in the Session tab
+        w.loop().dispatch(new Intent.SaveSession("", SessionSpec.fresh("gilt", "/tmp")));
+        w.loop().dispatch(new Intent.BindSession(w.loop().state().focusedPanel().id(), "gilt"));
+        onEdt(() -> {
+            Transcript t = w.transcripts().of("gilt");
+            t.append(new Block.UserPrompt("go", "p", ""));
+            t.append(new Block.AssistantText("m", 0, "# Result\n\nDone.", false, ""));
+            t.append(new Block.TurnEnd(0.1, 1_000, 2, false, ""));
+            t.changed();
+            return null;
+        });
+        w.loop().dispatch(new Intent.SelectLowerTab(LowerTab.SESSION));
+        settle(w);
+        TranscriptCanvas canvas = await("the transcript", () -> find(w.frame(), TranscriptCanvas.class).orElse(null), WAIT_MILLIS);
+        await("the turn on the canvas", () -> canvas.contentHeight() > 100, WAIT_MILLIS);
+        assertThat(goldPixels(canvas, Gold.TREASURE)).as("the report's bar").isPositive();
+
+        onEdt(() -> {
+            gold.doClick();
+            return null;
+        });
+        // the menu shows in the frame or, heavyweight, in a window the frame owns
+        JRadioButtonMenuItem champagne = await("the menu", () -> Stream.concat(Stream.of(w.frame()), Stream.of(w.frame().getOwnedWindows()))
+                .map(win -> find(win, JRadioButtonMenuItem.class, i -> Gold.CHAMPAGNE.label.equals(i.getText())).orElse(null))
+                .filter(Objects::nonNull).findFirst().orElse(null), WAIT_MILLIS);
+        List<String> ticked = onEdt(() -> Stream.of(champagne.getParent().getComponents())
+                .map(c -> (JRadioButtonMenuItem) c).filter(AbstractButton::isSelected).map(AbstractButton::getText).toList());
+        assertThat(ticked).as("the gold chosen is ticked").containsExactly(Gold.TREASURE.label);
+        onEdt(() -> {
+            champagne.doClick();
+            return null;
+        });
+        assertThat(Theme.gold()).isEqualTo(Gold.CHAMPAGNE);
+        assertThat(Preferences.userRoot().node(PREFS).get("theme.gold", null)).isEqualTo("CHAMPAGNE");
+        assertThat(goldPixels(canvas, Gold.CHAMPAGNE)).as("the answer laid out again in the gold chosen, at once").isPositive();
+        assertThat(goldPixels(canvas, Gold.TREASURE)).isZero();
+
+        Theme.gold(Gold.TREASURE);
+        open("mac");
+        assertThat(Theme.gold()).as("a new window paints in the gold kept").isEqualTo(Gold.CHAMPAGNE);
+    }
+
+    /** How many pixels of the canvas, painted as it stands, are {@code gold}'s highlight: the top of the report's bar. */
+    private static int goldPixels(TranscriptCanvas canvas, Gold gold) throws Exception {
+        return onEdt(() -> {
+            int width = 800;
+            canvas.ensureLayout(width);
+            canvas.setSize(width, canvas.contentHeight());
+            BufferedImage img = new BufferedImage(width, canvas.getHeight(), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = img.createGraphics();
+            canvas.paint(g);
+            g.dispose();
+            int n = 0;
+            for (int y = 0; y < img.getHeight(); y++) {
+                for (int x = 0; x < img.getWidth(); x++) {
+                    if ((img.getRGB(x, y) & 0xFFFFFF) == (gold.highlight.getRGB() & 0xFFFFFF)) {
+                        n++;
+                    }
+                }
+            }
+            return n;
+        });
     }
 
     @Test

@@ -90,3 +90,5 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [80](0080-the-kit-is-a-whole-setup-installed-reversibly.md) | The kit is a whole Claude Code setup, installed reversibly | Miguel, Claude | proposed; would replace the install and setup rows of 50 and 61 |
 | [81](0081-a-tab-shows-a-card-with-its-topic.md) | A tab shows a card with its topic | Miguel, Claude | accepted; replaces the panel tabs' tooltip |
 | [82](0082-threads-by-kind-with-a-budget.md) | Threads by kind, with a budget | Miguel, Claude | accepted; amends the architecture's thread rule |
+| [83](0083-one-gold-chosen-beside-clear.md) | One gold, chosen beside Clear; serif headings; a turn's report is framed; tooltips and dark pages as answers | Miguel, Claude | proposed; amends the transcript's amber and record 76's gold |
+| [84](0084-claude-shows-what-is-better-seen.md) | Claude shows what is better seen than read | Miguel, Claude | proposed; the kit's `show` skill |

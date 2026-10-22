@@ -750,7 +750,7 @@ public final class EditorPanel extends JPanel {
     static Color color(Status s) {
         return switch (s) {
             case OPEN -> Theme.OK;
-            case OPENING, CLOSING -> Theme.WARN;
+            case OPENING, CLOSING -> Theme.warn();
             case FAILED -> Theme.DANGER;
             case CLOSED -> Theme.MUTED;
         };

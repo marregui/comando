@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.kit.text;
 
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.Browser;
+import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.JEditorPane;
@@ -20,6 +21,7 @@ import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
 import java.awt.Color;
+import java.awt.Font;
 import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.Point;
@@ -38,6 +40,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * A read-only HTML pane styled from the theme, for rendered Markdown. A web link opens in the browser at a click; a
@@ -84,6 +88,8 @@ public class HtmlPane extends JEditorPane {
         setEditable(false);
         setOpaque(false);
         putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
+        // the body's colour: the pane honours its display properties over the style sheet's
+        setForeground(Theme.TRANSCRIPT_TEXT);
         // the page grows as its pictures arrive and settles as it is laid out at its width: a reader taken to a heading
         // and not scrolled since stays at the heading
         addComponentListener(new ComponentAdapter() {
@@ -184,11 +190,40 @@ public class HtmlPane extends JEditorPane {
             return;
         }
         light = on;
+        restyle();
+    }
+
+    /** Stops hearing the gold chosen; set while the pane is in a window. */
+    private Runnable stopHearingGold;
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        // a dark page's headings, table heads and rules are the gold chosen: another chosen, the page is drawn again
+        stopHearingGold = Theme.onGold(() -> {
+            if (!light) {
+                restyle();
+            }
+        });
+    }
+
+    @Override
+    public void removeNotify() {
+        if (stopHearingGold != null) {
+            stopHearingGold.run();
+            stopHearingGold = null;
+        }
+        super.removeNotify();
+    }
+
+    /** The page drawn again under the rules of its theme and the gold chosen. */
+    private void restyle() {
+        boolean on = light;
         String html = markdown == null ? getText() : null;
         HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
         kit.setStyleSheet(styles(on));
         // the pane honours its display properties: its foreground is the body's colour, over the style sheet's
-        setForeground(on ? LIGHT_TEXT : null);
+        setForeground(on ? LIGHT_TEXT : Theme.TRANSCRIPT_TEXT);
         setOpaque(on);
         setBackground(on ? PAPER : null);
         // setText fills the document it has, which keeps the style sheet it was made with: a new one takes the new rules
@@ -204,11 +239,15 @@ public class HtmlPane extends JEditorPane {
         return light;
     }
 
-    /** The rules of a light page or a dark one, over Swing's defaults. */
-    private static StyleSheet styles(boolean light) {
+    /**
+     * The rules of a light page or a dark one, over Swing's defaults. A dark page reads as a turn's answer in the
+     * transcript: ivory text, headings in the headings' serif and the chosen gold over a gold rule, gold table heads on a
+     * band of the gold's shade, bold brighter, inline code teal, quotes beside a gold bar.
+     */
+    static StyleSheet styles(boolean light) {
         StyleSheet css = new StyleSheet();
         css.addStyleSheet(new HTMLEditorKit().getStyleSheet());
-        String fg = light ? Theme.hex(LIGHT_TEXT) : Theme.hex(UIManager.getColor("Label.foreground"));
+        String fg = Theme.hex(light ? LIGHT_TEXT : Theme.TRANSCRIPT_TEXT);
         String card = light ? "#ece5d6" : Theme.hex(Theme.CARD);
         String border = light ? "#d6cdba" : Theme.hex(Theme.CARD_BORDER);
         String muted = light ? "#6c707e" : Theme.hex(Theme.MUTED);
@@ -229,6 +268,20 @@ public class HtmlPane extends JEditorPane {
         css.addRule("td { border: 1px solid " + border + "; padding: 2px 6px; }");
         css.addRule("blockquote { margin-left: 8px; color: " + muted + "; }");
         css.addRule("ul, ol { margin-left: 18px; margin-top: 2px; margin-bottom: 4px; }");
+        if (!light) {
+            Gold gold = Theme.gold();
+            String rule = Theme.hex(Gold.over(Theme.TRANSCRIPT, gold.shade, 0.7f));
+            String serif = Theme.serif().getFamily();
+            css.addRule("h1, h2, h3 { font-family: '" + serif + "'; font-weight: bold; color: " + Theme.hex(gold.body) + "; }");
+            css.addRule("h1, h2 { border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: " + rule
+                    + "; padding-bottom: 3px; }");
+            css.addRule("b, strong { color: #FAF7F0; }");
+            css.addRule("code { color: #8FC9C0; background-color: #26282C; }");
+            css.addRule("th { color: " + Theme.hex(gold.highlight) + "; background-color: "
+                    + Theme.hex(Gold.over(Theme.TRANSCRIPT, gold.shade, 0.22f)) + "; }");
+            css.addRule("blockquote { color: " + fg + "; font-style: italic; border-left-width: 3px; border-left-style: solid; "
+                    + "border-left-color: " + Theme.hex(gold.body) + "; padding-left: 8px; }");
+        }
         return css;
     }
 
@@ -287,7 +340,8 @@ public class HtmlPane extends JEditorPane {
         this.markdown = markdown;
         sizedFor = -1;
         waitingFor.clear();
-        setHtml(MarkdownHtml.render(markdown, this::diagram, light, this::picture, marks));
+        String html = MarkdownHtml.render(markdown, this::diagram, light, this::picture, marks);
+        setHtml(light ? html : fallBackInHeadings(html, Theme.serif()));
     }
 
     /**
@@ -486,6 +540,51 @@ public class HtmlPane extends JEditorPane {
 
     private static String code(String source) {
         return "<pre class=\"code\"><code>" + MarkdownHtml.escape(source) + "</code></pre>";
+    }
+
+    private static final Pattern HEADING = Pattern.compile("(<h[1-3][^>]*>)(.*?)(</h[1-3]>)", Pattern.DOTALL);
+
+    /**
+     * {@code html} with the characters of its first three levels of heading that {@code serif} cannot draw set in Java's
+     * logical sans serif, as the transcript does: Swing's HTML draws a glyph its font lacks as nothing, and New York
+     * lacks the arrow. Tags, entities and code inside a heading are left as they are.
+     */
+    static String fallBackInHeadings(String html, Font serif) {
+        Matcher m = HEADING.matcher(html);
+        StringBuilder out = new StringBuilder(html.length() + 64);
+        while (m.find()) {
+            String inner = m.group(2);
+            StringBuilder h = new StringBuilder(inner.length() + 32);
+            int code = 0;
+            int i = 0;
+            while (i < inner.length()) {
+                char c = inner.charAt(i);
+                if (c == '<' || c == '&') {
+                    int end = inner.indexOf(c == '<' ? '>' : ';', i);
+                    end = end < 0 ? inner.length() - 1 : end;
+                    String piece = inner.substring(i, end + 1);
+                    code += piece.startsWith("<code") ? 1 : piece.startsWith("</code") ? -1 : 0;
+                    h.append(piece);
+                    i = end + 1;
+                    continue;
+                }
+                int cp = inner.codePointAt(i);
+                if (code > 0 || serif.canDisplay(cp)) {
+                    h.appendCodePoint(cp);
+                    i += Character.charCount(cp);
+                    continue;
+                }
+                int j = i;
+                while (j < inner.length() && inner.charAt(j) != '<' && inner.charAt(j) != '&' && !serif.canDisplay(inner.codePointAt(j))) {
+                    j += Character.charCount(inner.codePointAt(j));
+                }
+                h.append("<span style=\"font-family: Dialog\">").append(inner, i, j).append("</span>");
+                i = j;
+            }
+            m.appendReplacement(out, Matcher.quoteReplacement(m.group(1) + h + m.group(3)));
+        }
+        m.appendTail(out);
+        return out.toString();
     }
 
     public void setHtml(String bodyHtml) {

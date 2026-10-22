@@ -501,9 +501,9 @@ class SessionsSidebarTest {
         String newest = SessionRow.newestCli(List.of(older, newer, SessionState.closed(SessionSpec.fresh("new", "/w/new"))));
         assertThat(newest).isEqualTo("2.1.303");
 
-        assertThat(SessionRow.bodyHtml(newer, started, newest)).contains("claude 2.1.303<").doesNotContain("↑", Theme.hex(Theme.WARN));
+        assertThat(SessionRow.bodyHtml(newer, started, newest)).contains("claude 2.1.303<").doesNotContain("↑", Theme.hex(Theme.warn()));
         assertThat(SessionRow.bodyHtml(older, started, newest)).as("started before the update: amber, with an arrow")
-                .contains("color:" + Theme.hex(Theme.WARN) + "'>claude 2.1.302 ↑<");
+                .contains("color:" + Theme.hex(Theme.warn()) + "'>claude 2.1.302 ↑<");
         assertThat(SessionRow.details(older, started, ZoneOffset.UTC, newest))
                 .contains("Claude Code: 2.1.302, older than the 2.1.303 another session runs; start this one again to use it\n");
         assertThat(SessionRow.details(newer, started, ZoneOffset.UTC, newest)).contains("Claude Code: 2.1.303\n");

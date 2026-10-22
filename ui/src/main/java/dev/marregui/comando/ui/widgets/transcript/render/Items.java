@@ -9,6 +9,7 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Diffs;
+import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.transcript.ToolText;
 import dev.marregui.comando.ui.widgets.transcript.doc.MarkdownDoc;
@@ -147,8 +148,17 @@ final class Items {
     // ---- assistant text
 
     static final class TextItem extends Item {
+        /** A report's text starts this far right of its frame's edge, past the bar. */
+        private static final int GUTTER = 14;
+        /** A report's frame reaches this far above, below and right of its text. */
+        private static final int FRAME = 10;
         private List<Paras.View> views = List.of();
         private int[] tops = new int[0];
+        /**
+         * True when this text ends its turn: the report, laid on a ground lifted a little from the transcript's, with a
+         * bar of gold down its left edge, so it is found again among the turn's cards.
+         */
+        private boolean report;
 
         TextItem(Block.AssistantText b) {
             super(b);
@@ -164,11 +174,28 @@ final class Items {
             }
         }
 
+        /** Frames this text as its turn's report, or not; the next layout makes room for the frame. */
+        void report(boolean on) {
+            if (report != on) {
+                report = on;
+                invalidate();
+            }
+        }
+
+        boolean isReport() {
+            return report;
+        }
+
+        private int inset() {
+            return report ? GUTTER : 0;
+        }
+
         @Override
         int doLayout(int w, Style style) {
             Style s = style.outside();
             tops = new int[views.size()];
-            int y = 4;
+            int inner = report ? w - GUTTER - FRAME : w;
+            int y = report ? FRAME : 4;
             for (int i = 0; i < views.size(); i++) {
                 if (i > 0) {
                     boolean listRun = views.get(i).para() instanceof Para.Text t
@@ -178,13 +205,21 @@ final class Items {
                     y += listRun ? s.paraGap / 3 : s.paraGap;
                 }
                 tops[i] = y;
-                y += views.get(i).layout(w, s);
+                y += views.get(i).layout(inner, s);
             }
-            return y + 4;
+            return y + (report ? FRAME : 4);
         }
 
         @Override
         void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
+            if (report) {
+                Gold gold = style().gold;
+                g.setColor(Gold.over(Theme.TRANSCRIPT, gold.highlight, 0.03f));
+                g.fillRoundRect(x, y, width(), height, 8, 8);
+                g.setPaint(gold.ramp(y, y + height, false));
+                g.fillRect(x, y, 3, height);
+            }
+            x += inset();
             for (int i = 0; i < views.size(); i++) {
                 int top = y + tops[i];
                 int bottom = i + 1 < views.size() ? y + tops[i + 1] : y + height;
@@ -197,6 +232,7 @@ final class Items {
 
         @Override
         void collect(int x, int y, List<Placed> out) {
+            x += inset();
             for (int i = 0; i < views.size(); i++) {
                 views.get(i).collect(x, y + tops[i], this, out);
             }
@@ -779,7 +815,7 @@ final class Items {
                 mark.paintIcon(marks.component(), g, right - 16, cy + IN_Y + 1);
             }
             if (st != null) {
-                g.setColor(isActive() ? Theme.WARN : s.muted);
+                g.setColor(isActive() ? Theme.warn() : s.muted);
                 st.draw(g, right - (iconWidth > 0 ? iconWidth + 6 : 0) - st.getAdvance(), cy + IN_Y + st.getAscent() + 1);
             }
             Shape old = g.getClip();

@@ -180,7 +180,7 @@ public final class ResourceDialog<S> {
         message.setName("message");
         message.setForeground(Theme.MUTED);
         confirmRow.setName("confirm");
-        confirmRow.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.WARN),
+        confirmRow.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.warn()),
                 BorderFactory.createEmptyBorder(Theme.GAP, Theme.GAP, Theme.GAP, Theme.GAP)));
         JPanel confirmButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
         confirmButtons.add(confirmNo);
@@ -698,7 +698,7 @@ public final class ResourceDialog<S> {
         boolean showing = !advice.isEmpty() && advice.equals(message.getText());
         advice = now;
         if (!now.isEmpty()) {
-            say(Theme.WARN, now);
+            say(Theme.warn(), now);
         } else if (showing) {
             say(Theme.MUTED, "");
         }

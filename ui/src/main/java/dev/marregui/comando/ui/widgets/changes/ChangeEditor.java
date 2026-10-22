@@ -401,7 +401,7 @@ public final class ChangeEditor {
     private void say(Said said) {
         switch (said) {
             case NOTHING -> diff.rightStatus("", Theme.MUTED, SAVE_TIP);
-            case EDITED -> diff.rightStatus("● edited", Theme.WARN, SAVE_TIP);
+            case EDITED -> diff.rightStatus("● edited", Theme.warn(), SAVE_TIP);
             case SAVED -> diff.rightStatus("✓ saved", Theme.OK, SAVE_TIP);
             case FAILED -> diff.rightStatus("✗ not saved", Theme.DANGER, "Writing the file failed; the notice says why, and it is tried again");
         }

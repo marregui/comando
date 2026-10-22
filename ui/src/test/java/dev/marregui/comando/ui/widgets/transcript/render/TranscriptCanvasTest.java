@@ -3,7 +3,9 @@ package dev.marregui.comando.ui.widgets.transcript.render;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.testkit.SyntheticSession;
 import dev.marregui.comando.ui.kit.async.OnEdt;
+import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -25,6 +27,11 @@ class TranscriptCanvasTest {
     @BeforeAll
     static void headless() {
         System.setProperty("java.awt.headless", "true");
+    }
+
+    @AfterEach
+    void defaultGold() {
+        Theme.gold(Gold.TREASURE);
     }
 
     private void load(List<SyntheticSession.Step> steps) {
@@ -122,10 +129,57 @@ class TranscriptCanvasTest {
         canvas.append(3, new Block.TurnEnd(0.1, 1_000, 2, false, ""));
         int answer = pixels(paint(800, 300), Theme.TRANSCRIPT_TEXT);
         assertThat(answer).as("the turn's last answer and its time").isPositive();
-        assertThat(pixels(paint(800, 300), Theme.GOLD)).isZero();
+        assertThat(((Items.TextItem) canvas.itemAt(2)).isReport()).as("the turn's last answer is its report").isTrue();
 
         canvas.append(4, new Block.Note(Block.NoteKind.INFO, "Stored conversation loaded", ""));
         assertThat(pixels(paint(800, 300), Theme.TRANSCRIPT_TEXT)).as("a note").isGreaterThan(answer);
+    }
+
+    @Test
+    void anAnswersHeadingsMarksAndTableHeadsAreGoldElsewhereTheTextsColour() {
+        Style s = Style.of(0);
+        Gold gold = Theme.gold();
+        assertThat(s.outside().heading).isEqualTo(gold.body);
+        assertThat(s.outside().mark).isEqualTo(gold.body);
+        assertThat(s.outside().tableHead).isEqualTo(gold.highlight);
+        assertThat(s.outside().strong).as("bold brighter than the text").isNotEqualTo(s.outside().text);
+        assertThat(s.heading).as("a card's text keeps one colour").isEqualTo(s.text);
+        assertThat(s.mark).isEqualTo(s.muted);
+        assertThat(s.tableHead).isEqualTo(s.text);
+        assertThat(s.strong).isEqualTo(s.text);
+        assertThat(s.codeText).isNull();
+    }
+
+    @Test
+    void theTextThatEndsATurnIsItsReport() {
+        canvas.append(0, new Block.UserPrompt("go", "p", ""));
+        canvas.append(1, text("Looking."));
+        canvas.append(2, call("t1", ""));
+        canvas.append(3, text("# Result\n\nThe store drops pending retries."));
+        canvas.append(4, new Block.Note(Block.NoteKind.INFO, "a hook said so", ""));
+        canvas.append(5, new Block.TurnEnd(0.1, 1_000, 2, false, ""));
+        canvas.append(6, new Block.UserPrompt("again", "p", ""));
+        canvas.append(7, text("Trying."));
+        canvas.append(8, call("t2", ""));
+        canvas.append(9, new Block.TurnEnd(0.1, 1_000, 2, true, "interrupted"));
+        paint(800, 600);
+        assertThat(((Items.TextItem) canvas.itemAt(1)).isReport()).as("a text a tool call followed").isFalse();
+        assertThat(((Items.TextItem) canvas.itemAt(3)).isReport()).as("notes after it do not count").isTrue();
+        assertThat(((Items.TextItem) canvas.itemAt(7)).isReport()).as("a turn that ended on a tool call has none").isFalse();
+    }
+
+    @Test
+    void choosingAnotherGoldRepaintsTheReportInIt() {
+        canvas.append(0, new Block.UserPrompt("go", "p", ""));
+        canvas.append(1, text("# Result\n\nDone."));
+        canvas.append(2, new Block.TurnEnd(0.1, 1_000, 2, false, ""));
+        assertThat(pixels(paint(800, 300), Gold.TREASURE.highlight)).as("the bar's top").isPositive();
+        assertThat(pixels(paint(800, 300), Gold.CHAMPAGNE.highlight)).isZero();
+
+        Theme.gold(Gold.CHAMPAGNE);
+        canvas.restyle();
+        assertThat(pixels(paint(800, 300), Gold.CHAMPAGNE.highlight)).isPositive();
+        assertThat(pixels(paint(800, 300), Gold.TREASURE.highlight)).isZero();
     }
 
     @Test

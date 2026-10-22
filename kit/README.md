@@ -9,6 +9,7 @@ agents are given specs with an executable acceptance check; Gradle runs in one c
 | `hooks/method.md` | the method, read by Claude at every session start (new, resumed, cleared) and after each compaction: where knowledge is kept, how a task is worked, what a compaction summary keeps |
 | `skills/reflect` | `/reflect`: writes the session into memory, corrects the knowledge base, consolidates the scratchpad |
 | `skills/deep-review` | `/deep-review`: an adversarial review against the stated requirements, every finding proved |
+| `skills/show` | show, don't tell: Claude renders what is better seen than read (a sheet of options, the real component, an animation, a diagram) and puts it in a comando view beside its reply; `show.py` draws sheets and GIFs |
 | `templates/agent-spec.md` | the spec an agent is given: files, limits, executable acceptance |
 | `bin/gradle-serial` | one Gradle run per checkout at a time; on Claude's PATH, and what comando runs Gradle through |
 | `bin/index-check` | checks that every memory file, knowledge-base document and scratchpad artefact is in its index, and every entry of a Files-tab folder inside Claude Code's folder (repositories excepted) in the folder's index file and listing files; warns when the memory index, a memory file or a dated log passes its budget |
@@ -43,5 +44,6 @@ Remove it with `claude plugin uninstall comando@comando` and `claude plugin mark
 `autoMemoryDirectory` out of `~/.claude/settings.json` to go back to a memory per project. The knowledge base, the
 scratchpad and the memory stay.
 
-Requirements: `python3` for the Mermaid check, `index-check`, `compact-check` and `cue-replay`; the `claude` CLI for
+Requirements: `python3` for the Mermaid check, `index-check`, `compact-check` and `cue-replay`; Pillow for `show`'s
+pictures (`python3 -m pip install --user pillow`); the `claude` CLI for
 `cue-replay`'s judge; `mmdc` to draw diagrams (`npm i -g @mermaid-js/mermaid-cli`).

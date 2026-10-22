@@ -254,12 +254,32 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             }
         } else {
             items.add(shown);
+            if (shown instanceof Items.TurnItem) {
+                frameReport();
+            }
         }
         if (!waitingFor.isEmpty()) {
             resolveWaiting();
         }
         structureChanged = true;
         changed();
+    }
+
+    /**
+     * The turn just ended: its last text, when nothing but notes, hooks or thinking came after it, is its report and
+     * takes the report's frame. A turn that ended on a tool call or a prompt has none.
+     */
+    private void frameReport() {
+        for (int i = items.size() - 2; i >= 0; i--) {
+            Item item = items.get(i);
+            if (item instanceof Items.TextItem text) {
+                text.report(true);
+                return;
+            }
+            if (!(item instanceof Items.NoteItem || item instanceof Items.HookGroupItem || item instanceof Items.ThinkingItem)) {
+                return;
+            }
+        }
     }
 
     /** True when the selection starts or ends in {@code item}'s text. */
@@ -629,6 +649,32 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             style = Style.of(zoom);
         }
         return style;
+    }
+
+    /**
+     * The gold was chosen again: every item is laid out and painted again in it now, as after a zoom change; the
+     * selection goes, as its boxes are made again. Runs on its own while the canvas is in a window.
+     */
+    public void restyle() {
+        setZoom(zoom);
+    }
+
+    /** Stops hearing the gold chosen; set while the canvas is in a window. */
+    private Runnable stopHearingGold;
+
+    @Override
+    public void addNotify() {
+        super.addNotify();
+        stopHearingGold = Theme.onGold(this::restyle);
+    }
+
+    @Override
+    public void removeNotify() {
+        if (stopHearingGold != null) {
+            stopHearingGold.run();
+            stopHearingGold = null;
+        }
+        super.removeNotify();
     }
 
     /**

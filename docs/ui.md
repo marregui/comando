@@ -18,7 +18,7 @@ The package layers are in [Architecture §8](architecture.md#8-ui-packages).
 | `icon` | `Icons` (one SVG set under `/icons`, HiDPI), `SpinnerIcon` (one shared wheel, advanced by its owner's timer), `RowIcon` (icons in a row: two marks where a cell has room for one, [record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)) |
 | `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority`, `ToolButton` ([§2](#2-commands-and-keys)) |
 | `resource` | `ResourceActions`: a list of resources' add (from its tab's menu) and its removal question (from a row's menu); no bar of buttons ([Workbench §1.3](workbench.md#13-the-sidebar)) |
-| `overlay` | `Overlay`: the empty, loading and error states a widget switches between; `Balloon`: a short word beside a component that asks for nothing, gone after 2.5 s or at the next click or key; `Flash`: the hint on what a click brought into view, the warning amber fading to nothing over 2 s, one at a time on a component, a line's flash painted the text's whole width under the text ([record 79](adr/0079-a-notice-takes-you-to-what-it-is-about.md)) |
+| `overlay` | `Overlay`: the empty, loading and error states a widget switches between; `Balloon`: a short word beside a component that asks for nothing, gone after 2.5 s or at the next click or key; `Flash`: the hint on what a click brought into view, the chosen gold fading to nothing over 2 s, one at a time on a component, a line's flash painted the text's whole width under the text ([record 79](adr/0079-a-notice-takes-you-to-what-it-is-about.md)) |
 | `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` (below) |
 | `format` | `Labels` (times, uptimes, counts, short paths), `Json`, `KeyText` (keys named as the desktop names them) |
 | `text` | `Editors`, `TextSearch`, `Highlighter`, `Diffs`, `DiffPane`, `SplitDiff`, `MarkdownHtml`, `HtmlPane`, `RenderedMarkdown` (an `HtmlPane` padded in a scroll pane: a panel's preview, the comparison window's rendered sides, which `MarkdownHtml.Marks` shades where a comparison found changes), `LocalImages`, `LocalLinks`, `MermaidDiagrams`, `SourceLinks`, `Plain`, `EditorThemes` (IntelliJ's Dark and Light editor themes), `Fences` (a fenced block's language), `LogLines` (an entry of comando's log by its time) |
@@ -161,18 +161,24 @@ out in 8 ms slices, nearest the viewport first, keeping the first visible line i
 clip by binary search. The canvas paints no ground of its own; the viewport under it is dark (`Theme.TRANSCRIPT`), so
 text and cards stand out more than on the window's grey; it is near-black (`#121212`), as on pure black bright text
 blurs at its edges. Every text outside the prompt bubble and the tool cards (Claude's text, thinking, notes, hook lines,
-the turn's time) is a soft amber (`Theme.TRANSCRIPT_TEXT`, `#E0C48A`, 11.1:1 on the ground): warm and low in
-saturation, for long reading. Errors stay red, links blue, code its highlighting.
+the turn's time) is a warm ivory (`Theme.TRANSCRIPT_TEXT`, `#E2DCCD`): low in saturation, for long reading. Claude's
+answers carry the gold chosen beside the Session tab's Clear (`Theme.gold()`, Treasure by default): headings (the first
+three levels in a serif, New York on macOS, else Georgia or another installed serif, else Java's logical serif), the first
+two levels along the gold's ramp from highlight to shade, the rule under them, list marks, a quote's bar and a table's
+head; bold is a brighter ivory, inline code teal. The turn's last text, when only notes, hooks or thinking follow it,
+is its report: a ground lifted a little and a bar of gold down its left edge
+([record 83](adr/0083-one-gold-chosen-beside-clear.md)). A character a run's font lacks is drawn in Java's logical sans
+serif, which covers most of Unicode on every desktop. Errors stay red, links blue, code its highlighting. Every tooltip, and the tab card, reads as a report: the lifted ground, a gold bar down its left edge, ivory text; a dark rendered Markdown page (an editor tab's preview, a view) reads as an answer, its headings in the serif and the gold.
 
 | Item | Paints |
 |---|---|
 | prompt | a bubble, with the panel it came from |
-| text | paragraphs, highlighted code, tables, quotes |
+| text | paragraphs, highlighted code, tables, quotes; the turn's report framed |
 | thinking | only while it is the latest item of its list; collapsed with its token count once it ends |
 | tool card | running, done or failed; a one-line summary; "running · 12 s", or "waiting for your approval · ⌃2"; open: input, result (400 lines), a subagent's blocks; opens by itself for edits, errors and running subagents. A subagent card adds the tool calls its blocks made, at any depth, and the latest: "running · 1 min 04 s · 9 tools · Read docs/ui.md" (the latest drops first when the card is narrow), then "done · 1 min 30 s · 12 tools". An Agent call whose result says it launched its subagent into the background reads "running in background · …" while the session lists that subagent among its open tasks, and done once it leaves the list. A card with no nested blocks shows no count: a stored conversation keeps a subagent's blocks in a file of its own. Its header links to its stored conversation |
 | note | an icon by kind and the first line; error notes start open |
 | hook group | consecutive hook outputs as one line, "hooks · UserPromptSubmit, SessionStart (3)" |
-| turn end | the duration, no cost ([record 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)); a failed turn its error first, in red; an interrupted turn "interrupted · 12.0 s", in the amber of any text |
+| turn end | the duration, no cost ([record 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)); a failed turn its error first, in red; an interrupted turn "interrupted · 12.0 s", in the ivory of any text |
 
 ### 4.2 The widget
 

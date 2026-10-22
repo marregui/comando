@@ -3,6 +3,8 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.Gold;
+import dev.marregui.comando.ui.kit.theme.GoldTitle;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.BorderFactory;
@@ -17,11 +19,12 @@ import javax.swing.JRootPane;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
-import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -30,9 +33,10 @@ import java.awt.event.MouseEvent;
 import java.util.function.Consumer;
 
 /**
- * A tab's card, in place of its tooltip: what the tooltip said; under it, set apart, "Summary:" and the panel's topic
- * in gold, wrapped to a few lines; at the bottom left, a button that reads the summary again and one that closes the
- * card. It floats in the window's popup layer under the tab it describes and stays until it is closed or clicked, or
+ * A tab's card, in place of its tooltip, laid out as a turn's report in the transcript: the ground lifted a little,
+ * a bar of the chosen gold down its left edge; what the tooltip said, in grey; under it, set apart, "Summary" in the
+ * headings' serif along the gold's ramp over a gold rule, and the panel's topic in the transcript's ivory, wrapped to
+ * a few lines; at the bottom left, a button that reads the summary again and one that closes the card. It floats in the window's popup layer under the tab it describes and stays until it is closed or clicked, or
  * until another tab's card takes its place; the window moves it with itself. EDT only.
  */
 final class TabCard {
@@ -42,11 +46,29 @@ final class TabCard {
     static final int SUMMARY_WIDTH = 460;
     private static final int MARGIN = 8;
 
-    private final JPanel card = new JPanel();
+    /** The bar's width, as the report's. */
+    private static final int BAR = 3;
+    private final JPanel card = new JPanel() {
+        @Override
+        protected void paintComponent(Graphics g0) {
+            Graphics2D g = (Graphics2D) g0.create();
+            try {
+                Gold gold = Theme.gold();
+                g.setColor(Theme.tooltipGround());
+                g.fillRect(0, 0, getWidth(), getHeight());
+                g.setPaint(gold.ramp(0, getHeight(), false));
+                g.fillRect(0, 0, BAR, getHeight());
+            } finally {
+                g.dispose();
+            }
+        }
+    };
     /** Text from a session, a document and Haiku: never rendered as HTML. */
     private final JLabel status = Plain.only(new JLabel());
-    private final JLabel heading = Plain.only(new JLabel("Summary:"));
+    private final GoldTitle heading;
     private final JTextArea topic = new JTextArea();
+    /** True while the summary is a placeholder, in grey italics, not a summary read. */
+    private boolean muted;
     private final JButton refresh = button("refresh", "tab-card-refresh", "Summarise the panel again with Haiku (about 2 s)",
             "Summarise again");
     private final JButton close = button("close", "tab-card-close", "Close the card", "Close the card");
@@ -59,22 +81,19 @@ final class TabCard {
     TabCard(Consumer<PanelId> onRefresh) {
         card.setName("tab-card");
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
-        Color background = UIManager.getColor("ToolTip.background");
-        card.setBackground(background == null ? Theme.CARD : background);
-        Color border = UIManager.getColor("Component.borderColor");
-        card.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(border == null ? Theme.CARD_BORDER : border),
-                BorderFactory.createEmptyBorder(8, 10, 6, 10)));
+        card.setOpaque(true);
+        card.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.CARD_BORDER),
+                BorderFactory.createEmptyBorder(10, 10 + BAR + 4, 6, 12)));
         Font font = UIManager.getFont("ToolTip.font");
-        Color foreground = UIManager.getColor("ToolTip.foreground");
-        if (font != null) {
-            status.setFont(font);
-            heading.setFont(font.deriveFont(Font.BOLD));
-            topic.setFont(font);
+        if (font == null) {
+            font = new Font(Font.DIALOG, Font.PLAIN, 12);
         }
-        if (foreground != null) {
-            status.setForeground(foreground);
-        }
-        heading.setForeground(Theme.GOLD);
+        status.setFont(font);
+        status.setForeground(Theme.MUTED_STRONG);
+        // the report's second heading, a size above the text
+        heading = new GoldTitle("Summary", font.getSize2D() * 1.25f);
+        heading.setName("tab-card-heading");
+        topic.setFont(font.deriveFont(font.getSize2D() + 0.5f));
         topic.setName("tab-card-topic");
         topic.setEditable(false);
         topic.setFocusable(false);
@@ -98,7 +117,7 @@ final class TabCard {
         card.add(status);
         card.add(Box.createVerticalStrut(10));
         card.add(heading);
-        card.add(Box.createVerticalStrut(2));
+        card.add(Box.createVerticalStrut(6));
         card.add(topic);
         card.add(Box.createVerticalStrut(6));
         card.add(actions);
@@ -111,6 +130,11 @@ final class TabCard {
         card.addMouseListener(closeOnPress);
         // the summary is a text area, which takes the press itself: a press on it closes the card as on the rest
         topic.addMouseListener(closeOnPress);
+        paintGold();
+        // one card for the window's life: it hears every gold chosen
+        Theme.onGold(this::paintGold);
+        // the rule under the heading runs the card's width, as under a report's heading
+        heading.setMaximumSize(new Dimension(Integer.MAX_VALUE, heading.getPreferredSize().height));
     }
 
     private static JButton button(String icon, String name, String tip, String accessible) {
@@ -152,9 +176,20 @@ final class TabCard {
         topic.setText(topicText);
         Font f = topic.getFont();
         topic.setFont(f.deriveFont(muted ? Font.ITALIC : Font.PLAIN));
-        topic.setForeground(muted ? Theme.MUTED : Theme.GOLD);
+        this.muted = muted;
+        paintGold();
         refresh.setEnabled(!reading);
         place();
+    }
+
+    private void paintGold() {
+        Gold gold = Theme.gold();
+        heading.setForeground(gold.body);
+        heading.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 0, 1, 0, Gold.over(Theme.TRANSCRIPT, gold.shade, 0.7f)),
+                BorderFactory.createEmptyBorder(0, 0, 4, 0)));
+        topic.setForeground(muted ? Theme.MUTED : Theme.TRANSCRIPT_TEXT);
+        card.repaint();
     }
 
     /** Puts the card shown under {@code tab} again, a rectangle of the tabs it was shown over: the tab moved. */
@@ -231,6 +266,10 @@ final class TabCard {
     }
 
     /** The summary's own component, which wraps it; for tests. */
+    GoldTitle headingLabel() {
+        return heading;
+    }
+
     JTextArea topicArea() {
         return topic;
     }

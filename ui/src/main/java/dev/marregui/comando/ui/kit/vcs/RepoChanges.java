@@ -107,7 +107,7 @@ public final class RepoChanges {
             case MODIFIED, RENAMED, COPIED -> Theme.VCS_MODIFIED;
             case ADDED -> Theme.VCS_ADDED;
             case DELETED -> Theme.VCS_DELETED;
-            case UNTRACKED -> Theme.VCS_UNTRACKED;
+            case UNTRACKED -> Theme.gold().body;
             case CONFLICTED -> Theme.VCS_CONFLICTED;
         };
     }

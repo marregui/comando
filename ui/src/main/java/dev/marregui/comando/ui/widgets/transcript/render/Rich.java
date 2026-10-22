@@ -1,9 +1,12 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
+import dev.marregui.comando.ui.kit.theme.Theme;
+
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.font.TextAttribute;
 import java.text.AttributedString;
+import java.text.StringCharacterIterator;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.IntStream;
@@ -57,7 +60,36 @@ final class Rich {
             expandTabs(s);
         }
         runs.add(new Run(start, text.length(), font, color, background, underline, strike));
+        fallBack(start, font);
         return this;
+    }
+
+    /**
+     * The characters from {@code start} that {@code font} cannot draw take {@link Theme#fallback}: a later run wins, so
+     * only the font changes there. Nothing is added when the font draws them all, which is the common case.
+     */
+    private void fallBack(int start, Font font) {
+        if (font == null) {
+            return;
+        }
+        String added = text.substring(start);
+        int missing = font.canDisplayUpTo(added);
+        if (missing < 0) {
+            return;
+        }
+        Font fallback = Theme.fallback(font);
+        while (missing >= 0) {
+            int end = missing;
+            while (end < added.length()) {
+                int cp = added.codePointAt(end);
+                if (font.canDisplay(cp)) {
+                    break;
+                }
+                end += Character.charCount(cp);
+            }
+            runs.add(new Run(start + missing, start + end, fallback, null, null, false, false));
+            missing = end >= added.length() ? -1 : font.canDisplayUpTo(new StringCharacterIterator(added), end, added.length());
+        }
     }
 
     /** Tabs become spaces to the next multiple of four columns; a text layout draws a tab as nothing. */

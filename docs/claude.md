@@ -70,7 +70,7 @@ text and shown to 400 lines.
   desktop notification while the window is not active; a turn that handed its work to the background notifies when the
   turn Claude Code starts after that work ends, and a result while no turn ran notifies nothing.
 - **Interrupt** writes a `control_request` with subtype `interrupt`. The turn ends with a `result` marked interrupted;
-  its turn end reads "interrupted · <time>" in the transcript's amber, not red; the session stays open and no "Turn
+  its turn end reads "interrupted · <time>" in the transcript's ivory, not red; the session stays open and no "Turn
   failed" notification is sent.
 - **Stop** interrupts, closes stdin, sends SIGTERM after 3 s and SIGKILL 2 s later. A prompt sent while stopping is
   refused with a notice and stays in the editor. A process that cannot start is reported once, naming `COMANDO_CLAUDE`

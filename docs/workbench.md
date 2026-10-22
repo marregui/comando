@@ -79,7 +79,9 @@ either empty. Several panels may share a connection; a session has at most one p
   "● " before the title: the question mark's until the request is answered, the others' until the tab is looked at. A
   waiting request or a failure bounces the Dock while the window is not active.
 - **The lower panel** follows the focused panel: its last SQL run, its session's transcript, its terminal. Approvals
-  lists every session's requests.
+  lists every session's requests. At its right end, the gold ingot chooses the window's gold (Treasure, 18k yellow,
+  Champagne; kept across restarts) and Clear empties the Session tab
+  ([record 83](adr/0083-one-gold-chosen-beside-clear.md)).
 - **Closing** (⌘W when no view has the keyboard; the last open panel cannot be closed) keeps a panel of comando's own, closed, with its file, title and bindings, until removed; a document
   is dropped ([record 39](adr/0039-panels-are-kept-until-removed.md)). ⌘⇧T reopens the last of ten recently closed;
   the Panels tab reopens any. Closing asks first when the panel's shell runs a job in the foreground.
@@ -103,7 +105,7 @@ or **Close and remove**, or **Leave it** ([record 37](adr/0037-session-actions-a
 
 - **Sessions:** name, where it is bound ("headless" when nowhere), status, current activity or what it waits on,
   pending approvals; directory and branch; `ctx` and the context % (purple from 60%), the Claude Code version the
-  session runs (from its `system/init`; amber with ↑ when another running session runs a newer one, as after an update
+  session runs (from its `system/init`; in gold with ↑ when another running session runs a newer one, as after an update
   of the CLI: each start runs the CLI installed then), how long it has run, a line only when one of them is known, so a
   disconnected row has its controls under its folder. Over the
   row's text the tooltip shows the details Copy details copies, the full session id among them. At the left a plug, fresh start, checkpoint, and while running compact and clear (`/compact`, `/clear`
@@ -320,7 +322,8 @@ edited and saved like any other; a `.log` stays read-only.
   is dropped if the folder was edited since; reads are ticketed so an older one never overwrites a newer one. The tree
   keeps what the user opened and selected.
 - **Git.** In a git repository a file that differs from `HEAD` takes git's colour for how (changed blue, added green,
-  untracked gold, in conflict red), and a folder that holds one is blue. A new (untracked) file and every folder on the
+  untracked in the gold chosen beside the Session tab's Clear, in conflict red), and a folder that holds one is blue
+  ([record 83](adr/0083-one-gold-chosen-beside-clear.md)). A new (untracked) file and every folder on the
   way down to it carry a gold dot after the name, so the closed folders to open are marked from the folder's row down.
   Once the new file is opened (in a panel or the side pane, from any place) it reads as any other file, without gold
   or dot, and counts for its folders no more; comando keeps the opened files in `opened-files`
@@ -377,7 +380,7 @@ inside that folder alone ([record 71](adr/0071-repositories-in-the-files-tab.md)
   an editor, the only one of the two: the differences are worked out again 250 ms after typing pauses, and ⌘Z and ⌘⇧Z
   (⌘Y) go back and forth through every edit made there since the file was shown; the window has no buttons for them. The
   text is written every second while it has edits, on ⌘S, and on leaving the file: another file, the window closing,
-  comando quitting (waiting up to 2 s). Beside the working tree's title, "● edited" (amber) shows while edits wait, "✓
+  comando quitting (waiting up to 2 s). Beside the working tree's title, "● edited" (gold) shows while edits wait, "✓
   saved" (green) once they are written, "✗ not saved" (red) when a write fails, which a notice explains and the next
   second tries again; on macOS the window's close button carries a dot meanwhile. A read of the file while it has
   unsaved edits is not shown; a panel open on the same file takes the saved text as any change made outside it. A

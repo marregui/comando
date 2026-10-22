@@ -9,3 +9,4 @@ logs/
 *.txt
 logs
 test-report.xml
+__pycache__/

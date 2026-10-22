@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.shell;
 
+import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
 
 import javax.swing.JFrame;
@@ -11,7 +12,7 @@ import java.util.prefs.Preferences;
 
 /**
  * The window's layout across restarts, in the user's preferences: its bounds and whether it was maximized, the
- * dividers, the sidebar's state and tab, the side pane, and the editors' theme. The one place each key is named.
+ * dividers, the sidebar's state and tab, the side pane, the editors' theme and the gold. The one place each key is named.
  */
 final class WindowLayout {
 
@@ -115,6 +116,14 @@ final class WindowLayout {
 
     void lightEditors(boolean light) {
         prefs.putBoolean("editor.light", light);
+    }
+
+    Gold gold() {
+        return Gold.named(prefs.get("theme.gold", Gold.TREASURE.name()));
+    }
+
+    void gold(Gold gold) {
+        prefs.put("theme.gold", gold.name());
     }
 
     boolean sidebarShown() {

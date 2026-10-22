@@ -146,7 +146,7 @@ public final class StatusBar {
         usage.setVisible(true);
         usage.setText(usageText(lastUsage));
         int worst = lastUsage.windows().stream().mapToInt(PlanUsage.Window::percent).max().orElse(0);
-        usage.setForeground(stale ? Theme.MUTED : worst >= USAGE_DANGER ? Theme.DANGER : worst >= USAGE_WARN ? Theme.WARN : Theme.MUTED);
+        usage.setForeground(stale ? Theme.MUTED : worst >= USAGE_DANGER ? Theme.DANGER : worst >= USAGE_WARN ? Theme.warn() : Theme.MUTED);
         StringBuilder tip = new StringBuilder();
         for (PlanUsage.Window w : lastUsage.windows()) {
             tip.append(MarkdownHtml.escape(w.name() + ": " + w.percent() + "% used" + (w.resets().isEmpty() ? "" : ", resets " + w.resets())))
@@ -324,7 +324,7 @@ public final class StatusBar {
     private static Color color(Notice.Level level) {
         return switch (level) {
             case INFO -> Theme.MUTED;
-            case WARN -> Theme.WARN;
+            case WARN -> Theme.warn();
             case ERROR -> Theme.DANGER;
         };
     }
@@ -381,7 +381,7 @@ public final class StatusBar {
             w.append(w.isEmpty() ? "" : " · ").append(s.approvals().size()).append(" waiting for approval");
         }
         work.setText(w.toString());
-        work.setForeground(s.approvals().isEmpty() ? Theme.MUTED : Theme.WARN);
+        work.setForeground(s.approvals().isEmpty() ? Theme.MUTED : Theme.warn());
     }
 
     /** The focused panel's session: name, model, effort, context used and, during a turn, what it does; no cost. */

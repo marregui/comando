@@ -250,11 +250,9 @@ final class About {
 
         private static final Color TOP = new Color(0x2C2926);
         private static final Color BOTTOM = new Color(0x1B1917);
-        private static final Color HAIRLINE = Theme.withAlpha(Theme.GOLD, 72);
         private static final Color INK = new Color(0xF2EDE4);
         private static final Color SOFT = new Color(0xBFB6A8);
         private static final Color MUTED = new Color(0x8E867A);
-        private static final Color GOLD_LIGHT = new Color(0xF0CF72);
 
         private static final Font NAME = face("HelveticaNeue-Light", Font.PLAIN, 34f, Font.SANS_SERIF);
         private static final Font TAGLINE = face("Charter-Italic", Font.ITALIC, 16f, Font.SERIF);
@@ -377,7 +375,7 @@ final class About {
                 RoundRectangle2D shape = new RoundRectangle2D.Float(0.5f, 0.5f, w - 1f, h - 1f, RADIUS * 2f, RADIUS * 2f);
                 g.setPaint(new GradientPaint(0, 0, TOP, 0, h, BOTTOM));
                 g.fill(shape);
-                g.setColor(HAIRLINE);
+                g.setColor(Theme.withAlpha(Theme.gold().body, 72));
                 g.draw(shape);
 
                 int y = 44;
@@ -389,7 +387,7 @@ final class About {
                     y = centred(g, l, SOFT, w, y);
                 }
                 y += 22;
-                g.setColor(Theme.withAlpha(Theme.GOLD, 170));
+                g.setColor(Theme.withAlpha(Theme.gold().body, 170));
                 g.fillRect(w / 2 - 20, y, 40, 1);
                 y += 1 + 22;
                 y = paintRows(g, w, y);
@@ -451,7 +449,7 @@ final class About {
             linkBounds.clear();
             for (int i = 0; i < texts.size(); i++) {
                 TextLayout t = texts.get(i);
-                g.setColor(i == hovered ? GOLD_LIGHT : Theme.GOLD);
+                g.setColor(i == hovered ? Theme.gold().highlight : Theme.gold().body);
                 t.draw(g, x, baseline);
                 if (i == hovered) {
                     g.fillRect(Math.round(x), Math.round(baseline + 3), Math.round(t.getAdvance()), 1);

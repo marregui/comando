@@ -1,16 +1,19 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
 import dev.marregui.comando.ui.kit.text.Highlighter;
-import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.widgets.transcript.doc.Para;
 import dev.marregui.comando.ui.widgets.transcript.doc.Span;
 
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics2D;
+import java.awt.Paint;
 import java.awt.Rectangle;
 import java.awt.RenderingHints;
+import java.awt.Shape;
 import java.awt.font.TextLayout;
+import java.awt.geom.AffineTransform;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -48,7 +51,10 @@ final class Paras {
         for (Span sp : spans) {
             boolean code = sp.has(Span.CODE);
             Font f = code ? s.mono : keepFont ? base : s.font(sp.style(), false);
-            Color c = sp.isLink() ? s.link : color;
+            Color c = sp.isLink() ? s.link
+                    : code && s.codeText != null ? s.codeText
+                    : !keepFont && sp.has(Span.BOLD) && color.equals(s.text) ? s.strong
+                    : color;
             int start = r.length();
             r.append(sp.text(), f, c, code ? s.inlineCodeBackground : null, sp.isLink(), sp.has(Span.STRIKE));
             if (sp.isLink()) {
@@ -92,7 +98,11 @@ final class Paras {
                     case QUOTE -> s.italic;
                     default -> s.body;
                 };
-                Color color = para.kind() == Para.Kind.QUOTE ? s.muted : s.text;
+                Color color = switch (para.kind()) {
+                    case HEADING -> s.heading;
+                    case QUOTE -> s.muted;
+                    default -> s.text;
+                };
                 box = new TextBox(rich(para.spans(), base, color, s, para.kind() == Para.Kind.HEADING));
                 marker = para.marker().isEmpty() ? null : new TextLayout(para.marker(), s.body, Style.FRC);
             }
@@ -107,18 +117,40 @@ final class Paras {
         public void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
             Style s = built;
             if (marker != null) {
-                g.setColor(s.muted);
+                g.setColor(s.mark);
                 float baseline = box.lines().isEmpty() ? y + top + marker.getAscent() : y + top + box.lines().getFirst().baseline();
                 marker.draw(g, x + indent - marker.getAdvance() - 6, baseline);
             }
             if (para.kind() == Para.Kind.QUOTE) {
-                g.setColor(s.muted);
+                g.setColor(s.mark);
                 g.fillRect(x + indent - s.indent + 4, y, 3, box.height());
             }
             paintBox(g, box, x + indent, y + top, clip, marks);
             if (para.kind() == Para.Kind.HEADING && para.level() <= 2) {
-                g.setColor(Theme.withAlpha(s.muted, 80));
+                if (s.answer && para.spans().stream().noneMatch(Span::isLink)) {
+                    gild(g, box, x + indent, y + top, s.gold);
+                }
+                g.setColor(s.headingRule);
                 g.fillRect(x, y + top + box.height() + 3, width, 1);
+            }
+        }
+
+        /**
+         * Paints the glyphs of {@code b} at {@code (x, y)} again along the gold's ramp, highlight at the letters' tops to
+         * shade at the baseline, as light runs down polished metal; the selection and find marks under them stay.
+         */
+        private static void gild(Graphics2D g, TextBox b, int x, int y, Gold gold) {
+            for (TextBox.Line line : b.lines()) {
+                if (line.layout() == null) {
+                    continue;
+                }
+                float baseline = y + line.baseline();
+                float top = baseline - line.layout().getAscent() * 0.8f;
+                Shape glyphs = line.layout().getOutline(AffineTransform.getTranslateInstance(x, baseline));
+                Paint was = g.getPaint();
+                g.setPaint(gold.ramp(top, baseline, true));
+                g.fill(glyphs);
+                g.setPaint(was);
             }
         }
 
@@ -230,7 +262,7 @@ final class Paras {
                     List<List<Span>> row = para.rows().get(r);
                     for (int c = 0; c < columns; c++) {
                         List<Span> spans = c < row.size() ? row.get(c) : List.of();
-                        cells[r][c] = new TextBox(rich(spans, r == 0 ? s.bold : s.body, s.text, s, r == 0));
+                        cells[r][c] = new TextBox(rich(spans, r == 0 ? s.bold : s.body, r == 0 ? s.tableHead : s.text, s, r == 0));
                     }
                 }
             }
@@ -270,7 +302,7 @@ final class Paras {
             int ry = y;
             for (int r = 0; r < cells.length; r++) {
                 if (r == 0) {
-                    g.setColor(built.codeBackground);
+                    g.setColor(built.tableHeadBackground);
                     g.fillRect(x + indent, ry, tableWidth, heights[r]);
                 }
                 int cx = x + indent;

@@ -12,6 +12,8 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.Gold;
+import dev.marregui.comando.ui.kit.theme.GoldIcon;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
@@ -19,9 +21,12 @@ import dev.marregui.comando.ui.widgets.approval.ApprovalInbox;
 import dev.marregui.comando.ui.widgets.transcript.TranscriptView;
 import dev.marregui.comando.ui.widgets.transcript.TranscriptWidget;
 
+import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
@@ -29,6 +34,7 @@ import java.awt.FlowLayout;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 /**
  * The lower panel: Session (the focused panel's transcript), Approvals (every session), Terminal (the focused
@@ -55,6 +61,9 @@ public final class LowerPanel {
     private final ViewTabs views;
     private final TerminalTabs terminals = new TerminalTabs();
     private final JButton clearSession = new JButton(Icons.get("clear"));
+    /** Beside Clear: the gold of the transcript's reports and headings, and of every gold in the window. */
+    private final JButton gold = new JButton(new GoldIcon(null));
+    private Consumer<Gold> goldChosen = g -> { };
     private AppState state;
     private boolean rendering;
     private String transcriptSession = "";
@@ -78,6 +87,9 @@ public final class LowerPanel {
         tabs.putClientProperty("JTabbedPane.tabType", "underlined");
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         views = new ViewTabs(tabs, FIXED_TABS, Placement.LOWER, registry, context);
+        // icons alone, as every icon button of the window
+        clearSession.putClientProperty("JButton.buttonType", "toolBarButton");
+        gold.putClientProperty("JButton.buttonType", "toolBarButton");
         clearSession.setFocusable(false);
         clearSession.getAccessibleContext().setAccessibleName("Clear the Session tab");
         clearSession.addActionListener(e -> {
@@ -85,8 +97,13 @@ public final class LowerPanel {
                 context.intents().dispatch(new Intent.ClearTranscript(transcriptSession));
             }
         });
+        gold.setFocusable(false);
+        gold.getAccessibleContext().setAccessibleName("Choose the gold");
+        gold.setToolTipText("Choose the gold of reports, headings and new files; kept across restarts");
+        gold.addActionListener(e -> goldMenu().show(gold, 0, gold.getHeight()));
         JPanel trailing = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
         trailing.setOpaque(false);
+        trailing.add(gold);
         trailing.add(clearSession);
         tabs.putClientProperty("JTabbedPane.trailingComponent", trailing);
         tabs.addChangeListener(e -> {
@@ -120,6 +137,24 @@ public final class LowerPanel {
 
     public JComponent component() {
         return tabs;
+    }
+
+    /** {@code chosen} hears the gold picked from the menu beside Clear. */
+    public void onGoldChosen(Consumer<Gold> chosen) {
+        goldChosen = chosen;
+    }
+
+    /** One entry per gold, each with its ingot; the gold chosen is ticked. */
+    JPopupMenu goldMenu() {
+        JPopupMenu menu = new JPopupMenu();
+        ButtonGroup group = new ButtonGroup();
+        for (Gold g : Gold.values()) {
+            JRadioButtonMenuItem item = new JRadioButtonMenuItem(g.label, new GoldIcon(g), g == Theme.gold());
+            item.addActionListener(e -> goldChosen.accept(g));
+            group.add(item);
+            menu.add(item);
+        }
+        return menu;
     }
 
     public ResultsView results() {
@@ -184,7 +219,7 @@ public final class LowerPanel {
             inbox.render(s.approvals());
             int pending = s.approvals().size();
             tabs.setTitleAt(APPROVALS, pending == 0 ? "Approvals" : "Approvals (" + pending + ")");
-            tabs.setForegroundAt(APPROVALS, pending == 0 ? null : Theme.WARN);
+            tabs.setForegroundAt(APPROVALS, pending == 0 ? null : Theme.warn());
             views.render(s.views());
             int want = switch (s.lowerTab().kind()) {
                 case RESULTS -> RESULTS;

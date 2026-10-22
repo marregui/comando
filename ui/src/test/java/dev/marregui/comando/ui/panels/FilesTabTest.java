@@ -343,7 +343,7 @@ class FilesTabTest {
                 colors[i] = f.tab.colorOf(node(f.tree(), i));
             }
         });
-        assertThat(colors).containsExactly(Theme.VCS_MODIFIED, Theme.VCS_MODIFIED, Theme.VCS_MODIFIED, Theme.VCS_UNTRACKED, null);
+        assertThat(colors).containsExactly(Theme.VCS_MODIFIED, Theme.VCS_MODIFIED, Theme.VCS_MODIFIED, Theme.gold().body, null);
     }
 
     @Test
