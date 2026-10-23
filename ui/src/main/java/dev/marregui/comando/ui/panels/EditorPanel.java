@@ -86,6 +86,8 @@ public final class EditorPanel extends JPanel {
     private final JButton sessionCheckpoint = iconButton();
     /** Sends {@code /compact} from this panel; shown while the session runs. */
     private final JButton sessionCompact = iconButton();
+    /** Has the session rewrite the panel's text as a professional Markdown document and put it in place of the text. */
+    private final JButton sessionPolish = iconButton();
     /** Sends {@code /clear} from this panel; shown while the session runs. */
     private final JButton sessionClear = iconButton();
     private final JButton run = iconButton();
@@ -155,6 +157,10 @@ public final class EditorPanel extends JPanel {
         sessionCompact.setToolTipText(SessionRow.COMPACT_TIP);
         sessionClear.setIcon(Icons.get("clear-conversation"));
         sessionClear.getAccessibleContext().setAccessibleName("Clear the conversation");
+        left.add(sessionPolish);
+        sessionPolish.setIcon(Icons.get("markdown"));
+        sessionPolish.getAccessibleContext().setAccessibleName("Rewrite as a document");
+        sessionPolish.setToolTipText(POLISH_TIP);
         left.add(Box.createHorizontalStrut(Theme.PAD));
         left.add(connection);
         left.add(connectionToggle);
@@ -238,10 +244,47 @@ public final class EditorPanel extends JPanel {
                 .ifPresent(x -> intents.dispatch(new Intent.SessionCommand(x.name(), SessionSpec.COMPACT_COMMAND))));
         sessionClear.addActionListener(e -> state.session(panel.session())
                 .ifPresent(x -> intents.dispatch(new Intent.SessionCommand(x.name(), SessionSpec.CLEAR_COMMAND))));
+        sessionPolish.addActionListener(e -> {
+            String text = editor.area().getText();
+            if (!text.isBlank()) {
+                intents.dispatch(new Intent.RunText(panel.id(), polishPrompt(panel.title(), text), Target.CLAUDE));
+            }
+        });
+    }
+
+    static final String POLISH_TIP = "Have the session rewrite this text as a professional Markdown document";
+
+    /**
+     * The prompt that has the panel's session rewrite {@code text}, the whole of the panel titled {@code title}, as a
+     * professional Markdown document and put it in place of the panel's text: the author's intent and facts kept, the
+     * sentences addressed to Claude dropped, nothing of its own added but the questions the text leaves open; then a few
+     * lines on what changed beyond wording.
+     */
+    static String polishPrompt(String title, String text) {
+        return "Rewrite the text below, the whole text of the comando panel \"" + title + "\", as a professional Markdown "
+                + "document, and replace the panel's text with it (comando's ui_set_editor, panel \"" + title + "\"). Keep the "
+                + "author's intent and every fact; correct spelling and names, checking them where you can; give it a title "
+                + "and numbered sections, and tables where they make it denser; drop the sentences addressed to you as "
+                + "instructions; add nothing of your own but a short section of the questions the text leaves open. Then say in "
+                + "a few lines what changed beyond wording.\n\n" + text.strip();
     }
 
     public CommandEditor editor() {
         return editor;
+    }
+
+    /**
+     * The last {@code max} characters of the text, read without copying the rest: where the user writes what a session is
+     * asked, the newest at the end.
+     */
+    String textEnd(int max) {
+        Document d = editor.area().getDocument();
+        int from = Math.max(0, d.getLength() - max);
+        try {
+            return d.getText(from, d.getLength() - from);
+        } catch (BadLocationException e) {
+            return "";
+        }
     }
 
     /** The first {@code max} characters of the text, read without copying the rest: a log's text may be large. */
@@ -589,12 +632,14 @@ public final class EditorPanel extends JPanel {
             // as on the session's row: compact and clear only while it runs
             sessionCompact.setVisible(ss.status().isUsable());
             sessionClear.setVisible(ss.status().isUsable());
+            sessionPolish.setVisible(ss.status().isUsable());
             sessionClear.setToolTipText(SessionRow.clearTip(ss));
         } else {
             sessionFresh.setVisible(false);
             sessionCheckpoint.setVisible(false);
             sessionCompact.setVisible(false);
             sessionClear.setVisible(false);
+            sessionPolish.setVisible(false);
             session.setIcon(Icons.get("claude"));
             session.setText("no session ▾");
             session.setToolTipText("Bind a session");

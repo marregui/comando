@@ -23,21 +23,25 @@ import java.util.function.Function;
 
 /**
  * Reads panels' topics with Haiku through Claude Code: {@code claude --safe-mode -p --model haiku} with no tools, no
- * thinking, a short system prompt and no saved session, the source on its input; the answer is two or three sentences
- * naming the repository, the task and its step. Measured on Claude Code 2.1.304: about 1.8 s and US$0.0001–0.0003 a read. One thread reads every ask, one at a time, so however many panels ask,
+ * thinking, a short system prompt and no saved session, the source on its input; the answer is one or two sentences
+ * naming the repository, the task and its step. Measured on Claude Code 2.1.308 with
+ * 2 000 characters in: a median of 2.0 s and US$0.0001–0.0003 a read. One thread reads every ask, one at a time, so however many panels ask,
  * comando runs at most one such process; the asks wait in one queue, at most one per panel.
  */
 public final class ClaudeTopics implements TopicPort, AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(ClaudeTopics.class.getName());
+    /** A read that hangs is stopped after this; a slow one takes what it takes. */
     static final Duration TIMEOUT = Duration.ofSeconds(30);
     static final String MODEL = "haiku";
     static final String SYSTEM = "You summarise, for a tab's card, what a coding session is working on, or what a document is about. "
-            + "Write two or three short sentences, at most 300 characters in all: the repository or project by its folder name, "
-            + "the task, and the step it is on now. Be specific: name the files, classes, tickets or commands the text names. "
+            + "Write one or two short sentences, at most 200 characters in all: the repository or project by its folder name, "
+            + "the task, and the step it is on now. When the text gives a most recent paragraph, the summary is about that "
+            + "command and where the session's last response left it; the rest is context. Be specific: name the files, "
+            + "classes, tickets or commands the text names. "
             + "Never repeat the full path or the session's name. No preamble, no heading, no quotes, no markdown.";
     /** A summary longer than this is cut: the card shows about four lines. */
-    static final int MAX_TEXT = 400;
+    static final int MAX_TEXT = 260;
 
     private record Ask(String key, String source, Consumer<Topic> done) {
     }
@@ -130,7 +134,9 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
                 in.write(source.getBytes(StandardCharsets.UTF_8));
             }
             if (!p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
-                return Topic.failed("Haiku did not answer within " + timeout.toMillis() + " ms", System.currentTimeMillis());
+                long ms = timeout.toMillis();
+                return Topic.failed("Haiku did not answer within " + (ms % 1_000 == 0 ? ms / 1_000 + " s" : ms + " ms"),
+                        System.currentTimeMillis());
             }
             return parse(Files.readString(out, StandardCharsets.UTF_8), System.currentTimeMillis(), json);
         } catch (IOException e) {

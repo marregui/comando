@@ -1,13 +1,13 @@
 ---
 name: show
-description: Show, don't tell. When an answer or a choice is better seen than read, render it and put it in a comando view beside the reply. Use before asking the user to choose anything visual (colours, type, layout, an icon), to explain anything that moves or unfolds in time (an interleaving, a state machine, a queue draining, a transition), to lay out structure or numbers, and after building UI to show the real thing working.
+description: Show, don't tell, when the user asks for it. Renders what is better seen than read and puts it in a comando view beside the reply. Use only when the user asks to see or be shown something: options to choose from (colours, type, layout, an icon), something that moves or unfolds in time (an interleaving, a state machine, a queue draining, a transition), structure or numbers, or built UI working. Never on Claude's own initiative.
 ---
 
 # Show
 
-The reply carries the reasoning; the view carries the evidence. When the user would otherwise have to imagine
-something (how a colour looks on the real ground, how two threads interleave, what a layout does when narrow), render
-it and show it. One look settles what a paragraph would argue.
+The reply carries the reasoning; the view carries the evidence. When the user asks to see something (how a colour
+looks on the real ground, how two threads interleave, what a layout does when narrow), render it and show it. One look
+settles what a paragraph would argue. Unasked, a rendered view gets in the way: describe in text instead.
 
 ## 1. Pick the form
 

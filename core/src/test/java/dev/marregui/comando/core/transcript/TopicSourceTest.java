@@ -64,4 +64,43 @@ class TopicSourceTest {
         assertThat(TopicSource.ofText("notes.md", "/w/notes.md", "# Plan\nship it", 100)).isEqualTo("A document /w/notes.md in a panel titled \"notes.md\". Its text begins:\n# Plan\nship it");
         assertThat(TopicSource.ofText("big.log", "", "y".repeat(500), 100)).endsWith("y…");
     }
+
+    @Test
+    void aSessionPanelsTopicIsAboutItsLastParagraphWithTheRestForContext() {
+        String text = "# notes\nold idea about the cache\n\nfix ENG-1125: the browse regression\n \nnow port the fix to v1\nand open the PR";
+        String source = TopicSource.ofPanel("work", "edge", "/Users/m/edge", "ENG-1125", text, "", TopicSource.MAX_CHARS);
+        assertThat(source).startsWith("The panel \"work\", where the user writes the prompts of a coding session named \"edge\", working in /Users/m/edge (git branch ENG-1125).");
+        assertThat(source).contains("which the summary is about:\nnow port the fix to v1\nand open the PR\n\nThe text before it, for context, oldest first:\n# notes");
+        assertThat(source).endsWith("fix ENG-1125: the browse regression");
+        assertThat(TopicSource.ofPanel("work", "edge", "", "", "  \n ", "a response", TopicSource.MAX_CHARS)).isEmpty();
+        assertThat(TopicSource.ofPanel("work", "edge", "", "", "one paragraph only", "", TopicSource.MAX_CHARS))
+                .endsWith("which the summary is about:\none paragraph only").doesNotContain("for context");
+
+        String longBefore = "x".repeat(10_000) + "\n\nthe ask";
+        String bounded = TopicSource.ofPanel("work", "edge", "", "", longBefore, "", 200);
+        assertThat(bounded).as("the context keeps its end, within the budget").contains("the ask\n\nThe text before it");
+        assertThat(bounded.length()).isLessThan(200 + 300);
+    }
+
+    @Test
+    void theSessionsLastResponseIsReadWithTheLastParagraphBeforeTheContext() {
+        Transcript t = new Transcript();
+        t.append(new Block.UserPrompt("port it", "p", ""));
+        t.append(new Block.AssistantText("m1", 0, "Looking.", false, ""));
+        t.append(new Block.AssistantText("m2", 0, "Ported to v1; PR #1790 is up and CI is green.", false, ""));
+        t.append(new Block.AssistantText("m3", 0, "a subagent's words", false, "toolu_1"));
+        t.append(new Block.TurnEnd(0.1, 1_000, 2, false, ""));
+        assertThat(TopicSource.lastResponse(t)).as("the main conversation's latest").isEqualTo("Ported to v1; PR #1790 is up and CI is green.");
+        assertThat(TopicSource.lastResponse(new Transcript())).isEmpty();
+
+        String source = TopicSource.ofPanel("work", "edge", "", "", "earlier notes\n\nport the fix to v1", TopicSource.lastResponse(t),
+                TopicSource.MAX_CHARS);
+        assertThat(source).contains("which the summary is about:\nport the fix to v1\n\nThe session's last response, to read with that command:\n"
+                + "Ported to v1; PR #1790 is up and CI is green.\n\nThe text before it, for context, oldest first:\nearlier notes");
+
+        String longAnswer = "y".repeat(5_000);
+        String bounded = TopicSource.ofPanel("work", "edge", "", "", "the ask", longAnswer, TopicSource.MAX_CHARS);
+        assertThat(bounded).as("a long response keeps its start, within its share").contains("y".repeat(TopicSource.MAX_RESPONSE - 1) + "…")
+                .doesNotContain("y".repeat(TopicSource.MAX_RESPONSE + 1));
+    }
 }

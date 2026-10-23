@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-21 | accepted (Miguel, after trying it); replaces the panel tabs' tooltip | Miguel (a card on a panel tab instead of its tooltip: what the tooltip said, plus one line Haiku wrote on what the panel's session works on; a button that reads it again; the card stays until it is clicked; the line refreshed every 10 s for the panels at work; every panel the same; threads must not compound), Claude (the topic of a panel without a session from its text, read only when its source changed, one reader thread, the card in the popup layer, the name "topic") |
+| 2026-10-21 | accepted (Miguel, after trying it); replaces the panel tabs' tooltip; amended 2026-10-22 (§2.1) | Miguel (a card on a panel tab instead of its tooltip: what the tooltip said, plus one line Haiku wrote on what the panel's session works on; a button that reads it again; the card stays until it is clicked; the line refreshed every 10 s for the panels at work; every panel the same; threads must not compound), Claude (the topic of a panel without a session from its text, read only when its source changed, one reader thread, the card in the popup layer, the name "topic") |
 
 ## 1. Context
 
@@ -24,6 +24,18 @@ that reads every tab every 10 s must not add a thread, a timer or a process per 
 | threads | one `topic-reader` thread reads every ask, one at a time: at most one Haiku process runs. Asks wait in one queue, at most one per tab: an ask for a tab already waiting replaces it in its place; the card shown goes first. The card and the checks run on the EDT | the queue's length is bounded by the number of tabs and the processes by one, whatever the rate of asks |
 | where the topic goes | from the reader to the workspace on the EDT, never through the reducer or the intent log (`TopicPort`, called by `ui`) | a topic is derived view data, like a drawn diagram; 6 000 characters every 10 s per working tab would fill the intent log |
 | the name | "topic" in code, "Summary" on the card | "theme" already names the light or dark editor theme; Miguel calls what the card shows a summary |
+
+### 2.1 Amended 2026-10-22 (Miguel)
+
+Miguel: "close it when I move the cursor out of it"; the summary "created" the first time the card opens, "only refreshed if I explicitly refresh", "no periodic timer related refresh", and on a later hover "only refreshed if there have been changes to the editor panel"; "the last paragraph has the most recent command I am working on or have sent. and that should be the main focus for the summary, but also considering the rest of the panel"; a Linear ticket's "id, and for it to be a link that when I double click it opens a browser tab". These rules replace the rows above that they contradict.
+
+| Question | Rule | Why |
+|---|---|---|
+| how long | the card closes when the pointer leaves it, or leaves its tab without reaching the card within 500 ms (`Workspace.LEAVE_GRACE_MILLIS`); ✕ and a click on the card (not on a link) close it as before | Miguel; the grace lets the pointer travel from the tab to the card below it |
+| when it is read | the first time the card shows; again when it shows and what it is read from changed since the last read; on ↻. No timer | Miguel |
+| what it is read from | a session's panel: the end of the panel's own text (the last 8 000 characters), its last paragraph (after the last blank line, up to 600 characters) given as the command the summary is about; then the session's last response (the main conversation's latest text, its first 700 characters), to read with that command (Miguel, same day: the summary "should also consider the last response in conjunction and relation with the content of the editor panel"); then the text before the paragraph, its end kept, as context, within 2 000 characters in all; headed by the session's folder and branch. A new response changes what it is read from, so the next show reads it again. A blank panel falls back to the end of the session's conversation; a panel without a session, to the start of its text as before (`TopicSource.ofPanel`) | the panel is where Miguel writes the prompts, newest at the end |
+| how much is read | the read is given 2 000 characters (`TopicSource.MAX_CHARS`, was 6 000) and asked for one or two sentences of at most 200 characters (was two or three, 300). A read takes what it takes; one that hangs is stopped at 30 s as before. Measured 2026-10-22 with Claude Code 2.1.308, the whole command: about 4 200 characters in, 2.6 to 4.5 s; 2 000 in and 200 out, a median of 2.0 s, the slowest of five 3.15 s; 1 200 in was no faster, so the API's own time, not the input, is what remains | Miguel: "we should not overwhelm haiku so much"; a 3 s limit was tried the same day and withdrawn ("it will take what it takes") |
+| tickets | under the heading, up to three Linear ids the panel's text names, the last paragraph's first, as links; a double click opens `https://linear.app/<workspace>/issue/<id>` in the desktop's browser. An id counts only when its team key was seen in a Linear link (`linear.app/<workspace>/issue/<KEY>-<n>`) in the panel's text or the session's last 300 blocks; the workspace and keys learnt are kept in the preferences (`LinearTickets`) | ids are found in the text, not by the model; learning from Linear's own links needs no setting and never takes `UTF-8` or `S7-1500` for a ticket |
 
 ## 3. Consequences
 

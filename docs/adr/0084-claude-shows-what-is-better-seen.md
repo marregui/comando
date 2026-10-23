@@ -15,7 +15,7 @@ conversation. Nothing told Claude when to do this or how, so it would happen aga
 
 | Question | Rule | Why |
 |---|---|---|
-| the form | a skill, `show`, in the kit: Claude invokes it on its own judgement, not a command the user types | the value is in noticing that a choice is visual before asking it |
+| the form | a skill, `show`, in the kit, used when the user asks to see something, never on Claude's own initiative (Miguel, 2026-10-22: "that gets in my way, so no unless I ask"; first proposed as Claude's judgement) | a view the user did not ask for interrupts more than it helps |
 | the abstraction | show, don't tell, in five forms picked by what the answer is about: a sheet of options, the proof (the real component painted off screen), motion (an animated GIF), a diagram (Mermaid), data and diffs (the existing views) | an animation, a diagram and a sheet are the same act: evidence in a view, reasoning in the reply |
 | the helper | `show.py` beside the skill (Pillow): a canvas at twice the size, gilded titles, a grid of options, crossfades and looping GIFs; `--test` checks it | sheets and animations look alike across sessions and take minutes, not a script from scratch each time |
 | the view | `ui_show_view` markdown, side, one title per topic so a later round replaces it in place; pictures by absolute path under `###` captions | the user looks at one place that updates |

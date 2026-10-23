@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.panels;
 
+import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -136,6 +137,37 @@ class EditorPanelHeaderTest {
             assertThat(b.getToolTipText()).as(name).isNotBlank();
             assertThat(b.getClientProperty("JButton.buttonType")).as(name + ": no button shape").isEqualTo("toolBarButton");
         }
+    }
+
+    @Test
+    void aRunningSessionsPanelHasItsTextRewrittenAsADocumentByItsOwnSession() throws Exception {
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        SessionState stopped = SessionState.closed(SessionSpec.fresh("work", "/w"));
+        PanelState panel = new PanelState(A, "strategy", "", "work");
+        EditorPanel[] p = new EditorPanel[1];
+        SwingUtilities.invokeAndWait(() -> {
+            p[0] = new EditorPanel(panel, intents::add, new SchemaRegistry());
+            p[0].render(panel, AppState.initial(List.of(panel), List.of(), List.of(stopped)));
+        });
+        assertThat(button(p[0], "Rewrite as a document").isVisible()).as("stopped: no session to ask").isFalse();
+
+        SwingUtilities.invokeAndWait(() -> p[0].render(panel, AppState.initial(List.of(panel), List.of(),
+                List.of(stopped.withStatus(Status.OPEN, "")))));
+        assertThat(button(p[0], "Rewrite as a document").getToolTipText()).isEqualTo(EditorPanel.POLISH_TIP);
+        SwingUtilities.invokeAndWait(() -> button(p[0], "Rewrite as a document").doClick());
+        assertThat(intents).as("an empty panel asks nothing").isEmpty();
+
+        SwingUtilities.invokeAndWait(() -> {
+            p[0].editor().area().setText("i am loving comando so far\n\nthe strategy is ...");
+            button(p[0], "Rewrite as a document").doClick();
+        });
+        assertThat(intents).singleElement().isInstanceOfSatisfying(Intent.RunText.class, r -> {
+            assertThat(r.panel()).isEqualTo(A);
+            assertThat(r.target()).as("to the panel's session, never to SQL").isEqualTo(Target.CLAUDE);
+            assertThat(r.text()).startsWith("Rewrite the text below, the whole text of the comando panel \"strategy\"")
+                    .contains("replace the panel's text with it (comando's ui_set_editor, panel \"strategy\")")
+                    .endsWith("\n\ni am loving comando so far\n\nthe strategy is ...");
+        });
     }
 
     private static AbstractButton button(Container root, String name) {

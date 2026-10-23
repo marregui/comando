@@ -441,7 +441,7 @@ class UiKeysTest {
 
     /** Every tooltip is one short line: what the control does and one fact it does not show (live status aside). */
     @Test
-    void restingOnATabShowsItsCardWithTheTopicWhichStaysUntilTheCardIsClicked() throws Exception {
+    void restingOnATabShowsItsCardWithTheTopicWhichClosesWhenThePointerLeavesIt() throws Exception {
         List<String> sources = new CopyOnWriteArrayList<>();
         Window w = open("mac", null, (key, source, urgent, done) -> {
             sources.add(source);
@@ -467,19 +467,19 @@ class UiKeysTest {
         assertThat(sources).singleElement().asString().contains("SELECT 1;");
         assertThat(onEdt(() -> tabs.getToolTipTextAt(0))).as("the card, not a tooltip").isNull();
 
+        // the pointer goes on from the tab into the card: it stays past the grace
         onEdt(() -> {
             tabs.dispatchEvent(new MouseEvent(tabs, MouseEvent.MOUSE_EXITED, System.currentTimeMillis(), 0, -5, -5, 0, false));
+            card.dispatchEvent(new MouseEvent(card, MouseEvent.MOUSE_ENTERED, System.currentTimeMillis(), 0, 5, 5, 0, false));
             return null;
         });
-        // the card stays when the pointer leaves, past the hover delay
-        Awaitility.await("the card staying").during(Duration.ofMillis(ToolTipManager.sharedInstance().getInitialDelay() + 200L))
-                .atMost(Duration.ofSeconds(5)).until(() -> onEdt(card::isShowing));
+        Awaitility.await("the card staying").during(Duration.ofMillis(800)).atMost(Duration.ofSeconds(5)).until(() -> onEdt(card::isShowing));
+        // and leaving the card closes it
         onEdt(() -> {
-            card.dispatchEvent(new MouseEvent(card, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(), InputEvent.BUTTON1_DOWN_MASK, 5, 5, 1, false,
-                    MouseEvent.BUTTON1));
+            card.dispatchEvent(new MouseEvent(card, MouseEvent.MOUSE_EXITED, System.currentTimeMillis(), 0, -5, 5, 0, false));
             return null;
         });
-        assertThat(onEdt(card::isShowing)).as("a click on the card closes it").isFalse();
+        assertThat(onEdt(card::isShowing)).as("off the card, it closes").isFalse();
     }
 
     @Test

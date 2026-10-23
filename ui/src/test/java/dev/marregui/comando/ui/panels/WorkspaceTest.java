@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalKind;
+import dev.marregui.comando.core.model.LinearTickets;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
@@ -21,8 +22,10 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
@@ -42,10 +45,12 @@ import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
 import java.awt.event.MouseMotionListener;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -355,7 +360,7 @@ class WorkspaceTest {
     }
 
     @Test
-    void aTabShowsACardWithItsTooltipAndTopicWhichStaysUntilClickedAndIsReadAgainOnlyWhenItsSessionMoved() throws Exception {
+    void aTabShowsACardWithItsTopicReadOnceAndAgainOnlyOnAskOrWhenThePanelsTextChangedAndItClosesWhenLeft() throws Exception {
         TranscriptRegistry transcripts = new TranscriptRegistry();
         Transcript t = transcripts.of("s");
         t.append(new Block.UserPrompt("make the tab card sticky", "p", ""));
@@ -384,7 +389,8 @@ class WorkspaceTest {
         assertThat(asks.asks).singleElement().satisfies(a -> {
             assertThat(a.key()).isEqualTo("p");
             assertThat(a.urgent()).as("the card shown is read first").isTrue();
-            assertThat(a.source()).contains("User: make the tab card sticky");
+            assertThat(a.source()).as("the panel's own text, not the conversation").contains("which the summary is about:\nSELECT 1;")
+                    .doesNotContain("make the tab card sticky");
         });
 
         asks.asks.getFirst().done().accept(new Topic("Making the tab card sticky", 1L, ""));
@@ -412,47 +418,72 @@ class WorkspaceTest {
         assertThat(closeAt.x).as("next to the refresh").isGreaterThan(refreshAt.x).isLessThan(refreshAt.x + 3 * card.refreshButton().getWidth());
         assertThat(closeAt.y).isEqualTo(refreshAt.y);
 
-        // the ten-second check asks again only once the conversation moved
-        now[0] += Workspace.TOPIC_EVERY_MILLIS;
+        // no timer reads it again, however long it shows and whatever the session does
+        now[0] += 3_600_000;
+        t.append(new Block.AssistantText("m1", 0, "The card sits in the popup layer.", false, ""));
         SwingUtilities.invokeAndWait(() -> w[0].tick());
         assertThat(asks.asks).hasSize(1);
-        SwingUtilities.invokeAndWait(() -> w[0].tick());
-        t.append(new Block.AssistantText("m1", 0, "The card sits in the popup layer.", false, ""));
-        now[0] += Workspace.TOPIC_EVERY_MILLIS - 1;
-        SwingUtilities.invokeAndWait(() -> w[0].tick());
-        assertThat(asks.asks).as("not before ten seconds").hasSize(1);
-        now[0] += 1;
-        SwingUtilities.invokeAndWait(() -> w[0].tick());
+        // shown again after the session answered: read again, the answer with the panel's last paragraph
+        SwingUtilities.invokeAndWait(() -> w[0].showCard(0));
         assertThat(asks.asks).hasSize(2);
-        assertThat(asks.asks.get(1).source()).contains("The card sits in the popup layer.");
-        assertThat(card.topicText()).as("the last line stays while it is read again").isEqualTo("Making the tab card sticky");
+        assertThat(asks.asks.get(1).source()).contains("which the summary is about:\nSELECT 1;\n\nThe session's last response, to read with that command:\n"
+                + "The card sits in the popup layer.");
+        assertThat(card.topicText()).as("the last summary stays while it is read again").isEqualTo("Making the tab card sticky");
+        asks.asks.get(1).done().accept(new Topic("Making the tab card sticky", 1L, ""));
+        // shown again with the panel's text and the answer as they were: nothing is asked
+        SwingUtilities.invokeAndWait(() -> w[0].showCard(0));
+        assertThat(asks.asks).as("its summary stands").hasSize(2);
+        // the panel's text changed: shown again, it is read from the text, about its last paragraph
+        SwingUtilities.invokeAndWait(() -> w[0].panel(P).editor().area().setText("old notes on the card\n\nnow make the card close when left"));
+        SwingUtilities.invokeAndWait(() -> w[0].showCard(0));
+        assertThat(asks.asks).hasSize(3);
+        assertThat(asks.asks.get(2).source()).contains("which the summary is about:\nnow make the card close when left")
+                .contains("for context, oldest first:\nold notes on the card");
 
         // the button reads it again, the same source too, ahead of the others
-        asks.asks.get(1).done().accept(new Topic("Placing the card", 2L, ""));
+        asks.asks.get(2).done().accept(new Topic("Placing the card", 2L, ""));
         SwingUtilities.invokeAndWait(() -> card.refreshButton().doClick());
-        assertThat(asks.asks).hasSize(3);
-        assertThat(asks.asks.get(2).urgent()).isTrue();
-        assertThat(asks.asks.get(2).source()).isEqualTo(asks.asks.get(1).source());
+        assertThat(asks.asks).hasSize(4);
+        assertThat(asks.asks.get(3).urgent()).isTrue();
+        assertThat(asks.asks.get(3).source()).isEqualTo(asks.asks.get(2).source());
 
         // a failed read says why
-        asks.asks.get(2).done().accept(Topic.failed("Not logged in", 3L));
+        asks.asks.get(3).done().accept(Topic.failed("Not logged in", 3L));
         SwingUtilities.invokeAndWait(() -> { });
         assertThat(card.topicText()).isEqualTo("No summary: Not logged in");
 
         // a long summary wraps to a few lines, and the card grows to hold them
         int oneLine = card.component().getHeight();
-        asks.asks.get(2).done().accept(new Topic("In comando, the tab card: " + "a summary of several clauses, ".repeat(8), 4L, ""));
+        asks.asks.get(3).done().accept(new Topic("In comando, the tab card: " + "a summary of several clauses, ".repeat(8), 4L, ""));
         SwingUtilities.invokeAndWait(() -> { });
         assertThat(card.component().getHeight()).as("taller for the wrapped summary").isGreaterThan(oneLine);
         assertThat(card.component().getWidth()).isLessThanOrEqualTo(TabCard.MAX_WIDTH);
 
-        // the pointer leaving the tabs leaves the card; a click on it closes it
+        // the pointer leaving the tabs and going on into the card keeps it; leaving the card closes it
         SwingUtilities.invokeAndWait(() -> {
             for (MouseListener l : w[0].component().getMouseListeners()) {
                 l.mouseExited(mouse(w[0].component(), MouseEvent.MOUSE_EXITED, 1, 1));
             }
+            card.component().dispatchEvent(mouse(card.component(), MouseEvent.MOUSE_ENTERED, 5, 5));
+            w[0].closeCardIfLeft();
         });
-        assertThat(w[0].cardShown()).isEqualTo(P);
+        assertThat(w[0].cardShown()).as("the pointer reached it").isEqualTo(P);
+        SwingUtilities.invokeAndWait(() -> card.topicArea().dispatchEvent(mouse(card.topicArea(), MouseEvent.MOUSE_EXITED, 3, 3)));
+        assertThat(w[0].cardShown()).as("from a part onto the card's own ground is still on the card").isEqualTo(P);
+        SwingUtilities.invokeAndWait(() -> card.component().dispatchEvent(mouse(card.component(), MouseEvent.MOUSE_EXITED, -4, 5)));
+        assertThat(w[0].cardShown()).as("off the card, it closes").isNull();
+        // leaving the tab without reaching the card closes it once the grace is over
+        SwingUtilities.invokeAndWait(() -> {
+            w[0].showCard(0);
+            for (MouseListener l : w[0].component().getMouseListeners()) {
+                l.mouseExited(mouse(w[0].component(), MouseEvent.MOUSE_EXITED, 1, 1));
+            }
+        });
+        assertThat(w[0].cardShown()).as("within the grace").isEqualTo(P);
+        Awaitility.await("the grace over").atMost(Duration.ofSeconds(3)).until(() -> w[0].cardShown() == null);
+
+        // a click on it closes it
+        SwingUtilities.invokeAndWait(() -> w[0].showCard(0));
         SwingUtilities.invokeAndWait(() -> card.component().dispatchEvent(mouse(card.component(), MouseEvent.MOUSE_PRESSED, 5, 5)));
         assertThat(w[0].cardShown()).isNull();
         assertThat(card.component().getParent()).isNull();
@@ -462,6 +493,45 @@ class WorkspaceTest {
         assertThat(w[0].cardShown()).isEqualTo(P);
         SwingUtilities.invokeAndWait(() -> card.closeButton().doClick());
         assertThat(w[0].cardShown()).isNull();
+    }
+
+    @Test
+    void aCardLinksTheLinearTicketsThePanelNamesNewestFirstLearningTheirAddressFromLinearsLinks() throws Exception {
+        TranscriptRegistry transcripts = new TranscriptRegistry();
+        transcripts.of("s").append(new Block.AssistantText("m", 0, "Opened https://linear.app/acme/issue/OPS-3/x for it.", false, ""));
+        SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
+        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s")), List.of(), List.of(open));
+        Workspace[] w = new Workspace[1];
+        List<LinearTickets.Site> kept = new CopyOnWriteArrayList<>();
+        List<String> opened = new CopyOnWriteArrayList<>();
+        JRootPane root = new JRootPane();
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> 0L);
+            w[0].topics(new Asks(), transcripts::of);
+            w[0].linear(new LinearTickets.Site("acme", Set.of("ENG")), kept::add);
+            w[0].card().browseWith(opened::add);
+            w[0].render(s);
+            root.getContentPane().add(w[0].component());
+            layOut(root, 900, 600);
+            w[0].panel(P).editor().area().setText("ENG-7 and OPS-3 and UTF-8 earlier\n\nnow fix ENG-1125 then ENG-8");
+            w[0].showCard(0);
+        });
+        TabCard card = w[0].card();
+        assertThat(card.ticketLinks()).extracting(JLabel::getText).containsExactly("ENG-1125", "ENG-8", "OPS-3");
+        assertThat(kept).as("OPS learnt from the session's conversation, and kept")
+                .containsExactly(new LinearTickets.Site("acme", Set.of("ENG", "OPS")));
+        JLabel first = card.ticketLinks().getFirst();
+        SwingUtilities.invokeAndWait(() -> first.dispatchEvent(new MouseEvent(first, MouseEvent.MOUSE_CLICKED, 0, 0, 2, 2, 1, false, MouseEvent.BUTTON1)));
+        assertThat(opened).as("one click opens nothing").isEmpty();
+        SwingUtilities.invokeAndWait(() -> first.dispatchEvent(new MouseEvent(first, MouseEvent.MOUSE_CLICKED, 0, 0, 2, 2, 2, false, MouseEvent.BUTTON1)));
+        assertThat(opened).containsExactly("https://linear.app/acme/issue/ENG-1125");
+        assertThat(w[0].cardShown()).as("the card stays for the next link").isEqualTo(P);
+
+        SwingUtilities.invokeAndWait(() -> {
+            w[0].panel(P).editor().area().setText("no tickets here, UTF-8 only");
+            w[0].showCard(0);
+        });
+        assertThat(card.ticketLinks()).isEmpty();
     }
 
     @Test

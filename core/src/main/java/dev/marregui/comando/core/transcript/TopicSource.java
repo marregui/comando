@@ -4,6 +4,7 @@ import dev.marregui.comando.core.view.Clip;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
@@ -13,8 +14,12 @@ import java.util.regex.Pattern;
  */
 public final class TopicSource {
 
-    /** At most this much of a conversation or a text is read; about 1 500 tokens. */
-    public static final int MAX_CHARS = 6_000;
+    /**
+     * At most this much of a conversation or a text is read, about 500 tokens: a card's summary is to come back within
+     * 3 s. Measured 2026-10-22 with Claude Code 2.1.308 (Haiku, the whole command): about 4 200 characters in took 2.6 to
+     * 4.5 s, 2 000 a median of 2.0 s; 1 200 was no faster.
+     */
+    public static final int MAX_CHARS = 2_000;
     static final int MAX_PROMPT = 800;
     static final int MAX_TEXT = 600;
     static final int MAX_TOOL_INPUT = 160;
@@ -62,6 +67,60 @@ public final class TopicSource {
         String where = workDir.isBlank() ? "" : ", working in " + workDir + (branch.isBlank() ? "" : " (git branch " + branch + ")");
         return "A coding session named \"" + session + "\"" + where + ", in a panel titled \"" + panel
                 + "\". The end of its conversation, oldest first:\n" + String.join("", lines);
+    }
+
+    /** The most recent paragraph of a session panel's text read whole up to this; a longer one keeps its start. */
+    static final int MAX_LAST = 600;
+    /** The session's last response read up to this, its start kept: a report puts its result first. */
+    static final int MAX_RESPONSE = 700;
+    /** How far back a conversation is searched for its last response. */
+    static final int RESPONSE_BLOCKS = 500;
+    private static final Pattern BLANK_LINE = Pattern.compile("\\n[ \\t]*\\n");
+
+    /**
+     * A session panel's own text, where the user writes what the session is asked, at most {@code maxChars}: its last
+     * paragraph, the command being worked on now, which the summary is about; the session's last {@code response}, read
+     * with that command; then the text before it, its end kept, for context. Headed by where the session works
+     * ({@code workDir}, and {@code branch} when known) so the summary can name the repository. Empty when the text is
+     * blank.
+     */
+    public static String ofPanel(String panel, String session, String workDir, String branch, String text, String response, int maxChars) {
+        String t = text.strip();
+        if (t.isEmpty()) {
+            return "";
+        }
+        Matcher m = BLANK_LINE.matcher(t);
+        int cut = 0;
+        while (m.find()) {
+            cut = m.end();
+        }
+        String last = Clip.keepStart(t.substring(cut).strip(), Math.min(MAX_LAST, maxChars));
+        String before = t.substring(0, cut).strip();
+        String where = workDir.isBlank() ? "" : ", working in " + workDir + (branch.isBlank() ? "" : " (git branch " + branch + ")");
+        StringBuilder sb = new StringBuilder("The panel \"").append(panel).append("\", where the user writes the prompts of a coding session named \"")
+                .append(session).append('"').append(where).append(".\nIts most recent paragraph, the command being worked on now, which the summary is about:\n")
+                .append(last);
+        int room = maxChars - last.length();
+        String answer = response.strip();
+        if (!answer.isEmpty() && room > 0) {
+            String kept = Clip.keepStart(answer, Math.min(MAX_RESPONSE, room));
+            sb.append("\n\nThe session's last response, to read with that command:\n").append(kept);
+            room -= kept.length();
+        }
+        if (!before.isEmpty() && room > 0) {
+            sb.append("\n\nThe text before it, for context, oldest first:\n").append(Clip.keepEnd(before, room));
+        }
+        return sb.toString();
+    }
+
+    /** The text of the main conversation's latest response from the session; empty when it has none. */
+    public static String lastResponse(Transcript t) {
+        for (int i = t.size() - 1, last = Math.max(0, t.size() - RESPONSE_BLOCKS); i >= last; i--) {
+            if (t.get(i) instanceof Block.AssistantText a && a.parent().isEmpty() && !a.text().isBlank()) {
+                return a.text();
+            }
+        }
+        return "";
     }
 
     /** The start of a panel's own text, at most {@code maxChars}, with its file when it has one; empty when the text is blank. */

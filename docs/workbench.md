@@ -61,7 +61,9 @@ either empty. Several panels may share a connection; a session has at most one p
   with a conversation: a new conversation; the old one stays importable) and a checkpoint (sends the session's
   checkpoint command, `/reflect` by default; purple once a turn ended with the context at 60% of the window or more and
   the command was not sent since) ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)),
-  then, while the session runs, compact and clear (`/compact`, `/clear` sent from the panel, as on the session's row).
+  then, while the session runs, compact and clear (`/compact`, `/clear` sent from the panel, as on the session's row),
+  and rewrite as a document: the session rewrites the panel's whole text as a professional Markdown document and puts
+  it in place of the text, ⌘Z bringing the original back ([record 85](adr/0085-a-panel-rewritten-as-a-document.md)).
   On the right, icons without a button's shape, close together: Browser (HTML: the page in the browser), Preview or
   Edit (Markdown), the editor theme, Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A
   production connection frames the panel in red ([record 57](adr/0057-a-light-editor-and-a-header-of-icons.md)).

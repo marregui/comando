@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.shell;
 
+import dev.marregui.comando.core.model.LinearTickets;
 import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
 
@@ -8,11 +9,13 @@ import java.awt.Frame;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.prefs.Preferences;
 
 /**
  * The window's layout across restarts, in the user's preferences: its bounds and whether it was maximized, the
- * dividers, the sidebar's state and tab, the side pane, the editors' theme and the gold. The one place each key is named.
+ * dividers, the sidebar's state and tab, the side pane, the editors' theme, the gold and Linear's site. The one place each key is named.
  */
 final class WindowLayout {
 
@@ -116,6 +119,17 @@ final class WindowLayout {
 
     void lightEditors(boolean light) {
         prefs.putBoolean("editor.light", light);
+    }
+
+    /** Linear's workspace and team keys as learnt from its links, which make a tab card's tickets links. */
+    LinearTickets.Site linearSite() {
+        String teams = prefs.get("linear.teams", "");
+        return new LinearTickets.Site(prefs.get("linear.workspace", ""), teams.isEmpty() ? Set.of() : Set.of(teams.split(",")));
+    }
+
+    void linearSite(LinearTickets.Site site) {
+        prefs.put("linear.workspace", site.workspace());
+        prefs.put("linear.teams", String.join(",", new TreeSet<>(site.teams())));
     }
 
     Gold gold() {

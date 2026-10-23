@@ -1598,6 +1598,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             diffWindow.light(windowLayout.lightEditors());
         }
         paintIn(windowLayout.gold());
+        workspace.linear(windowLayout.linearSite(), windowLayout::linearSite);
         showSidebar(windowLayout.sidebarShown());
         vertical.setDividerLocation(windowLayout.lowerDivider(h));
         sidePaneHidden = windowLayout.sidePaneHidden();

@@ -73,6 +73,7 @@ class ClaudeTopicsTest {
         Topic topic = ClaudeTopics.read(exe.toString(), dir, JSON, "x", Duration.ofMillis(300));
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
         assertThat(topic.problem()).isEqualTo("Haiku did not answer within 300 ms");
+        assertThat(ClaudeTopics.read(exe.toString(), dir, JSON, "x", Duration.ofSeconds(1)).problem()).isEqualTo("Haiku did not answer within 1 s");
         assertThat(ClaudeTopics.read(dir.resolve("absent").toString(), dir, JSON, "x", Duration.ofSeconds(1)).problem()).startsWith("cannot run '");
     }
 

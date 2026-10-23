@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.LinearTickets;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.Topic;
 import dev.marregui.comando.core.port.IntentSink;
@@ -10,6 +11,7 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TopicSource;
 import dev.marregui.comando.core.view.Clip;
@@ -69,9 +71,11 @@ import java.util.function.Predicate;
  * A tab's menu closes it, the others, or those to its right or its left; such a close keeps the tabs waiting for the
  * user and those whose shell runs a program.
  *
- * <p>A tab shows a {@link TabCard} rather than a tooltip: its status, and the panel's topic, one line Haiku wrote on what
- * the panel's session works on, or what its text is about. Every open tab's topic is read again, every
- * {@link #TOPIC_EVERY_MILLIS}, when what it is read from changed since; a tab whose session is idle costs nothing.</p>
+ * <p>A tab shows a {@link TabCard} rather than a tooltip: its status, the Linear tickets its text names, and the
+ * panel's topic, a few sentences Haiku wrote on what the panel is about. A topic is read when its card first shows,
+ * again when the card shows after what it is read from changed, and whenever the card's button asks; never on a timer.
+ * The card closes when the pointer leaves it, or leaves the tab without reaching the card within
+ * {@link #LEAVE_GRACE_MILLIS}.</p>
  */
 public final class Workspace {
 
@@ -81,8 +85,14 @@ public final class Workspace {
 
     static final int CLOSED_KEPT = 10;
     static final int TITLE_CHARS = 32;
-    /** How often every open tab's topic is checked for a change in what it is read from. */
-    static final long TOPIC_EVERY_MILLIS = 10_000;
+    /** How long the pointer has from leaving a tab to reaching its card below before the card closes. */
+    static final int LEAVE_GRACE_MILLIS = 500;
+    /** How much of the end of a panel's text its topic and tickets are read from. */
+    static final int PANEL_TEXT_READ = 4 * TopicSource.MAX_CHARS;
+    /** At most this many tickets show on a card. */
+    static final int MAX_TICKETS = 3;
+    /** How far back a session's conversation is read for Linear's links, which teach the tickets' addresses. */
+    static final int LINK_BLOCKS = 300;
 
     private final IntentSink intents;
     private final PanelTexts texts;
@@ -138,11 +148,15 @@ public final class Workspace {
     private final Map<PanelId, String> topicAsked = new HashMap<>();
     /** Panels whose topic is being read. EDT only. */
     private final Set<PanelId> topicReading = new HashSet<>();
-    private long topicCheckedMillis;
     private final TabCard card = new TabCard(id -> readTopic(id, true));
     /** The tab the pointer rests on, whose card shows when the hover timer fires; -1 when none. */
     private int hoverIndex = -1;
     private final Timer hover = new Timer(ToolTipManager.sharedInstance().getInitialDelay(), e -> showCard(hoverIndex));
+    /** Runs when the pointer left the card's tab: the card closes unless the pointer reached it. */
+    private final Timer leave = new Timer(LEAVE_GRACE_MILLIS, e -> closeCardIfLeft());
+    /** Linear's workspace and team keys as learnt so far, and where they are kept. */
+    private LinearTickets.Site site = LinearTickets.Site.NONE;
+    private Consumer<LinearTickets.Site> keepSite = s -> { };
 
     public Workspace(IntentSink intents, PanelTexts texts, SchemaRegistry schemas) {
         this(intents, texts, schemas, System::currentTimeMillis);
@@ -189,6 +203,8 @@ public final class Workspace {
         // a dragged tab moves its panel; the render that follows puts the tabs in the state's order
         tabs.onMove((from, to) -> intents.dispatch(new Intent.MovePanel(((EditorPanel) tabs.getComponentAt(from)).panel().id(), to)));
         hover.setRepeats(false);
+        leave.setRepeats(false);
+        card.onPointerIn(leave::stop);
         tabs.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
@@ -206,14 +222,23 @@ public final class Workspace {
                 if (i < 0) {
                     hover.stop();
                 }
+                // off the tab whose card shows, the card closes unless the pointer goes on into it
+                if (card.shown() != null && (i < 0 || !(tabs.getComponentAt(i) instanceof EditorPanel v) || !v.panel().id().equals(card.shown()))) {
+                    leave.restart();
+                } else {
+                    leave.stop();
+                }
             }
         });
         tabs.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseExited(MouseEvent e) {
-                // the card shown stays until it is clicked; one not yet shown is not shown
+                // a card not yet shown is not shown; one shown closes unless the pointer goes on into it
                 hoverIndex = -1;
                 hover.stop();
+                if (card.shown() != null) {
+                    leave.restart();
+                }
             }
 
             @Override
@@ -442,9 +467,48 @@ public final class Workspace {
             return;
         }
         // shown first, so its read goes ahead of the other tabs'
+        leave.stop();
         card.show(id, tabs, r, tips.getOrDefault(id, ""), "", false, false);
+        card.tickets(tickets(view.panel(), view));
         readTopic(id, false);
         updateCard(id);
+    }
+
+    /** The pointer left the card's tab and did not reach the card: it closes. */
+    void closeCardIfLeft() {
+        if (!card.pointerIn()) {
+            card.hide();
+        }
+    }
+
+    /** Where Linear's tickets are found: learnt so far, kept by {@code keep} as more is learnt. */
+    public void linear(LinearTickets.Site known, Consumer<LinearTickets.Site> keep) {
+        site = known;
+        keepSite = keep;
+    }
+
+    /**
+     * The Linear tickets the panel's text names, the newest command's first; Linear's links in the text, and in the end of
+     * the panel's session's conversation, teach which ids are tickets and their addresses.
+     */
+    private List<LinearTickets.Ticket> tickets(PanelState p, EditorPanel view) {
+        String text = view.textEnd(PANEL_TEXT_READ);
+        LinearTickets.Site learnt = LinearTickets.learn(site, text);
+        Transcript t = p.session().isEmpty() ? null : transcripts.apply(p.session());
+        for (int i = t == null ? 0 : t.size() - 1, last = Math.max(0, i - LINK_BLOCKS); t != null && i >= last; i--) {
+            String said = switch (t.get(i)) {
+                case Block.AssistantText a -> a.text();
+                case Block.ToolCall c -> c.inputJson() + '\n' + c.resultText();
+                case Block.UserPrompt u -> u.text();
+                case null, default -> "";
+            };
+            learnt = LinearTickets.learn(learnt, said);
+        }
+        if (!learnt.equals(site)) {
+            site = learnt;
+            keepSite.accept(learnt);
+        }
+        return LinearTickets.in(text, site, MAX_TICKETS);
     }
 
     /** The card shown, under its tab again: tabs move as others close, are dragged, scroll or the window resizes. */
@@ -454,13 +518,6 @@ public final class Workspace {
         Rectangle r = at < 0 ? null : tabs.getUI().getTabBounds(tabs, at);
         if (r != null) {
             card.moveUnder(r);
-        }
-    }
-
-    /** Reads every open tab's topic whose source changed since it was last asked. */
-    private void checkTopics() {
-        for (PanelId id : panels.keySet()) {
-            readTopic(id, false);
         }
     }
 
@@ -497,16 +554,22 @@ public final class Workspace {
     }
 
     /**
-     * The end of the panel's session's conversation with where the session works, or else the start of its own text with
-     * its file; empty when there is neither.
+     * A session panel's own text, its last paragraph first, with the session's last response and where the session works;
+     * when the text is blank, the end of the session's conversation. A panel without a session: the start of its own text with its file. Empty when
+     * there is nothing.
      */
     private String topicSource(PanelState p, EditorPanel view) {
-        Transcript t = p.session().isEmpty() ? null : transcripts.apply(p.session());
-        if (t != null && t.size() > 0) {
+        if (!p.session().isEmpty()) {
             Optional<SessionState> session = shown == null ? Optional.empty() : shown.session(p.session());
             String workDir = session.map(x -> x.spec().workDir()).orElse("");
             String branch = session.map(SessionState::branch).orElse("");
-            String source = TopicSource.ofSession(p.session(), p.title(), workDir, branch, t, TopicSource.MAX_CHARS);
+            Transcript t = transcripts.apply(p.session());
+            String response = t == null ? "" : TopicSource.lastResponse(t);
+            String source = TopicSource.ofPanel(p.title(), p.session(), workDir, branch, view.textEnd(PANEL_TEXT_READ), response,
+                    TopicSource.MAX_CHARS);
+            if (source.isEmpty() && t != null && t.size() > 0) {
+                source = TopicSource.ofSession(p.session(), p.title(), workDir, branch, t, TopicSource.MAX_CHARS);
+            }
             if (!source.isEmpty()) {
                 return source;
             }
@@ -564,11 +627,6 @@ public final class Workspace {
         panels.values().forEach(EditorPanel::tick);
         if (shown == null) {
             return;
-        }
-        long now = clock.getAsLong();
-        if (now - topicCheckedMillis >= TOPIC_EVERY_MILLIS) {
-            topicCheckedMillis = now;
-            checkTopics();
         }
         placeCard();
         for (PanelState p : shown.panels()) {
