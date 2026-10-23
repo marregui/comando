@@ -405,8 +405,10 @@ in its log ([UI §1](ui.md#1-the-kit)); the packaged runtime keeps `jdk.jfr`, `j
 `jdk.management.agent` so the installed app can be recorded, and watched over JMX, too
 ([record 54](adr/0054-comando-knows-nothing-of-jfr.md)).
 
-CI (`.github/workflows/build.yml`, Ubuntu and macOS, Temurin 25, actions pinned by SHA) runs `build`, `:app:uiTest`
+CI (`.github/workflows/build.yml`, Temurin 25, actions pinned by SHA) runs `build`, `:app:uiTest`
 (under `xvfb-run` on Ubuntu), a test summary (`ci/TestReport.java`), the transcript gate (reported, not enforced), and on
-macOS `:app:dmg` as a packaging smoke test. `dependabot.yml` groups weekly updates of the actions and the Gradle
-dependencies. `./gradlew :app:dmg` builds an unsigned disk image with `jpackage` and a runtime of the modules listed in `app/build.gradle.kts`
+macOS `:app:dmg` as a packaging smoke test. Ubuntu runs on every push and pull request that changes more than the docs
+(`docs/tutorial.md` and `kit/` count as code: the jars bundle them); macOS, whose minutes bill at ten times Ubuntu's on a
+private repository, runs weekly and on demand (`workflow_dispatch`). `dependabot.yml` groups monthly updates of the
+actions and the Gradle dependencies. `./gradlew :app:dmg` builds an unsigned disk image with `jpackage` and a runtime of the modules listed in `app/build.gradle.kts`
 ([decision 16](adr/0016-unsigned-macos-build.md)).
