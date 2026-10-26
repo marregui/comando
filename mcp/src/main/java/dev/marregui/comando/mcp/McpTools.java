@@ -367,7 +367,7 @@ public final class McpTools {
             String panels = String.join(", ", s.panels().stream().map(PanelState::title).toList());
             Optional<PanelState> closed = s.closedPanelOfSession(session);
             throw new IllegalArgumentException(closed.isPresent()
-                    ? "this session's panel " + closed.get().title() + " is closed; the user reopens it from the Panels tab, or pass panel (one of: " + panels + ')'
+                    ? "this session's panel " + closed.get().title() + " is closed; the user reopens it by opening the session in the sidebar, or pass panel (one of: " + panels + ')'
                     : "this session is bound to no panel; pass panel (one of: " + panels + ')');
         }
         return mine.getFirst();

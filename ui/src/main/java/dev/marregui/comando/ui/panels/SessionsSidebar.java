@@ -73,10 +73,10 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
- * The left column, four tabs in one row of icons: Sessions (every session with its project, branch, state, context,
+ * The left column, three tabs in one row of icons: Sessions (every session with its project, branch, state, context,
  * conversation and pending approvals, and controls to connect or disconnect it, compact or clear its conversation and
- * change its model or effort), Connections, Panels (comando's own panels, open and closed), and Files (the folders the
- * user chose, as trees: {@link FilesTab}). No tab has a bar of buttons: a tab's menu adds (and, for sessions, imports
+ * change its model or effort; under them, the panels of comando's own that belong to no session:
+ * {@link PanelsWithoutSession}), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). No tab has a bar of buttons: a tab's menu adds (and, for sessions, imports
  * and sorts), and a row's menu edits, clones and removes, through the same {@link ResourceActions}. Double-click on a
  * session opens it in a panel ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. Sessions are
  * listed running first, then by name, until the user drags one: from then on in the order the user left them, until
@@ -99,6 +99,10 @@ public final class SessionsSidebar {
 
         /** Opens a file in a panel, or brings forward the panel that has it. */
         void openFile(Path file);
+
+        /** The session dialog on a new session named {@code name}: a panel without a session's "New session ‹title›…". */
+        default void newSession(String name) {
+        }
 
         /** As {@link #openFile}, showing the file's text to edit rather than rendered. */
         default void editFile(Path file) {
@@ -158,12 +162,11 @@ public final class SessionsSidebar {
             "No connections yet. Right-click the tab to add one.");
     public static final int SESSIONS = 0;
     public static final int CONNECTIONS = 1;
-    public static final int PANELS = 2;
-    public static final int FILES = 3;
+    public static final int FILES = 2;
 
     private final ResourceActions<SessionState> sessionActions;
     private final ResourceActions<ConnectionState> connectionActions;
-    private final PanelsTab panelsTab;
+    private final PanelsWithoutSession loosePanels;
     /** The panels' texts, which a session's menu has the session rewrite. */
     private final PanelTexts texts;
     /** The card the session rows show; none until the shell gives the workspace's. */
@@ -205,7 +208,7 @@ public final class SessionsSidebar {
         this.dialogs = dialogs;
         this.toggle = toggle;
         this.texts = texts;
-        this.panelsTab = new PanelsTab(intents, texts, questions);
+        this.loosePanels = new PanelsWithoutSession(intents, texts, dialogs::newSession, questions);
         cardWait.setRepeats(false);
         sessions.getAccessibleContext().setAccessibleName("Sessions");
         connections.getAccessibleContext().setAccessibleName("Connections");
@@ -339,11 +342,12 @@ public final class SessionsSidebar {
                 ResourceActions.Rows.of(ConnectionKind.INSTANCE, ConnectionState::name, ConnectionState::status, "Disconnect", () -> state),
                 dialogs.connections(), name -> intents.dispatch(new Intent.RemoveConnection(name)), questions);
         // one row of icons (Miguel, 2026-10-19): the resources, then the documents; a click moves nothing. No bar of
-        // buttons: a tab's menu adds, a row's menu edits, clones and removes
-        tabs.add("Sessions", "session", "Claude Code sessions; right-click to add, import or sort", section(new JScrollPane(sessions)));
+        // buttons: a tab's menu adds, a row's menu edits, clones and removes. A session and its own panel are one row,
+        // so the panels have no tab of their own: those without a session sit under the sessions (record 91)
+        JPanel sessionsTab = section(new JScrollPane(sessions));
+        sessionsTab.add(loosePanels.component(), BorderLayout.SOUTH);
+        tabs.add("Sessions", "session", "Claude Code sessions and panels; right-click to add, import or sort", sessionsTab);
         tabs.add("Connections", "database", "databases; right-click to add one", section(new JScrollPane(connections)));
-        tabs.add("Panels", "text", "every panel, open or closed; right-click to add one",
-                section(new JScrollPane(panelsTab.list())));
         tabs.add("Files", "folder", "your folders and their git changes; double-click a file to open it",
                 section(files.component()));
         tabs.trailing(ToolButton.of("more", KeyText.of("Hide the sidebar (⌘B)"), toggle));
@@ -374,7 +378,7 @@ public final class SessionsSidebar {
         root.repaint();
     }
 
-    /** The tab in front: {@link #SESSIONS}, {@link #PANELS}, {@link #CONNECTIONS} or {@link #FILES}. */
+    /** The tab in front: {@link #SESSIONS}, {@link #CONNECTIONS} or {@link #FILES}. */
     public int selectedTab() {
         return tabs.selectedIndex();
     }
@@ -432,6 +436,11 @@ public final class SessionsSidebar {
         return i;
     }
 
+    /** The panels without a session under the sessions; for tests. */
+    PanelsWithoutSession loosePanels() {
+        return loosePanels;
+    }
+
     /** Puts the keyboard in the Files tab's filter. */
     public void focusFilesFilter() {
         files.filter().requestFocusInWindow();
@@ -457,7 +466,7 @@ public final class SessionsSidebar {
         }
         rows.keySet().retainAll(s.sessions().stream().map(SessionState::name).toList());
         sync(connectionModel, s.connections(), connections);
-        panelsTab.render(s);
+        loosePanels.render(s);
         files.render(s);
     }
 

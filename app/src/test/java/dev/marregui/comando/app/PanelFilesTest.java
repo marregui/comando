@@ -185,7 +185,7 @@ class PanelFilesTest {
             });
             store.saveNow().get(5, TimeUnit.SECONDS);
         }
-        assertThat(notices).containsExactly("reviews.md has no panel; listed as closed in the Panels tab");
+        assertThat(notices).containsExactly("reviews.md has no panel; listed as closed under the sessions, without a session");
         assertThat(Files.readString(home.resolve("panels.json"))).contains("\"file\" : \"reviews.md\"").contains("\"closed\" : true");
     }
 

@@ -49,7 +49,7 @@ Document panels may be attached to a session, any number of them ([record 38](ad
   brings forward; on a document, "Attach to ‹session›" or "Detach from ‹session›". A selection run in an attached
   document goes to its session, and the session buttons in its header act on it.
 - **A new panel** (⌘T) gets the focused panel's connection and no session.
-- **Renaming** a panel: double-click its tab, the Panels tab's Rename…, or "Rename panel…" in the palette.
+- **Renaming** a panel: double-click its tab, Rename… on its row under the sessions (a panel without a session), or "Rename panel…" in the palette.
 - **Restore layout** (palette) puts the sidebar, side pane and lower divider back as they were before a session
   arranged them; it is greyed out while nothing was arranged.
 - **Moving** a tab: drag it along the row; a line marks where it lands. The order is saved and kept across restarts.
@@ -96,7 +96,8 @@ Document panels may be attached to a session, any number of them ([record 38](ad
   ([record 83](adr/0083-one-gold-chosen-beside-clear.md)).
 - **Closing** (⌘W when no view has the keyboard; the last open panel cannot be closed) keeps a panel of comando's own, closed, with its file, title and bindings, until removed; a document
   is dropped ([record 39](adr/0039-panels-are-kept-until-removed.md)). ⌘⇧T reopens the last of ten recently closed;
-  the Panels tab reopens any. Closing asks first when the panel's shell runs a job in the foreground.
+  the Sessions tab reopens any: a session's own panel by opening the session, a panel without a session from its
+  section under the sessions ([record 91](adr/0091-the-panels-tab-folds-into-the-sessions-tab.md)). Closing asks first when the panel's shell runs a job in the foreground.
 - **A tab's menu** (right click on the tab, not the panel) closes it, the others, the tabs to its right or those to its
   left, in the order shown after any drag. Such a close puts the clicked tab in front and asks nothing: a tab waiting
   for the user and a tab whose shell runs a program stay open, and one notice says how many closed and stayed; a tab

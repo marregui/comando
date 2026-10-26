@@ -93,16 +93,25 @@ final class WindowLayout {
     }
 
     /**
-     * The sidebar tab in front when the window closed. {@code sidebar.tab} held it before the tabs took one row
-     * (Sessions, Panels, Connections, Files); it is read once, in that order, until {@code sidebar.front} is saved.
+     * The sidebar tab in front when the window closed, saved as {@code sidebar.selected}. The keys before it are read
+     * until it is saved: {@code sidebar.front} held Sessions, Connections, Panels, Files; {@code sidebar.tab}, before the
+     * tabs took one row, Sessions, Panels, Connections, Files. The Panels tab is gone (record 91): it reads as Sessions,
+     * which lists the panels without a session.
      */
     int sidebarTab() {
+        int selected = prefs.getInt("sidebar.selected", -1);
+        if (selected >= 0) {
+            return selected <= SessionsSidebar.FILES ? selected : SessionsSidebar.SESSIONS;
+        }
         int front = prefs.getInt("sidebar.front", -1);
         if (front >= 0) {
-            return front;
+            return switch (front) {
+                case 1 -> SessionsSidebar.CONNECTIONS;
+                case 3 -> SessionsSidebar.FILES;
+                default -> SessionsSidebar.SESSIONS;
+            };
         }
         return switch (prefs.getInt("sidebar.tab", 0)) {
-            case 1 -> SessionsSidebar.PANELS;
             case 2 -> SessionsSidebar.CONNECTIONS;
             case 3 -> SessionsSidebar.FILES;
             default -> SessionsSidebar.SESSIONS;
@@ -183,7 +192,7 @@ final class WindowLayout {
             prefs.putInt("divider.sidebar", s.sidebarDivider());
         }
         prefs.putBoolean("sidebar.visible", s.sidebarShown());
-        prefs.putInt("sidebar.front", s.sidebarTab());
+        prefs.putInt("sidebar.selected", s.sidebarTab());
         prefs.putBoolean("sessions.manualOrder", s.manualOrder());
         prefs.putBoolean("sidePane.hidden", s.sidePaneHidden());
         prefs.putInt("divider.lower", s.lowerDivider());

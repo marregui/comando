@@ -76,13 +76,13 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void theColumnIsFourTabsInOneRowAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
+    void theColumnIsThreeTabsInOneRowAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
         AtomicInteger toggles = new AtomicInteger();
         SessionsSidebar[] s = new SessionsSidebar[1];
         SwingUtilities.invokeAndWait(() -> s[0] = new SessionsSidebar(intent -> {
         }, NO_DIALOGS, toggles::incrementAndGet));
         SessionsSidebar sidebar = s[0];
-        List<String> order = List.of("Sessions", "Connections", "Panels", "Files");
+        List<String> order = List.of("Sessions", "Connections", "Files");
         Map<String, Rectangle> at = new HashMap<>();
         Map<String, String> text = new HashMap<>();
         SwingUtilities.invokeAndWait(() -> {
@@ -100,25 +100,27 @@ class SessionsSidebarTest {
         }
         assertThat(text.values()).as("icons alone").containsOnly("");
         assertThat(header(sidebar, "Files").getClientProperty("JButton.buttonType")).as("drawn as a tab").isEqualTo("tab");
-        assertThat(at.get("Files").x + at.get("Files").width).as("packed: four icons in a narrow sidebar").isLessThan(160);
+        assertThat(at.get("Files").x + at.get("Files").width).as("packed: three icons in a narrow sidebar").isLessThan(160);
         for (String t : order) {
             JToggleButton h = header(sidebar, t);
             assertThat(h.getToolTipText()).as(t + " is named by its tooltip").startsWith(t + ": ").hasSizeLessThanOrEqualTo(80);
             assertThat(h.getAccessibleContext().getAccessibleName()).isEqualTo(t);
         }
 
-        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.PANELS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES}) {
+        assertThat(search(sidebar.component(), JToggleButton.class, b -> "Panels".equals(b.getAccessibleContext().getAccessibleName())))
+                .as("no Panels tab: a session and its panel are one row (record 91)").isNull();
+        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES}) {
             SwingUtilities.invokeAndWait(() -> sidebar.selectTab(tab));
             assertThat(sidebar.selectedTab()).isEqualTo(tab);
         }
-        SwingUtilities.invokeAndWait(() -> header(sidebar, "Panels").doClick());
-        assertThat(sidebar.selectedTab()).as("a click selects").isEqualTo(SessionsSidebar.PANELS);
+        SwingUtilities.invokeAndWait(() -> header(sidebar, "Connections").doClick());
+        assertThat(sidebar.selectedTab()).as("a click selects").isEqualTo(SessionsSidebar.CONNECTIONS);
 
         AbstractButton hide = button(sidebar.component(), KeyText.of("Hide the sidebar (⌘B)"));
         AbstractButton show = button(sidebar.component(), KeyText.of("Show the sidebar (⌘B)"));
         assertThat(sidebar.isShown()).isTrue();
         assertThat(shows(show, sidebar.component())).as("no rail beside the tabs").isFalse();
-        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.PANELS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES}) {
+        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES}) {
             SwingUtilities.invokeAndWait(() -> sidebar.selectTab(tab));
             assertThat(shows(hide, sidebar.component())).as("the hide button on every tab").isTrue();
         }
@@ -860,7 +862,7 @@ class SessionsSidebarTest {
         sidebar.onTabMenu((tab, menu) -> menu.add(new JMenuItem("window command " + tab)));
         Map<Integer, List<String>> items = new HashMap<>();
         SwingUtilities.invokeAndWait(() -> {
-            for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.PANELS, SessionsSidebar.FILES}) {
+            for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES}) {
                 List<String> texts = new ArrayList<>();
                 for (Component c : sidebar.tabMenu(tab).getComponents()) {
                     texts.add(c instanceof JMenuItem m ? m.getText() : "—");
@@ -871,8 +873,7 @@ class SessionsSidebarTest {
         assertThat(items.get(SessionsSidebar.SESSIONS)).containsExactly("New session…", "Import stored conversations…",
                 "Sort: running first, then by name", "window command 0");
         assertThat(items.get(SessionsSidebar.CONNECTIONS)).containsExactly("New connection…", "window command 1");
-        assertThat(items.get(SessionsSidebar.PANELS)).as("its window commands: a new panel, a reopened one").containsExactly("window command 2");
-        assertThat(items.get(SessionsSidebar.FILES)).as("the two configuration windows alone").containsExactly("window command 3");
+        assertThat(items.get(SessionsSidebar.FILES)).as("the two configuration windows alone").containsExactly("window command 2");
     }
 
     /** The tab header named {@code title}: by its accessible name, which stays when a narrow row drops its text. */

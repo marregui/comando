@@ -24,7 +24,7 @@ class KeyTextTest {
     @Test
     void cmdOptionAndShiftReadAsCtrlAltAndShiftInThatOrder() {
         assertThat(KeyText.other("New panel (⌘T)")).isEqualTo("New panel (Ctrl+T)");
-        assertThat(KeyText.other("⌘⇧T or the Panels tab reopens it")).isEqualTo("Ctrl+Shift+T or the Panels tab reopens it");
+        assertThat(KeyText.other("⌘⇧T or the Sessions tab reopens it")).isEqualTo("Ctrl+Shift+T or the Sessions tab reopens it");
         assertThat(KeyText.other("⇧⌘⏎")).isEqualTo("Ctrl+Shift+Enter");
         assertThat(KeyText.other("⌥⏎ runs as SQL")).isEqualTo("Alt+Enter runs as SQL");
         assertThat(KeyText.other("⌘⌥G")).isEqualTo("Ctrl+Alt+G");

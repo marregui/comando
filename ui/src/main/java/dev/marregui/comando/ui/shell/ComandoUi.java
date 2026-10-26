@@ -389,6 +389,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 workspace.editWhenOpen(file.toAbsolutePath().normalize());
                 ComandoUi.this.openFile(file);
             }
+
+            @Override
+            public void newSession(String name) {
+                sessionsDialog.showNew(deps.state().get(), name);
+            }
         }, deps.texts(), () -> actions.run("view.sidebar"));
         sidebar.onTabMenu(this::tabMenu);
         // a session row shows the card a tab shows, the workspace's
@@ -819,8 +824,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** A sidebar tab's menu gains the window's commands for that tab, each with its key and enabled as it can run. */
     private void tabMenu(int tab, JPopupMenu menu) {
         List<String> ids = switch (tab) {
+            case SessionsSidebar.SESSIONS -> List.of("panel.new", "panel.reopen");
             case SessionsSidebar.CONNECTIONS -> deps.server() == null ? List.<String>of() : List.of("server.start", "server.stop");
-            case SessionsSidebar.PANELS -> List.of("panel.new", "panel.reopen");
             case SessionsSidebar.FILES -> List.of("files.settings", "files.repositories");
             default -> List.of();
         };

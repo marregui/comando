@@ -3,7 +3,6 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.port.IntentSink;
-import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.ui.PanelTexts;
@@ -16,12 +15,16 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenuItem;
+import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JScrollPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
+import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -32,29 +35,38 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Consumer;
 
 /**
- * The sidebar's Panels tab: comando's own panels, open and closed, as one flat list by title, as a folder of files
- * would show them; documents opened from elsewhere are not here. No bar of buttons: the tab's menu adds a panel, and a
- * row's menu renames, clones or removes it. Double-click opens a closed panel or brings an open one forward.
+ * The foot of the Sessions tab: comando's own panels that belong to no session, open and closed, by title (record 91).
+ * A session's own panel is its session's row, and a document is the Files tab's, so neither is here; the section shows
+ * only while it has a row. A row's menu opens or brings forward, renames, makes the panel a session's own and removes;
+ * a double-click opens a closed panel or brings an open one forward.
  */
-final class PanelsTab {
+final class PanelsWithoutSession {
 
     /** A panel and whether it is open. */
     record Row(PanelState panel, boolean open) {
     }
 
+    /** The most rows shown before the section scrolls: the sessions keep the tab. */
+    private static final int MOST_ROWS = 4;
+
     private final IntentSink intents;
     private final PanelTexts texts;
+    private final Consumer<String> newSession;
     private final DefaultListModel<Row> model = new DefaultListModel<>();
     private final JList<Row> list = new JList<>(model);
     private final ResourceActions<Row> actions;
+    private final JPanel section = new JPanel(new BorderLayout());
     private AppState state;
 
-    PanelsTab(IntentSink intents, PanelTexts texts, ResourceActions.Questions questions) {
+    /** {@code newSession} opens the session dialog on a new session with the name given, as a panel's chip does. */
+    PanelsWithoutSession(IntentSink intents, PanelTexts texts, Consumer<String> newSession, ResourceActions.Questions questions) {
         this.intents = intents;
         this.texts = texts;
-        list.getAccessibleContext().setAccessibleName("Panels");
+        this.newSession = newSession;
+        list.getAccessibleContext().setAccessibleName("Panels without a session");
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         list.setCellRenderer(new DefaultListCellRenderer() {
             @Override
@@ -99,7 +111,7 @@ final class PanelsTab {
                 Row::open, "Close", this::question), new ResourceActions.Editor() {
             @Override
             public void add() {
-                intents.dispatch(new Intent.AddPanel(PanelId.random(), ""));
+                // a new panel is ⌘T, or the tab menu's New panel
             }
 
             @Override
@@ -109,25 +121,48 @@ final class PanelsTab {
 
             @Override
             public void cloneOf(String id) {
-                row(id).ifPresent(PanelsTab.this::copy);
+                // panels are not cloned (record 91)
             }
         }, id -> intents.dispatch(new Intent.RemovePanel(new PanelId(id))), questions);
+        JLabel title = new JLabel("Without a session");
+        title.setForeground(Theme.MUTED_STRONG);
+        title.setBorder(BorderFactory.createEmptyBorder(6, 8, 2, 8));
+        JScrollPane scroll = new JScrollPane(list);
+        scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        scroll.setBorder(null);
+        section.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.CARD_BORDER));
+        section.add(title, BorderLayout.NORTH);
+        section.add(scroll, BorderLayout.CENTER);
+        section.setVisible(false);
+    }
+
+    /** The section: its title and its rows; hidden while there is none. */
+    JComponent component() {
+        return section;
     }
 
     JList<Row> list() {
         return list;
     }
 
+    /** Whether {@code p} is a panel of comando's own that no session has: none named, or one named that is gone. */
+    static boolean withoutSession(AppState s, PanelState p) {
+        return !p.document() && (p.session().isEmpty() || s.session(p.session()).isEmpty());
+    }
+
     void render(AppState s) {
         state = s;
         List<Row> rows = new ArrayList<>();
-        s.panels().stream().filter(p -> !p.document()).forEach(p -> rows.add(new Row(p, true)));
-        s.closed().forEach(p -> rows.add(new Row(p, false)));
+        s.panels().stream().filter(p -> withoutSession(s, p)).forEach(p -> rows.add(new Row(p, true)));
+        s.closed().stream().filter(p -> withoutSession(s, p)).forEach(p -> rows.add(new Row(p, false)));
         rows.sort(Comparator.comparing((Row r) -> r.panel().title().toLowerCase(Locale.ROOT)));
         Row selected = list.getSelectedValue();
         if (!rows.equals(Collections.list(model.elements()))) {
             model.clear();
             model.addAll(rows);
+            list.setVisibleRowCount(Math.clamp(rows.size(), 1, MOST_ROWS));
+            section.setVisible(!rows.isEmpty());
+            section.revalidate();
         }
         if (selected != null) {
             for (int i = 0; i < model.size(); i++) {
@@ -148,29 +183,19 @@ final class PanelsTab {
     String question(Row r) {
         PanelState p = r.panel();
         String file = texts.file(p.id()).map(f -> f.getFileName().toString()).orElse(p.title() + ".md");
-        if (!p.document() && !p.session().isEmpty() && state != null && state.session(p.session()).isPresent()) {
-            // a session's own panel and the session are one (record 88)
-            return SessionKind.INSTANCE.removalQuestion(state, p.session());
-        }
-        return "Remove panel " + p.title() + "? Its file " + file + " is deleted." + (r.open() ? " The panel closes first." : "")
-                + (p.session().isEmpty() ? "" : " Its session " + p.session() + " keeps running without a panel.");
+        return "Remove panel " + p.title() + "? Its file " + file + " is deleted." + (r.open() ? " The panel closes first." : "");
     }
 
-    /** A new panel with the text and connection of {@code r}, without its session: a session has one panel. */
-    private void copy(Row r) {
-        PanelId id = PanelId.random();
-        texts.changed(id, texts.load(r.panel().id()));
-        intents.dispatch(new Intent.AddPanel(id, r.panel().title() + " copy"));
-        intents.dispatch(new Intent.BindConnection(id, r.panel().connection()));
-    }
-
-    /** A row's menu: open or bring forward, rename, clone, remove. */
+    /** A row's menu: open or bring forward, rename, make it a session's own, remove. */
     JPopupMenu menu(Row r) {
         JPopupMenu m = new JPopupMenu();
         m.add(item(r.open() ? "Bring forward" : "Open", "file", () -> open(r)));
         m.addSeparator();
         m.add(item("Rename…", "edit", () -> Workspace.rename(r.panel(), list, intents)));
-        m.add(item("Clone", "copy", () -> copy(r)));
+        JMenuItem create = item(Plain.text("New session " + r.panel().title() + "…"), "add", () -> newSession.accept(r.panel().title()));
+        create.setToolTipText("A session with this panel's name, this panel its own");
+        m.add(create);
+        m.addSeparator();
         m.add(item("Remove…", "close", () -> actions.remove(r)));
         return m;
     }
@@ -189,15 +214,12 @@ final class PanelsTab {
         return i >= 0 && list.getCellBounds(i, i).contains(e.getPoint()) ? model.get(i) : null;
     }
 
-    /** Two lines: open or closed and the title; then the session, the connection and the file. */
+    /** Two lines: open or closed and the title; then the connection and the file. */
     private String html(Row r) {
         PanelState p = r.panel();
         String dot = "<span style='color:" + Theme.hex(r.open() ? Theme.ACCENT : Theme.MUTED) + "'>" + (r.open() ? "●" : "○") + "</span>";
         boolean focused = state != null && r.open() && Objects.equals(state.focused(), p.id());
         List<String> parts = new ArrayList<>();
-        if (!p.session().isEmpty()) {
-            parts.add("✳ " + p.session());
-        }
         if (!p.connection().isEmpty()) {
             parts.add(p.connection());
         }

@@ -23,13 +23,29 @@ class WindowLayoutTest {
     void theTabInFrontBeforeTheOneRowStaysInFront() {
         WindowLayout layout = new WindowLayout(prefs);
         assertThat(layout.sidebarTab()).as("nothing saved").isEqualTo(SessionsSidebar.SESSIONS);
-        int[][] oldToNew = {{0, SessionsSidebar.SESSIONS}, {1, SessionsSidebar.PANELS}, {2, SessionsSidebar.CONNECTIONS},
+        // Sessions, Panels, Connections, Files: the Panels tab reads as Sessions, which lists the panels without one
+        int[][] oldToNew = {{0, SessionsSidebar.SESSIONS}, {1, SessionsSidebar.SESSIONS}, {2, SessionsSidebar.CONNECTIONS},
                 {3, SessionsSidebar.FILES}};
         for (int[] pair : oldToNew) {
             prefs.putInt("sidebar.tab", pair[0]);
             assertThat(layout.sidebarTab()).as("old index " + pair[0]).isEqualTo(pair[1]);
         }
-        prefs.putInt("sidebar.front", SessionsSidebar.CONNECTIONS);
-        assertThat(layout.sidebarTab()).as("the new key wins").isEqualTo(SessionsSidebar.CONNECTIONS);
+    }
+
+    @Test
+    void theTabInFrontWithAPanelsTabStaysInFront() {
+        WindowLayout layout = new WindowLayout(prefs);
+        prefs.putInt("sidebar.tab", 2);
+        // Sessions, Connections, Panels, Files (record 70), read over the older key
+        int[][] oldToNew = {{0, SessionsSidebar.SESSIONS}, {1, SessionsSidebar.CONNECTIONS}, {2, SessionsSidebar.SESSIONS},
+                {3, SessionsSidebar.FILES}};
+        for (int[] pair : oldToNew) {
+            prefs.putInt("sidebar.front", pair[0]);
+            assertThat(layout.sidebarTab()).as("index " + pair[0] + " with a Panels tab").isEqualTo(pair[1]);
+        }
+        prefs.putInt("sidebar.selected", SessionsSidebar.FILES);
+        assertThat(layout.sidebarTab()).as("the newest key wins").isEqualTo(SessionsSidebar.FILES);
+        prefs.putInt("sidebar.selected", 7);
+        assertThat(layout.sidebarTab()).as("a tab that is gone reads as Sessions").isEqualTo(SessionsSidebar.SESSIONS);
     }
 }

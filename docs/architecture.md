@@ -345,7 +345,7 @@ dev.marregui.comando.ui
 ├── widget/         the contract: Widget, WidgetContext, WidgetRegistry; capability/ (Searchable, Copyable, …)
 ├── widgets/        one package per widget: approval, changes, console, diff, editor, markdown, plot, table, terminal, text,
 │                   transcript (with doc/ and render/), tree
-├── panels/         the window's regions: Workspace, EditorPanel, LowerPanel, SessionsSidebar, PanelsTab, FilesTab,
+├── panels/         the window's regions: Workspace, EditorPanel, LowerPanel, SessionsSidebar, PanelsWithoutSession, FilesTab,
 │                   SidePane, StatusBar, ResultsView, TerminalTabs, ViewTabs, …
 ├── dialogs/        folders/ (the Files tab's folders: FoldersEditor, FoldersDialog), resource/ (ResourceDialog, one dialog for connections and sessions), sessions/ (import)
 ├── shell/          ComandoUi (the frame and the UI port), WindowLayout, HelpActions, Menus, Keys, LivePlots, Notifier, HelpFiles, OpenFiles, DiffWindow, …

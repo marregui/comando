@@ -46,7 +46,7 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [36](0036-five-menus-by-subject.md) | Five menus, by subject | Miguel, Claude | superseded by 59; Help items carry icons since 47 |
 | [37](0037-session-actions-act-on-the-selected-row.md) | Session and connection actions act on the selected row | Miguel, Claude | accepted; the bar replaced by menus, 74 |
 | [38](0038-a-session-has-one-panel.md) | A session has one panel | Miguel, Claude | accepted |
-| [39](0039-panels-are-kept-until-removed.md) | Panels are kept until removed | Miguel, Claude | accepted |
+| [39](0039-panels-are-kept-until-removed.md) | Panels are kept until removed | Miguel, Claude | accepted; where they are listed amended, 91 |
 | [40](0040-one-resource-per-dialog-and-two-tab-rows.md) | One resource per dialog, and the sidebar's tabs in two rows | Miguel, Claude | accepted; the Scratchpad tab became Files, 49; the two rows replaced by one, 70 |
 | [41](0041-a-session-can-prompt-another.md) | A session can prompt another | Miguel, Claude | accepted; consent replaced by 44 |
 | [42](0042-tabs-show-their-sessions-state.md) | Tabs show their session's state, and comando has its own icon | Miguel, Claude | accepted; a waiting status added by 43 |
@@ -77,7 +77,7 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [67](0067-reflect-measures-what-it-does-to-the-memory.md) | `/reflect` measures what it does to the memory | Miguel, Claude | accepted; amended 2026-10-25: no fork |
 | [68](0068-git-changes-and-a-side-by-side-diff.md) | Git changes and a side-by-side diff | Miguel, Claude | accepted; a repository's double click, the view's title and groups replaced, 71; window extended, 72; colours amended, 76; double click amended, 78 |
 | [69](0069-a-window-edits-the-files-tab-folders.md) | A window edits the Files tab's folders | Miguel, Claude | accepted; where it opens replaced, 71; title, problems line and index creation amended, 73 |
-| [70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | The sidebar's tabs in one row, with a menu each | Miguel, Claude | accepted; the Files tab's menu replaced, 73; Hide the sidebar out of the tab menus, 74 |
+| [70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | The sidebar's tabs in one row, with a menu each | Miguel, Claude | accepted; the Files tab's menu replaced, 73; Hide the sidebar out of the tab menus, 74; the Panels tab folded into Sessions, 91 |
 | [71](0071-repositories-in-the-files-tab.md) | Repositories in the Files tab | Miguel, Claude | accepted; window amended, 73; double click amended, 78 |
 | [72](0072-the-comparison-window-edits-rolls-back-and-removes.md) | The comparison window edits, rolls back and removes | Miguel, Claude | accepted |
 | [73](0073-the-claude-folders-window-explains-and-creates-the-index.md) | The ~/.claude folders window explains its fields and creates the index | Miguel, Claude | accepted |
@@ -98,3 +98,4 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [88](0088-a-session-and-its-panel-share-a-name.md) | A session and its own panel share a name, and are one | Miguel, Claude | proposed; amends 13 and 38 |
 | [89](0089-a-session-row-is-one-line.md) | A session row is one line, its state an icon | Miguel, Claude | proposed; amends 53 and 87 |
 | [90](0090-a-session-row-is-its-icon-and-name.md) | A session row is its icon and its name; the card says each fact once | Miguel, Claude | proposed; amends 87 and 89 |
+| [91](0091-the-panels-tab-folds-into-the-sessions-tab.md) | The Panels tab folds into the Sessions tab | Miguel, Claude | proposed; amends 39 and 70 |

@@ -341,7 +341,7 @@ public final class Workspace {
         }
         List<String> parts = new ArrayList<>(3);
         if (!closing.isEmpty()) {
-            parts.add("Closed " + closing.size() + (closing.size() == 1 ? " tab" : " tabs") + KeyText.of("; ⌘⇧T or the Panels tab reopens them"));
+            parts.add("Closed " + closing.size() + (closing.size() == 1 ? " tab" : " tabs") + KeyText.of("; ⌘⇧T or the Sessions tab reopens them"));
         }
         if (waiting + running > 0) {
             List<String> why = new ArrayList<>(2);
@@ -863,7 +863,7 @@ public final class Workspace {
         rename(p.panel(), tabs, intents);
     }
 
-    /** Asks for a panel's new name over {@code owner}; the panel tabs and the Panels tab both rename this way. */
+    /** Asks for a panel's new name over {@code owner}; the panel tabs and the sidebar's panel rows rename this way. */
     static void rename(PanelState panel, Component owner, IntentSink intents) {
         String title = (String) JOptionPane.showInputDialog(owner, "Panel name", "Rename panel", JOptionPane.PLAIN_MESSAGE, null, null,
                 panel.title());
@@ -936,7 +936,7 @@ public final class Workspace {
                         // a menu's close says it once, below
                     } else if (kept) {
                         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Closed " + was.title()
-                                + KeyText.of("; ⌘⇧T or the Panels tab reopens it"), false));
+                                + KeyText.of("; ⌘⇧T or the Sessions tab reopens it"), false));
                     } else if (was.document()) {
                         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Closed " + was.title() + KeyText.of(" — ⌘⇧T reopens it"), false));
                     }

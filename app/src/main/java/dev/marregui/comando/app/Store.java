@@ -232,7 +232,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         if (!adopted.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "files in panels/ without a panel, listed as closed panels " + adopted);
             notices.accept(String.join(", ", adopted) + (adopted.size() == 1 ? " has" : " have")
-                    + " no panel; listed as closed in the Panels tab");
+                    + " no panel; listed as closed under the sessions, without a session");
         }
         if (!gone.isEmpty()) {
             LOG.log(System.Logger.Level.INFO, "files deleted while comando was closed, their panels dropped " + gone);
