@@ -74,7 +74,7 @@ public final class Hero {
         // the default permission mode, whatever the painter's own Claude Code sets: the turn's approvals are allowed below
         SessionSpec spec = SessionSpec.fresh("comando", repo).withModel("haiku");
         loop.dispatch(new Intent.SaveSession("", new SessionSpec(spec.name(), spec.workDir(), spec.model(), spec.effort(), "default",
-                spec.addDirs(), spec.budgetUsd(), spec.claudeSessionId(), spec.startMode(), spec.checkpoint())));
+                spec.addDirs(), spec.budgetUsd(), spec.claudeSessionId(), spec.startMode(), spec.checkpoint(), spec.carried())));
         loop.dispatch(new Intent.BindSession(loop.state().focused(), "comando"));
         loop.dispatch(new Intent.EditPanel(loop.state().focused(), TEXT, EditMode.REPLACE, ""));
 

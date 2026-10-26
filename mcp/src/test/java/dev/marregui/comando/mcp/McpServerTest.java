@@ -376,6 +376,8 @@ class McpServerTest {
 
     @Test
     void layoutFocusesSelectsAndArranges() throws Exception {
+        // work's own panel is one; two is a document attached to it
+        state.set(state.get().withPanel(new PanelState(States.P2, "two", "local", "work", true)));
         JsonNode r = tool("ui_set_layout", "{\"panel\":\"two\",\"lower_tab\":\"approvals\",\"sidebar\":false,\"lower_share\":0.5}");
         assertThat(r.path("isError").asBoolean(false)).isFalse();
         // one intent naming the session: the reducer decides what the user's window allows
@@ -393,6 +395,8 @@ class McpServerTest {
 
     @Test
     void layoutNamesAPanelInAnyCaseAsTheEditorToolsDo() throws Exception {
+        // work's own panel is one; two is a document attached to it
+        state.set(state.get().withPanel(new PanelState(States.P2, "two", "local", "work", true)));
         JsonNode r = tool("ui_set_layout", "{\"panel\":\"TWO\"}");
         assertThat(r.path("isError").asBoolean()).as(text(r)).isFalse();
         assertThat(sink.await(Intent.SessionLayout.class, WAIT).panel()).isEqualTo(States.P2);

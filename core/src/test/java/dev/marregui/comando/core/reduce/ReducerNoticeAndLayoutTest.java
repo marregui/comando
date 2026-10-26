@@ -14,6 +14,7 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -42,6 +43,12 @@ class ReducerNoticeAndLayoutTest {
     }
 
     // ---- notices
+
+    /** A second session, "other", whose own panel is p2: set as stored, as the reducer keeps it. */
+    private void otherOnP2() {
+        state = state.withSessions(List.of(state.session("work").orElseThrow(), SessionState.closed(SessionSpec.fresh("other", "/tmp"))))
+                .withPanel(state.panel(P2).orElseThrow().withSession("other"));
+    }
 
     @Test
     void anErrorStandsOverALaterInfoAboutSomethingElseAndTheHistoryKeepsBoth() {
@@ -193,12 +200,14 @@ class ReducerNoticeAndLayoutTest {
     }
 
     @Test
-    void importingOneConversationBindsItToAPanelWithoutASession() {
-        apply(new Intent.BindSession(P1, ""));
+    void importingOneConversationOpensItInItsOwnPanel() {
         apply(new Intent.ImportSessions(List.of(SessionSpec.imported("old", "/tmp", "abc"))));
 
-        assertThat(state.panel(P1).orElseThrow().session()).isEqualTo("old");
-        assertThat(state.notice().text()).contains("bound it to one");
+        assertThat(state.panel(P2).orElseThrow().session()).as("no other panel is taken").isEmpty();
+        PanelState own = state.homePanel("old").orElseThrow();
+        assertThat(own.title()).isEqualTo("old");
+        assertThat(state.focused()).isEqualTo(own.id());
+        assertThat(state.notice().text()).isEqualTo("Imported old and opened it in its own panel");
     }
 
     @Test
@@ -235,7 +244,7 @@ class ReducerNoticeAndLayoutTest {
 
     @Test
     void aViewFromASessionTheUserIsNotLookingAtDoesNotTakeTheLowerPanel() {
-        apply(new Intent.SaveSession("", SessionSpec.fresh("other", "/tmp")));
+        state = state.withSessions(List.of(state.session("work").orElseThrow(), SessionState.closed(SessionSpec.fresh("other", "/tmp"))));
         apply(new Intent.ShowView("other", "plot", new ViewSpec.Markdown("x"), Placement.LOWER));
 
         assertThat(state.lowerTab()).as("the tab it had: the first, Session").isEqualTo(LowerTab.SESSION);
@@ -248,8 +257,7 @@ class ReducerNoticeAndLayoutTest {
 
     @Test
     void aTabAskedWithAFocusWaitsForTheFocus() {
-        apply(new Intent.SaveSession("", SessionSpec.fresh("other", "/tmp")));
-        apply(new Intent.BindSession(P2, "other"));
+        otherOnP2();
         LowerTab before = state.lowerTab();
 
         apply(new Intent.SessionLayout("other", P2, LowerTab.TERMINAL, null));
@@ -261,18 +269,17 @@ class ReducerNoticeAndLayoutTest {
 
     @Test
     void aFocusRequestAppliedAfterThePanelWasReboundChangesNothing() {
-        apply(new Intent.SaveSession("", SessionSpec.fresh("other", "/tmp")));
-        apply(new Intent.BindSession(P2, "other"));
+        otherOnP2();
         apply(new Intent.SessionLayout("other", P2, LowerTab.TERMINAL, null));
         LowerTab before = state.lowerTab();
 
-        apply(new Intent.BindSession(P2, "work")); // the user rebinds the panel while typing
+        state = state.withPanel(state.panel(P2).orElseThrow().withSession("work")); // the panel was rebound meanwhile
         apply(new Intent.SessionFocus("other", P2, LowerTab.TERMINAL));
 
         assertThat(state.focused()).isEqualTo(P1);
         assertThat(state.lowerTab()).isEqualTo(before);
 
-        apply(new Intent.BindSession(P2, "other"));
+        state = state.withPanel(state.panel(P2).orElseThrow().withSession("other"));
         apply(new Intent.SessionFocus("other", P2, LowerTab.TERMINAL));
         assertThat(state.focused()).isEqualTo(P2);
         assertThat(state.lowerTab()).isEqualTo(LowerTab.TERMINAL);
@@ -280,8 +287,7 @@ class ReducerNoticeAndLayoutTest {
 
     @Test
     void aSessionFocusesOnlyItsOwnPanelAndSelectsTabsOnlyWhileTheUserLooksAtIt() {
-        apply(new Intent.SaveSession("", SessionSpec.fresh("other", "/tmp")));
-        apply(new Intent.BindSession(P2, "other"));
+        otherOnP2();
 
         apply(new Intent.SessionLayout("work", P2, LowerTab.SESSION, Layout.KEEP));
         assertThat(state.focused()).isEqualTo(P1);
@@ -413,7 +419,8 @@ class ReducerNoticeAndLayoutTest {
         apply(new Intent.SessionExited("work", 1, "boom"));
         assertThat(state.notice().subject()).isEqualTo(Notice.session("work"));
         apply(new Intent.RemoveSession("work"));
-        assertThat(state.notice()).isEqualTo(Notice.NONE);
+        assertThat(state.notice().subject()).as("its notice gone; what was removed said").isEmpty();
+        assertThat(state.notice().text()).isEqualTo("Removed session work and its panel");
     }
 
     @Test

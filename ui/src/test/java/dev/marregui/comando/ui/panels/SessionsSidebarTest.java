@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
 import com.formdev.flatlaf.FlatDarkLaf;
+import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
@@ -10,10 +11,13 @@ import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.AfterAll;
@@ -21,6 +25,8 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.AbstractButton;
+import javax.swing.Icon;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JMenuItem;
@@ -32,6 +38,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import javax.swing.plaf.basic.BasicHTML;
 import java.awt.Component;
+import java.awt.Color;
 import java.awt.Container;
 import java.awt.HeadlessException;
 import java.awt.Point;
@@ -210,7 +217,7 @@ class SessionsSidebarTest {
         assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Disconnected; click to connect (starts the session)");
         Rectangle row = cell(list, 0);
         assertThat(list.getToolTipText(event(list, new Rectangle(row.x + 30, row.y + 4, 4, 4), 0)))
-                .as("over the text: the details as Copy details copies them").isEqualTo(SessionRow.detailsTip(SessionRow.details(edge, 0L, ZoneOffset.UTC, "")));
+                .as("over the text no tooltip: the row's card shows there, as a tab's").isNull();
 
         intents.clear();
         click(list, power, 2);
@@ -290,6 +297,117 @@ class SessionsSidebarTest {
         assertThat(intents).containsExactly(new Intent.RemoveSession("edge"));
     }
 
+    @Test
+    void aRunningSessionsMenuHasItsPanelRewrittenAsADocumentAndNoClear() throws Exception {
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        PanelId notes = new PanelId("notes");
+        PanelId strategy = new PanelId("strategy");
+        PanelId other = new PanelId("other");
+        Map<PanelId, String> texts = new HashMap<>(Map.of(strategy, "i am loving comando so far\n\nthe strategy is ..."));
+        PanelTexts store = new PanelTexts() {
+            @Override
+            public String load(PanelId panel) {
+                return texts.getOrDefault(panel, "");
+            }
+
+            @Override
+            public void changed(PanelId panel, String text) {
+            }
+
+            @Override
+            public void forget(PanelId panel) {
+            }
+        };
+        SessionState stopped = SessionState.closed(SessionSpec.fresh("work", "/w"));
+        SessionState running = stopped.withStatus(Status.OPEN, "");
+        List<PanelState> panels = List.of(new PanelState(notes, "notes", "", "work"), new PanelState(strategy, "strategy", "", "work"),
+                new PanelState(other, "other", "", ""));
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intents::add, new Dialogs(), store, () -> {
+            }, ResourceActions.Questions.MODAL);
+            s[0].render(AppState.initial(panels, List.of(), List.of(stopped)));
+        });
+        SessionsSidebar sidebar = s[0];
+        assertThat(on(() -> itemTexts(sidebar.sessionMenu(stopped)))).as("stopped: no session to ask")
+                .noneMatch(t -> t.startsWith("Rewrite")).doesNotContain("Clear the conversation");
+
+        SwingUtilities.invokeAndWait(() -> sidebar.render(AppState.initial(panels, List.of(), List.of(running)).withPanels(panels, strategy)));
+        assertThat(on(() -> itemTexts(sidebar.sessionMenu(running)))).as("the checkpoint clears").doesNotContain("Clear the conversation");
+        JMenuItem rewrite = on(() -> menuItem(sidebar.sessionMenu(running), "Rewrite strategy as a document"));
+        assertThat(rewrite.isEnabled()).as("the focused panel, the session's").isTrue();
+        assertThat(rewrite.getToolTipText()).isEqualTo(EditorPanel.POLISH_TIP);
+        SwingUtilities.invokeAndWait(rewrite::doClick);
+        assertThat(intents).singleElement().isInstanceOfSatisfying(Intent.RunText.class, r -> {
+            assertThat(r.panel()).isEqualTo(strategy);
+            assertThat(r.target()).as("to the panel's session, never to SQL").isEqualTo(Target.CLAUDE);
+            assertThat(r.text()).startsWith("Rewrite the text below, the whole text of the comando panel \"strategy\"")
+                    .contains("replace the panel's text with it (comando's ui_set_editor, panel \"strategy\")")
+                    .endsWith("\n\ni am loving comando so far\n\nthe strategy is ...");
+        });
+
+        intents.clear();
+        SwingUtilities.invokeAndWait(() -> sidebar.render(AppState.initial(panels, List.of(), List.of(running)).withPanels(panels, other)));
+        JMenuItem first = on(() -> menuItem(sidebar.sessionMenu(running), "Rewrite notes as a document"));
+        assertThat(first.isEnabled()).as("focus elsewhere: the session's first panel, empty, asks nothing").isFalse();
+    }
+
+    @Test
+    void aSessionRowShowsTheWorkspacesCardOverItsTextAndTellsItWhenThePointerLeaves() throws Exception {
+        List<String> told = new CopyOnWriteArrayList<>();
+        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(work));
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intent -> {
+            }, new Dialogs(), () -> {
+            });
+            s[0].cards(new SessionsSidebar.Cards() {
+                @Override
+                public void show(String session, JComponent over, Rectangle row) {
+                    told.add("show " + session + " " + row.y);
+                }
+
+                @Override
+                public void left() {
+                    told.add("left");
+                }
+            });
+            s[0].render(state);
+        });
+        SessionsSidebar sidebar = s[0];
+        JList<?> list = find(sidebar.component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+        SwingUtilities.invokeAndWait(() -> {
+            list.setSize(260, 400);
+            list.doLayout();
+        });
+        Rectangle row = cell(list, 0);
+        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_MOVED, row.x + 60, row.y + 6, 0)));
+        assertThat(sidebar.cardRow()).as("the wait for its card starts").isEqualTo("work");
+        SwingUtilities.invokeAndWait(sidebar::showCardNow);
+        assertThat(told).containsExactly("show work " + row.y);
+
+        Rectangle power = bounds(sidebar, SessionRow.Control.POWER);
+        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(event(list, power, 0)));
+        assertThat(told).as("onto a control: its own tip, the card told").containsExactly("show work " + row.y, "left");
+        assertThat(sidebar.cardRow()).isNull();
+
+        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_MOVED, row.x + 60, row.y + 6, 0)));
+        SwingUtilities.invokeAndWait(sidebar::showCardNow);
+        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_EXITED, row.x + 60, row.y + 6, 0)));
+        assertThat(told).as("off the list").endsWith("show work " + row.y, "left");
+    }
+
+    private static List<String> itemTexts(JPopupMenu menu) {
+        List<String> out = new ArrayList<>();
+        for (Component c : menu.getComponents()) {
+            if (c instanceof JMenuItem m) {
+                out.add(m.getText());
+            }
+        }
+        return out;
+    }
+
     private static <T> T on(Callable<T> c) throws Exception {
         AtomicReference<T> out = new AtomicReference<>();
         SwingUtilities.invokeAndWait(() -> {
@@ -331,11 +449,13 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void aRowNamesThePanelsItIsBoundToElseHeadlessAndItsPlugShowsTheState() throws Exception {
+    void aRowDimsTheNameWhileItsOwnPanelIsNotOpenAndItsStateIconConnects() throws Exception {
         SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
         SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
-        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work"),
-                new PanelState(new PanelId("q"), "notes", "", "work")), List.of(), List.of(edge, work));
+        SessionState old = SessionState.closed(SessionSpec.fresh("old", "/w/old"));
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "work", "", "work"),
+                new PanelState(new PanelId("q"), "PLAN.md", "", "work", true)), List.of(), List.of(edge, work, old))
+                .withClosed(List.of(new PanelState(new PanelId("e"), "edge", "", "edge")));
         SessionsSidebar[] s = new SessionsSidebar[1];
         SwingUtilities.invokeAndWait(() -> {
             s[0] = new SessionsSidebar(intent -> {
@@ -344,15 +464,16 @@ class SessionsSidebarTest {
             s[0].render(state);
         });
         JList<?> list = find(s[0].component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
-        assertThat(rowText(list, 0)).as("running first").contains("· main, notes");
-        assertThat(rowText(list, 1)).contains("· headless").doesNotContain("this panel");
+        assertThat(rowText(list, 0)).as("running first; one of its panels has the focus")
+                .contains("<b style='color:" + Theme.hex(Theme.ACCENT) + "'>work</b>").doesNotContain("PLAN.md", "·");
+        String dimmed = "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";
+        assertThat(rowText(list, 1)).as("its own panel closed").contains(dimmed + "edge</b>");
+        assertThat(rowText(list, 2)).as("no panel").contains(dimmed + "old</b>");
 
         SessionRow row = (SessionRow) render(list, 0);
         assertThat(row.tip(new Rectangle(0, 0, 260, 60), new Point(0, 0))).isEmpty();
-        assertThat(SessionRow.Control.values()).as("no edit control: the button above the list edits")
-                .containsExactly(SessionRow.Control.POWER, SessionRow.Control.FRESH, SessionRow.Control.CHECKPOINT,
-                        SessionRow.Control.COMPACT, SessionRow.Control.CLEAR, SessionRow.Control.MODEL, SessionRow.Control.EFFORT,
-                        SessionRow.Control.COPY);
+        assertThat(SessionRow.Control.values()).as("the state icon alone: the rest is in the menu")
+                .containsExactly(SessionRow.Control.POWER);
         Rectangle power = s[0].controlBounds(0, SessionRow.Control.POWER);
         assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Connected; click to disconnect (stops the session)");
     }
@@ -414,10 +535,11 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void aHoveredRowCopiesItsDetailsAndARunningOneCompactsOrClears() throws Exception {
+    void aSessionsMenuHoldsWhatItsRowHeld() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();
         List<String> copied = new CopyOnWriteArrayList<>();
-        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
+        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work").withModel("opus").withEffort("high").resumable("conv-1"))
+                .withStatus(Status.OPEN, "");
         AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(work));
         SessionsSidebar[] s = new SessionsSidebar[1];
         SwingUtilities.invokeAndWait(() -> {
@@ -427,34 +549,55 @@ class SessionsSidebarTest {
             s[0].render(state);
         });
         SessionsSidebar sidebar = s[0];
-        JList<?> list = find(sidebar.component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
-        SwingUtilities.invokeAndWait(() -> {
-            list.setSize(260, 400);
-            list.doLayout();
-        });
-        Rectangle[] copy = new Rectangle[1];
-        SwingUtilities.invokeAndWait(() -> copy[0] = sidebar.controlBounds(0, SessionRow.Control.COPY));
-        assertThat(copy[0].width).as("no copy button away from the mouse").isZero();
-
-        Rectangle row = cell(list, 0);
-        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_MOVED, row.x + 60, row.y + 6, 0)));
-        Rectangle copyButton = bounds(sidebar, SessionRow.Control.COPY);
-        assertThat(copyButton.x + copyButton.width).as("at the right").isGreaterThan(row.x + row.width - 30);
-        click(list, copyButton, 1);
+        assertThat(on(() -> itemTexts(sidebar.sessionMenu(work)))).as("running: compact and the checkpoint, no fresh start")
+                .contains("Checkpoint", "Compact the conversation", "Model: opus", "Effort: high", "Copy details")
+                .doesNotContain("Start a new conversation");
+        SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(work), "Compact the conversation").doClick());
+        SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(work), "Checkpoint").doClick());
+        SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(work), "Copy details").doClick());
+        assertThat(intents).containsExactly(new Intent.SessionCommand("work", "/compact"), new Intent.Checkpoint("work"));
         assertThat(copied).singleElement().asString().startsWith("Session: work\nPath: /w/work\n");
 
-        click(list, bounds(sidebar, SessionRow.Control.COMPACT), 1);
-        click(list, bounds(sidebar, SessionRow.Control.CLEAR), 1);
-        assertThat(intents).containsExactly(new Intent.SessionCommand("work", "/compact"), new Intent.SessionCommand("work", "/clear"));
-        Rectangle compact = bounds(sidebar, SessionRow.Control.COMPACT);
-        Rectangle model = bounds(sidebar, SessionRow.Control.MODEL);
-        assertThat(compact.x).as("the session's controls at the left, its settings at the right").isLessThan(model.x);
-        assertThat(model.x + model.width + bounds(sidebar, SessionRow.Control.EFFORT).width).isGreaterThan(row.width - 80);
+        SessionState stopped = work.withStatus(Status.CLOSED, "");
+        SwingUtilities.invokeAndWait(() -> sidebar.render(state.withSessions(List.of(stopped))));
+        assertThat(on(() -> itemTexts(sidebar.sessionMenu(stopped)))).as("stopped: a fresh start, nothing to compact")
+                .contains("Start a new conversation").doesNotContain("Compact the conversation");
+        intents.clear();
+        SwingUtilities.invokeAndWait(() -> menuItem(sidebar.sessionMenu(stopped), "Start a new conversation").doClick());
+        assertThat(intents).containsExactly(new Intent.StartFresh("work"));
+    }
 
-        SwingUtilities.invokeAndWait(() -> sidebar.render(state.withSessions(List.of(work.withStatus(Status.CLOSED, "")))));
-        Rectangle[] stopped = new Rectangle[1];
-        SwingUtilities.invokeAndWait(() -> stopped[0] = sidebar.controlBounds(0, SessionRow.Control.CLEAR));
-        assertThat(stopped[0].width).as("a stopped session has nothing to compact or clear").isZero();
+    @Test
+    void aSessionStartedUnderThePointerKeepsItsRowUntilThePointerLeaves() throws Exception {
+        SessionState developer = SessionState.closed(SessionSpec.fresh("comando developer", "/w"));
+        SessionState improvement = SessionState.closed(SessionSpec.fresh("comando improvement", "/w"));
+        SessionState goose = SessionState.closed(SessionSpec.fresh("Goose", "/w"));
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(), List.of(developer, improvement, goose));
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intent -> { }, new Dialogs(), () -> {
+            });
+            s[0].render(state);
+        });
+        SessionsSidebar sidebar = s[0];
+        JList<?> list = find(sidebar.component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
+        assertThat(names(list)).containsExactly("comando developer", "comando improvement", "Goose");
+
+        // the second row started with the pointer on the list: it stays second, so the pointer is still on it
+        AppState started = state.withSessions(List.of(developer, improvement.withStatus(Status.OPEN, ""), goose));
+        SwingUtilities.invokeAndWait(() -> {
+            list.dispatchEvent(mouse(list, MouseEvent.MOUSE_ENTERED, 10, 30, 0));
+            sidebar.render(started);
+        });
+        assertThat(names(list)).containsExactly("comando developer", "comando improvement", "Goose");
+        assertThat(((SessionState) list.getModel().getElementAt(1)).status()).as("with its new state").isEqualTo(Status.OPEN);
+
+        // the pointer leaves: running first
+        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_EXITED, -1, -1, 0)));
+        assertThat(names(list)).containsExactly("comando improvement", "comando developer", "Goose");
+
+        assertThat(SessionsSidebar.held(List.of(developer, improvement), List.of(goose, improvement)))
+                .as("a removed session goes, a new one comes last").containsExactly(improvement, goose);
     }
 
     @Test
@@ -477,20 +620,57 @@ class SessionsSidebarTest {
                 """);
         assertThat(SessionRow.details(SessionState.closed(SessionSpec.fresh("new", "/w/new")), started, ZoneOffset.UTC, ""))
                 .contains("Session id: none yet\n", "Status: closed\n", "Context: unknown until a turn ends\n").doesNotContain("Uptime");
-        assertThat(SessionRow.detailsTip("Session: a<b>\nPath: /w\n")).as("the same lines, as text")
-                .isEqualTo("<html>Session: a&lt;b&gt;<br>Path: /w</html>");
     }
 
     @Test
-    void aRowSaysCtxAndUptimeUnderItsFolderAndLeavesTheIdToTheTooltip() {
+    void aRowIsOneLineItsStateIconAndTheName() throws Exception {
         long started = 1_760_000_000_000L;
         SessionState running = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").resumable("e41164bc-160c-4e3e-b43b-3218489da4e1"))
-                .withStatus(Status.OPEN, "").withStarted(started).withUsage(0.0, 84_000L, 200_000L, started);
-        String[] lines = SessionRow.bodyHtml(running, started + 65 * 60_000L, "").split("<br>");
-        assertThat(lines).hasSize(2);
-        assertThat(lines[1]).contains(">ctx 42%<", "up 1 h 05 min").doesNotContain("context", "e41164bc");
-        String[] fresh = SessionRow.bodyHtml(SessionState.closed(SessionSpec.fresh("new", "/w/new")), started, "").split("<br>");
-        assertThat(fresh).as("nothing known: no empty line, the controls come up under the folder").hasSize(1);
+                .withStatus(Status.OPEN, "").withStarted(started).withUsage(0.0, 84_000L, 200_000L, started).withBranch("main");
+        assertThat(SessionRow.titleHtml(running, true, false, 0, "")).isEqualTo("<html><nobr><b>edge</b></nobr></html>");
+        assertThat(SessionRow.titleHtml(running, false, false, 2, "")).as("its own panel not open: dimmed; approvals waiting")
+                .contains("<b style='color:" + Theme.hex(Theme.MUTED) + "'>edge</b>", "⚑2");
+        assertThat(SessionRow.titleHtml(running.withReflection(new Reflection(true, false)), true, false, 0, ""))
+                .as("the checkpoint due: the context in purple").contains("<span style='color:" + Theme.hex(Theme.THINKING) + "'>42%</span>");
+        SessionRow[] row = new SessionRow[1];
+        int[] height = new int[3];
+        Icon[] icons = new Icon[2];
+        SwingUtilities.invokeAndWait(() -> {
+            row[0] = new SessionRow();
+            row[0].show(running, true, false, 0, false, Color.BLACK, Color.WHITE, "");
+            height[0] = row[0].getPreferredSize().height;
+            icons[0] = row[0].stateIcon();
+            row[0].show(SessionState.closed(SessionSpec.fresh("new", "/w/new")), false, false, 0, false, Color.BLACK, Color.WHITE, "");
+            height[1] = row[0].getPreferredSize().height;
+            icons[1] = row[0].stateIcon();
+            height[2] = new JLabel("<html>x</html>").getPreferredSize().height;
+        });
+        System.out.println("session row height: running " + height[0] + " px, stopped " + height[1] + " px, a line " + height[2] + " px");
+        assertThat(height[0]).isEqualTo(height[1]);
+        assertThat(height[0]).as("one line").isLessThan(2 * height[2] + 2);
+        assertThat(icons).containsExactly(Icons.get("claude"), Icons.get("claude-off"));
+        assertThat(SessionIcons.of(Status.OPENING)).isEqualTo("claude-starting");
+        assertThat(SessionIcons.of(Status.FAILED)).isEqualTo("claude-failed");
+        assertThat(SessionRow.powerTip(running)).isEqualTo("Connected; click to disconnect (stops the session)");
+        assertThat(SessionRow.powerTip(running.withTurns(1, started).withActivity("Bash", started)))
+                .isEqualTo("Working: Bash; connected; click to disconnect (stops the session)");
+    }
+
+    @Test
+    void theModelAndEffortChipsSayWhatTheSessionRunsAt() {
+        SessionState stopped = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
+        assertThat(List.of(SessionRow.modelName(stopped), SessionRow.effortName(stopped))).containsExactly("default", "default");
+        SessionState running = stopped.withStatus(Status.OPEN, "")
+                .withInfo(new SessionInfo("id", "claude-opus-5-5", "/w", "2.1", "default", List.of(), "high"), 0L);
+        assertThat(List.of(SessionRow.modelName(running), SessionRow.effortName(running))).as("as reported, and from Claude Code's settings")
+                .containsExactly("opus", "high");
+        assertThat(SessionRow.modelTip(running)).startsWith("Model: claude-opus-5-5, as the session reported it");
+        assertThat(SessionRow.effortTip(running)).isEqualTo("Effort: high, Claude Code's setting for this model; the base each turn starts at,"
+                + " which a turn may raise; click to change");
+        SessionState set = running.withSpec(running.spec().withEffort("low").withModel("haiku"));
+        assertThat(SessionRow.effortName(set)).as("the session's own setting first").isEqualTo("low");
+        assertThat(SessionRow.modelName(set)).as("the model it runs until it starts again").isEqualTo("opus");
+        assertThat(SessionRow.modelName(set.withStatus(Status.CLOSED, ""))).isEqualTo("haiku");
     }
 
     @Test
@@ -501,14 +681,14 @@ class SessionsSidebarTest {
         String newest = SessionRow.newestCli(List.of(older, newer, SessionState.closed(SessionSpec.fresh("new", "/w/new"))));
         assertThat(newest).isEqualTo("2.1.303");
 
-        assertThat(SessionRow.bodyHtml(newer, started, newest)).contains("claude 2.1.303<").doesNotContain("↑", Theme.hex(Theme.warn()));
-        assertThat(SessionRow.bodyHtml(older, started, newest)).as("started before the update: amber, with an arrow")
-                .contains("color:" + Theme.hex(Theme.warn()) + "'>claude 2.1.302 ↑<");
+        assertThat(SessionRow.titleHtml(newer, true, false, 0, newest)).doesNotContain("↑");
+        assertThat(SessionRow.titleHtml(older, true, false, 0, newest)).as("started before the update: an amber arrow after the name")
+                .contains(">edge</b>&nbsp;<span style='color:" + Theme.hex(Theme.warn()) + "'>↑</span>");
         assertThat(SessionRow.details(older, started, ZoneOffset.UTC, newest))
                 .contains("Claude Code: 2.1.302, older than the 2.1.303 another session runs; start this one again to use it\n");
         assertThat(SessionRow.details(newer, started, ZoneOffset.UTC, newest)).contains("Claude Code: 2.1.303\n");
-        assertThat(SessionRow.bodyHtml(older.withStatus(Status.CLOSED, ""), started, newest))
-                .as("a stopped session runs no Claude Code").doesNotContain("claude 2.1");
+        assertThat(SessionRow.titleHtml(older.withStatus(Status.CLOSED, ""), true, false, 0, newest))
+                .as("a stopped session runs no Claude Code").doesNotContain("↑");
 
         assertThat(SessionRow.compareVersions("2.1.303", "2.1.302")).isPositive();
         assertThat(SessionRow.compareVersions("2.2.0", "2.1.303")).isPositive();

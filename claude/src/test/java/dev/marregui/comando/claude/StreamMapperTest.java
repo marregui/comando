@@ -33,6 +33,29 @@ class StreamMapperTest {
     }
 
     @Test
+    void aCheckpointsClearShowsOnlyWhatItCarriedAndAClearByHandShowsItself() {
+        String reset = "{\"type\":\"conversation_reset\",\"trigger\":\"clear\"}";
+        String result = "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"result\":\"\",\"total_cost_usd\":0,"
+                + "\"duration_ms\":3,\"num_turns\":0}";
+        mapper.carried("## Reflected\nmemory written");
+        mapper.clearQuietly();
+        mapper.accept(reset);
+        mapper.accept(result);
+        assertThat(blocks()).hasSize(3);
+        assertThat(blocks().get(0)).isInstanceOfSatisfying(Block.Note.class,
+                n -> assertThat(n.text()).isEqualTo("Conversation cleared after the checkpoint; its summary below goes in front of the next prompt"));
+        assertThat(blocks().get(1)).isInstanceOfSatisfying(Block.AssistantText.class,
+                a -> assertThat(a.text()).isEqualTo("## Reflected\nmemory written"));
+        assertThat(blocks().get(2)).isEqualTo(Block.TurnEnd.stored());
+        assertThat(sink.of(Intent.SessionTurnEnded.class)).as("the clear's turn still ends").hasSize(1);
+
+        mapper.accept(reset);
+        mapper.accept(result);
+        assertThat(blocks(Block.Note.class)).last().extracting(Block.Note::text).asString().startsWith("Conversation cleared (clear)");
+        assertThat(blocks(Block.TurnEnd.class)).hasSize(2);
+    }
+
+    @Test
     void approvalsAndQuestionRecording() {
         mapper.prompt("Run the shell command: touch probe-file.txt", "one");
         Fixtures.stream("approvals-and-question").forEach(mapper::accept);
@@ -64,6 +87,8 @@ class StreamMapperTest {
         // the context is the last API call's input, not result.usage, which sums every call of the turn
         assertThat(ends).extracting(Intent.SessionTurnEnded::contextTokens).containsExactly(34_699L, 35_134L);
         assertThat(blocks(Block.TurnEnd.class)).hasSize(2);
+        assertThat(ends).as("each turn's last answer, which a checkpoint carries").extracting(Intent.SessionTurnEnded::result)
+                .containsExactly("DONE", "You answered **red**.");
         assertThat(blocks(Block.Note.class)).filteredOn(n -> n.kind() == Block.NoteKind.INIT).hasSize(1);
     }
 

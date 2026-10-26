@@ -1,6 +1,5 @@
 package dev.marregui.comando.ui.panels;
 
-import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -13,6 +12,8 @@ import dev.marregui.comando.ui.PanelTexts;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.AbstractButton;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
@@ -78,26 +79,79 @@ class EditorPanelHeaderTest {
     }
 
     @Test
-    void aRunningSessionsPanelCompactsAndClearsItsConversation() throws Exception {
+    void aRunningSessionsPanelCompactsItsConversationAndNeitherClearsNorRewritesFromItsHeader() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();
         SessionState stopped = SessionState.closed(SessionSpec.fresh("work", "/w"));
         PanelState panel = new PanelState(A, "one", "", "work");
         EditorPanel[] p = new EditorPanel[1];
         SwingUtilities.invokeAndWait(() -> {
-            p[0] = new EditorPanel(panel, intents::add, new SchemaRegistry());
+            // made before its session was bound: the buttons act on the session it shows
+            p[0] = new EditorPanel(new PanelState(A, "one", "", ""), intents::add, new SchemaRegistry());
             p[0].render(panel, AppState.initial(List.of(panel), List.of(), List.of(stopped)));
         });
         assertThat(button(p[0], "Compact the conversation").isVisible()).as("stopped: nothing to compact").isFalse();
-        assertThat(button(p[0], "Clear the conversation").isVisible()).isFalse();
 
         SwingUtilities.invokeAndWait(() -> p[0].render(panel, AppState.initial(List.of(panel), List.of(),
                 List.of(stopped.withStatus(Status.OPEN, "")))));
+        assertThat(button(p[0], "Clear the conversation")).as("the checkpoint clears").isNull();
+        assertThat(button(p[0], "Rewrite as a document")).as("in the session's menu in the sidebar").isNull();
+        assertThat(button(p[0], "Checkpoint").getToolTipText()).contains("then clears the conversation and carries its summary");
+        SwingUtilities.invokeAndWait(() -> button(p[0], "Compact the conversation").doClick());
+        assertThat(intents).containsExactly(new Intent.SessionCommand("work", SessionSpec.COMPACT_COMMAND));
+    }
+
+    @Test
+    void theSessionChipsMenuFollowsThePanelsKind() throws Exception {
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        List<String> created = new CopyOnWriteArrayList<>();
+        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w"));
+        PanelState own = new PanelState(A, "work", "", "work");
+        PanelState notes = new PanelState(new PanelId("n"), "notes", "", "");
+        PanelState doc = new PanelState(new PanelId("d"), "PLAN.md", "", "", true);
+        AppState state = AppState.initial(List.of(own, notes, doc), List.of(), List.of(work));
+        List<List<String>> menus = new ArrayList<>();
+        EditorPanel[] view = new EditorPanel[1];
         SwingUtilities.invokeAndWait(() -> {
-            button(p[0], "Compact the conversation").doClick();
-            button(p[0], "Clear the conversation").doClick();
+            for (PanelState p : List.of(own, notes, doc, doc.withSession("work"))) {
+                EditorPanel e = new EditorPanel(p, intents::add, new SchemaRegistry());
+                e.onNewSession(created::add);
+                e.render(p, state);
+                menus.add(texts(e.sessionMenu()));
+                if (p == notes) {
+                    view[0] = e;
+                }
+            }
         });
-        assertThat(intents).containsExactly(new Intent.SessionCommand("work", SessionSpec.COMPACT_COMMAND),
-                new Intent.SessionCommand("work", SessionSpec.CLEAR_COMMAND));
+        assertThat(menus.get(0)).as("its own panel").containsExactly("work's own panel: removing either removes both");
+        assertThat(menus.get(1)).as("a panel without a session").containsExactly("New session notes…", "Open work  /w");
+        assertThat(menus.get(2)).as("a document").containsExactly("Attach to work  /w");
+        assertThat(menus.get(3)).as("a document attached").containsExactly("Detach from work");
+
+        SwingUtilities.invokeAndWait(() -> click(view[0].sessionMenu(), "New session notes…"));
+        assertThat(created).containsExactly("notes");
+        SwingUtilities.invokeAndWait(() -> click(view[0].sessionMenu(), "Open work  /w"));
+        assertThat(intents).singleElement().isInstanceOfSatisfying(Intent.OpenSession.class,
+                o -> assertThat(o.session()).as("its own panel comes forward; this one is not taken").isEqualTo("work"));
+    }
+
+    private static List<String> texts(JPopupMenu menu) {
+        List<String> out = new ArrayList<>();
+        for (Component c : menu.getComponents()) {
+            if (c instanceof JMenuItem m) {
+                out.add(m.getText());
+            }
+        }
+        return out;
+    }
+
+    private static void click(JPopupMenu menu, String text) {
+        for (Component c : menu.getComponents()) {
+            if (c instanceof JMenuItem m && text.equals(m.getText())) {
+                m.doClick();
+                return;
+            }
+        }
+        throw new AssertionError("no item " + text);
     }
 
     @Test
@@ -137,37 +191,6 @@ class EditorPanelHeaderTest {
             assertThat(b.getToolTipText()).as(name).isNotBlank();
             assertThat(b.getClientProperty("JButton.buttonType")).as(name + ": no button shape").isEqualTo("toolBarButton");
         }
-    }
-
-    @Test
-    void aRunningSessionsPanelHasItsTextRewrittenAsADocumentByItsOwnSession() throws Exception {
-        List<Intent> intents = new CopyOnWriteArrayList<>();
-        SessionState stopped = SessionState.closed(SessionSpec.fresh("work", "/w"));
-        PanelState panel = new PanelState(A, "strategy", "", "work");
-        EditorPanel[] p = new EditorPanel[1];
-        SwingUtilities.invokeAndWait(() -> {
-            p[0] = new EditorPanel(panel, intents::add, new SchemaRegistry());
-            p[0].render(panel, AppState.initial(List.of(panel), List.of(), List.of(stopped)));
-        });
-        assertThat(button(p[0], "Rewrite as a document").isVisible()).as("stopped: no session to ask").isFalse();
-
-        SwingUtilities.invokeAndWait(() -> p[0].render(panel, AppState.initial(List.of(panel), List.of(),
-                List.of(stopped.withStatus(Status.OPEN, "")))));
-        assertThat(button(p[0], "Rewrite as a document").getToolTipText()).isEqualTo(EditorPanel.POLISH_TIP);
-        SwingUtilities.invokeAndWait(() -> button(p[0], "Rewrite as a document").doClick());
-        assertThat(intents).as("an empty panel asks nothing").isEmpty();
-
-        SwingUtilities.invokeAndWait(() -> {
-            p[0].editor().area().setText("i am loving comando so far\n\nthe strategy is ...");
-            button(p[0], "Rewrite as a document").doClick();
-        });
-        assertThat(intents).singleElement().isInstanceOfSatisfying(Intent.RunText.class, r -> {
-            assertThat(r.panel()).isEqualTo(A);
-            assertThat(r.target()).as("to the panel's session, never to SQL").isEqualTo(Target.CLAUDE);
-            assertThat(r.text()).startsWith("Rewrite the text below, the whole text of the comando panel \"strategy\"")
-                    .contains("replace the panel's text with it (comando's ui_set_editor, panel \"strategy\")")
-                    .endsWith("\n\ni am loving comando so far\n\nthe strategy is ...");
-        });
     }
 
     private static AbstractButton button(Container root, String name) {

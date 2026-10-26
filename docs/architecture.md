@@ -39,6 +39,11 @@ test trees, and a browser over folders of documents.
 
 `ui` depends on `core` only; `app` is the one module that sees every other.
 
+A module exists only where it separates an external dependency or enforces a boundary a package cannot: `core`
+depends on the JDK alone, each adapter module wraps one outside system, only `app` sees them all, and `testkit` holds
+the fakes every module's tests share. Merging `mcp` into `db` would be the riskiest merge, because it would open a
+route from Claude to the database that does not pass the approval card.
+
 Each module has a README on its classes, its threads and its interface with the others:
 [`core`](../core/README.md), [`testkit`](../testkit/README.md), [`db`](../db/README.md),
 [`claude`](../claude/README.md), [`mcp`](../mcp/README.md), [`tools`](../tools/README.md), [`ui`](../ui/README.md),
@@ -104,7 +109,7 @@ One immutable record of metadata and ids. Lists are tens of entries, so lookups 
 | `closed` | comando's own panels the user closed, kept with their bindings until removed |
 | `focused` | the panel the user works in; the lower panel follows it |
 | `connections` | each connection's spec, status (closed, opening, open, closing, failed) and last error |
-| `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, process and turn start, last turn error, background tasks, whether a checkpoint is due |
+| `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, process and turn start, last turn error, background tasks, whether a checkpoint is due, whether the running checkpoint clears when it ends |
 | `folders` | the Files tab's folders and repositories in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository (shown under Repositories) |
 | `runs` | at most one SQL run per panel: request id, SQL, status, counts, timings, error, whether it is a live plot's background refresh |
 | `approvals` | permission prompts waiting for an answer, from every session |
@@ -114,7 +119,8 @@ One immutable record of metadata and ids. Lists are tens of entries, so lookups 
 | `nextId` | the next request, view or run id |
 
 Invariants: at least one panel; `focused` names a panel (both checked by the record's constructor); connection and
-session names are unique; one run per panel; a session is bound to at most one panel, open or closed.
+session names are unique; one run per panel; a session has at most one panel of comando's own, open or closed, titled
+with its name, and any number of documents attached (record 88).
 
 ### 4.2 Intents
 
@@ -169,7 +175,7 @@ queues and returns.
 | Port | Effects |
 |---|---|
 | `DatabasePort` | `OpenDb`, `CloseDb`, `ForgetSchema`, `TestDb`, `ExecuteSql`, `CancelSql`, `ReleaseResult`, `LoadSchema` |
-| `ClaudePort` | `StartClaude`, `StopClaude`, `SendToClaude`, `InterruptClaude`, `LoadHistory`, `ClearTranscript`, `ForgetSession`, `ShowSubagent` |
+| `ClaudePort` | `StartClaude`, `StopClaude`, `SendToClaude`, `InterruptClaude`, `LoadHistory`, `ClearTranscript`, `ClearConversation`, `ForgetSession`, `ShowSubagent` |
 | `ApprovalPort` | `ResolveApproval` |
 | `UiPort` | `EditPanelText`, `DesktopNotify`, `ForgetPanel`, `DeletePanel`, `ShowFile`, `Arrange`, `ShowFolder`, `ShowRepos`, `ShowChange`, `ShowPlanUsage` |
 | `PersistencePort` | `SaveConnections`, `SaveSessions`, `SaveFolders`, `SavePanels` |
@@ -211,7 +217,7 @@ transcript text.
 | `Clock` | `millis` | `Clock.SYSTEM` |
 | `DatabasePort` | `open`, `close`, `forgetSchema`, `test`, `execute`, `cancel`, `release`, `loadSchema` | `DbAdapter` |
 | `QueryPort` | `query`, `describe` (futures of text rows, for Claude) | `DbAdapter` |
-| `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `clearTranscript`, `loadHistory`, `forget`, `showSubagent` | `ClaudeAdapter` |
+| `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `clearTranscript`, `clearConversation`, `loadHistory`, `forget`, `showSubagent` | `ClaudeAdapter` |
 | `McpGateway` | `register(session)` gives the URL and bearer token a session's CLI uses; `unregister` | `McpServer` |
 | `ApprovalPort` | `resolve` | `McpServer` |
 | `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles`, `watchRepos`, `readChange`, `rollBack`, `removeFiles`, `unstage` | `ToolsAdapter` |

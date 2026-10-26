@@ -40,7 +40,8 @@ public final class EffectRouter implements StateLoop.EffectHandler {
             case Effect.LoadSchema e -> db.loadSchema(e.spec(), e.show());
             case Effect.StartClaude e -> claude.start(e.spec());
             case Effect.StopClaude e -> claude.stop(e.name());
-            case Effect.SendToClaude e -> claude.send(e.name(), e.text(), e.origin());
+            case Effect.SendToClaude e -> claude.send(e.name(), e.text(), e.origin(), e.preface());
+            case Effect.ClearConversation e -> claude.clearConversation(e.name(), e.carried());
             case Effect.InterruptClaude e -> claude.interrupt(e.name());
             case Effect.ClearTranscript e -> claude.clearTranscript(e.name());
             case Effect.LoadHistory e -> claude.loadHistory(e.spec());

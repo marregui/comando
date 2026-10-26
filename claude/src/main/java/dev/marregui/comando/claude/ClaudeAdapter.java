@@ -148,6 +148,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             this.name = name;
             this.transcript = transcripts.of(name);
             this.mapper = new StreamMapper(name, transcript, sink, json);
+            // the CLI's own settings, beside its projects folder: the base effort the stream does not report
+            this.mapper.effortFrom(model -> BaseEffort.base(settings.projectsDir().resolveSibling("settings.json"), model, json));
             this.strand = Threads.strand("claude-strand-" + name);
         }
 
@@ -194,7 +196,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     }
 
     @Override
-    public void send(String name, String text, String origin) {
+    public void send(String name, String text, String origin, String preface) {
         Session s = session(name);
         s.run(() -> {
             s.mapper.prompt(text, origin);
@@ -213,13 +215,45 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 sink.dispatch(new Intent.SessionTurnEnded(name, 0, -1.0, -1L, 0L, true, "session not running"));
                 return;
             }
-            ObjectNode line = json.createObjectNode();
-            line.put("type", "user");
-            ObjectNode message = line.putObject("message");
-            message.put("role", "user");
-            message.put("content", text);
-            s.current.process.send(line.toString());
+            sendLine(s, preface + text);
         });
+    }
+
+    /**
+     * On the session's strand, so no line of the stream lands between the clear and the mapper forgetting where its
+     * blocks were. The {@code /clear} goes after the transcript shows what the checkpoint carried; its own note and turn
+     * end are not shown.
+     */
+    @Override
+    public void clearConversation(String name, String carried) {
+        Session s = sessions.get(name);
+        if (s == null) {
+            return;
+        }
+        s.run(() -> {
+            s.transcript.clear();
+            s.mapper.forgetBlocks();
+            s.mapper.carried(carried);
+            if (s.current == null || !s.current.isAlive()) {
+                s.mapper.note(Block.NoteKind.ERROR, "Session is not running; the conversation was not cleared");
+                s.transcript.changed();
+                sink.dispatch(new Intent.SessionTurnEnded(name, 0, -1.0, -1L, 0L, true, "session not running"));
+                return;
+            }
+            s.transcript.changed();
+            s.mapper.clearQuietly();
+            sendLine(s, SessionSpec.CLEAR_COMMAND);
+        });
+    }
+
+    /** Writes one user message to the running process; on the session's strand. */
+    private void sendLine(Session s, String text) {
+        ObjectNode line = json.createObjectNode();
+        line.put("type", "user");
+        ObjectNode message = line.putObject("message");
+        message.put("role", "user");
+        message.put("content", text);
+        s.current.process.send(line.toString());
     }
 
     @Override
@@ -264,6 +298,12 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             }
             Path file = findTranscript(spec.claudeSessionId());
             if (file == null) {
+                // a conversation cleared by a checkpoint has no file until its first prompt; what it carries still shows
+                if (!spec.carried().isEmpty()) {
+                    s.transcript.clear();
+                    s.mapper.carried(spec.carried());
+                    s.transcript.changed();
+                }
                 return;
             }
             s.transcript.clear();
@@ -280,6 +320,9 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             s.mapper.endHistory(); // its last turn's end, when it ended: its answer reads as the conclusion
             s.mapper.endRunningTools(); // a call the stored conversation never answered will not be answered now
             s.mapper.note(Block.NoteKind.INFO, "Stored conversation " + spec.claudeSessionId() + " loaded; start the session to continue it");
+            if (!spec.carried().isEmpty()) {
+                s.mapper.carried(spec.carried());
+            }
             s.transcript.changed();
             String b = GitBranch.of(Path.of(spec.workDir()));
             if (!b.isEmpty()) {

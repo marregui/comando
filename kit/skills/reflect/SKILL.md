@@ -79,12 +79,10 @@ replacement of your own lines), never a full-file Write: a concurrent change the
     (`## N. Pending memory changes from /reflect --no-ask`, one line per change, **State:** waiting on the user); the
     next `/reflect` the user watches asks them first and deletes the entry.
 
-## C. KB and scratchpad, in a fork when one is available
+## C. KB and scratchpad, in this session
 
-When the Agent tool offers `subagent_type: fork`, steps 6–7 run in one fork (it inherits this conversation, and its
-file reads stay out of this context, which is about to be compacted), `run_in_background: false`, after steps 2–10 are
-written: the fork touches only `KB/` and `SCRATCHPAD/`, runs step 8 for them, and returns the files it changed and the
-entries it rewrote, which the report carries. Without a fork, steps 6–7 run here.
+Steps 6–7 run here, after steps 2–10 are written, never in a fork or another agent: this session checks every KB and
+scratchpad change itself, and the report names the files changed and the entries rewritten.
 
 6. **Memory and the KB are separate.** Memory never points into the KB, and the KB never cites memory. If this session
    checked a KB document against the published code or its source and found it wrong or incomplete, correct the

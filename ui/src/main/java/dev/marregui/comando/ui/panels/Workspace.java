@@ -125,6 +125,9 @@ public final class Workspace {
     /** Opens a file a panel's link names; the shell's own open. */
     private Consumer<Path> opener = f -> {
     };
+    /** Opens the session dialog on a new session named as given: a panel's "New session ‹title›…". */
+    private Consumer<String> newSession = name -> {
+    };
     /** Panels removed because their file was deleted outside comando, with the file's name. EDT only. */
     private final Map<PanelId, String> deletedFiles = new HashMap<>();
     private boolean rendering;
@@ -142,13 +145,20 @@ public final class Workspace {
     private TopicPort topics = TopicPort.NONE;
     /** A session's transcript by name, which a session panel's topic is read from. */
     private Function<String, Transcript> transcripts = name -> null;
-    /** Each panel's topic as last read. EDT only. */
-    private final Map<PanelId, Topic> topicOf = new HashMap<>();
-    /** What each panel's topic was last asked from; the same source is not asked again unless the user asks. EDT only. */
-    private final Map<PanelId, String> topicAsked = new HashMap<>();
-    /** Panels whose topic is being read. EDT only. */
-    private final Set<PanelId> topicReading = new HashSet<>();
-    private final TabCard card = new TabCard(id -> readTopic(id, true));
+    /** Each card's topic as last read, by the card's key: its panel's id, or a headless session's key. EDT only. */
+    private final Map<String, Topic> topicOf = new HashMap<>();
+    /** What each card's topic was last asked from; the same source is not asked again unless the user asks. EDT only. */
+    private final Map<String, String> topicAsked = new HashMap<>();
+    /**
+     * Each session's conversation as last rendered: a new one (a checkpoint's clear, a fresh start) is about something
+     * else, so the topics of the session's panels are dropped and read again at the next show. EDT only.
+     */
+    private final Map<String, String> conversationOf = new HashMap<>();
+    /** Cards whose topic is being read. EDT only. */
+    private final Set<String> topicReading = new HashSet<>();
+    /** The key of a headless session's card: the session's name after it; a panel's card is keyed by the panel's id. */
+    static final String SESSION_KEY = "session:";
+    private final TabCard card = new TabCard(key -> readTopic(key, true));
     /** The tab the pointer rests on, whose card shows when the hover timer fires; -1 when none. */
     private int hoverIndex = -1;
     private final Timer hover = new Timer(ToolTipManager.sharedInstance().getInitialDelay(), e -> showCard(hoverIndex));
@@ -223,7 +233,7 @@ public final class Workspace {
                     hover.stop();
                 }
                 // off the tab whose card shows, the card closes unless the pointer goes on into it
-                if (card.shown() != null && (i < 0 || !(tabs.getComponentAt(i) instanceof EditorPanel v) || !v.panel().id().equals(card.shown()))) {
+                if (card.shown() != null && (i < 0 || !(tabs.getComponentAt(i) instanceof EditorPanel v) || !v.panel().id().value().equals(card.shown()))) {
                     leave.restart();
                 } else {
                     leave.stop();
@@ -388,6 +398,17 @@ public final class Workspace {
                     + " was deleted outside comando; the panel's unsaved edits write it again", false));
             return;
         }
+        // a session's own panel is the session (record 88): removing it would remove and stop the session, so its text,
+        // still in the editor or the store, is written again instead
+        Optional<PanelState> own = shown == null ? Optional.empty() : shown.panel(deleted.panel()).or(() -> shown.closedPanel(deleted.panel()))
+                .filter(p -> !p.document() && shown.session(p.session()).isPresent());
+        if (own.isPresent()) {
+            EditorPanel view = panels.get(deleted.panel());
+            texts.changed(deleted.panel(), view != null ? view.editor().text() : texts.load(deleted.panel()));
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO, deleted.file() + " was deleted outside comando; it is session "
+                    + own.get().session() + "'s own panel, so its text is written again", false));
+            return;
+        }
         if (panels.containsKey(deleted.panel())) {
             deletedFiles.put(deleted.panel(), deleted.file());
         } else if (shown != null && shown.closedPanel(deleted.panel()).isPresent()) {
@@ -421,6 +442,11 @@ public final class Workspace {
     /** What runs when a panel's theme button switches the editors, with the new choice. */
     public void onThemeChanged(Consumer<Boolean> listener) {
         themeChanged = listener;
+    }
+
+    /** How a panel's "New session ‹title›…" opens the session dialog, with the panel's title as the name. */
+    public void onNewSession(Consumer<String> open) {
+        newSession = open;
     }
 
     /** How a link followed in a panel's rendered Markdown opens its file. */
@@ -468,10 +494,73 @@ public final class Workspace {
         }
         // shown first, so its read goes ahead of the other tabs'
         leave.stop();
-        card.show(id, tabs, r, tips.getOrDefault(id, ""), "", false, false);
+        card.show(id.value(), tabs, r, factsOf(id.value()), "", false, false);
         card.tickets(tickets(view.panel(), view));
-        readTopic(id, false);
-        updateCard(id);
+        readTopic(id.value(), false);
+        updateCard(id.value());
+    }
+
+    /**
+     * The sidebar's session rows show the same card as the tabs: the card of the session's panel (the focused one when it
+     * is the session's, else its first), or, for a headless session, a card of its own, read from the end of its
+     * conversation. Shown under {@code row}, a rectangle of {@code over}.
+     */
+    public SessionsSidebar.Cards sessionCards() {
+        return new SessionsSidebar.Cards() {
+            @Override
+            public void show(String session, JComponent over, Rectangle row) {
+                showSessionCard(session, over, row);
+            }
+
+            @Override
+            public void left() {
+                if (card.shown() != null) {
+                    leave.restart();
+                }
+            }
+        };
+    }
+
+    void showSessionCard(String session, JComponent over, Rectangle row) {
+        if (shown == null || shown.session(session).isEmpty()) {
+            return;
+        }
+        leave.stop();
+        Optional<EditorPanel> view = sessionPanel(session);
+        String key = view.map(v -> v.panel().id().value()).orElse(SESSION_KEY + session);
+        card.show(key, over, row, factsOf(key), "", false, false);
+        card.tickets(view.map(v -> tickets(v.panel(), v)).orElse(List.of()));
+        readTopic(key, false);
+        updateCard(key);
+    }
+
+    /** The open panel a session's card is its card of: the focused one when it is the session's, else the first. */
+    private Optional<EditorPanel> sessionPanel(String session) {
+        List<EditorPanel> open = shown.panelsBoundToSession(session).stream().map(p -> panels.get(p.id())).filter(v -> v != null).toList();
+        return open.stream().filter(v -> v.panel().id().equals(shown.focused())).findFirst().or(() -> open.stream().findFirst());
+    }
+
+    /**
+     * What card {@code key} says above its summary (record 90): its panel's title and facts, with its session's; or a
+     * headless session's name and facts.
+     */
+    private CardFacts factsOf(String key) {
+        if (shown == null) {
+            return new CardFacts("", List.of());
+        }
+        long now = clock.getAsLong();
+        String newest = SessionRow.newestCli(shown.sessions());
+        if (key.startsWith(SESSION_KEY)) {
+            String name = key.substring(SESSION_KEY.length());
+            CardFacts facts = CardFacts.of(Optional.empty(), shown.session(name), "", "", now, newest);
+            return facts.title().isEmpty() ? new CardFacts(name, facts.facts()) : facts;
+        }
+        PanelId id = new PanelId(key);
+        Optional<PanelState> panel = shown.panel(id);
+        Optional<SessionState> session = panel.map(PanelState::session).filter(x -> !x.isEmpty()).flatMap(shown::session);
+        String doing = panel.map(p -> TabStatus.describe(p, shown, statuses.getOrDefault(id, TabStatus.NONE), now)).orElse("");
+        String file = texts.file(id).map(f -> Labels.shortPath(f.toString())).orElse("");
+        return CardFacts.of(panel, session, doing, file, now, newest);
     }
 
     /** The pointer left the card's tab and did not reach the card: it closes. */
@@ -511,9 +600,12 @@ public final class Workspace {
         return LinearTickets.in(text, site, MAX_TICKETS);
     }
 
-    /** The card shown, under its tab again: tabs move as others close, are dragged, scroll or the window resizes. */
+    /**
+     * The card shown over the tabs, under its tab again: tabs move as others close, are dragged, scroll or the window
+     * resizes. A card shown from the sidebar stays under its row.
+     */
     private void placeCard() {
-        EditorPanel view = card.shown() == null ? null : panels.get(card.shown());
+        EditorPanel view = card.shown() == null || card.over() != tabs ? null : panels.get(new PanelId(card.shown()));
         int at = view == null ? -1 : tabs.indexOfComponent(view);
         Rectangle r = at < 0 ? null : tabs.getUI().getTabBounds(tabs, at);
         if (r != null) {
@@ -522,35 +614,59 @@ public final class Workspace {
     }
 
     /**
-     * Asks for the topic of panel {@code id} when what it is read from changed since the last ask, or always when
-     * {@code force}d (the card's button), ahead of the other tabs. A panel with nothing to read has no topic.
+     * Asks for the topic of card {@code key} when what it is read from changed since the last ask, or always when
+     * {@code force}d (the card's button), ahead of the other cards. A card with nothing to read has no topic.
      */
-    private void readTopic(PanelId id, boolean force) {
-        EditorPanel view = panels.get(id);
-        if (view == null) {
-            return;
+    private void readTopic(String key, boolean force) {
+        String source = topicSource(key);
+        if (source == null) {
+            return; // its panel or session is gone
         }
-        String source = topicSource(view.panel(), view);
         if (source.isEmpty()) {
-            topicAsked.remove(id);
-            topicOf.remove(id);
-            updateCardOf(id);
+            topicAsked.remove(key);
+            topicOf.remove(key);
+            updateCardOf(key);
             return;
         }
-        if (!force && source.equals(topicAsked.get(id))) {
+        if (!force && source.equals(topicAsked.get(key))) {
             return;
         }
-        topicAsked.put(id, source);
-        topicReading.add(id);
-        updateCardOf(id);
-        topics.read(id.value(), source, force || id.equals(card.shown()), topic -> Edt.later(() -> {
-            if (!panels.containsKey(id)) {
-                return; // closed while it was read
+        topicAsked.put(key, source);
+        topicReading.add(key);
+        updateCardOf(key);
+        topics.read(key, source, force || key.equals(card.shown()), topic -> Edt.later(() -> {
+            if (!exists(key)) {
+                return; // closed or removed while it was read
             }
-            topicReading.remove(id);
-            topicOf.put(id, topic);
-            updateCardOf(id);
+            topicReading.remove(key);
+            topicOf.put(key, topic);
+            updateCardOf(key);
         }));
+    }
+
+    /** Whether card {@code key}'s panel is open, or its headless session still configured. */
+    private boolean exists(String key) {
+        return key.startsWith(SESSION_KEY) ? shown != null && shown.session(key.substring(SESSION_KEY.length())).isPresent()
+                : panels.containsKey(new PanelId(key));
+    }
+
+    /**
+     * What card {@code key}'s topic is read from: its panel's (see below), or a headless session's end of conversation,
+     * headed by where it works; empty when there is nothing; null when the panel or the session is gone.
+     */
+    private String topicSource(String key) {
+        if (key.startsWith(SESSION_KEY)) {
+            String name = key.substring(SESSION_KEY.length());
+            Optional<SessionState> session = shown == null ? Optional.empty() : shown.session(name);
+            if (session.isEmpty()) {
+                return null;
+            }
+            Transcript t = transcripts.apply(name);
+            return t == null || t.size() == 0 ? "" : TopicSource.ofSession(name, "", session.get().spec().workDir(), session.get().branch(), t,
+                    TopicSource.MAX_CHARS);
+        }
+        EditorPanel view = panels.get(new PanelId(key));
+        return view == null ? null : topicSource(view.panel(), view);
     }
 
     /**
@@ -578,15 +694,35 @@ public final class Workspace {
         return TopicSource.ofText(p.title(), file, view.textStart(TopicSource.MAX_CHARS), TopicSource.MAX_CHARS);
     }
 
-    private void updateCardOf(PanelId id) {
-        if (id.equals(card.shown())) {
-            updateCard(id);
+    private void forgetTopicsOfNewConversations(AppState s) {
+        Set<String> names = new HashSet<>();
+        for (SessionState x : s.sessions()) {
+            names.add(x.name());
+            String before = conversationOf.put(x.name(), x.spec().claudeSessionId());
+            if (before == null || before.equals(x.spec().claudeSessionId())) {
+                continue;
+            }
+            List<String> keys = new ArrayList<>();
+            keys.add(SESSION_KEY + x.name());
+            s.panelsBoundToSession(x.name()).forEach(p -> keys.add(p.id().value()));
+            for (String key : keys) {
+                topicOf.remove(key);
+                topicAsked.remove(key);
+                updateCardOf(key);
+            }
+        }
+        conversationOf.keySet().retainAll(names);
+    }
+
+    private void updateCardOf(String key) {
+        if (key.equals(card.shown())) {
+            updateCard(key);
         }
     }
 
-    private void updateCard(PanelId id) {
-        boolean reading = topicReading.contains(id);
-        Topic topic = topicOf.get(id);
+    private void updateCard(String key) {
+        boolean reading = topicReading.contains(key);
+        Topic topic = topicOf.get(key);
         String line;
         boolean muted;
         if (topic != null && !topic.line().isEmpty()) {
@@ -602,12 +738,13 @@ public final class Workspace {
             line = "Nothing to summarise yet";
             muted = true;
         }
-        card.update(tips.getOrDefault(id, ""), line, muted, reading);
+        card.update(factsOf(key), line, muted, reading);
     }
 
-    /** The panel whose card shows, null when none; for tests. */
+    /** The panel whose card shows, null when none or a headless session's; for tests. */
     PanelId cardShown() {
-        return card.shown();
+        String key = card.shown();
+        return key == null || key.startsWith(SESSION_KEY) ? null : new PanelId(key);
     }
 
     TabCard card() {
@@ -634,6 +771,10 @@ public final class Workspace {
             if (view != null && tabs.indexOfComponent(view) >= 0) {
                 refreshTab(p, shown, view);
             }
+        }
+        // a session's uptime and its working time move on
+        if (card.shown() != null) {
+            updateCard(card.shown());
         }
         spinWhileWorking();
     }
@@ -761,6 +902,7 @@ public final class Workspace {
         shown = s;
         rendering = true;
         try {
+            forgetTopicsOfNewConversations(s);
             // remove panels the state no longer has
             List<PanelId> ids = s.panels().stream().map(PanelState::id).toList();
             for (PanelId id : new ArrayList<>(panels.keySet())) {
@@ -779,10 +921,10 @@ public final class Workspace {
                     unseen.remove(id);
                     statuses.remove(id);
                     tips.remove(id);
-                    topicOf.remove(id);
-                    topicAsked.remove(id);
-                    topicReading.remove(id);
-                    if (id.equals(card.shown())) {
+                    topicOf.remove(id.value());
+                    topicAsked.remove(id.value());
+                    topicReading.remove(id.value());
+                    if (id.value().equals(card.shown())) {
                         card.hide();
                     }
                     tabs.remove(gone);
@@ -821,6 +963,7 @@ public final class Workspace {
                         }
                         opener.accept(f);
                     });
+                    view.onNewSession(name -> newSession.accept(name));
                     view.light(light);
                     view.onThemeToggle(() -> {
                         light(!light);
@@ -859,6 +1002,14 @@ public final class Workspace {
             }
             spinWhileWorking();
             placeCard();
+            // the card shown follows its session: status, context, model; it closes when its panel or session is gone
+            if (card.shown() != null) {
+                if (exists(card.shown())) {
+                    updateCard(card.shown());
+                } else {
+                    card.hide();
+                }
+            }
         } finally {
             rendering = false;
         }
@@ -872,13 +1023,15 @@ public final class Workspace {
         if (!tabs.getTitleAt(at).equals(title)) {
             tabs.setTitleAt(at, title);
         }
-        Icon icon = icon(status);
+        // at rest, a session's tab shows whether its session is connected, as its row in the sidebar does (record 89)
+        Icon icon = status == TabStatus.IDLE ? s.session(p.session()).map(x -> Icons.get(SessionIcons.of(x.status()))).orElse(icon(status))
+                : icon(status);
         if (tabs.getIconAt(at) != icon) {
             tabs.setIconAt(at, icon);
         }
         String tip = tooltip(p, s, status);
-        if (!tip.equals(tips.put(p.id(), tip)) && p.id().equals(card.shown())) {
-            updateCard(p.id());
+        if (!tip.equals(tips.put(p.id(), tip)) && p.id().value().equals(card.shown())) {
+            updateCard(p.id().value());
         }
     }
 
@@ -935,8 +1088,10 @@ public final class Workspace {
         return Plain.text((marked ? "● " : "") + Clip.keepStart(p.title(), TITLE_CHARS));
     }
 
+    /** The title, the connection, and the session unless the title names it already (a session's own panel). */
     private static String tooltip(PanelState p) {
-        return p.title() + (p.connection().isEmpty() ? "" : " · " + p.connection()) + (p.session().isEmpty() ? "" : " · " + p.session());
+        return p.title() + (p.connection().isEmpty() ? "" : " · " + p.connection())
+                + (p.session().isEmpty() || p.session().equals(p.title()) ? "" : " · " + p.session());
     }
 
     private static MovableTabs named(MovableTabs tabs, String name) {

@@ -74,7 +74,7 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [64](0064-sub-agents-are-shown-live.md) | Sub-agents are shown live | Miguel, Claude | accepted; following and large files amended 2026-10-18 |
 | [65](0065-keys-on-desktops-other-than-macos.md) | Keys on desktops other than macOS | Miguel, Claude | accepted |
 | [66](0066-the-reducer-is-watched-as-the-edt-is.md) | The reducer is watched as the EDT is | Miguel, Claude | accepted |
-| [67](0067-reflect-measures-what-it-does-to-the-memory.md) | `/reflect` measures what it does to the memory | Miguel, Claude | accepted |
+| [67](0067-reflect-measures-what-it-does-to-the-memory.md) | `/reflect` measures what it does to the memory | Miguel, Claude | accepted; amended 2026-10-25: no fork |
 | [68](0068-git-changes-and-a-side-by-side-diff.md) | Git changes and a side-by-side diff | Miguel, Claude | accepted; a repository's double click, the view's title and groups replaced, 71; window extended, 72; colours amended, 76; double click amended, 78 |
 | [69](0069-a-window-edits-the-files-tab-folders.md) | A window edits the Files tab's folders | Miguel, Claude | accepted; where it opens replaced, 71; title, problems line and index creation amended, 73 |
 | [70](0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md) | The sidebar's tabs in one row, with a menu each | Miguel, Claude | accepted; the Files tab's menu replaced, 73; Hide the sidebar out of the tab menus, 74 |
@@ -92,4 +92,9 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [82](0082-threads-by-kind-with-a-budget.md) | Threads by kind, with a budget | Miguel, Claude | accepted; amends the architecture's thread rule |
 | [83](0083-one-gold-chosen-beside-clear.md) | One gold, chosen beside Clear; serif headings; a turn's report is framed; tooltips and dark pages as answers | Miguel, Claude | proposed; amends the transcript's amber and record 76's gold |
 | [84](0084-claude-shows-what-is-better-seen.md) | Claude shows what is better seen than read | Miguel, Claude | proposed; the kit's `show` skill |
-| [85](0085-a-panel-rewritten-as-a-document.md) | A panel's text rewritten as a document, with one button | Miguel, Claude | proposed |
+| [85](0085-a-panel-rewritten-as-a-document.md) | A panel's text rewritten as a document, with one button | Miguel, Claude | proposed; its place amended by 86 |
+| [86](0086-a-checkpoint-clears-and-carries-its-summary.md) | The Checkpoint button clears the conversation and carries its summary into the next prompt | Miguel, Claude | proposed; amends 46, 53 and 85 |
+| [87](0087-a-session-row-shows-the-tabs-card.md) | A session row shows the tab's card, with the session's details | Miguel, Claude | proposed; amends 53 and 81 |
+| [88](0088-a-session-and-its-panel-share-a-name.md) | A session and its own panel share a name, and are one | Miguel, Claude | proposed; amends 13 and 38 |
+| [89](0089-a-session-row-is-one-line.md) | A session row is one line, its state an icon | Miguel, Claude | proposed; amends 53 and 87 |
+| [90](0090-a-session-row-is-its-icon-and-name.md) | A session row is its icon and its name; the card says each fact once | Miguel, Claude | proposed; amends 87 and 89 |

@@ -9,12 +9,23 @@ public interface ClaudePort {
 
     void stop(String name);
 
-    void send(String name, String text, String origin);
+    default void send(String name, String text, String origin) {
+        send(name, text, origin, "");
+    }
+
+    /** Sends {@code text}; a non-empty {@code preface} goes in front of it to Claude and is not shown on the user block. */
+    void send(String name, String text, String origin, String preface);
 
     void interrupt(String name);
 
     /** Drops the blocks of the session's transcript; the conversation, in Claude Code's files, is untouched. */
     void clearTranscript(String name);
+
+    /**
+     * Sends {@code /clear}, so a new conversation starts, and empties the transcript, which then shows {@code carried},
+     * the summary the next prompt takes with it; the clear's own notes are not shown.
+     */
+    void clearConversation(String name, String carried);
 
     /** Fills the session's transcript from its stored conversation, without starting a process. */
     void loadHistory(SessionSpec spec);

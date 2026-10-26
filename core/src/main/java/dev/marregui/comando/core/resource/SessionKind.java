@@ -100,7 +100,8 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                 budget,
                 id,
                 startMode,
-                a.getOrDefault("checkpoint", ""));
+                a.getOrDefault("checkpoint", ""),
+                "");
     }
 
     private static StartMode startMode(String value, String id) {
@@ -138,7 +139,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
             return s;
         }
         return new SessionSpec(name, s.workDir(), s.model(), s.effort(), s.permissionMode(), s.addDirs(), s.budgetUsd(),
-                s.claudeSessionId(), StartMode.FORK, s.checkpoint());
+                s.claudeSessionId(), StartMode.FORK, s.checkpoint(), s.carried());
     }
 
     @Override
@@ -162,9 +163,11 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
         if (approvals > 0) {
             parts.add("denies " + ResourceKind.count(approvals, "waiting approval"));
         }
-        int panels = s.panelsBoundToSession(name).size() + (s.closedPanelOfSession(name).isPresent() ? 1 : 0);
-        if (panels > 0) {
-            parts.add("unbinds " + ResourceKind.count(panels, "panel"));
+        // its own panel goes with it (record 88); documents attached to it stay, detached
+        s.homePanel(name).or(() -> s.closedPanelOfSession(name)).ifPresent(p -> parts.add("removes its panel " + p.title() + " with its text"));
+        long documents = s.panelsBoundToSession(name).stream().filter(p -> p.document()).count();
+        if (documents > 0) {
+            parts.add("detaches " + ResourceKind.count((int) documents, "document"));
         }
         StringBuilder q = new StringBuilder("Remove session ").append(name).append('?');
         if (!parts.isEmpty()) {

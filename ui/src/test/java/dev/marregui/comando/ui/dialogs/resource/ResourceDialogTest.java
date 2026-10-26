@@ -87,7 +87,7 @@ class ResourceDialogTest {
     void everyButtonIsVisibleAtTheDefaultSize() {
         ResourceDialog<SessionSpec> sessions = sessions(new RecordingSink());
         sessions.prepare(States.twoPanels(), "work");
-        assertEveryButtonVisible(sessions.content(), "Start", "Assign to panel", "Save", "…");
+        assertEveryButtonVisible(sessions.content(), "Start", "Open its panel", "Save", "…");
         assertThat(all(sessions.content(), AbstractButton.class, b -> List.of("Add", "Clone", "Remove", "Import…").contains(b.getText())))
                 .as("the sidebar adds, clones, removes and imports; the dialog edits one resource").isEmpty();
         assertThat(all(sessions.content(), JList.class, l -> true)).as("no list of resources").isEmpty();
@@ -96,7 +96,7 @@ class ResourceDialogTest {
                 List.of(SessionState.closed(SessionSpec.imported("imp", "/tmp", "c0ffee"))));
         ResourceDialog<SessionSpec> advanced = sessions(new RecordingSink());
         advanced.prepare(imported, "imp");
-        assertEveryButtonVisible(advanced.content(), "Start", "Assign to panel", "Save");
+        assertEveryButtonVisible(advanced.content(), "Start", "Open its panel", "Save");
 
         ResourceDialog<ConnectionSpec> connections = connections(new RecordingSink());
         connections.prepare(States.twoPanels(), "local");
@@ -257,7 +257,7 @@ class ResourceDialogTest {
         ResourceDialog<SessionSpec> d = sessions(sink);
         d.prepareNew(States.twoPanels());
         text(d, "name").setText("fresh");
-        click(d, "Assign to panel");
+        click(d, "Open its panel");
 
         assertThat(sink.intents()).hasSize(2);
         assertThat(sink.intents().get(0)).isInstanceOfSatisfying(Intent.SaveSession.class, i -> {
@@ -265,7 +265,7 @@ class ResourceDialogTest {
             assertThat(i.spec().name()).isEqualTo("fresh");
         });
         assertThat(sink.intents().get(1)).isEqualTo(new Intent.BindSession(States.P1, "fresh"));
-        assertThat(message(d).getText()).isEqualTo("Saved and opened fresh in a panel");
+        assertThat(message(d).getText()).isEqualTo("Saved and opened fresh in its own panel");
     }
 
     @Test
@@ -274,7 +274,7 @@ class ResourceDialogTest {
         ResourceDialog<SessionSpec> d = sessions(sink);
         d.prepare(States.twoPanels(), "work");
         text(d, "budgetUsd").setText("abc");
-        click(d, "Assign to panel");
+        click(d, "Open its panel");
         assertThat(sink.intents()).isEmpty();
         assertThat(message(d).getText()).isEqualTo("budget is not a number: abc");
         assertThat(message(d).getForeground()).isEqualTo(Theme.DANGER);
@@ -285,9 +285,9 @@ class ResourceDialogTest {
         RecordingSink sink = new RecordingSink();
         ResourceDialog<SessionSpec> d = sessions(sink);
         d.prepare(States.twoPanels(), "work");
-        click(d, "Assign to panel");
+        click(d, "Open its panel");
         assertThat(sink.intents()).containsExactly(new Intent.BindSession(States.P1, "work"));
-        assertThat(message(d).getText()).isEqualTo("Opened work in a panel");
+        assertThat(message(d).getText()).isEqualTo("Opened work in its own panel");
     }
 
     @Test

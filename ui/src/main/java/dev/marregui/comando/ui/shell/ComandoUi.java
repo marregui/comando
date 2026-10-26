@@ -350,6 +350,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.onClose(this::closePanel);
         workspace.onOpenFile(this::openFile);
         workspace.onThemeChanged(this::editorThemeChanged);
+        // a panel's "New session ‹title›…": the session dialog, named after the panel, which becomes its own (record 88)
+        workspace.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
         workspace.topics(topics, deps.transcripts()::of);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
@@ -389,6 +391,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         }, deps.texts(), () -> actions.run("view.sidebar"));
         sidebar.onTabMenu(this::tabMenu);
+        // a session row shows the card a tab shows, the workspace's
+        sidebar.cards(workspace.sessionCards());
         sidebar.watchOpened(openedFiles);
         status = new StatusBar(deps.intents(), this::noticeTarget);
         findBar = new FindBar();
@@ -545,7 +549,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private void tick() {
         workspace.tick();
         lower.results().tick();
-        sidebar.tick();
     }
 
     private static Map<String, Status> statuses(List<Map.Entry<String, Status>> entries) {

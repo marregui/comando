@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.panels;
 
+import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
@@ -10,6 +11,7 @@ import dev.marregui.comando.core.resource.ConnectionKind;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
+import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;
@@ -17,6 +19,7 @@ import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.ToolButton;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.tabs.TabStrip;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
@@ -39,6 +42,8 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
+import javax.swing.ToolTipManager;
 import javax.swing.TransferHandler;
 import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
@@ -59,6 +64,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -100,6 +106,27 @@ public final class SessionsSidebar {
         }
     }
 
+    /**
+     * The card a session row shows in place of a tooltip, as a tab does: the workspace's. {@code show} puts it under
+     * {@code row}, a rectangle of {@code over}; {@code left} says the pointer left the row, so the card closes unless the
+     * pointer goes on into it.
+     */
+    public interface Cards {
+        Cards NONE = new Cards() {
+            @Override
+            public void show(String session, JComponent over, Rectangle row) {
+            }
+
+            @Override
+            public void left() {
+            }
+        };
+
+        void show(String session, JComponent over, Rectangle row);
+
+        void left();
+    }
+
     /** Panel texts kept nowhere, for a sidebar built without the store. */
     private static final PanelTexts NO_TEXTS = new PanelTexts() {
         @Override
@@ -137,6 +164,15 @@ public final class SessionsSidebar {
     private final ResourceActions<SessionState> sessionActions;
     private final ResourceActions<ConnectionState> connectionActions;
     private final PanelsTab panelsTab;
+    /** The panels' texts, which a session's menu has the session rewrite. */
+    private final PanelTexts texts;
+    /** The card the session rows show; none until the shell gives the workspace's. */
+    private Cards cards = Cards.NONE;
+    /** The session row the pointer rests on over its text, whose card shows when the timer fires; null when none. */
+    private String cardRow;
+    /** Whether the card shown is a session row's, so leaving the rows tells it. */
+    private boolean cardShown;
+    private final Timer cardWait = new Timer(ToolTipManager.sharedInstance().getInitialDelay(), e -> showCard());
     private final TabStrip tabs = new TabStrip("Sidebar");
     /** Adds the window's own commands to a tab's menu, before Hide the sidebar. */
     private BiConsumer<Integer, JPopupMenu> moreForTab = (tab, menu) -> {
@@ -168,13 +204,16 @@ public final class SessionsSidebar {
         this.intents = intents;
         this.dialogs = dialogs;
         this.toggle = toggle;
+        this.texts = texts;
         this.panelsTab = new PanelsTab(intents, texts, questions);
+        cardWait.setRepeats(false);
         sessions.getAccessibleContext().setAccessibleName("Sessions");
         connections.getAccessibleContext().setAccessibleName("Connections");
         sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         connections.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        sessions.setCellRenderer((list, s, index, selected, focus) -> row(s).show(s, boundText(s), boundToFocused(s),
-                state == null ? 0 : state.pendingApprovals(s.name()), selected, index == ((SessionList) list).hover,
+        sessions.setCellRenderer((list, s, index, selected, focus) -> row(s).show(s, state != null && state.homePanel(s.name()).isPresent(),
+                boundToFocused(s),
+                state == null ? 0 : state.pendingApprovals(s.name()), selected,
                 selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground(),
                 newestCli()));
         // ⌘C, and Edit ▸ Copy, which forwards it, copy the selected session's details
@@ -220,18 +259,30 @@ public final class SessionsSidebar {
             }
 
             @Override
-            public void mousePressed(MouseEvent e) {
-                popup(e);
-            }
-
-            @Override
             public void mouseReleased(MouseEvent e) {
                 popup(e);
             }
 
             @Override
+            public void mouseEntered(MouseEvent e) {
+                pointerOnList = true;
+            }
+
+            @Override
             public void mouseExited(MouseEvent e) {
-                ((SessionList) sessions).hover(-1);
+                pointerOnList = false;
+                restOn(null);
+                // the order held while the pointer was on the list takes effect now
+                if (state != null) {
+                    sync(sessionModel, ordered(state.sessions(), manualOrder), sessions);
+                }
+            }
+
+            @Override
+            public void mousePressed(MouseEvent e) {
+                // a press acts on the row, as a tooltip's would: no card until the pointer rests on another row
+                cardWait.stop();
+                popup(e);
             }
 
             private void popup(MouseEvent e) {
@@ -246,8 +297,10 @@ public final class SessionsSidebar {
             @Override
             public void mouseMoved(MouseEvent e) {
                 SessionState s = at(sessions, e);
-                ((SessionList) sessions).hover(s == null ? -1 : sessions.locationToIndex(e.getPoint()));
-                sessions.setCursor(s != null && control(s, e).isPresent() ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
+                boolean onControl = s != null && control(s, e).isPresent();
+                sessions.setCursor(onControl ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
+                // over a row's text its card, as over a tab; over a control the control's own tip
+                restOn(s == null || onControl ? null : s.name());
             }
         });
         connections.addMouseListener(new MouseAdapter() {
@@ -394,7 +447,8 @@ public final class SessionsSidebar {
 
     public void render(AppState s) {
         state = s;
-        sync(sessionModel, ordered(s.sessions(), manualOrder), sessions);
+        sync(sessionModel, pointerOnList ? held(shownSessions(), s.sessions()) : ordered(s.sessions(), manualOrder), sessions);
+        spinWhileWorking();
         // a session reporting a newer CLI version changes the other rows too: theirs is older now
         String newest = newestCli();
         if (!newest.equals(paintedNewestCli)) {
@@ -424,6 +478,34 @@ public final class SessionsSidebar {
         if (state != null) {
             sync(sessionModel, ordered(state.sessions(), manual), sessions);
         }
+    }
+
+    /**
+     * Whether the pointer is on the session list: a session that starts or stops keeps its row until the pointer leaves,
+     * so the row under it is still the one it was on and a second click does not land on another session (record 90).
+     */
+    private boolean pointerOnList;
+
+    private List<SessionState> shownSessions() {
+        return Collections.list(sessionModel.elements());
+    }
+
+    /**
+     * {@code stored} in the order of {@code shown}, the rows as they are: each kept session where it is, with its new
+     * state; a new session last; a removed one gone.
+     */
+    static List<SessionState> held(List<SessionState> shown, List<SessionState> stored) {
+        Map<String, SessionState> byName = new LinkedHashMap<>();
+        stored.forEach(x -> byName.put(x.name(), x));
+        List<SessionState> out = new ArrayList<>();
+        for (SessionState x : shown) {
+            SessionState now = byName.remove(x.name());
+            if (now != null) {
+                out.add(now);
+            }
+        }
+        out.addAll(byName.values());
+        return out;
     }
 
     /** {@code stored} as the list shows it: as stored, or running first, then by name. */
@@ -462,25 +544,6 @@ public final class SessionsSidebar {
         return state == null ? "" : SessionRow.newestCli(state.sessions());
     }
 
-    /** The uptimes the session rows last showed, so the shell's one-second tick repaints them only when one moved on. */
-    private String uptimes = "";
-
-    /** Once a second, from the shell: the running sessions' uptimes, which move on by the minute. */
-    public void tick() {
-        if (state == null) {
-            return;
-        }
-        long now = System.currentTimeMillis();
-        StringBuilder sb = new StringBuilder();
-        for (SessionState x : state.sessions()) {
-            sb.append(SessionRow.uptimeText(x, now)).append('\n');
-        }
-        String next = sb.toString();
-        if (!next.equals(uptimes)) {
-            uptimes = next;
-            sessions.repaint();
-        }
-    }
 
     /** The row control under a mouse event on {@code s}'s cell, if any. */
     private Optional<SessionRow.Control> control(SessionState s, MouseEvent e) {
@@ -490,7 +553,28 @@ public final class SessionsSidebar {
     }
 
     private SessionRow row(SessionState s) {
-        return rows.computeIfAbsent(s.name(), name -> new SessionRow());
+        return rows.computeIfAbsent(s.name(), name -> {
+            SessionRow r = new SessionRow();
+            r.working(spinner);
+            return r;
+        });
+    }
+
+    /** The working sessions' icon, one for every row, turned while any session works. */
+    private final SpinnerIcon spinner = new SpinnerIcon(16);
+    private final Timer spin = new Timer(SpinnerIcon.STEP_MILLIS, e -> {
+        spinner.advance();
+        sessions.repaint();
+    });
+
+    /** Turns the working icon while a session works, and stops it when none does. */
+    private void spinWhileWorking() {
+        boolean working = state != null && state.sessions().stream().anyMatch(SessionState::isBusy);
+        if (working && !spin.isRunning()) {
+            spin.start();
+        } else if (!working && spin.isRunning()) {
+            spin.stop();
+        }
     }
 
     /** The row at {@code index}, filled as it was painted, so its controls sit where they were drawn. */
@@ -505,22 +589,14 @@ public final class SessionsSidebar {
 
     /** What a click on a row's control does. */
     private void act(SessionState s, SessionRow.Control control) {
-        int i = sessionModel.indexOf(s);
-        Rectangle cell = sessions.getCellBounds(i, i);
         switch (control) {
             case POWER -> intents.dispatch(s.status().isUsable() ? new Intent.StopSession(s.name()) : new Intent.StartSession(s.name()));
-            case FRESH -> intents.dispatch(new Intent.StartFresh(s.name()));
-            case CHECKPOINT -> intents.dispatch(new Intent.Checkpoint(s.name()));
-            case COMPACT -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.COMPACT_COMMAND));
-            case CLEAR -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.CLEAR_COMMAND));
-            case COPY -> clipboard.accept(details(s));
-            case MODEL, EFFORT -> {
-                Rectangle at = layOutRow(s, i).bounds(cell, control);
-                JPopupMenu m = new JPopupMenu();
-                (control == SessionRow.Control.MODEL ? modelItems(s) : effortItems(s)).forEach(m::add);
-                m.show(sessions, at.x, at.y + at.height);
-            }
         }
+    }
+
+    private static JMenuItem tipped(JMenuItem i, String tip) {
+        i.setToolTipText(Plain.text(tip));
+        return i;
     }
 
     /** One item per model, the session's own checked; a choice applies now to a running session and is saved. */
@@ -541,14 +617,12 @@ public final class SessionsSidebar {
     }
 
     /**
-     * The session list: its tooltips name the control under the mouse, else give the session's details as copied; it
-     * knows the row under the mouse, which shows its copy button; and a row dragged by its text moves, a line marking
-     * where it will land.
+     * The session list: its tooltip names what the state icon does, and the row's card shows over its text; a row
+     * dragged by its text moves, a line marking where it will land.
      */
     private final class SessionList extends JList<SessionState> {
         /** How far the mouse moves with the button down before a press becomes a drag. */
         private static final int DRAG_SLOP = 5;
-        int hover = -1;
         private int pressed = -1;
         private Point pressedAt;
         /** The gap a drag would drop into, -1 while no drag runs. */
@@ -565,23 +639,6 @@ public final class SessionsSidebar {
         @Override
         public boolean getScrollableTracksViewportWidth() {
             return true;
-        }
-
-        void hover(int index) {
-            if (index != hover) {
-                repaintRow(hover);
-                hover = index;
-                repaintRow(hover);
-            }
-        }
-
-        private void repaintRow(int index) {
-            if (index >= 0 && index < getModel().getSize()) {
-                Rectangle r = getCellBounds(index, index);
-                if (r != null) {
-                    repaint(r);
-                }
-            }
         }
 
         @Override
@@ -667,10 +724,59 @@ public final class SessionsSidebar {
                 return null;
             }
             SessionState s = getModel().getElementAt(i);
-            // over a control its tip; over the text what Copy details copies, line for line
-            return layOutRow(s, i).tip(getCellBounds(i, i), e.getPoint()).map(Plain::text)
-                    .orElseGet(() -> SessionRow.detailsTip(details(s)));
+            // over a control its tip; over the text no tooltip: the row's card shows there, as a tab's
+            return layOutRow(s, i).tip(getCellBounds(i, i), e.getPoint()).map(Plain::text).orElse(null);
         }
+    }
+
+    /** The workspace's card, which the session rows show in place of a tooltip. */
+    public void cards(Cards c) {
+        cards = c;
+    }
+
+    /**
+     * The pointer rests over {@code session}'s row text, or over no row's text when null: a new row starts the wait for
+     * its card; leaving the row whose card shows tells the card, which closes unless the pointer goes on into it.
+     */
+    private void restOn(String session) {
+        if (Objects.equals(session, cardRow)) {
+            return;
+        }
+        cardRow = session;
+        if (session == null) {
+            cardWait.stop();
+        } else {
+            cardWait.restart();
+        }
+        if (cardShown) {
+            cardShown = false;
+            cards.left();
+        }
+    }
+
+    /** The wait is over: the card of the row the pointer rests on shows under the row. */
+    private void showCard() {
+        if (cardRow == null || state == null) {
+            return;
+        }
+        for (int i = 0; i < sessionModel.size(); i++) {
+            if (sessionModel.get(i).name().equals(cardRow)) {
+                cardShown = true;
+                cards.show(cardRow, sessions, sessions.getCellBounds(i, i));
+                return;
+            }
+        }
+    }
+
+    /** Shows the card of the row the pointer rests on now, without the wait; for tests. */
+    void showCardNow() {
+        cardWait.stop();
+        showCard();
+    }
+
+    /** The session row whose card waits or shows; for tests. */
+    String cardRow() {
+        return cardRow;
     }
 
     private static <T> void sync(DefaultListModel<T> model, List<T> items, JList<T> list) {
@@ -719,14 +825,26 @@ public final class SessionsSidebar {
         } else {
             m.add(item("Start", "play", () -> intents.dispatch(new Intent.StartSession(s.name()))));
         }
-        if (s.status().isUsable()) {
-            m.add(item("Compact the conversation", "compact", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.COMPACT_COMMAND))));
-            m.add(item("Clear the conversation", "clear-conversation", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.CLEAR_COMMAND))));
+        if (EditorPanel.showsFresh(s)) {
+            m.add(tipped(item("Start a new conversation", "fresh", () -> intents.dispatch(new Intent.StartFresh(s.name()))), SessionRow.freshTip(s)));
         }
-        JMenu models = new JMenu("Model");
+        if (EditorPanel.showsCheckpoint(s)) {
+            m.add(tipped(item(s.reflection().due() ? "Checkpoint, due" : "Checkpoint", EditorPanel.checkpointIcon(s),
+                    () -> intents.dispatch(new Intent.Checkpoint(s.name()))), EditorPanel.checkpointTip(s)));
+        }
+        if (s.status().isUsable()) {
+            m.add(tipped(item("Compact the conversation", "compact", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.COMPACT_COMMAND))),
+                    SessionRow.COMPACT_TIP));
+            rewriteItem(s).ifPresent(m::add);
+        }
+        m.addSeparator();
+        // the menus name what the session runs at, as the row's chips did (record 89)
+        JMenu models = new JMenu("Model: " + SessionRow.modelName(s));
+        models.setToolTipText(SessionRow.modelTip(s));
         modelItems(s).forEach(models::add);
         m.add(models);
-        JMenu efforts = new JMenu("Effort");
+        JMenu efforts = new JMenu("Effort: " + SessionRow.effortName(s));
+        efforts.setToolTipText(SessionRow.effortTip(s));
         effortItems(s).forEach(efforts::add);
         m.add(efforts);
         m.addSeparator();
@@ -736,6 +854,29 @@ public final class SessionsSidebar {
         m.add(item("Clone…", "copy", () -> dialogs.sessions().cloneOf(s.name())));
         m.add(item("Remove…", "close", () -> sessionActions.remove(s)));
         return m;
+    }
+
+    /**
+     * Has the running session rewrite its panel's whole text as a professional Markdown document, put in place of the
+     * text: the focused panel when it is the session's, else the first of its panels. None for a session without an open
+     * panel; disabled while that panel's text is blank.
+     */
+    private Optional<JMenuItem> rewriteItem(SessionState s) {
+        List<PanelState> bound = state.panelsBoundToSession(s.name());
+        if (bound.isEmpty()) {
+            return Optional.empty();
+        }
+        PanelState panel = bound.stream().filter(p -> p.id().equals(state.focused())).findFirst().orElse(bound.getFirst());
+        String text = texts.load(panel.id());
+        JMenuItem i = item(Plain.text("Rewrite " + panel.title() + " as a document"), "markdown", () -> {
+            String now = texts.load(panel.id());
+            if (!now.isBlank()) {
+                intents.dispatch(new Intent.RunText(panel.id(), EditorPanel.polishPrompt(panel.title(), now), Target.CLAUDE));
+            }
+        });
+        i.setToolTipText(EditorPanel.POLISH_TIP);
+        i.setEnabled(!text.isBlank());
+        return Optional.of(i);
     }
 
     JPopupMenu connectionMenu(ConnectionState c) {
@@ -785,19 +926,6 @@ public final class SessionsSidebar {
         return list;
     }
 
-    /** Where a session is bound: its panel's title, "(closed)" after it when closed; "headless" when it has none. */
-    private String boundText(SessionState s) {
-        if (state == null) {
-            return "headless";
-        }
-        List<String> titles = state.panels().stream().filter(p -> p.session().equals(s.name()))
-                .sorted((a, b) -> Boolean.compare(b.id().equals(state.focused()), a.id().equals(state.focused())))
-                .map(p -> p.title()).toList();
-        if (!titles.isEmpty()) {
-            return String.join(", ", titles);
-        }
-        return state.closedPanelOfSession(s.name()).map(p -> p.title() + " (closed)").orElse("headless");
-    }
 
     private boolean boundToFocused(SessionState s) {
         return state != null && state.focusedPanel().session().equals(s.name());

@@ -22,6 +22,8 @@ class TopicSourceTest {
         assertThat(source).startsWith("A coding session named \"main\", working in /w/comando (git branch main), in a panel titled \"keys\".")
                 .contains("User: fix the flaky key test\nTool Bash: {\"command\":\"gradle test\"}\nAssistant: The test reads the focus owner.\n")
                 .doesNotContain("secret reasoning", "a sub-agent's words", "hook said", "done");
+        assertThat(TopicSource.ofSession("main", "", "/w/comando", "", t, TopicSource.MAX_CHARS))
+                .as("a headless session names no panel").startsWith("A coding session named \"main\", working in /w/comando. The end of its conversation");
     }
 
     @Test

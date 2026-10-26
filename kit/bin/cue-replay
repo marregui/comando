@@ -297,10 +297,13 @@ def history_rows():
 
 
 def write_report(day_dir, today, args, counts, pairs, scored, failures, memory_dir, index_bytes, index_lines):
+    roll = shutil.which("scratchpad-roll")
+    if roll and day_dir.parent == CLAUDE_DIR / "SCRATCHPAD":   # one day folder, today's (README §1); not in tests
+        subprocess.run([roll], capture_output=True, check=False)
     day_dir.mkdir(parents=True, exist_ok=True)
-    n = len(list(day_dir.glob("READ-[0-9][0-9]-*")))
-    mon = today.strftime("%b").upper()
-    report = day_dir / f"READ-{n + 1:02d}-CUEREPLAY-REPORT-{mon}-{today:%d}.md"
+    # README §1 naming: the next number after the highest in the folder, legacy READ-NN- counted too
+    nums = [int(m.group(1)) for f in day_dir.iterdir() if (m := re.match(r"(?:READ-)?(\d{2})-", f.name))]
+    report = day_dir / f"{max(nums, default=0) + 1:02d}-cue-replay-report.md"
     s = scored
     lines = [
         f"# Memory cue replay — {today:%Y-%m-%d}",

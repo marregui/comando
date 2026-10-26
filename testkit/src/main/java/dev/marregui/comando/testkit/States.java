@@ -23,7 +23,8 @@ public final class States {
 
     public static AppState twoPanels() {
         return AppState.initial(
-                List.of(new PanelState(P1, "one", "local", "work"), new PanelState(P2, "two", "local", "work")),
+                // a session has one panel of comando's own (record 88): p1 is work's, p2 has none
+                List.of(new PanelState(P1, "one", "local", "work"), new PanelState(P2, "two", "local", "")),
                 List.of(ConnectionState.closed(LOCAL)),
                 List.of(SessionState.closed(WORK)));
     }

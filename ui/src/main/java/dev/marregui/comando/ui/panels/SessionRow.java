@@ -1,15 +1,14 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.BorderFactory;
+import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -18,119 +17,69 @@ import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
-import java.awt.FlowLayout;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.time.ZoneId;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
 /**
- * One session in the sidebar's list: its state, name, the panels it is bound to (or headless) and pending approvals;
- * its folder and branch; how full its context is and how long it has run; and a row of controls. On
- * the left, packed: the plug, green while the session runs and grey while it does not, a click on it stopping or
- * starting the session; a fresh start (a stopped session with a conversation starts on a new one); a checkpoint (the
- * session's checkpoint command sent as a prompt), purple once the session is due one; and, while it runs, compact and
- * clear ({@code /compact}, {@code /clear}). On the right, the model and the effort. Under the mouse, a copy button at
- * the top right copies {@link #details}. The list paints it as a cell renderer, so its buttons are not live: the list
- * finds the control under a click with {@link #hit}.
+ * One session in the sidebar's list, one line (record 90): its state icon, which a click on connects or disconnects
+ * (Claude's orange while it runs, grey while stopped, faint while it starts or stops, red when it failed, one glyph at
+ * one size; it spins while the session works and shows the hourglass while it waits on background work); its name,
+ * dimmed while its own panel is not open, with an amber ↑ when it runs an older Claude Code than another running
+ * session, the context in purple once its checkpoint is due, and the approvals waiting. Everything else a session does
+ * is in its menu. Its folder, branch, context and the rest are on the card the row shows (record 87). The list paints it
+ * as a cell renderer, so its icon is not live: the list finds it under a click with {@link #hit}.
  */
 final class SessionRow extends JPanel {
 
-    /** The controls of a row, in their order. */
+    /** The controls of a row: its state icon. */
     enum Control {
-        POWER, FRESH, CHECKPOINT, COMPACT, CLEAR, MODEL, EFFORT, COPY
+        POWER
     }
 
-
-    /** The first line, beside the copy button; the lines under it take the row's whole width. */
     private final JLabel title = new JLabel();
-    private final JLabel body = new JLabel();
     private final JButton power = control();
-    private final JButton fresh = control();
-    private final JButton checkpoint = control();
-    private final JButton compact = control();
-    private final JButton clear = control();
-    private final JButton model = control();
-    private final JButton effort = control();
-    private final JButton copy = control();
 
     SessionRow() {
-        super(new BorderLayout(0, 3));
-        setBorder(BorderFactory.createEmptyBorder(6, 6, 6, 6));
-        int indent = Icons.get("claude").getIconWidth() + 6;
-        title.setIcon(Icons.get("claude"));
-        title.setIconTextGap(6);
-        body.setBorder(BorderFactory.createEmptyBorder(0, indent, 0, 0));
-        fresh.setIcon(Icons.get("fresh", 14));
-        checkpoint.setIcon(Icons.get("checkpoint", 14));
-        compact.setIcon(Icons.get("compact", 14));
-        compact.setToolTipText(COMPACT_TIP);
-        clear.setIcon(Icons.get("clear-conversation", 14));
-        copy.setIcon(Icons.get("copy", 14));
-        copy.setToolTipText("Copy the session's details: name, folder, conversation, uptime, context");
-        copy.setMargin(new Insets(0, 3, 0, 3));
-        JPanel head = new JPanel(new BorderLayout());
-        head.setOpaque(false);
-        head.add(title, BorderLayout.CENTER);
-        head.add(copy, BorderLayout.EAST);
-        JPanel text = new JPanel(new BorderLayout(0, 1));
-        text.setOpaque(false);
-        text.add(head, BorderLayout.NORTH);
-        text.add(body, BorderLayout.CENTER);
-        // the session's own controls packed at the left, under the text past the icon's column; its settings at the right
-        JPanel actions = group(FlowLayout.LEFT, power, fresh, checkpoint, compact, clear);
-        actions.setBorder(BorderFactory.createEmptyBorder(0, indent - 4, 0, 0));
-        JPanel controls = new JPanel(new BorderLayout());
-        controls.setOpaque(false);
-        controls.add(actions, BorderLayout.WEST);
-        controls.add(group(FlowLayout.RIGHT, model, effort), BorderLayout.EAST);
-        add(text, BorderLayout.CENTER);
-        add(controls, BorderLayout.SOUTH);
+        super(new BorderLayout(4, 0));
+        setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 4));
+        // one line (record 90): the state icon, which connects and disconnects, and the name; the rest is in the menu
+        power.setMargin(new Insets(0, 2, 0, 2));
+        add(power, BorderLayout.WEST);
+        add(title, BorderLayout.CENTER);
+    }
+
+    /** The icon a working session shows in place of its state, turned by the list's timer. */
+    private Icon working = Icons.get("claude");
+
+    void working(Icon spinner) {
+        working = spinner;
+    }
+
+    /** The state icon shown; for tests. */
+    Icon stateIcon() {
+        return power.getIcon();
     }
 
     /**
-     * Shows {@code s}; {@code bound} names the panels it is bound to, "headless" when none, in the accent colour when
-     * {@code focused} (one of them is the focused panel); {@code approvals} counts the waiting approvals; {@code hovered}
-     * shows the copy button; {@code newestCli} is the newest Claude Code version a running session reported.
+     * Shows {@code s}: the name dimmed when its own panel is not {@code open}, in the accent colour when {@code focused}
+     * (one of its panels is the focused panel); {@code approvals} counts the waiting approvals; {@code newestCli} is
+     * the newest Claude Code version a running session reported.
      */
-    SessionRow show(SessionState s, String bound, boolean focused, int approvals, boolean selected, boolean hovered,
+    SessionRow show(SessionState s, boolean open, boolean focused, int approvals, boolean selected,
                     Color background, Color foreground, String newestCli) {
         setOpaque(true);
         setBackground(background);
         title.setForeground(foreground);
-        body.setForeground(foreground);
-        title.setText(titleHtml(s, bound, focused, approvals));
-        body.setText(bodyHtml(s, System.currentTimeMillis(), newestCli));
-        boolean running = s.status().isUsable();
-        power.setIcon(Icons.get(running ? "plug" : "unplug", 14));
-        power.setToolTipText(running ? "Connected; click to disconnect (stops the session)" : "Disconnected; click to connect (starts the session)");
-        fresh.setVisible(EditorPanel.showsFresh(s));
-        fresh.setToolTipText(freshTip(s));
-        checkpoint.setVisible(EditorPanel.showsCheckpoint(s));
-        checkpoint.setIcon(Icons.get(EditorPanel.checkpointIcon(s), 14));
-        checkpoint.setToolTipText(EditorPanel.checkpointTip(s));
-        compact.setVisible(running);
-        clear.setVisible(running);
-        clear.setToolTipText(clearTip(s));
-        model.setText(modelName(s) + " ▾");
-        model.setToolTipText("Model: " + modelName(s) + "; click to change");
-        effort.setText(effortName(s) + " ▾");
-        effort.setToolTipText("Effort: " + effortName(s) + "; click to change");
-        copy.setVisible(hovered);
-        for (JButton b : new JButton[]{power, fresh, checkpoint, compact, clear, model, effort, copy}) {
-            b.setForeground(selected ? foreground : Theme.MUTED_STRONG);
-        }
+        title.setText(titleHtml(s, open, focused, approvals, newestCli));
+        // its state is its icon: working spins, waiting on background work shows the hourglass
+        power.setIcon(s.isBusy() ? working : s.isWaiting() ? Icons.get("hourglass") : Icons.get(SessionIcons.of(s.status())));
+        power.setToolTipText(powerTip(s));
         return this;
-    }
-
-    /** "up 3 h 05 min" while the session runs, empty while it does not; when it started is in {@link #details}. */
-    static String uptimeText(SessionState s, long nowMillis) {
-        long started = s.startedMillis();
-        return started <= 0L || !s.status().isUsable() ? "" : "up " + Labels.uptime(nowMillis - started);
     }
 
     /**
@@ -219,14 +168,6 @@ final class SessionRow extends JPanel {
         return sb.toString();
     }
 
-    /**
-     * {@link #details} as a tooltip: the same lines, each escaped, so a name or path is shown as typed and never read
-     * as markup.
-     */
-    static String detailsTip(String details) {
-        return "<html>" + String.join("<br>", details.strip().lines().map(MarkdownHtml::escape).toList()) + "</html>";
-    }
-
     /** The control at {@code p}, a point in the cell whose bounds this row was laid out to. */
     Optional<Control> hit(Rectangle cell, Point p) {
         layOut(cell);
@@ -260,13 +201,6 @@ final class SessionRow extends JPanel {
     private JButton button(Control c) {
         return switch (c) {
             case POWER -> power;
-            case FRESH -> fresh;
-            case CHECKPOINT -> checkpoint;
-            case COMPACT -> compact;
-            case CLEAR -> clear;
-            case MODEL -> model;
-            case EFFORT -> effort;
-            case COPY -> copy;
         };
     }
 
@@ -291,19 +225,19 @@ final class SessionRow extends JPanel {
         return "Start a new conversation" + keeps(s);
     }
 
-    static String clearTip(SessionState s) {
-        return "Send " + SessionSpec.CLEAR_COMMAND + ": a new conversation starts" + keeps(s);
-    }
-
     /** Where the current conversation goes: the start of its id, to find it among the importable ones. */
     private static String keeps(SessionState s) {
         String id = s.spec().claudeSessionId();
         return id.isEmpty() ? "" : "; this one, " + id.substring(0, Math.min(8, id.length())) + ", stays importable";
     }
 
-    /** The model the session asked for, else the one Claude Code reported, else "default"; a full id by its family. */
+    /**
+     * The model the session runs, by family: the one its {@code system/init} reported while it runs, else the one it
+     * is set to start with, else "default" (Claude Code's).
+     */
     static String modelName(SessionState s) {
-        String m = !s.spec().model().isBlank() ? s.spec().model() : s.info().model();
+        String m = s.status().isUsable() && !s.info().model().isBlank() ? s.info().model()
+                : !s.spec().model().isBlank() ? s.spec().model() : "";
         if (m.isBlank()) {
             return "default";
         }
@@ -316,70 +250,59 @@ final class SessionRow extends JPanel {
         return m;
     }
 
-    static String effortName(SessionState s) {
-        return s.spec().effort().isBlank() ? "default" : s.spec().effort();
-    }
-
-    /** The state, name, where it is bound, pending approvals and what it is doing; never wraps, clipped at the edge. */
-    private static String titleHtml(SessionState s, String bound, boolean focused, int approvals) {
-        String dot = "<span style='color:" + Theme.hex(EditorPanel.color(s.status())) + "'>" + EditorPanel.dot(s.status()) + "</span>";
-        String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.warn()) + "'>⚑" + approvals + "</span>";
-        String where = "&nbsp;<span style='color:" + Theme.hex(focused ? Theme.ACCENT : Theme.MUTED_STRONG)
-                + "'>· " + MarkdownHtml.escape(Clip.keepEnd(bound, 24)) + "</span>";
-        String doing = s.isBusy() ? TabStatus.working(s) : s.isWaiting() ? TabStatus.waiting(s) : "";
-        String busy = doing.isEmpty() ? "" : "&nbsp;&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>"
-                + MarkdownHtml.escape(Clip.keepEnd(doing, 30)) + "</span>";
-        return "<html><nobr>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(s.name()) + "</b>" + where + badge + busy + "</nobr></html>";
+    static String modelTip(SessionState s) {
+        boolean reported = s.status().isUsable() && !s.info().model().isBlank();
+        return "Model: " + (reported ? s.info().model() + ", as the session reported it" : modelName(s)
+                + (s.spec().model().isBlank() ? ", Claude Code's" : ", set for the next start")) + "; click to change";
     }
 
     /**
-     * Lines that never wrap, clipped at the edge: the folder and branch; then how full the context is (purple from the
-     * checkpoint's threshold), the Claude Code version it runs (amber, with an arrow, when another running session runs
-     * a newer one) and how long it has run, whatever is known, a line only when something is, so a disconnected
-     * row has its controls right under its folder. The conversation's id is in the tooltip and the copied details.
+     * The effort the session starts each turn at: the one it is set to, else, while it runs, the one Claude Code's settings
+     * give its model, else "default".
      */
-    static String bodyHtml(SessionState s, long nowMillis, String newestCli) {
-        String branch = s.branch().isEmpty() ? "" : " ⎇ " + MarkdownHtml.escape(s.branch());
-        String muted = Theme.hex(Theme.MUTED);
-        List<String> facts = new ArrayList<>(3);
-        String context = contextText(s);
-        if (!context.isEmpty()) {
-            boolean full = s.contextTokens() >= Reflection.THRESHOLD * s.contextWindow();
-            facts.add("<span style='color:" + Theme.hex(full ? Theme.THINKING : Theme.MUTED) + "'>ctx " + context + "</span>");
+    static String effortName(SessionState s) {
+        if (!s.spec().effort().isBlank()) {
+            return s.spec().effort();
         }
-        // before the uptime, which the tooltip also gives: at the sidebar's usual width the line is clipped after these two
-        String cli = cliText(s);
-        if (!cli.isEmpty()) {
-            boolean older = olderCli(s, newestCli);
-            facts.add("<span style='color:" + Theme.hex(older ? Theme.warn() : Theme.MUTED) + "'>" + MarkdownHtml.escape(cli)
-                    + (older ? " ↑" : "") + "</span>");
-        }
-        String uptime = uptimeText(s, nowMillis);
-        if (!uptime.isEmpty()) {
-            facts.add("<span style='color:" + muted + "'>" + MarkdownHtml.escape(uptime) + "</span>");
-        }
-        return "<html><nobr><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>"
-                + MarkdownHtml.escape(Clip.keepEnd(Labels.shortPath(s.spec().workDir()), 34)) + branch + "</span></nobr>"
-                + (facts.isEmpty() ? "" : "<br><nobr>" + String.join("<span style='color:" + muted + "'> · </span>", facts) + "</nobr>")
-                + "</html>";
+        return s.status().isUsable() && !s.info().effort().isBlank() ? s.info().effort() : "default";
     }
 
-    /** Buttons side by side with no gap between them. */
-    private static JPanel group(int align, JButton... buttons) {
-        JPanel p = new JPanel(new FlowLayout(align, 0, 0));
-        p.setOpaque(false);
-        for (JButton b : buttons) {
-            p.add(b);
-        }
-        return p;
+    static String effortTip(SessionState s) {
+        String from = !s.spec().effort().isBlank() ? "set for this session"
+                : s.status().isUsable() && !s.info().effort().isBlank() ? "Claude Code's setting for this model" : "Claude Code's";
+        return "Effort: " + effortName(s) + ", " + from + "; the base each turn starts at, which a turn may raise; click to change";
+    }
+
+    /** What the state icon says and does. */
+    static String powerTip(SessionState s) {
+        String doing = s.isBusy() ? "Working: " + TabStatus.working(s) + "; " : s.isWaiting() ? "Waiting on " + s.waitingFor() + "; " : "";
+        return switch (s.status()) {
+            case OPEN -> (doing.isEmpty() ? "Connected" : doing + "connected") + "; click to disconnect (stops the session)";
+            case OPENING -> "Starting";
+            case CLOSING -> "Stopping";
+            case FAILED -> "Failed" + (s.error().isEmpty() ? "" : ": " + s.error()) + "; click to connect (starts the session)";
+            case CLOSED -> "Disconnected; click to connect (starts the session)";
+        };
+    }
+
+    /**
+     * The name, dimmed when its own panel is not open, in the accent colour while one of its panels has the focus; an
+     * amber ↑ when it runs an older Claude Code than another running session ({@code newestCli} as in {@link #show}); the
+     * context in purple once the checkpoint is due; the approvals waiting. Never wraps, clipped at the edge.
+     */
+    static String titleHtml(SessionState s, boolean open, boolean focused, int approvals, String newestCli) {
+        String older = olderCli(s, newestCli) ? "&nbsp;<span style='color:" + Theme.hex(Theme.warn()) + "'>↑</span>" : "";
+        String due = s.reflection().due() && EditorPanel.showsCheckpoint(s)
+                ? "&nbsp;<span style='color:" + Theme.hex(Theme.THINKING) + "'>" + (contextText(s).isEmpty() ? "◆" : contextText(s)) + "</span>" : "";
+        String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.warn()) + "'>⚑" + approvals + "</span>";
+        String name = focused ? "<b style='color:" + Theme.hex(Theme.ACCENT) + "'>" : open ? "<b>" : "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";
+        return "<html><nobr>" + name + MarkdownHtml.escape(s.name()) + "</b>" + older + due + badge + "</nobr></html>";
     }
 
     private static JButton control() {
         JButton b = new JButton();
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setFocusable(false);
-        b.setFont(b.getFont().deriveFont(b.getFont().getSize2D() - 1f));
-        b.setMargin(new Insets(1, 3, 1, 3));
         return b;
     }
 }

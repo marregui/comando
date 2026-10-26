@@ -1,7 +1,6 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.model.LinearTickets;
-import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -27,6 +26,8 @@ import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.GridBagConstraints;
+import java.awt.GridBagLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
@@ -41,13 +42,16 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 /**
- * A tab's card, in place of its tooltip, laid out as a turn's report in the transcript: the ground lifted a little,
- * a bar of the chosen gold down its left edge; what the tooltip said, in grey; under it, set apart, "Summary" in the
- * headings' serif along the gold's ramp over a gold rule, and the panel's topic in the transcript's ivory, wrapped to
- * a few lines; the Linear tickets the panel's text names, as links a double click opens in the browser; at the bottom
+ * A tab's card, in place of its tooltip, and a session row's in the sidebar, the same card: laid out as a turn's report
+ * in the transcript: the ground lifted a little, a bar of the chosen gold down its left edge; its title, the panel's or
+ * the session's name, in the headings' serif along the gold's ramp; its facts (record 90), each said once, a quiet label
+ * and the value in the transcript's ivory; under them, set apart,
+ * "Summary" in the headings' serif along the gold's ramp over a gold rule, and the topic in the transcript's ivory,
+ * wrapped to a few lines; the Linear tickets the panel's text names, as links a double click opens in the browser; at the bottom
  * left, a button that reads the summary again and one that closes the card. The card closes when the pointer leaves
- * it, at a click on it (not on a link) and at its close button. It floats in the window's popup layer under the tab it describes and stays until it is closed or clicked, or
- * until another tab's card takes its place; the window moves it with itself. EDT only.
+ * it, at a click on it (not on a link) and at its close button. It floats in the window's popup layer under the tab or row it describes and stays until it is closed or clicked,
+ * or until another card takes its place; the window moves it with itself. A card is known by a key: its panel's, or a
+ * headless session's. EDT only.
  */
 final class TabCard {
 
@@ -73,8 +77,12 @@ final class TabCard {
             }
         }
     };
-    /** Text from a session, a document and Haiku: never rendered as HTML. */
-    private final JLabel status = Plain.only(new JLabel());
+    /** The panel's or the session's name; text from a session, a document and Haiku is never rendered as HTML. */
+    private final GoldTitle title;
+    /** The facts, a label and a value a row; hidden when there are none. */
+    private final JPanel facts = new JPanel(new GridBagLayout());
+    private CardFacts head = new CardFacts("", List.of());
+    private final Font font;
     private final GoldTitle heading;
     /** The tickets, links in a row under the heading; hidden when the text names none. */
     private final JPanel tickets = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
@@ -101,30 +109,41 @@ final class TabCard {
             }
         }
     };
+    /** A press on the card closes it; its parts that take presses themselves hear it too. */
+    private final MouseAdapter closeOnPress = new MouseAdapter() {
+        @Override
+        public void mousePressed(MouseEvent e) {
+            hide();
+        }
+    };
     private final JTextArea topic = new JTextArea();
     /** True while the summary is a placeholder, in grey italics, not a summary read. */
     private boolean muted;
-    private final JButton refresh = button("refresh", "tab-card-refresh", "Summarise the panel again with Haiku (about 2 s)",
+    private final JButton refresh = button("refresh", "tab-card-refresh", "Summarise again with Haiku (about 2 s)",
             "Summarise again");
     private final JButton close = button("close", "tab-card-close", "Close the card", "Close the card");
-    private PanelId shown;
+    private String shown;
     private JLayeredPane layer;
     /** Where the card's top left corner goes, in the tabs' coordinates: under the tab, at its left edge. */
     private Point anchor;
     private JComponent tabs;
 
-    TabCard(Consumer<PanelId> onRefresh) {
+    TabCard(Consumer<String> onRefresh) {
         card.setName("tab-card");
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setOpaque(true);
         card.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(10, 10 + BAR + 4, 6, 12)));
-        Font font = UIManager.getFont("ToolTip.font");
-        if (font == null) {
-            font = new Font(Font.DIALOG, Font.PLAIN, 12);
-        }
-        status.setFont(font);
-        status.setForeground(Theme.MUTED_STRONG);
+        Font tip = UIManager.getFont("ToolTip.font");
+        font = tip == null ? new Font(Font.DIALOG, Font.PLAIN, 12) : tip;
+        // the report's first heading: the card's name
+        title = new GoldTitle("", font.getSize2D() * 1.55f);
+        title.setName("tab-card-title");
+        title.setBorder(BorderFactory.createEmptyBorder(0, 0, 2, 0));
+        facts.setName("tab-card-facts");
+        facts.setOpaque(false);
+        facts.setBorder(BorderFactory.createEmptyBorder(6, 0, 0, 0));
+        facts.setVisible(false);
         // the report's second heading, a size above the text
         heading = new GoldTitle("Summary", font.getSize2D() * 1.25f);
         heading.setName("tab-card-heading");
@@ -146,10 +165,11 @@ final class TabCard {
             }
         });
         close.addActionListener(e -> hide());
-        for (JComponent c : new JComponent[]{status, heading, topic, actions}) {
+        for (JComponent c : new JComponent[]{title, facts, heading, topic, actions}) {
             c.setAlignmentX(Component.LEFT_ALIGNMENT);
         }
-        card.add(status);
+        card.add(title);
+        card.add(facts);
         card.add(Box.createVerticalStrut(10));
         card.add(heading);
         card.add(Box.createVerticalStrut(6));
@@ -160,14 +180,8 @@ final class TabCard {
         card.add(topic);
         card.add(Box.createVerticalStrut(6));
         card.add(actions);
-        MouseAdapter closeOnPress = new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                hide();
-            }
-        };
         card.addMouseListener(closeOnPress);
-        // the summary is a text area, which takes the press itself: a press on it closes the card as on the rest
+        // the summary is a text area, which takes the press itself: a press closes the card as on the rest
         topic.addMouseListener(closeOnPress);
         hearPointer(card);
         paintGold();
@@ -255,8 +269,8 @@ final class TabCard {
         return Arrays.stream(tickets.getComponents()).filter(c -> "tab-card-ticket".equals(c.getName())).map(c -> (JLabel) c).toList();
     }
 
-    /** Shows the card of {@code id} under {@code tab}, a rectangle of {@code over}, replacing any card shown. */
-    void show(PanelId id, JComponent over, Rectangle tab, String statusText, String topicText, boolean muted, boolean reading) {
+    /** Shows the card of {@code key} under {@code tab}, a rectangle of {@code over}, replacing any card shown. */
+    void show(String key, JComponent over, Rectangle tab, CardFacts head, String topicText, boolean muted, boolean reading) {
         JRootPane root = SwingUtilities.getRootPane(over);
         if (root == null) {
             return;
@@ -265,21 +279,35 @@ final class TabCard {
             hide();
             layer = root.getLayeredPane();
         }
-        shown = id;
+        shown = key;
         tabs = over;
         anchor = new Point(tab.x, tab.y + tab.height + 2);
         if (card.getParent() != layer) {
             layer.add(card, JLayeredPane.POPUP_LAYER);
         }
-        update(statusText, topicText, muted, reading);
+        // shown anew: placed even when its text is the last card's
+        lastText = null;
+        update(head, topicText, muted, reading);
     }
 
-    /** New text for the card shown, sized and placed again; nothing when none shows. */
-    void update(String statusText, String topicText, boolean muted, boolean reading) {
+    /** The text the card shows now, to size and place it again only when it changed. */
+    private List<Object> lastText;
+
+    /** New text for the card shown, sized and placed again when it changed; nothing when none shows. */
+    void update(CardFacts head, String topicText, boolean muted, boolean reading) {
         if (shown == null) {
             return;
         }
-        status.setText(Plain.text(statusText));
+        List<Object> text = List.of(head, topicText, muted, reading);
+        if (text.equals(lastText)) {
+            return;
+        }
+        lastText = text;
+        title.setText(Plain.text(head.title()));
+        if (!head.facts().equals(this.head.facts())) {
+            fill(head.facts());
+        }
+        this.head = head;
         topic.setText(topicText);
         Font f = topic.getFont();
         topic.setFont(f.deriveFont(muted ? Font.ITALIC : Font.PLAIN));
@@ -287,6 +315,45 @@ final class TabCard {
         paintGold();
         refresh.setEnabled(!reading);
         place();
+    }
+
+    /**
+     * The facts as rows: the label in a quiet grey, a size below, the value in the transcript's ivory, clipped at the
+     * card's edge rather than wrapped.
+     */
+    private void fill(List<CardFacts.Fact> list) {
+        facts.removeAll();
+        Font label = font.deriveFont(font.getSize2D() - 1f).deriveFont(Map.of(TextAttribute.TRACKING, 0.04f));
+        GridBagConstraints at = new GridBagConstraints();
+        at.anchor = GridBagConstraints.BASELINE_LEADING;
+        at.insets = new Insets(1, 0, 1, 0);
+        for (int i = 0; i < list.size(); i++) {
+            CardFacts.Fact f = list.get(i);
+            JLabel name = Plain.only(new JLabel(f.label()));
+            name.setFont(label);
+            name.setForeground(Theme.MUTED);
+            JLabel value = Plain.only(new JLabel(Plain.text(f.value())));
+            value.setName("tab-card-fact");
+            value.setFont(font);
+            value.setForeground(Theme.TRANSCRIPT_TEXT);
+            at.gridy = i;
+            at.gridx = 0;
+            at.weightx = 0;
+            at.fill = GridBagConstraints.NONE;
+            at.insets = new Insets(1, 0, 1, 14);
+            facts.add(name, at);
+            at.gridx = 1;
+            at.weightx = 1;
+            at.fill = GridBagConstraints.HORIZONTAL;
+            at.insets = new Insets(1, 0, 1, 0);
+            facts.add(value, at);
+        }
+        for (Component c : facts.getComponents()) {
+            c.addMouseListener(pointer);
+            c.addMouseListener(closeOnPress);
+        }
+        facts.setVisible(!list.isEmpty());
+        facts.setMaximumSize(new Dimension(Integer.MAX_VALUE, facts.getPreferredSize().height));
     }
 
     private void paintGold() {
@@ -312,20 +379,16 @@ final class TabCard {
     }
 
     /**
-     * Sizes the card: as wide as the status line or the summary's width, whichever is wider, within the window; the
-     * summary wraps to that width, and the card is as tall as its lines.
+     * Sizes the card: as wide as the title, the facts or the summary's width, whichever is widest, within the window; the
+     * summary wraps to that width, the facts clip at it, and the card is as tall as their lines.
      */
     private void place() {
         Point at = SwingUtilities.convertPoint(tabs, anchor, layer);
         int room = Math.max(160, layer.getWidth() - 2 * MARGIN);
         Insets in = card.getInsets();
-        int inner = Math.min(Math.max(status.getPreferredSize().width, SUMMARY_WIDTH), Math.min(MAX_WIDTH, room) - in.left - in.right);
-        topic.setPreferredSize(null);
-        topic.setMaximumSize(null);
-        topic.setSize(inner, Short.MAX_VALUE);
-        int topicHeight = topic.getPreferredSize().height;
-        topic.setPreferredSize(new Dimension(inner, topicHeight));
-        topic.setMaximumSize(new Dimension(inner, topicHeight));
+        int widest = Math.max(Math.max(title.getPreferredSize().width, facts.isVisible() ? facts.getPreferredSize().width : 0), SUMMARY_WIDTH);
+        int inner = Math.min(widest, Math.min(MAX_WIDTH, room) - in.left - in.right);
+        wrapTo(topic, inner);
         int w = inner + in.left + in.right;
         card.invalidate(); // the box layout keeps its children's sizes until told: the summary's lines changed
         int h = card.getPreferredSize().height;
@@ -333,6 +396,16 @@ final class TabCard {
         card.setBounds(x, at.y, w, h);
         card.validate();
         layer.repaint();
+    }
+
+    /** {@code area} wraps to {@code width} and is as tall as its lines. */
+    private static void wrapTo(JTextArea area, int width) {
+        area.setPreferredSize(null);
+        area.setMaximumSize(null);
+        area.setSize(width, Short.MAX_VALUE);
+        int height = area.getPreferredSize().height;
+        area.setPreferredSize(new Dimension(width, height));
+        area.setMaximumSize(new Dimension(width, height));
     }
 
     void hide() {
@@ -348,8 +421,8 @@ final class TabCard {
         }
     }
 
-    /** The panel whose card shows, null when none does. */
-    PanelId shown() {
+    /** The key of the card shown: its panel's, or a headless session's; null when none shows. */
+    String shown() {
         return shown;
     }
 
@@ -357,8 +430,19 @@ final class TabCard {
         return card;
     }
 
+    /** What the card shown hangs under: the tabs, or the sidebar's sessions; null when none shows. */
+    JComponent over() {
+        return shown == null ? null : tabs;
+    }
+
+    /** The title shown; for tests. */
     String statusText() {
-        return status.getText();
+        return title.getText();
+    }
+
+    /** The facts shown, "Label: value" a line; for tests. */
+    String detailsText() {
+        return head.text();
     }
 
     String topicText() {

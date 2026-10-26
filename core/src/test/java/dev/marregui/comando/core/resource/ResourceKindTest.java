@@ -106,12 +106,12 @@ class ResourceKindTest {
     @Test
     void sessionRoundTrip() {
         SessionSpec spec = new SessionSpec("edge", "/Users/x/edge", "opus", "high", "acceptEdits",
-                List.of("/a", "/b"), 15.0, "id-1", StartMode.RESUME, "/reflect");
+                List.of("/a", "/b"), 15.0, "id-1", StartMode.RESUME, "/reflect", "");
         assertThat(SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(spec))).isEqualTo(spec);
-        SessionSpec silent = new SessionSpec("edge", "/Users/x/edge", "", "", "", List.of(), 0.0, "", StartMode.NEW, "");
+        SessionSpec silent = new SessionSpec("edge", "/Users/x/edge", "", "", "", List.of(), 0.0, "", StartMode.NEW, "", "");
         assertThat(SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(silent)).checkpoint())
                 .as("an emptied checkpoint stays empty: the button is hidden").isEmpty();
-        assertThat(new SessionSpec("edge", "/Users/x/edge", "", "", "", List.of(), 0.0, "", StartMode.NEW, null).checkpoint())
+        assertThat(new SessionSpec("edge", "/Users/x/edge", "", "", "", List.of(), 0.0, "", StartMode.NEW, null, null).checkpoint())
                 .as("a spec read from a file written before the field existed gets the default").isEqualTo("/reflect");
     }
 
@@ -166,16 +166,17 @@ class ResourceKindTest {
     }
 
     @Test
-    void removingASessionNamesWhatItStopsDeniesAndUnbinds() {
+    void removingASessionNamesWhatItStopsDeniesRemovesAndDetaches() {
         SessionSpec work = SessionSpec.imported("work", "/tmp", "id-1");
         AppState s = AppState.initial(
-                        List.of(new PanelState(new PanelId("p1"), "one", "", "work"), new PanelState(new PanelId("p2"), "two", "", "work")),
+                        List.of(new PanelState(new PanelId("p1"), "work", "", "work"), new PanelState(new PanelId("p2"), "PLAN.md", "", "work", true)),
                         List.of(), List.of(SessionState.closed(work).withStatus(Status.OPEN, "")))
                 .withApprovals(List.of(new Approval(1, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 0L),
                         new Approval(2, "work", ApprovalKind.TOOL, "Bash", "{}", "pwd", 0L)));
 
-        assertThat(SessionKind.INSTANCE.removalQuestion(s, "work")).isEqualTo("Remove session work? This stops it, denies 2 waiting approvals"
-                + " and unbinds 2 panels. The conversation stays in ~/.claude/projects and can be imported again.");
+        assertThat(SessionKind.INSTANCE.removalQuestion(s, "work")).isEqualTo("Remove session work? This stops it, denies 2 waiting approvals,"
+                + " removes its panel work with its text and detaches 1 document. The conversation stays in ~/.claude/projects and can be"
+                + " imported again.");
 
         AppState idle = AppState.initial(List.of(new PanelState(new PanelId("p1"), "one", "", "")), List.of(),
                 List.of(SessionState.closed(SessionSpec.fresh("new", "/tmp"))));
@@ -199,7 +200,7 @@ class ResourceKindTest {
         AppState s = AppState.initial(List.of(new PanelState(new PanelId("p1"), "one", "", "")), List.of(ConnectionState.closed(lab)),
                         List.of(SessionState.closed(SessionSpec.fresh("work", "/tmp"))))
                 .withClosed(List.of(new PanelState(new PanelId("p2"), "two", "lab", "work")));
-        assertThat(SessionKind.INSTANCE.removalQuestion(s, "work")).isEqualTo("Remove session work? This unbinds 1 panel.");
+        assertThat(SessionKind.INSTANCE.removalQuestion(s, "work")).as("its own panel, closed").isEqualTo("Remove session work? This removes its panel two with its text.");
         assertThat(ConnectionKind.INSTANCE.removalQuestion(s, "lab")).isEqualTo("Remove connection lab? This unbinds 1 panel.");
     }
 

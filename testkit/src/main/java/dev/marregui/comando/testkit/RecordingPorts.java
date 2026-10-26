@@ -90,8 +90,8 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     }
 
     @Override
-    public void send(String name, String text, String origin) {
-        record("claude.send " + name + ' ' + text);
+    public void send(String name, String text, String origin, String preface) {
+        record("claude.send " + name + ' ' + (preface.isEmpty() ? "" : "[preface] ") + text);
     }
 
     @Override
@@ -102,6 +102,11 @@ public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalP
     @Override
     public void clearTranscript(String name) {
         record("claude.clearTranscript " + name);
+    }
+
+    @Override
+    public void clearConversation(String name, String carried) {
+        record("claude.clearConversation " + name);
     }
 
     @Override

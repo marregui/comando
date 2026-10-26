@@ -121,10 +121,12 @@ class PanelsTabTest {
     @Test
     void removeAsksNamingTheFileAndTheSessionAndClosesAnOpenPanelFirst() throws Exception {
         PanelsTab tab = tab();
-        assertThat(tab.question(tab.list().getModel().getElementAt(1)))
-                .isEqualTo("Remove panel reviews? Its file r.md is deleted. Its session reviews keeps running without a panel.");
+        assertThat(tab.question(tab.list().getModel().getElementAt(1))).as("a session's own panel goes with its session")
+                .isEqualTo("Remove session reviews? This removes its panel reviews with its text.");
         assertThat(tab.question(tab.list().getModel().getElementAt(0)))
-                .isEqualTo("Remove panel main? Its file m.md is deleted. The panel closes first. Its session standard keeps running without a panel.");
+                .isEqualTo("Remove session standard? This removes its panel main with its text.");
+        assertThat(tab.question(new PanelsTab.Row(new PanelState(new PanelId("n"), "notes", "", ""), true)))
+                .as("a panel without a session").isEqualTo("Remove panel notes? Its file n.md is deleted. The panel closes first.");
 
         answer.set(1);
         SwingUtilities.invokeAndWait(() -> rowItem(tab, 0, "Remove…"));

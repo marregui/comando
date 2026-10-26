@@ -82,14 +82,13 @@ public final class EditorPanel extends JPanel {
     private final JButton sessionToggle = iconButton();
     /** Starts a stopped session on a new conversation; shown only while there is a conversation to leave. */
     private final JButton sessionFresh = iconButton();
-    /** Sends the session's checkpoint command; shown only while the session has one. */
+    /**
+     * Sends the session's checkpoint command; once its turn has finished, the conversation is cleared and the turn's
+     * summary goes in front of the next prompt. Shown only while the session has one.
+     */
     private final JButton sessionCheckpoint = iconButton();
     /** Sends {@code /compact} from this panel; shown while the session runs. */
     private final JButton sessionCompact = iconButton();
-    /** Has the session rewrite the panel's text as a professional Markdown document and put it in place of the text. */
-    private final JButton sessionPolish = iconButton();
-    /** Sends {@code /clear} from this panel; shown while the session runs. */
-    private final JButton sessionClear = iconButton();
     private final JButton run = iconButton();
     private final JButton stop = iconButton();
     /** Empties the panel's own text in one step ⌘Z takes back; a document, a file of its own, is never emptied from here. */
@@ -113,6 +112,9 @@ public final class EditorPanel extends JPanel {
     private PanelState panel;
     private AppState state;
     private BiConsumer<Path, String> opener = (f, heading) -> {
+    };
+    /** Opens the session dialog on a new session with the name given; the shell's. */
+    private Consumer<String> newSession = name -> {
     };
     private final JScrollPane renderedScroll = preview.scroll();
     /** A heading the preview scrolls to once it is laid out; null when none waits. EDT only. */
@@ -151,16 +153,9 @@ public final class EditorPanel extends JPanel {
         sessionCheckpoint.setIcon(Icons.get("checkpoint"));
         sessionCheckpoint.getAccessibleContext().setAccessibleName("Checkpoint");
         left.add(sessionCompact);
-        left.add(sessionClear);
         sessionCompact.setIcon(Icons.get("compact"));
         sessionCompact.getAccessibleContext().setAccessibleName("Compact the conversation");
         sessionCompact.setToolTipText(SessionRow.COMPACT_TIP);
-        sessionClear.setIcon(Icons.get("clear-conversation"));
-        sessionClear.getAccessibleContext().setAccessibleName("Clear the conversation");
-        left.add(sessionPolish);
-        sessionPolish.setIcon(Icons.get("markdown"));
-        sessionPolish.getAccessibleContext().setAccessibleName("Rewrite as a document");
-        sessionPolish.setToolTipText(POLISH_TIP);
         left.add(Box.createHorizontalStrut(Theme.PAD));
         left.add(connection);
         left.add(connectionToggle);
@@ -238,21 +233,15 @@ public final class EditorPanel extends JPanel {
         session.addActionListener(e -> sessionMenu().show(session, 0, session.getHeight()));
         connectionToggle.addActionListener(e -> toggleConnection());
         sessionToggle.addActionListener(e -> toggleSession());
-        sessionFresh.addActionListener(e -> state.session(panel.session()).ifPresent(x -> intents.dispatch(new Intent.StartFresh(x.name()))));
-        sessionCheckpoint.addActionListener(e -> state.session(panel.session()).ifPresent(x -> intents.dispatch(new Intent.Checkpoint(x.name()))));
-        sessionCompact.addActionListener(e -> state.session(panel.session())
+        // the panel as rendered last, not as made: a session bound since is the one they act on
+        sessionFresh.addActionListener(e -> state.session(this.panel.session()).ifPresent(x -> intents.dispatch(new Intent.StartFresh(x.name()))));
+        sessionCheckpoint.addActionListener(e -> state.session(this.panel.session()).ifPresent(x -> intents.dispatch(new Intent.Checkpoint(x.name()))));
+        sessionCompact.addActionListener(e -> state.session(this.panel.session())
                 .ifPresent(x -> intents.dispatch(new Intent.SessionCommand(x.name(), SessionSpec.COMPACT_COMMAND))));
-        sessionClear.addActionListener(e -> state.session(panel.session())
-                .ifPresent(x -> intents.dispatch(new Intent.SessionCommand(x.name(), SessionSpec.CLEAR_COMMAND))));
-        sessionPolish.addActionListener(e -> {
-            String text = editor.area().getText();
-            if (!text.isBlank()) {
-                intents.dispatch(new Intent.RunText(panel.id(), polishPrompt(panel.title(), text), Target.CLAUDE));
-            }
-        });
     }
 
-    static final String POLISH_TIP = "Have the session rewrite this text as a professional Markdown document";
+    /** The tooltip of the sessions sidebar's menu item that has a session rewrite its panel. */
+    static final String POLISH_TIP = "Have the session rewrite the panel's text as a professional Markdown document";
 
     /**
      * The prompt that has the panel's session rewrite {@code text}, the whole of the panel titled {@code title}, as a
@@ -629,17 +618,12 @@ public final class EditorPanel extends JPanel {
             sessionCheckpoint.setEnabled(ss.status() != Status.CLOSING);
             sessionCheckpoint.setIcon(Icons.get(checkpointIcon(ss)));
             sessionCheckpoint.setToolTipText(checkpointTip(ss));
-            // as on the session's row: compact and clear only while it runs
+            // as on the session's row: compact only while it runs
             sessionCompact.setVisible(ss.status().isUsable());
-            sessionClear.setVisible(ss.status().isUsable());
-            sessionPolish.setVisible(ss.status().isUsable());
-            sessionClear.setToolTipText(SessionRow.clearTip(ss));
         } else {
             sessionFresh.setVisible(false);
             sessionCheckpoint.setVisible(false);
             sessionCompact.setVisible(false);
-            sessionClear.setVisible(false);
-            sessionPolish.setVisible(false);
             session.setIcon(Icons.get("claude"));
             session.setText("no session ▾");
             session.setToolTipText("Bind a session");
@@ -727,8 +711,11 @@ public final class EditorPanel extends JPanel {
         return ss.reflection().due() ? "checkpoint-due" : "checkpoint";
     }
 
+    /** What the checkpoint sends and what follows: the clear, or nothing while the last one's summary still waits. */
     static String checkpointTip(SessionState ss) {
-        String send = "sends " + Clip.keepStart(ss.spec().checkpoint(), 40);
+        String send = "sends " + Clip.keepStart(ss.spec().checkpoint(), 40) + (ss.spec().carried().isEmpty()
+                ? ", then clears the conversation and carries its summary into the next prompt"
+                : "; the last checkpoint's summary still waits for the next prompt");
         return ss.reflection().due() ? "Checkpoint due, context past " + Math.round(Reflection.THRESHOLD * 100) + "%: " + send
                 : "Checkpoint: " + send;
     }
@@ -758,29 +745,49 @@ public final class EditorPanel extends JPanel {
     }
 
     /**
-     * A panel with a session offers to detach it: the session keeps running without a panel. A panel without one lists
-     * the sessions; a choice opens it, here unless another panel has it, which then comes forward.
+     * The session chip's menu, by the panel's kind (record 88). A session's own panel names itself as such: the two are
+     * one, removed together. A document attached to a session detaches from it; one attached to none lists the sessions
+     * to attach to. A panel of comando's own without a session offers a new session with its name, and lists the
+     * sessions, whose own panels a choice brings forward.
      */
-    private JPopupMenu sessionMenu() {
+    JPopupMenu sessionMenu() {
         JPopupMenu m = new JPopupMenu();
         if (!panel.session().isEmpty()) {
-            JMenuItem detach = new JMenuItem("Detach " + panel.session());
-            detach.setToolTipText("The session keeps running without a panel; the text stays here");
-            detach.addActionListener(e -> intents.dispatch(new Intent.BindSession(panel.id(), "")));
-            m.add(detach);
+            if (panel.document()) {
+                JMenuItem detach = new JMenuItem(Plain.text("Detach from " + panel.session()));
+                detach.setToolTipText("The document stays open; its selection no longer runs in the session");
+                detach.addActionListener(e -> intents.dispatch(new Intent.BindSession(panel.id(), "")));
+                m.add(detach);
+            } else {
+                m.add(new JMenuItem(Plain.text(panel.session() + "'s own panel: removing either removes both"))).setEnabled(false);
+            }
             return m;
         }
+        if (!panel.document()) {
+            JMenuItem create = new JMenuItem(Plain.text("New session " + panel.title() + "…"), Icons.get("add"));
+            create.setToolTipText("A session with this panel's name, this panel its own");
+            create.addActionListener(e -> newSession.accept(panel.title()));
+            m.add(create);
+            if (!state.sessions().isEmpty()) {
+                m.addSeparator();
+            }
+        }
         for (SessionState x : state.sessions()) {
-            List<PanelState> elsewhere = state.panelsBoundToSession(x.name());
-            String where = elsewhere.isEmpty() ? "" : "  · " + elsewhere.getFirst().title();
-            JMenuItem item = new JMenuItem(Plain.text(x.name() + "  " + Labels.shortPath(x.spec().workDir()) + where), Icons.get("claude"));
-            item.addActionListener(e -> intents.dispatch(new Intent.OpenSession(x.name(), panel.id(), PanelId.random())));
+            String verb = panel.document() ? "Attach to " : "Open ";
+            JMenuItem item = new JMenuItem(Plain.text(verb + x.name() + "  " + Labels.shortPath(x.spec().workDir())), Icons.get("claude"));
+            item.addActionListener(e -> intents.dispatch(panel.document() ? new Intent.BindSession(panel.id(), x.name())
+                    : new Intent.OpenSession(x.name(), panel.id(), PanelId.random())));
             m.add(item);
         }
-        if (state.sessions().isEmpty()) {
+        if (state.sessions().isEmpty() && panel.document()) {
             m.add(new JMenuItem("No sessions; + or import in the sidebar's Sessions tab adds one")).setEnabled(false);
         }
         return m;
+    }
+
+    /** What "New session ‹title›…" opens: the session dialog with the name filled in. */
+    public void onNewSession(Consumer<String> open) {
+        newSession = open;
     }
 
     static String dot(Status s) {

@@ -215,11 +215,14 @@ public sealed interface Intent {
     record StartFresh(String name) implements Intent {
     }
 
-    /** Sends the session's checkpoint command as a prompt from its panel. */
+    /**
+     * The Checkpoint button: sends the session's checkpoint command as a prompt from its panel; when that turn has
+     * finished, the conversation is cleared and the turn's summary goes in front of the next prompt.
+     */
     record Checkpoint(String name) implements Intent {
     }
 
-    /** Sends a Claude Code command ({@code /compact}, {@code /clear}) as a prompt from the session's panel. */
+    /** Sends a Claude Code command ({@code /compact}) as a prompt from the session's panel. */
     record SessionCommand(String name, String command) implements Intent {
     }
 
@@ -279,8 +282,19 @@ public sealed interface Intent {
      * @param contextTokens the context size: input tokens of the turn's last API call; 0 when unknown after a
      *                      compaction; negative when unknown (the previous value stands)
      * @param contextWindow the model's context window, 0 when the event did not carry it
+     * @param result        the turn's last answer, as the event carries it; empty for a failed turn or one without text
      */
-    record SessionTurnEnded(String name, int queued, double costUsd, long contextTokens, long contextWindow, boolean error, String message) implements Intent {
+    record SessionTurnEnded(String name, int queued, double costUsd, long contextTokens, long contextWindow, boolean error, String message,
+                            String result) implements Intent {
+
+        public SessionTurnEnded {
+            result = result == null ? "" : result;
+        }
+
+        /** A turn that ended without an answer to read: it failed before one, or nothing ran. */
+        public SessionTurnEnded(String name, int queued, double costUsd, long contextTokens, long contextWindow, boolean error, String message) {
+            this(name, queued, costUsd, contextTokens, contextWindow, error, message, "");
+        }
     }
 
     record SessionExited(String name, int exitCode, String error) implements Intent {

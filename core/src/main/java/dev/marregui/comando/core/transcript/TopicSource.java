@@ -30,7 +30,8 @@ public final class TopicSource {
 
     /**
      * The end of {@code session}'s conversation, newest last, at most {@code maxChars}, headed by where the session works
-     * ({@code workDir}, and {@code branch} when known) so the summary can name the repository; empty when it has none.
+     * ({@code workDir}, and {@code branch} when known) so the summary can name the repository, and by its panel's title,
+     * {@code panel}, unless blank (a headless session); empty when it has none.
      */
     public static String ofSession(String session, String panel, String workDir, String branch, Transcript t, int maxChars) {
         int size = t.size();
@@ -65,8 +66,9 @@ public final class TopicSource {
             return "";
         }
         String where = workDir.isBlank() ? "" : ", working in " + workDir + (branch.isBlank() ? "" : " (git branch " + branch + ")");
-        return "A coding session named \"" + session + "\"" + where + ", in a panel titled \"" + panel
-                + "\". The end of its conversation, oldest first:\n" + String.join("", lines);
+        String in = panel.isBlank() ? "" : ", in a panel titled \"" + panel + "\"";
+        return "A coding session named \"" + session + "\"" + where + in + ". The end of its conversation, oldest first:\n"
+                + String.join("", lines);
     }
 
     /** The most recent paragraph of a session panel's text read whole up to this; a longer one keeps its start. */

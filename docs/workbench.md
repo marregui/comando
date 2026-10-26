@@ -21,7 +21,7 @@ their own, Configure ~/.claude folders and Configure repositories, which keep th
 
 | Layer | Connection | Session | Folder |
 |---|---|---|---|
-| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, permission mode, extra directories, budget, checkpoint command, conversation id, next start (new, resume, fork) | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository |
+| Spec (`core.model`) | `ConnectionSpec`: name, host, port, database, user, password, production, TLS mode | `SessionSpec`: name, directory, model, effort, permission mode, extra directories, budget, checkpoint command, conversation id, next start (new, resume, fork), the summary a checkpoint carried into the next prompt | `FolderRoot`: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository |
 | Kind (`core.resource`) | `ConnectionKind` | `SessionKind` (a clone forks the conversation) | `FolderKind` |
 | Live state (`core.state`) | `ConnectionState`: closed, opening, open, closing, failed, last error | `SessionState`: the same, plus turns, context, activity, branch, background tasks | — |
 | Store file | `connections.json` | `sessions.json` | `folders.json` |
@@ -35,12 +35,19 @@ Their outcome shows on the line above the buttons.
 ### 1.2 Panels
 
 A panel is a tab in the workspace: an id, a title, its text, and two bindings by name, a connection and a session,
-either empty. Several panels may share a connection; a session has at most one panel, and one with none is headless
-([record 38](adr/0038-a-session-has-one-panel.md)).
+either empty. Several panels may share a connection. Every session has one panel of comando's own, titled with its
+name: the two are one, renamed together (refused while the session runs) and removed together, after one question.
+Document panels may be attached to a session, any number of them ([record 38](adr/0038-a-session-has-one-panel.md),
+[record 88](adr/0088-a-session-and-its-panel-share-a-name.md)).
 
-- **Opening a session** (double-click in the sidebar, Open in a panel, the dialog's Assign, the header chip) brings its
-  panel forward; else the focused panel takes it when it has no session; else a new panel opens, titled after the
-  session, with the focused panel's connection. Detach (header chip) leaves the session running headless.
+- **Opening a session** (double-click in the sidebar, Open in a panel, the dialog's Open its panel, the header chip)
+  brings its own panel forward, open or closed; a session that has none (a conversation imported, never opened) gets
+  one, titled with its name, with the focused panel's connection. A new session opens its own panel; a panel of
+  comando's own without a session and with the new session's name becomes it.
+- **The session chip's menu**, by the panel's kind: on a session's own panel it says so; on a panel without a session,
+  "New session ‹title›…" (the session dialog, named after the panel) and the sessions, whose own panels a choice
+  brings forward; on a document, "Attach to ‹session›" or "Detach from ‹session›". A selection run in an attached
+  document goes to its session, and the session buttons in its header act on it.
 - **A new panel** (⌘T) gets the focused panel's connection and no session.
 - **Renaming** a panel: double-click its tab, the Panels tab's Rename…, or "Rename panel…" in the palette.
 - **Restore layout** (palette) puts the sidebar, side pane and lower divider back as they were before a session
@@ -60,10 +67,13 @@ either empty. Several panels may share a connection; a session has at most one p
   connected) that starts or stops, connects or disconnects. Next to the session's plug: a fresh start (while stopped
   with a conversation: a new conversation; the old one stays importable) and a checkpoint (sends the session's
   checkpoint command, `/reflect` by default; purple once a turn ended with the context at 60% of the window or more and
-  the command was not sent since) ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)),
-  then, while the session runs, compact and clear (`/compact`, `/clear` sent from the panel, as on the session's row),
-  and rewrite as a document: the session rewrites the panel's whole text as a professional Markdown document and puts
-  it in place of the text, ⌘Z bringing the original back ([record 85](adr/0085-a-panel-rewritten-as-a-document.md)).
+  the command was not sent since) ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)).
+  Once the checkpoint's turn has finished, the conversation is cleared (`/clear`), the Session tab shows only the
+  turn's summary, the tab card's summary is read again, the panel's text stays, and the summary goes in front of the
+  next prompt that is not a slash command, kept in `sessions.json` until then; a prompt sent before the turn ends, a
+  failed or interrupted turn, or a blank answer keeps the conversation
+  ([record 86](adr/0086-a-checkpoint-clears-and-carries-its-summary.md)). Then, while the session runs, compact
+  (`/compact` sent from the panel, as on the session's row).
   On the right, icons without a button's shape, close together: Browser (HTML: the page in the browser), Preview or
   Edit (Markdown), the editor theme, Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A
   production connection frames the panel in red ([record 57](adr/0057-a-light-editor-and-a-header-of-icons.md)).
@@ -105,16 +115,29 @@ No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-ba
 clones and removes it (`ResourceActions`). Removing something in use asks **Stop and remove**, **Disconnect and remove**
 or **Close and remove**, or **Leave it** ([record 37](adr/0037-session-actions-act-on-the-selected-row.md)).
 
-- **Sessions:** name, where it is bound ("headless" when nowhere), status, current activity or what it waits on,
-  pending approvals; directory and branch; `ctx` and the context % (purple from 60%), the Claude Code version the
-  session runs (from its `system/init`; in gold with ↑ when another running session runs a newer one, as after an update
-  of the CLI: each start runs the CLI installed then), how long it has run, a line only when one of them is known, so a
-  disconnected row has its controls under its folder. Over the
-  row's text the tooltip shows the details Copy details copies, the full session id among them. At the left a plug, fresh start, checkpoint, and while running compact and clear (`/compact`, `/clear`
-  sent from the session's panel); at the right the model and effort as menus (a change saves and, on a running session,
-  sends `/model` or `/effort`). A copy button at the row's top right under the mouse, Copy details in its menu and ⌘C
-  copy name, path, branch, full id, status, uptime and start, context with tokens, model and effort, and the Claude Code version. Listed running
-  first, then by name, until a row is dragged; the order then stands (saved in `sessions.json`) until **Sort: running first, then by name** in the Sessions tab's
+- **Sessions:** one line a row: the state icon and the name ([record 90](adr/0090-a-session-row-is-its-icon-and-name.md)).
+  The icon, which a click connects or disconnects, is Claude's mark in one size for every state: Claude's orange while
+  the session runs, grey while it is stopped, faint while it starts or stops, red when it failed; it spins while the
+  session works and shows the hourglass while it waits on background work. The name is dimmed while its own panel is not
+  open and in the accent colour while one of its panels has the focus, with an amber ↑ when it runs an older Claude Code
+  than another running session (each start runs the CLI installed then; start it again to use the newer), the context in
+  purple once its checkpoint is due (60% of the context), and the approvals waiting. A session's tab shows the same state
+  icon while nothing else is under way. Everything else is in the row's menu: open in a panel, start or stop, interrupt,
+  a fresh start (while stopped, when there is a conversation to leave), checkpoint (as the panel's,
+  [record 86](adr/0086-a-checkpoint-clears-and-carries-its-summary.md)), compact while running (`/compact` sent from the
+  session's panel), Rewrite, and **Model: ‹family›** and **Effort: ‹level›**, each naming what the session runs at: the
+  model it reported at its start while it runs (`opus`, not `default`), the effort set for it, else the one Claude
+  Code's `settings.json` gives its model (`modelSettings.<model>.effortLevel`, else `effortLevel`), the base each turn
+  starts at, which a turn may raise (the stream does not report it); a change saves and, on a running session, sends
+  `/model` or `/effort`. Over the row's text the panel tabs' card shows, the same card
+  ([record 87](adr/0087-a-session-row-shows-the-tabs-card.md)): the session's panel's, or for a session with no panel
+  open one of its own read from the end of its conversation; its title in the headings' gold serif, then its facts, each
+  once and only when known: state, model and effort, context, folder and branch, conversation, Claude Code, and the
+  panel's session, connection and file where the title does not say them. Copy details in the menu and ⌘C copy name,
+  path, branch, full id, status, uptime and start, context with tokens, model and effort, and the Claude Code version.
+  Listed running first, then by name, until a row is dragged; while the pointer is on the list a session that starts or
+  stops keeps its row, and the order applies when the pointer leaves, so a second click lands on the same session. A
+  dragged order then stands (saved in `sessions.json`) until **Sort: running first, then by name** in the Sessions tab's
   menu ([record 53](adr/0053-session-rows-compact-clear-copy-and-an-order-of-your-own.md), [record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)). Import lists stored
   conversations.
 - **Panels:** comando's own panels, open and closed, with session, connection and file name. Clone copies text and

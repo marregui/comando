@@ -22,7 +22,7 @@ class ClaudeCommandTest {
 
     @Test
     void resumeAndForkUseTheStoredId() {
-        SessionSpec spec = new SessionSpec("edge", "/w", "opus", "high", "acceptEdits", List.of("/a"), 5.0, "id-1", StartMode.FORK, "");
+        SessionSpec spec = new SessionSpec("edge", "/w", "opus", "high", "acceptEdits", List.of("/a"), 5.0, "id-1", StartMode.FORK, "", "");
         String argv = String.join(" ", ClaudeCommand.of("claude", spec, "", null, "ui text"));
         assertThat(argv).contains("--resume id-1 --fork-session", "--model opus", "--effort high", "--permission-mode acceptEdits",
                         "--add-dir /a", "--max-budget-usd 5.0")

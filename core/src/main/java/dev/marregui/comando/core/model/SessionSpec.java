@@ -16,6 +16,8 @@ import java.util.Objects;
  * @param claudeSessionId Claude Code's session id once known; empty for a session never started
  * @param checkpoint    the prompt the Checkpoint button sends ("/reflect"); empty hides the button
  * @param startMode       how the next start reaches the conversation
+ * @param carried         what the Checkpoint button carried out of the conversation it cleared: the checkpoint's summary,
+ *                        which goes in front of the next prompt; empty when nothing waits
  */
 public record SessionSpec(
         String name,
@@ -27,7 +29,8 @@ public record SessionSpec(
         double budgetUsd,
         String claudeSessionId,
         StartMode startMode,
-        String checkpoint) {
+        String checkpoint,
+        String carried) {
 
     /** The checkpoint command of a session that never set one: what the Checkpoint button sends. */
     public static final String DEFAULT_CHECKPOINT = "/reflect";
@@ -43,6 +46,8 @@ public record SessionSpec(
     public SessionSpec {
         // a sessions.json written before the field existed has none: the default, not a hidden button
         checkpoint = checkpoint == null ? DEFAULT_CHECKPOINT : checkpoint.strip();
+        // nor a carried summary: nothing waits
+        carried = carried == null ? "" : carried;
         ConnectionSpec.requireName(name);
         Objects.requireNonNull(workDir, "workDir");
         Objects.requireNonNull(model, "model");
@@ -64,12 +69,15 @@ public record SessionSpec(
     }
 
     public static SessionSpec fresh(String name, String workDir) {
-        return new SessionSpec(name, workDir, "", "", "", List.of(), 0.0, "", StartMode.NEW, DEFAULT_CHECKPOINT);
+        return new SessionSpec(name, workDir, "", "", "", List.of(), 0.0, "", StartMode.NEW, DEFAULT_CHECKPOINT, "");
     }
 
-    /** The same session on a new conversation: the next start creates one; the old conversation stays on disk. */
+    /**
+     * The same session on a new conversation: the next start creates one; the old conversation stays on disk. A carried
+     * summary still waits for the next prompt.
+     */
     public SessionSpec restarted() {
-        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, "", StartMode.NEW, checkpoint);
+        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, "", StartMode.NEW, checkpoint, carried);
     }
 
     /**
@@ -77,27 +85,32 @@ public record SessionSpec(
      * start forks it: two processes never write one conversation. The fork's own id is resumed after that.
      */
     public static SessionSpec imported(String name, String workDir, String claudeSessionId) {
-        return new SessionSpec(name, workDir, "", "", "", List.of(), 0.0, claudeSessionId, StartMode.FORK, DEFAULT_CHECKPOINT);
+        return new SessionSpec(name, workDir, "", "", "", List.of(), 0.0, claudeSessionId, StartMode.FORK, DEFAULT_CHECKPOINT, "");
     }
 
     public SessionSpec withName(String newName) {
-        return new SessionSpec(newName, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint);
+        return new SessionSpec(newName, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried);
     }
 
     /** After Claude Code reports its session id, later starts resume that conversation. */
     public SessionSpec resumable(String sessionId) {
-        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, sessionId, StartMode.RESUME, checkpoint);
+        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, sessionId, StartMode.RESUME, checkpoint, carried);
     }
 
     public SessionSpec withCheckpoint(String newCheckpoint) {
-        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, newCheckpoint);
+        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, newCheckpoint, carried);
+    }
+
+    /** The checkpoint's summary that goes in front of the next prompt; empty once it has gone. */
+    public SessionSpec withCarried(String newCarried) {
+        return new SessionSpec(name, workDir, model, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, newCarried);
     }
 
     public SessionSpec withModel(String newModel) {
-        return new SessionSpec(name, workDir, newModel, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint);
+        return new SessionSpec(name, workDir, newModel, effort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried);
     }
 
     public SessionSpec withEffort(String newEffort) {
-        return new SessionSpec(name, workDir, model, newEffort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint);
+        return new SessionSpec(name, workDir, model, newEffort, permissionMode, addDirs, budgetUsd, claudeSessionId, startMode, checkpoint, carried);
     }
 }

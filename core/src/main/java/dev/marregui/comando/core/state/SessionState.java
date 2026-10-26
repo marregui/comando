@@ -24,6 +24,8 @@ import java.util.Objects;
  * @param handedOff      the last turn added background work that is still open: that turn's outcome is the work's, still to come
  * @param startedMillis  when the session's process started, 0 while it does not run
  * @param reflection     whether the session is due its checkpoint
+ * @param checkpointClears the Checkpoint button's command runs: when its turn ends, the conversation is cleared and the
+ *                       turn's last answer, its summary, is carried into the next prompt
  */
 public record SessionState(
         SessionSpec spec,
@@ -43,7 +45,8 @@ public record SessionState(
         long returnedMillis,
         boolean handedOff,
         long startedMillis,
-        Reflection reflection) {
+        Reflection reflection,
+        boolean checkpointClears) {
 
     public SessionState {
         Objects.requireNonNull(spec, "spec");
@@ -61,7 +64,7 @@ public record SessionState(
     }
 
     public static SessionState closed(SessionSpec spec) {
-        return new SessionState(spec, Status.CLOSED, "", SessionInfo.NONE, 0, 0.0, 0L, 0L, 0L, "", "", 0L, "", List.of(), 0L, false, 0L, Reflection.FRESH);
+        return new SessionState(spec, Status.CLOSED, "", SessionInfo.NONE, 0, 0.0, 0L, 0L, 0L, "", "", 0L, "", List.of(), 0L, false, 0L, Reflection.FRESH, false);
     }
 
     public String name() {
@@ -127,39 +130,45 @@ public record SessionState(
         boolean added = next.stream().anyMatch(t -> tasks.stream().noneMatch(k -> k.id().equals(t.id())));
         boolean handed = !next.isEmpty() && (handedOff || added && isBusy());
         return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity,
-                branch, turnStartedMillis, lastTurnError, next, returned, handed, startedMillis, reflection);
+                branch, turnStartedMillis, lastTurnError, next, returned, handed, startedMillis, reflection, checkpointClears);
     }
 
     /** No background work: the session's process ended, and its tasks with it. */
     public SessionState withoutTasks() {
         return tasks.isEmpty() && returnedMillis == 0L && !handedOff ? this
                 : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity,
-                branch, turnStartedMillis, lastTurnError, List.of(), 0L, false, startedMillis, reflection);
+                branch, turnStartedMillis, lastTurnError, List.of(), 0L, false, startedMillis, reflection, checkpointClears);
     }
 
     public SessionState withSpec(SessionSpec newSpec) {
-        return new SessionState(newSpec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection);
+        return new SessionState(newSpec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
     }
 
     /** A session that stopped, or failed to start, no longer has a start time. */
     public SessionState withStatus(Status newStatus, String newError) {
         long started = newStatus == Status.CLOSED || newStatus == Status.FAILED ? 0L : startedMillis;
-        return new SessionState(spec, newStatus, newError, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, started, reflection);
+        return new SessionState(spec, newStatus, newError, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, started, reflection, checkpointClears);
     }
 
     /** The process started at {@code at}; a start reported again for a process already running keeps the first time. */
     public SessionState withStarted(long at) {
         return startedMillis > 0L ? this : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity,
-                branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, at, reflection);
+                branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, at, reflection, checkpointClears);
     }
 
     public SessionState withReflection(Reflection newReflection) {
         return newReflection.equals(reflection) ? this : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis,
-                activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, newReflection);
+                activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, newReflection, checkpointClears);
+    }
+
+    /** Whether the end of the running turn clears the conversation and carries its summary; see {@link #checkpointClears}. */
+    public SessionState withCheckpointClears(boolean clears) {
+        return clears == checkpointClears ? this : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow,
+                lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, clears);
     }
 
     public SessionState withInfo(SessionInfo newInfo, long at) {
-        return new SessionState(spec, status, error, newInfo, pendingTurns, costUsd, contextTokens, contextWindow, at, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection);
+        return new SessionState(spec, status, error, newInfo, pendingTurns, costUsd, contextTokens, contextWindow, at, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
     }
 
     /**
@@ -170,24 +179,24 @@ public record SessionState(
         boolean starts = pendingTurns == 0 && pending > 0;
         long started = pending == 0 ? 0L : starts ? at : turnStartedMillis;
         return new SessionState(spec, status, error, info, pending, costUsd, contextTokens, contextWindow, at, activity, branch, started,
-                starts ? "" : lastTurnError, tasks, starts ? 0L : returnedMillis, !starts && handedOff, startedMillis, reflection);
+                starts ? "" : lastTurnError, tasks, starts ? 0L : returnedMillis, !starts && handedOff, startedMillis, reflection, checkpointClears);
     }
 
     /** How the last turn ended: a message when it failed, empty when it finished or was interrupted. */
     public SessionState withLastTurnError(String message) {
         return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity,
-                branch, turnStartedMillis, message, tasks, returnedMillis, handedOff, startedMillis, reflection);
+                branch, turnStartedMillis, message, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
     }
 
     public SessionState withUsage(double cost, long tokens, long window, long at) {
-        return new SessionState(spec, status, error, info, pendingTurns, cost, tokens, window, at, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection);
+        return new SessionState(spec, status, error, info, pendingTurns, cost, tokens, window, at, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
     }
 
     public SessionState withActivity(String newActivity, long at) {
-        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, at, newActivity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection);
+        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, at, newActivity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
     }
 
     public SessionState withBranch(String newBranch) {
-        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, newBranch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection);
+        return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, lastActivityMillis, activity, newBranch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
     }
 }

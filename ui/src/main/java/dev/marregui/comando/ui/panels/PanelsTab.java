@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.ui.PanelTexts;
@@ -147,6 +148,10 @@ final class PanelsTab {
     String question(Row r) {
         PanelState p = r.panel();
         String file = texts.file(p.id()).map(f -> f.getFileName().toString()).orElse(p.title() + ".md");
+        if (!p.document() && !p.session().isEmpty() && state != null && state.session(p.session()).isPresent()) {
+            // a session's own panel and the session are one (record 88)
+            return SessionKind.INSTANCE.removalQuestion(state, p.session());
+        }
         return "Remove panel " + p.title() + "? Its file " + file + " is deleted." + (r.open() ? " The panel closes first." : "")
                 + (p.session().isEmpty() ? "" : " Its session " + p.session() + " keeps running without a panel.");
     }

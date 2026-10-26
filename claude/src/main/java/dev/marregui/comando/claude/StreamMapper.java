@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Function;
 
 /**
  * Turns Claude Code's stream-JSON events, or the lines of a stored transcript, into transcript blocks
@@ -49,6 +50,13 @@ final class StreamMapper {
      * notification. Written on the strand, read by the sub-agent thread.
      */
     private final Set<String> endedAgents = ConcurrentHashMap.newKeySet();
+    /**
+     * A {@code /clear} comando sent for a checkpoint runs: the transcript already shows what the checkpoint carried, so
+     * the clear's note and its turn's end are not shown. Cleared by the clear's {@code result}.
+     */
+    private boolean quietClear;
+    /** The base effort Claude Code's settings give a model id; read at each {@code system/init}. */
+    private Function<String, String> effortOf = model -> "";
 
     StreamMapper(String session, Transcript transcript, IntentSink sink, ObjectMapper json) {
         this.session = session;
@@ -75,7 +83,9 @@ final class StreamMapper {
                 // /clear: a system/init with the new conversation's id follows; the old context no longer applies, and
                 // the clear's turn makes no model call to report the new one
                 contextTokens = 0L;
-                note(Block.NoteKind.INFO, "Conversation cleared (" + e.path("trigger").asText("clear") + "); a new one starts");
+                if (!quietClear) {
+                    note(Block.NoteKind.INFO, "Conversation cleared (" + e.path("trigger").asText("clear") + "); a new one starts");
+                }
             }
             default -> LOG.log(System.Logger.Level.DEBUG, "event ignored [session=" + session + ", type=" + type + ']');
         }
@@ -137,6 +147,29 @@ final class StreamMapper {
 
     void note(Block.NoteKind kind, String text) {
         transcript.append(new Block.Note(kind, text, ""));
+    }
+
+    /** The message id of the summary a checkpoint carried into the next prompt, shown as the transcript's answer. */
+    static final String CARRIED_ID = "carried";
+
+    /**
+     * Shows {@code summary}, which a checkpoint carried out of the conversation it cleared, as the answer of a turn that
+     * ended: it is what the next prompt takes with it.
+     */
+    void carried(String summary) {
+        note(Block.NoteKind.INFO, "Conversation cleared after the checkpoint; its summary below goes in front of the next prompt");
+        transcript.append(new Block.AssistantText(CARRIED_ID, 0, summary, false, ""));
+        transcript.append(Block.TurnEnd.stored());
+    }
+
+    /** Where the base effort of the model a {@code system/init} names is read from. */
+    void effortFrom(Function<String, String> effort) {
+        effortOf = effort;
+    }
+
+    /** The {@code /clear} about to be sent is a checkpoint's: its note and its turn's end are not shown. */
+    void clearQuietly() {
+        quietClear = true;
     }
 
     /** The result a tool call gets when its process ended, or its stored conversation stopped, before it returned. */
@@ -245,7 +278,8 @@ final class StreamMapper {
                 e.path("cwd").asText(""),
                 e.path("claude_code_version").asText(""),
                 e.path("permissionMode").asText(""),
-                caps);
+                caps,
+                effortOf.apply(e.path("model").asText("")));
         if (!info.model().equals(lastModel)) {
             note(Block.NoteKind.INIT, "Model " + info.model() + " · Claude Code " + info.cliVersion() + " · " + info.permissionMode());
             lastModel = info.model();
@@ -449,14 +483,18 @@ final class StreamMapper {
         String message = error ? errorText(e) : "";
         // result.usage sums every API call of the turn; the context is the last call's input
         long tokens = contextTokens;
-        transcript.append(new Block.TurnEnd(e.path("total_cost_usd").asDouble(), e.path("duration_ms").asLong(),
-                e.path("num_turns").asInt(), error, message.isEmpty() ? subtype : message));
+        boolean quiet = quietClear && !error;
+        quietClear = false;
+        if (!quiet) {
+            transcript.append(new Block.TurnEnd(e.path("total_cost_usd").asDouble(), e.path("duration_ms").asLong(),
+                    e.path("num_turns").asInt(), error, message.isEmpty() ? subtype : message));
+        }
         long window = 0;
         for (JsonNode model : e.path("modelUsage")) {
             window = Math.max(window, model.path("contextWindow").asLong());
         }
         sink.dispatch(new Intent.SessionTurnEnded(session, e.path("queued_turn_count").asInt(0), e.path("total_cost_usd").asDouble(),
-                tokens, window, error, message));
+                tokens, window, error, message, error ? "" : e.path("result").asText("")));
     }
 
     private static String errorText(JsonNode e) {

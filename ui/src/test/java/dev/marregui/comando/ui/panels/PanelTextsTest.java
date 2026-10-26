@@ -53,23 +53,24 @@ class PanelTextsTest {
         ZoneId utc = ZoneOffset.UTC;
         long started = Instant.parse("2026-10-16T09:12:30Z").toEpochMilli();
         SessionState running = SessionState.closed(States.WORK).withStatus(Status.OPEN, "").withStarted(started);
-        assertThat(SessionRow.uptimeText(running, started + 30_000)).isEqualTo("up under a minute");
-        assertThat(SessionRow.uptimeText(running, started + (3 * 60 + 5) * 60_000L)).isEqualTo("up 3 h 05 min");
-        assertThat(SessionRow.uptimeText(running, started + 26 * 3_600_000L)).isEqualTo("up 1 d 2 h");
         assertThat(SessionRow.details(running, started + (3 * 60 + 5) * 60_000L, utc, "")).contains("Uptime: 3 h 05 min, since 09:12\n");
         assertThat(SessionRow.details(running, started + 26 * 3_600_000L, utc, "")).contains("Uptime: 1 d 2 h, since Oct 16 09:12\n");
-        assertThat(SessionRow.uptimeText(running.withStatus(Status.CLOSED, ""), started + 60_000)).as("stopped").isEmpty();
-        assertThat(SessionRow.uptimeText(SessionState.closed(States.WORK), started)).isEmpty();
+        assertThat(SessionRow.details(running, started + 30_000, utc, "")).contains("Uptime: under a minute, since 09:12\n");
+        assertThat(SessionRow.details(running.withStatus(Status.CLOSED, ""), started + 60_000, utc, "")).as("stopped").doesNotContain("Uptime");
     }
 
     @Test
     void theCheckpointButtonIsPurpleOnlyWhenDue() {
         SessionState x = SessionState.closed(States.WORK);
         assertThat(EditorPanel.checkpointIcon(x)).isEqualTo("checkpoint");
-        assertThat(EditorPanel.checkpointTip(x)).isEqualTo("Checkpoint: sends /reflect");
+        assertThat(EditorPanel.checkpointTip(x))
+                .isEqualTo("Checkpoint: sends /reflect, then clears the conversation and carries its summary into the next prompt");
         SessionState due = x.withReflection(Reflection.FRESH.afterTurn(700_000L, 1_000_000L));
         assertThat(EditorPanel.checkpointIcon(due)).isEqualTo("checkpoint-due");
-        assertThat(EditorPanel.checkpointTip(due)).isEqualTo("Checkpoint due, context past 60%: sends /reflect");
+        assertThat(EditorPanel.checkpointTip(due)).isEqualTo("Checkpoint due, context past 60%: sends /reflect, then clears the conversation"
+                + " and carries its summary into the next prompt");
+        assertThat(EditorPanel.checkpointTip(x.withSpec(x.spec().withCarried("the summary"))))
+                .isEqualTo("Checkpoint: sends /reflect; the last checkpoint's summary still waits for the next prompt");
     }
 
     @Test

@@ -111,8 +111,18 @@ public record AppState(
         return find(views, v -> v.id() == id);
     }
 
+    /** The open panels bound to the session: its own panel first, then the documents attached to it. */
     public List<PanelState> panelsBoundToSession(String session) {
-        return panels.stream().filter(p -> p.session().equals(session)).toList();
+        return panels.stream().filter(p -> p.session().equals(session))
+                .sorted((a, b) -> Boolean.compare(a.document(), b.document())).toList();
+    }
+
+    /**
+     * The session's own panel, open: the one panel of comando's own bound to it, titled with its name. A session has one;
+     * documents attached to it are not its panel.
+     */
+    public Optional<PanelState> homePanel(String session) {
+        return session.isEmpty() ? Optional.empty() : find(panels, p -> !p.document() && p.session().equals(session));
     }
 
     public int pendingApprovals(String session) {
@@ -145,7 +155,7 @@ public record AppState(
         return panels.stream().anyMatch(p -> p.title().equalsIgnoreCase(title)) || closed.stream().anyMatch(p -> p.title().equalsIgnoreCase(title));
     }
 
-    /** The closed panel bound to the session, if any. */
+    /** The closed panel bound to the session, if any: its own panel, closed (a document is dropped when closed). */
     public Optional<PanelState> closedPanelOfSession(String session) {
         return session.isEmpty() ? Optional.empty() : find(closed, p -> p.session().equals(session));
     }

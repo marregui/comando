@@ -80,6 +80,11 @@ text and shown to 400 lines.
   work under `-p`. `/clear` writes `conversation_reset`, ends its turn with no model call and reports the new
   conversation in a new `system/init`: comando zeroes the context, notes the clear, and resumes the new id from then on,
   saying the previous one can be imported again.
+- **The Checkpoint button** sends the checkpoint command; once its turn has finished (nothing running, queued or out in
+  the background), the `result` event's `result`, the turn's last answer, is kept as the session's carried summary,
+  `/clear` is sent with its note and turn end not shown, and the transcript is emptied to the summary. The next prompt
+  that is not a slash command goes to Claude with the summary in front of it, its block showing the prompt as typed
+  ([record 86](adr/0086-a-checkpoint-clears-and-carries-its-summary.md)).
 - **Versions.** At start `claude --version` runs with a 5 s bound on its exit and 1 s more for its output. A version outside the tested line (2.1.296 up to,
   not including, 2.2.0) gets a warning, not a refusal; features are read from `system/init`'s capabilities.
 

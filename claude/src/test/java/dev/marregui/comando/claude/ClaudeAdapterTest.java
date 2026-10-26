@@ -115,6 +115,32 @@ class ClaudeAdapterTest {
     }
 
     @Test
+    void aCheckpointsClearEmptiesTheTranscriptToItsSummaryAndThePrefaceIsNotShown() throws Exception {
+        ClaudeAdapter a = adapter("fake-claude.sh");
+        a.start(SessionSpec.fresh("work", tmp.toString()));
+        sink.await(Intent.SessionStarted.class, WAIT);
+        a.send("work", "ping", "panel one");
+        sink.await(Intent.SessionTurnEnded.class, WAIT);
+
+        a.clearConversation("work", "the summary");
+        sink.await(Intent.SessionTurnEnded.class, e -> sink.of(Intent.SessionTurnEnded.class).size() == 2, WAIT);
+        List<Block> cleared = blocks("work");
+        assertThat(cleared.subList(0, 3)).as("only what the checkpoint carried, then what the stand-in answers").containsExactly(
+                new Block.Note(Block.NoteKind.INFO, "Conversation cleared after the checkpoint; its summary below goes in front of the next prompt", ""),
+                new Block.AssistantText(StreamMapper.CARRIED_ID, 0, "the summary", false, ""),
+                Block.TurnEnd.stored());
+        assertThat(cleared).as("no prompt block for the clear, nor its turn's end").noneMatch(Block.UserPrompt.class::isInstance)
+                .filteredOn(Block.TurnEnd.class::isInstance).hasSize(1);
+
+        a.send("work", "go on", "panel one", "Context carried over: the summary\n\n---\n\n");
+        sink.await(Intent.SessionTurnEnded.class, e -> sink.of(Intent.SessionTurnEnded.class).size() == 3, WAIT);
+        assertThat(blocks("work")).filteredOn(Block.UserPrompt.class::isInstance)
+                .containsExactly(new Block.UserPrompt("go on", "panel one", ""));
+        a.stop("work");
+        sink.await(Intent.SessionExited.class, WAIT);
+    }
+
+    @Test
     void closeStopsRunningSessionsAndLeavesNoTokenFiles() throws Exception {
         Files.createDirectories(runDir);
         Files.writeString(runDir.resolve("old-crash.mcp.json"), "{}");

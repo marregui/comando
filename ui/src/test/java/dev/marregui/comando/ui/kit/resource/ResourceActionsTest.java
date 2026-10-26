@@ -87,7 +87,7 @@ class ResourceActionsTest {
         answer.set(1);
         actions.remove(work);
         assertThat(asked.getLast()).as("a resource in use is stopped first, or left as it is")
-                .isEqualTo("Remove work: Remove session work? This stops it and unbinds 1 panel. [Stop and remove, Leave it]");
+                .isEqualTo("Remove work: Remove session work? This stops it and removes its panel main with its text. [Stop and remove, Leave it]");
         assertThat(removed).isEmpty();
         answer.set(-1);
         actions.remove(work);

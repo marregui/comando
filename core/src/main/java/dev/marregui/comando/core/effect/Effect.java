@@ -64,8 +64,23 @@ public sealed interface Effect {
     record StopClaude(String name) implements Effect {
     }
 
-    /** Sends a prompt; {@code origin} names the panel it came from, shown on the transcript's user block. */
-    record SendToClaude(String name, String text, String origin) implements Effect {
+    /**
+     * Sends a prompt; {@code origin} names the panel it came from, shown on the transcript's user block. A non-empty
+     * {@code preface}, the summary a checkpoint carried, goes to Claude in front of the text, and is not shown again on
+     * the user block.
+     */
+    record SendToClaude(String name, String text, String origin, String preface) implements Effect {
+
+        public SendToClaude(String name, String text, String origin) {
+            this(name, text, origin, "");
+        }
+    }
+
+    /**
+     * Clears the session's conversation ({@code /clear}) and its Session tab, which then shows {@code carried}, the
+     * summary that goes in front of the next prompt.
+     */
+    record ClearConversation(String name, String carried) implements Effect {
     }
 
     record InterruptClaude(String name) implements Effect {

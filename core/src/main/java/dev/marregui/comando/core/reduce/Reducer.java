@@ -165,7 +165,7 @@ public final class Reducer {
             case Intent.StartSession i -> startSession(s, i.name());
             case Intent.StopSession i -> stopSession(s, i.name());
             case Intent.StartFresh i -> startFresh(s, i.name());
-            case Intent.Checkpoint i -> s.session(i.name()).map(x -> sessionCommand(s, i.name(), x.spec().checkpoint())).orElse(Transition.of(s));
+            case Intent.Checkpoint i -> checkpoint(s, i.name());
             case Intent.SessionCommand i -> sessionCommand(s, i.name(), i.command());
             case Intent.OrderSessions i -> orderSessions(s, i.names());
             case Intent.InterruptSession i -> interruptSession(s, i.name());
@@ -249,7 +249,8 @@ public final class Reducer {
             return Transition.of(s);
         }
         PanelState current = s.focusedPanel();
-        // a title names a panel to the tools and keys its plots: a title already taken gets a number, "README.md 2"
+        // a title names a panel to the tools and keys its plots: a title already taken gets a number, "README.md 2"; a
+        // session's name is its own panel's, taken too
         String title = i.title().isBlank() ? defaultTitle(s) : uniqueTitle(s, i.title().strip());
         List<PanelState> panels = new ArrayList<>(s.panels());
         panels.add(new PanelState(i.panel(), title, current.connection(), "", i.document()));
@@ -264,6 +265,11 @@ public final class Reducer {
 
     /** Removes a panel: an open one closes first; either leaves the lists, and its own file is deleted. */
     private Transition removePanel(AppState s, PanelId id) {
+        // a session's own panel and the session are one: removing either removes both (record 88)
+        Optional<PanelState> own = s.panel(id).or(() -> s.closedPanel(id)).filter(p -> !p.document() && !p.session().isEmpty());
+        if (own.isPresent() && s.session(own.get().session()).isPresent()) {
+            return removeSession(s, own.get().session());
+        }
         Optional<PanelState> closed = s.closedPanel(id);
         if (closed.isPresent()) {
             AppState next = notice(s.withClosed(s.closed().stream().filter(p -> !p.id().equals(id)).toList()), Notice.Level.INFO,
@@ -364,9 +370,28 @@ public final class Reducer {
             return Transition.of(s);
         }
         String title = i.title().strip();
+        Optional<PanelState> renamed = s.panel(i.panel()).or(() -> s.closedPanel(i.panel()));
+        // a session's own panel is titled with its name: renaming one renames the other (record 88)
+        Optional<SessionState> own = renamed.filter(p -> !p.document()).flatMap(p -> s.session(p.session()));
+        if (own.isPresent()) {
+            if (own.get().name().equals(title)) {
+                return Transition.of(s);
+            }
+            SessionSpec spec;
+            try {
+                spec = own.get().spec().withName(title);
+            } catch (IllegalArgumentException e) {
+                return Transition.of(notice(s, Notice.Level.ERROR, e.getMessage(), Notice.panel(i.panel().value())));
+            }
+            return saveSession(s, new Intent.SaveSession(own.get().name(), spec));
+        }
         // a title names a panel to the tools and keys its plots: two panels never share one
         if (Stream.concat(s.panels().stream(), s.closed().stream()).anyMatch(p -> !p.id().equals(i.panel()) && p.title().equalsIgnoreCase(title))) {
             return Transition.of(notice(s, Notice.Level.ERROR, "A panel called " + title + " exists", Notice.panel(i.panel().value())));
+        }
+        if (renamed.filter(p -> !p.document()).isPresent() && s.sessions().stream().anyMatch(x -> x.name().equalsIgnoreCase(title))) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "A session called " + title + " exists; its panel is its own",
+                    Notice.panel(i.panel().value())));
         }
         if (s.closedPanel(i.panel()).isPresent()) {
             AppState next = s.withClosed(s.closed().stream().map(p -> p.id().equals(i.panel()) ? p.withTitle(i.title().strip()) : p).toList());
@@ -388,72 +413,105 @@ public final class Reducer {
                 .orElse(Transition.of(s));
     }
 
+    /**
+     * A document is attached to a session, or detached; any number of documents may be attached to one session. A panel of
+     * comando's own is never rebound: a session has one, titled with its name (record 88), so binding one to a session
+     * opens that session's own panel, and its own panel is never detached.
+     */
     private Transition bindSession(AppState s, Intent.BindSession i) {
         if (!i.session().isEmpty() && s.session(i.session()).isEmpty()) {
             return Transition.of(notice(s, Notice.Level.ERROR, "No session called " + i.session()));
         }
-        if (s.panel(i.panel()).isEmpty()) {
+        Optional<PanelState> found = s.panel(i.panel());
+        if (found.isEmpty() || found.get().session().equals(i.session())) {
             return Transition.of(s);
         }
-        List<PanelState> panels = new ArrayList<>(s.panels().size());
-        for (PanelState p : s.panels()) {
-            if (p.id().equals(i.panel())) {
-                panels.add(p.withSession(i.session()));
-            } else {
-                // a session has one panel: binding it here takes it from any other
-                panels.add(!i.session().isEmpty() && p.session().equals(i.session()) ? p.withSession("") : p);
-            }
+        PanelState panel = found.get();
+        if (panel.document()) {
+            AppState next = s.withPanel(panel.withSession(i.session()));
+            return new Transition(next, List.of(save(next)));
         }
-        List<PanelState> closed = s.closed().stream()
-                .map(p -> !i.session().isEmpty() && p.session().equals(i.session()) ? p.withSession("") : p).toList();
-        AppState next = s.withPanels(panels, s.focused()).withClosed(closed);
-        return new Transition(next, List.of(save(next)));
+        if (i.session().isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.INFO, panel.title() + " is its session's own panel; removing the session removes both",
+                    Notice.panel(panel.id().value())));
+        }
+        Fresh fresh = freshPanel(s);
+        return openSession(fresh.state(), new Intent.OpenSession(i.session(), i.panel(), fresh.id()));
     }
 
+    /**
+     * Opens a session's own panel: open, it comes forward; closed, it opens again; none yet, a panel of comando's own with
+     * no session and the session's name becomes it, or a new one titled with the name, on {@code target}'s connection.
+     * Another panel is never taken (record 88).
+     */
     private Transition openSession(AppState s, Intent.OpenSession i) {
         if (s.session(i.session()).isEmpty()) {
             return Transition.of(notice(s, Notice.Level.ERROR, "No session called " + i.session()));
         }
-        List<PanelState> bound = s.panelsBoundToSession(i.session());
-        if (!bound.isEmpty()) {
-            return Transition.of(s.withFocused(bound.getFirst().id()));
+        Optional<PanelState> own = s.homePanel(i.session());
+        if (own.isPresent()) {
+            return Transition.of(s.withFocused(own.get().id()));
         }
         Optional<PanelState> closed = s.closedPanelOfSession(i.session());
         if (closed.isPresent()) {
             return reopen(s, closed.get());
         }
-        PanelState target = s.panel(i.target()).orElse(s.focusedPanel());
-        if (target.session().isEmpty()) {
-            AppState next = s.withPanel(target.withSession(i.session())).withFocused(target.id());
-            return new Transition(next, List.of(save(next)));
+        Optional<PanelState> named = Stream.concat(s.panels().stream(), s.closed().stream())
+                .filter(p -> !p.document() && p.session().isEmpty() && p.title().equalsIgnoreCase(i.session())).findFirst();
+        if (named.isPresent()) {
+            PanelState adopted = named.get().withSession(i.session()).withTitle(i.session());
+            if (s.panel(adopted.id()).isPresent()) {
+                AppState next = s.withPanel(adopted).withFocused(adopted.id());
+                return new Transition(next, List.of(save(next)));
+            }
+            return reopen(s.withClosed(s.closed().stream().map(p -> p.id().equals(adopted.id()) ? adopted : p).toList()), adopted);
         }
-        if (s.panel(i.newPanel()).isPresent()) {
+        if (s.panel(i.newPanel()).isPresent() || s.closedPanel(i.newPanel()).isPresent()) {
             return Transition.of(s);
         }
-        String title = uniqueTitle(s, i.session());
+        PanelState target = s.panel(i.target()).orElse(s.focusedPanel());
+        // the name is free unless a document or another panel has it in another case: then the panel keeps a number
+        String title = s.titleTaken(i.session()) ? uniqueTitle(s, i.session()) : i.session();
         List<PanelState> panels = new ArrayList<>(s.panels());
         panels.add(new PanelState(i.newPanel(), title, target.connection(), i.session()));
-        AppState next = notice(s.withPanels(panels, i.newPanel()), Notice.Level.INFO,
-                "Opened " + i.session() + " in a new panel; " + target.title() + " keeps " + target.session());
+        AppState next = s.withPanels(panels, i.newPanel());
         return new Transition(next, List.of(save(next)));
     }
 
-    /** "panel N", N the open panels plus one, else the next number no panel, open or closed, has as its title. */
     private static String defaultTitle(AppState s) {
         int n = s.panels().size() + 1;
-        while (s.titleTaken("panel " + n)) {
+        while (taken(s, "panel " + n)) {
             n++;
         }
         return "panel " + n;
     }
 
-    /** {@code title}, or the first of "title 2", "title 3"… no panel has, open or closed. */
+    /** {@code title}, or the first of "title 2", "title 3"… no panel has, open or closed, and no session is called. */
     private static String uniqueTitle(AppState s, String title) {
         String candidate = title;
-        for (int n = 2; s.titleTaken(candidate); n++) {
+        for (int n = 2; taken(s, candidate); n++) {
             candidate = title + " " + n;
         }
         return candidate;
+    }
+
+    /** A panel has the title, or a session the name: a session's name is its own panel's title. */
+    private static boolean taken(AppState s, String title) {
+        return s.titleTaken(title) || s.sessions().stream().anyMatch(x -> x.name().equalsIgnoreCase(title));
+    }
+
+    /** A panel id no panel holds, open or closed, and the state that took it: the reducer makes ids deterministically. */
+    private record Fresh(AppState state, PanelId id) {
+    }
+
+    private static Fresh freshPanel(AppState s) {
+        PanelId fresh = new PanelId("p-" + s.nextId());
+        s = s.withIdTaken();
+        while (s.panel(fresh).isPresent() || s.closedPanel(fresh).isPresent()) {
+            fresh = new PanelId("p-" + s.nextId());
+            s = s.withIdTaken();
+        }
+        return new Fresh(s, fresh);
     }
 
     // ---- running text
@@ -553,20 +611,39 @@ public final class Reducer {
             effects.add(new Effect.StartClaude(session.spec()));
             session = session.withStatus(Status.OPENING, "");
         }
-        effects.add(new Effect.SendToClaude(session.name(), prompt, panel.title()));
+        boolean checkpoint = isCheckpoint(prompt, session.spec().checkpoint());
+        String carried = session.spec().carried();
+        // a command (the checkpoint, /compact) leaves the carried summary for the next prompt that is not one
+        boolean carries = !carried.isEmpty() && !prompt.strip().startsWith("/");
+        effects.add(new Effect.SendToClaude(session.name(), prompt, panel.title(), carries ? preface(carried) : ""));
         long now = clock.millis();
         session = session.withTurns(session.pendingTurns() + 1, now).withActivity("sending", now);
-        if (isCheckpoint(prompt, session.spec().checkpoint())) {
+        if (checkpoint) {
             // typed, sent by the button or by another session alike: the session is no longer due
             session = session.withReflection(Reflection.checkpointed(session.contextTokens(), session.contextWindow()));
+        } else {
+            // a prompt after the button's checkpoint: the user goes on in this conversation, which is not cleared
+            session = session.withCheckpointClears(false);
+        }
+        if (carries) {
+            session = session.withSpec(session.spec().withCarried(""));
         }
         AppState next = clear(s.withSession(session), subject);
+        if (carries) {
+            effects.add(new Effect.SaveSessions(sessionSpecs(next)));
+        }
         // the Session tab follows a prompt run from the panel the user looks at; one another session sends to a panel
         // in the background leaves the user's lower panel alone
         if (panel.id().equals(s.focused())) {
             next = next.withLowerTab(LowerTab.SESSION);
         }
         return new Transition(next, effects);
+    }
+
+    /** What goes to Claude in front of the first prompt after a checkpoint cleared the conversation. */
+    static String preface(String carried) {
+        return "Context carried over from the previous conversation of this session: the summary its checkpoint wrote before "
+                + "the conversation was cleared.\n\n" + carried.strip() + "\n\n---\n\n";
     }
 
     /** The prompt is the checkpoint command, alone or followed by arguments ({@code /reflect now}). */
@@ -897,6 +974,11 @@ public final class Reducer {
             if (s.session(spec.name()).isPresent()) {
                 return Transition.of(notice(s, Notice.Level.ERROR, "A session called " + spec.name() + " exists", Notice.session(spec.name())));
             }
+            if (s.titleTaken(spec.name()) && Stream.concat(s.panels().stream(), s.closed().stream())
+                    .noneMatch(p -> !p.document() && p.session().isEmpty() && p.title().equalsIgnoreCase(spec.name()))) {
+                return Transition.of(notice(s, Notice.Level.ERROR, "A panel called " + spec.name()
+                        + " exists; a session's name is its own panel's title", Notice.session(spec.name())));
+            }
             List<SessionState> sessions = new ArrayList<>(s.sessions());
             sessions.add(SessionState.closed(spec));
             AppState next = s.withSessions(sessions);
@@ -905,7 +987,11 @@ public final class Reducer {
             if (!spec.claudeSessionId().isEmpty()) {
                 effects.add(new Effect.LoadHistory(spec));
             }
-            return new Transition(next, effects);
+            // a session comes with its own panel, titled with its name (record 88)
+            Fresh fresh = freshPanel(next);
+            Transition opened = openSession(fresh.state(), new Intent.OpenSession(spec.name(), fresh.state().focused(), fresh.id()));
+            effects.addAll(opened.effects());
+            return new Transition(opened.state(), effects);
         }
         Optional<SessionState> previous = s.session(i.previousName());
         if (previous.isEmpty()) {
@@ -919,15 +1005,22 @@ public final class Reducer {
         if (renamed && s.session(spec.name()).isPresent()) {
             return Transition.of(notice(s, Notice.Level.ERROR, "A session called " + spec.name() + " exists"));
         }
+        // its own panel takes the new name: no other panel may have it
+        if (renamed && Stream.concat(s.panels().stream(), s.closed().stream())
+                .anyMatch(p -> p.title().equalsIgnoreCase(spec.name()) && !(!p.document() && p.session().equals(i.previousName())))) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "A panel called " + spec.name() + " exists", Notice.session(old.name())));
+        }
         List<SessionState> sessions = new ArrayList<>(s.sessions().size());
         for (SessionState x : s.sessions()) {
-            sessions.add(x.name().equals(i.previousName()) ? x.withSpec(spec) : x);
+            // the form has no carried summary: the one waiting stays
+            sessions.add(x.name().equals(i.previousName()) ? x.withSpec(spec.withCarried(x.spec().carried())) : x);
         }
         AppState next = s.withSessions(sessions);
         List<Effect> effects = new ArrayList<>();
         effects.add(new Effect.SaveSessions(sessionSpecs(next)));
         if (renamed) {
             next = rebindSession(next, i.previousName(), spec.name());
+            next = retitleOwnPanel(next, spec.name());
             effects.add(new Effect.ForgetSession(i.previousName()));
             effects.add(save(next));
             if (!spec.claudeSessionId().isEmpty()) {
@@ -940,12 +1033,28 @@ public final class Reducer {
         return new Transition(next, effects);
     }
 
+    /**
+     * Removes the session and its own panel, open or closed, whose file is deleted; documents attached to it stay,
+     * detached. The conversation stays in Claude Code's files.
+     */
     private Transition removeSession(AppState s, String name) {
         Optional<SessionState> session = s.session(name);
         if (session.isEmpty()) {
             return Transition.of(s);
         }
         List<Effect> effects = new ArrayList<>();
+        Optional<PanelState> own = s.homePanel(name);
+        if (own.isPresent()) {
+            Transition dropped = dropPanel(s, own.get().id(), true);
+            s = dropped.state();
+            effects.addAll(dropped.effects().stream().filter(e -> !(e instanceof Effect.SavePanels)).toList());
+        }
+        Optional<PanelState> closedOwn = s.closedPanelOfSession(name);
+        if (closedOwn.isPresent()) {
+            PanelId gone = closedOwn.get().id();
+            s = s.withClosed(s.closed().stream().filter(p -> !p.id().equals(gone)).toList());
+            effects.add(new Effect.DeletePanel(gone));
+        }
         if (session.get().status() != Status.CLOSED) {
             effects.add(new Effect.StopClaude(name));
         }
@@ -953,6 +1062,9 @@ public final class Reducer {
         AppState next = clear(withdrawApprovals(s, name, "session removed", effects), Notice.session(name));
         next = next.withSessions(next.sessions().stream().filter(x -> !x.name().equals(name)).toList());
         next = rebindSession(next, name, "");
+        if (own.isPresent() || closedOwn.isPresent()) {
+            next = notice(next, Notice.Level.INFO, "Removed session " + name + " and its panel");
+        }
         effects.add(new Effect.SaveSessions(sessionSpecs(next)));
         effects.add(save(next));
         return new Transition(next, effects);
@@ -982,13 +1094,13 @@ public final class Reducer {
         if (added > 0) {
             effects.add(new Effect.SaveSessions(sessionSpecs(next)));
         }
-        PanelState focused = next.focusedPanel();
-        if (added == 1 && focused.session().isEmpty()) {
-            // the usual "import, then talk": one conversation and a panel waiting for one
+        if (added == 1) {
+            // the usual "import, then talk": one conversation, opened in its own panel
             String name = next.sessions().getLast().name();
-            next = next.withPanel(focused.withSession(name));
-            effects.add(save(next));
-            return new Transition(notice(next, Notice.Level.INFO, "Imported " + name + " and bound it to " + focused.title()), effects);
+            Fresh fresh = freshPanel(next);
+            Transition opened = openSession(fresh.state(), new Intent.OpenSession(name, fresh.state().focused(), fresh.id()));
+            effects.addAll(opened.effects());
+            return new Transition(notice(opened.state(), Notice.Level.INFO, "Imported " + name + " and opened it in its own panel"), effects);
         }
         return new Transition(notice(next, Notice.Level.INFO, "Imported " + added + " of " + specs.size() + " sessions"), effects);
     }
@@ -1019,20 +1131,42 @@ public final class Reducer {
     }
 
     /**
-     * A command (the checkpoint, {@code /compact}, {@code /clear}) runs as a prompt from the session's panel, as if the
-     * user had typed it there.
+     * The Checkpoint button: the checkpoint command runs from the session's panel and, once its turn has finished, the
+     * conversation is cleared and the turn's summary carried into the next prompt (see {@link #turnEnded}). A summary
+     * still carried means the conversation has had no prompt since its clear: there is nothing new to clear, and the
+     * command runs alone.
+     */
+    private Transition checkpoint(AppState s, String name) {
+        Optional<SessionState> found = s.session(name);
+        if (found.isEmpty()) {
+            return Transition.of(s);
+        }
+        Transition t = sessionCommand(s, name, found.get().spec().checkpoint());
+        boolean sent = t.effects().stream().anyMatch(e -> e instanceof Effect.SendToClaude);
+        if (!sent || !found.get().spec().carried().isEmpty()) {
+            return t;
+        }
+        return t.state().session(name)
+                .map(x -> new Transition(t.state().withSession(x.withCheckpointClears(true)), t.effects()))
+                .orElse(t);
+    }
+
+    /**
+     * A command (the checkpoint, {@code /compact}) runs as a prompt from the session's panel, as if the user had typed it
+     * there.
      */
     private Transition sessionCommand(AppState s, String name, String command) {
         Optional<SessionState> found = s.session(name);
         if (found.isEmpty() || command.isBlank() || found.get().status() == Status.CLOSING) {
             return Transition.of(s);
         }
-        List<PanelState> panels = s.panelsBoundToSession(name);
-        if (panels.isEmpty()) {
+        // its own panel, else a document attached to it, else its own panel closed: the command needs a panel to show in
+        Optional<PanelState> panel = s.panelsBoundToSession(name).stream().findFirst().or(() -> s.closedPanelOfSession(name));
+        if (panel.isEmpty()) {
             return Transition.of(notice(s, Notice.Level.ERROR, "Session " + name + " has no panel; open it to send "
                     + command, Notice.session(name)));
         }
-        return runPrompt(s, panels.getFirst(), command);
+        return runPrompt(s, panel.get(), command);
     }
 
     /** The named sessions first, in the order given; the rest after them as they were. Saved, so a restart keeps it. */
@@ -1121,8 +1255,9 @@ public final class Reducer {
         }
         AppState next = s.withSession(cleared ? x.withReflection(Reflection.FRESH) : x);
         if (cleared) {
+            String carried = x.spec().carried().isEmpty() ? "" : "; the checkpoint's summary goes in front of the next prompt";
             next = notice(next, Notice.Level.INFO, "Session " + x.name() + ": new conversation; the previous one (" + previous
-                    + ") can be imported again", Notice.session(x.name()));
+                    + ") can be imported again" + carried, Notice.session(x.name()));
         }
         if (!x.spec().equals(found.get().spec())) {
             effects.add(new Effect.SaveSessions(sessionSpecs(next)));
@@ -1155,11 +1290,28 @@ public final class Reducer {
         // the user's own interrupt is an outcome, not a failure
         boolean interrupted = i.error() && INTERRUPTED.equals(i.message());
         x = x.withLastTurnError(i.error() && !interrupted ? i.message() : "");
+        // the button's checkpoint has finished once nothing runs, is queued or was handed to the background; a result
+        // that made no model call and carries no text finished nothing
+        boolean checkpointDone = x.checkpointClears() && !x.isBusy() && !x.isAwaitingHandOff() && (ran || !i.result().isBlank());
+        if (checkpointDone) {
+            x = x.withCheckpointClears(false);
+            String summary = i.result().strip();
+            if (!i.error() && !summary.isEmpty()) {
+                x = x.withSpec(x.spec().withCarried(summary)).withTurns(x.pendingTurns() + 1, now).withActivity("clearing", now);
+                effects.add(new Effect.ClearConversation(i.name(), summary));
+            }
+        }
         next = next.withSession(x);
+        if (checkpointDone && !x.spec().carried().isEmpty()) {
+            effects.add(new Effect.SaveSessions(sessionSpecs(next)));
+        }
         if (interrupted) {
             next = notice(next, Notice.Level.INFO, i.name() + ": interrupted", Notice.session(i.name()));
         } else if (i.error()) {
             next = notice(next, Notice.Level.ERROR, i.name() + ": " + i.message(), Notice.session(i.name()));
+        } else if (checkpointDone && x.spec().carried().isEmpty()) {
+            next = notice(next, Notice.Level.WARN, i.name() + ": the checkpoint ended without a summary; the conversation is kept",
+                    Notice.session(i.name()));
         } else {
             next = clear(next, Notice.session(i.name()));
         }
@@ -1212,7 +1364,9 @@ public final class Reducer {
         x = x.withStatus(expected ? Status.CLOSED : Status.FAILED, expected ? "" : i.error())
                 .withTurns(0, now)
                 .withActivity("", now)
-                .withoutTasks();
+                .withoutTasks()
+                // the checkpoint's turn ended with the process: its conversation is not cleared
+                .withCheckpointClears(false);
         List<Effect> effects = new ArrayList<>();
         AppState next = withdrawApprovals(s.withSession(x), i.name(), "session ended", effects);
         if (!expected) {
@@ -1222,6 +1376,13 @@ public final class Reducer {
             next = notice(next, Notice.Level.ERROR, text, Notice.session(i.name()));
         }
         return new Transition(next, effects);
+    }
+
+    /** The session's own panel, open or closed, titled with its name. */
+    private static AppState retitleOwnPanel(AppState s, String name) {
+        List<PanelState> panels = s.panels().stream().map(p -> !p.document() && p.session().equals(name) ? p.withTitle(name) : p).toList();
+        List<PanelState> closed = s.closed().stream().map(p -> !p.document() && p.session().equals(name) ? p.withTitle(name) : p).toList();
+        return s.withPanels(panels, s.focused()).withClosed(closed);
     }
 
     private static AppState rebindSession(AppState s, String from, String to) {

@@ -29,6 +29,7 @@ import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
+import javax.swing.JList;
 import javax.swing.JRootPane;
 import javax.swing.JTabbedPane;
 import javax.swing.JViewport;
@@ -36,6 +37,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.PlainDocument;
+import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.HeadlessException;
@@ -156,6 +158,26 @@ class WorkspaceTest {
                 .withClosed(List.of(new PanelState(shut, "old", "", "")))));
         SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(shut, "old.md", () -> true)));
         assertThat(intents).as("a closed panel's file deleted outside removes it too").contains(new Intent.RemovePanel(shut));
+    }
+
+    @Test
+    void aSessionsOwnPanelWhoseFileWasDeletedKeepsItsSessionAndWritesItsTextAgain() throws Exception {
+        Texts texts = new Texts();
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w")).withStatus(Status.OPEN, "");
+        PanelState own = new PanelState(P, "work", "", "work");
+        Workspace[] w = new Workspace[1];
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(intents::add, texts, new SchemaRegistry());
+            w[0].render(AppState.initial(List.of(own), List.of(), List.of(work)));
+            w[0].panel(P).editor().area().setText("my notes");
+        });
+        int before = texts.changes.get();
+        SwingUtilities.invokeAndWait(() -> w[0].closeDeleted(new PanelTexts.Deleted(P, "work.md", () -> true)));
+        assertThat(intents).as("removing it would remove and stop the session").doesNotHaveAnyElementsOfTypes(Intent.RemovePanel.class);
+        assertThat(texts.changes.get()).as("its text is written again").isGreaterThan(before);
+        assertThat(intents).filteredOn(Intent.Notify.class::isInstance).extracting(i -> ((Intent.Notify) i).text())
+                .containsExactly("work.md was deleted outside comando; it is session work's own panel, so its text is written again");
     }
 
     @Test
@@ -360,6 +382,112 @@ class WorkspaceTest {
     }
 
     @Test
+    void aSessionRowShowsItsPanelsCardWithTheSessionsDetailsAndAHeadlessSessionACardOfItsOwn() throws Exception {
+        TranscriptRegistry transcripts = new TranscriptRegistry();
+        transcripts.of("idle").append(new Block.UserPrompt("tidy the imports", "x", ""));
+        transcripts.of("idle").append(new Block.AssistantText("m1", 0, "Imports tidied.", false, ""));
+        Asks asks = new Asks();
+        SessionState work = SessionState.closed(SessionSpec.fresh("s", "/w/s").resumable("conv-1")).withStatus(Status.OPEN, "").withBranch("main");
+        SessionState idle = SessionState.closed(SessionSpec.fresh("idle", "/w/idle"));
+        PanelState sql = new PanelState(new PanelId("q"), "query", "", "");
+        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s"), sql), List.of(), List.of(work, idle));
+        Workspace[] w = new Workspace[1];
+        JRootPane root = new JRootPane();
+        JList<String> rows = new JList<>(new String[]{"s", "idle"});
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> 100_000L);
+            w[0].topics(asks, transcripts::of);
+            w[0].render(s);
+            root.getContentPane().setLayout(new BorderLayout());
+            root.getContentPane().add(rows, BorderLayout.WEST);
+            root.getContentPane().add(w[0].component(), BorderLayout.CENTER);
+            layOut(root, 900, 600);
+            w[0].showCard(0);
+        });
+        TabCard card = w[0].card();
+        String details = card.detailsText();
+        assertThat(card.statusText()).as("the panel's title").isEqualTo("work");
+        assertThat(details).as("a session panel's card has the session's facts, each once")
+                .startsWith("State: running\nModel: default · effort default\nFolder: /w/s · main\nConversation: conv-1\nSession: s")
+                .doesNotContain("Status:", "Path:", "unknown");
+        asks.asks.getFirst().done().accept(new Topic("Working on the tab card", 1L, ""));
+        SwingUtilities.invokeAndWait(() -> { });
+        String status = card.statusText();
+
+        // the session's row: the same card, its panel's, with no new read
+        SwingUtilities.invokeAndWait(() -> w[0].sessionCards().show("s", rows, rows.getCellBounds(0, 0)));
+        assertThat(w[0].cardShown()).isEqualTo(P);
+        assertThat(card.component().getParent()).isSameAs(root.getLayeredPane());
+        assertThat(List.of(card.statusText(), card.detailsText(), card.topicText())).containsExactly(status, details, "Working on the tab card");
+        assertThat(asks.asks).hasSize(1);
+        int below = SwingUtilities.convertRectangle(rows, rows.getCellBounds(0, 0), root.getLayeredPane()).y + rows.getCellBounds(0, 0).height;
+        assertThat(card.component().getY()).as("under the row").isGreaterThanOrEqualTo(below);
+        SwingUtilities.invokeAndWait(() -> w[0].tick());
+        assertThat(card.component().getY()).as("a tick leaves it under its row, not its tab").isGreaterThanOrEqualTo(below);
+
+        // a headless session: a card of its own, read from the end of its conversation
+        SwingUtilities.invokeAndWait(() -> w[0].sessionCards().show("idle", rows, rows.getCellBounds(1, 1)));
+        assertThat(w[0].cardShown()).as("no panel's").isNull();
+        assertThat(card.statusText()).isEqualTo("idle");
+        assertThat(card.detailsText()).startsWith("State: stopped · no panel\n").contains("Folder: /w/idle").doesNotContain("Session:");
+        assertThat(card.topicText()).isEqualTo("Reading the summary…");
+        assertThat(asks.asks).hasSize(2);
+        assertThat(asks.asks.get(1).key()).isEqualTo(Workspace.SESSION_KEY + "idle");
+        assertThat(asks.asks.get(1).urgent()).isTrue();
+        assertThat(asks.asks.get(1).source()).startsWith("A coding session named \"idle\", working in /w/idle.").contains("Assistant: Imports tidied.");
+        asks.asks.get(1).done().accept(new Topic("Tidying the imports", 1L, ""));
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(card.topicText()).isEqualTo("Tidying the imports");
+        SwingUtilities.invokeAndWait(() -> card.refreshButton().doClick());
+        assertThat(asks.asks).as("↻ reads it again").hasSize(3);
+
+        // the pointer leaves the row and does not reach the card: it closes after the grace
+        SwingUtilities.invokeAndWait(() -> w[0].sessionCards().left());
+        Awaitility.await("the grace over").atMost(Duration.ofSeconds(3)).until(() -> card.shown() == null);
+
+        // a removed session's card closes
+        SwingUtilities.invokeAndWait(() -> w[0].sessionCards().show("idle", rows, rows.getCellBounds(1, 1)));
+        SwingUtilities.invokeAndWait(() -> w[0].render(s.withSessions(List.of(work))));
+        assertThat(card.shown()).isNull();
+
+        // a panel without a session: no session's facts
+        SwingUtilities.invokeAndWait(() -> w[0].showCard(1));
+        assertThat(card.statusText()).isEqualTo("query");
+        assertThat(card.detailsText()).doesNotContain("Model", "Folder", "State");
+    }
+
+    @Test
+    void aNewConversationDropsTheTopicOfItsSessionsPanelsAndTheNextShowReadsItAgain() throws Exception {
+        TranscriptRegistry transcripts = new TranscriptRegistry();
+        Asks asks = new Asks();
+        SessionState open = SessionState.closed(SessionSpec.fresh("s", "/tmp").resumable("conv-1")).withStatus(Status.OPEN, "");
+        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "s")), List.of(), List.of(open));
+        Workspace[] w = new Workspace[1];
+        JRootPane root = new JRootPane();
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> 100_000L);
+            w[0].topics(asks, transcripts::of);
+            w[0].render(s);
+            root.getContentPane().add(w[0].component());
+            layOut(root, 900, 600);
+            w[0].showCard(0);
+        });
+        asks.asks.getFirst().done().accept(new Topic("Reflecting on the session", 1L, ""));
+        SwingUtilities.invokeAndWait(() -> { });
+        TabCard card = w[0].card();
+        assertThat(card.topicText()).isEqualTo("Reflecting on the session");
+
+        SwingUtilities.invokeAndWait(() -> w[0].render(s.withSession(open.withSpec(open.spec().withModel("opus")))));
+        assertThat(card.topicText()).as("the same conversation keeps its topic").isEqualTo("Reflecting on the session");
+
+        // a checkpoint's /clear: the session reports a new conversation
+        SwingUtilities.invokeAndWait(() -> w[0].render(s.withSession(open.withSpec(open.spec().resumable("conv-2")))));
+        assertThat(card.topicText()).as("the old topic is gone with its conversation").isEqualTo("Nothing to summarise yet");
+        SwingUtilities.invokeAndWait(() -> w[0].showCard(0));
+        assertThat(asks.asks).as("read again at the next show, from the same text").hasSize(2);
+    }
+
+    @Test
     void aTabShowsACardWithItsTopicReadOnceAndAgainOnlyOnAskOrWhenThePanelsTextChangedAndItClosesWhenLeft() throws Exception {
         TranscriptRegistry transcripts = new TranscriptRegistry();
         Transcript t = transcripts.of("s");
@@ -383,7 +511,8 @@ class WorkspaceTest {
         assertThat(card.component().getParent()).isSameAs(root.getLayeredPane());
         assertThat(JLayeredPane.getLayer(card.component())).isEqualTo(JLayeredPane.POPUP_LAYER.intValue());
         assertThat(((JTabbedPane) w[0].component()).getToolTipTextAt(0)).as("the card, not a tooltip").isNull();
-        assertThat(card.statusText()).startsWith("work · s");
+        assertThat(card.statusText()).isEqualTo("work");
+        assertThat(card.detailsText()).contains("State: running", "Session: s");
         assertThat(card.topicText()).isEqualTo("Reading the summary…");
         assertThat(card.refreshButton().isEnabled()).isFalse();
         assertThat(asks.asks).singleElement().satisfies(a -> {

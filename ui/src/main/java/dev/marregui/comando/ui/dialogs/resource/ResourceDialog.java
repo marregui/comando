@@ -212,8 +212,9 @@ public final class ResourceDialog<S> {
             });
         }
         if (config.assign() != null) {
-            actions.add(button("Assign to panel", "pin", KeyText.of(session
-                            ? "Save if changed, then open the session in a panel (⌘⏎)"
+            // a session has its own panel, titled with its name (record 88): the button brings it forward
+            actions.add(button(session ? "Open its panel" : "Assign to panel", "pin", KeyText.of(session
+                            ? "Save if changed, then bring the session's own panel forward (⌘⏎)"
                             : "Save if changed, then bind it to the focused panel (⌘⏎)"),
                     this::assign));
         }
@@ -238,6 +239,14 @@ public final class ResourceDialog<S> {
     /** Shows the dialog on a new resource, as Add does. */
     public void showNew(AppState s) {
         open(() -> prepareNew(s));
+    }
+
+    /** Shows the dialog on a new resource named {@code name}, not saved yet: a panel's "New session ‹title›…". */
+    public void showNew(AppState s, String name) {
+        open(() -> {
+            render(s);
+            replacingForm(() -> add(name));
+        });
     }
 
     /** Shows the dialog on a copy of {@code of}, not saved yet, as Clone does. */
@@ -442,7 +451,10 @@ public final class ResourceDialog<S> {
     }
 
     private void add() {
-        String name = unique("new " + config.kind().noun());
+        add(unique("new " + config.kind().noun()));
+    }
+
+    private void add(String name) {
         hideConfirm();
         unwatch();
         editing = "";
@@ -583,8 +595,8 @@ public final class ResourceDialog<S> {
             saved = true;
         }
         intents.dispatch(config.assign().apply(state, editing));
-        // a session opens in its own panel, the focused one or a new one: the reducer decides, and its notice says which
-        say(Theme.MUTED, session ? (saved ? "Saved and opened " : "Opened ") + editing + " in a panel"
+        // a session opens in its own panel, never another one
+        say(Theme.MUTED, session ? (saved ? "Saved and opened " : "Opened ") + editing + " in its own panel"
                 : (saved ? "Saved and assigned " : "Assigned ") + editing + " to panel " + state.focusedPanel().title());
     }
 

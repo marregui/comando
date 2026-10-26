@@ -193,8 +193,9 @@ class ToolsAdapterTest {
         Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
         assertThat(end.exitCode()).isZero();
         assertThat(Duration.ofNanos(System.nanoTime() - t0)).as("not the child's 8 s").isLessThan(Duration.ofSeconds(6));
-        // the notice shows when the reader is still waiting on the pipe; on Linux the JDK's process reaper drains and
-        // closes the pipe at the exit unless the reader is inside a read then, and the reader ends with nothing to report
+        // the notice shows when the reader is still waiting on the pipe; at the exit the JDK's process reaper drains and
+        // closes the pipe (on Linux and macOS alike) unless the reader is inside a read then, so which one happens is a
+        // matter of thread timing, and in the drained case the reader ends with nothing to report
         assertThat(consoles.of(8L).text(0)).contains("done", "Exit code 0");
     }
 

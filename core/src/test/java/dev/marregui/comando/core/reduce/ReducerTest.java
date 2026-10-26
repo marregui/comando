@@ -14,6 +14,7 @@ import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.ConnectionState;
@@ -260,6 +261,8 @@ class ReducerTest {
 
     @Test
     void aPromptRunInAPanelTheUserIsNotLookingAtLeavesTheLowerPanelAlone() {
+        // a document attached to the session
+        state = state.withPanel(new PanelState(P2, "two", "local", "work", true));
         apply(new Intent.SelectLowerTab(LowerTab.RESULTS));
         apply(new Intent.RunText(P2, "review the diff", Target.CLAUDE)); // P1 has the focus
 
@@ -291,6 +294,8 @@ class ReducerTest {
 
     @Test
     void twoPanelsSharingASessionFeedOneQueue() {
+        // its own panel and a document attached to it
+        state = state.withPanel(new PanelState(P2, "two", "local", "work", true));
         apply(new Intent.RunText(P1, "first", Target.CLAUDE));
         apply(new Intent.SessionStarted("work"));
         apply(new Intent.RunText(P2, "second", Target.CLAUDE));
@@ -533,16 +538,20 @@ class ReducerTest {
         assertThat(effects).contains(new Effect.SendToClaude("work", "/reflect", state.panel(P1).orElseThrow().title()));
         assertThat(state.session("work").orElseThrow().pendingTurns()).isEqualTo(1);
 
-        apply(new Intent.BindSession(P1, ""));
-        apply(new Intent.BindSession(P2, ""));
-        apply(new Intent.Checkpoint("work"));
+        // an imported session never opened has no panel
+        state = state.withSessions(List.of(state.session("work").orElseThrow(), SessionState.closed(SessionSpec.imported("old", "/tmp", "abc"))));
+        apply(new Intent.Checkpoint("old"));
         assertThat(effects).as("no panel: nowhere to run it").doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
-        assertThat(state.notice().text()).isEqualTo("Session work has no panel; open it to send /reflect");
+        assertThat(state.notice().text()).isEqualTo("Session old has no panel; open it to send /reflect");
 
-        apply(new Intent.BindSession(P1, "work"));
+        apply(new Intent.ClosePanel(P1));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 1_000L, 200_000L, false, ""));
+        apply(new Intent.Checkpoint("work"));
+        assertThat(effects).as("its own panel closed: it runs from there").contains(new Effect.SendToClaude("work", "/reflect", "one"));
+        apply(new Intent.ReopenPanel(P1));
         apply(new Intent.SaveSession("work", state.session("work").orElseThrow().spec().restarted()));
         SessionSpec silent = new SessionSpec("work", state.session("work").orElseThrow().spec().workDir(), "", "", "", List.of(), 0.0, "",
-                StartMode.NEW, "");
+                StartMode.NEW, "", "");
         apply(new Intent.SaveSession("work", silent));
         apply(new Intent.Checkpoint("work"));
         assertThat(effects).as("an emptied command sends nothing").isEmpty();
@@ -593,11 +602,10 @@ class ReducerTest {
         assertThat(effects).contains(new Effect.SendToClaude("work", "/compact", state.panel(P1).orElseThrow().title()));
         assertThat(state.session("work").orElseThrow().pendingTurns()).isEqualTo(1);
 
-        apply(new Intent.BindSession(P1, ""));
-        apply(new Intent.BindSession(P2, ""));
-        apply(new Intent.SessionCommand("work", "/clear"));
+        state = state.withSessions(List.of(state.session("work").orElseThrow(), SessionState.closed(SessionSpec.imported("old", "/tmp", "abc"))));
+        apply(new Intent.SessionCommand("old", "/compact"));
         assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.SendToClaude.class);
-        assertThat(state.notice().text()).isEqualTo("Session work has no panel; open it to send /clear");
+        assertThat(state.notice().text()).isEqualTo("Session old has no panel; open it to send /compact");
     }
 
     @Test
@@ -617,6 +625,119 @@ class ReducerTest {
         assertThat(x.reflection()).as("a new conversation has nothing to reflect on").isEqualTo(Reflection.FRESH);
         assertThat(effects).singleElement().isInstanceOf(Effect.SaveSessions.class);
         assertThat(state.notice().text()).isEqualTo("Session work: new conversation; the previous one (conv-1) can be imported again");
+    }
+
+    @Test
+    void theCheckpointButtonClearsTheConversationOnceItsTurnHasFinishedAndCarriesItsSummaryIntoTheNextPrompt() {
+        String title = state.panel(P1).orElseThrow().title();
+        String summary = "## Reflected\nSession log and memory written.";
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.SessionInit("work", new SessionInfo("conv-1", "opus", "/w", "2.1", "", List.of())));
+        apply(new Intent.Checkpoint("work"));
+        assertThat(state.session("work").orElseThrow().checkpointClears()).isTrue();
+
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 700_000L, 1_000_000L, false, "", "  " + summary + "\n"));
+        SessionState x = state.session("work").orElseThrow();
+        assertThat(x.checkpointClears()).isFalse();
+        assertThat(x.spec().carried()).isEqualTo(summary);
+        assertThat(x.pendingTurns()).as("the clear is a turn").isEqualTo(1);
+        assertThat(effects).contains(new Effect.ClearConversation("work", summary), new Effect.SaveSessions(List.of(x.spec())))
+                .as("the turn that clears notifies, once").doesNotHaveAnyElementsOfTypes(Effect.DesktopNotify.class);
+
+        apply(new Intent.SessionInit("work", new SessionInfo("conv-2", "opus", "/w", "2.1", "", List.of())));
+        assertThat(state.session("work").orElseThrow().spec().carried()).as("kept with the new conversation").isEqualTo(summary);
+        assertThat(state.notice().text()).isEqualTo("Session work: new conversation; the previous one (conv-1) can be imported again;"
+                + " the checkpoint's summary goes in front of the next prompt");
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 0L, 1_000_000L, false, "", ""));
+        assertThat(effects).contains(new Effect.DesktopNotify("work", "Turn finished"));
+
+        apply(new Intent.RunText(P1, "/compact", Target.CLAUDE));
+        assertThat(effects).as("a command leaves the summary for the next prompt").contains(new Effect.SendToClaude("work", "/compact", title));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 0L, 1_000_000L, false, "", ""));
+
+        apply(new Intent.RunText(P1, "go on", Target.CLAUDE));
+        SessionSpec spec = state.session("work").orElseThrow().spec();
+        assertThat(spec.carried()).isEmpty();
+        assertThat(effects).containsExactly(new Effect.SendToClaude("work", "go on", title, Reducer.preface(summary)),
+                new Effect.SaveSessions(List.of(spec)));
+        assertThat(Reducer.preface(summary)).contains(summary).endsWith("\n\n---\n\n");
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "on it"));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+
+        apply(new Intent.RunText(P1, "next", Target.CLAUDE));
+        assertThat(effects).contains(new Effect.SendToClaude("work", "next", title));
+    }
+
+    @Test
+    void theCheckpointKeepsTheConversationWhenTheUserGoesOnItFailsOrGivesNoSummary() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.RunText(P1, "wait, one more thing", Target.CLAUDE));
+        assertThat(state.session("work").orElseThrow().checkpointClears()).as("a prompt after it: the user goes on").isFalse();
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 9_000L, 1_000_000L, false, "", "summary"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "done"));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, true, "rate limited"));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+        assertThat(state.session("work").orElseThrow().checkpointClears()).isFalse();
+
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, true, "interrupted"));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+        assertThat(state.notice().text()).isEqualTo("work: interrupted");
+
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", " "));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+        assertThat(state.notice().text()).isEqualTo("work: the checkpoint ended without a summary; the conversation is kept");
+
+        apply(new Intent.RunText(P1, "/reflect", Target.CLAUDE));
+        assertThat(state.session("work").orElseThrow().checkpointClears()).as("typed, it is a prompt like any other").isFalse();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "summary"));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.SessionExited("work", 1, "killed"));
+        assertThat(state.session("work").orElseThrow().checkpointClears()).as("its turn ended with the process").isFalse();
+    }
+
+    @Test
+    void aCheckpointQueuedBehindAPromptClearsAfterItsOwnTurn() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.RunText(P1, "go", Target.CLAUDE));
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.SessionTurnEnded("work", 1, 0.1, 9_000L, 1_000_000L, false, "", "gone"));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "the summary"));
+        assertThat(effects).contains(new Effect.ClearConversation("work", "the summary"));
+    }
+
+    @Test
+    void aCarriedSummaryOutlivesTheSessionFormAndACheckpointBeforeTheNextPrompt() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionStarted("work"));
+        apply(new Intent.Checkpoint("work"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "the summary"));
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 0L, 1_000_000L, false, "", ""));
+
+        SessionSpec edited = SessionKind.INSTANCE.fromAttributes(SessionKind.INSTANCE.toAttributes(state.session("work").orElseThrow().spec()
+                .withModel("opus")));
+        assertThat(edited.carried()).as("the form has no such field").isEmpty();
+        apply(new Intent.SaveSession("work", edited));
+        assertThat(state.session("work").orElseThrow().spec().carried()).isEqualTo("the summary");
+        assertThat(state.session("work").orElseThrow().spec().model()).isEqualTo("opus");
+
+        apply(new Intent.Checkpoint("work"));
+        assertThat(state.session("work").orElseThrow().checkpointClears()).as("nothing new to clear").isFalse();
+        apply(new Intent.SessionTurnEnded("work", 0, 0.1, 9_000L, 1_000_000L, false, "", "nothing to reflect on"));
+        assertThat(effects).doesNotHaveAnyElementsOfTypes(Effect.ClearConversation.class);
+        assertThat(state.session("work").orElseThrow().spec().carried()).isEqualTo("the summary");
     }
 
     @Test
@@ -821,9 +942,31 @@ class ReducerTest {
 
     /** p1 "one" on work, p2 "two" with no session, a headless session edge. */
     private static AppState onePanelPerSession() {
-        return AppState.initial(List.of(new PanelState(P1, "one", "local", "work"), new PanelState(P2, "two", "local", "")),
+        return AppState.initial(List.of(new PanelState(P1, "work", "local", "work"), new PanelState(P2, "two", "local", "")),
                 List.of(ConnectionState.closed(States.LOCAL)),
                 List.of(SessionState.closed(States.WORK), SessionState.closed(SessionSpec.fresh("edge", "/w/edge"))));
+    }
+
+    @Test
+    void renamingASessionsOwnPanelRenamesTheSessionAndTheOtherWayRoundOnlyWhileItIsStopped() {
+        state = onePanelPerSession();
+        apply(new Intent.RenamePanel(P1, "build"));
+        assertThat(state.session("build")).as("the tab renames the session").isPresent();
+        assertThat(state.session("work")).isEmpty();
+        assertThat(state.panel(P1).orElseThrow()).isEqualTo(new PanelState(P1, "build", "local", "build"));
+        assertThat(effects).contains(new Effect.ForgetSession("work"));
+
+        apply(new Intent.SaveSession("build", state.session("build").orElseThrow().spec().withName("deploy")));
+        assertThat(state.panel(P1).orElseThrow().title()).as("the session renames its panel").isEqualTo("deploy");
+
+        apply(new Intent.StartSession("deploy"));
+        apply(new Intent.SessionStarted("deploy"));
+        apply(new Intent.RenamePanel(P1, "ship"));
+        assertThat(state.panel(P1).orElseThrow().title()).isEqualTo("deploy");
+        assertThat(state.notice().text()).isEqualTo("Stop session deploy before renaming it");
+
+        apply(new Intent.RenamePanel(P2, "deploy"));
+        assertThat(state.panel(P2).orElseThrow().title()).as("a session's name is its own panel's").isEqualTo("two");
     }
 
     @Test
@@ -836,13 +979,18 @@ class ReducerTest {
     }
 
     @Test
-    void openingAHeadlessSessionOnAPanelWithoutOneBindsItThere() {
+    void openingASessionWithoutAPanelOpensItsOwnNamedAfterItAndTakesNoOtherPanel() {
         state = onePanelPerSession();
         apply(new Intent.OpenSession("edge", P2, P3));
-        assertThat(state.panel(P2).orElseThrow().session()).isEqualTo("edge");
-        assertThat(state.focused()).isEqualTo(P2);
-        assertThat(state.panels()).hasSize(2);
+        assertThat(state.panel(P2).orElseThrow().session()).as("a panel is never given another session").isEmpty();
+        assertThat(state.panel(P3).orElseThrow()).isEqualTo(new PanelState(P3, "edge", "local", "edge"));
+        assertThat(state.homePanel("edge")).map(PanelState::id).contains(P3);
+        assertThat(state.focused()).isEqualTo(P3);
         assertThat(effects).containsExactly(new Effect.SavePanels(state.panels(), state.closed()));
+
+        apply(new Intent.OpenSession("gone", P1, new PanelId("p4")));
+        assertThat(state.notice().text()).isEqualTo("No session called gone");
+        assertThat(state.panels()).hasSize(3);
     }
 
     @Test
@@ -880,31 +1028,55 @@ class ReducerTest {
     }
 
     @Test
-    void openingAHeadlessSessionOnAPanelWithAnotherOpensANewPanelNamedAfterIt() {
+    void aSessionCreatedWithAPanelsNameMakesThatPanelItsOwnAndNoPanelTakesASessionsName() {
         state = onePanelPerSession();
-        apply(new Intent.RenamePanel(P2, "edge"));
-        apply(new Intent.OpenSession("edge", P1, P3));
+        apply(new Intent.SaveSession("", SessionSpec.fresh("two", "/w/two")));
+        assertThat(state.panels()).as("no new panel: two, without a session, is its own").hasSize(2);
+        assertThat(state.panel(P2).orElseThrow().session()).isEqualTo("two");
+        assertThat(state.focused()).isEqualTo(P2);
 
-        assertThat(state.panel(P1).orElseThrow().session()).as("the panel keeps its session").isEqualTo("work");
-        assertThat(state.panel(P3).orElseThrow()).isEqualTo(new PanelState(P3, "edge 2", "local", "edge"));
-        assertThat(state.focused()).isEqualTo(P3);
-        assertThat(state.notice().text()).isEqualTo("Opened edge in a new panel; one keeps work");
-        assertThat(effects).containsExactly(new Effect.SavePanels(state.panels(), state.closed()));
+        apply(new Intent.SaveSession("", SessionSpec.fresh("fresh", "/w/f")));
+        PanelState own = state.homePanel("fresh").orElseThrow();
+        assertThat(own.title()).as("a new session comes with its own panel").isEqualTo("fresh");
+        assertThat(state.focused()).isEqualTo(own.id());
 
-        apply(new Intent.OpenSession("gone", P1, new PanelId("p4")));
-        assertThat(state.notice().text()).isEqualTo("No session called gone");
-        assertThat(state.panels()).hasSize(3);
+        apply(new Intent.AddPanel(P3, "edge"));
+        assertThat(state.panel(P3).orElseThrow().title()).as("a session's name is its own panel's").isEqualTo("edge 2");
+        apply(new Intent.RenamePanel(P3, "Edge"));
+        assertThat(state.notice().text()).isEqualTo("A session called Edge exists; its panel is its own");
+
+        PanelId doc = new PanelId("doc");
+        apply(new Intent.AddPanel(doc, "PLAN.md", true));
+        apply(new Intent.SaveSession("", SessionSpec.fresh("plan.md", "/w")));
+        assertThat(state.notice().text()).as("a document's title is not a session's panel")
+                .isEqualTo("A panel called plan.md exists; a session's name is its own panel's title");
+        assertThat(state.session("plan.md")).isEmpty();
     }
 
     @Test
-    void bindingASessionTakesItFromItsOtherPanelAndAnEmptyNameDetaches() {
+    void bindingAPanelOfComandosOwnOpensTheSessionsOwnPanelAndDocumentsAttachAndDetach() {
         state = onePanelPerSession();
         apply(new Intent.BindSession(P2, "work"));
-        assertThat(state.panels()).extracting(PanelState::session).containsExactly("", "work");
+        assertThat(state.panels()).as("the session keeps its panel; two keeps none").extracting(PanelState::session).containsExactly("work", "");
+        assertThat(state.focused()).isEqualTo(P1);
 
-        apply(new Intent.BindSession(P2, ""));
-        assertThat(state.panels()).extracting(PanelState::session).containsExactly("", "");
-        assertThat(state.session("work")).as("a detached session stays").isPresent();
+        apply(new Intent.BindSession(P1, ""));
+        assertThat(state.panel(P1).orElseThrow().session()).as("its own panel is never detached").isEqualTo("work");
+        assertThat(state.notice().text()).isEqualTo("work is its session's own panel; removing the session removes both");
+
+        PanelId doc = new PanelId("doc");
+        PanelId spec = new PanelId("spec");
+        apply(new Intent.AddPanel(doc, "PLAN.md", true));
+        apply(new Intent.AddPanel(spec, "SPEC.md", true));
+        apply(new Intent.BindSession(doc, "work"));
+        apply(new Intent.BindSession(spec, "work"));
+        assertThat(state.panelsBoundToSession("work")).as("its own panel first, then its documents").extracting(PanelState::id)
+                .containsExactly(P1, doc, spec);
+        assertThat(state.homePanel("work")).map(PanelState::id).contains(P1);
+
+        apply(new Intent.BindSession(doc, ""));
+        assertThat(state.panel(doc).orElseThrow().session()).isEmpty();
+        assertThat(state.session("work")).isPresent();
     }
 
     @Test
@@ -912,7 +1084,7 @@ class ReducerTest {
         state = onePanelPerSession();
         apply(new Intent.ClosePanel(P1));
         assertThat(state.panels()).extracting(PanelState::id).containsExactly(P2);
-        assertThat(state.closed()).containsExactly(new PanelState(P1, "one", "local", "work"));
+        assertThat(state.closed()).containsExactly(new PanelState(P1, "work", "local", "work"));
         assertThat(effects).containsExactly(new Effect.ForgetPanel(P1), new Effect.SavePanels(state.panels(), state.closed()));
 
         apply(new Intent.OpenSession("work", P2, P3));
@@ -922,7 +1094,9 @@ class ReducerTest {
 
         apply(new Intent.ClosePanel(P1));
         apply(new Intent.BindSession(P2, "work"));
-        assertThat(state.closed()).as("a session has one panel, open or closed").containsExactly(new PanelState(P1, "one", "local", ""));
+        assertThat(state.closed()).as("a session has one panel, open or closed: binding opens it again").isEmpty();
+        assertThat(state.panel(P2).orElseThrow().session()).isEmpty();
+        assertThat(state.focused()).isEqualTo(P1);
     }
 
     @Test
@@ -970,8 +1144,9 @@ class ReducerTest {
         apply(new Intent.ClosePanel(P1));
         apply(new Intent.RemovePanel(P1));
         assertThat(state.closed()).isEmpty();
-        assertThat(state.notice().text()).isEqualTo("Removed one");
-        assertThat(effects).containsExactly(new Effect.DeletePanel(P1), new Effect.SavePanels(state.panels(), state.closed()));
+        assertThat(state.session("work")).as("a session's own panel goes with it").isEmpty();
+        assertThat(state.notice().text()).isEqualTo("Removed session work and its panel");
+        assertThat(effects).contains(new Effect.DeletePanel(P1), new Effect.ForgetSession("work"));
 
         apply(new Intent.AddPanel(P3, "three"));
         apply(new Intent.RemovePanel(P2));
