@@ -100,6 +100,7 @@ class SessionsSidebarTest {
         }
         assertThat(text.values()).as("icons alone").containsOnly("");
         assertThat(header(sidebar, "Files").getClientProperty("JButton.buttonType")).as("drawn as a tab").isEqualTo("tab");
+        assertThat(header(sidebar, "Files").getIcon()).as("the Files tab's own mark, not the tree's folder").isSameAs(Icons.get("files"));
         assertThat(at.get("Files").x + at.get("Files").width).as("packed: three icons in a narrow sidebar").isLessThan(160);
         for (String t : order) {
             JToggleButton h = header(sidebar, t);
@@ -656,6 +657,99 @@ class SessionsSidebarTest {
         assertThat(SessionRow.powerTip(running)).isEqualTo("Connected; click to disconnect (stops the session)");
         assertThat(SessionRow.powerTip(running.withTurns(1, started).withActivity("Bash", started)))
                 .isEqualTo("Working: Bash; connected; click to disconnect (stops the session)");
+    }
+
+    @Test
+    void aConnectionRowIsItsStateIconAndItsNameAsASessionsIs() throws Exception {
+        ConnectionState open = ConnectionState.closed(new ConnectionSpec("live", "db.example", 8812, "qdb", "admin", "secret", true))
+                .with(Status.OPEN, "");
+        assertThat(ConnectionRow.titleHtml(open, false)).isEqualTo("<html><nobr><b>live</b>&nbsp;<span style='color:"
+                + Theme.hex(Theme.DANGER) + "'>prod</span></nobr></html>");
+        assertThat(ConnectionRow.titleHtml(open, true)).as("the focused panel uses it: the accent colour")
+                .contains("<b style='color:" + Theme.hex(Theme.ACCENT) + "'>live</b>");
+        assertThat(List.of(ConnectionRow.icon(Status.OPEN), ConnectionRow.icon(Status.CLOSED), ConnectionRow.icon(Status.OPENING),
+                ConnectionRow.icon(Status.FAILED))).containsExactly("database", "database-off", "database-starting", "database-failed");
+        assertThat(ConnectionRow.powerTip(open)).isEqualTo("Connected; click to disconnect");
+        assertThat(ConnectionRow.powerTip(open.with(Status.FAILED, "refused"))).isEqualTo("Failed: refused; click to connect");
+        assertThat(ConnectionRow.details(open)).as("never the password").doesNotContain("secret")
+                .isEqualTo("Connection: live\nHost: db.example:8812\nDatabase: qdb\nUser: admin\nTLS: prefer\nStatus: connected\n"
+                        + "Production: Claude's writes are refused\n");
+        assertThat(CardFacts.of(open, List.of("main", "notes")).text()).as("the card: facts alone, each once")
+                .isEqualTo("State: connected\nDatabase: qdb on db.example:8812\nUser: admin\nTLS: prefer\n"
+                        + "Production: yes; Claude's writes are refused\nPanels: main · notes");
+        assertThat(CardFacts.of(open, List.of()).title()).isEqualTo("live");
+
+        int[] height = new int[2];
+        SwingUtilities.invokeAndWait(() -> {
+            height[0] = new ConnectionRow().show(open, false, false, Color.BLACK, Color.WHITE).getPreferredSize().height;
+            height[1] = new SessionRow().show(SessionState.closed(SessionSpec.fresh("new", "/w/new")), true, false, 0, false,
+                    Color.BLACK, Color.WHITE, "").getPreferredSize().height;
+        });
+        assertThat(height[0]).as("as tall as a session row").isEqualTo(height[1]);
+    }
+
+    @Test
+    void aConnectionRowsIconConnectsItsNameBindsAndShowsTheCardAndItsMenuCopies() throws Exception {
+        List<String> told = new CopyOnWriteArrayList<>();
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        ConnectionState local = ConnectionState.closed(ConnectionSpec.questDbDefaults("local"));
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(local), List.of());
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intents::add, new Dialogs(), () -> {
+            });
+            s[0].cards(new SessionsSidebar.Cards() {
+                @Override
+                public void show(String session, JComponent over, Rectangle row) {
+                    told.add("session " + session);
+                }
+
+                @Override
+                public void showConnection(String connection, JComponent over, Rectangle row) {
+                    told.add("connection " + connection + " " + row.y);
+                }
+
+                @Override
+                public void left() {
+                    told.add("left");
+                }
+            });
+            s[0].render(state);
+        });
+        SessionsSidebar sidebar = s[0];
+        List<String> copied = new CopyOnWriteArrayList<>();
+        sidebar.clipboard = copied::add;
+        JList<?> list = find(sidebar.component(), JList.class, l -> "Connections".equals(l.getAccessibleContext().getAccessibleName()));
+        SwingUtilities.invokeAndWait(() -> {
+            list.setSize(260, 400);
+            list.doLayout();
+        });
+        Rectangle row = cell(list, 0);
+        Rectangle[] icon = new Rectangle[1];
+        SwingUtilities.invokeAndWait(() -> icon[0] = sidebar.connectionIconBounds(0));
+        assertThat(icon[0].width).as("the icon is laid out").isPositive();
+
+        assertThat(on(() -> list.getToolTipText(event(list, icon[0], 0)))).isEqualTo("Disconnected; click to connect");
+        assertThat(on(() -> list.getToolTipText(mouse(list, MouseEvent.MOUSE_MOVED, row.x + 80, row.y + 6, 0))))
+                .as("over the name no tooltip: the card").isNull();
+
+        click(list, icon[0], 1);
+        assertThat(intents).as("a click on the icon connects").containsExactly(new Intent.OpenConnection("local"));
+        SwingUtilities.invokeAndWait(() -> sidebar.render(state.withConnections(List.of(local.with(Status.OPEN, "")))));
+        click(list, icon[0], 1);
+        assertThat(intents).last().as("and disconnects").isEqualTo(new Intent.CloseConnection("local"));
+        click(list, new Rectangle(row.x + 70, row.y, 20, row.height), 2);
+        assertThat(intents).last().as("a double click on the name binds it").isEqualTo(new Intent.BindConnection(new PanelId("p"), "local"));
+
+        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_MOVED, row.x + 80, row.y + 6, 0)));
+        assertThat(sidebar.cardRow()).isEqualTo("local");
+        SwingUtilities.invokeAndWait(sidebar::showCardNow);
+        assertThat(told).containsExactly("connection local " + row.y);
+        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(event(list, icon[0], 0)));
+        assertThat(told).as("onto the icon: its tip, the card told").containsExactly("connection local " + row.y, "left");
+
+        SwingUtilities.invokeAndWait(() -> menuItem(sidebar.connectionMenu(local), "Copy details").doClick());
+        assertThat(copied).singleElement().asString().startsWith("Connection: local\nHost: localhost:8812").doesNotContain("quest\n");
     }
 
     @Test

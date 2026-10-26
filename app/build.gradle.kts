@@ -144,7 +144,8 @@ tasks.register<Exec>("dmg") {
     inputs.dir(lib)
     outputs.dir(out)
     doFirst {
-        delete(out)
+        // the file's own delete: the script's delete() is a script object, which the configuration cache cannot keep
+        out.get().asFile.deleteRecursively()
         executable = jdk.get().metadata.installationPath.file("bin/jpackage").asFile.absolutePath
     }
     executable = "jpackage"

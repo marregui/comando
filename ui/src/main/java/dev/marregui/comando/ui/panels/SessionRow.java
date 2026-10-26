@@ -7,17 +7,8 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
-import javax.swing.BorderFactory;
 import javax.swing.Icon;
-import javax.swing.JButton;
-import javax.swing.JLabel;
-import javax.swing.JPanel;
-import javax.swing.SwingUtilities;
-import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Component;
-import java.awt.Container;
-import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
 import java.time.ZoneId;
@@ -32,25 +23,18 @@ import java.util.Optional;
  * dimmed while its own panel is not open, with an amber ↑ when it runs an older Claude Code than another running
  * session, the context in purple once its checkpoint is due, and the approvals waiting. Everything else a session does
  * is in its menu. Its folder, branch, context and the rest are on the card the row shows (record 87). The list paints it
- * as a cell renderer, so its icon is not live: the list finds it under a click with {@link #hit}.
+ * as a cell renderer, so its icon is not live: the list finds it under a click with {@link #hit}. A connection's row
+ * is the same row ({@link ConnectionRow}).
  */
-final class SessionRow extends JPanel {
+final class SessionRow extends IconRow {
 
     /** The controls of a row: its state icon. */
     enum Control {
         POWER
     }
 
-    private final JLabel title = new JLabel();
-    private final JButton power = control();
-
     SessionRow() {
-        super(new BorderLayout(4, 0));
-        setBorder(BorderFactory.createEmptyBorder(3, 4, 3, 4));
         // one line (record 90): the state icon, which connects and disconnects, and the name; the rest is in the menu
-        power.setMargin(new Insets(0, 2, 0, 2));
-        add(power, BorderLayout.WEST);
-        add(title, BorderLayout.CENTER);
     }
 
     /** The icon a working session shows in place of its state, turned by the list's timer. */
@@ -170,53 +154,17 @@ final class SessionRow extends JPanel {
 
     /** The control at {@code p}, a point in the cell whose bounds this row was laid out to. */
     Optional<Control> hit(Rectangle cell, Point p) {
-        layOut(cell);
-        Component c = SwingUtilities.getDeepestComponentAt(this, p.x - cell.x, p.y - cell.y);
-        for (Control control : Control.values()) {
-            JButton b = button(control);
-            if (c == b && b.isVisible()) {
-                return Optional.of(control);
-            }
-        }
-        return Optional.empty();
+        return onIcon(cell, p) ? Optional.of(Control.POWER) : Optional.empty();
     }
 
     /** Where {@code control} is, in the list's coordinates, for a menu to drop from it; empty while it is hidden. */
     Rectangle bounds(Rectangle cell, Control control) {
-        layOut(cell);
-        JButton b = button(control);
-        if (!b.isVisible()) {
-            return new Rectangle();
-        }
-        Rectangle r = SwingUtilities.convertRectangle(b.getParent(), b.getBounds(), this);
-        r.translate(cell.x, cell.y);
-        return r;
+        return iconBounds(cell);
     }
 
     /** The tooltip of the control at {@code p}, or empty over the text. */
     Optional<String> tip(Rectangle cell, Point p) {
-        return hit(cell, p).map(c -> button(c).getToolTipText());
-    }
-
-    private JButton button(Control c) {
-        return switch (c) {
-            case POWER -> power;
-        };
-    }
-
-    /** A renderer is never in a window, so nothing lays it out for a hit test; this does, as painting would. */
-    private void layOut(Rectangle cell) {
-        setBounds(0, 0, cell.width, cell.height);
-        layOut((Container) this);
-    }
-
-    private static void layOut(Container c) {
-        c.doLayout();
-        for (Component child : c.getComponents()) {
-            if (child instanceof Container k) {
-                layOut(k);
-            }
-        }
+        return iconTip(cell, p);
     }
 
     static final String COMPACT_TIP = "Compact the conversation to free context (sends " + SessionSpec.COMPACT_COMMAND + ")";
@@ -297,12 +245,5 @@ final class SessionRow extends JPanel {
         String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.warn()) + "'>⚑" + approvals + "</span>";
         String name = focused ? "<b style='color:" + Theme.hex(Theme.ACCENT) + "'>" : open ? "<b>" : "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";
         return "<html><nobr>" + name + MarkdownHtml.escape(s.name()) + "</b>" + older + due + badge + "</nobr></html>";
-    }
-
-    private static JButton control() {
-        JButton b = new JButton();
-        b.putClientProperty("JButton.buttonType", "toolBarButton");
-        b.setFocusable(false);
-        return b;
     }
 }

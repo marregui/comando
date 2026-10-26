@@ -13,7 +13,6 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.ToolButton;
@@ -28,7 +27,6 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 
 import javax.swing.BorderFactory;
-import javax.swing.DefaultListCellRenderer;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
@@ -48,7 +46,6 @@ import javax.swing.TransferHandler;
 import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
 import java.awt.BorderLayout;
-import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Graphics;
 import java.awt.Point;
@@ -78,7 +75,9 @@ import java.util.function.Consumer;
  * change its model or effort; under them, the panels of comando's own that belong to no session:
  * {@link PanelsWithoutSession}), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). No tab has a bar of buttons: a tab's menu adds (and, for sessions, imports
  * and sorts), and a row's menu edits, clones and removes, through the same {@link ResourceActions}. Double-click on a
- * session opens it in a panel ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. Sessions are
+ * session opens it in a panel ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. A session
+ * row and a connection row are alike: the state icon, which a click connects or disconnects, the name, a card over the
+ * name (a connection's has no summary) and everything else in the row's menu. Sessions are
  * listed running first, then by name, until the user drags one: from then on in the order the user left them, until
  * the tab menu's Sort. Hidden, the column collapses to a rail whose button shows it again.
  */
@@ -128,7 +127,15 @@ public final class SessionsSidebar {
 
         void show(String session, JComponent over, Rectangle row);
 
+        /** A connection row's card, of its facts alone (record 92). */
+        default void showConnection(String connection, JComponent over, Rectangle row) {
+        }
+
         void left();
+    }
+
+    /** The row the pointer rests on over its text: a session's, or a connection's. */
+    private record Rest(boolean connection, String name) {
     }
 
     /** Panel texts kept nowhere, for a sidebar built without the store. */
@@ -158,7 +165,9 @@ public final class SessionsSidebar {
     private final Map<String, SessionRow> rows = new HashMap<>();
     private final JList<SessionState> sessions = emptyText(new SessionList(sessionModel),
             "No sessions yet. Right-click the tab to add one or import stored Claude Code conversations.");
-    private final JList<ConnectionState> connections = emptyText(new JList<>(connectionModel),
+    /** One row for every connection, painted for each in turn: the list is short, and a row parses little. */
+    private final ConnectionRow connectionRow = new ConnectionRow();
+    private final JList<ConnectionState> connections = emptyText(new ConnectionList(connectionModel),
             "No connections yet. Right-click the tab to add one.");
     public static final int SESSIONS = 0;
     public static final int CONNECTIONS = 1;
@@ -171,8 +180,8 @@ public final class SessionsSidebar {
     private final PanelTexts texts;
     /** The card the session rows show; none until the shell gives the workspace's. */
     private Cards cards = Cards.NONE;
-    /** The session row the pointer rests on over its text, whose card shows when the timer fires; null when none. */
-    private String cardRow;
+    /** The row the pointer rests on over its text, whose card shows when the timer fires; null when none. */
+    private Rest cardRow;
     /** Whether the card shown is a session row's, so leaving the rows tells it. */
     private boolean cardShown;
     private final Timer cardWait = new Timer(ToolTipManager.sharedInstance().getInitialDelay(), e -> showCard());
@@ -232,16 +241,20 @@ public final class SessionsSidebar {
                 return s == null ? null : new StringSelection(details(s));
             }
         });
-        connections.setCellRenderer(new DefaultListCellRenderer() {
+        // one line, as a session's (record 92): the state icon, which connects and disconnects, and the name
+        connections.setCellRenderer((list, c, index, selected, focus) -> connectionRow.show(c, usedByFocused(c), selected,
+                selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground()));
+        // ⌘C, and Edit ▸ Copy, which forwards it, copy the selected connection's details
+        connections.setTransferHandler(new TransferHandler() {
             @Override
-            public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected, boolean focus) {
-                JLabel l = (JLabel) super.getListCellRendererComponent(list, "", index, selected, focus);
-                ConnectionState c = (ConnectionState) value;
-                l.setText(connectionHtml(c));
-                l.setIcon(Icons.get("database"));
-                l.setBorder(BorderFactory.createEmptyBorder(5, 6, 5, 6));
-                l.setToolTipText(Plain.text(c.error().isEmpty() ? c.spec().label() : c.error()));
-                return l;
+            public int getSourceActions(JComponent c) {
+                return COPY;
+            }
+
+            @Override
+            protected Transferable createTransferable(JComponent c) {
+                ConnectionState x = connections.getSelectedValue();
+                return x == null ? null : new StringSelection(ConnectionRow.details(x));
             }
         });
         sessions.addMouseListener(new MouseAdapter() {
@@ -303,20 +316,34 @@ public final class SessionsSidebar {
                 boolean onControl = s != null && control(s, e).isPresent();
                 sessions.setCursor(onControl ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
                 // over a row's text its card, as over a tab; over a control the control's own tip
-                restOn(s == null || onControl ? null : s.name());
+                restOn(s == null || onControl ? null : new Rest(false, s.name()));
             }
         });
         connections.addMouseListener(new MouseAdapter() {
             @Override
             public void mouseClicked(MouseEvent e) {
                 ConnectionState c = at(connections, e);
-                if (c != null && e.getClickCount() == 2) {
+                if (c == null || !SwingUtilities.isLeftMouseButton(e)) {
+                    return;
+                }
+                if (onIcon(c, e)) {
+                    if (e.getClickCount() == 1) {
+                        intents.dispatch(c.status().isUsable() ? new Intent.CloseConnection(c.name()) : new Intent.OpenConnection(c.name()));
+                    }
+                } else if (e.getClickCount() == 2) {
                     intents.dispatch(new Intent.BindConnection(state.focused(), c.name()));
                 }
             }
 
             @Override
+            public void mouseExited(MouseEvent e) {
+                restOn(null);
+            }
+
+            @Override
             public void mousePressed(MouseEvent e) {
+                // a press acts on the row: no card until the pointer rests on another row
+                cardWait.stop();
                 popup(e);
             }
 
@@ -331,6 +358,15 @@ public final class SessionsSidebar {
                     connections.setSelectedValue(c, false);
                     connectionMenu(c).show(connections, e.getX(), e.getY());
                 }
+            }
+        });
+        connections.addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                ConnectionState c = at(connections, e);
+                boolean onIcon = c != null && onIcon(c, e);
+                connections.setCursor(onIcon ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
+                restOn(c == null || onIcon ? null : new Rest(true, c.name()));
             }
         });
         files = new FilesTab(intents, dialogs::openFile, dialogs::editFile, questions);
@@ -348,7 +384,8 @@ public final class SessionsSidebar {
         sessionsTab.add(loosePanels.component(), BorderLayout.SOUTH);
         tabs.add("Sessions", "session", "Claude Code sessions and panels; right-click to add, import or sort", sessionsTab);
         tabs.add("Connections", "database", "databases; right-click to add one", section(new JScrollPane(connections)));
-        tabs.add("Files", "folder", "your folders and their git changes; double-click a file to open it",
+        // its own mark, drawn as the other tabs' are: an outline in one colour; the tree's rows keep the plain folder
+        tabs.add("Files", "files", "your folders and their git changes; double-click a file to open it",
                 section(files.component()));
         tabs.trailing(ToolButton.of("more", KeyText.of("Hide the sidebar (⌘B)"), toggle));
         tabs.onMenu((tab, e) -> tabMenu(tab).show(e.getComponent(), e.getX(), e.getY()));
@@ -747,12 +784,12 @@ public final class SessionsSidebar {
      * The pointer rests over {@code session}'s row text, or over no row's text when null: a new row starts the wait for
      * its card; leaving the row whose card shows tells the card, which closes unless the pointer goes on into it.
      */
-    private void restOn(String session) {
-        if (Objects.equals(session, cardRow)) {
+    private void restOn(Rest row) {
+        if (Objects.equals(row, cardRow)) {
             return;
         }
-        cardRow = session;
-        if (session == null) {
+        cardRow = row;
+        if (row == null) {
             cardWait.stop();
         } else {
             cardWait.restart();
@@ -768,10 +805,20 @@ public final class SessionsSidebar {
         if (cardRow == null || state == null) {
             return;
         }
+        if (cardRow.connection()) {
+            for (int i = 0; i < connectionModel.size(); i++) {
+                if (connectionModel.get(i).name().equals(cardRow.name())) {
+                    cardShown = true;
+                    cards.showConnection(cardRow.name(), connections, connections.getCellBounds(i, i));
+                    return;
+                }
+            }
+            return;
+        }
         for (int i = 0; i < sessionModel.size(); i++) {
-            if (sessionModel.get(i).name().equals(cardRow)) {
+            if (sessionModel.get(i).name().equals(cardRow.name())) {
                 cardShown = true;
-                cards.show(cardRow, sessions, sessions.getCellBounds(i, i));
+                cards.show(cardRow.name(), sessions, sessions.getCellBounds(i, i));
                 return;
             }
         }
@@ -783,9 +830,9 @@ public final class SessionsSidebar {
         showCard();
     }
 
-    /** The session row whose card waits or shows; for tests. */
+    /** The name of the row whose card waits or shows, a session's or a connection's; for tests. */
     String cardRow() {
-        return cardRow;
+        return cardRow == null ? null : cardRow.name();
     }
 
     private static <T> void sync(DefaultListModel<T> model, List<T> items, JList<T> list) {
@@ -812,14 +859,6 @@ public final class SessionsSidebar {
 
     private static String name(Object o) {
         return o instanceof SessionState s ? s.name() : o instanceof ConnectionState c ? c.name() : String.valueOf(o);
-    }
-
-    private String connectionHtml(ConnectionState c) {
-        String muted = Theme.hex(Theme.MUTED);
-        String dot = "<span style='color:" + Theme.hex(EditorPanel.color(c.status())) + "'>" + EditorPanel.dot(c.status()) + "</span>";
-        String prod = c.spec().prod() ? "&nbsp;<span style='color:" + Theme.hex(Theme.DANGER) + "'>prod</span>" : "";
-        return "<html>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(c.name()) + "</b>" + prod
-                + "<br><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>" + MarkdownHtml.escape(Clip.keepEnd(c.spec().label(), 36)) + "</span></html>";
     }
 
     JPopupMenu sessionMenu(SessionState s) {
@@ -900,6 +939,8 @@ public final class SessionsSidebar {
         m.add(item("Test", "check", () -> intents.dispatch(new Intent.TestConnection(c.spec()))));
         m.add(item("Explore the schema", "tree", () -> dialogs.exploreSchema(c.name())));
         m.addSeparator();
+        m.add(item("Copy details", "copy", () -> clipboard.accept(ConnectionRow.details(c))));
+        m.addSeparator();
         m.add(item("Edit…", "edit", () -> dialogs.connections().edit(c.name())));
         m.add(item("Clone…", "copy", () -> dialogs.connections().cloneOf(c.name())));
         m.add(item("Remove…", "close", () -> connectionActions.remove(c)));
@@ -938,6 +979,48 @@ public final class SessionsSidebar {
 
     private boolean boundToFocused(SessionState s) {
         return state != null && state.focusedPanel().session().equals(s.name());
+    }
+
+    private boolean usedByFocused(ConnectionState c) {
+        return state != null && state.focusedPanel().connection().equals(c.name());
+    }
+
+    /** Whether a mouse event on {@code c}'s cell is on its state icon. */
+    private boolean onIcon(ConnectionState c, MouseEvent e) {
+        int i = connections.locationToIndex(e.getPoint());
+        return layOutConnection(c, i).hit(connections.getCellBounds(i, i), e.getPoint());
+    }
+
+    /** The connection row at {@code index}, filled as it was painted, so its icon sits where it was drawn. */
+    private ConnectionRow layOutConnection(ConnectionState c, int index) {
+        return (ConnectionRow) connections.getCellRenderer().getListCellRendererComponent(connections, c, index, connections.isSelectedIndex(index), false);
+    }
+
+    /** Where a connection row's state icon is, in the list's coordinates; for tests. */
+    Rectangle connectionIconBounds(int index) {
+        return layOutConnection(connectionModel.get(index), index).iconBounds(connections.getCellBounds(index, index));
+    }
+
+    /** The connection list: over a row's icon the icon's tip; over its text no tooltip, the row's card shows there. */
+    private final class ConnectionList extends JList<ConnectionState> {
+        ConnectionList(DefaultListModel<ConnectionState> model) {
+            super(model);
+            setToolTipText("");
+        }
+
+        @Override
+        public boolean getScrollableTracksViewportWidth() {
+            return true;
+        }
+
+        @Override
+        public String getToolTipText(MouseEvent e) {
+            int i = locationToIndex(e.getPoint());
+            if (i < 0 || !getCellBounds(i, i).contains(e.getPoint())) {
+                return null;
+            }
+            return layOutConnection(getModel().getElementAt(i), i).tip(getCellBounds(i, i), e.getPoint()).map(Plain::text).orElse(null);
+        }
     }
 
     private static <T> T at(JList<T> list, MouseEvent e) {

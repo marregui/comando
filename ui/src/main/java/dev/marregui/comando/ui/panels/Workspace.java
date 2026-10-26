@@ -158,6 +158,8 @@ public final class Workspace {
     private final Set<String> topicReading = new HashSet<>();
     /** The key of a headless session's card: the session's name after it; a panel's card is keyed by the panel's id. */
     static final String SESSION_KEY = "session:";
+    /** The key of a connection's card, which has facts alone (record 92). */
+    static final String CONNECTION_KEY = "connection:";
     private final TabCard card = new TabCard(key -> readTopic(key, true));
     /** The tab the pointer rests on, whose card shows when the hover timer fires; -1 when none. */
     private int hoverIndex = -1;
@@ -503,13 +505,19 @@ public final class Workspace {
     /**
      * The sidebar's session rows show the same card as the tabs: the card of the session's panel (the focused one when it
      * is the session's, else its first), or, for a headless session, a card of its own, read from the end of its
-     * conversation. Shown under {@code row}, a rectangle of {@code over}.
+     * conversation. A connection's row shows a card of its facts, without a summary. Shown under {@code row}, a
+     * rectangle of {@code over}.
      */
-    public SessionsSidebar.Cards sessionCards() {
+    public SessionsSidebar.Cards rowCards() {
         return new SessionsSidebar.Cards() {
             @Override
             public void show(String session, JComponent over, Rectangle row) {
                 showSessionCard(session, over, row);
+            }
+
+            @Override
+            public void showConnection(String connection, JComponent over, Rectangle row) {
+                showConnectionCard(connection, over, row);
             }
 
             @Override
@@ -534,6 +542,15 @@ public final class Workspace {
         updateCard(key);
     }
 
+    void showConnectionCard(String connection, JComponent over, Rectangle row) {
+        if (shown == null || shown.connection(connection).isEmpty()) {
+            return;
+        }
+        leave.stop();
+        String key = CONNECTION_KEY + connection;
+        card.showFacts(key, over, row, factsOf(key));
+    }
+
     /** The open panel a session's card is its card of: the focused one when it is the session's, else the first. */
     private Optional<EditorPanel> sessionPanel(String session) {
         List<EditorPanel> open = shown.panelsBoundToSession(session).stream().map(p -> panels.get(p.id())).filter(v -> v != null).toList();
@@ -547,6 +564,11 @@ public final class Workspace {
     private CardFacts factsOf(String key) {
         if (shown == null) {
             return new CardFacts("", List.of());
+        }
+        if (key.startsWith(CONNECTION_KEY)) {
+            String name = key.substring(CONNECTION_KEY.length());
+            List<String> using = shown.panels().stream().filter(p -> p.connection().equals(name)).map(PanelState::title).toList();
+            return shown.connection(name).map(c -> CardFacts.of(c, using)).orElse(new CardFacts(name, List.of()));
         }
         long now = clock.getAsLong();
         String newest = SessionRow.newestCli(shown.sessions());
@@ -644,8 +666,11 @@ public final class Workspace {
         }));
     }
 
-    /** Whether card {@code key}'s panel is open, or its headless session still configured. */
+    /** Whether card {@code key}'s panel is open, or its headless session or its connection still configured. */
     private boolean exists(String key) {
+        if (key.startsWith(CONNECTION_KEY)) {
+            return shown != null && shown.connection(key.substring(CONNECTION_KEY.length())).isPresent();
+        }
         return key.startsWith(SESSION_KEY) ? shown != null && shown.session(key.substring(SESSION_KEY.length())).isPresent()
                 : panels.containsKey(new PanelId(key));
     }
@@ -721,6 +746,10 @@ public final class Workspace {
     }
 
     private void updateCard(String key) {
+        if (key.startsWith(CONNECTION_KEY)) {
+            card.update(factsOf(key), "", false, false); // facts alone: nothing is read
+            return;
+        }
         boolean reading = topicReading.contains(key);
         Topic topic = topicOf.get(key);
         String line;
@@ -741,10 +770,10 @@ public final class Workspace {
         card.update(factsOf(key), line, muted, reading);
     }
 
-    /** The panel whose card shows, null when none or a headless session's; for tests. */
+    /** The panel whose card shows, null when none, a headless session's or a connection's; for tests. */
     PanelId cardShown() {
         String key = card.shown();
-        return key == null || key.startsWith(SESSION_KEY) ? null : new PanelId(key);
+        return key == null || key.startsWith(SESSION_KEY) || key.startsWith(CONNECTION_KEY) ? null : new PanelId(key);
     }
 
     TabCard card() {

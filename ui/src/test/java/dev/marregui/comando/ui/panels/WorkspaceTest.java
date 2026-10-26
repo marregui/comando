@@ -6,12 +6,14 @@ import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.LinearTickets;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.model.Topic;
 import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.BackgroundTask;
+import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.Block;
@@ -415,7 +417,7 @@ class WorkspaceTest {
         String status = card.statusText();
 
         // the session's row: the same card, its panel's, with no new read
-        SwingUtilities.invokeAndWait(() -> w[0].sessionCards().show("s", rows, rows.getCellBounds(0, 0)));
+        SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("s", rows, rows.getCellBounds(0, 0)));
         assertThat(w[0].cardShown()).isEqualTo(P);
         assertThat(card.component().getParent()).isSameAs(root.getLayeredPane());
         assertThat(List.of(card.statusText(), card.detailsText(), card.topicText())).containsExactly(status, details, "Working on the tab card");
@@ -426,7 +428,7 @@ class WorkspaceTest {
         assertThat(card.component().getY()).as("a tick leaves it under its row, not its tab").isGreaterThanOrEqualTo(below);
 
         // a headless session: a card of its own, read from the end of its conversation
-        SwingUtilities.invokeAndWait(() -> w[0].sessionCards().show("idle", rows, rows.getCellBounds(1, 1)));
+        SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("idle", rows, rows.getCellBounds(1, 1)));
         assertThat(w[0].cardShown()).as("no panel's").isNull();
         assertThat(card.statusText()).isEqualTo("idle");
         assertThat(card.detailsText()).startsWith("State: stopped · no panel\n").contains("Folder: /w/idle").doesNotContain("Session:");
@@ -442,11 +444,11 @@ class WorkspaceTest {
         assertThat(asks.asks).as("↻ reads it again").hasSize(3);
 
         // the pointer leaves the row and does not reach the card: it closes after the grace
-        SwingUtilities.invokeAndWait(() -> w[0].sessionCards().left());
+        SwingUtilities.invokeAndWait(() -> w[0].rowCards().left());
         Awaitility.await("the grace over").atMost(Duration.ofSeconds(3)).until(() -> card.shown() == null);
 
         // a removed session's card closes
-        SwingUtilities.invokeAndWait(() -> w[0].sessionCards().show("idle", rows, rows.getCellBounds(1, 1)));
+        SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("idle", rows, rows.getCellBounds(1, 1)));
         SwingUtilities.invokeAndWait(() -> w[0].render(s.withSessions(List.of(work))));
         assertThat(card.shown()).isNull();
 
@@ -454,6 +456,50 @@ class WorkspaceTest {
         SwingUtilities.invokeAndWait(() -> w[0].showCard(1));
         assertThat(card.statusText()).isEqualTo("query");
         assertThat(card.detailsText()).doesNotContain("Model", "Folder", "State");
+    }
+
+    @Test
+    void aConnectionsRowShowsACardOfItsFactsWithoutASummaryThatFollowsItsState() throws Exception {
+        Asks asks = new Asks();
+        ConnectionState local = ConnectionState.closed(ConnectionSpec.questDbDefaults("local"));
+        AppState s = AppState.initial(List.of(new PanelState(P, "work", "local", ""), new PanelState(new PanelId("q"), "query", "", "")),
+                List.of(local), List.of());
+        Workspace[] w = new Workspace[1];
+        JRootPane root = new JRootPane();
+        JList<String> rows = new JList<>(new String[]{"local"});
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry(), () -> 100_000L);
+            w[0].topics(asks, name -> null);
+            w[0].render(s);
+            root.getContentPane().setLayout(new BorderLayout());
+            root.getContentPane().add(rows, BorderLayout.WEST);
+            root.getContentPane().add(w[0].component(), BorderLayout.CENTER);
+            layOut(root, 900, 600);
+            w[0].rowCards().showConnection("local", rows, rows.getCellBounds(0, 0));
+        });
+        TabCard card = w[0].card();
+        assertThat(card.shown()).isEqualTo(Workspace.CONNECTION_KEY + "local");
+        assertThat(w[0].cardShown()).as("no panel's").isNull();
+        assertThat(card.statusText()).isEqualTo("local");
+        assertThat(card.detailsText()).isEqualTo("State: disconnected\nDatabase: qdb on localhost:8812\nUser: admin\nTLS: prefer\nPanels: work");
+        assertThat(card.summarised()).as("no summary").isFalse();
+        assertThat(List.of(card.headingLabel().isVisible(), card.topicArea().isVisible(), card.refreshButton().getParent().isVisible()))
+                .containsOnly(false);
+        assertThat(asks.asks).as("nothing is read").isEmpty();
+        assertThat(card.component().getWidth()).as("as wide as its facts, not a summary").isLessThan(TabCard.SUMMARY_WIDTH);
+
+        SwingUtilities.invokeAndWait(() -> w[0].render(s.withConnections(List.of(local.with(Status.OPEN, "")))));
+        assertThat(card.detailsText()).as("it follows the connection").startsWith("State: connected\n");
+
+        // a session's card after it has its summary back
+        SwingUtilities.invokeAndWait(() -> w[0].showCard(0));
+        assertThat(card.summarised()).isTrue();
+        assertThat(card.headingLabel().isVisible()).isTrue();
+
+        // a removed connection's card closes
+        SwingUtilities.invokeAndWait(() -> w[0].rowCards().showConnection("local", rows, rows.getCellBounds(0, 0)));
+        SwingUtilities.invokeAndWait(() -> w[0].render(s.withConnections(List.of())));
+        assertThat(card.shown()).isNull();
     }
 
     @Test

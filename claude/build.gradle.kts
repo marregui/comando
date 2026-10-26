@@ -11,11 +11,13 @@ dependencies {
 val kitDir = rootProject.file("kit")
 val kitIndex = tasks.register("kitIndex") {
     val out = layout.buildDirectory.file("generated/kit/dev/marregui/comando/claude/kit/files.txt")
-    inputs.dir(kitDir)
+    // a local copy: the action must not hold the build script, which the configuration cache cannot keep
+    val dir = kitDir
+    inputs.dir(dir)
     outputs.file(out)
     doLast {
-        val files = kitDir.walkTopDown().filter { it.isFile && it.name != ".DS_Store" }
-            .map { it.relativeTo(kitDir).invariantSeparatorsPath }.sorted().toList()
+        val files = dir.walkTopDown().filter { it.isFile && it.name != ".DS_Store" }
+            .map { it.relativeTo(dir).invariantSeparatorsPath }.sorted().toList()
         out.get().asFile.apply { parentFile.mkdirs() }.writeText(files.joinToString("\n", postfix = "\n"))
     }
 }

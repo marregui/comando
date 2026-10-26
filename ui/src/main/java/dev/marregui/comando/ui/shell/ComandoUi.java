@@ -396,8 +396,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         }, deps.texts(), () -> actions.run("view.sidebar"));
         sidebar.onTabMenu(this::tabMenu);
-        // a session row shows the card a tab shows, the workspace's
-        sidebar.cards(workspace.sessionCards());
+        // a session row shows the card a tab shows, the workspace's; a connection row a card of its facts
+        sidebar.cards(workspace.rowCards());
         sidebar.watchOpened(openedFiles);
         status = new StatusBar(deps.intents(), this::noticeTarget);
         findBar = new FindBar();

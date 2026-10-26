@@ -36,6 +36,7 @@ import java.awt.Rectangle;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.font.TextAttribute;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -50,8 +51,9 @@ import java.util.function.Consumer;
  * wrapped to a few lines; the Linear tickets the panel's text names, as links a double click opens in the browser; at the bottom
  * left, a button that reads the summary again and one that closes the card. The card closes when the pointer leaves
  * it, at a click on it (not on a link) and at its close button. It floats in the window's popup layer under the tab or row it describes and stays until it is closed or clicked,
- * or until another card takes its place; the window moves it with itself. A card is known by a key: its panel's, or a
- * headless session's. EDT only.
+ * or until another card takes its place; the window moves it with itself. A card is known by a key: its panel's, a
+ * headless session's, or a connection's. A connection's card is its title and facts alone: no summary, no tickets, no
+ * buttons (record 92). EDT only.
  */
 final class TabCard {
 
@@ -122,6 +124,10 @@ final class TabCard {
     private final JButton refresh = button("refresh", "tab-card-refresh", "Summarise again with Haiku (about 2 s)",
             "Summarise again");
     private final JButton close = button("close", "tab-card-close", "Close the card", "Close the card");
+    /** The summary's parts: its heading, its text and the space around them, and the buttons; hidden on a card of facts. */
+    private final List<Component> summaryParts = new ArrayList<>();
+    /** Whether the card shown has a summary. */
+    private boolean summarised = true;
     private String shown;
     private JLayeredPane layer;
     /** Where the card's top left corner goes, in the tabs' coordinates: under the tab, at its left edge. */
@@ -170,16 +176,20 @@ final class TabCard {
         }
         card.add(title);
         card.add(facts);
-        card.add(Box.createVerticalStrut(10));
+        Component aboveHeading = Box.createVerticalStrut(10);
+        Component underHeading = Box.createVerticalStrut(6);
+        Component aboveActions = Box.createVerticalStrut(6);
+        card.add(aboveHeading);
         card.add(heading);
-        card.add(Box.createVerticalStrut(6));
+        card.add(underHeading);
         tickets.setOpaque(false);
         tickets.setAlignmentX(Component.LEFT_ALIGNMENT);
         tickets.setVisible(false);
         card.add(tickets);
         card.add(topic);
-        card.add(Box.createVerticalStrut(6));
+        card.add(aboveActions);
         card.add(actions);
+        summaryParts.addAll(List.of(aboveHeading, heading, underHeading, topic, aboveActions, actions));
         card.addMouseListener(closeOnPress);
         // the summary is a text area, which takes the press itself: a press closes the card as on the rest
         topic.addMouseListener(closeOnPress);
@@ -271,6 +281,28 @@ final class TabCard {
 
     /** Shows the card of {@code key} under {@code tab}, a rectangle of {@code over}, replacing any card shown. */
     void show(String key, JComponent over, Rectangle tab, CardFacts head, String topicText, boolean muted, boolean reading) {
+        summarised(true);
+        open(key, over, tab, head, topicText, muted, reading);
+    }
+
+    /** As {@link #show}, a card of its title and facts alone: a connection's. Its tickets are cleared. */
+    void showFacts(String key, JComponent over, Rectangle row, CardFacts head) {
+        summarised(false);
+        tickets(List.of());
+        open(key, over, row, head, "", false, false);
+    }
+
+    private void summarised(boolean on) {
+        summarised = on;
+        summaryParts.forEach(c -> c.setVisible(on));
+    }
+
+    /** Whether the card shown has a summary; for tests. */
+    boolean summarised() {
+        return summarised;
+    }
+
+    private void open(String key, JComponent over, Rectangle tab, CardFacts head, String topicText, boolean muted, boolean reading) {
         JRootPane root = SwingUtilities.getRootPane(over);
         if (root == null) {
             return;
@@ -386,7 +418,9 @@ final class TabCard {
         Point at = SwingUtilities.convertPoint(tabs, anchor, layer);
         int room = Math.max(160, layer.getWidth() - 2 * MARGIN);
         Insets in = card.getInsets();
-        int widest = Math.max(Math.max(title.getPreferredSize().width, facts.isVisible() ? facts.getPreferredSize().width : 0), SUMMARY_WIDTH);
+        // a card of facts is as wide as they are; a summary takes its own width
+        int widest = Math.max(Math.max(title.getPreferredSize().width, facts.isVisible() ? facts.getPreferredSize().width : 0),
+                summarised ? SUMMARY_WIDTH : 0);
         int inner = Math.min(widest, Math.min(MAX_WIDTH, room) - in.left - in.right);
         wrapTo(topic, inner);
         int w = inner + in.left + in.right;

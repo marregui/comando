@@ -99,3 +99,4 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [89](0089-a-session-row-is-one-line.md) | A session row is one line, its state an icon | Miguel, Claude | proposed; amends 53 and 87 |
 | [90](0090-a-session-row-is-its-icon-and-name.md) | A session row is its icon and its name; the card says each fact once | Miguel, Claude | proposed; amends 87 and 89 |
 | [91](0091-the-panels-tab-folds-into-the-sessions-tab.md) | The Panels tab folds into the Sessions tab | Miguel, Claude | proposed; amends 39 and 70 |
+| [92](0092-a-connection-row-is-its-icon-and-name.md) | A connection row is its icon and its name, as a session's | Miguel, Claude | proposed; extends 90 to connections |

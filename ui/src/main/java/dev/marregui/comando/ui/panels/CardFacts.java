@@ -1,6 +1,8 @@
 package dev.marregui.comando.ui.panels;
 
+import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.format.Labels;
@@ -13,7 +15,7 @@ import java.util.Optional;
  * What a card says above its summary (record 90): a title, the panel's or the headless session's name, and the facts,
  * one a line, each said once: the state, then for a session its model, context, folder, conversation and Claude Code,
  * then the panel's session when the title does not name it, its connection, and its file unless it is a session's own.
- * Copy details copies more, for a clipboard ({@link SessionRow#details}).
+ * Copy details copies more, for a clipboard ({@link SessionRow#details}). A connection's card has facts alone.
  */
 record CardFacts(String title, List<Fact> facts) {
 
@@ -58,6 +60,22 @@ record CardFacts(String title, List<Fact> facts) {
             }
         });
         return new CardFacts(title, List.copyOf(facts));
+    }
+
+    /**
+     * A connection's card, which has no summary (record 92): its name, then its state, database and server, user, TLS
+     * mode, production, and the open panels that use it; never the password.
+     */
+    static CardFacts of(ConnectionState c, List<String> panels) {
+        ConnectionSpec s = c.spec();
+        List<Fact> facts = new ArrayList<>();
+        add(facts, "State", ConnectionRow.stateText(c));
+        add(facts, "Database", s.database() + " on " + s.host() + ':' + s.port());
+        add(facts, "User", s.user());
+        add(facts, "TLS", s.sslMode());
+        add(facts, "Production", s.prod() ? "yes; Claude's writes are refused" : "");
+        add(facts, "Panels", String.join(" · ", panels));
+        return new CardFacts(s.name(), List.copyOf(facts));
     }
 
     /** "running · working: Bash 12 s · up 1 h 4 m"; a failed session's error; "no panel" for a headless one. */
