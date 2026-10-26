@@ -48,6 +48,17 @@ class StatusBarUsageTest {
     }
 
     @Test
+    void aReadWithNothingToShowLeavesTheKitShown() throws Exception {
+        StatusBar bar = new StatusBar(intent -> {
+        });
+        SwingUtilities.invokeAndWait(() -> bar.kit("kit test-kit", "", false));
+        int listeners = bar.kitLabel().getMouseListeners().length;
+        SwingUtilities.invokeAndWait(() -> bar.planUsage(PlanUsage.failed("not logged in", 2L)));
+        assertThat(bar.kitLabel().isVisible()).isTrue();
+        assertThat(bar.kitLabel().getMouseListeners()).hasSize(listeners);
+    }
+
+    @Test
     void theStatusBarNamesTheModelAsTheSessionRowDoes() {
         SessionState x = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").withModel("sonnet"))
                 .withInfo(new SessionInfo("", "claude-opus-4-5", "", "", "", List.of()), 1L);

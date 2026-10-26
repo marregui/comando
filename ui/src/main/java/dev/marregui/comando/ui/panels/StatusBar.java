@@ -157,16 +157,6 @@ public final class StatusBar {
         }
         if (lastUsage == null) {
             usage.setVisible(false);
-        kit.setVisible(false);
-        kit.setForeground(Theme.MUTED);
-        kit.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        kit.getAccessibleContext().setAccessibleName("Kit");
-        kit.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                kitMenu.accept(kit);
-            }
-        });
             return;
         }
         boolean stale = read != lastUsage;
