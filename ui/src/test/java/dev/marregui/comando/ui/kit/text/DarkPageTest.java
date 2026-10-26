@@ -19,18 +19,14 @@ class DarkPageTest {
     }
 
     @Test
-    void aDarkPageReadsAsAnAnswerInTheGoldChosenALightOneAsBefore() {
-        StyleSheet dark = HtmlPane.styles(false);
+    void aPageReadsAsAnAnswerInTheGoldChosen() {
+        StyleSheet dark = HtmlPane.styles();
         assertThat(dark.getForeground(dark.getRule("h2"))).isEqualTo(Gold.TREASURE.body);
         assertThat(dark.getForeground(dark.getRule("th"))).isEqualTo(Gold.TREASURE.highlight);
         assertThat(dark.getForeground(dark.getRule("body"))).isEqualTo(Theme.TRANSCRIPT_TEXT);
         assertThat(dark.getFont(dark.getRule("h1")).getFamily()).isEqualTo(Theme.serif().getFamily());
         Theme.gold(Gold.CHAMPAGNE);
-        assertThat(HtmlPane.styles(false).getForeground(HtmlPane.styles(false).getRule("h2"))).isEqualTo(Gold.CHAMPAGNE.body);
-
-        StyleSheet light = HtmlPane.styles(true);
-        assertThat(light.getForeground(light.getRule("h2"))).as("the light page keeps its own colours")
-                .isNotIn(Gold.TREASURE.body, Gold.CHAMPAGNE.body);
+        assertThat(HtmlPane.styles().getForeground(HtmlPane.styles().getRule("h2"))).isEqualTo(Gold.CHAMPAGNE.body);
     }
 
     @Test

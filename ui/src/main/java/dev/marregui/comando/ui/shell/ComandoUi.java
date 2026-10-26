@@ -336,11 +336,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 deps.intents().dispatch(new Intent.OpenChange(diffWindow.root(), currentChange(diffWindow.root(), diffWindow.change()),
                         ChangeAsk.REFRESH));
             }
-        }, () -> {
-            // the comparison's theme button is a panel's: every editor switches, and the choice is kept
-            boolean on = !workspace.light();
-            workspace.light(on);
-            editorThemeChanged(on);
         }, deps.intents(), deps.texts()::write, ResourceActions.Questions.MODAL);
         AppIcon.install(frame);
         livePlots = new LivePlots(deps.intents(), deps.results());
@@ -349,7 +344,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.onAttention(notifier::attention);
         workspace.onClose(this::closePanel);
         workspace.onOpenFile(this::openFile);
-        workspace.onThemeChanged(this::editorThemeChanged);
         // a panel's "New session ‹title›…": the session dialog, named after the panel, which becomes its own (record 88)
         workspace.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
         workspace.topics(topics, deps.transcripts()::of);
@@ -810,14 +804,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         Theme.gold(gold);
         for (Window w : Window.getWindows()) {
             w.repaint();
-        }
-    }
-
-    /** Every editor took the light theme or the dark one: the choice is kept, and the comparison window follows. */
-    private void editorThemeChanged(boolean light) {
-        windowLayout.lightEditors(light);
-        if (diffWindow != null) {
-            diffWindow.light(light);
         }
     }
 
@@ -1601,10 +1587,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         int h = windowLayout.restoreBounds(frame);
         sidebar.selectTab(windowLayout.sidebarTab());
         sidebar.manualOrder(windowLayout.manualOrder());
-        workspace.light(windowLayout.lightEditors());
-        if (diffWindow != null) {
-            diffWindow.light(windowLayout.lightEditors());
-        }
         paintIn(windowLayout.gold());
         workspace.linear(windowLayout.linearSite(), windowLayout::linearSite);
         showSidebar(windowLayout.sidebarShown());

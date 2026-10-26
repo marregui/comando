@@ -100,7 +100,6 @@ public final class ChangeEditor {
     private final JMenuItem rollBack;
     private final JMenuItem remove;
     private final JButton mode;
-    private final JButton theme;
     private final Timer recompare;
     private final Timer autosave;
     /** Hears whether edits wait to be written: the window marks itself modified while they do. */
@@ -129,8 +128,7 @@ public final class ChangeEditor {
     private long asked;
     private String counted = "";
 
-    /** {@code toggleTheme} switches every editor's theme, as a panel's theme button does. */
-    public ChangeEditor(IntentSink intents, Writer writer, ResourceActions.Questions questions, Runnable toggleTheme) {
+    public ChangeEditor(IntentSink intents, Writer writer, ResourceActions.Questions questions) {
         this.intents = intents;
         this.writer = writer;
         this.questions = questions;
@@ -139,7 +137,6 @@ public final class ChangeEditor {
         rollBack = menuItem("Roll back to HEAD", "rollback", this::rollBack);
         remove = menuItem("Move to the Trash…", "trash", this::remove);
         mode = ToolButton.of("preview", "", this::toggleRendered);
-        theme = ToolButton.of("theme", "", toggleTheme);
         recompare = new Timer(RECOMPARE_MILLIS, e -> recompare());
         recompare.setRepeats(false);
         autosave = new Timer(AUTOSAVE_MILLIS, e -> {
@@ -150,7 +147,6 @@ public final class ChangeEditor {
         autosave.start();
         build();
         showMode();
-        showTheme();
         updateButtons();
     }
 
@@ -527,25 +523,6 @@ public final class ChangeEditor {
         return new MarkdownHtml.Marks(lines, gained ? m.rightWords() : m.leftWords(), gained);
     }
 
-    /** The light editor theme or the dark one, for the texts and the rendered sides. */
-    public void light(boolean on) {
-        diff.light(on);
-        headRendered.light(on);
-        treeRendered.light(on);
-        showTheme();
-    }
-
-    public boolean isLight() {
-        return diff.isLight();
-    }
-
-    private void showTheme() {
-        boolean light = diff.isLight();
-        // worded as a panel's theme button: the switch is the same, and so is its reach
-        theme.setToolTipText(light ? "Switch every editor and this window to dark" : "Switch every editor and this window to light");
-        theme.getAccessibleContext().setAccessibleName(light ? "Dark editors" : "Light editors");
-    }
-
     private void showMode() {
         mode.setVisible(markdown && shown != null && shown.note().isEmpty());
         mode.setIcon(Icons.get(rendering ? "edit" : "preview"));
@@ -579,7 +556,7 @@ public final class ChangeEditor {
         count.setForeground(Theme.MUTED_STRONG);
         count.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 6));
         buttons.add(count);
-        for (JButton b : List.of(previous, next, mode, theme)) {
+        for (JButton b : List.of(previous, next, mode)) {
             buttons.add(b);
         }
         top.add(buttons, BorderLayout.EAST);

@@ -64,7 +64,7 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [54](0054-comando-knows-nothing-of-jfr.md) | comando knows nothing of JFR | Miguel, Claude | accepted |
 | [55](0055-the-files-tab-only-shows-folders-json-configures-it.md) | The Files tab only shows; folders.json configures it; every file opens to edit | Miguel, Claude | accepted; the Trash for deletable folders, 63; configuration row replaced by 69 |
 | [56](0056-html-opens-in-the-browser-not-in-comando.md) | HTML opens in the browser, not in comando | Miguel, Claude | accepted |
-| [57](0057-a-light-editor-and-a-header-of-icons.md) | A light editor, and a panel header of icons | Miguel, Claude | accepted |
+| [57](0057-a-light-editor-and-a-header-of-icons.md) | A light editor, and a panel header of icons | Miguel, Claude | accepted; the light editor withdrawn, 93 |
 | [58](0058-markdown-shows-the-pictures-beside-it.md) | Markdown shows the pictures beside it | Miguel, Claude | accepted |
 | [59](0059-three-menus-for-what-has-no-key.md) | Three menus, for what has no key or control | Miguel, Claude | accepted; Tool settings removed by 62; the bar replaced, 75 |
 | [60](0060-about-is-a-card-worded-by-a-file.md) | About comando is a card worded by a file | Miguel, Claude | accepted |
@@ -98,5 +98,6 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [88](0088-a-session-and-its-panel-share-a-name.md) | A session and its own panel share a name, and are one | Miguel, Claude | proposed; amends 13 and 38 |
 | [89](0089-a-session-row-is-one-line.md) | A session row is one line, its state an icon | Miguel, Claude | proposed; amends 53 and 87 |
 | [90](0090-a-session-row-is-its-icon-and-name.md) | A session row is its icon and its name; the card says each fact once | Miguel, Claude | proposed; amends 87 and 89 |
-| [91](0091-the-panels-tab-folds-into-the-sessions-tab.md) | The Panels tab folds into the Sessions tab | Miguel, Claude | proposed; amends 39 and 70 |
-| [92](0092-a-connection-row-is-its-icon-and-name.md) | A connection row is its icon and its name, as a session's | Miguel, Claude | proposed; extends 90 to connections |
+| [91](0091-the-panels-tab-folds-into-the-sessions-tab.md) | The Panels tab folds into the Sessions tab | Miguel, Claude | accepted; amends 39 and 70 |
+| [92](0092-a-connection-row-is-its-icon-and-name.md) | A connection row is its icon and its name, as a session's | Miguel, Claude | accepted; extends 90 to connections |
+| [93](0093-comando-is-dark-throughout.md) | comando is dark throughout | Miguel, Claude | accepted; withdraws 57's light editor |

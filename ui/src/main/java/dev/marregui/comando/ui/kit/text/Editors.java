@@ -190,29 +190,24 @@ public final class Editors {
         a.setSyntaxEditingStyle(style);
         a.setCodeFoldingEnabled(false);
         a.setAntiAliasingEnabled(true);
-        EditorThemes.apply(a, false);
+        EditorThemes.apply(a);
         a.setFont(Theme.mono());
         return a;
     }
 
-    /** The dark editor theme's foreground for token type {@code type}, null for the default. */
+    /** The editor theme's foreground for token type {@code type}, null for the default. */
     public static Color colorOf(int type) {
-        return colorOf(type, false);
-    }
-
-    /** The editor theme's foreground for token type {@code type}, light or dark; null for the default. */
-    public static Color colorOf(int type, boolean light) {
-        SyntaxScheme scheme = EditorThemes.scheme(light);
+        SyntaxScheme scheme = EditorThemes.scheme();
         if (type < 0 || type >= scheme.getStyleCount() || scheme.getStyle(type) == null) {
             return null;
         }
         return scheme.getStyle(type).foreground;
     }
 
-    /** Gives {@code area} the light or the dark editor theme; its font, zoom included, stays as it is. */
-    public static void theme(RSyntaxTextArea area, boolean light) {
+    /** Gives {@code area} the editor theme; its font, zoom included, stays as it is. */
+    public static void theme(RSyntaxTextArea area) {
         Font font = area.getFont();
-        EditorThemes.apply(area, light);
+        EditorThemes.apply(area);
         area.setFont(font);
         // the theme colours the gutter; the icon column inside it keeps its own background unless told
         Gutter gutter = RSyntaxUtilities.getGutter(area);

@@ -69,13 +69,12 @@ public final class MarkdownHtml {
             return !lines.isEmpty() || !words.isEmpty();
         }
 
-        String lineColour(boolean light) {
-            return Theme.hex(gained ? light ? Theme.DIFF_ADDED_LIGHT : Theme.DIFF_ADDED : light ? Theme.DIFF_REMOVED_LIGHT : Theme.DIFF_REMOVED);
+        String lineColour() {
+            return Theme.hex(gained ? Theme.DIFF_ADDED : Theme.DIFF_REMOVED);
         }
 
-        String wordColour(boolean light) {
-            return Theme.hex(gained ? light ? Theme.DIFF_ADDED_WORD_LIGHT : Theme.DIFF_ADDED_WORD
-                    : light ? Theme.DIFF_REMOVED_WORD_LIGHT : Theme.DIFF_REMOVED_WORD);
+        String wordColour() {
+            return Theme.hex(gained ? Theme.DIFF_ADDED_WORD : Theme.DIFF_REMOVED_WORD);
         }
 
         /** Whether one of {@code node}'s source lines changed. */
@@ -100,7 +99,7 @@ public final class MarkdownHtml {
             .softbreak("<br>")
             .attributeProviderFactory(c -> new HeadingIds())
             .nodeRendererFactory(c -> new ImageAsText(c, Pictures.NONE))
-            .nodeRendererFactory(c -> new ColouredCode(c, null, false, Marks.NONE))
+            .nodeRendererFactory(c -> new ColouredCode(c, null, Marks.NONE))
             .build();
 
     /** What a heading's id leaves out of its text: all but letters, marks, digits, connectors such as {@code _}, spaces and hyphens. */
@@ -118,21 +117,16 @@ public final class MarkdownHtml {
      * the source with a note. Without it, a Mermaid block shows as code.
      */
     public static String render(String markdown, Function<String, String> mermaid) {
-        return render(markdown, mermaid, false);
+        return render(markdown, mermaid, Pictures.NONE);
     }
 
-    /** As {@link #render(String, Function)}, code blocks in the light or the dark editor theme's colours. */
-    public static String render(String markdown, Function<String, String> mermaid, boolean light) {
-        return render(markdown, mermaid, light, Pictures.NONE);
+    /** As {@link #render(String, Function)}, an image link shown as {@code pictures} makes it. */
+    public static String render(String markdown, Function<String, String> mermaid, Pictures pictures) {
+        return render(markdown, mermaid, pictures, Marks.NONE);
     }
 
-    /** As {@link #render(String, Function, boolean)}, an image link shown as {@code pictures} makes it. */
-    public static String render(String markdown, Function<String, String> mermaid, boolean light, Pictures pictures) {
-        return render(markdown, mermaid, light, pictures, Marks.NONE);
-    }
-
-    /** As {@link #render(String, Function, boolean, Pictures)}, what {@code marks} names shaded as changed. */
-    public static String render(String markdown, Function<String, String> mermaid, boolean light, Pictures pictures, Marks marks) {
+    /** As {@link #render(String, Function, Pictures)}, what {@code marks} names shaded as changed. */
+    public static String render(String markdown, Function<String, String> mermaid, Pictures pictures, Marks marks) {
         boolean marked = marks.any();
         HtmlRenderer.Builder b = HtmlRenderer.builder()
                 .extensions(EXTENSIONS)
@@ -141,11 +135,11 @@ public final class MarkdownHtml {
                 .softbreak("<br>")
                 .attributeProviderFactory(c -> new HeadingIds())
                 .nodeRendererFactory(c -> new ImageAsText(c, pictures))
-                .nodeRendererFactory(c -> new ColouredCode(c, mermaid, light, marks));
+                .nodeRendererFactory(c -> new ColouredCode(c, mermaid, marks));
         if (marked) {
-            b.attributeProviderFactory(c -> new ShadedBlocks(marks, light)).nodeRendererFactory(c -> new ShadedWords(c, marks, light));
+            b.attributeProviderFactory(c -> new ShadedBlocks(marks)).nodeRendererFactory(c -> new ShadedWords(c, marks));
         }
-        HtmlRenderer renderer = mermaid == null && !light && pictures == Pictures.NONE && !marked ? RENDERER : b.build();
+        HtmlRenderer renderer = mermaid == null && pictures == Pictures.NONE && !marked ? RENDERER : b.build();
         String html = renderer.render((marked ? SPANNING : PARSER).parse(markdown));
         // Swing's renderer does not know <del>, and draws <pre><code> with a wrapping paragraph margin
         return html.replace("<pre><code", "<pre class=\"code\"><code").replace("<del>", "<strike>").replace("</del>", "</strike>");
@@ -196,11 +190,9 @@ public final class MarkdownHtml {
      */
     private static final class ShadedBlocks implements AttributeProvider {
         private final Marks marks;
-        private final boolean light;
 
-        ShadedBlocks(Marks marks, boolean light) {
+        ShadedBlocks(Marks marks) {
             this.marks = marks;
-            this.light = light;
         }
 
         @Override
@@ -209,7 +201,7 @@ public final class MarkdownHtml {
                     || node instanceof IndentedCodeBlock && tagName.equals("pre");
             boolean changed = block ? marks.touches(node) : node instanceof ListItem && node.getFirstChild() instanceof Paragraph p && marks.touches(p);
             if (changed) {
-                attributes.merge("style", "background-color: " + marks.lineColour(light), (a, b) -> a + "; " + b);
+                attributes.merge("style", "background-color: " + marks.lineColour(), (a, b) -> a + "; " + b);
             }
         }
     }
@@ -218,12 +210,10 @@ public final class MarkdownHtml {
     private static final class ShadedWords implements NodeRenderer {
         private final HtmlNodeRendererContext context;
         private final Marks marks;
-        private final boolean light;
 
-        ShadedWords(HtmlNodeRendererContext context, Marks marks, boolean light) {
+        ShadedWords(HtmlNodeRendererContext context, Marks marks) {
             this.context = context;
             this.marks = marks;
-            this.light = light;
         }
 
         @Override
@@ -249,7 +239,7 @@ public final class MarkdownHtml {
                     continue;
                 }
                 w.text(text.substring(done, from));
-                w.raw("<span style=\"background-color: " + marks.wordColour(light) + "\">");
+                w.raw("<span style=\"background-color: " + marks.wordColour() + "\">");
                 w.text(text.substring(from, to));
                 w.raw("</span>");
                 done = to;
@@ -312,13 +302,11 @@ public final class MarkdownHtml {
     private static final class ColouredCode implements NodeRenderer {
         private final HtmlNodeRendererContext context;
         private final Function<String, String> mermaid;
-        private final boolean light;
         private final Marks marks;
 
-        ColouredCode(HtmlNodeRendererContext context, Function<String, String> mermaid, boolean light, Marks marks) {
+        ColouredCode(HtmlNodeRendererContext context, Function<String, String> mermaid, Marks marks) {
             this.context = context;
             this.mermaid = mermaid;
-            this.light = light;
             this.marks = marks;
         }
 
@@ -333,7 +321,7 @@ public final class MarkdownHtml {
             String code = block.getLiteral() == null ? "" : block.getLiteral();
             String language = Fences.language(block.getInfo());
             HtmlWriter w = context.getWriter();
-            String shade = marks.touches(block) ? " style=\"background-color: " + marks.lineColour(light) + "\"" : "";
+            String shade = marks.touches(block) ? " style=\"background-color: " + marks.lineColour() + "\"" : "";
             if (mermaid != null && language.equalsIgnoreCase("mermaid")) {
                 w.line();
                 w.raw(shade.isEmpty() ? mermaid.apply(code) : "<div" + shade + ">" + mermaid.apply(code) + "</div>");
@@ -342,7 +330,7 @@ public final class MarkdownHtml {
             }
             w.line();
             w.raw("<pre class=\"code\"" + shade + "><code>");
-            w.raw(coloured(code, language, light));
+            w.raw(coloured(code, language));
             w.raw("</code></pre>");
             w.line();
         }
@@ -350,11 +338,7 @@ public final class MarkdownHtml {
 
     /** {@code code} as HTML, each token in its colour for {@code language}; escaped and uncoloured when unknown. */
     static String coloured(String code, String language) {
-        return coloured(code, language, false);
-    }
-
-    static String coloured(String code, String language, boolean light) {
-        List<Highlighter.Run> runs = language.isEmpty() ? List.of() : Highlighter.runs(code, language, light);
+        List<Highlighter.Run> runs = language.isEmpty() ? List.of() : Highlighter.runs(code, language);
         StringBuilder out = new StringBuilder(code.length() + runs.size() * 24);
         int at = 0;
         for (Highlighter.Run r : runs) {

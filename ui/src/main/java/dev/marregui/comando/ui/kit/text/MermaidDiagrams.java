@@ -43,8 +43,6 @@ public final class MermaidDiagrams {
     static final int SCALE = 2;
     /** Part of every cache key: a change of how diagrams are drawn draws them again. */
     private static final String STYLE = "dark|transparent|" + SCALE;
-    /** As {@link #STYLE}, for a light preview: Mermaid's default theme, dark lines on the page. */
-    private static final String LIGHT_STYLE = "default|transparent|" + SCALE;
     static final Duration TIMEOUT = Duration.ofSeconds(30);
     private static final int MAX_REASON_CHARS = 200;
 
@@ -118,17 +116,12 @@ public final class MermaidDiagrams {
      * callback is handed in meanwhile.
      */
     public Diagram diagram(String source, Runnable whenReady) {
-        return diagram(source, false, whenReady);
-    }
-
-    /** As {@link #diagram(String, Runnable)}, drawn for a light page or a dark one. */
-    public Diagram diagram(String source, boolean light, Runnable whenReady) {
         if (drawer == null) {
             return new Diagram.Unavailable(mmdc == null && cache != null
                     ? "install mermaid-cli (npm install -g @mermaid-js/mermaid-cli) to see this diagram drawn"
                     : "diagrams are not drawn here");
         }
-        String key = key(source, light);
+        String key = key(source);
         String failed = failures.get(key);
         if (failed != null) {
             return new Diagram.Unavailable(failed);
@@ -154,7 +147,7 @@ public final class MermaidDiagrams {
         });
         if (first[0]) {
             try {
-                drawer.execute(() -> draw(key, source, light, png));
+                drawer.execute(() -> draw(key, source, png));
             } catch (RejectedExecutionException e) {
                 waiting.remove(key);
                 return new Diagram.Unavailable("comando is closing");
@@ -163,7 +156,7 @@ public final class MermaidDiagrams {
         return new Diagram.Pending();
     }
 
-    private void draw(String key, String source, boolean light, Path png) {
+    private void draw(String key, String source, Path png) {
         if (Files.isRegularFile(png)) {
             // asked again while the last drawing of it finished: it is there
             finish(key);
@@ -178,7 +171,7 @@ public final class MermaidDiagrams {
             try {
                 Files.writeString(in, source, StandardCharsets.UTF_8);
                 ProcessBuilder pb = new ProcessBuilder(mmdc.toString(), "-q", "-i", in.toString(), "-o", out.toString(),
-                        "-t", light ? "default" : "dark", "-b", "transparent", "-s", Integer.toString(SCALE))
+                        "-t", "dark", "-b", "transparent", "-s", Integer.toString(SCALE))
                         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                         .redirectError(err.toFile());
                 // mmdc is a node script: an app started from Finder has no node on its PATH, so its own folder goes first
@@ -264,13 +257,9 @@ public final class MermaidDiagrams {
 
     /** The cache file name of a diagram: its text and how it is drawn, hashed. */
     static String key(String source) {
-        return key(source, false);
-    }
-
-    static String key(String source, boolean light) {
         try {
             MessageDigest sha = MessageDigest.getInstance("SHA-256");
-            sha.update((light ? LIGHT_STYLE : STYLE).getBytes(StandardCharsets.UTF_8));
+            sha.update(STYLE.getBytes(StandardCharsets.UTF_8));
             sha.update((byte) 0);
             sha.update(source.strip().getBytes(StandardCharsets.UTF_8));
             return HexFormat.of().formatHex(sha.digest(), 0, 16);

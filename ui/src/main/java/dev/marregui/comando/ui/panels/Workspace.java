@@ -117,11 +117,6 @@ public final class Workspace {
     /** The tabs a menu's close is closing, which post no notice of their own, and the one notice said once they are gone. EDT only. */
     private final Set<PanelId> bulkClosing = new HashSet<>();
     private String bulkSummary;
-    /** Whether every editor shows the light theme, its text and its rendered Markdown. EDT only. */
-    private boolean light;
-    /** Told when the theme button switches the editors, so the choice is kept. */
-    private Consumer<Boolean> themeChanged = on -> {
-    };
     /** Opens a file a panel's link names; the shell's own open. */
     private Consumer<Path> opener = f -> {
     };
@@ -429,21 +424,6 @@ public final class Workspace {
     /** Whether a panel's shell runs a program: a tab closed with others stays open while it does. */
     public void onRunsProgram(Predicate<PanelId> runs) {
         runsProgram = runs;
-    }
-
-    /** Every editor, open now or opened later, in the light theme or the dark one. */
-    public void light(boolean on) {
-        light = on;
-        panels.values().forEach(p -> p.light(on));
-    }
-
-    public boolean light() {
-        return light;
-    }
-
-    /** What runs when a panel's theme button switches the editors, with the new choice. */
-    public void onThemeChanged(Consumer<Boolean> listener) {
-        themeChanged = listener;
     }
 
     /** How a panel's "New session ‹title›…" opens the session dialog, with the panel's title as the name. */
@@ -993,11 +973,6 @@ public final class Workspace {
                         opener.accept(f);
                     });
                     view.onNewSession(name -> newSession.accept(name));
-                    view.light(light);
-                    view.onThemeToggle(() -> {
-                        light(!light);
-                        themeChanged.accept(light);
-                    });
                     panels.put(p.id(), view);
                     tabs.insertTab(title(p, false), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
                 } else if (tabs.indexOfComponent(view) != i) {

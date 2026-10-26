@@ -45,7 +45,6 @@ class ChangeEditorTest {
             }, (parent, text, title, options) -> {
                 asked.add(text);
                 return answer.get();
-            }, () -> {
             });
             e.onGone(gone::incrementAndGet);
             return e;

@@ -178,7 +178,9 @@ class DbAdapterTest {
         long start = System.nanoTime();
         db.cancel(6L);
         long callMillis = (System.nanoTime() - start) / 1_000_000L;
-        assertThat(callMillis).as("cancel() must not block its caller, the reducer thread; took %d ms", callMillis).isLessThan(100L);
+        // a cancel made on the caller's thread waits for QuestDB's answer, about 1 000 ms; handed off it returns at once,
+        // though a loaded CI runner, its cores busy with the query, took 125 ms (2026-10-26): 500 ms tells them apart
+        assertThat(callMillis).as("cancel() must not block its caller, the reducer thread; took %d ms", callMillis).isLessThan(500L);
         sink.await(Intent.SqlCancelled.class, c -> c.requestId() == 6L, Duration.ofSeconds(5));
         long tookMillis = (System.nanoTime() - start) / 1_000_000L;
         assertThat(tookMillis).as("cancel took %d ms", tookMillis).isLessThan(3_000L);

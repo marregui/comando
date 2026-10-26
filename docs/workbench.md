@@ -75,11 +75,11 @@ Document panels may be attached to a session, any number of them ([record 38](ad
   ([record 86](adr/0086-a-checkpoint-clears-and-carries-its-summary.md)). Then, while the session runs, compact
   (`/compact` sent from the panel, as on the session's row).
   On the right, icons without a button's shape, close together: Browser (HTML: the page in the browser), Preview or
-  Edit (Markdown), the editor theme, Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A
+  Edit (Markdown), Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A
   production connection frames the panel in red ([record 57](adr/0057-a-light-editor-and-a-header-of-icons.md)).
-- **The editor theme** is dark (IntelliJ's Dark) or light (IntelliJ's Light) for every panel at once: the text, its
-  gutter, its rendered Markdown (code blocks in the theme's colours, Mermaid diagrams drawn in Mermaid's dark
-  theme, or its default theme with light editors). The rest of the window stays dark. The choice is kept across restarts.
+- **The editor theme** is IntelliJ's Dark, as is the whole window: the text, its gutter, its rendered Markdown (code
+  blocks in the theme's colours, Mermaid diagrams drawn in Mermaid's dark theme). There is no light theme
+  ([record 93](adr/0093-comando-is-dark-throughout.md)).
 - **Pictures in Markdown**: an image link to a PNG, JPEG, GIF or SVG on this machine, named from the document's folder
   (`images/chart.png`, `../img/flow.svg`) or by its full path, shows the picture, no wider than the panel; it is read on
   a thread of its own and shown when ready, and read again when the file changes. A web address shows the alt text;
@@ -399,8 +399,7 @@ inside that folder alone ([record 71](adr/0071-repositories-in-the-files-tab.md)
   a session's edits show where the user scrolled to. The line match stops after 2 s and the texts are then compared as
   a whole; line ends are compared as git commits them (`core.autocrlf`), a link as its target. A binary file, a version
   over 4 MB, a line over 10 000 characters, a Git LFS file or a submodule is not compared, and the window says why. A
-  terminal with the keyboard keeps ⌘K, its Clear Buffer. The comparison takes the editors' theme; its ◑ button is the
-  panels' one, and switches every editor.
+  terminal with the keyboard keeps ⌘K, its Clear Buffer. The comparison takes the editors' theme.
   The file's menu also opens it in a panel.
 - **Editing** ([record 72](adr/0072-the-comparison-window-edits-rolls-back-and-removes.md)). The working tree's side is
   an editor, the only one of the two: the differences are worked out again 250 ms after typing pauses, and ⌘Z and ⌘⇧Z

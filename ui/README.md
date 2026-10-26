@@ -84,7 +84,7 @@ without importing them.
 edits, files, Gradle runs, folders, notices ([Architecture §4.2](../docs/architecture.md#42-intents)).
 
 **Resources.** `icons/` (SVG, and the app's `comando.png`); `shell/about.md` (the About card's words);
-`shell/markdown-sheet.md`; `kit/text/editor-dark.xml` and `editor-light.xml` (the editors' themes); the tutorial,
+`shell/markdown-sheet.md`; `kit/text/editor-dark.xml` (the editors' theme); the tutorial,
 copied from `docs/tutorial.md` by `ui/build.gradle.kts` so Help and the docs never disagree.
 
 ## 3. Threads

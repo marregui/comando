@@ -150,13 +150,7 @@ public final class Snapshot {
         click("Preview");
         Thread.sleep(800);
         shoot(out.resolve("02d-markdown-preview.png"));
-        // the light editors: the preview, then the text, then back to dark for the shots that follow
-        // the switch redraws on the event thread: done when the click returns
-        click("Light editors");
-        shoot(out.resolve("02d2-light-preview.png"));
         click("Edit");
-        shoot(out.resolve("02d3-light-editor.png"));
-        click("Dark editors");
         // the sidebar's Files tab, clicked as a user would: the folders as rows, the first opened as by a click
         selectSidebarTab("Files");
         SwingUtilities.invokeAndWait(() -> {
@@ -243,14 +237,11 @@ public final class Snapshot {
         SwingUtilities.invokeAndWait(() -> app.ui().openFile(plan));
         Thread.sleep(4000); // mmdc draws the diagram in about 1.5 s, and the preview shows it then
         shoot(out.resolve("02e-markdown-document.png"));
-        // a report with the pictures beside it, a PNG in images/ and an SVG in img/, dark and then light
+        // a report with the pictures beside it, a PNG in images/ and an SVG in img/
         Path report = reportWithPictures(docs);
         SwingUtilities.invokeAndWait(() -> app.ui().openFile(report));
         picturesRead(docs.resolve("images/p99-latency.png"), docs.resolve("img/write-path.svg"));
         shoot(out.resolve("02e2-markdown-pictures.png"));
-        click("Light editors");
-        shoot(out.resolve("02e3-markdown-pictures-light.png"));
-        click("Dark editors");
         // a link to a heading of another document, double-clicked in the report: the document opens at that heading
         StringBuilder rollout = new StringBuilder("# Rollout\n\n");
         for (int i = 1; i <= 6; i++) {
@@ -351,19 +342,6 @@ public final class Snapshot {
         flushEdt();
         flushEdt();
         shootDialog(diffTitle, out.resolve("02m-diff-window.png"));
-        // the comparison's theme button switches every editor to the light theme, and the comparison with them
-        loop.dispatch(new Intent.OpenChange(sampleRepo.toString(),
-                new RepoStatus.FileChange("src/main/java/demo/Lane.java", "", RepoStatus.Kind.MODIFIED), ChangeAsk.OPEN));
-        await(loop, st -> dialogShown(diffTitle), 10_000);
-        clickInDialog(diffTitle, "Light editors");
-        flushEdt();
-        flushEdt();
-        shootDialog(diffTitle, out.resolve("02m2-diff-window-light.png"));
-        loop.dispatch(new Intent.OpenChange(sampleRepo.toString(),
-                new RepoStatus.FileChange("src/main/java/demo/Lane.java", "", RepoStatus.Kind.MODIFIED), ChangeAsk.OPEN));
-        await(loop, st -> dialogShown(diffTitle), 10_000);
-        clickInDialog(diffTitle, "Dark editors");
-        flushEdt();
         // a Markdown file's two sides rendered, what changed shaded as in the texts
         loop.dispatch(new Intent.OpenChange(sampleRepo.toString(), new RepoStatus.FileChange("README.md", "", RepoStatus.Kind.MODIFIED), ChangeAsk.OPEN));
         String readmeTitle = "README.md — compared with HEAD";

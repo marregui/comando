@@ -4,7 +4,6 @@ import dev.marregui.comando.ui.kit.async.OnEdt;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
-import java.awt.Color;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -131,19 +130,6 @@ class SplitDiffTest {
         assertThat(d.previous()).isTrue();
         assertThat(d.current()).as("back, not the same one again").isZero();
         assertThat(d.previous()).isFalse();
-    }
-
-    @Test
-    void theLightThemeRepaintsTheTextsAndTheDifferencesForPaper() {
-        SplitDiff d = new SplitDiff();
-        d.show("A.java", "HEAD", "a\nb\n", "Working tree", "a\nB\n", false);
-        Color dark = d.left().getBackground();
-        d.light(true);
-        assertThat(d.isLight()).isTrue();
-        assertThat(d.left().getBackground()).isNotEqualTo(dark).isEqualTo(d.right().getBackground());
-        assertThat(d.chunks()).as("the comparison stays").hasSize(1);
-        d.light(false);
-        assertThat(d.left().getBackground()).isEqualTo(dark);
     }
 
     @Test

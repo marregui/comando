@@ -39,7 +39,7 @@ Text:
 
 | Class | Does |
 |---|---|
-| `Editors` | configures every text area: IntelliJ's Dark colours (the panels' editors also Light), font, syntax by extension, file name or fence language |
+| `Editors` | configures every text area: IntelliJ's Dark colours, font, syntax by extension, file name or fence language |
 | `TextSearch` | find in a text area with every match marked |
 | `Highlighter` | syntax colours for text painted outside a text area (the transcript); any thread |
 | `Diffs`, `DiffPane` | unified diff with three lines of context, coloured |
@@ -49,8 +49,8 @@ Text:
 | `SourceLinks` | `path/File.java:42` becomes a link that opens the file at the line |
 | `Plain` | `Plain.only(c)` turns HTML rendering off before text is set; `Plain.text(s)` guards a string starting with `<html>` |
 
-Rules: colours, fonts and spacing come from `Theme` (excepted: the transcript's `Style`, the terminal's palette, the
-light page `HtmlPane` draws documents on); placeholder, spinner and error states
+Rules: colours, fonts and spacing come from `Theme` (excepted: the transcript's `Style`, the terminal's palette);
+comando is dark throughout, with no light theme ([record 93](adr/0093-comando-is-dark-throughout.md)); placeholder, spinner and error states
 are `Overlay` (excepted: the terminal, whose placeholder starts the shell on a click and whose exit bar offers a
 restart); a user action is a `Command`; work from other threads reaches Swing
 through `Edt` or a `Coalescer`; a tooltip is one line of at most 80 characters, imperative and without a closing period,

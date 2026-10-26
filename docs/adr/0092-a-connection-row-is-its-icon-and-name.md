@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-26 | proposed | Miguel ("the connections tab items should follow a similar pattern as the session's minus the summary in the tooltip"), Claude (the icon's states, the card's facts, Copy details, the shared row) |
+| 2026-10-26 | accepted | Miguel ("the connections tab items should follow a similar pattern as the session's minus the summary in the tooltip"), Claude (the icon's states, the card's facts, Copy details, the shared row) |
 
 ## 1. Context
 

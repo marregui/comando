@@ -53,13 +53,12 @@ final class DiffWindow {
     private JDialog dialog;
 
     /**
-     * {@code reread} asks for the file shown again; it runs every few seconds while the window shows. {@code
-     * toggleTheme} switches every editor's theme, as a panel's theme button does; {@code writer} writes the file edited.
+     * {@code reread} asks for the file shown again; it runs every few seconds while the window shows; {@code writer}
+     * writes the file edited.
      */
-    DiffWindow(Window owner, Runnable reread, Runnable toggleTheme, IntentSink intents, ChangeEditor.Writer writer,
-               ResourceActions.Questions questions) {
+    DiffWindow(Window owner, Runnable reread, IntentSink intents, ChangeEditor.Writer writer, ResourceActions.Questions questions) {
         this.owner = owner;
-        this.editor = new ChangeEditor(intents, writer, questions, toggleTheme);
+        this.editor = new ChangeEditor(intents, writer, questions);
         editor.onGone(this::close);
         // macOS draws the window's close button with a dot while its document has unsaved changes
         editor.onModified(m -> {
@@ -133,11 +132,6 @@ final class DiffWindow {
             d.toFront();
             editor.diff().right().requestFocusInWindow();
         }
-    }
-
-    /** The light editor theme or the dark one, as every panel's editors take it. */
-    void light(boolean on) {
-        editor.light(on);
     }
 
     /** Hides the window; its edits are written as it hides. */

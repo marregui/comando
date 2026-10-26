@@ -32,6 +32,7 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -42,24 +43,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 class HtmlPaneTest {
 
     @Test
-    void onePaneTurnedLightLeavesTheOthersDarkAndRedrawsWhatItShows() throws Exception {
-        HtmlPane[] p = new HtmlPane[2];
+    void aPageIsDarkTheWindowsGroundWithItsCodeInTheEditorsColours() throws Exception {
+        HtmlPane[] p = new HtmlPane[1];
         SwingUtilities.invokeAndWait(() -> {
             p[0] = new HtmlPane();
-            p[1] = new HtmlPane();
             p[0].setMarkdown("# Plan\n\n```java\nint x = 1;\n```\n");
-            p[1].setMarkdown("# Notes");
-            p[0].setLight(true);
-            p[1].setMarkdown("# Notes again");
         });
-        assertThat(p[0].light()).isTrue();
-        assertThat(p[0].isOpaque()).isTrue();
-        assertThat(p[0].getBackground()).as("warm paper, not white").isEqualTo(HtmlPane.PAPER);
-        assertThat(bodyColor(p[0])).isEqualTo("#1f1f1f");
-        assertThat(bodyColor(p[1])).as("each pane keeps its own style sheet").isNotEqualTo("#1f1f1f");
-        assertThat(p[1].isOpaque()).isFalse();
-        assertThat(p[0].getText()).as("the code drawn again in the light theme's colours")
-                .contains(Theme.hex(Editors.colorOf(TokenTypes.RESERVED_WORD, true)).substring(1));
+        assertThat(p[0].isOpaque()).as("the window's ground shows through").isFalse();
+        assertThat(bodyColor(p[0])).isEqualTo(Theme.hex(Theme.TRANSCRIPT_TEXT).toLowerCase(Locale.ROOT));
+        assertThat(p[0].getText()).as("the code in the editor theme's colours")
+                .contains(Theme.hex(Editors.colorOf(TokenTypes.RESERVED_WORD)).substring(1));
     }
 
     @Test
@@ -320,7 +313,7 @@ class HtmlPaneTest {
             // the pane asked first, so its fill is posted before the last of these is heard
             for (String s : sources) {
                 CountDownLatch drawn = new CountDownLatch(1);
-                if (MermaidDiagrams.current().diagram(s, false, drawn::countDown) instanceof MermaidDiagrams.Diagram.Pending) {
+                if (MermaidDiagrams.current().diagram(s, drawn::countDown) instanceof MermaidDiagrams.Diagram.Pending) {
                     assertThat(drawn.await(10, TimeUnit.SECONDS)).isTrue();
                 }
             }

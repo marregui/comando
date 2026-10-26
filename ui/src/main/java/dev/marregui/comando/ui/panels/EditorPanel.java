@@ -95,10 +95,6 @@ public final class EditorPanel extends JPanel {
     private final JButton clear = iconButton();
     /** Shows the other view: the rendered Markdown while the text is edited, the text while it shows rendered. */
     private final JButton mode = iconButton();
-    /** Switches every editor between the light theme and the dark one. */
-    private final JButton theme = iconButton();
-    private Runnable themeToggle = () -> {
-    };
     /** Opens an HTML document in the browser, which renders it; shown for HTML only. */
     private final JButton browser = iconButton();
     private boolean previewing;
@@ -175,11 +171,8 @@ public final class EditorPanel extends JPanel {
         });
         showMode();
         mode.addActionListener(e -> showPreview(!previewing));
-        theme.addActionListener(e -> themeToggle.run());
-        showTheme(false);
         right.add(browser);
         right.add(mode);
-        right.add(theme);
         right.add(run);
         right.add(stop);
         right.add(clear);
@@ -472,29 +465,6 @@ public final class EditorPanel extends JPanel {
     /** For tests: the Clear button's click. */
     void clickClear() {
         clear.doClick();
-    }
-
-    /** How the theme button switches the editors; the workspace switches every panel's. */
-    public void onThemeToggle(Runnable toggle) {
-        themeToggle = toggle;
-    }
-
-    /** The light editor theme or the dark one, for the text and its rendered Markdown. */
-    public void light(boolean on) {
-        editor.light(on);
-        preview.light(on);
-        showTheme(on);
-    }
-
-    /** For tests. */
-    boolean light() {
-        return rendered.light();
-    }
-
-    private void showTheme(boolean light) {
-        theme.setIcon(Icons.get("theme"));
-        theme.setToolTipText(light ? "Switch every editor to dark" : "Switch every editor to light");
-        theme.getAccessibleContext().setAccessibleName(light ? "Dark editors" : "Light editors");
     }
 
     private void showMode() {

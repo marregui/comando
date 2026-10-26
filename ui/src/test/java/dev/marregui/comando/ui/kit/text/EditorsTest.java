@@ -1,6 +1,5 @@
 package dev.marregui.comando.ui.kit.text;
 
-import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.junit.jupiter.api.Test;
@@ -11,17 +10,6 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class EditorsTest {
-
-    @Test
-    void theLightThemeIsIntellijsLightOnWarmPaperAndTheDarkComesBackWhole() {
-        RSyntaxTextArea area = Editors.viewer("java");
-        Color dark = area.getBackground();
-        Editors.theme(area, true);
-        assertThat(area.getBackground()).as("the preview's paper, not white").isEqualTo(HtmlPane.PAPER);
-        assertThat(Editors.colorOf(TokenTypes.RESERVED_WORD, true)).isEqualTo(new Color(0x0033B3));
-        Editors.theme(area, false);
-        assertThat(area.getBackground()).isEqualTo(dark);
-    }
 
     @Test
     void theThemeHasIntellijsDarkColours() {

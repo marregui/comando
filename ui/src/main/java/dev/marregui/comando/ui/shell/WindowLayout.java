@@ -122,14 +122,6 @@ final class WindowLayout {
         return prefs.getBoolean("sessions.manualOrder", false);
     }
 
-    boolean lightEditors() {
-        return prefs.getBoolean("editor.light", false);
-    }
-
-    void lightEditors(boolean light) {
-        prefs.putBoolean("editor.light", light);
-    }
-
     /** Linear's workspace and team keys as learnt from its links, which make a tab card's tickets links. */
     LinearTickets.Site linearSite() {
         String teams = prefs.get("linear.teams", "");

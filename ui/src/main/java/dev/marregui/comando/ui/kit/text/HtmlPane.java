@@ -20,7 +20,6 @@ import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
-import java.awt.Color;
 import java.awt.Font;
 import java.awt.Dimension;
 import java.awt.Insets;
@@ -64,14 +63,6 @@ public class HtmlPane extends JEditorPane {
         links = handler;
     }
 
-    /** The text of a light page. */
-    private static final Color LIGHT_TEXT = new Color(0x1F1F1F);
-    /** A light page's ground: warm paper, as the light editor's, rather than white, which tires the eye. */
-    public static final Color PAPER = new Color(0xF5F0E6);
-
-    /** Whether the pane shows a light page: dark text on warm paper, code and diagrams in light colours. */
-    private boolean light;
-
     /** A change of width smaller than this keeps the pictures as they are sized. */
     private static final int RESIZE_SLACK = 16;
     /** The width the page's pictures and diagrams were sized for; -1 when it has none. */
@@ -83,7 +74,7 @@ public class HtmlPane extends JEditorPane {
         setContentType("text/html");
         resized.setRepeats(false);
         OwnStyles kit = new OwnStyles();
-        kit.setStyleSheet(styles(false));
+        kit.setStyleSheet(styles());
         setEditorKit(kit);
         setEditable(false);
         setOpaque(false);
@@ -181,18 +172,6 @@ public class HtmlPane extends JEditorPane {
         }
     }
 
-    /**
-     * Shows a light page (dark text on warm paper, code and diagrams in light colours) or a dark one, the window's; what is
-     * shown is drawn again in the new colours.
-     */
-    public void setLight(boolean on) {
-        if (on == light) {
-            return;
-        }
-        light = on;
-        restyle();
-    }
-
     /** Stops hearing the gold chosen; set while the pane is in a window. */
     private Runnable stopHearingGold;
 
@@ -200,11 +179,7 @@ public class HtmlPane extends JEditorPane {
     public void addNotify() {
         super.addNotify();
         // a dark page's headings, table heads and rules are the gold chosen: another chosen, the page is drawn again
-        stopHearingGold = Theme.onGold(() -> {
-            if (!light) {
-                restyle();
-            }
-        });
+        stopHearingGold = Theme.onGold(this::restyle);
     }
 
     @Override
@@ -216,16 +191,11 @@ public class HtmlPane extends JEditorPane {
         super.removeNotify();
     }
 
-    /** The page drawn again under the rules of its theme and the gold chosen. */
+    /** The page drawn again under its rules and the gold chosen. */
     private void restyle() {
-        boolean on = light;
         String html = markdown == null ? getText() : null;
         HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
-        kit.setStyleSheet(styles(on));
-        // the pane honours its display properties: its foreground is the body's colour, over the style sheet's
-        setForeground(on ? LIGHT_TEXT : Theme.TRANSCRIPT_TEXT);
-        setOpaque(on);
-        setBackground(on ? PAPER : null);
+        kit.setStyleSheet(styles());
         // setText fills the document it has, which keeps the style sheet it was made with: a new one takes the new rules
         setDocument(kit.createDefaultDocument());
         if (markdown != null) {
@@ -235,23 +205,18 @@ public class HtmlPane extends JEditorPane {
         }
     }
 
-    public boolean light() {
-        return light;
-    }
-
     /**
-     * The rules of a light page or a dark one, over Swing's defaults. A dark page reads as a turn's answer in the
-     * transcript: ivory text, headings in the headings' serif and the chosen gold over a gold rule, gold table heads on a
+     * The page's rules, over Swing's defaults. It reads as a turn's answer in the transcript: ivory text, headings in the headings' serif and the chosen gold over a gold rule, gold table heads on a
      * band of the gold's shade, bold brighter, inline code teal, quotes beside a gold bar.
      */
-    static StyleSheet styles(boolean light) {
+    static StyleSheet styles() {
         StyleSheet css = new StyleSheet();
         css.addStyleSheet(new HTMLEditorKit().getStyleSheet());
-        String fg = Theme.hex(light ? LIGHT_TEXT : Theme.TRANSCRIPT_TEXT);
-        String card = light ? "#ece5d6" : Theme.hex(Theme.CARD);
-        String border = light ? "#d6cdba" : Theme.hex(Theme.CARD_BORDER);
-        String muted = light ? "#6c707e" : Theme.hex(Theme.MUTED);
-        String link = light ? "#006dcc" : Theme.hex(Theme.ACCENT);
+        String fg = Theme.hex(Theme.TRANSCRIPT_TEXT);
+        String card = Theme.hex(Theme.CARD);
+        String border = Theme.hex(Theme.CARD_BORDER);
+        String muted = Theme.hex(Theme.MUTED);
+        String link = Theme.hex(Theme.ACCENT);
         String mono = Theme.mono().getFamily();
         int size = UIManager.getFont("Label.font").getSize();
         css.addRule("body { font-family: sans-serif; font-size: " + size + "pt; color: " + fg + "; margin: 0; }");
@@ -268,26 +233,24 @@ public class HtmlPane extends JEditorPane {
         css.addRule("td { border: 1px solid " + border + "; padding: 2px 6px; }");
         css.addRule("blockquote { margin-left: 8px; color: " + muted + "; }");
         css.addRule("ul, ol { margin-left: 18px; margin-top: 2px; margin-bottom: 4px; }");
-        if (!light) {
-            Gold gold = Theme.gold();
-            String rule = Theme.hex(Gold.over(Theme.TRANSCRIPT, gold.shade, 0.7f));
-            String serif = Theme.serif().getFamily();
-            css.addRule("h1, h2, h3 { font-family: '" + serif + "'; font-weight: bold; color: " + Theme.hex(gold.body) + "; }");
-            css.addRule("h1, h2 { border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: " + rule
-                    + "; padding-bottom: 3px; }");
-            css.addRule("b, strong { color: #FAF7F0; }");
-            css.addRule("code { color: #8FC9C0; background-color: #26282C; }");
-            css.addRule("th { color: " + Theme.hex(gold.highlight) + "; background-color: "
-                    + Theme.hex(Gold.over(Theme.TRANSCRIPT, gold.shade, 0.22f)) + "; }");
-            css.addRule("blockquote { color: " + fg + "; font-style: italic; border-left-width: 3px; border-left-style: solid; "
-                    + "border-left-color: " + Theme.hex(gold.body) + "; padding-left: 8px; }");
-        }
+        Gold gold = Theme.gold();
+        String rule = Theme.hex(Gold.over(Theme.TRANSCRIPT, gold.shade, 0.7f));
+        String serif = Theme.serif().getFamily();
+        css.addRule("h1, h2, h3 { font-family: '" + serif + "'; font-weight: bold; color: " + Theme.hex(gold.body) + "; }");
+        css.addRule("h1, h2 { border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: " + rule
+                + "; padding-bottom: 3px; }");
+        css.addRule("b, strong { color: #FAF7F0; }");
+        css.addRule("code { color: #8FC9C0; background-color: #26282C; }");
+        css.addRule("th { color: " + Theme.hex(gold.highlight) + "; background-color: "
+                + Theme.hex(Gold.over(Theme.TRANSCRIPT, gold.shade, 0.22f)) + "; }");
+        css.addRule("blockquote { color: " + fg + "; font-style: italic; border-left-width: 3px; border-left-style: solid; "
+                + "border-left-color: " + Theme.hex(gold.body) + "; padding-left: 8px; }");
         return css;
     }
 
     /**
      * Swing's kit with a style sheet of its own: {@link HTMLEditorKit#setStyleSheet} sets one shared by every kit, so
-     * one pane turned light would turn every pane light.
+     * one pane's rules would become every pane's.
      */
     private static final class OwnStyles extends HTMLEditorKit {
         private StyleSheet styles;
@@ -340,8 +303,8 @@ public class HtmlPane extends JEditorPane {
         this.markdown = markdown;
         sizedFor = -1;
         waitingFor.clear();
-        String html = MarkdownHtml.render(markdown, this::diagram, light, this::picture, marks);
-        setHtml(light ? html : fallBackInHeadings(html, Theme.serif()));
+        String html = MarkdownHtml.render(markdown, this::diagram, this::picture, marks);
+        setHtml(fallBackInHeadings(html, Theme.serif()));
     }
 
     /**
@@ -472,15 +435,14 @@ public class HtmlPane extends JEditorPane {
     }
 
     private String diagram(String source) {
-        boolean drawnLight = light;
-        MermaidDiagrams.Diagram d = MermaidDiagrams.current().diagram(source, drawnLight, arrived);
+        MermaidDiagrams.Diagram d = MermaidDiagrams.current().diagram(source, arrived);
         sizedFor = getWidth();
         String html = diagramHtml(source, d, pictureWidth());
         if (!(d instanceof MermaidDiagrams.Diagram.Pending)) {
             return html;
         }
         String id = waiting(() -> {
-            MermaidDiagrams.Diagram now = MermaidDiagrams.current().diagram(source, drawnLight, arrived);
+            MermaidDiagrams.Diagram now = MermaidDiagrams.current().diagram(source, arrived);
             return now instanceof MermaidDiagrams.Diagram.Pending ? null : diagramHtml(source, now, pictureWidth());
         });
         return "<div id=\"" + id + "\">" + html + "</div>";

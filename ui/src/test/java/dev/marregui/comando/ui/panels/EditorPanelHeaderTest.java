@@ -50,32 +50,14 @@ class EditorPanelHeaderTest {
     };
 
     @Test
-    void theThemeButtonSwitchesEveryEditorAndItsPreviewAndTheChoiceIsTold() throws Exception {
-        List<Boolean> told = new CopyOnWriteArrayList<>();
+    void aPanelsHeaderHasNoThemeSwitchComandoIsDarkThroughout() throws Exception {
         Workspace[] w = new Workspace[1];
-        AppState[] s = new AppState[1];
         SwingUtilities.invokeAndWait(() -> {
             w[0] = new Workspace(i -> { }, TEXTS, new SchemaRegistry());
-            w[0].onThemeChanged(told::add);
-            s[0] = AppState.initial(List.of(new PanelState(A, "one", "", ""), new PanelState(B, "two", "", "")), List.of(), List.of());
-            w[0].render(s[0]);
+            w[0].render(AppState.initial(List.of(new PanelState(A, "one", "", "")), List.of(), List.of()));
         });
-        assertThat(w[0].panel(A).light()).as("dark by default").isFalse();
-
-        SwingUtilities.invokeAndWait(() -> button(w[0].panel(A), "Light editors").doClick());
-        assertThat(told).containsExactly(true);
-        assertThat(w[0].panel(A).light()).isTrue();
-        assertThat(w[0].panel(B).light()).as("every panel, not only the one clicked").isTrue();
-        assertThat(button(w[0].panel(B), "Dark editors")).as("the button names the other theme").isNotNull();
-
-        PanelId c = new PanelId("c");
-        SwingUtilities.invokeAndWait(() -> w[0].render(s[0].withPanels(List.of(s[0].panels().get(0), s[0].panels().get(1),
-                new PanelState(c, "three", "", "")), A)));
-        assertThat(w[0].panel(c).light()).as("a panel opened later follows the choice").isTrue();
-
-        SwingUtilities.invokeAndWait(() -> button(w[0].panel(B), "Dark editors").doClick());
-        assertThat(told).containsExactly(true, false);
-        assertThat(List.of(w[0].panel(A).light(), w[0].panel(B).light(), w[0].panel(c).light())).containsOnly(false);
+        assertThat(button(w[0].panel(A), "Light editors")).as("no theme button (record 93)").isNull();
+        assertThat(button(w[0].panel(A), "Dark editors")).isNull();
     }
 
     @Test
@@ -183,7 +165,7 @@ class EditorPanelHeaderTest {
     void theHeadersButtonsAreIconsWithoutWords() throws Exception {
         EditorPanel[] p = new EditorPanel[1];
         SwingUtilities.invokeAndWait(() -> p[0] = new EditorPanel(new PanelState(A, "one", "", ""), i -> { }, new SchemaRegistry()));
-        for (String name : List.of("Preview", "Light editors", "Run", "Stop", "Clear")) {
+        for (String name : List.of("Preview", "Run", "Stop", "Clear")) {
             AbstractButton b = button(p[0], name);
             assertThat(b).as(name).isNotNull();
             assertThat(b.getText()).as(name).isNullOrEmpty();

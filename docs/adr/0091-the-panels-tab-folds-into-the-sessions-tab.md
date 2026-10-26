@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-26 | proposed | Miguel (the Panels tab is a second way to reach the same panels; one list; no Clone), Claude (the section under the sessions, its rows and menu, the saved tab) |
+| 2026-10-26 | accepted | Miguel (the Panels tab is a second way to reach the same panels; one list; no Clone), Claude (the section under the sessions, its rows and menu, the saved tab) |
 
 ## 1. Context
 

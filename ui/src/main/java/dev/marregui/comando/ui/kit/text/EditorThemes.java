@@ -8,33 +8,26 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 
-/** The editors' two colour themes, IntelliJ's Dark and Light, each loaded once from its XML. */
+/** The editors' colour theme, IntelliJ's Dark, loaded once from its XML: comando is dark throughout. */
 final class EditorThemes {
 
     private static Theme dark;
-    private static Theme light;
 
     private EditorThemes() {
     }
 
-    static void apply(RSyntaxTextArea area, boolean light) {
-        Theme theme = theme(light);
+    static void apply(RSyntaxTextArea area) {
+        Theme theme = theme();
         theme.apply(area);
         // each area its own copy: a zoom rewrites its scheme's fonts, which would reach every other editor
         area.setSyntaxScheme((SyntaxScheme) theme.scheme.clone());
     }
 
-    static SyntaxScheme scheme(boolean light) {
-        return theme(light).scheme;
+    static SyntaxScheme scheme() {
+        return theme().scheme;
     }
 
-    private static synchronized Theme theme(boolean isLight) {
-        if (isLight) {
-            if (light == null) {
-                light = load("editor-light.xml");
-            }
-            return light;
-        }
+    private static synchronized Theme theme() {
         if (dark == null) {
             dark = load("editor-dark.xml");
         }

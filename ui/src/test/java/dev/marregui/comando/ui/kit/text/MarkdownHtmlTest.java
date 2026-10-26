@@ -21,7 +21,7 @@ class MarkdownHtmlTest {
         assertThat(MarkdownHtml.render("Setext title\n============")).contains("<h1 id=\"setext-title\">");
         assertThat(MarkdownHtml.render("## A\n\n## A\n\n## A-1\n\n## A")).as("a taken id counts on, as GitHub's")
                 .contains("id=\"a\"", "id=\"a-1\"", "id=\"a-1-1\"", "id=\"a-2\"");
-        assertThat(MarkdownHtml.render("## Notes", null, true, MarkdownHtml.Pictures.NONE)).as("every renderer, light or not")
+        assertThat(MarkdownHtml.render("## Notes", null, MarkdownHtml.Pictures.NONE)).as("every renderer")
                 .contains("id=\"notes\"");
         assertThat(MarkdownHtml.render("## Notes")).as("ids count from the top of each document").contains("id=\"notes\"");
         assertThat(MarkdownHtml.render("a paragraph")).doesNotContain("id=");
@@ -48,13 +48,6 @@ class MarkdownHtmlTest {
     }
 
     @Test
-    void aLightPageTakesTheLightThemesColours() {
-        assertThat(MarkdownHtml.render("```java\nreturn \"x\";\n```\n", null, true))
-                .contains("<font color=\"#0033b3\">return</font>")
-                .contains("<font color=\"#067d17\">\"x\"</font>");
-    }
-
-    @Test
     void aCodeBlockWithoutALanguageIsPlainAndEscaped() {
         assertThat(MarkdownHtml.render("```\n<script>x</script>\n```\n"))
                 .contains("<pre class=\"code\"><code>&lt;script&gt;x&lt;/script&gt;\n</code></pre>")
@@ -71,7 +64,7 @@ class MarkdownHtmlTest {
         String md = "# Title\n\nFirst para.\n\nSecond para has words.\n\n- a\n- b\n\n| x | y |\n|---|---|\n| 1 | 2 |\n\n```java\nint x;\n```\n";
         int word = md.indexOf("words");
         MarkdownHtml.Marks marks = new MarkdownHtml.Marks(Set.of(4, 7, 11, 14), List.of(new int[] {word, word + 5}), true);
-        String html = MarkdownHtml.render(md, null, false, MarkdownHtml.Pictures.NONE, marks);
+        String html = MarkdownHtml.render(md, null, MarkdownHtml.Pictures.NONE, marks);
         String line = "background-color: " + Theme.hex(Theme.DIFF_ADDED);
         String strong = "background-color: " + Theme.hex(Theme.DIFF_ADDED_WORD);
         assertThat(html).contains("<p style=\"" + line + "\">Second para has <span style=\"" + strong + "\">words</span>.</p>")
@@ -79,9 +72,9 @@ class MarkdownHtmlTest {
                 .contains("<td style=\"" + line + "\">1</td>", "<td style=\"" + line + "\">2</td>")
                 .contains("<pre class=\"code\" style=\"" + line + "\">");
 
-        String older = MarkdownHtml.render("Gone\n", null, true, MarkdownHtml.Pictures.NONE, new MarkdownHtml.Marks(Set.of(0), List.of(), false));
-        assertThat(older).as("the older side in red, in the light theme's").contains("<p style=\"background-color: " + Theme.hex(Theme.DIFF_REMOVED_LIGHT) + "\">Gone</p>");
-        assertThat(MarkdownHtml.render(md, null, false, MarkdownHtml.Pictures.NONE, MarkdownHtml.Marks.NONE))
+        String older = MarkdownHtml.render("Gone\n", null, MarkdownHtml.Pictures.NONE, new MarkdownHtml.Marks(Set.of(0), List.of(), false));
+        assertThat(older).as("the older side in red").contains("<p style=\"background-color: " + Theme.hex(Theme.DIFF_REMOVED) + "\">Gone</p>");
+        assertThat(MarkdownHtml.render(md, null, MarkdownHtml.Pictures.NONE, MarkdownHtml.Marks.NONE))
                 .as("no marks: as ever").isEqualTo(MarkdownHtml.render(md));
     }
 }

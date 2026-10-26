@@ -17,8 +17,8 @@ class EditorThemesTest {
         SwingUtilities.invokeAndWait(() -> {
             RSyntaxTextArea zoomed = new RSyntaxTextArea();
             RSyntaxTextArea other = new RSyntaxTextArea();
-            EditorThemes.apply(zoomed, false);
-            EditorThemes.apply(other, false);
+            EditorThemes.apply(zoomed);
+            EditorThemes.apply(other);
             Style comment = other.getSyntaxScheme().getStyle(TokenTypes.COMMENT_DOCUMENTATION);
             Font before = comment.font;
 

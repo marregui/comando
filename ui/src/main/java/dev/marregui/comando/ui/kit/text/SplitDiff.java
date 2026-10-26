@@ -84,10 +84,8 @@ public final class SplitDiff {
     private boolean revealing;
     /** The difference last scrolled to, -1 when none or when the user scrolled since. */
     private int current = -1;
-    /** The comparison shown, kept so a change of theme colours it again. */
+    /** The comparison shown. */
     private Model model = new Model("", "", List.of(), List.of(), List.of(), "", true);
-    /** Whether the editors take the light theme. */
-    private boolean light;
 
     public SplitDiff() {
         for (JLabel l : List.of(leftTitle, rightTitle)) {
@@ -382,35 +380,16 @@ public final class SplitDiff {
         return pos + shift;
     }
 
-    /**
-     * The light editor theme or the dark one, as every panel's editors take it: the texts' colours, the line numbers and
-     * the colours of the differences.
-     */
-    public void light(boolean on) {
-        if (on == light) {
-            return;
-        }
-        light = on;
-        Editors.theme(left, on);
-        Editors.theme(right, on);
-        mark(model);
-        connector.repaint();
-    }
-
-    public boolean isLight() {
-        return light;
-    }
-
     /** Colours the lines each difference touches, then the words inside a changed stretch that differ. */
     private void mark(Model model) {
         left.removeAllLineHighlights();
         right.removeAllLineHighlights();
         left.getHighlighter().removeAllHighlights();
         right.getHighlighter().removeAllHighlights();
-        Highlighter.HighlightPainter removed = new DefaultHighlighter.DefaultHighlightPainter(light ? Theme.DIFF_REMOVED_WORD_LIGHT : Theme.DIFF_REMOVED_WORD);
-        Highlighter.HighlightPainter added = new DefaultHighlighter.DefaultHighlightPainter(light ? Theme.DIFF_ADDED_WORD_LIGHT : Theme.DIFF_ADDED_WORD);
-        Color lost = light ? Theme.DIFF_REMOVED_LIGHT : Theme.DIFF_REMOVED;
-        Color gained = light ? Theme.DIFF_ADDED_LIGHT : Theme.DIFF_ADDED;
+        Highlighter.HighlightPainter removed = new DefaultHighlighter.DefaultHighlightPainter(Theme.DIFF_REMOVED_WORD);
+        Highlighter.HighlightPainter added = new DefaultHighlighter.DefaultHighlightPainter(Theme.DIFF_ADDED_WORD);
+        Color lost = Theme.DIFF_REMOVED;
+        Color gained = Theme.DIFF_ADDED;
         try {
             for (Chunk c : chunks) {
                 for (int i = c.leftStart(); i < c.leftEnd(); i++) {

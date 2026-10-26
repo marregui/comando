@@ -44,9 +44,4 @@ public final class RenderedMarkdown {
         pane.setMarkdown(markdown, folder, marks);
         pane.setCaretPosition(0);
     }
-
-    /** The light paper or the dark one, as the editors take it. */
-    public void light(boolean on) {
-        pane.setLight(on);
-    }
 }
