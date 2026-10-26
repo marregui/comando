@@ -64,7 +64,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
     private final IntentSink sink;
     private final ConsoleRegistry consoles;
-    /** Read at each run, so a kit installed while comando runs serves the next run. */
+    /** Read at each run, so a {@code gradle-serial} installed while comando runs serves the next run. */
     private final Supplier<ToolSettings> settings;
     private final Trash trash;
     private final Git git;

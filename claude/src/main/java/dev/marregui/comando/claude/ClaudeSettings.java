@@ -13,8 +13,14 @@ import java.util.List;
  * @param runDir        where per-session MCP config files live while a process runs
  * @param projectsDir   Claude Code's stored conversations: {@code projects} in its folder ({@link HomeDir#claudeDir})
  * @param uiInstructions text passed with {@code --append-system-prompt}; empty for none
+ * @param launch        what each process gets from the kit root: its folder and the kit's settings
  */
-public record ClaudeSettings(String executable, Path runDir, Path projectsDir, String uiInstructions) {
+public record ClaudeSettings(String executable, Path runDir, Path projectsDir, String uiInstructions, RootLaunch launch) {
+
+    /** On the environment comando was started with: tests. */
+    public ClaudeSettings(String executable, Path runDir, Path projectsDir, String uiInstructions) {
+        this(executable, runDir, projectsDir, uiInstructions, RootLaunch.INHERIT);
+    }
 
     /** Finds {@code claude}: a GUI app launched from Finder has a short PATH, so known install paths come first. */
     public static String findExecutable() {
@@ -26,9 +32,5 @@ public record ClaudeSettings(String executable, Path runDir, Path projectsDir, S
             }
         }
         return "claude";
-    }
-
-    public static Path defaultProjectsDir() {
-        return HomeDir.claudeDir().resolve("projects");
     }
 }

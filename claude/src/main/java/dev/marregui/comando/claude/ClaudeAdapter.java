@@ -579,10 +579,11 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             return;
         }
         try {
-            var argv = ClaudeCommand.of(settings.executable(), spec, newId, run.mcpConfig, settings.uiInstructions());
+            RootLaunch launch = settings.launch().forSession(spec.name(), spec.workDir());
+            var argv = launch.argv(ClaudeCommand.of(settings.executable(), spec, newId, run.mcpConfig, settings.uiInstructions()));
             s.workDir = workDir;
             s.mapper.resetStreams();
-            run.process = ClaudeProcess.start(s.name, argv, workDir, Map.of(),
+            run.process = ClaudeProcess.start(s.name, argv, workDir, launch,
                     line -> s.run(() -> onLine(s, line)),
                     code -> s.run(() -> onExit(s, run, code)));
             s.current = run;
@@ -593,7 +594,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 s.transcript.clear();
                 s.mapper.forgetBlocks();
             }
-            LOG.log(System.Logger.Level.INFO, "claude started [session=" + s.name + ", pid=" + run.process.pid() + ", mode=" + spec.startMode() + ']');
+            LOG.log(System.Logger.Level.INFO, "claude started [session=" + s.name + ", pid=" + run.process.pid() + ", mode=" + spec.startMode()
+                    + ", env=" + launch + ']');
             s.mapper.note(Block.NoteKind.INFO, switch (spec.startMode()) {
                 case NEW -> "New conversation " + newId;
                 case RESUME -> "Resumed conversation " + spec.claudeSessionId();
@@ -761,7 +763,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         planUsage.scheduleWithFixedDelay(() -> {
             // an exception escaping a periodic task cancels every later run
             try {
-                PlanUsage usage = PlanUsageReader.read(settings.executable(), settings.runDir(), json);
+                PlanUsage usage = PlanUsageReader.read(settings.executable(), settings.launch(), settings.runDir(), json);
                 if (!usage.problem().isEmpty()) {
                     LOG.log(System.Logger.Level.WARNING, "cannot read the plan's usage limits: " + usage.problem());
                 }

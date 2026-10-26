@@ -21,13 +21,14 @@ the EDT and ends in an intent. It depends on `core` only.
 | `TestReports` | JUnit XML written since the run started, as a tree with failures first, each linked to its source line |
 | `FolderTree` | a folder as a tree, ordered and bounded (12 levels; 80 000 names listed, 20 000 entries kept), without the entries a caller skips |
 | `ListingLines` | the lines a listing file (such as a scratchpad day's `INDEX.md`) gives an entry, taken out once the entry went to the Trash |
-| `ToolSettings` | where the tools are, by convention: the kit's `gradle-serial` when it is executable, and the JDK for child processes |
+| `ToolSettings` | where the tools are, by convention: a `gradle-serial` on comando's `PATH` when there is one, and the JDK for child processes |
+| `KitGit` | the kit's root and brain as git checkouts: `git describe --tags --always` and the newer `vX.Y.Z` tags of `git ls-remote --tags origin` (`core`'s `KitVersion`); the brain's backup, `git add -A`, a commit `Brain backup <date>` when anything changed, `git push`, only when the brain is a repository of its own with a remote; remote runs bounded at 120 s |
 
 - **A Gradle run.** The process runs on a virtual thread that copies its output into the run's `Console` (past 4 MB
   the rest is held and its last 64 kB shown at the end) and sends `CommandFinished` with the exit code, the test tree
   and the failures. A stop sends SIGTERM to the process tree, SIGKILL 2 s later; output is read at most 2 s after the
   process exits.
-- **Settings per run.** `ToolsAdapter` takes a `Supplier<ToolSettings>` and asks it at each run, so a kit installed
+- **Settings per run.** `ToolsAdapter` takes a `Supplier<ToolSettings>` and asks it at each run, so a `gradle-serial` installed
   while comando runs is used from the next run.
 - **Folders.** `readFolders` reads once and sends each tree; `watchFolders` replaces the set the poll reads, and the
   poll sends a tree only when it changed. Reads are ticketed, so an older read never overwrites a newer one.
@@ -60,8 +61,11 @@ flowchart LR
 | `ToolsAdapter.pollFolders(every)` | starts the folder poll | `app` at start (every 5 s) |
 | `ToolsAdapter.Trash` | `moveToTrash(file)`; `Trash.NONE` for tests and desktops without one | implemented in `ui` (`DesktopTrash`), passed in by `app`, so `tools` never imports Swing or AWT |
 
-**Needs.** The `IntentSink`, the `ConsoleRegistry` it writes, a `Supplier<ToolSettings>` (`app` builds it from
-`claude`'s `Kit.gradleSerial()`), and a `Trash`.
+**Needs.** The `IntentSink`, the `ConsoleRegistry` it writes, a `Supplier<ToolSettings>` (`app` passes
+`ToolSettings::now`), and a `Trash`.
+
+`KitGit` is used by `app` alone, off the EDT: the kit's version at start and every 6 hours, and the brain's backup when
+the user asks for it.
 
 **Sends back.** `CommandFinished` (the reducer updates the run's console view and may ask for a desktop
 notification), `FolderLoaded` (the reducer turns it into a `ShowFolder` effect for the Files tab), `ReposLoaded`

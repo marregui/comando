@@ -45,7 +45,7 @@ class MenusTest {
         assertThat(ids(bar)).containsExactly(
                 "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
                 "view.palette", "terminal.restart", "run.plotStop", "server.start", "server.stop",
-                "help.tutorial", "help.keys", "help.markdown", "help.kit", "help.log", "help.dataRoot");
+                "help.tutorial", "help.keys", "help.markdown", "help.log", "help.dataRoot");
         assertThat(submenus(bar)).as("flat").isEmpty();
         assertThat(bar.get(1).entries().stream().filter(e -> !(e instanceof MenuEntry.Item)).count())
                 .as("separators between the palette, the shell and plots, the server, help").isEqualTo(3);

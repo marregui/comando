@@ -28,10 +28,10 @@ test trees, and a browser over folders of documents.
 
 | Module | Holds | Depends on |
 |---|---|---|
-| `core` | state, intents, reducer, effects, ports, the stores outside the state, the SQL-or-prompt classifier | JDK only |
+| `core` | state, intents, reducer, effects, ports, the stores outside the state, the SQL-or-prompt classifier, the root sessions run on and its kit (`KitRoot`) | JDK only |
 | `testkit` | fakes for every effect port, a fake clock, recorded Claude streams, a synthetic session, a recording intent sink | `core` |
 | `db` | JDBC lanes (one thread per connection), cancel, columnar results, schema reading, queries for Claude | `core`, pgjdbc |
-| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, the Claude Code kit (`Kit`) | `core`, Jackson |
+| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, `kit.json` read (`KitJson`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log | `core`, Jackson |
 | `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash, the folders' git repositories (the `git` command line) | `core` |
 | `ui` | the Swing shell, panels, dialogs, the kit, the widgets | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
@@ -165,7 +165,8 @@ it throw: an intent naming a missing panel, connection or session changes nothin
 - **The folders window.** `SaveFolders` replaces the folders and saves them; its notice says when it replaced a change
   to `folders.json` read while the window was open; a list naming one folder twice saves nothing.
 - **The user's file.** `FoldersRead`, `folders.json` read again after the user changed it, replaces the folders and
-  saves nothing; `AddFolder`, the kit's, saves.
+  saves nothing. The kit's folders join the list read at start, once per root, and are saved
+  ([Workbench §7.3](workbench.md#73-the-files-tab)).
 
 ### 4.4 Effects
 
@@ -274,8 +275,9 @@ default.
 | `claude-in-`, `claude-exit-<session>` | K6 | the stdin queue; the wait for the process's exit, then the stderr tail |
 | `git-out`, `git-err`, `tool-output-<run>`, `keychain-output`, `claude-output`, `claude-version` | K6 | one process's output while its caller waits for it, bounded |
 | `gradle-<run>`, `tool-kill-<run>`, `folder-read`, `repo-read`, `file-trash` | K5 (`ToolsAdapter`) | a run's process; SIGKILL what a stop left alive after 2 s; folder and repository reads; moving files to the Trash |
-| `claude-version`, `kit`, `questdb-toggle` | K5 (`App`, `EmbeddedQuestDb`) | the start-up checks; one start or stop of the embedded QuestDB |
-| `open-file`, `show-file`, `log-entry`, `open-link`, `external-editor`, `notify`, `export`, `plot-prepare`, `diff-compute`, `folder-facts`, `read-conversations`, `opened-files`, the tutorial's and the kit's | K5 (`UiErrands`) | one blocking call each off the EDT |
+| `kit-check` | K4, timed | the kit's version and newer tags, at start and every 6 hours |
+| `claude-version`, `questdb-toggle` | K5 (`App`, `EmbeddedQuestDb`) | the start-up check; one start or stop of the embedded QuestDB |
+| `open-file`, `show-file`, `log-entry`, `open-link`, `external-editor`, `notify`, `export`, `plot-prepare`, `diff-compute`, `folder-facts`, `read-conversations`, `opened-files`, `kit-status`, `brain-backup`, the tutorial's | K5 (`UiErrands`) | one blocking call each off the EDT |
 | MCP requests; a connection test, a cancel | owned per-task executors | JSON-RPC (an `approve` call waits for its card); `DbAdapter`'s testers and cancellers |
 | `exit`, `shutdown` | platform, at quit only | close the application after Quit, or from the shutdown hook |
 
@@ -396,7 +398,6 @@ over HTTP.
 |---|---|---|
 | keychain round trip | `./gradlew test -PkeychainTest=true` | writes and deletes a login keychain item |
 | window replay | `./gradlew :app:uiTest` | needs a display; its windows open on no screen and take no focus |
-| the kit with the real Claude Code | `COMANDO_KIT_LIVE=true ./gradlew :claude:test --tests '*KitLiveTest'` | runs the installed `claude` in a throwaway `CLAUDE_CONFIG_DIR` |
 
 Gates:
 
@@ -414,7 +415,13 @@ in its log ([UI §1](ui.md#1-the-kit)); the packaged runtime keeps `jdk.jfr`, `j
 CI (`.github/workflows/build.yml`, Temurin 25, actions pinned by SHA) runs `build`, `:app:uiTest`
 (under `xvfb-run` on Ubuntu), a test summary (`ci/TestReport.java`), the transcript gate (reported, not enforced), and on
 macOS `:app:dmg` as a packaging smoke test. Ubuntu runs on every push and pull request that changes more than the docs
-(`docs/tutorial.md` and `kit/` count as code: the jars bundle them); macOS, whose minutes bill at ten times Ubuntu's on a
+(`docs/tutorial.md` counts as code: the ui jar bundles it); macOS, whose minutes bill at ten times Ubuntu's on a
 private repository, runs weekly and on demand (`workflow_dispatch`). `dependabot.yml` groups monthly updates of the
 actions and the Gradle dependencies. `./gradlew :app:dmg` builds an unsigned disk image with `jpackage` and a runtime of the modules listed in `app/build.gradle.kts`
 ([decision 16](adr/0016-unsigned-macos-build.md)).
+
+Releases (`.github/workflows/release.yml`): a pushed tag `v*` runs `:app:package` with `-PreleaseVersion=<tag without
+v>` on `macos-latest`, `ubuntu-latest` and `windows-latest`, without the tests, keeps each file as an artifact, and a
+last job on Ubuntu makes the tag's GitHub release with the three files and the commits since the previous tag as its
+notes. Run by hand (`workflow_dispatch`), it builds the three files as artifacts kept 7 days and makes no release
+unless it runs on a tag with dry run off. Nothing is signed; [INSTALL.md](../INSTALL.md) is the install recipe.

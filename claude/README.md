@@ -2,8 +2,8 @@
 
 The Claude Code adapter: one headless `claude -p` process per session, speaking stream-JSON on standard input and
 output, mapped into transcript blocks and intents. It also lists the conversations Claude Code stored, follows
-sub-agents' stored conversations, reads the plan's usage, checks the installed CLI's version, and installs comando's
-Claude Code kit. It depends on `core` and Jackson.
+sub-agents' stored conversations, reads the plan's usage, checks the installed CLI's version, and reads a kit's
+`kit.json`, so that every `claude` it starts runs on the kit's root. It depends on `core` and Jackson.
 
 1. [Architecture](#1-architecture)
 2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
@@ -24,8 +24,9 @@ Claude Code kit. It depends on `core` and Jackson.
 | `ClaudeTopics` | the tabs' topics: one line each from Haiku (`claude --safe-mode -p --model haiku`, no tools, no thinking, no saved session), one read at a time, one ask waiting per tab |
 | `ClaudeVersion` | `claude --version` against the tested line (2.1.296 up to 2.2.0): a warning outside it, not a refusal |
 | `GitBranch` | the working directory's branch from `.git/HEAD`, without running git |
-| `Kit` | comando's Claude Code plugin (the repository's `kit/`), copied into the data root and installed through Claude Code's plugin commands with the user's consent |
-| `ClaudeSettings` | the executable (found in the usual install paths, since an app started from Finder has a short `PATH`), the MCP configuration folder, Claude Code's `projects` folder, the appended instructions |
+| `KitJson` | a kit's `kit.json` (schema version 1) read into `core`'s `KitRoot.Manifest`, refused whole when it breaks the schema; `resolve()`, the root comando runs on |
+| `RootLaunch` | what every `claude` comando starts gets from the root: `CLAUDE_CONFIG_DIR=<root>` when the root is not `~/.claude`, and with a kit `--settings {"autoMemoryDirectory": "<root>/<brain>/MEMORY"}`, merged into a `--settings` already given; the session `kit` in the root runs on the user's own `~/.claude`, so it can replace the kit |
+| `ClaudeSettings` | the executable (found in the usual install paths, since an app started from Finder has a short `PATH`), the MCP configuration folder, Claude Code's `projects` folder under the root, the appended instructions, the `RootLaunch` |
 | `UiInstructions` | the text appended to the system prompt that tells a session about comando's tools |
 
 - **One writer per transcript.** Every change to a session (start, a stdout line, a prompt, interrupt, stop, history)
@@ -37,8 +38,8 @@ Claude Code kit. It depends on `core` and Jackson.
   left are deleted at the next start.
 - **Not `--bare`.** The process loads CLAUDE.md, hooks, plugins, skills and the user's MCP servers as a terminal
   session does; the login is the CLI's own.
-- **The kit in the jar.** The build copies `kit/` into the jar's resources with an index of its files
-  (`claude/build.gradle.kts`, task `kitIndex`), because a jar cannot list a folder.
+- **On the kit's root.** Sessions, the `/usage` read, the topic reads and `claude --version` all go through the one
+  `RootLaunch`: one root for every `claude` comando starts.
 
 ## 2. Interface with the rest of the app
 
@@ -62,9 +63,10 @@ flowchart LR
 | `ClaudePort` | `start`, `stop`, `send(name, text, origin, preface)`, `interrupt`, `clearTranscript`, `clearConversation`, `loadHistory`, `forget`, `showSubagent` | the reducer's effects, through `EffectRouter` |
 | `ClaudeAdapter.watchPlanUsage(every)` | reads the plan's usage now and every period | `app` at start (every 5 min) |
 | `SessionCatalogue.scan(limit)` | the stored conversations, newest first | `app`, which maps each entry to `ui`'s `StoredConversation` for the import dialog |
-| `ClaudeVersion.check(executable)` | a warning, or empty | `app` at start |
-| `Kit` | `refresh`, `status`, `install`, `folders`, `gradleSerial` | `app` (at start, and through `KitSetup` for the menus); `gradleSerial` also tells `tools` where Gradle runs queue |
-| `ClaudeSettings.findExecutable`, `defaultProjectsDir`, `UiInstructions.TEXT` | configuration | `app`'s `AppConfig` and wiring |
+| `ClaudeVersion.check(executable, launch)` | a warning, or empty | `app` at start |
+| `KitJson.resolve`, `KitJson.read` | the root and its kit | `app`'s `AppConfig` |
+| `RootLaunch.on(root)` | the root's environment and settings for every `claude` | `app`'s wiring: `ClaudeSettings`, `ClaudeTopics`, `ClaudeVersion` |
+| `ClaudeSettings.findExecutable`, `UiInstructions.TEXT` | configuration | `app`'s `AppConfig` and wiring |
 
 **Needs.** The `IntentSink`, the `TranscriptRegistry` it writes, an `McpGateway` (`McpServer`, or `McpGateway.NONE` to
 start sessions without comando's tools) and `ClaudeSettings`.
@@ -73,10 +75,8 @@ start sessions without comando's tools) and `ClaudeSettings`.
 `SessionTasksChanged`, `SessionExited`, `SessionBranch`, `PlanUsageRead`, `ShowView` and `RefreshView` (a sub-agent's
 conversation as a lower view, followed while it grows), `Notify`.
 
-**Reads, never writes:** Claude Code's `~/.claude/projects/`. **Writes outside the data root:** only what `Kit.install`
-does after the user consents (Claude Code's plugin commands, the skeleton files that are missing, one settings key),
-and a temporary file in the system temp folder for each plan-usage read, each topic read and each process's stderr,
-deleted after it.
+**Reads, never writes:** the root's `projects/` and its `kit.json`. **Writes outside the data root:** only a temporary
+file in the system temp folder for each plan-usage read, each topic read and each process's stderr, deleted after it.
 
 ## 3. Threads
 
@@ -89,7 +89,7 @@ deleted after it.
 | `subagent-tail` | timed strand: follows up to 4 sub-agent conversations every 2 s while they run |
 | `plan-usage` | timed strand: the periodic `/usage` read |
 | `topic-reader` | strand: the tabs' topic reads, one at a time |
-| `claude-version`, `claude-output` | forks: `claude --version`'s output; one `claude plugin` run's output for `Kit`, bounded at 60 s |
+| `claude-version` | fork: `claude --version`'s output |
 
 `close()` stops every process (SIGTERM, SIGKILL 2 s later) and deletes every MCP configuration file.
 
@@ -104,6 +104,8 @@ deleted after it.
   they go; `SubagentFilesProbeTest` feeds `SubagentFiles` generated inputs.
 - `PlanUsageReaderTest` and `ClaudeTopicsTest` run their reads against fake scripts written in a temporary folder;
   `ClaudeTopicsTest` also paces a stubbed read to check one read at a time, the replacement of a waiting ask and the close.
-- `KitLiveTest` runs the installed `claude` in a throwaway `CLAUDE_CONFIG_DIR`, only with `COMANDO_KIT_LIVE=true`.
+- `KitJsonTest` reads a `kit.json` as the kit's installer writes it, refuses broken ones, and resolves roots with it;
+  `RootLaunchTest` checks the environment and `--settings` each `claude` gets, the upgrade session's exception, and a
+  real process's `CLAUDE_CONFIG_DIR`.
 
-Further reading: [Claude §1](../docs/claude.md#1-the-claude-bridge), [the kit](../kit/README.md).
+Further reading: [Claude §1](../docs/claude.md#1-the-claude-bridge).

@@ -35,7 +35,7 @@ rest of the order is kept by review.
   `Coalescer`, so many changes become at most one pending `invokeLater`, which reads the latest state. Growing stores
   (transcripts, consoles) ask for repaints the same way.
 - **Input.** Every user action is a `Command` in the `ActionRegistry` (menus, keys, palette); a command dispatches an
-  intent. Blocking work (opening a file, links, exports, the kit) moves to a virtual thread.
+  intent. Blocking work (opening a file, links, exports, the kit's git runs) moves to a virtual thread.
 - **Views.** `WidgetRegistry` maps a placed view's type (`table`, `plot`, `diff`, `markdown`, `text`, `tree`,
   `console`, `changes`) to a widget; `ViewTabs` creates it when the view appears, renders it when its version changes, unmounts
   it when it closes.
@@ -52,7 +52,7 @@ flowchart LR
   ER["core EffectRouter"] -->|"UiPort"| CU
   CU -->|"user intents"| SINK["core IntentSink"]
   REG[("registries: results, transcripts, consoles, schemas")] --> CU
-  CU -->|"PanelTexts, ServerToggle, Setup"| APP["app: Store, EmbeddedQuestDb, KitSetup"]
+  CU -->|"PanelTexts, ServerToggle, Setup"| APP["app: Store, EmbeddedQuestDb, RootSetup"]
 ```
 
 **Provides.**
@@ -60,7 +60,7 @@ flowchart LR
 | Interface | Methods | Caller |
 |---|---|---|
 | `UiPort` | `editPanel`, `notifyDesktop`, `forgetPanel`, `deletePanel`, `showFile`, `arrange`, `showFolder`, `showRepos`, `showChange`, `showPlanUsage`; each hands its work to the EDT, a virtual thread (`showFile`) or the store (`forgetPanel`, `deletePanel`) and returns | the reducer's effects, through `EffectRouter` |
-| `ComandoUi(Dependencies)`, `topics(port)`, `start()`, `offerKit(offer)`, `close()` | builds and shows the window from any thread; reads the tabs' topics through `topics`' port, set before `start()`; asks about the Claude Code kit; closes terminals, live plots, the EDT watchdog and the window | `app` |
+| `ComandoUi(Dependencies)`, `topics(port)`, `start()`, `kitStatus(status)`, `close()` | builds and shows the window from any thread; reads the tabs' topics through `topics`' port, set before `start()`; shows the kit's version in the status bar, with its menu (Upgrade the kit…, Back up the brain); closes terminals, live plots, the EDT watchdog and the window | `app` |
 | `MermaidDiagrams.install(cache)`, `LocalImages.install(cache)` and their `shutdown()` | the drawing services Markdown previews use, with their caches under the data root | `app` |
 | `DesktopTrash.moveToTrash(file)` | the desktop's Trash | `app` passes it to `tools` as its `Trash` |
 
@@ -73,7 +73,7 @@ flowchart LR
 | `texts` | `PanelTexts`: each panel's file and text (`app`'s `Store`) |
 | `catalogue` | the stored conversations for the import dialog, as `StoredConversation` (`app` maps `claude`'s `SessionCatalogue`) |
 | `server` | `ServerToggle`: the embedded QuestDB (`app`'s `EmbeddedQuestDb`) |
-| `setup` | `Setup`: the Claude Code kit, its install and the folders it adds to the Files tab (`app`'s `KitSetup`) |
+| `setup` | `Setup`: the kit root comando runs on, the kit's version and newer releases, the brain's backup (`app`'s `RootSetup`). `shell`'s `KitActions` shows the kit in the status bar, sends the upgrade to the session `kit` in the root and offers to restart the sessions on the old kit once it reported; the folders' window has Use the kit's folders; a brain folder's row in the Files tab has Back up the brain |
 | `version`, `home`, `logDir`, `onQuit` | for About, Help and the log; `home` also holds `opened-files`, the files opened once, which the Files tab no longer marks new; what quitting runs once the window has asked |
 
 `PanelTexts`, `ServerToggle` and `Setup` are declared here and implemented in `app`, and `StoredConversation` is a

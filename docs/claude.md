@@ -29,6 +29,9 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   conversation ([decision 4](adr/0004-a-session-open-in-another-terminal.md)).
 - **Not `--bare`.** The session loads CLAUDE.md, hooks, plugins, skills and the user's MCP servers as a terminal session
   does. The login is the CLI's own; comando stores no key.
+- **The root.** Every `claude` comando starts runs on one Claude Code folder, the root: with
+  `CLAUDE_CONFIG_DIR=<root>` in its environment when the root is not `~/.claude`, and, when the root holds a kit,
+  `--settings '{"autoMemoryDirectory": "<root>/<brain>/MEMORY"}'` ([Workbench §7.1](workbench.md#71-the-root)).
 - **MCP configuration.** One file per running process under `run/` in the data root, mode `0600` from creation, named
   after the session and a random UUID. It names comando's server, the process's bearer token, and `"timeout": 3600000`,
   which lets an approval card wait up to 55 minutes. Deleted when the process exits.
@@ -40,7 +43,8 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   table, plot or diff shows a result better than text; explanations stay in text).
 - **Other runs.** Besides one process per running session, comando runs `claude --safe-mode -p /usage` at start and
   every 5 minutes for the plan's usage (no prompt, no saved session; 30 s bound), `claude --version` once at start
-  ([§1.3](#13-turns-interrupt-stop)), and `claude plugin …` when the kit is installed or updated.
+  ([§1.3](#13-turns-interrupt-stop)), and `claude --safe-mode -p --model haiku` for the summary on a tab's card, one at a
+  time; each runs on the root, as a session does.
 
 ### 1.2 Mapping the stream
 

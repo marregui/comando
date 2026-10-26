@@ -30,7 +30,7 @@ class ClaudeVersionTest {
 
     @Test
     void aMissingExecutableIsReported() {
-        assertThat(ClaudeVersion.check("/nonexistent/claude")).contains("not found");
+        assertThat(ClaudeVersion.check("/nonexistent/claude", RootLaunch.INHERIT)).contains("not found");
     }
 
     @Test
@@ -39,7 +39,7 @@ class ClaudeVersionTest {
         Files.writeString(script, "#!/bin/sh\necho '2.1.296 (Claude Code)'\nsleep 8 &\nexit 0\n");
         Files.setPosixFilePermissions(script, PosixFilePermissions.fromString("rwx------"));
 
-        String message = assertTimeoutPreemptively(Duration.ofSeconds(7), () -> ClaudeVersion.check(script.toString()));
+        String message = assertTimeoutPreemptively(Duration.ofSeconds(7), () -> ClaudeVersion.check(script.toString(), RootLaunch.INHERIT));
 
         assertThat(message).isEmpty();
     }

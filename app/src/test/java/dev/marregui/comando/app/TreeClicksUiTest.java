@@ -1,23 +1,43 @@
 package dev.marregui.comando.app;
 
+import dev.marregui.comando.claude.KitJson;
+import dev.marregui.comando.core.loop.StateLoop;
+import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.tree.TreeView;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.io.TempDir;
 
+import javax.swing.JLabel;
+import javax.swing.JToggleButton;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
+import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.TreePath;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Frame;
 import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * A tree that opens a folder on one click, as the Files tab's: the look opens and closes folders on a press, which needs
- * a display, so this runs in {@code ./gradlew :app:uiTest} (on Linux under {@code xvfb-run}).
+ * a display, so this runs in {@code ./gradlew :app:uiTest} (on Linux under {@code xvfb-run}). And the Files tab of a
+ * window started on a kit's root, which opens on the kit's folders.
  */
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class TreeClicksUiTest {
@@ -54,6 +74,117 @@ class TreeClicksUiTest {
 
         TreeView plain = new TreeView();
         assertThat(plain.tree().getToggleClickCount()).as("other trees keep the look's double click").isEqualTo(2);
+    }
+
+    /**
+     * comando started on a kit's root shows the kit's folders at the top of the Files tab, before the user's own, and
+     * saves them; the status bar names the kit. The root is a temporary folder named as {@code CLAUDE_CONFIG_DIR} would
+     * name it; no {@code claude} runs.
+     */
+    @Test
+    void theKitsFoldersOpenTheFilesTabOfAWindowStartedOnItsRoot(@TempDir Path home) throws Exception {
+        Path root = home.resolve("claude-kit");
+        for (String dir : List.of("BRAIN/MEMORY", "BRAIN/KB", "skills/reflect")) {
+            Files.createDirectories(root.resolve(dir));
+        }
+        Files.writeString(root.resolve("BRAIN/MEMORY/MEMORY.md"), "# Memory\n");
+        Files.writeString(root.resolve(KitRoot.FILE), """
+                {"kit": 1, "name": "test-kit", "brain": "BRAIN",
+                 "folders": [
+                   {"name": "Memory", "path": "BRAIN/MEMORY", "index": "MEMORY.md", "icon": "memory"},
+                   {"name": "KB", "path": "BRAIN/KB", "icon": "knowledge"},
+                   {"name": "Skills", "path": "skills", "icon": "skills"}],
+                 "requirements": [], "credentials": [], "jobs": []}
+                """);
+        Path data = Files.createDirectories(home.resolve("data"));
+        Path notes = Files.createDirectories(home.resolve("notes"));
+        Files.writeString(data.resolve("folders.json"), "[{\"name\": \"Notes\", \"path\": \"" + notes + "\"}]");
+        KitRoot kitRoot = KitRoot.resolve(root.toString(), home, KitJson::read);
+        assertThat(kitRoot.kit()).isPresent();
+
+        App app = new App(new AppConfig(data, home.resolve("no-claude").toString(), kitRoot, false), "kit", () -> {
+        });
+        try {
+            app.start();
+            StateLoop loop = app.loop();
+            assertThat(loop.state().folders()).extracting(FolderRoot::name).as("the kit's first, the user's kept")
+                    .containsExactly("Memory", "KB", "Skills", "Notes");
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> front("Files"));
+            Awaitility.await("the Files tab's rows").atMost(Duration.ofSeconds(10)).until(() -> rows().size() >= 4);
+            assertThat(rows()).as("in the Files tab").startsWith("Memory", "KB", "Skills").contains("Notes");
+            Awaitility.await("folders.json saved").atMost(Duration.ofSeconds(10))
+                    .until(() -> Files.readString(data.resolve("folders.json")).contains(root.resolve("BRAIN/MEMORY").toString()));
+            Awaitility.await("the kit in the status bar").atMost(Duration.ofSeconds(10))
+                    .until(() -> onEdt(() -> first(JLabel.class, l -> "Kit".equals(l.getAccessibleContext().getAccessibleName()) && l.isShowing())) != null);
+            assertThat(onEdt(() -> first(JLabel.class, l -> "Kit".equals(l.getAccessibleContext().getAccessibleName())).getText()))
+                    .as("no checkout: the kit's name alone").isEqualTo("kit test-kit");
+        } finally {
+            app.close();
+        }
+    }
+
+    /** The Files tab's folder rows, top first. */
+    private static List<String> rows() throws Exception {
+        return onEdt(() -> {
+            JTree tree = first(JTree.class, t -> "Files".equals(t.getAccessibleContext().getAccessibleName()) && t.isShowing());
+            List<String> out = new ArrayList<>();
+            if (tree != null) {
+                for (int i = 0; i < tree.getRowCount(); i++) {
+                    if (tree.getPathForRow(i).getPathCount() == 2) {
+                        out.add(((ViewSpec.TreeNode) ((DefaultMutableTreeNode) tree.getPathForRow(i).getLastPathComponent()).getUserObject()).label());
+                    }
+                }
+            }
+            return out;
+        });
+    }
+
+    /** Brings sidebar tab {@code tab} to the front; false while the window is not up. */
+    private static boolean front(String tab) throws Exception {
+        return onEdt(() -> {
+            JToggleButton header = first(JToggleButton.class, b -> tab.equals(b.getAccessibleContext().getAccessibleName()) && b.isShowing());
+            if (header != null) {
+                header.doClick();
+            }
+            return header != null;
+        });
+    }
+
+    private static <T extends Component> T first(Class<T> type, Predicate<T> which) {
+        List<T> out = new ArrayList<>();
+        for (Frame f : Frame.getFrames()) {
+            if (f.isVisible()) {
+                collect(f, type, which, out);
+            }
+        }
+        return out.isEmpty() ? null : out.getFirst();
+    }
+
+    private static <T extends Component> void collect(Component c, Class<T> type, Predicate<T> which, List<T> out) {
+        if (type.isInstance(c) && which.test(type.cast(c))) {
+            out.add(type.cast(c));
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                collect(child, type, which, out);
+            }
+        }
+    }
+
+    private static <T> T onEdt(Callable<T> call) throws Exception {
+        AtomicReference<T> out = new AtomicReference<>();
+        AtomicReference<Exception> failed = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                out.set(call.call());
+            } catch (Exception e) {
+                failed.set(e);
+            }
+        });
+        if (failed.get() != null) {
+            throw failed.get();
+        }
+        return out.get();
     }
 
     /** A left press and release of {@code count} on row {@code row}. */

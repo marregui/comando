@@ -1,7 +1,7 @@
 name: build
 
-# A change to the docs alone builds nothing, except the tutorial, which the ui jar bundles (kit/ is
-# bundled whole, so it always builds). Later patterns override earlier ones.
+# A change to the docs alone builds nothing, except the tutorial, which the ui jar bundles. Later patterns
+# override earlier ones.
 on:
   push:
     branches: [main]
@@ -10,16 +10,16 @@ on:
       - '!docs/**'
       - 'docs/tutorial.md'
       - '!README.md'
+      - '!INSTALL.md'
       - '!*/README.md'
-      - 'kit/README.md'
   pull_request:
     paths:
       - '**'
       - '!docs/**'
       - 'docs/tutorial.md'
       - '!README.md'
+      - '!INSTALL.md'
       - '!*/README.md'
-      - 'kit/README.md'
   schedule:
     - cron: '17 5 * * 1'
   workflow_dispatch:

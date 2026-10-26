@@ -6,6 +6,8 @@ import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.model.KitFolders;
+import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.PersistencePort;
@@ -80,6 +82,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     private final JsonFile<List<SessionSpec>> sessions;
     private final JsonFile<List<FolderRoot>> folders;
     private final JsonFile<List<StoredPanel>> panels;
+    /** The kit roots whose folders the Files tab gained at a start, one path a line: each root's are added once. */
+    private final Path kitFolders;
     private final ScheduledExecutorService writer = writer();
     /**
      * Connection saves talk to the keychain, which can wait on an unlock prompt for its whole bound; they get a
@@ -158,6 +162,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         });
         panels = new JsonFile<>(home.resolve("panels.json"), new TypeReference<>() {
         });
+        kitFolders = home.resolve("kit-folders");
         files = new PanelFiles(home.resolve("panels"), text -> notices.accept(text));
     }
 
@@ -467,6 +472,41 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             return FolderRoot.defaults(claudeDir);
         }
         return valid(read);
+    }
+
+    /**
+     * The folders at the first start on a kit's root: when {@code loaded} shows none of the kit's folders, the kit's go
+     * first and are saved; the user's own entries stay. Once per root, so a folder the user takes out stays out; the
+     * folders' window puts them back.
+     */
+    List<FolderRoot> withKitFolders(List<FolderRoot> loaded, KitRoot root) {
+        List<FolderRoot> kit = root.folders();
+        String key = root.dir().toString();
+        if (kit.isEmpty() || kitRootsDone().contains(key)) {
+            return loaded;
+        }
+        List<FolderRoot> merged = KitFolders.atStart(loaded, kit);
+        try {
+            Files.createDirectories(kitFolders.getParent());
+            Files.writeString(kitFolders, key + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            // added again at the next start: the user's list is still kept
+            LOG.log(System.Logger.Level.WARNING, "cannot write " + kitFolders + ": " + e.getMessage());
+        }
+        if (!merged.equals(loaded)) {
+            LOG.log(System.Logger.Level.INFO, "the Files tab gains the kit's folders [root=" + key + ", folders="
+                    + KitFolders.missing(loaded, kit).stream().map(FolderRoot::name).toList() + ']');
+            saveFolders(merged);
+        }
+        return merged;
+    }
+
+    private List<String> kitRootsDone() {
+        try {
+            return Files.isRegularFile(kitFolders) ? Files.readAllLines(kitFolders, StandardCharsets.UTF_8).stream().map(String::strip).toList() : List.of();
+        } catch (IOException e) {
+            return List.of();
+        }
     }
 
     /** The entries of a hand-edited {@code folders.json} that meet the folders' rules; the user is told of the rest. */

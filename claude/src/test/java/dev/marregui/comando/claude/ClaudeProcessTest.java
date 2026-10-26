@@ -5,7 +5,6 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -21,7 +20,7 @@ class ClaudeProcessTest {
         List<String> lines = new CopyOnWriteArrayList<>();
         AtomicInteger code = new AtomicInteger(-1);
         CountDownLatch exited = new CountDownLatch(1);
-        ClaudeProcess.start("t", List.of("sh", "-c", "printf 'a\\nb\\n'; exit 3"), dir, Map.of(), lines::add, c -> {
+        ClaudeProcess.start("t", List.of("sh", "-c", "printf 'a\\nb\\n'; exit 3"), dir, RootLaunch.INHERIT, lines::add, c -> {
             code.set(c);
             exited.countDown();
         });
@@ -35,7 +34,7 @@ class ClaudeProcessTest {
     void theExitIsReportedWhileAChildStillHoldsTheOutputOpen(@TempDir Path dir) throws Exception {
         List<String> lines = new CopyOnWriteArrayList<>();
         CountDownLatch exited = new CountDownLatch(1);
-        ClaudeProcess.start("t", List.of("sh", "-c", "sleep 60 & echo $!; exit 0"), dir, Map.of(), lines::add, c -> exited.countDown());
+        ClaudeProcess.start("t", List.of("sh", "-c", "sleep 60 & echo $!; exit 0"), dir, RootLaunch.INHERIT, lines::add, c -> exited.countDown());
         try {
             assertThat(exited.await(ClaudeProcess.DRAIN_MILLIS + 8_000, TimeUnit.MILLISECONDS)).isTrue();
         } finally {
@@ -51,7 +50,7 @@ class ClaudeProcessTest {
         CountDownLatch exited = new CountDownLatch(1);
         AtomicReference<ClaudeProcess> process = new AtomicReference<>();
         process.set(ClaudeProcess.start("t", List.of("sh", "-c", "i=0; while [ $i -lt 100 ]; do echo \"err $i\" 1>&2; i=$((i+1)); done; exit 1"),
-                dir, Map.of(), line -> { }, c -> exited.countDown()));
+                dir, RootLaunch.INHERIT, line -> { }, c -> exited.countDown()));
         assertThat(exited.await(10, TimeUnit.SECONDS)).isTrue();
         // read before the exit is told, so it is there once it has been
         List<String> tail = process.get().stderrTail().lines().toList();
@@ -62,7 +61,7 @@ class ClaudeProcessTest {
     @Test
     void aSessionsOnlyPlatformThreadIsItsStdoutReader(@TempDir Path dir) throws Exception {
         CountDownLatch exited = new CountDownLatch(1);
-        ClaudeProcess p = ClaudeProcess.start("budget", List.of("sh", "-c", "read x; exit 0"), dir, Map.of(), line -> { }, c -> exited.countDown());
+        ClaudeProcess p = ClaudeProcess.start("budget", List.of("sh", "-c", "read x; exit 0"), dir, RootLaunch.INHERIT, line -> { }, c -> exited.countDown());
         try {
             List<String> platform = Thread.getAllStackTraces().keySet().stream().filter(t -> !t.isVirtual())
                     .map(Thread::getName).filter(n -> n.startsWith("claude-")).toList();

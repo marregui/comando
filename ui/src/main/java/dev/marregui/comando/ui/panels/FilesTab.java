@@ -56,6 +56,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
@@ -153,6 +154,9 @@ final class FilesTab {
     /** True while code, not the user, expands rows: a restored row neither opens its index nor changes what is watched. */
     private boolean restoring;
     private boolean built;
+    /** Adds the window's own items to a folder row's menu: the brain's backup. */
+    private BiConsumer<FolderRoot, JPopupMenu> folderMenu = (f, m) -> {
+    };
 
     FilesTab(IntentSink intents, Consumer<Path> open, Consumer<Path> editFile) {
         this(intents, open, editFile, ResourceActions.Questions.MODAL);
@@ -779,8 +783,8 @@ final class FilesTab {
     /**
      * The context menu of {@code n}, selected in the tree in front: a file's opens it rendered or as its text and, when
      * it changed, compares it with {@code HEAD}; a folder row's opens its index file; a folder row's and a subfolder's
-     * show the changes inside it; any other node has none. In a deletable folder, a file's or a subfolder's menu also
-     * moves the selection to the Trash.
+     * show the changes inside it, and a folder row's gains the window's items for it; any other node has none. In a
+     * deletable folder, a file's or a subfolder's menu also moves the selection to the Trash.
      */
     JPopupMenu menuFor(ViewSpec.TreeNode n) {
         JPopupMenu menu = new JPopupMenu();
@@ -799,8 +803,14 @@ final class FilesTab {
             // asked for by name: a missing index says so in the status bar, as any file that cannot be opened
             f.indexFile().ifPresent(index -> menu.add(item("Open " + f.index(), "index", () -> open.accept(index))));
             addChanges(menu, at);
+            folderMenu.accept(f, menu);
         }
         return menu;
+    }
+
+    /** What a folder row's menu gains from the window, after its own items. */
+    void onFolderMenu(BiConsumer<FolderRoot, JPopupMenu> extra) {
+        folderMenu = extra;
     }
 
     /** Shows the changes inside the folder at {@code at}, of the repository holding it; off, saying so, when it has none. */

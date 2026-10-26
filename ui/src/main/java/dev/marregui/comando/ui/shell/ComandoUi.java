@@ -86,6 +86,7 @@ import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 import dev.marregui.comando.ui.widgets.text.TextWidget;
 import dev.marregui.comando.ui.widgets.tree.TreeWidget;
 
+import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -180,6 +181,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** Reads the tabs' topics; the build hands it to the workspace. */
     private volatile TopicPort topics = TopicPort.NONE;
     private final HelpActions help;
+    private final KitActions kit;
     private final ActionRegistry actions = new ActionRegistry();
     private final WidgetRegistry widgets = new WidgetRegistry();
     private final Coalescer render = new Coalescer(this::render);
@@ -251,7 +253,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     public ComandoUi(Dependencies deps) {
         this.deps = deps;
         this.openedFiles = deps.home() == null ? OpenedFiles.inMemory() : OpenedFiles.load(deps.home().resolve("opened-files"));
-        this.help = new HelpActions(deps, prefs, () -> frame, this::openFile, actions::run, () -> sidePaneHidden = false, actions::all);
+        this.help = new HelpActions(deps, () -> frame, this::openFile, actions::run, () -> sidePaneHidden = false, actions::all);
+        this.kit = new KitActions(deps, () -> frame);
     }
 
     /** Every command registered once {@link #start} has run, with its key on this desktop; the keyboard tests read them. */
@@ -264,9 +267,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         help.showAbout();
     }
 
-    /** Offers the kit when comando starts, once the window shows, unless the user said not to ask again. Any thread. */
-    public void offerKit(Setup.KitOffer offer) {
-        help.offerKit(offer);
+    /** Shows the kit's version and newer releases in the status bar, and whether the brain can be backed up. Any thread. */
+    public void kitStatus(Setup.Status status) {
+        kit.show(status);
     }
 
     /** Builds and shows the window; call from any thread. */
@@ -394,6 +397,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         sidebar.cards(workspace.rowCards());
         sidebar.watchOpened(openedFiles);
         status = new StatusBar(deps.intents(), this::noticeTarget);
+        status.onKitMenu(this::kitMenu);
+        kit.attach(status);
+        sidebar.onFolderMenu(this::folderMenu);
         findBar = new FindBar();
         top = new JPanel(new BorderLayout());
         top.add(workspace.component(), BorderLayout.CENTER);
@@ -588,6 +594,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             showSidePane(show);
         }
         status.render(s);
+        kit.render(s);
         connectionsDialog.render(s);
         sessionsDialog.render(s);
         watchTranscript(s.focusedPanel().session());
@@ -827,7 +834,47 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     /** The Files tab's folders in their window, {@code select} selected (empty: the first); saving replaces them. */
     private void editFolders(boolean repositories) {
-        FoldersDialog.show(frame, deps.state().get().folders(), repositories, repoChanges, deps.intents());
+        FoldersDialog.show(frame, deps.state().get().folders(), repositories, repoChanges, deps.intents(), deps.setup().root().folders());
+    }
+
+    /** The kit's menu under its label in the status bar: its upgrade and the brain's backup, enabled as each can run. */
+    private void kitMenu(JComponent under) {
+        JPopupMenu menu = new JPopupMenu();
+        for (String id : List.of("kit.upgrade", "kit.backup")) {
+            Command c = actions.get(id);
+            if (c != null) {
+                JMenuItem item = new JMenuItem(ActionRegistry.action(c));
+                item.setEnabled(c.enabled().getAsBoolean());
+                menu.add(item);
+            }
+        }
+        menu.show(under, 0, -menu.getPreferredSize().height);
+    }
+
+    /** A Files tab folder row's menu: a folder of the kit's brain gains the brain's backup. */
+    private void folderMenu(FolderRoot folder, JPopupMenu menu) {
+        Optional<Path> brain = deps.setup().root().brain();
+        Command c = actions.get("kit.backup");
+        if (brain.isEmpty() || c == null || !inside(Path.of(folder.path()), brain.get())) {
+            return;
+        }
+        menu.addSeparator();
+        JMenuItem item = new JMenuItem(ActionRegistry.action(c));
+        item.setEnabled(c.enabled().getAsBoolean());
+        menu.add(item);
+    }
+
+    /** Whether {@code p} is {@code dir} or inside it, links followed: {@code ~/.claude/MEMORY} may be a link into the brain. */
+    static boolean inside(Path p, Path dir) {
+        Path a = p.toAbsolutePath().normalize();
+        Path b = dir.toAbsolutePath().normalize();
+        try {
+            a = a.toRealPath();
+            b = b.toRealPath();
+        } catch (IOException | RuntimeException e) {
+            // as written: a folder not there yet is compared by its path
+        }
+        return a.startsWith(b);
     }
 
     /** Opens the Changes view of every repository in the side pane; closes it when it shows them all, widens it when it shows one. */
@@ -1035,6 +1082,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // panel: tools that run in its project
         cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, shortcut | ALT), this::runGradle, () -> focusedSession().isPresent());
         cmd("files.settings", "Configure " + FoldersDialog.title(false), null, () -> editFolders(false));
+        // the kit: its upgrade, by a session in its root, and the brain's backup; never on their own
+        cmd("kit.upgrade", KitActions.UPGRADE, null, kit::upgrade, kit::canUpgrade);
+        cmd("kit.backup", KitActions.BACK_UP, null, kit::backUp, kit::canBackUp);
         cmd("files.repositories", "Configure repositories", null, () -> editFolders(true));
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         // view
@@ -1099,7 +1149,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // ⌘/ stays the editor's comment toggle; ⌘⇧/ is the Mac's Help key
         cmd("help.keys", "Keyboard shortcuts", key(KeyEvent.VK_SLASH, shortcut | SHIFT), help::showKeys);
         cmd("help.markdown", "Markdown sheet", null, help::showMarkdownSheet);
-        cmd("help.kit", "Claude Code kit…", null, help::showKit);
         cmd("help.log", "Show the log", null, help::showLog, () -> deps.logDir() != null);
         cmd("help.dataRoot", "Reveal comando folder", null, () -> help.reveal(deps.home()), () -> deps.home() != null);
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice

@@ -57,10 +57,12 @@ public record ClaudeVersion(int major, int minor, int patch) implements Comparab
      * Blocks up to six seconds: five for the CLI to exit, one more for its output; call it off the EDT and off the
      * reducer thread.
      */
-    public static String check(String executable) {
+    public static String check(String executable, RootLaunch launch) {
         Process p;
         try {
-            p = new ProcessBuilder(executable, "--version").redirectErrorStream(true).start();
+            ProcessBuilder pb = new ProcessBuilder(executable, "--version").redirectErrorStream(true);
+            launch.environment(pb.environment());
+            p = pb.start();
         } catch (IOException e) {
             return "Claude Code not found at '" + executable + "'. Install it, or set COMANDO_CLAUDE to its path.";
         }

@@ -6,26 +6,3 @@ dependencies {
     testImplementation(libs.awaitility)
 }
 
-// The Claude Code kit (the repository's kit/ folder) travels in the jar, with an index of its files: a jar cannot list
-// a folder, and the kit has hidden ones (.claude-plugin).
-val kitDir = rootProject.file("kit")
-val kitIndex = tasks.register("kitIndex") {
-    val out = layout.buildDirectory.file("generated/kit/dev/marregui/comando/claude/kit/files.txt")
-    // a local copy: the action must not hold the build script, which the configuration cache cannot keep
-    val dir = kitDir
-    inputs.dir(dir)
-    outputs.file(out)
-    doLast {
-        val files = dir.walkTopDown().filter { it.isFile && it.name != ".DS_Store" }
-            .map { it.relativeTo(dir).invariantSeparatorsPath }.sorted().toList()
-        out.get().asFile.apply { parentFile.mkdirs() }.writeText(files.joinToString("\n", postfix = "\n"))
-    }
-}
-tasks.processResources {
-    dependsOn(kitIndex)
-    from(kitDir) {
-        into("dev/marregui/comando/claude/kit")
-        exclude("**/.DS_Store")
-    }
-    from(layout.buildDirectory.dir("generated/kit"))
-}

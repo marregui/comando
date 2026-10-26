@@ -9,6 +9,7 @@ import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -80,8 +81,8 @@ public final class Snapshot {
         Files.createDirectories(out);
         Path home = Files.createTempDirectory("comando-snapshot");
         Path sampleRepo = sampleFolders(home);
-        AppConfig config = new AppConfig(home, ClaudeSettings.findExecutable(),
-                ClaudeSettings.defaultProjectsDir(), true);
+        // the root as comando reads it before one is chosen, without a kit: the pictures are the same on every machine
+        AppConfig config = new AppConfig(home, ClaudeSettings.findExecutable(), KitRoot.current(), true);
         App app = new App(config, "snapshot", () -> {
         });
         app.start();

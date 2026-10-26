@@ -42,13 +42,14 @@ final class Menus {
             Map.entry("help.tutorial", "tutorial"),
             Map.entry("help.keys", "keyboard"),
             Map.entry("help.markdown", "markdown"),
-            Map.entry("help.kit", "kit"),
             Map.entry("help.log", "log"),
             Map.entry("help.dataRoot", "comando-folder"),
             // in no menu: the icon of the button or tab-menu item that does the same, shown in the palette
             Map.entry("panel.openSpec", "open-file"),
             Map.entry("files.settings", "folders"),
             Map.entry("files.repositories", "repositories"),
+            Map.entry("kit.upgrade", "kit"),
+            Map.entry("kit.backup", "export"),
             Map.entry("view.export", "export"),
             Map.entry("run", "play"),
             Map.entry("run.stop", "stop"),
@@ -74,7 +75,6 @@ final class Menus {
             Map.entry("help.tutorial", "comando in ten minutes, as a document"),
             Map.entry("help.keys", "Every key, in the side pane"),
             Map.entry("help.markdown", "What a panel's Markdown may hold and how its preview shows it"),
-            Map.entry("help.kit", "The Claude Code kit: what it holds, what is installed, install or update"),
             Map.entry("help.log", "comando's log, read-only, following its end"),
             Map.entry("help.dataRoot", "Show comando's data root: panels, sessions, settings, logs"));
 
@@ -106,7 +106,7 @@ final class Menus {
         if (server) {
             actions.addAll(List.of(SEPARATOR, "server.start", "server.stop"));
         }
-        actions.addAll(List.of(SEPARATOR, "help.tutorial", "help.keys", "help.markdown", "help.kit", "help.log", "help.dataRoot"));
+        actions.addAll(List.of(SEPARATOR, "help.tutorial", "help.keys", "help.markdown", "help.log", "help.dataRoot"));
         return List.of(
                 menu("Edit", null, "edit.undo", "edit.redo", SEPARATOR, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll"),
                 menu("Actions", null, actions.toArray()));
@@ -128,6 +128,7 @@ final class Menus {
         put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive");
         put(a, "Edit", "view.copy", "view.find", "view.findNext", "view.findPrevious", "edit.complete", "edit.completeAlt");
         put(a, "Files", "files.settings", "files.repositories");
+        put(a, "Kit", "kit.upgrade", "kit.backup");
         put(a, "Window", "view.export", "view.sidebar", "view.sidePane", "view.files", "view.changes", "view.restoreLayout", "view.session", "view.approvals",
                 "view.terminal", "view.results", "view.nextTab", "view.previousTab", "view.closeLower", "view.zoomIn", "view.zoomOut",
                 "view.zoomReset", "view.notices", "view.session.alt", "view.approvals.alt", "view.terminal.alt", "view.results.alt");

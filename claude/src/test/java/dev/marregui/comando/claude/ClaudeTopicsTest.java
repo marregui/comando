@@ -57,7 +57,7 @@ class ClaudeTopicsTest {
         Path exe = script("claude", "printf '%s\\n' \"$@\" > '" + args + "'\ncat > '" + input + "'\nprintf '%s' \"$MAX_THINKING_TOKENS\" > '" + env
                 + "'\nprintf '%s' '" + answer("Sticky tab cards", false) + "'\n");
 
-        Topic topic = ClaudeTopics.read(exe.toString(), dir, JSON, "User: make the card sticky", Duration.ofSeconds(10));
+        Topic topic = ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, "User: make the card sticky", Duration.ofSeconds(10));
 
         assertThat(topic.line()).isEqualTo("Sticky tab cards");
         assertThat(Files.readAllLines(args)).containsExactly("--safe-mode", "-p", "--model", "haiku", "--effort", "low", "--tools", "",
@@ -70,11 +70,11 @@ class ClaudeTopicsTest {
     void aReadThatHangsIsStoppedAndAMissingExecutableIsAProblem() throws Exception {
         Path exe = script("hang", "exec sleep 30\n");
         long start = System.nanoTime();
-        Topic topic = ClaudeTopics.read(exe.toString(), dir, JSON, "x", Duration.ofMillis(300));
+        Topic topic = ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, "x", Duration.ofMillis(300));
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
         assertThat(topic.problem()).isEqualTo("Haiku did not answer within 300 ms");
-        assertThat(ClaudeTopics.read(exe.toString(), dir, JSON, "x", Duration.ofSeconds(1)).problem()).isEqualTo("Haiku did not answer within 1 s");
-        assertThat(ClaudeTopics.read(dir.resolve("absent").toString(), dir, JSON, "x", Duration.ofSeconds(1)).problem()).startsWith("cannot run '");
+        assertThat(ClaudeTopics.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, "x", Duration.ofSeconds(1)).problem()).isEqualTo("Haiku did not answer within 1 s");
+        assertThat(ClaudeTopics.read(dir.resolve("absent").toString(), RootLaunch.INHERIT, dir, JSON, "x", Duration.ofSeconds(1)).problem()).startsWith("cannot run '");
     }
 
     @Test

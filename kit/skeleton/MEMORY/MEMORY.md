@@ -1,1 +1,0 @@
-*Index of the memory, one line per memory file: a cue saying when to open the file, about 150–250 characters. Claude Code loads the first 200 lines or 25 KB of this file into every session; `/reflect` keeps it under 160 lines and 20 KB. The facts live in the files, not here.*

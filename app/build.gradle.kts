@@ -4,6 +4,10 @@ plugins {
     application
 }
 
+// A release builds with -PreleaseVersion=<the tag without its v>: the packages are named after it, and the jar's manifest
+// carries it as the version comando shows. Without it, the version set for every module.
+providers.gradleProperty("releaseVersion").orNull?.let { version = it }
+
 // Wiring, configuration, persistence and main.
 dependencies {
     implementation(project(":core"))
@@ -122,45 +126,59 @@ val uiTest = tasks.register<Test>("uiTest") {
     jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED")
 }
 
-// An unsigned macOS disk image with its own Java runtime: ./gradlew :app:dmg (output in build/dmg).
-// The modules are what jdeps reports for every jar, plus locale data, charsets and zipfs, which are
-// reached through services and reflection rather than direct references.
-// The icon is src/main/icon/comando.icns, made from comando.svg; the window and Dock use the same picture as
-// ui/src/main/resources/icons/comando.png. To redraw both after editing the SVG:
+
+// The operating system and architecture this build runs on, as the packages' names say them: macos, linux or windows;
+// arm64 or x64.
+val platform = providers.systemProperty("os.name").get().lowercase().let {
+    when {
+        it.contains("mac") -> "macos"
+        it.contains("windows") -> "windows"
+        else -> "linux"
+    }
+}
+val arch = providers.systemProperty("os.arch").get().let {
+    when (it) {
+        "aarch64", "arm64" -> "arm64"
+        "amd64", "x86_64" -> "x64"
+        else -> it
+    }
+}
+
+// What every package of comando carries: its own Java runtime of the modules jdeps reports for every jar, plus locale
+// data, charsets and zipfs, which are reached through services and reflection rather than direct references; and the
+// JVM options of applicationDefaultJvmArgs. jdk.jfr, jdk.management.jfr, jdk.management.agent: no comando code uses
+// them; they let the packaged app be recorded, and watched over JMX, like any JVM.
+// The icon is src/main/icon/comando.icns on macOS and ui/src/main/resources/icons/comando.png on Linux, both made from
+// src/main/icon/comando.svg; Windows packages carry jpackage's own icon. To redraw both after editing the SVG:
 //   rsvg-convert -w 1024 -h 1024 app/src/main/icon/comando.svg -o ui/src/main/resources/icons/comando.png
 //   mkdir -p /tmp/comando.iconset && for s in 16 32 128 256 512; do
 //     sips -z $s $s ui/src/main/resources/icons/comando.png --out /tmp/comando.iconset/icon_${s}x${s}.png
 //     sips -z $((s*2)) $((s*2)) ui/src/main/resources/icons/comando.png --out /tmp/comando.iconset/icon_${s}x${s}@2x.png
 //   done && iconutil -c icns /tmp/comando.iconset -o app/src/main/icon/comando.icns
-tasks.register<Exec>("dmg") {
+fun jpackage(name: String, type: String, folder: String, summary: String) = tasks.register<Exec>(name) {
     group = "distribution"
-    description = "Builds an unsigned macOS disk image with a bundled runtime"
+    description = summary
     dependsOn(tasks.named("installDist"))
     val jdk = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+    val tool = if (platform == "windows") "bin/jpackage.exe" else "bin/jpackage"
     val lib = layout.buildDirectory.dir("install/comando/lib")
-    val out = layout.buildDirectory.dir("dmg")
-    val appVersion = project.version.toString().substringBefore('-')
-    val mainJar = "app-${project.version}.jar"
+    val out = layout.buildDirectory.dir(folder)
     inputs.dir(lib)
     outputs.dir(out)
     doFirst {
         // the file's own delete: the script's delete() is a script object, which the configuration cache cannot keep
         out.get().asFile.deleteRecursively()
-        executable = jdk.get().metadata.installationPath.file("bin/jpackage").asFile.absolutePath
+        executable = jdk.get().metadata.installationPath.file(tool).asFile.absolutePath
     }
     executable = "jpackage"
     args(
-        "--type", "dmg",
+        "--type", type,
         "--name", "comando",
-        "--app-version", appVersion,
+        "--app-version", project.version.toString().substringBefore('-'),
         "--vendor", "marregui",
-        "--mac-package-identifier", "dev.marregui.comando",
         "--input", lib.get().asFile.absolutePath,
-        "--main-jar", mainJar,
+        "--main-jar", "app-${project.version}.jar",
         "--main-class", "dev.marregui.comando.app.Main",
-        "--icon", layout.projectDirectory.file("src/main/icon/comando.icns").asFile.absolutePath,
-        // jdk.jfr, jdk.management.jfr, jdk.management.agent: no comando code uses them; they let the packaged app be
-        // recorded, and watched over JMX, like any JVM
         "--add-modules", "java.base,java.desktop,java.logging,java.naming,java.prefs,java.security.jgss,java.sql,jdk.httpserver,jdk.jfr," +
                 "jdk.management,jdk.management.jfr,jdk.management.agent,jdk.unsupported,jdk.localedata,jdk.charsets,jdk.zipfs",
         "--java-options", "--enable-native-access=ALL-UNNAMED",
@@ -173,4 +191,48 @@ tasks.register<Exec>("dmg") {
         "--java-options", "-Dapple.awt.application.appearance=NSAppearanceNameDarkAqua",
         "--dest", out.get().asFile.absolutePath
     )
+    when (platform) {
+        "macos" -> args("--icon", layout.projectDirectory.file("src/main/icon/comando.icns").asFile.absolutePath,
+            "--mac-package-identifier", "dev.marregui.comando")
+        "linux" -> args("--icon", rootProject.layout.projectDirectory.file("ui/src/main/resources/icons/comando.png").asFile.absolutePath)
+    }
+}
+
+// An unsigned macOS disk image: ./gradlew :app:dmg (output in build/dmg, named comando-<version>.dmg).
+val dmg = jpackage("dmg", "dmg", "dmg", "Builds an unsigned macOS disk image with a bundled runtime")
+
+// The application as a folder, for this system: ./gradlew :app:appImage (output in build/app-image: comando.app on
+// macOS, comando/ elsewhere).
+val appImage = jpackage("appImage", "app-image", "app-image", "Builds the application folder with a bundled runtime")
+
+// The file a release publishes for this system: ./gradlew :app:package (output in build/package). macOS: the disk
+// image, comando-<version>-macos-<arch>.dmg; Linux: the application folder as comando-<version>-linux-<arch>.tar.gz;
+// Windows: as comando-<version>-windows-<arch>.zip. Each archive holds one folder, comando/. Nothing is signed.
+val packageName = "comando-${project.version}-$platform-$arch"
+when (platform) {
+    "macos" -> tasks.register<Sync>("package") {
+        group = "distribution"
+        description = "Builds this system's release file: the disk image"
+        val file = "$packageName.dmg"
+        from(dmg) {
+            include("*.dmg")
+            rename { file }
+        }
+        into(layout.buildDirectory.dir("package"))
+    }
+    "windows" -> tasks.register<Zip>("package") {
+        group = "distribution"
+        description = "Builds this system's release file: the application folder as a zip archive"
+        from(appImage)
+        destinationDirectory = layout.buildDirectory.dir("package")
+        archiveFileName = "$packageName.zip"
+    }
+    else -> tasks.register<Tar>("package") {
+        group = "distribution"
+        description = "Builds this system's release file: the application folder as a gzipped tar archive"
+        from(appImage)
+        compression = Compression.GZIP
+        destinationDirectory = layout.buildDirectory.dir("package")
+        archiveFileName = "$packageName.tar.gz"
+    }
 }

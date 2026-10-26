@@ -14,6 +14,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
@@ -56,8 +57,8 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
     private String lastProblem = "";
     private volatile boolean closed;
 
-    public ClaudeTopics(String executable, Path workDir) {
-        this(source -> read(executable, workDir, new ObjectMapper(), source, TIMEOUT));
+    public ClaudeTopics(String executable, RootLaunch launch, Path workDir) {
+        this(source -> read(executable, launch, workDir, new ObjectMapper(), source, TIMEOUT));
     }
 
     /** With the read itself; tests count and pace reads. */
@@ -116,15 +117,16 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
     }
 
     /** Runs one read; blocks up to {@code timeout}. */
-    static Topic read(String executable, Path workDir, ObjectMapper json, String source, Duration timeout) {
+    static Topic read(String executable, RootLaunch launch, Path workDir, ObjectMapper json, String source, Duration timeout) {
         Path out = null;
         Process p = null;
         try {
             out = Files.createTempFile("comando-topic", ".json");
-            ProcessBuilder pb = new ProcessBuilder(executable, "--safe-mode", "-p", "--model", MODEL, "--effort", "low", "--tools", "",
-                    "--system-prompt", SYSTEM, "--no-session-persistence", "--output-format", "json")
+            ProcessBuilder pb = new ProcessBuilder(launch.argv(List.of(executable, "--safe-mode", "-p", "--model", MODEL, "--effort", "low",
+                    "--tools", "", "--system-prompt", SYSTEM, "--no-session-persistence", "--output-format", "json")))
                     .redirectOutput(out.toFile())
                     .redirectError(ProcessBuilder.Redirect.DISCARD);
+            launch.environment(pb.environment());
             pb.environment().put("MAX_THINKING_TOKENS", "0");
             if (workDir != null && Files.isDirectory(workDir)) {
                 pb.directory(workDir.toFile());

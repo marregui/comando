@@ -444,6 +444,11 @@ public final class SessionsSidebar {
         moreForTab = more;
     }
 
+    /** What a folder row's menu in the Files tab gains from the window, after its own items. */
+    public void onFolderMenu(BiConsumer<FolderRoot, JPopupMenu> extra) {
+        files.onFolderMenu(extra);
+    }
+
     /**
      * What a tab's header offers on a right click: the tab's own actions (a new session or connection, importing
      * conversations, sorting the sessions while a drag ordered them by hand), then the window's commands for it, with

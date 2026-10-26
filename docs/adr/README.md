@@ -57,7 +57,7 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [47](0047-help-opens-its-files-as-documents.md) | Help opens its files as documents, with icons of its own | Miguel, Claude | accepted |
 | [48](0048-stalls-are-a-line-hangs-a-stack-the-heap-starts-small.md) | Stalls are a line, hangs a stack; the heap starts small | Miguel, Claude | accepted; its JFR row removed by 54 |
 | [49](0049-the-files-tab-shows-folders-the-user-chooses.md) | The Files tab shows folders the user chooses | Miguel, Claude | accepted; bar, sync interval and order amended by 51; clicks and the index replaced by 52; bar, folder dialog and configuration row removed by 55 |
-| [50](0050-comando-ships-a-claude-code-kit.md) | comando ships a Claude Code kit, and relies only on what it installed | Miguel, Claude | accepted; its JFR key removed by 54; own-setup and offer rows replaced by 61; tool paths by 62; install and setup to be replaced by 80 (proposed) |
+| [50](0050-comando-ships-a-claude-code-kit.md) | comando ships a Claude Code kit, and relies only on what it installed | Miguel, Claude | accepted; its JFR key removed by 54; own-setup and offer rows replaced by 61; tool paths by 62; install and setup replaced by 80 |
 | [51](0051-folder-buttons-together-read-only-folders-icons.md) | Folder buttons together, read-only folders, an icon per folder | Miguel, Claude | accepted, the row "files" proposed; bar, files and read-only removed by 55; its row "files" replaced and the scratchpad icon added by 52 |
 | [52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md) | Files open on a double click; the bar follows the selection and acts on files | Miguel, Claude | accepted; bar, tips, clone, remove and read-only removed by 55; clicks amended by 78 |
 | [53](0053-session-rows-compact-clear-copy-and-an-order-of-your-own.md) | Session rows: compact, clear, copy, and an order of the user's own | Miguel, Claude | accepted |
@@ -66,10 +66,10 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [56](0056-html-opens-in-the-browser-not-in-comando.md) | HTML opens in the browser, not in comando | Miguel, Claude | accepted |
 | [57](0057-a-light-editor-and-a-header-of-icons.md) | A light editor, and a panel header of icons | Miguel, Claude | accepted; the light editor withdrawn, 93 |
 | [58](0058-markdown-shows-the-pictures-beside-it.md) | Markdown shows the pictures beside it | Miguel, Claude | accepted |
-| [59](0059-three-menus-for-what-has-no-key.md) | Three menus, for what has no key or control | Miguel, Claude | accepted; Tool settings removed by 62; the bar replaced, 75 |
+| [59](0059-three-menus-for-what-has-no-key.md) | Three menus, for what has no key or control | Miguel, Claude | accepted; Tool settings removed by 62; the bar replaced, 75; Claude Code kit… removed by 80 |
 | [60](0060-about-is-a-card-worded-by-a-file.md) | About comando is a card worded by a file | Miguel, Claude | accepted |
-| [61](0061-the-kit-overrides-a-setup-of-the-users-own-with-consent.md) | The kit overrides a setup of the user's own, with the user's consent | Miguel, Claude | accepted, not built: the kit still keeps out of a user's own setup (50); to be replaced by 80 (proposed) |
-| [62](0062-gradle-runs-by-convention.md) | Gradle runs by convention; no `tools.json` | Miguel, Claude | accepted |
+| [61](0061-the-kit-overrides-a-setup-of-the-users-own-with-consent.md) | The kit overrides a setup of the user's own, with the user's consent | Miguel, Claude | accepted, not built; replaced by 80 |
+| [62](0062-gradle-runs-by-convention.md) | Gradle runs by convention; no `tools.json` | Miguel, Claude | accepted; the command's `gradle-serial` found on the `PATH` by 80 |
 | [63](0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md) | A tab's menu closes many; a scratchpad's entries go to the Trash | Miguel, Claude | accepted |
 | [64](0064-sub-agents-are-shown-live.md) | Sub-agents are shown live | Miguel, Claude | accepted; following and large files amended 2026-10-18 |
 | [65](0065-keys-on-desktops-other-than-macos.md) | Keys on desktops other than macOS | Miguel, Claude | accepted |
@@ -82,12 +82,12 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [72](0072-the-comparison-window-edits-rolls-back-and-removes.md) | The comparison window edits, rolls back and removes | Miguel, Claude | accepted |
 | [73](0073-the-claude-folders-window-explains-and-creates-the-index.md) | The ~/.claude folders window explains its fields and creates the index | Miguel, Claude | accepted |
 | [74](0074-the-sidebars-lists-have-no-bar-of-buttons.md) | The sidebar's lists have no bar of buttons | Miguel, Claude | accepted |
-| [75](0075-the-menu-bar-is-edit-and-actions-flat.md) | The menu bar is Edit and Actions, flat | Miguel, Claude | accepted |
+| [75](0075-the-menu-bar-is-edit-and-actions-flat.md) | The menu bar is Edit and Actions, flat | Miguel, Claude | accepted; Claude Code kit… removed by 80 |
 | [76](0076-new-files-are-gold-and-marked-from-the-top.md) | New files are gold and marked from the top | Miguel, Claude | accepted; marks amended, 78 |
 | [77](0077-a-files-panel-keeps-its-extension.md) | A file's panel keeps its extension | Miguel, Claude | accepted |
 | [78](0078-a-rows-marks-and-double-click-show-its-changes.md) | A row's marks and double click show its changes; one click opens a folder | Miguel, Claude | accepted; amends 52, 68, 71, 76 |
 | [79](0079-a-notice-takes-you-to-what-it-is-about.md) | A notice takes you to what it is about | Miguel, Claude | accepted; amends the status bar's click |
-| [80](0080-the-kit-is-a-whole-setup-installed-reversibly.md) | The kit is a whole Claude Code setup, installed reversibly | Miguel, Claude | proposed; would replace the install and setup rows of 50 and 61 |
+| [80](0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md) | The kit is a Claude Code setup in a repository of its own, and comando runs its sessions on it | Miguel, Claude | accepted; replaces the install and setup rows of 50 and 61 |
 | [81](0081-a-tab-shows-a-card-with-its-topic.md) | A tab shows a card with its topic | Miguel, Claude | accepted; replaces the panel tabs' tooltip; amended 2026-10-22 |
 | [82](0082-threads-by-kind-with-a-budget.md) | Threads by kind, with a budget | Miguel, Claude | accepted; amends the architecture's thread rule |
 | [83](0083-one-gold-chosen-beside-clear.md) | One gold, chosen beside Clear; serif headings; a turn's report is framed; tooltips and dark pages as answers | Miguel, Claude | proposed; amends the transcript's amber and record 76's gold |

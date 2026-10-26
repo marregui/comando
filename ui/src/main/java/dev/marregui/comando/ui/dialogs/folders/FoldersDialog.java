@@ -31,11 +31,15 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The Files tab's folders inside Claude Code's folder, or its repositories, in a window over comando's: the {@link FoldersEditor}, Cancel and Save.
+ * The Files tab's folders inside Claude Code's folder, or its repositories, in a window over comando's: the {@link FoldersEditor}, Cancel and Save;
+ * the folders' window also has {@link #USE_KIT} when comando runs on a kit.
  * Save writes {@code folders.json} once and is on only while every entry passes; Cancel, Esc and the window's close drop
  * the edits, asking first when there are any. EDT only.
  */
 public final class FoldersDialog {
+
+    /** The folders' window's button that puts the kit's folders back. */
+    public static final String USE_KIT = "Use the kit's folders";
 
     private final JDialog dialog;
     private final FoldersEditor editor;
@@ -44,7 +48,8 @@ public final class FoldersDialog {
     private final ResourceActions.Questions questions;
     private final String title;
 
-    private FoldersDialog(Window owner, List<FolderRoot> folders, boolean repositories, RepoChanges repos, IntentSink intents) {
+    private FoldersDialog(Window owner, List<FolderRoot> folders, boolean repositories, RepoChanges repos, IntentSink intents,
+                          List<FolderRoot> kitFolders) {
         this.intents = intents;
         this.questions = ResourceActions.Questions.MODAL;
         this.title = title(repositories);
@@ -75,12 +80,21 @@ public final class FoldersDialog {
         editor.onChange(() -> save.setEnabled(editor.valid()));
         save.setEnabled(editor.valid());
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.TRAILING, Theme.GAP, 0));
-        buttons.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, Theme.PAD, Theme.PAD));
         buttons.add(cancel);
         buttons.add(save);
+        JPanel south = new JPanel(new BorderLayout());
+        south.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, Theme.PAD, Theme.PAD));
+        south.add(buttons, BorderLayout.EAST);
+        if (!repositories && !kitFolders.isEmpty()) {
+            // the kit's layout back at the top, as comando set it at the first start on the kit; the user's folders stay
+            JButton kit = new JButton(USE_KIT);
+            kit.setToolTipText("Put the kit's folders the list lacks at its top; the others stay");
+            kit.addActionListener(e -> editor.addFirst(kitFolders));
+            south.add(kit, BorderLayout.WEST);
+        }
         JPanel content = new JPanel(new BorderLayout());
         content.add(editor.component(), BorderLayout.CENTER);
-        content.add(buttons, BorderLayout.SOUTH);
+        content.add(south, BorderLayout.SOUTH);
         dialog.setContentPane(content);
         JComponent root = dialog.getRootPane();
         root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "cancel");
@@ -99,9 +113,13 @@ public final class FoldersDialog {
         return repositories ? "Repositories" : HomeDir.shorten(HomeDir.claudeDir().toString()) + " folders";
     }
 
-    /** Opens the window over {@code owner}, of the repositories or of the folders; returns when it closes. */
-    public static void show(Window owner, List<FolderRoot> folders, boolean repositories, RepoChanges repos, IntentSink intents) {
-        new FoldersDialog(owner, folders, repositories, repos, intents).dialog.setVisible(true);
+    /**
+     * Opens the window over {@code owner}, of the repositories or of the folders; returns when it closes. The folders'
+     * window offers {@link #USE_KIT} when the kit has folders.
+     */
+    public static void show(Window owner, List<FolderRoot> folders, boolean repositories, RepoChanges repos, IntentSink intents,
+                            List<FolderRoot> kitFolders) {
+        new FoldersDialog(owner, folders, repositories, repos, intents, kitFolders).dialog.setVisible(true);
     }
 
     private void save() {

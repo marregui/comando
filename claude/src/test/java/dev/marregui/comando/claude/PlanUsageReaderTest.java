@@ -72,7 +72,7 @@ class PlanUsageReaderTest {
     void theReadRunsTheLocalCommandInSafeModeWithoutSavingASession() throws Exception {
         Path args = dir.resolve("args.txt");
         Path exe = script("claude", "printf '%s\\n' \"$@\" > '" + args + "'\nprintf '%s' '" + answer(MAX_PLAN, false).replace("'", "'\\''") + "'\n");
-        PlanUsage u = PlanUsageReader.read(exe.toString(), dir, JSON, Duration.ofSeconds(10));
+        PlanUsage u = PlanUsageReader.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofSeconds(10));
         assertThat(u.windows()).hasSize(3);
         assertThat(Files.readAllLines(args)).containsExactly("--safe-mode", "-p", "/usage", "--no-session-persistence", "--output-format", "json");
     }
@@ -81,7 +81,7 @@ class PlanUsageReaderTest {
     void aReadThatHangsIsStoppedAndSaysSo() throws Exception {
         Path exe = script("hang", "exec sleep 30\n");
         long start = System.nanoTime();
-        PlanUsage u = PlanUsageReader.read(exe.toString(), dir, JSON, Duration.ofMillis(300));
+        PlanUsage u = PlanUsageReader.read(exe.toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofMillis(300));
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofSeconds(5));
         assertThat(u.windows()).isEmpty();
         assertThat(u.problem()).isEqualTo("'claude -p /usage' did not answer within 300 ms");
@@ -89,7 +89,7 @@ class PlanUsageReaderTest {
 
     @Test
     void aMissingExecutableIsAProblemNotAnException() {
-        PlanUsage u = PlanUsageReader.read(dir.resolve("absent").toString(), dir, JSON, Duration.ofSeconds(1));
+        PlanUsage u = PlanUsageReader.read(dir.resolve("absent").toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofSeconds(1));
         assertThat(u.windows()).isEmpty();
         assertThat(u.problem()).startsWith("cannot run '");
     }

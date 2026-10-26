@@ -34,19 +34,20 @@ final class PlanUsageReader {
     }
 
     /** Runs the read; blocks up to {@link #TIMEOUT}. Call it off the EDT and the reducer. */
-    static PlanUsage read(String executable, Path workDir, ObjectMapper json) {
-        return read(executable, workDir, json, TIMEOUT);
+    static PlanUsage read(String executable, RootLaunch launch, Path workDir, ObjectMapper json) {
+        return read(executable, launch, workDir, json, TIMEOUT);
     }
 
-    static PlanUsage read(String executable, Path workDir, ObjectMapper json, Duration timeout) {
+    static PlanUsage read(String executable, RootLaunch launch, Path workDir, ObjectMapper json, Duration timeout) {
         Path out = null;
         Process p = null;
         try {
             out = Files.createTempFile("comando-usage", ".json");
-            ProcessBuilder pb = new ProcessBuilder(executable, "--safe-mode", "-p", "/usage", "--no-session-persistence",
-                    "--output-format", "json")
+            ProcessBuilder pb = new ProcessBuilder(launch.argv(List.of(executable, "--safe-mode", "-p", "/usage", "--no-session-persistence",
+                    "--output-format", "json")))
                     .redirectOutput(out.toFile())
                     .redirectError(ProcessBuilder.Redirect.DISCARD);
+            launch.environment(pb.environment());
             if (workDir != null && Files.isDirectory(workDir)) {
                 pb.directory(workDir.toFile());
             }

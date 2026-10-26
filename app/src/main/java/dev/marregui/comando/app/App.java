@@ -1,10 +1,10 @@
 package dev.marregui.comando.app;
 
 import dev.marregui.comando.claude.ClaudeAdapter;
+import dev.marregui.comando.claude.RootLaunch;
 import dev.marregui.comando.claude.ClaudeSettings;
 import dev.marregui.comando.claude.ClaudeTopics;
 import dev.marregui.comando.claude.ClaudeVersion;
-import dev.marregui.comando.claude.Kit;
 import dev.marregui.comando.claude.SessionCatalogue;
 import dev.marregui.comando.claude.UiInstructions;
 import dev.marregui.comando.core.console.ConsoleRegistry;
@@ -13,7 +13,8 @@ import dev.marregui.comando.core.effect.EffectRouter;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.StateLoop;
-import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.reduce.Reducer;
@@ -29,6 +30,7 @@ import dev.marregui.comando.db.DbSettings;
 import dev.marregui.comando.mcp.AuditLog;
 import dev.marregui.comando.mcp.McpServer;
 import dev.marregui.comando.mcp.McpTools;
+import dev.marregui.comando.tools.KitGit;
 import dev.marregui.comando.tools.ToolSettings;
 import dev.marregui.comando.tools.ToolsAdapter;
 import dev.marregui.comando.ui.PanelTexts;
@@ -44,6 +46,8 @@ import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * The ownership tree. Builds every part in dependency order and closes them in reverse, each once: the tool
@@ -61,20 +65,33 @@ public final class App implements AutoCloseable {
     static final Duration FOLDERS_EVERY = Duration.ofSeconds(5);
     /** How often the status bar's plan usage is read; each read is one local {@code claude -p /usage}, about a second. */
     static final Duration PLAN_USAGE_EVERY = Duration.ofMinutes(5);
+    /** How often the kit's version and its remote's releases are read; never blocking anything. */
+    static final Duration KIT_EVERY = Duration.ofHours(6);
     private final StateLoop loop;
     private final ClaudeAdapter claude;
     private final Errands errands;
     private final ComandoUi ui;
     private final ToolsAdapter tools;
     private final String claudeExecutable;
-    private final Kit kit;
-    private final boolean offerKit;
+    private final KitRoot root;
+    private final RootLaunch launch;
+    private final RootSetup setup;
+    /** Reads the kit's version at start and every {@link #KIT_EVERY}. */
+    private final ScheduledExecutorService kitCheck = Threads.timedStrand("kit-check");
     private volatile boolean closed;
 
     public App(AppConfig config, String version, Runnable onQuit) {
         claudeExecutable = config.claudeExecutable();
-        offerKit = config.offerKit();
+        root = config.root();
+        launch = RootLaunch.on(root);
         try {
+            // what reads HomeDir.claudeDir without being handed the root reads this one, until this closes
+            KitRoot before = KitRoot.current();
+            KitRoot.use(root);
+            own(() -> KitRoot.use(before));
+            own(kitCheck::shutdownNow);
+            KitGit git = own(new KitGit());
+            setup = new RootSetup(root, git);
             Store store = own(new Store(config.home(), config.keychain() ? Secrets.forPlatform() : Secrets.NONE));
             // the start-up checks run as errands, closed just before the store
             errands = own(new Errands("app"));
@@ -82,7 +99,7 @@ public final class App implements AutoCloseable {
             AppState initial = AppState.initial(loaded.panels(),
                     loaded.connections().stream().map(ConnectionState::closed).toList(),
                     loaded.sessions().stream().map(SessionState::closed).toList(),
-                    store.loadFolders(HomeDir.claudeDir())).withClosed(loaded.closed());
+                    store.withKitFolders(store.loadFolders(root.dir()), root)).withClosed(loaded.closed());
 
             TranscriptRegistry transcripts = new TranscriptRegistry();
             ResultRegistry results = new ResultRegistry();
@@ -115,26 +132,25 @@ public final class App implements AutoCloseable {
                 throw new UncheckedIOException("cannot start the MCP server", e);
             }
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
-                    new ClaudeSettings(config.claudeExecutable(), config.runDir(), config.claudeProjects(), UiInstructions.TEXT)));
-            kit = new Kit(Kit.Bundle.resources(), Kit.Cli.process(config.claudeExecutable()), config.kitDir(), HomeDir.claudeDir());
-            ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, () -> ToolSettings.of(kit.gradleSerial()), DesktopTrash::moveToTrash));
+                    new ClaudeSettings(config.claudeExecutable(), config.runDir(), root.projects(), UiInstructions.TEXT, launch)));
+            ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
             tools = devTools;
             EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
-            SessionCatalogue catalogue = new SessionCatalogue(config.claudeProjects());
+            SessionCatalogue catalogue = new SessionCatalogue(root.projects());
             ui = new ComandoUi(new ComandoUi.Dependencies(
                     loop, loop::state, loop, transcripts, results, consoles, schemas, store,
                     () -> catalogue.scan(500).stream().map(e -> new StoredConversation(e.sessionId(), e.cwd(), e.branch(), e.title(),
                             e.lastPrompt(), e.modifiedMillis(), e.sizeBytes())).toList(),
-                    questDb, new KitSetup(kit, store), version, config.home(), config.logDir(), onQuit));
+                    questDb, setup, version, config.home(), config.logDir(), onQuit));
             // the tabs' topics: one reader, one Haiku process at a time, whatever the number of panels
-            ui.topics(own(new ClaudeTopics(config.claudeExecutable(), config.runDir())));
+            ui.topics(own(new ClaudeTopics(config.claudeExecutable(), launch, config.runDir())));
             effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
             // the embedded QuestDB stops last: it may still serve the connections closed above
             owned.addLast(questDb);
             // the window closes last: it stays, greyed and titled "closing…", until everything behind it has closed
             owned.addLast(ui);
             LOG.log(System.Logger.Level.INFO, "comando " + version + " ready [home=" + config.home() + ", mcp=" + mcp.url()
-                    + ", claude=" + config.claudeExecutable() + ']');
+                    + ", claude=" + config.claudeExecutable() + ", root=" + root.dir() + ", kit=" + (root.kit().isPresent() ? root.name() : "none") + ']');
         } catch (RuntimeException | Error e) {
             // roll back: close what was built, in reverse order, then report the cause
             close();
@@ -158,61 +174,25 @@ public final class App implements AutoCloseable {
         }
         String executable = claudeExecutable;
         errands.start("claude-version", () -> {
-            String problem = ClaudeVersion.check(executable);
+            String problem = ClaudeVersion.check(executable, launch);
             if (!problem.isEmpty()) {
                 LOG.log(System.Logger.Level.WARNING, problem);
                 loop.dispatch(new Intent.Notify(Notice.Level.WARN, problem, false));
             }
         });
-        errands.start("kit", this::checkKit);
+        if (root.kit().isPresent()) {
+            kitCheck.scheduleWithFixedDelay(this::checkKit, 0, KIT_EVERY.toMillis(), TimeUnit.MILLISECONDS);
+        }
     }
 
-    /**
-     * Keeps comando's copy of its Claude Code kit equal to this build's, then, on the user's own data root, offers the
-     * kit when Claude Code does not have it and no setup of the user's own was found, or says that the installed kit
-     * changed with comando.
-     */
+    /** Reads the kit's version and its remote's newer releases, and whether the brain can be backed up; the window shows them. */
     private void checkKit() {
-        boolean changed;
+        // an exception escaping a periodic task cancels every later run
         try {
-            changed = kit.refresh();
-        } catch (IOException | RuntimeException e) {
-            loop.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "comando could not write its Claude Code kit into " + kit.dir()
-                    + ": " + e.getMessage() + "; Gradle runs use ./gradlew", e));
-            return;
+            ui.kitStatus(setup.status());
+        } catch (RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "the kit's version could not be read: " + e.getMessage(), e);
         }
-        if (!offerKit) {
-            return;
-        }
-        try {
-            Kit.Status status = kit.status();
-            switch (atStart(status, changed)) {
-                case UPDATED -> loop.dispatch(new Intent.Notify(Notice.Level.INFO, "comando's Claude Code kit is now "
-                        + status.installedVersion() + "; new Claude sessions load it", false));
-                case OFFER -> ui.offerKit(KitSetup.offer(status));
-                case NOTHING -> {
-                }
-            }
-        } catch (IOException | RuntimeException e) {
-            // Claude Code missing or answering oddly: the version check has said so; the kit waits for Help
-            LOG.log(System.Logger.Level.INFO, "the Claude Code kit's state is unknown: " + e.getMessage());
-        }
-    }
-
-    /** What comando does about its kit at start, on the user's own data root. */
-    enum KitAtStart {
-        /** Claude Code loads comando's copy and the copy changed: say so. */
-        UPDATED,
-        /** Claude Code lacks the kit and no setup of the user's own stands in its way: offer it. */
-        OFFER,
-        NOTHING
-    }
-
-    static KitAtStart atStart(Kit.Status status, boolean changed) {
-        if (status.installed()) {
-            return changed && status.loadsCopy() ? KitAtStart.UPDATED : KitAtStart.NOTHING;
-        }
-        return status.alreadySetUp() ? KitAtStart.NOTHING : KitAtStart.OFFER;
     }
 
     public StateLoop loop() {

@@ -5,12 +5,13 @@ architecture to change it.
 
 | To | Read |
 |---|---|
+| install it | [Install](../INSTALL.md): the recipe Claude Code follows to install, upgrade and uninstall comando, and to offer the kit |
 | use comando for the first time | [Tutorial](tutorial.md): a first session, step by step; also Actions ▸ Tutorial in the app |
-| know what the window does | [Workbench](workbench.md): panels and bindings, running text, the database, the tools, the Files tab and git changes, what is kept on disk |
+| know what the window does | [Workbench](workbench.md): panels and bindings, running text, the database, the tools, the Files tab and git changes, what is kept on disk, the kit |
 | know what Claude Code can do in it | [Claude](claude.md): the `claude -p` bridge, the MCP tools, approvals and safety |
 | build, run and test it | [Build and run](build-and-run.md): prerequisites, Gradle tasks, settings |
-| change its code | [Architecture](architecture.md): modules, state and intents, ports, threads, ownership, code rules, quality; then [UI](ui.md): the kit, commands and keys, widgets, the painted transcript |
-| change one module | its README: [core](../core/README.md), [testkit](../testkit/README.md), [db](../db/README.md), [claude](../claude/README.md), [mcp](../mcp/README.md), [tools](../tools/README.md), [ui](../ui/README.md), [app](../app/README.md); the kit: [kit](../kit/README.md) |
+| change its code | [Architecture](architecture.md): modules, state and intents, ports, threads, ownership, code rules, quality; then [UI](ui.md): the UI's shared package (`ui.kit`), commands and keys, widgets, the painted transcript |
+| change one module | its README: [core](../core/README.md), [testkit](../testkit/README.md), [db](../db/README.md), [claude](../claude/README.md), [mcp](../mcp/README.md), [tools](../tools/README.md), [ui](../ui/README.md), [app](../app/README.md) |
 | know why it is so | [Decisions](adr/README.md): one record per decision, dated, with who decided |
 
 `images/` holds the pictures the front page shows: `hero.png` (`./gradlew :app:hero`) and

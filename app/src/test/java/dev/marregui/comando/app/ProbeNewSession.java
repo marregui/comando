@@ -1,6 +1,7 @@
 package dev.marregui.comando.app;
 
 import dev.marregui.comando.claude.ClaudeSettings;
+import dev.marregui.comando.core.model.KitRoot;
 
 import javax.swing.AbstractButton;
 import javax.swing.JDialog;
@@ -25,7 +26,7 @@ import static org.awaitility.Awaitility.await;
 public final class ProbeNewSession {
     public static void main(String[] args) throws Exception {
         Path home = Files.createTempDirectory("comando-probe");
-        App app = new App(new AppConfig(home, ClaudeSettings.findExecutable(), ClaudeSettings.defaultProjectsDir(), true), "probe", () -> {
+        App app = new App(new AppConfig(home, ClaudeSettings.findExecutable(), KitRoot.current(), true), "probe", () -> {
         });
         app.start();
         Thread.sleep(2500);

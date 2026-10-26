@@ -2,6 +2,7 @@ package dev.marregui.comando.app;
 
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.PanelState;
@@ -130,6 +131,30 @@ class StoreTest {
         try (var aside = Files.list(home)) {
             assertThat(aside.map(p -> p.getFileName().toString())).anyMatch(n -> n.startsWith("folders.json.corrupt-"));
         }
+    }
+
+    @Test
+    void theKitsFoldersComeFirstAtTheFirstStartOnItsRootAndOnlyThen() throws Exception {
+        Path root = home.resolve("claude/kit");
+        Path memory = Files.createDirectories(root.resolve("BRAIN/MEMORY"));
+        KitRoot kitRoot = new KitRoot(root, Optional.of(new KitRoot.Manifest("k", "BRAIN",
+                List.of(new FolderRoot("Memory", "BRAIN/MEMORY", "MEMORY.md", List.of(), "memory")), List.of(), List.of(), List.of())),
+                home.resolve("claude"));
+        FolderRoot kitMemory = new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory");
+        FolderRoot repo = new FolderRoot("app", "/app", "", List.of()).asRepository();
+        Files.writeString(home.resolve("folders.json"), "[{\"name\":\"app\",\"path\":\"/app\",\"repository\":true}]");
+        try (Store store = new Store(home)) {
+            assertThat(store.withKitFolders(store.loadFolders(CLAUDE_DIR), kitRoot)).containsExactly(kitMemory, repo);
+        }
+        try (Store store = new Store(home)) {
+            assertThat(store.loadFolders(CLAUDE_DIR)).as("saved").containsExactly(kitMemory, repo);
+            store.saveFolders(List.of(repo));
+        }
+        try (Store store = new Store(home)) {
+            assertThat(store.withKitFolders(store.loadFolders(CLAUDE_DIR), kitRoot)).as("taken out by the user: stays out").containsExactly(repo);
+            assertThat(store.withKitFolders(List.of(repo), KitRoot.plain(root))).as("no kit").containsExactly(repo);
+        }
+        assertThat(Files.readAllLines(home.resolve("kit-folders"))).containsExactly(root.toString());
     }
 
     @Test

@@ -110,6 +110,23 @@ class FoldersEditorTest {
     }
 
     @Test
+    void theKitsFoldersTheListLacksGoFirstAndTheUsersStay(@TempDir Path dir) throws Exception {
+        FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(dir.resolve("kit/BRAIN/MEMORY")).toString(), "MEMORY.md",
+                List.of(), "memory");
+        FolderRoot skills = new FolderRoot("Skills", Files.createDirectories(dir.resolve("kit/skills")).toString(), "", List.of(), "skills");
+        FolderRoot mine = new FolderRoot("Mine", Files.createDirectories(dir.resolve("notes")).toString(), "", List.of());
+        FolderRoot repo = new FolderRoot("repo", Files.createDirectories(dir.resolve("repo")).toString(), "", List.of()).asRepository();
+        FoldersEditor e = editor(List.of(skills, mine, repo), new RepoChanges());
+        settled(e);
+
+        assertThat(on(e, (FoldersEditor x) -> x.addFirst(List.of(memory, skills)))).as("Skills is there already").isEqualTo(1);
+        settled(e);
+        assertThat(on(e, FoldersEditor::dirty)).isTrue();
+        assertThat(on(e, FoldersEditor::folders)).contains(List.of(memory, skills, mine, repo));
+        assertThat(on(e, (FoldersEditor x) -> x.addFirst(List.of(memory, skills)))).as("once").isZero();
+    }
+
+    @Test
     void addingChoosesTheFolderFirstAndNamesItUniquelyWithItsIndex(@TempDir Path dir) throws Exception {
         Path notes = Files.createDirectories(dir.resolve("x").resolve("notes"));
         Files.writeString(notes.resolve("INDEX.md"), "# a\n");

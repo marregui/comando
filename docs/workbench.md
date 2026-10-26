@@ -1,7 +1,7 @@
 # Workbench
 
-What the window does: panels and their bindings, running text, the database, the development tools, the Files tab, and
-what is kept on disk.
+What the window does: panels and their bindings, running text, the database, the development tools, the Files tab,
+what is kept on disk, and the kit.
 
 1. [Panels and resources](#1-panels-and-resources)
 2. [Running text](#2-running-text)
@@ -9,6 +9,7 @@ what is kept on disk.
 4. [Development tools](#4-development-tools)
 5. [The Files tab](#5-the-files-tab)
 6. [Persistence](#6-persistence)
+7. [The kit](#7-the-kit)
 
 ## 1. Panels and resources
 
@@ -275,9 +276,9 @@ ends the focused panel's shell and starts a new one in the session's directory.
 ⌥⌘G asks for tasks (default `build`, then the last used) and runs them in the build of the focused panel's session:
 the nearest directory at or above its working directory with an executable `gradlew`.
 
-- **Command:** `<kit>/bin/gradle-serial <root> <tasks>` (one run per checkout at a time, queued on the same lock as
-  the kit's own runs), or `<root>/gradlew --console=plain <tasks>` when the kit's `gradle-serial` is not there or not
-  executable; each run looks again. Arguments split like shell words, without expansion. Nothing configures it
+- **Command:** `gradle-serial <root> <tasks>`, the first executable `gradle-serial` on comando's `PATH` (one run per
+  checkout at a time, queued on the same lock as the sessions' runs through it), or `<root>/gradlew --console=plain
+  <tasks>` when there is none; each run looks again. Arguments split like shell words, without expansion. Nothing configures it
   ([record 62](adr/0062-gradle-runs-by-convention.md)).
 - **Output:** a console view filled as output arrives; past 4 MB the rest is held and its last 64 kB shown at the end.
   The same command again replaces an unpinned view and stops the old run.
@@ -299,9 +300,10 @@ edited and saved like any other; a `.log` stays read-only.
   an optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge,
   skills, plugin), whether its entries go to the Trash (`deletable`), the file name that lists them (`listedIn`), and
   whether it is a repository (`repository`).
-  The kit's Scratchpad is deletable and listed in `INDEX.md`, its knowledge base indexed by `00_START_HERE.md`; the kit adds only folders that are missing, so a
-  Scratchpad entry written before gains the two keys by editing `folders.json`. Without `folders.json` there is one folder, `~/.claude`, opening `CLAUDE.md` and leaving out Claude
-  Code's transcripts, caches and per-session state; an emptied list stays empty.
+  With a kit, its folders come first, as its `kit.json` lists them ([§7](#7-the-kit)). Without a kit and without
+  `folders.json` there is one folder, Claude Code's (`~/.claude`), opening `CLAUDE.md` and leaving out Claude Code's
+  transcripts, caches and per-session state; an emptied list stays empty. Here and below, `~/.claude` stands for the
+  root comando's sessions run on ([§7.1](#71-the-root)).
 - **Repositories.** The folders configured as repositories are rows of one node, Repositories (its own icon), after the
   other folders, which lie inside `~/.claude` ([record 71](adr/0071-repositories-in-the-files-tab.md)).
 - **Configuring.** The Files tab's menu (a right click on its header) opens the `~/.claude` folders
@@ -321,7 +323,7 @@ edited and saved like any other; a `.log` stays read-only.
   it, and one per entry of a subfolder in that subfolder's listing file. Cancel or Esc drop the edits, asking first. The
   store checks `folders.json` every second: a change it did not write is read again and the tab follows; an entry that
   breaks the rules is left out with a notice; a file that does not parse keeps the tab's folders, says why and stays
-  where it is. The kit adds its folders there too. A `readOnly` key from older versions is ignored.
+  where it is. A `readOnly` key from older versions is ignored.
 - **Order.** At a folder's top level its index file comes first. Every level then lists folders not named after a date,
   date-named folders (`yyyy-MM-dd`) oldest first, then files, by name ignoring case. Hidden entries, `node_modules`,
   `build`, `target`, `__pycache__`, `out` and the folder's own exclusions are left out, and so is what git ignores in
@@ -442,13 +444,14 @@ inside that folder alone ([record 71](adr/0071-repositories-in-the-files-tab.md)
 | `opened-files` | the files opened in comando, one path per line, at most 20 000: a new (untracked) file listed here is no longer marked in the Files tab ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)) |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |
 | `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |
-| `kit/` | comando's copy of its Claude Code kit, made equal to the build's at start ([record 50](adr/0050-comando-ships-a-claude-code-kit.md)) |
+| `kit-folders` | the roots whose kit folders the Files tab has added, one per line, so a kit folder the user took out stays out ([§7.3](#73-the-files-tab)) |
 | `questdb/` | the embedded QuestDB's data |
 
 Outside it: connection passwords in the macOS keychain for the default data root (elsewhere, or off macOS, they stay
 in `connections.json`; [Claude §3.3](claude.md#33-secrets)); window layout and recent
 inputs in Java preferences (node `dev/marregui/comando`; tests use `comando.prefsNode`); Claude Code's conversations in
-`~/.claude/projects/`, read, never written; the kit's skeleton files in Claude Code's folder, written only when missing.
+`projects/` of the root ([§7.1](#71-the-root)), read, never written. comando writes nothing into the root; the brain's
+backup commits in the brain's own repository, on the user's click ([§7.4](#74-back-up-the-brain)).
 
 ### 6.2 Store files
 
@@ -484,3 +487,61 @@ in Git.
 | edited outside comando | checked once a second; reloads into its panel when the panel has no unsaved edits (the caret stays, ⌘Z restores) ([record 27](adr/0027-panels-reload-files-changed-outside.md)); otherwise the next save moves the outside version aside as `<name> (outside comando <date time>).md` |
 | deleted outside comando | the panel is removed, unless it has unsaved edits, which its save writes back ([record 34](adr/0034-a-deleted-document-closes-its-panel.md)) |
 | a file of `panels/` no panel names, at start | becomes a closed panel, with a notice |
+
+## 7. The kit
+
+A kit is a Claude Code setup kept in a git repository and versioned by tags `vMAJOR.MINOR.PATCH`: `CLAUDE.md`,
+`settings.json`, skills, a plugin, `kit.json` (what comando reads) and `INSTALL.md` (the recipe its install, upgrade
+and uninstall follow). The standard kit is `marregui/claude-kit`. comando does not install a kit: the agent that
+installs comando offers it ([INSTALL.md §5](../INSTALL.md#5-the-kit)), and comando finds it at start
+([record 80](adr/0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md)).
+
+### 7.1 The root
+
+The root is the Claude Code folder comando's sessions run on, decided once at start:
+
+| When | Root |
+|---|---|
+| comando was started with `CLAUDE_CONFIG_DIR` | that folder |
+| `~/.claude/kit.json` exists | `~/.claude`: the user's Claude Code folder is a kit checkout |
+| `~/.claude/kit/kit.json` exists | `~/.claude/kit`: a clone of a kit at a tag, beside the user's own setup |
+| otherwise | `~/.claude`, without a kit |
+
+A `kit.json` that does not parse is logged and counts as no kit. Every `claude` comando starts (sessions, the plan
+usage reader, the topics, the version check) gets `CLAUDE_CONFIG_DIR=<root>` when the root is not `~/.claude`, and,
+with a kit, `--settings '{"autoMemoryDirectory": "<root>/<brain>/MEMORY"}'`. Stored conversations, their import and
+their retention are read from `<root>/projects`. A session on a root other than `~/.claude` neither reads nor writes
+`~/.claude`; a new root is signed in to once, with `CLAUDE_CONFIG_DIR=<root> claude auth login`.
+
+### 7.2 The brain
+
+The brain is `<root>/<brain>/` (`brain` in `kit.json`, `BRAIN` in the standard kit): `MEMORY/`, `KB/` and
+`SCRATCHPAD/`, what the sessions learn and write. It is never part of the kit, whose repository ignores it; it can be
+a git repository of its own.
+
+### 7.3 The Files tab
+
+`kit.json` lists the kit's folders with the fields of a `folders.json` entry ([§5](#5-the-files-tab)), each path
+relative to the root. When `folders.json` holds none of them, comando adds them at the top, their paths made absolute
+under the root, once, and saves; the user's own entries (other folders, repositories) stay. An entry whose path
+resolves to the same real path as a kit folder counts as that folder, so an entry through a link is not added twice.
+**Use the kit's folders** in the Files tab's folders window adds them again.
+
+### 7.4 Back up the brain
+
+**Back up the brain** (the palette, and the Files tab's menu on a brain folder) runs in `<root>/<brain>`, off the EDT:
+`git add -A`, `git commit -m "Brain backup <ISO date>"` (nothing to commit is not an error), `git push`. A notice names
+the commit or the failure. The action is off while the brain is not a git repository with a remote, and it never runs
+by itself.
+
+### 7.5 Version and upgrade
+
+The status bar shows the kit's name and version (`git -C <root> describe --tags --always`) and, when
+`git -C <root> ls-remote --tags origin` lists a newer `vX.Y.Z`, "kit vA → vB available". Both are read at start and
+every 6 hours, off the EDT, never holding the window.
+
+**Upgrade the kit…** (the palette, and the notice's menu) asks for a tag, newest first, then opens or creates a session
+named `kit`, working in the root and started on the user's own Claude Code setup rather than the root's (it replaces
+the root's files), and sends it: "Upgrade the kit at <root> to <tag>, following <root>/INSTALL.md section Upgrade.
+Report what changed." A user's own changes to the kit are commits on a local branch, which the upgrade merges with the
+new tag. Once the session reports, comando offers to restart the sessions still running on the old kit.

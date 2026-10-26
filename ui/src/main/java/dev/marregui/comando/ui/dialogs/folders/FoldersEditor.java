@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.dialogs.folders;
 
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.model.KitFolders;
 import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
@@ -380,6 +381,31 @@ public final class FoldersEditor {
         list.setSelectedIndex(rows.size() - 1);
         list.ensureIndexIsVisible(rows.size() - 1);
         edited();
+    }
+
+    /**
+     * "Use the kit's folders": the folders of {@code kit} the list lacks (none of its rows shows that folder or has that
+     * name) go first, in the kit's order, the first selected; answers how many were added.
+     */
+    int addFirst(List<FolderRoot> kit) {
+        List<FolderRoot> have = new ArrayList<>(others);
+        for (int i = 0; i < rows.size(); i++) {
+            have.add(new FolderRoot(rows.get(i).get(NAME).strip(), HomeDir.expand(rows.get(i).get(PATH).strip()), "", List.of()));
+        }
+        List<FolderRoot> missing = KitFolders.missing(have, kit);
+        for (int k = 0; k < missing.size(); k++) {
+            Row r = new Row(FolderKind.INSTANCE.toAttributes(missing.get(k)));
+            rows.add(k, r);
+            lookUp(r.get(PATH));
+            lookUpIndex(r);
+        }
+        if (!missing.isEmpty()) {
+            list.setSelectedIndex(0);
+            list.ensureIndexIsVisible(0);
+            load();
+            edited();
+        }
+        return missing.size();
     }
 
     private boolean nameTaken(String n) {

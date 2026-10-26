@@ -7,6 +7,7 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
@@ -50,7 +51,7 @@ public final class Hero {
         Path out = Path.of(args.length > 0 ? args[0] : "build/snapshots");
         Files.createDirectories(out);
         Path home = Files.createTempDirectory("comando-hero");
-        AppConfig config = new AppConfig(home, ClaudeSettings.findExecutable(), ClaudeSettings.defaultProjectsDir(), true);
+        AppConfig config = new AppConfig(home, ClaudeSettings.findExecutable(), KitRoot.current(), true);
         App app = new App(config, "hero", () -> {
         });
         app.start();

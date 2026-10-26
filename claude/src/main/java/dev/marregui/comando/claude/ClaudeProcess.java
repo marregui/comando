@@ -14,7 +14,6 @@ import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
@@ -57,14 +56,14 @@ final class ClaudeProcess {
         this.stderrFile = stderrFile;
     }
 
-    static ClaudeProcess start(String name, List<String> argv, Path workDir, Map<String, String> env,
+    static ClaudeProcess start(String name, List<String> argv, Path workDir, RootLaunch launch,
                                Consumer<String> onLine, IntConsumer onExit) throws IOException {
         Path stderrFile = Files.createTempFile("comando-claude-", ".stderr",
                 PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")));
         Process process;
         try {
             ProcessBuilder pb = new ProcessBuilder(argv).directory(workDir.toFile()).redirectError(stderrFile.toFile());
-            pb.environment().putAll(env);
+            launch.environment(pb.environment());
             process = pb.start();
         } catch (IOException | RuntimeException e) {
             Files.deleteIfExists(stderrFile);

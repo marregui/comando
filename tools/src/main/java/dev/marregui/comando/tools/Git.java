@@ -294,6 +294,11 @@ final class Git implements AutoCloseable {
 
     /** Runs git in {@code dir}; its output is read on a thread of its own, so a stuck process is killed in time. */
     Run run(Path dir, List<String> args) throws IOException {
+        return run(dir, args, TIMEOUT_MILLIS);
+    }
+
+    /** As {@link #run(Path, List)}, killed after {@code timeoutMillis}: a run that talks to a remote takes longer. */
+    Run run(Path dir, List<String> args, long timeoutMillis) throws IOException {
         if (closed) {
             throw new IOException("closed");
         }
@@ -316,7 +321,7 @@ final class Git implements AutoCloseable {
             Thread errReader = Threads.fork("git-err", err);
             boolean ended;
             try {
-                ended = p.waitFor(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS);
+                ended = p.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 ended = false;

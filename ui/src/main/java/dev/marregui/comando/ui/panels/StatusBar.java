@@ -42,6 +42,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /**
@@ -62,6 +63,11 @@ public final class StatusBar {
     private final JLabel connection = new JLabel();
     private final JLabel work = new JLabel();
     private final JLabel usage = new JLabel();
+    /** The kit's name and version, and a newer release when one is out; hidden without a kit. */
+    private final JLabel kit = new JLabel();
+    /** Opens the kit's menu under its label. */
+    private Consumer<JComponent> kitMenu = c -> {
+    };
     /** The last read that had windows; a failed read after it keeps showing it, marked as old. */
     private PlanUsage lastUsage;
     private final IntentSink intents;
@@ -81,11 +87,22 @@ public final class StatusBar {
         root.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(3, Theme.PAD, 3, Theme.PAD)));
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.PAD * 2, 0));
+        right.add(kit);
         right.add(usage);
         right.add(session);
         right.add(connection);
         right.add(work);
         usage.setVisible(false);
+        kit.setVisible(false);
+        kit.setForeground(Theme.MUTED);
+        kit.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        kit.getAccessibleContext().setAccessibleName("Kit");
+        kit.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                kitMenu.accept(kit);
+            }
+        });
         usage.getAccessibleContext().setAccessibleName("Plan usage");
         notice.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         notice.getAccessibleContext().setAccessibleName("Status");
@@ -140,6 +157,16 @@ public final class StatusBar {
         }
         if (lastUsage == null) {
             usage.setVisible(false);
+        kit.setVisible(false);
+        kit.setForeground(Theme.MUTED);
+        kit.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        kit.getAccessibleContext().setAccessibleName("Kit");
+        kit.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                kitMenu.accept(kit);
+            }
+        });
             return;
         }
         boolean stale = read != lastUsage;
@@ -159,6 +186,27 @@ public final class StatusBar {
                     + " failed: " + read.problem()));
         }
         usage.setToolTipText("<html>" + tip + "</html>");
+    }
+
+    /**
+     * Shows the kit: its name and version, muted; gold, the colour that asks to be looked at, when a newer release is
+     * out, as {@code text} then says. Empty text hides it.
+     */
+    public void kit(String text, String tip, boolean newer) {
+        kit.setVisible(!text.isEmpty());
+        kit.setText(text);
+        kit.setForeground(newer ? Theme.warn() : Theme.MUTED);
+        kit.setToolTipText(tip.isEmpty() ? null : wrapped(tip));
+    }
+
+    /** What a press on the kit's label opens, under it. */
+    public void onKitMenu(Consumer<JComponent> show) {
+        kitMenu = show;
+    }
+
+    /** The kit's label; for tests. */
+    JLabel kitLabel() {
+        return kit;
     }
 
     /** The usage label; for tests. */

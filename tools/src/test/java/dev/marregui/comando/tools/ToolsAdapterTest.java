@@ -216,7 +216,7 @@ class ToolsAdapterTest {
         sink.await(Intent.CommandFinished.class, e -> e.runId() == 2L, WAIT);
 
         assertThat(consoles.of(1L).text(0)).startsWith("$ " + dir.resolve("gradlew"));
-        assertThat(consoles.of(2L).text(0)).as("the kit appeared between runs").startsWith("$ " + serial + " " + dir + " build")
+        assertThat(consoles.of(2L).text(0)).as("the wrapper appeared between runs").startsWith("$ " + serial + " " + dir + " build")
                 .contains("serial " + dir + " build");
     }
 
