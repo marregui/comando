@@ -4,35 +4,52 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 
 import javax.swing.AbstractAction;
 import javax.swing.Action;
+import javax.swing.ButtonGroup;
 import javax.swing.JComponent;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JRadioButtonMenuItem;
 import javax.swing.KeyStroke;
 import javax.swing.event.MenuEvent;
 import javax.swing.event.MenuListener;
 import java.awt.event.ActionEvent;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
 /** The registry of commands. Widgets register; the shell builds menus, bindings and the palette from it. */
 public final class ActionRegistry {
+
+    /** The client property of a menu item that names its command. */
+    private static final String ID = "comando.command";
 
     private final Map<String, Command> commands = new LinkedHashMap<>();
     /** Every menu item built from a command, so {@link #refresh} can keep their enabled state current. */
     private final List<JMenuItem> built = new ArrayList<>();
     /** The ids of the commands the menu bar holds, whose keys are their items' accelerators. */
     private final Set<String> inMenus = new HashSet<>();
+    /** The commands that are one choice of several, by id: whether each is the one chosen now. */
+    private final Map<String, BooleanSupplier> choices = new HashMap<>();
 
     public void register(Command command) {
         if (commands.putIfAbsent(command.id(), command) != null) {
             throw new IllegalArgumentException("command registered twice: " + command.id());
         }
+    }
+
+    /**
+     * Makes command {@code id} one choice of several: its menu item is a radio item, ticked while {@code chosen} holds,
+     * asked as its menu opens. Call it before {@link #menuBar}.
+     */
+    public void choice(String id, BooleanSupplier chosen) {
+        choices.put(id, chosen);
     }
 
     public List<Command> all() {
@@ -137,6 +154,8 @@ public final class ActionRegistry {
         }
         menu.setToolTipText(menuTips.apply(spec.title()));
         List<JMenuItem> items = new ArrayList<>();
+        // a menu's choices are one group: choosing one unticks the others before the menu is asked again
+        ButtonGroup group = new ButtonGroup();
         for (MenuEntry e : spec.entries()) {
             switch (e) {
                 case MenuEntry.Separator s -> menu.addSeparator();
@@ -152,7 +171,13 @@ public final class ActionRegistry {
                     inMenus.add(i.id());
                     c = c.withGroup(path);
                     commands.put(c.id(), c);
-                    JMenuItem item = new JMenuItem(action(c));
+                    BooleanSupplier chosen = choices.get(c.id());
+                    JMenuItem item = chosen == null ? new JMenuItem(action(c)) : new JRadioButtonMenuItem(action(c));
+                    item.putClientProperty(ID, c.id());
+                    if (chosen != null) {
+                        group.add(item);
+                        item.setSelected(chosen.getAsBoolean());
+                    }
                     item.setAccelerator(c.key());
                     item.setToolTipText(tips.apply(c.id()));
                     item.setEnabled(c.enabled().getAsBoolean());
@@ -168,6 +193,7 @@ public final class ActionRegistry {
                 for (JMenuItem item : items) {
                     item.setEnabled(item.getAction().isEnabled());
                 }
+                syncChoices(items);
             }
 
             @Override
@@ -193,6 +219,19 @@ public final class ActionRegistry {
             boolean enabled = item.getAction().isEnabled();
             if (item.isEnabled() != enabled) {
                 item.setEnabled(enabled);
+            }
+        }
+        syncChoices(built);
+    }
+
+    /** Ticks each radio item of {@code items} whose choice is the one chosen now, and only those. */
+    private void syncChoices(List<JMenuItem> items) {
+        for (JMenuItem item : items) {
+            if (item instanceof JRadioButtonMenuItem radio) {
+                BooleanSupplier chosen = choices.get((String) item.getClientProperty(ID));
+                if (chosen != null && radio.isSelected() != chosen.getAsBoolean()) {
+                    radio.setSelected(chosen.getAsBoolean());
+                }
             }
         }
     }

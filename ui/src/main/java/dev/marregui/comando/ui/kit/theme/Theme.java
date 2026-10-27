@@ -54,9 +54,42 @@ public final class Theme {
     public static final Color TRANSCRIPT = new Color(0x121212);
     /**
      * Every text of the transcript outside a bubble or a card: a warm ivory, low in saturation for long reading, so
-     * that the gold of its headings and marks stands apart from it.
+     * that the tint of its headings and marks stands apart from it.
      */
     public static final Color TRANSCRIPT_TEXT = new Color(0xE2DCCD);
+    /** Bold text in Claude's answers and rendered pages: brighter than {@link #TRANSCRIPT_TEXT}. */
+    public static final Color ANSWER_STRONG = new Color(0xFAF7F0);
+    /** Inline code in Claude's answers and rendered pages: teal on its own ground. */
+    public static final Color ANSWER_CODE = new Color(0x8FC9C0);
+    public static final Color ANSWER_CODE_GROUND = new Color(0x26282C);
+    /** Inline code elsewhere in the transcript (a bubble, a card), in the text's colour. */
+    public static final Color INLINE_CODE_GROUND = new Color(0x393B40);
+    /** A code block's ground. */
+    public static final Color CODE_GROUND = new Color(0x1E1F22);
+    /** Selected text in the transcript. */
+    public static final Color SELECTION = new Color(0x214283);
+    /**
+     * A find match and the current one: violet, apart from the tint (structure), the selection's blue, the diff's green
+     * and red, and the attention's gold; a match is data, not structure (record 96). Ivory reads at 7.8:1 and 4.9:1.
+     */
+    public static final Color FIND_MATCH = new Color(0x4A3560);
+    public static final Color FIND_CURRENT = new Color(0x6F4C91);
+    /** The rules of a table in the transcript. */
+    public static final Color TABLE_RULE = new Color(0x4E5157);
+    /** Text where the look and feel names no label colour. */
+    public static final Color TEXT_FALLBACK = new Color(0xDFE1E5);
+    /**
+     * A state that asks to be looked at (an approval waiting, a session opening, an edit not saved yet, the flash on what
+     * a click brought into view, the SVGs' amber): Treasure gold's body in every tint, a status colour as {@link #DANGER}
+     * is (record 96). It followed the gold chosen while every tint was a gold (record 83).
+     */
+    public static final Color ATTENTION = Tint.TREASURE.body;
+    /** About's card: warm charcoal from top to bottom, its ink, its soft and muted text (record 60). */
+    public static final Color ABOUT_TOP = new Color(0x2C2926);
+    public static final Color ABOUT_BOTTOM = new Color(0x1B1917);
+    public static final Color ABOUT_INK = new Color(0xF2EDE4);
+    public static final Color ABOUT_SOFT = new Color(0xBFB6A8);
+    public static final Color ABOUT_MUTED = new Color(0x8E867A);
     /** Laid over a window that is closing: it greys what is under it. */
     public static final Color VEIL = new Color(0, 0, 0, 110);
     /** Series colours, chosen to stay apart on a dark background. */
@@ -69,6 +102,12 @@ public final class Theme {
     public static final int PAD = 10;
     public static final int RADIUS = 8;
 
+    /**
+     * The first three heading levels' sizes, as multiples of the text's: the transcript and rendered Markdown pages both
+     * (record 96). Levels 4 to 6 are the text's size, bold.
+     */
+    public static final float[] HEADING_SCALE = {1.45f, 1.25f, 1.1f};
+
     private static Font mono = new Font(Font.MONOSPACED, Font.PLAIN, 13);
     /**
      * Where macOS keeps New York, Apple's serif: it lists the face under no family name, as it does SF, so it is loaded
@@ -77,9 +116,9 @@ public final class Theme {
     static final Path NEW_YORK = Path.of("/System/Library/Fonts/NewYork.ttf");
     /** The headings' face where New York is not: serifs of Windows, macOS and the Linux distributions, in that order. */
     static final String[] SERIFS = {"Georgia", "Cambria", "Noto Serif", "DejaVu Serif", "Liberation Serif"};
-    private static volatile Gold gold = Gold.TREASURE;
-    /** What shows the gold and must lay itself out or recolour when another is chosen. */
-    private static final List<Runnable> GOLD_LISTENERS = new CopyOnWriteArrayList<>();
+    private static volatile Tint tint = Tint.TREASURE;
+    /** What shows the tint and must lay itself out or recolour when another is chosen. */
+    private static final List<Runnable> TINT_LISTENERS = new CopyOnWriteArrayList<>();
 
     private Theme() {
     }
@@ -101,10 +140,10 @@ public final class Theme {
         if (!ok) {
             FlatDarkLaf.setup();
         }
-        // tooltips read as a report: its ground, a bar of the gold down the left edge, the transcript's ivory
-        UIManager.put("ToolTip.background", new ColorUIResource(tooltipGround()));
+        // tooltips read as a report: the transcript's ground, a bar of the tint down the left edge, its ivory
+        UIManager.put("ToolTip.background", new ColorUIResource(TRANSCRIPT));
         UIManager.put("ToolTip.foreground", new ColorUIResource(TRANSCRIPT_TEXT));
-        UIManager.put("ToolTip.border", new GoldBarBorder());
+        UIManager.put("ToolTip.border", new TintBarBorder());
         FlatLaf.updateUI();
         mono = pickMono();
     }
@@ -173,44 +212,29 @@ public final class Theme {
         return new Font(Font.MONOSPACED, Font.PLAIN, 13);
     }
 
-    /**
-     * A state that asks to be looked at (an approval waiting, a session opening, an edit not saved yet, the flash on what
-     * a click brought into view): the gold chosen, as every other gold of the window. It was an amber of its own,
-     * {@code #EDA200}, which read as a second, coppery gold beside it.
-     */
-    public static Color warn() {
-        return gold().body;
-    }
-
-    /** The gold chosen; {@link Gold#TREASURE} until one is. */
-    public static Gold gold() {
-        return gold;
+    /** The tint chosen; {@link Tint#TREASURE} until one is. */
+    public static Tint tint() {
+        return tint;
     }
 
     /**
-     * Chooses the gold: the tooltips take it, then everything listening ({@link #onGold}) lays itself out or recolours
-     * in it at once; what reads {@link #gold()} as it paints takes it at its next paint. EDT only.
+     * Chooses the tint: everything listening ({@link #onTint}) lays itself out or recolours in it at once; what reads
+     * {@link #tint()} as it paints, the tooltips' bar among them, takes it at its next paint. EDT only.
      */
-    public static void gold(Gold chosen) {
-        if (gold == chosen) {
+    public static void tint(Tint chosen) {
+        if (tint == chosen) {
             return;
         }
-        gold = chosen;
-        UIManager.put("ToolTip.background", new ColorUIResource(tooltipGround()));
-        for (Runnable r : GOLD_LISTENERS) {
+        tint = chosen;
+        for (Runnable r : TINT_LISTENERS) {
             r.run();
         }
     }
 
-    /** Runs {@code listener} on the EDT each time another gold is chosen; returns what stops it. */
-    public static Runnable onGold(Runnable listener) {
-        GOLD_LISTENERS.add(listener);
-        return () -> GOLD_LISTENERS.remove(listener);
-    }
-
-    /** The ground of a tooltip and a tab card: the transcript's, lifted a little towards the gold, as a report's. */
-    public static Color tooltipGround() {
-        return Gold.over(TRANSCRIPT, gold.highlight, 0.03f);
+    /** Runs {@code listener} on the EDT each time another tint is chosen; returns what stops it. */
+    public static Runnable onTint(Runnable listener) {
+        TINT_LISTENERS.add(listener);
+        return () -> TINT_LISTENERS.remove(listener);
     }
 
     /** {@code c} with {@code alpha} (0 to 255): a tint laid over text, such as the accent behind a statement that ran. */

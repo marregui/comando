@@ -110,7 +110,7 @@ class StatusBarUsageTest {
         StatusBar bar = new StatusBar(intent -> {
         });
         SwingUtilities.invokeAndWait(() -> bar.planUsage(new PlanUsage(List.of(new PlanUsage.Window("Week", 80, "")), 1L, "")));
-        assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.warn());
+        assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.ATTENTION);
         SwingUtilities.invokeAndWait(() -> bar.planUsage(new PlanUsage(List.of(new PlanUsage.Window("Session", 95, "")), 1L, "")));
         assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.DANGER);
     }

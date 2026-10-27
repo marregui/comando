@@ -3,10 +3,15 @@ package dev.marregui.comando.ui.shell;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.ui.kit.action.MenuEntry;
 import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.Tint;
+import dev.marregui.comando.ui.kit.theme.TintIcon;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import static dev.marregui.comando.ui.kit.action.MenuEntry.SEPARATOR;
@@ -15,7 +20,8 @@ import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
 /**
  * The menu bar, the icons and tooltips of its entries, and where every other command belongs. The bar holds only what
  * has no key and no control in the window, and what macOS expects in a menu: after the application menu macOS draws,
- * Edit (the clipboard and undo) and Actions, flat, its groups split by separators, help the last. Every other command
+ * Edit (the clipboard and undo) and Actions, its groups split by separators, the tints its one submenu, help the last.
+ * Every other command
  * keeps its key, its control and the palette, and is listed by its area ("Session", "Results") in the palette and the
  * keyboard shortcuts.
  * <p>
@@ -77,31 +83,50 @@ final class Menus {
             Map.entry("help.log", "comando's log, read-only, following its end"),
             Map.entry("help.dataRoot", "Show comando's data root: panels, sessions, settings, logs"));
 
-    /** The tooltips of the submenus, by title: none, the bar is flat (Miguel, 2026-10-19). */
-    static final Map<String, String> MENU_TIPS = Map.of();
+    /** The tooltips of the submenus, by title: only Tint; the bar is otherwise flat (Miguel, 2026-10-19). */
+    static final Map<String, String> MENU_TIPS = Map.of(
+            "Tint", "The colour of headings, reports, tooltips and new files, in every window");
+
+    /** The submenu's icon: a swatch of the tint chosen. */
+    static final String TINT_ICON = "tint";
 
     /** Where each command in no menu belongs, named in the palette and the keyboard shortcuts. */
     static final Map<String, String> AREAS = areas();
 
+    static {
+        // the tints' swatches, painted, named as their commands are; the submenu's is the tint chosen
+        Icons.put(TINT_ICON, new TintIcon(null));
+        for (Tint t : Tint.values()) {
+            Icons.put(t.commandId(), new TintIcon(t));
+        }
+    }
+
     private Menus() {
     }
 
-    /** The icon of command {@code id}, or null. */
+    /** The icon of command {@code id}, or null; a tint's command is named as its swatch is. */
     static String icon(String id) {
-        return ICONS.get(id);
+        return id.startsWith("tint.") ? id : ICONS.get(id);
     }
 
     /** The tooltip of command {@code id}, or null. */
     static String tip(String id) {
+        for (Tint t : Tint.values()) {
+            if (t.commandId().equals(id)) {
+                return "Tint headings, reports and new files in " + t.label.toLowerCase(Locale.ROOT) + "; kept across restarts";
+            }
+        }
         return KeyText.of(TIPS.get(id));
     }
 
     /**
-     * The menu bar after the application menu macOS draws: Edit, then Actions, flat, its groups split by separators: the
-     * palette; the shell and the plots; the embedded server, only when comando has one; help.
+     * The menu bar after the application menu macOS draws: Edit, then Actions, its groups split by separators: the
+     * palette and the tint (record 96); the shell and the plots; the embedded server, only when comando has one; help.
      */
     static List<MenuEntry.Menu> bar(boolean server) {
-        List<Object> actions = new ArrayList<>(List.of("view.palette", SEPARATOR, "terminal.restart", "run.plotStop"));
+        Object[] tints = Arrays.stream(Tint.values()).map(Tint::commandId).toArray();
+        List<Object> actions = new ArrayList<>(List.of("view.palette", menu("Tint", TINT_ICON, tints), SEPARATOR,
+                "terminal.restart", "run.plotStop"));
         if (server) {
             actions.addAll(List.of(SEPARATOR, "server.start", "server.stop"));
         }

@@ -2,8 +2,8 @@ package dev.marregui.comando.ui.kit.text;
 
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.Links;
-import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 import javax.swing.JEditorPane;
 import javax.swing.JViewport;
@@ -172,26 +172,26 @@ public class HtmlPane extends JEditorPane {
         }
     }
 
-    /** Stops hearing the gold chosen; set while the pane is in a window. */
-    private Runnable stopHearingGold;
+    /** Stops hearing the tint chosen; set while the pane is in a window. */
+    private Runnable stopHearingTint;
 
     @Override
     public void addNotify() {
         super.addNotify();
-        // a dark page's headings, table heads and rules are the gold chosen: another chosen, the page is drawn again
-        stopHearingGold = Theme.onGold(this::restyle);
+        // a page's headings, table heads and rules are the tint chosen: another chosen, the page is drawn again
+        stopHearingTint = Theme.onTint(this::restyle);
     }
 
     @Override
     public void removeNotify() {
-        if (stopHearingGold != null) {
-            stopHearingGold.run();
-            stopHearingGold = null;
+        if (stopHearingTint != null) {
+            stopHearingTint.run();
+            stopHearingTint = null;
         }
         super.removeNotify();
     }
 
-    /** The page drawn again under its rules and the gold chosen. */
+    /** The page drawn again under its rules and the tint chosen. */
     private void restyle() {
         String html = markdown == null ? getText() : null;
         HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
@@ -206,8 +206,9 @@ public class HtmlPane extends JEditorPane {
     }
 
     /**
-     * The page's rules, over Swing's defaults. It reads as a turn's answer in the transcript: ivory text, headings in the headings' serif and the chosen gold over a gold rule, gold table heads on a
-     * band of the gold's shade, bold brighter, inline code teal, quotes beside a gold bar.
+     * The page's rules, over Swing's defaults. It reads as a turn's answer in the transcript: ivory text, headings in the
+     * headings' serif and the chosen tint over a tinted rule, at the transcript's scale ({@link Theme#HEADING_SCALE}),
+     * tinted table heads on a band of the tint's shade, bold brighter, inline code teal, quotes beside a tinted bar.
      */
     static StyleSheet styles() {
         StyleSheet css = new StyleSheet();
@@ -218,20 +219,30 @@ public class HtmlPane extends JEditorPane {
         String muted = Theme.hex(Theme.MUTED);
         String link = Theme.hex(Theme.ACCENT);
         String mono = Theme.mono().getFamily();
+        String serif = Theme.serif().getFamily();
+        Tint tint = Theme.tint();
         int size = UIManager.getFont("Label.font").getSize();
+        float[] scale = Theme.HEADING_SCALE;
         css.addRule("body { font-family: sans-serif; font-size: " + size + "pt; color: " + fg + "; margin: 0; }");
         css.addRule("p { margin-top: 2px; margin-bottom: 6px; }");
-        css.addRule("h1 { font-size: " + (size + 6) + "pt; margin: 6px 0 4px 0; }");
-        css.addRule("h2 { font-size: " + (size + 4) + "pt; margin: 6px 0 4px 0; }");
-        css.addRule("h3 { font-size: " + (size + 2) + "pt; margin: 4px 0 2px 0; }");
-        css.addRule("code { font-family: '" + mono + "'; color: " + Theme.hex(Theme.CLAUDE) + "; }");
+        css.addRule("h1, h2, h3 { font-family: '" + serif + "'; font-weight: bold; color: " + Theme.hex(tint.body) + "; }");
+        css.addRule("h1 { font-size: " + Math.round(size * scale[0]) + "pt; margin: 6px 0 4px 0; }");
+        css.addRule("h2 { font-size: " + Math.round(size * scale[1]) + "pt; margin: 6px 0 4px 0; }");
+        css.addRule("h3 { font-size: " + Math.round(size * scale[2]) + "pt; margin: 4px 0 2px 0; }");
+        css.addRule("h1, h2 { border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: " + Theme.hex(tint.headingRule())
+                + "; padding-bottom: 3px; }");
+        css.addRule("b, strong { color: " + Theme.hex(Theme.ANSWER_STRONG) + "; }");
+        css.addRule("code { font-family: '" + mono + "'; color: " + Theme.hex(Theme.ANSWER_CODE) + "; background-color: "
+                + Theme.hex(Theme.ANSWER_CODE_GROUND) + "; }");
         css.addRule("pre { font-family: '" + mono + "'; background-color: " + card + "; padding: 6px; margin: 4px 0 6px 0; }");
         css.addRule("pre.code code { color: " + fg + "; }");
         css.addRule("a { color: " + link + "; }");
         css.addRule("table { border-collapse: collapse; margin: 4px 0 6px 0; }");
-        css.addRule("th { border: 1px solid " + border + "; padding: 2px 6px; background-color: " + card + "; }");
+        css.addRule("th { border: 1px solid " + border + "; padding: 2px 6px; color: " + Theme.hex(tint.highlight) + "; background-color: "
+                + Theme.hex(tint.tableHeadGround()) + "; }");
         css.addRule("td { border: 1px solid " + border + "; padding: 2px 6px; }");
-        css.addRule("blockquote { margin-left: 8px; color: " + muted + "; }");
+        css.addRule("blockquote { margin-left: 8px; color: " + fg + "; font-style: italic; border-left-width: 3px; border-left-style: solid; "
+                + "border-left-color: " + Theme.hex(tint.body) + "; padding-left: 8px; }");
         // front matter: its facts as a tab's card shows them, a quiet key and the value, no grid
         css.addRule("table.front { margin: 0 0 8px 0; }");
         // Swing reads padding side by side, not a shorthand of four
@@ -239,18 +250,6 @@ public class HtmlPane extends JEditorPane {
                 + muted + "; }");
         css.addRule("td.front-value { border-width: 0; padding-top: 1px; padding-bottom: 1px; padding-left: 0; padding-right: 0; }");
         css.addRule("ul, ol { margin-left: 18px; margin-top: 2px; margin-bottom: 4px; }");
-        Gold gold = Theme.gold();
-        String rule = Theme.hex(Gold.over(Theme.TRANSCRIPT, gold.shade, 0.7f));
-        String serif = Theme.serif().getFamily();
-        css.addRule("h1, h2, h3 { font-family: '" + serif + "'; font-weight: bold; color: " + Theme.hex(gold.body) + "; }");
-        css.addRule("h1, h2 { border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: " + rule
-                + "; padding-bottom: 3px; }");
-        css.addRule("b, strong { color: #FAF7F0; }");
-        css.addRule("code { color: #8FC9C0; background-color: #26282C; }");
-        css.addRule("th { color: " + Theme.hex(gold.highlight) + "; background-color: "
-                + Theme.hex(Gold.over(Theme.TRANSCRIPT, gold.shade, 0.22f)) + "; }");
-        css.addRule("blockquote { color: " + fg + "; font-style: italic; border-left-width: 3px; border-left-style: solid; "
-                + "border-left-color: " + Theme.hex(gold.body) + "; padding-left: 8px; }");
         return css;
     }
 

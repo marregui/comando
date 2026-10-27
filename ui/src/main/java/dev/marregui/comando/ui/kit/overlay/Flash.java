@@ -29,7 +29,7 @@ public final class Flash {
     /** The colour {@code elapsedMillis} into a flash: the warning amber, its alpha falling to 0 at {@link #MILLIS}. */
     public static Color at(long elapsedMillis) {
         long left = Math.max(0, MILLIS - elapsedMillis);
-        return Theme.withAlpha(Theme.warn(), (int) (START_ALPHA * left / MILLIS));
+        return Theme.withAlpha(Theme.ATTENTION, (int) (START_ALPHA * left / MILLIS));
     }
 
     /**

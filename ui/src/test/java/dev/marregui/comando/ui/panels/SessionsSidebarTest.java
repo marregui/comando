@@ -779,7 +779,7 @@ class SessionsSidebarTest {
 
         assertThat(SessionRow.titleHtml(newer, true, false, 0, newest)).doesNotContain("↑");
         assertThat(SessionRow.titleHtml(older, true, false, 0, newest)).as("started before the update: an amber arrow after the name")
-                .contains(">edge</b>&nbsp;<span style='color:" + Theme.hex(Theme.warn()) + "'>↑</span>");
+                .contains(">edge</b>&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>↑</span>");
         assertThat(SessionRow.details(older, started, ZoneOffset.UTC, newest))
                 .contains("Claude Code: 2.1.302, older than the 2.1.303 another session runs; start this one again to use it\n");
         assertThat(SessionRow.details(newer, started, ZoneOffset.UTC, newest)).contains("Claude Code: 2.1.303\n");

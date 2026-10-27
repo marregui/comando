@@ -113,3 +113,4 @@ has the same shape:
 | [93](0093-comando-is-dark-throughout.md) | comando is dark throughout | 2026-10-26 | Miguel and Claude | accepted |
 | [94](0094-links-in-both-styles-everywhere.md) | Links in both styles, followed everywhere at a double click | 2026-10-27 | Miguel and Claude | accepted |
 | [95](0095-the-files-tab-holds-no-code-repositories.md) | The Files tab holds no code repositories | 2026-10-27 | Miguel and Claude | accepted |
+| [96](0096-a-tint-chosen-in-actions.md) | A tint, chosen in Actions or beside Clear; the ground stays the transcript's; attention stays gold | 2026-10-27 | Miguel and Claude | accepted |

@@ -1,7 +1,7 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
 import dev.marregui.comando.ui.kit.text.Highlighter;
-import dev.marregui.comando.ui.kit.theme.Gold;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.widgets.transcript.doc.Para;
 import dev.marregui.comando.ui.widgets.transcript.doc.Span;
 
@@ -128,7 +128,7 @@ final class Paras {
             paintBox(g, box, x + indent, y + top, clip, marks);
             if (para.kind() == Para.Kind.HEADING && para.level() <= 2) {
                 if (s.answer && para.spans().stream().noneMatch(Span::isLink)) {
-                    gild(g, box, x + indent, y + top, s.gold);
+                    gild(g, box, x + indent, y + top, s.tint);
                 }
                 g.setColor(s.headingRule);
                 g.fillRect(x, y + top + box.height() + 3, width, 1);
@@ -136,10 +136,10 @@ final class Paras {
         }
 
         /**
-         * Paints the glyphs of {@code b} at {@code (x, y)} again along the gold's ramp, highlight at the letters' tops to
+         * Paints the glyphs of {@code b} at {@code (x, y)} again along the tint's ramp, highlight at the letters' tops to
          * shade at the baseline, as light runs down polished metal; the selection and find marks under them stay.
          */
-        private static void gild(Graphics2D g, TextBox b, int x, int y, Gold gold) {
+        private static void gild(Graphics2D g, TextBox b, int x, int y, Tint tint) {
             for (TextBox.Line line : b.lines()) {
                 if (line.layout() == null) {
                     continue;
@@ -148,7 +148,7 @@ final class Paras {
                 float top = baseline - line.layout().getAscent() * 0.8f;
                 Shape glyphs = line.layout().getOutline(AffineTransform.getTranslateInstance(x, baseline));
                 Paint was = g.getPaint();
-                g.setPaint(gold.ramp(top, baseline, true));
+                g.setPaint(tint.ramp(top, baseline, true));
                 g.fill(glyphs);
                 g.setPaint(was);
             }

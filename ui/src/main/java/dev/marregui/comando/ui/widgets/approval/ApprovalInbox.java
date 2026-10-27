@@ -531,7 +531,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             }
             if (a.kind() == ApprovalKind.QUESTION) {
                 choose.setName("choose");
-                choose.setForeground(Theme.warn());
+                choose.setForeground(Theme.ATTENTION);
                 p.add(choose);
             }
             return p;

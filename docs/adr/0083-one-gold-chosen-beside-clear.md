@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-21 | accepted; the light page it left unchanged removed by [record 93](0093-comando-is-dark-throughout.md) | Miguel and Claude |
+| 2026-10-21 | accepted; the light page it left unchanged removed by [record 93](0093-comando-is-dark-throughout.md); the choice, the lifted ground and the warning amber amended by [record 96](0096-a-tint-chosen-in-actions.md) | Miguel and Claude |
 
 ## 1. Context
 

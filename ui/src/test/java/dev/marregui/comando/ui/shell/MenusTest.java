@@ -1,6 +1,8 @@
 package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.ui.kit.action.MenuEntry;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.TintIcon;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -39,16 +41,18 @@ class MenusTest {
     }
 
     @Test
-    void editThenActionsFlatInGroupsHelpAmongThem() {
+    void editThenActionsInGroupsTheTintsItsOneSubmenuHelpAmongThem() {
         List<MenuEntry.Menu> bar = Menus.bar(true);
         assertThat(bar).extracting(MenuEntry.Menu::title).as("after macOS's application menu").containsExactly("Edit", "Actions");
         assertThat(ids(bar)).containsExactly(
                 "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
                 "view.palette", "terminal.restart", "run.plotStop", "server.start", "server.stop",
-                "help.tutorial", "help.keys", "help.markdown", "help.log", "help.dataRoot");
-        assertThat(submenus(bar)).as("flat").isEmpty();
-        assertThat(bar.get(1).entries().stream().filter(e -> !(e instanceof MenuEntry.Item)).count())
-                .as("separators between the palette, the shell and plots, the server, help").isEqualTo(3);
+                "help.tutorial", "help.keys", "help.markdown", "help.log", "help.dataRoot",
+                "tint.treasure", "tint.yellow", "tint.champagne", "tint.silver", "tint.tropical_forest", "tint.electric_blue");
+        assertThat(submenus(bar)).extracting(MenuEntry.Menu::title).as("flat but for the tints").containsExactly("Tint");
+        assertThat(bar.get(1).entries().get(1)).as("the tints after the palette").isInstanceOf(MenuEntry.Menu.class);
+        assertThat(bar.get(1).entries().stream().filter(MenuEntry.Separator.class::isInstance).count())
+                .as("separators between the palette and tints, the shell and plots, the server, help").isEqualTo(3);
         assertThat(ids(Menus.bar(false))).as("no embedded server, no items for it").doesNotContain("server.start", "server.stop");
     }
 
@@ -57,16 +61,21 @@ class MenusTest {
         List<MenuEntry.Menu> bar = Menus.bar(true);
         for (String id : ids(bar)) {
             assertThat(Menus.icon(id)).as(id + " has an icon").isNotNull();
-            assertThat(MenusTest.class.getResource("/icons/" + Menus.icon(id) + ".svg")).as(id + "'s icon is a resource").isNotNull();
-            assertThat(Menus.tip(id)).as(id + " has a tooltip").isNotBlank();
+            if (id.startsWith("tint.")) {
+                assertThat(Icons.get(Menus.icon(id))).as(id + "'s icon is its swatch").isInstanceOf(TintIcon.class);
+            } else {
+                assertThat(MenusTest.class.getResource("/icons/" + Menus.icon(id) + ".svg")).as(id + "'s icon is a resource").isNotNull();
+            }
+            assertThat(Menus.tip(id)).as(id + " has a tooltip").isNotBlank().hasSizeLessThanOrEqualTo(80);
         }
         for (MenuEntry.Menu sub : submenus(bar)) {
             assertThat(sub.icon()).as(sub.title() + " has an icon").isNotNull();
-            assertThat(MenusTest.class.getResource("/icons/" + sub.icon() + ".svg")).isNotNull();
+            assertThat(Icons.get(sub.icon())).as("the chosen tint's swatch").isInstanceOf(TintIcon.class);
             assertThat(Menus.MENU_TIPS.get(sub.title())).as(sub.title() + " has a tooltip").isNotBlank();
         }
         assertThat(bar).as("the bar's own titles are words, as macOS draws them").allMatch(m -> m.icon() == null);
-        assertThat(Menus.TIPS.keySet()).as("no tooltip for an item that is gone").isEqualTo(new HashSet<>(ids(bar)));
+        assertThat(Menus.TIPS.keySet()).as("no tooltip for an item that is gone")
+                .isEqualTo(new HashSet<>(ids(bar).stream().filter(id -> !id.startsWith("tint.")).toList()));
     }
 
     @Test

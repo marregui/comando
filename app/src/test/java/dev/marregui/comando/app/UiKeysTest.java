@@ -25,7 +25,7 @@ import dev.marregui.comando.testkit.RecordingPorts;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.Command;
 import dev.marregui.comando.ui.kit.desktop.Platform;
-import dev.marregui.comando.ui.kit.theme.Gold;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.shell.ComandoUi;
 import dev.marregui.comando.ui.shell.ServerToggle;
@@ -44,6 +44,7 @@ import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JMenu;
+import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JTabbedPane;
@@ -168,7 +169,7 @@ class UiKeysTest {
         restore(Platform.KEYS_PROPERTY, keys);
         restore("comando.prefsNode", prefs);
         Preferences.userRoot().node(PREFS).removeNode();
-        Theme.gold(Gold.TREASURE);
+        Theme.tint(Tint.TREASURE);
     }
 
     private static void restore(String property, String value) {
@@ -483,15 +484,36 @@ class UiKeysTest {
     }
 
     @Test
-    void theGoldIsChosenBesideTheSessionsClearAndKeptForTheNextWindow() throws Exception {
+    void theTintIsChosenInActionsOrBesideClearAndKeptForTheNextWindow() throws Exception {
+        Preferences prefs = Preferences.userRoot().node(PREFS);
         Window w = open("mac");
         settle(w);
-        AbstractButton gold = await("the gold button", () -> find(w.frame(), AbstractButton.class,
-                b -> "Choose the gold".equals(b.getAccessibleContext().getAccessibleName())).orElse(null), WAIT_MILLIS);
-        List<String> row = onEdt(() -> Stream.of(gold.getParent().getComponents())
+        AbstractButton swatch = await("the tint button", () -> find(w.frame(), AbstractButton.class,
+                b -> "Choose the tint".equals(b.getAccessibleContext().getAccessibleName())).orElse(null), WAIT_MILLIS);
+        List<String> row = onEdt(() -> Stream.of(swatch.getParent().getComponents())
                 .map(c -> ((JComponent) c).getAccessibleContext().getAccessibleName()).toList());
-        assertThat(row).as("left of Clear").containsExactly("Choose the gold", "Clear the Session tab");
-        assertThat(Theme.gold()).as("by default").isEqualTo(Gold.TREASURE);
+        assertThat(row).as("left of Clear").containsExactly("Choose the tint", "Clear the Session tab");
+        JMenu tint = onEdt(() -> {
+            JMenuBar bar = w.frame().getJMenuBar();
+            for (int i = 0; i < bar.getMenuCount(); i++) {
+                JMenu m = bar.getMenu(i);
+                if ("Actions".equals(m.getText())) {
+                    for (int k = 0; k < m.getItemCount(); k++) {
+                        if (m.getItem(k) instanceof JMenu sub && "Tint".equals(sub.getText())) {
+                            return sub;
+                        }
+                    }
+                }
+            }
+            return null;
+        });
+        assertThat(tint).as("Actions ▸ Tint").isNotNull();
+        List<JRadioButtonMenuItem> items = onEdt(() -> Stream.of(tint.getMenuComponents()).map(c -> (JRadioButtonMenuItem) c).toList());
+        assertThat(onEdt(() -> items.stream().map(AbstractButton::getText).toList())).containsExactly(
+                Stream.of(Tint.values()).map(t -> t.label).toArray(String[]::new));
+        assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
+                .as("the tint chosen is ticked").containsExactly(Tint.TREASURE.label);
+        assertThat(Theme.tint()).as("by default").isEqualTo(Tint.TREASURE);
         // a session bound to the panel, with a turn whose answer is its report, in the Session tab
         w.loop().dispatch(new Intent.SaveSession("", SessionSpec.fresh("gilt", "/tmp")));
         w.loop().dispatch(new Intent.BindSession(w.loop().state().focusedPanel().id(), "gilt"));
@@ -507,35 +529,58 @@ class UiKeysTest {
         settle(w);
         TranscriptCanvas canvas = await("the transcript", () -> find(w.frame(), TranscriptCanvas.class).orElse(null), WAIT_MILLIS);
         await("the turn on the canvas", () -> canvas.contentHeight() > 100, WAIT_MILLIS);
-        assertThat(goldPixels(canvas, Gold.TREASURE)).as("the report's bar").isPositive();
+        assertThat(tintPixels(canvas, Tint.TREASURE)).as("the report's bar").isPositive();
 
+        JRadioButtonMenuItem blue = items.get(Tint.ELECTRIC_BLUE.ordinal());
         onEdt(() -> {
-            gold.doClick();
+            blue.doClick();
+            return null;
+        });
+        assertThat(Theme.tint()).isEqualTo(Tint.ELECTRIC_BLUE);
+        assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
+                .as("one tick, on the tint chosen").containsExactly(Tint.ELECTRIC_BLUE.label);
+        assertThat(prefs.get("theme.tint", null)).isEqualTo("ELECTRIC_BLUE");
+        assertThat(tintPixels(canvas, Tint.ELECTRIC_BLUE)).as("the answer laid out again in the tint chosen, at once").isPositive();
+        assertThat(tintPixels(canvas, Tint.TREASURE)).isZero();
+
+        // the same choice from the swatch beside Clear: its menu ticks the tint chosen, and Actions ▸ Tint follows
+        onEdt(() -> {
+            swatch.doClick();
             return null;
         });
         // the menu shows in the frame or, heavyweight, in a window the frame owns
-        JRadioButtonMenuItem champagne = await("the menu", () -> Stream.concat(Stream.of(w.frame()), Stream.of(w.frame().getOwnedWindows()))
-                .map(win -> find(win, JRadioButtonMenuItem.class, i -> Gold.CHAMPAGNE.label.equals(i.getText())).orElse(null))
+        JRadioButtonMenuItem silver = await("the swatch's menu", () -> Stream.concat(Stream.of(w.frame()), Stream.of(w.frame().getOwnedWindows()))
+                .map(win -> find(win, JRadioButtonMenuItem.class,
+                        i -> Tint.SILVER.label.equals(i.getText()) && !items.contains(i)).orElse(null))
                 .filter(Objects::nonNull).findFirst().orElse(null), WAIT_MILLIS);
-        List<String> ticked = onEdt(() -> Stream.of(champagne.getParent().getComponents())
-                .map(c -> (JRadioButtonMenuItem) c).filter(AbstractButton::isSelected).map(AbstractButton::getText).toList());
-        assertThat(ticked).as("the gold chosen is ticked").containsExactly(Gold.TREASURE.label);
+        assertThat(onEdt(() -> Stream.of(silver.getParent().getComponents()).map(c -> (JRadioButtonMenuItem) c)
+                .filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
+                .as("the swatch's menu ticks the tint chosen").containsExactly(Tint.ELECTRIC_BLUE.label);
         onEdt(() -> {
-            champagne.doClick();
+            silver.doClick();
             return null;
         });
-        assertThat(Theme.gold()).isEqualTo(Gold.CHAMPAGNE);
-        assertThat(Preferences.userRoot().node(PREFS).get("theme.gold", null)).isEqualTo("CHAMPAGNE");
-        assertThat(goldPixels(canvas, Gold.CHAMPAGNE)).as("the answer laid out again in the gold chosen, at once").isPositive();
-        assertThat(goldPixels(canvas, Gold.TREASURE)).isZero();
+        assertThat(Theme.tint()).isEqualTo(Tint.SILVER);
+        assertThat(prefs.get("theme.tint", null)).isEqualTo("SILVER");
+        assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
+                .as("Actions ▸ Tint ticks it too").containsExactly(Tint.SILVER.label);
+        assertThat(tintPixels(canvas, Tint.SILVER)).as("the answer laid out again in it, at once").isPositive();
 
-        Theme.gold(Gold.TREASURE);
+        Theme.tint(Tint.TREASURE);
         open("mac");
-        assertThat(Theme.gold()).as("a new window paints in the gold kept").isEqualTo(Gold.CHAMPAGNE);
+        assertThat(Theme.tint()).as("a new window paints in the tint kept").isEqualTo(Tint.SILVER);
+
+        // the gold kept before tints, under its old key, is the tint of the next window
+        prefs.remove("theme.tint");
+        prefs.put("theme.gold", "CHAMPAGNE");
+        Theme.tint(Tint.TREASURE);
+        open("mac");
+        assertThat(Theme.tint()).as("the gold kept before tints").isEqualTo(Tint.CHAMPAGNE);
+        prefs.remove("theme.gold");
     }
 
-    /** How many pixels of the canvas, painted as it stands, are {@code gold}'s highlight: the top of the report's bar. */
-    private static int goldPixels(TranscriptCanvas canvas, Gold gold) throws Exception {
+    /** How many pixels of the canvas, painted as it stands, are {@code tint}'s highlight: the top of the report's bar. */
+    private static int tintPixels(TranscriptCanvas canvas, Tint tint) throws Exception {
         return onEdt(() -> {
             int width = 800;
             canvas.ensureLayout(width);
@@ -547,7 +592,7 @@ class UiKeysTest {
             int n = 0;
             for (int y = 0; y < img.getHeight(); y++) {
                 for (int x = 0; x < img.getWidth(); x++) {
-                    if ((img.getRGB(x, y) & 0xFFFFFF) == (gold.highlight.getRGB() & 0xFFFFFF)) {
+                    if ((img.getRGB(x, y) & 0xFFFFFF) == (tint.highlight.getRGB() & 0xFFFFFF)) {
                         n++;
                     }
                 }

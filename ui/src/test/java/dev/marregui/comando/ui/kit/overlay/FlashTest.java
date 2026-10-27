@@ -19,13 +19,13 @@ class FlashTest {
 
     @Test
     void theAmberFadesToNothingOverTwoSeconds() {
-        assertThat(Flash.at(0)).isEqualTo(Theme.withAlpha(Theme.warn(), Flash.START_ALPHA));
+        assertThat(Flash.at(0)).isEqualTo(Theme.withAlpha(Theme.ATTENTION, Flash.START_ALPHA));
         assertThat(Flash.at(Flash.MILLIS / 2).getAlpha()).isEqualTo(Flash.START_ALPHA / 2);
         assertThat(Flash.at(Flash.MILLIS).getAlpha()).isZero();
         assertThat(Flash.at(Flash.MILLIS * 3).getAlpha()).isZero();
         Color mid = Flash.at(500);
         assertThat(new int[]{mid.getRed(), mid.getGreen(), mid.getBlue()})
-                .containsExactly(Theme.warn().getRed(), Theme.warn().getGreen(), Theme.warn().getBlue());
+                .containsExactly(Theme.ATTENTION.getRed(), Theme.ATTENTION.getGreen(), Theme.ATTENTION.getBlue());
     }
 
     @Test

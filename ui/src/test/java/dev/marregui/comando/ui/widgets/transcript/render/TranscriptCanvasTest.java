@@ -3,7 +3,7 @@ package dev.marregui.comando.ui.widgets.transcript.render;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.testkit.SyntheticSession;
 import dev.marregui.comando.ui.kit.async.OnEdt;
-import dev.marregui.comando.ui.kit.theme.Gold;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -33,8 +33,8 @@ class TranscriptCanvasTest {
     }
 
     @AfterEach
-    void defaultGold() {
-        Theme.gold(Gold.TREASURE);
+    void defaultTint() {
+        Theme.tint(Tint.TREASURE);
     }
 
     private void load(List<SyntheticSession.Step> steps) {
@@ -139,18 +139,21 @@ class TranscriptCanvasTest {
     }
 
     @Test
-    void anAnswersHeadingsMarksAndTableHeadsAreGoldElsewhereTheTextsColour() {
+    void anAnswersHeadingsMarksAndTableHeadsAreTintedElsewhereTheTextsColour() {
         Style s = Style.of(0);
-        Gold gold = Theme.gold();
-        assertThat(s.outside().heading).isEqualTo(gold.body);
-        assertThat(s.outside().mark).isEqualTo(gold.body);
-        assertThat(s.outside().tableHead).isEqualTo(gold.highlight);
+        Tint tint = Theme.tint();
+        assertThat(s.outside().heading).isEqualTo(tint.body);
+        assertThat(s.outside().mark).isEqualTo(tint.body);
+        assertThat(s.outside().tableHead).isEqualTo(tint.highlight);
         assertThat(s.outside().strong).as("bold brighter than the text").isNotEqualTo(s.outside().text);
         assertThat(s.heading).as("a card's text keeps one colour").isEqualTo(s.text);
         assertThat(s.mark).isEqualTo(s.muted);
         assertThat(s.tableHead).isEqualTo(s.text);
         assertThat(s.strong).isEqualTo(s.text);
         assertThat(s.codeText).isNull();
+        assertThat(s.findMatch).as("a match is data, no tint's").isEqualTo(Theme.FIND_MATCH);
+        assertThat(Style.of(0).headings[0].getSize2D()).as("h1 at the shared scale")
+                .isEqualTo(s.body.getSize2D() * Theme.HEADING_SCALE[0]);
     }
 
     @Test
@@ -172,17 +175,19 @@ class TranscriptCanvasTest {
     }
 
     @Test
-    void choosingAnotherGoldRepaintsTheReportInIt() {
+    void choosingAnotherTintRepaintsTheReportInItOnTheTranscriptsGround() {
         canvas.append(0, new Block.UserPrompt("go", "p", ""));
         canvas.append(1, text("# Result\n\nDone."));
         canvas.append(2, new Block.TurnEnd(0.1, 1_000, 2, false, ""));
-        assertThat(pixels(paint(800, 300), Gold.TREASURE.highlight)).as("the bar's top").isPositive();
-        assertThat(pixels(paint(800, 300), Gold.CHAMPAGNE.highlight)).isZero();
+        assertThat(pixels(paint(800, 300), Tint.TREASURE.highlight)).as("the bar's top").isPositive();
+        assertThat(pixels(paint(800, 300), Tint.CHAMPAGNE.highlight)).isZero();
+        assertThat(pixels(paint(800, 300), Tint.over(Theme.TRANSCRIPT, Tint.TREASURE.highlight, 0.03f)))
+                .as("no ground lifted towards the tint").isZero();
 
-        Theme.gold(Gold.CHAMPAGNE);
+        Theme.tint(Tint.ELECTRIC_BLUE);
         canvas.restyle();
-        assertThat(pixels(paint(800, 300), Gold.CHAMPAGNE.highlight)).isPositive();
-        assertThat(pixels(paint(800, 300), Gold.TREASURE.highlight)).isZero();
+        assertThat(pixels(paint(800, 300), Tint.ELECTRIC_BLUE.highlight)).isPositive();
+        assertThat(pixels(paint(800, 300), Tint.TREASURE.highlight)).isZero();
     }
 
     @Test

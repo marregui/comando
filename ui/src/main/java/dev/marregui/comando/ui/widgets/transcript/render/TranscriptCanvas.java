@@ -654,27 +654,27 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     /**
-     * The gold was chosen again: every item is laid out and painted again in it now, as after a zoom change; the
+     * Another tint was chosen: every item is laid out and painted again in it now, as after a zoom change; the
      * selection goes, as its boxes are made again. Runs on its own while the canvas is in a window.
      */
     public void restyle() {
         setZoom(zoom);
     }
 
-    /** Stops hearing the gold chosen; set while the canvas is in a window. */
-    private Runnable stopHearingGold;
+    /** Stops hearing the tint chosen; set while the canvas is in a window. */
+    private Runnable stopHearingTint;
 
     @Override
     public void addNotify() {
         super.addNotify();
-        stopHearingGold = Theme.onGold(this::restyle);
+        stopHearingTint = Theme.onTint(this::restyle);
     }
 
     @Override
     public void removeNotify() {
-        if (stopHearingGold != null) {
-            stopHearingGold.run();
-            stopHearingGold = null;
+        if (stopHearingTint != null) {
+            stopHearingTint.run();
+            stopHearingTint = null;
         }
         super.removeNotify();
     }

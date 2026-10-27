@@ -9,13 +9,13 @@ import java.awt.font.TextLayout;
 import java.awt.geom.AffineTransform;
 
 /**
- * A title in the headings' serif, its letters along the chosen gold's ramp, as a transcript answer's first headings:
+ * A title in the headings' serif, its letters along the chosen tint's ramp, as a transcript answer's first headings:
  * the heading of a card that should read as the reply does. Plain text only; a glyph the serif lacks is not drawn, so
  * a title keeps to words.
  */
-public final class GoldTitle extends JLabel {
+public final class TintTitle extends JLabel {
 
-    public GoldTitle(String text, float size) {
+    public TintTitle(String text, float size) {
         super(text);
         putClientProperty("html.disable", Boolean.TRUE);
         setFont(Theme.serif().deriveFont(size));
@@ -34,7 +34,7 @@ public final class GoldTitle extends JLabel {
             Insets in = getInsets();
             TextLayout layout = new TextLayout(text, getFont(), g.getFontRenderContext());
             float baseline = in.top + layout.getAscent();
-            g.setPaint(Theme.gold().ramp(baseline - layout.getAscent() * 0.8f, baseline, true));
+            g.setPaint(Theme.tint().ramp(baseline - layout.getAscent() * 0.8f, baseline, true));
             g.fill(layout.getOutline(AffineTransform.getTranslateInstance(in.left, baseline)));
         } finally {
             g.dispose();

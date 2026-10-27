@@ -1,7 +1,7 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
 import dev.marregui.comando.ui.widgets.transcript.doc.Span;
 
@@ -40,23 +40,23 @@ public final class Style {
     final Color outside = Theme.TRANSCRIPT_TEXT;
     final Color accent = Theme.ACCENT;
     final Color link = Theme.ACCENT;
-    final Color codeBackground = new Color(0x1E1F22);
+    final Color codeBackground = Theme.CODE_GROUND;
     final Color inlineCodeBackground;
-    final Color selection = new Color(0x214283);
-    final Color findMatch = new Color(0x6B5A1E);
-    final Color tableRule = new Color(0x4E5157);
-    final Color findCurrent = new Color(0xA88A1E);
+    final Color selection = Theme.SELECTION;
+    final Color findMatch = Theme.FIND_MATCH;
+    final Color tableRule = Theme.TABLE_RULE;
+    final Color findCurrent = Theme.FIND_CURRENT;
 
-    /** The gold this style paints with, as {@link Theme#gold()} was when it was made. */
-    final Gold gold;
+    /** The tint this style paints with, as {@link Theme#tint()} was when it was made. */
+    final Tint tint;
     /**
-     * True for Claude's answers on the transcript's ground ({@link #outside()}): gold headings, list marks and table
+     * True for Claude's answers on the transcript's ground ({@link #outside()}): tinted headings, list marks and table
      * heads, a brighter bold, tinted code; elsewhere each of these is the text's own colour, as before.
      */
     final boolean answer;
     /** Bold text. */
     final Color strong;
-    /** A heading's text; an answer's first two levels run along {@link #gold}'s ramp over it. */
+    /** A heading's text; an answer's first two levels run along {@link #tint}'s ramp over it. */
     final Color heading;
     /** A list's bullets and numbers, and a quote's bar. */
     final Color mark;
@@ -73,32 +73,32 @@ public final class Style {
     private Style outsideStyle;
 
     Style(Font base, Font monoBase, int zoom) {
-        this(base, monoBase, zoom, color("Label.foreground", new Color(0xDFE1E5)), Theme.MUTED, false, Theme.gold());
+        this(base, monoBase, zoom, color("Label.foreground", Theme.TEXT_FALLBACK), Theme.MUTED, false, Theme.tint());
     }
 
-    private Style(Font base, Font monoBase, int zoom, Color text, Color muted, boolean answer, Gold gold) {
+    private Style(Font base, Font monoBase, int zoom, Color text, Color muted, boolean answer, Tint tint) {
         this.base = base;
         this.monoBase = monoBase;
         this.text = text;
         this.muted = muted;
         this.zoom = zoom;
-        this.gold = gold;
+        this.tint = tint;
         this.answer = answer;
         if (answer) {
-            strong = new Color(0xFAF7F0);
-            heading = gold.body;
-            mark = gold.body;
-            codeText = new Color(0x8FC9C0);
-            inlineCodeBackground = new Color(0x26282C);
-            tableHead = gold.highlight;
-            tableHeadBackground = Gold.over(Theme.TRANSCRIPT, gold.shade, 0.22f);
-            headingRule = Gold.over(Theme.TRANSCRIPT, gold.shade, 0.7f);
+            strong = Theme.ANSWER_STRONG;
+            heading = tint.body;
+            mark = tint.body;
+            codeText = Theme.ANSWER_CODE;
+            inlineCodeBackground = Theme.ANSWER_CODE_GROUND;
+            tableHead = tint.highlight;
+            tableHeadBackground = tint.tableHeadGround();
+            headingRule = tint.headingRule();
         } else {
             strong = text;
             heading = text;
             mark = muted;
             codeText = null;
-            inlineCodeBackground = new Color(0x393B40);
+            inlineCodeBackground = Theme.INLINE_CODE_GROUND;
             tableHead = text;
             tableHeadBackground = codeBackground;
             headingRule = Theme.withAlpha(muted, 80);
@@ -114,8 +114,9 @@ public final class Style {
         small = base.deriveFont(Font.PLAIN, Math.max(8f, size - 1f));
         // the first three levels in the serif, set apart from the text as a title is; the smaller ones bold
         Font serif = Theme.serif();
+        float[] scale = Theme.HEADING_SCALE;
         headings = new Font[]{
-                serif.deriveFont(Font.BOLD, size * 1.45f), serif.deriveFont(Font.BOLD, size * 1.25f), serif.deriveFont(Font.BOLD, size * 1.1f),
+                serif.deriveFont(Font.BOLD, size * scale[0]), serif.deriveFont(Font.BOLD, size * scale[1]), serif.deriveFont(Font.BOLD, size * scale[2]),
                 bold, bold, bold};
         LineMetrics m = body.getLineMetrics("Xg", FRC);
         lineGap = Math.max(2f, m.getHeight() * 0.22f);
@@ -147,12 +148,12 @@ public final class Style {
     }
 
     /**
-     * The same style with its text and muted text in {@link #outside}, and an {@link #answer}'s gold: Claude's answers,
+     * The same style with its text and muted text in {@link #outside}, and an {@link #answer}'s tint: Claude's answers,
      * quotes included.
      */
     Style outside() {
         if (outsideStyle == null) {
-            outsideStyle = answer ? this : new Style(base, monoBase, zoom, outside, outside, true, gold);
+            outsideStyle = answer ? this : new Style(base, monoBase, zoom, outside, outside, true, tint);
         }
         return outsideStyle;
     }

@@ -1,7 +1,7 @@
 package dev.marregui.comando.app;
 
 import dev.marregui.comando.ui.kit.text.HtmlPane;
-import dev.marregui.comando.ui.kit.theme.Gold;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -19,14 +19,14 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * A rendered Markdown page in a window takes another gold at once, as the transcript does: it listens only while it is
+ * A rendered Markdown page in a window takes another tint at once, as the transcript does: it listens only while it is
  * in a window, which needs a display, so this runs in {@code ./gradlew :app:uiTest}.
  */
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
-class DarkPageGoldUiTest {
+class DarkPageTintUiTest {
 
     @Test
-    void aShownPageIsDrawnAgainInTheGoldChosenAndOneTakenOutOfItsWindowNoMore() throws Exception {
+    void aShownPageIsDrawnAgainInTheTintChosenAndOneTakenOutOfItsWindowNoMore() throws Exception {
         AtomicReference<JFrame> frame = new AtomicReference<>();
         HtmlPane pane = new HtmlPane();
         try {
@@ -40,16 +40,16 @@ class DarkPageGoldUiTest {
                 f.setVisible(true);
                 frame.set(f);
             });
-            assertThat(headingColour(pane)).isEqualTo(Gold.TREASURE.body);
-            SwingUtilities.invokeAndWait(() -> Theme.gold(Gold.CHAMPAGNE));
-            assertThat(headingColour(pane)).as("drawn again at once").isEqualTo(Gold.CHAMPAGNE.body);
+            assertThat(headingColour(pane)).isEqualTo(Tint.TREASURE.body);
+            SwingUtilities.invokeAndWait(() -> Theme.tint(Tint.CHAMPAGNE));
+            assertThat(headingColour(pane)).as("drawn again at once").isEqualTo(Tint.CHAMPAGNE.body);
 
             SwingUtilities.invokeAndWait(() -> frame.get().remove(pane));
-            SwingUtilities.invokeAndWait(() -> Theme.gold(Gold.YELLOW));
-            assertThat(headingColour(pane)).as("out of its window, it no longer listens").isEqualTo(Gold.CHAMPAGNE.body);
+            SwingUtilities.invokeAndWait(() -> Theme.tint(Tint.YELLOW));
+            assertThat(headingColour(pane)).as("out of its window, it no longer listens").isEqualTo(Tint.CHAMPAGNE.body);
         } finally {
             SwingUtilities.invokeAndWait(() -> {
-                Theme.gold(Gold.TREASURE);
+                Theme.tint(Tint.TREASURE);
                 if (frame.get() != null) {
                     frame.get().dispose();
                 }

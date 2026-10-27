@@ -239,10 +239,10 @@ final class SessionRow extends IconRow {
      * context in purple once the checkpoint is due; the approvals waiting. Never wraps, clipped at the edge.
      */
     static String titleHtml(SessionState s, boolean open, boolean focused, int approvals, String newestCli) {
-        String older = olderCli(s, newestCli) ? "&nbsp;<span style='color:" + Theme.hex(Theme.warn()) + "'>↑</span>" : "";
+        String older = olderCli(s, newestCli) ? "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>↑</span>" : "";
         String due = s.reflection().due() && EditorPanel.showsCheckpoint(s)
                 ? "&nbsp;<span style='color:" + Theme.hex(Theme.THINKING) + "'>" + (contextText(s).isEmpty() ? "◆" : contextText(s)) + "</span>" : "";
-        String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.warn()) + "'>⚑" + approvals + "</span>";
+        String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>⚑" + approvals + "</span>";
         String name = focused ? "<b style='color:" + Theme.hex(Theme.ACCENT) + "'>" : open ? "<b>" : "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";
         return "<html><nobr>" + name + MarkdownHtml.escape(s.name()) + "</b>" + older + due + badge + "</nobr></html>";
     }

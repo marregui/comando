@@ -17,7 +17,7 @@ The packages under `dev.marregui.comando.ui`, in layer order: a layer uses only 
 
 | Package | Holds |
 |---|---|
-| `kit` | what every layer shares, one subpackage each: `theme` (palette, gold), `icon`, `action` (`Command`, `ActionRegistry`, the palette, menu entries), `async` (`Edt`, `Coalescer`, `EdtWatchdog`, `UiErrands`), `overlay`, `format`, `text` (editors, Markdown and HTML panes, diffs, links, `MermaidDiagrams`, `LocalImages`), `tree`, `tabs`, `layout`, `resource` (resource actions), `desktop` (browser, external editor, file choosers, `DesktopTrash`, platform keys), `vcs` (the Files tab's git marks, opened files) |
+| `kit` | what every layer shares, one subpackage each: `theme` (palette, tints), `icon`, `action` (`Command`, `ActionRegistry`, the palette, menu entries), `async` (`Edt`, `Coalescer`, `EdtWatchdog`, `UiErrands`), `overlay`, `format`, `text` (editors, Markdown and HTML panes, diffs, links, `MermaidDiagrams`, `LocalImages`), `tree`, `tabs`, `layout`, `resource` (resource actions), `desktop` (browser, external editor, file choosers, `DesktopTrash`, platform keys), `vcs` (the Files tab's git marks, opened files) |
 | `widget` | the contract: `Widget`, `WidgetContext`, `WidgetRegistry`; `capability` (`Searchable`, `Copyable`, `Exportable`, `Zoomable`, the find bar) |
 | `widgets` | one package per widget: `approval`, `changes`, `console`, `diff`, `editor`, `markdown`, `plot`, `table`, `terminal`, `text`, `transcript` (with `doc` and `render`), `tree` |
 | `panels` | the window's regions: `Workspace`, `EditorPanel`, `LowerPanel`, `SessionsSidebar` (its rows: `SessionRow`, `ConnectionRow`), `PanelsWithoutSession`, `FilesTab`, `SidePane`, `StatusBar`, `ResultsView`, `TerminalTabs`, `ViewTabs`, `TabCard` |

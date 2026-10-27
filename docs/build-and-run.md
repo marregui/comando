@@ -63,7 +63,7 @@ windows share one desktop.
 | `UiReplayTest` | recorded intent logs replayed against the window, every adapter a recording fake; the window shows what the final state says |
 | `UiKeysTest` | the keyboard with macOS's keys and with the other desktops' (`comando.keys`): no two commands share a key, Ctrl with a letter reaches the terminal's shell, the run keys run, every text names this desktop's keys ([record 65](adr/0065-keys-on-desktops-other-than-macos.md)) |
 | `TreeClicksUiTest` | a tree that opens a folder on one click, as the Files tab's; a window started on a kit's root opens on the kit's folders |
-| `DarkPageGoldUiTest` | a rendered Markdown page takes a newly chosen gold at once, as the transcript does |
+| `DarkPageTintUiTest` | a rendered Markdown page takes a newly chosen tint at once, as the transcript does |
 | `ThreadBudgetTest` | comando's own platform threads stay within their budget with the processor count plus four fake sessions running ([record 82](adr/0082-threads-by-kind-with-a-budget.md)) |
 | `CheckpointClearUiTest` | the Checkpoint button against a stand-in for `claude -p`: the conversation cleared, the summary shown and carried into the next prompt, the panel's text kept ([record 86](adr/0086-a-checkpoint-clears-and-carries-its-summary.md)) |
 | `SessionCardUiTest` | a session's row shows the tab's card, a connection's row a card of its facts; both painted to `app/build/snapshots/` |

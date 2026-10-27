@@ -46,7 +46,7 @@ the sessions run on the kit, the Files tab opens on its folders and the status b
 
 | Part | What it is |
 |---|---|
-| **Menu bar** | **Edit**, and **Actions**: the palette; restart the shell, stop refreshing plots; start or stop the embedded QuestDB; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
+| **Menu bar** | **Edit**, and **Actions**: the palette; **Tint**, the colour of headings, reports and new files; restart the shell, stop refreshing plots; start or stop the embedded QuestDB; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
 | **Sidebar**, left | three tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it |
 | **Panel header** | two chips, the panel's **session** and its **connection**, each with a status dot (○ closed, ● open) and a plug button that starts or connects it. On the right: **Preview** (Markdown), **Run**, **Stop**, **Clear**; rest the pointer on one for its name |
@@ -70,7 +70,7 @@ does; the menus grey out what cannot run now.
 |---|---|---|
 | **Sessions** | Claude Code sessions, running first. A row is the session's state icon and its name. Under the sessions, while there is one, **Without a session** lists comando's own panels that belong to no session, open and closed | a click on the icon starts or stops the session; resting on the name shows its card (facts and a summary); a right click opens its menu, which does the rest; drag a row to order the list yourself |
 | **Connections** | databases. A row is the connection's state icon (grey while closed, blue while connected) and its name, with a red **prod** for production; the name is in the accent colour while the focused panel uses it | a click on the icon connects or disconnects; resting on the name shows a card of its facts, without a summary; a double click binds the connection to the focused panel |
-| **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, changed files and the folders holding them are named in git's colours; a file git does not track yet is gold, with a dot after each folder on the way down to it, until you open it; what git ignores is left out. Every folder lies inside Claude Code's folder; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a folder's right click shows the changes inside it |
+| **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, changed files and the folders holding them are named in git's colours; a file git does not track yet is in the tint, with a dot after each folder on the way down to it, until you open it; what git ignores is left out. Every folder lies inside Claude Code's folder; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a folder's right click shows the changes inside it |
 
 The tabs' right-click menus:
 
@@ -94,10 +94,10 @@ A tab's icon says what its session is doing:
 
 The last three put a `●` before the title until you look; the question mark stays until you answer.
 
-Rest the pointer on a tab, or on a session's row in the **Sessions** tab, for its card: the name in gold; the facts,
+Rest the pointer on a tab, or on a session's row in the **Sessions** tab, for its card: the name in the tint; the facts,
 each once (state and what it does, model and effort, context, folder and branch, conversation, Claude Code version,
 connection); the Linear tickets the panel's text names, once a `linear.app/<workspace>/issue/` link has shown which
-workspace to use, each opened in your browser by a double click; and under **Summary**, in gold, one or two short
+workspace to use, each opened in your browser by a double click; and under **Summary**, in the tint, one or two short
 sentences (at most 200 characters) Haiku wrote on what the panel is about. For a session's panel the summary reads the
 last paragraph you wrote there with the session's last response, the rest of the panel as context; for a document, what
 it says. The summary is written the first time the card shows, again when it shows after the panel's text or the
@@ -269,8 +269,9 @@ choose.
 
 The **Session** tab shows the whole turn: your prompt in a bubble, every tool call as a card with its input and
 result, and everything else (Claude's text, notes, the turn's time, the "Thinking…" line while Claude thinks) in warm
-ivory on near-black, with headings, list marks and table heads in gold. The answer that ends a turn sits on a lifted
-ground with a gold bar beside it. The gold ingot beside the tab's Clear chooses the gold.
+ivory on near-black, with headings, list marks and table heads in the tint, Treasure gold at first. The answer that
+ends a turn has a bar of the tint beside it. **Actions ▸ Tint**, or the swatch beside the tab's Clear, chooses another:
+three golds, silver, tropical forest, electric blue.
 
 **⌘⇧.** interrupts a turn: the turn ends with an "interrupted" line and the session stays alive for the next prompt.
 While you read further up, new output does not scroll the view; **↓ Latest** jumps back, and sending a prompt follows
@@ -353,7 +354,7 @@ Your data lives in `~/.comando`; **Actions ▸ Reveal comando folder** opens it.
 | `questdb/` | the embedded QuestDB's data |
 | `help/` | this tutorial |
 | `folders.json` | the Files tab's folders, edited from the Files tab's menu |
-| `opened-files` | the files you opened: a new file stops being marked gold once opened |
+| `opened-files` | the files you opened: a new file stops being marked in the tint once opened |
 | `logs/` | comando's logs |
 
 On macOS, with the default data root, connection passwords are kept in the login keychain, not in the files;

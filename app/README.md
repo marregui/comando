@@ -127,7 +127,7 @@ The store's threads are virtual, so daemons: `close()` waits for what is queued,
 | `UiReplayTest` | intent logs replayed against the real shell with `testkit`'s `RecordingPorts` | `./gradlew :app:uiTest` |
 | `UiKeysTest` | keys typed into a real window, with macOS's keys and with the other desktops' | `./gradlew :app:uiTest` |
 | `TreeClicksUiTest` | a tree's clicks, and the Files tab of a window started on a temporary kit root | `./gradlew :app:uiTest` |
-| `DarkPageGoldUiTest`, `LinksUiTest` | a rendered Markdown page in a window: its gold, a memory file's front matter and links | `./gradlew :app:uiTest` |
+| `DarkPageTintUiTest`, `LinksUiTest` | a rendered Markdown page in a window: its tint, a memory file's front matter and links | `./gradlew :app:uiTest` |
 | `CheckpointClearUiTest` | the Checkpoint button against a stand-in for `claude -p`: the conversation cleared, the summary carried | `./gradlew :app:uiTest` |
 | `SessionCardUiTest` | the card a session's row and a connection's row show | `./gradlew :app:uiTest` |
 | `ThreadBudgetTest` | the whole application with more fake sessions than cores (cores + 4): comando's own platform threads are the reducer, the watchdog and one reader per session, and none is left after the close | `./gradlew :app:uiTest` |

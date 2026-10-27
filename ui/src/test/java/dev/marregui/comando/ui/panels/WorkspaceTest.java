@@ -25,7 +25,7 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
-import dev.marregui.comando.ui.kit.theme.Gold;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
@@ -576,13 +576,13 @@ class WorkspaceTest {
         assertThat(card.topicText()).isEqualTo("Making the tab card sticky");
         assertThat(card.topicArea().getForeground()).as("the summary reads as a report's text").isEqualTo(Theme.TRANSCRIPT_TEXT);
         assertThat(card.headingLabel().getText()).isEqualTo("Summary");
-        assertThat(card.headingLabel().getForeground()).as("its heading is gold").isEqualTo(Theme.gold().body);
+        assertThat(card.headingLabel().getForeground()).as("its heading is in the tint").isEqualTo(Theme.tint().body);
         assertThat(card.headingLabel().getFont().getFamily()).as("in the headings' serif").isEqualTo(Theme.serif().getFamily());
         try {
-            SwingUtilities.invokeAndWait(() -> Theme.gold(Gold.CHAMPAGNE));
-            assertThat(card.headingLabel().getForeground()).as("another gold chosen, the card shown takes it").isEqualTo(Gold.CHAMPAGNE.body);
+            SwingUtilities.invokeAndWait(() -> Theme.tint(Tint.CHAMPAGNE));
+            assertThat(card.headingLabel().getForeground()).as("another tint chosen, the card shown takes it").isEqualTo(Tint.CHAMPAGNE.body);
         } finally {
-            SwingUtilities.invokeAndWait(() -> Theme.gold(Gold.TREASURE));
+            SwingUtilities.invokeAndWait(() -> Theme.tint(Tint.TREASURE));
         }
         assertThat(card.refreshButton().isEnabled()).isTrue();
         // the buttons sit at the bottom left, the refresh first, the close beside it; a card never shown lays out by hand

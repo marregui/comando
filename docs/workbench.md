@@ -102,9 +102,11 @@ Any number of document panels may be attached to a session
   answered, the others' until the tab is looked at. A waiting request or a failure bounces the Dock while the window
   is not active.
 - **The lower panel** follows the focused panel: its last SQL run, its session's transcript, its terminal. Approvals
-  lists every session's requests. At its right end, the gold ingot chooses the window's gold (Treasure gold, 18k
-  yellow gold, Champagne gold; Treasure until one is chosen; kept across restarts), and Clear empties the Session tab
-  while the conversation goes on ([record 83](adr/0083-one-gold-chosen-beside-clear.md)).
+  lists every session's requests. At its right end, a swatch of the tint chosen opens the tints (as Actions ▸ Tint
+  does), and Clear empties the Session tab while the conversation goes on.
+- **Actions ▸ Tint** chooses the window's tint, the colour of headings, reports, tooltips and new files: Treasure gold,
+  18k yellow gold, Champagne gold, Silver, Tropical forest, Electric blue; Treasure until one is chosen; kept across
+  restarts ([record 96](adr/0096-a-tint-chosen-in-actions.md)).
 - **Closing** (⌘W when no view has the keyboard; the last open panel cannot be closed) keeps a panel of comando's own,
   closed, with its file, title and bindings, until removed; a document is dropped
   ([record 39](adr/0039-panels-are-kept-until-removed.md)). ⌘⇧T reopens the last of ten recently closed. The Sessions
@@ -149,7 +151,7 @@ is due, and ⚑ with the count of approvals waiting. A double click on the row o
 Resting the pointer on the row's name shows the card the panel tabs show
 ([record 87](adr/0087-a-session-row-shows-the-tabs-card.md)): the card of the session's panel (the focused panel when it
 is the session's, else its own), or, for a session with no panel open, a card of its own whose summary is read from the
-end of its conversation. Its title is set in the headings' gold serif; then come its facts (`CardFacts`), each once and
+end of its conversation. Its title is set in the headings' serif, in the tint; then come its facts (`CardFacts`), each once and
 only when known: State, Model · effort, Context, Folder · branch, Conversation, Claude Code, and the panel's Session,
 Connection and File where the title does not say them; then the summary.
 
@@ -412,10 +414,10 @@ edited and saved like any other; a `.log` stays read-only.
   when something changed. A tree carries the settings it was read with and is dropped if the folder was edited since;
   reads are ticketed so an older one never overwrites a newer one. The tree keeps what the user opened and selected.
 - **Git.** In a git repository a file that differs from `HEAD` takes git's colour for how (changed blue, added green,
-  untracked in the chosen gold, in conflict red), and a folder that holds one is blue
+  untracked in the chosen tint, in conflict red), and a folder that holds one is blue
   ([record 83](adr/0083-one-gold-chosen-beside-clear.md)). A new (untracked) file and every folder on the way down to it
-  carry a gold dot after the name, so the closed folders to open are marked from the folder's row down. Once the new
-  file is opened (in a panel or the side pane, from any place) it reads as any other file, without gold or dot, and
+  carry a dot in the tint after the name, so the closed folders to open are marked from the folder's row down. Once the new
+  file is opened (in a panel or the side pane, from any place) it reads as any other file, without tint or dot, and
   counts for its folders no more; comando keeps the opened files in `opened-files`
   ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)).
 - **Repository marks.** A repository's top folder (a folder row, such as the kit's, or a subfolder, such as the
@@ -518,7 +520,7 @@ replacing what the view showed.
 | `questdb/` | the embedded QuestDB's data |
 
 Outside it: connection passwords in the macOS keychain for the default data root (elsewhere, or off macOS, they stay
-in `connections.json`; [Claude §3.3](claude.md#33-secrets)); window layout, the chosen gold and recent inputs in Java
+in `connections.json`; [Claude §3.3](claude.md#33-secrets)); window layout, the chosen tint and recent inputs in Java
 preferences (node `dev/marregui/comando`; tests use `comando.prefsNode`).
 
 In the root ([§7.1](#71-the-root)) comando reads Claude Code's conversations in `projects/` and the effort levels in

@@ -110,7 +110,7 @@ val uiTest = tasks.register<Test>("uiTest") {
         includeTestsMatching("*UiReplayTest")
         includeTestsMatching("*UiKeysTest")
         includeTestsMatching("*TreeClicksUiTest")
-        includeTestsMatching("*DarkPageGoldUiTest")
+        includeTestsMatching("*DarkPageTintUiTest")
         includeTestsMatching("*ThreadBudgetTest")
         includeTestsMatching("*CheckpointClearUiTest")
         includeTestsMatching("*SessionCardUiTest")

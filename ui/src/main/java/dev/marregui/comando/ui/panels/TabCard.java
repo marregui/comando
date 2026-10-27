@@ -13,8 +13,8 @@ import dev.marregui.comando.core.model.LinearTickets;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
-import dev.marregui.comando.ui.kit.theme.Gold;
-import dev.marregui.comando.ui.kit.theme.GoldTitle;
+import dev.marregui.comando.ui.kit.theme.Tint;
+import dev.marregui.comando.ui.kit.theme.TintTitle;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.BorderFactory;
@@ -53,10 +53,10 @@ import java.util.function.Consumer;
 
 /**
  * A tab's card, in place of its tooltip, and a session row's in the sidebar, the same card: laid out as a turn's report
- * in the transcript: the ground lifted a little, a bar of the chosen gold down its left edge; its title, the panel's or
- * the session's name, in the headings' serif along the gold's ramp; its facts (record 90), each said once, a quiet label
+ * in the transcript: the transcript's ground, a bar of the chosen tint down its left edge; its title, the panel's or
+ * the session's name, in the headings' serif along the tint's ramp; its facts (record 90), each said once, a quiet label
  * and the value in the transcript's ivory; under them, set apart,
- * "Summary" in the headings' serif along the gold's ramp over a gold rule, and the topic in the transcript's ivory,
+ * "Summary" in the headings' serif along the tint's ramp over a tinted rule, and the topic in the transcript's ivory,
  * wrapped to a few lines; the Linear tickets the panel's text names, as links a double click opens in the browser; at the bottom
  * left, a button that reads the summary again and one that closes the card. The card closes when the pointer leaves
  * it, at a click on it (not on a link) and at its close button. It floats in the window's popup layer under the tab or row it describes and stays until it is closed or clicked,
@@ -78,10 +78,9 @@ final class TabCard {
         protected void paintComponent(Graphics g0) {
             Graphics2D g = (Graphics2D) g0.create();
             try {
-                Gold gold = Theme.gold();
-                g.setColor(Theme.tooltipGround());
+                g.setColor(Theme.TRANSCRIPT);
                 g.fillRect(0, 0, getWidth(), getHeight());
-                g.setPaint(gold.ramp(0, getHeight(), false));
+                g.setPaint(Theme.tint().ramp(0, getHeight(), false));
                 g.fillRect(0, 0, BAR, getHeight());
             } finally {
                 g.dispose();
@@ -89,12 +88,12 @@ final class TabCard {
         }
     };
     /** The panel's or the session's name; text from a session, a document and Haiku is never rendered as HTML. */
-    private final GoldTitle title;
+    private final TintTitle title;
     /** The facts, a label and a value a row; hidden when there are none. */
     private final JPanel facts = new JPanel(new GridBagLayout());
     private CardFacts head = new CardFacts("", List.of());
     private final Font font;
-    private final GoldTitle heading;
+    private final TintTitle heading;
     /** The tickets, links in a row under the heading; hidden when the text names none. */
     private final JPanel tickets = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
     /** Whether the pointer is over the card or one of its parts. */
@@ -152,7 +151,7 @@ final class TabCard {
         Font tip = UIManager.getFont("ToolTip.font");
         font = tip == null ? new Font(Font.DIALOG, Font.PLAIN, 12) : tip;
         // the report's first heading: the card's name
-        title = new GoldTitle("", font.getSize2D() * 1.55f);
+        title = new TintTitle("", font.getSize2D() * 1.55f);
         title.setName("tab-card-title");
         title.setBorder(BorderFactory.createEmptyBorder(0, 0, 2, 0));
         facts.setName("tab-card-facts");
@@ -160,7 +159,7 @@ final class TabCard {
         facts.setBorder(BorderFactory.createEmptyBorder(6, 0, 0, 0));
         facts.setVisible(false);
         // the report's second heading, a size above the text
-        heading = new GoldTitle("Summary", font.getSize2D() * 1.25f);
+        heading = new TintTitle("Summary", font.getSize2D() * 1.25f);
         heading.setName("tab-card-heading");
         topic.setFont(font.deriveFont(font.getSize2D() + 0.5f));
         topic.setName("tab-card-topic");
@@ -226,9 +225,9 @@ final class TabCard {
         topic.addMouseListener(summaryLinks);
         topic.addMouseMotionListener(summaryLinks);
         hearPointer(card);
-        paintGold();
-        // one card for the window's life: it hears every gold chosen
-        Theme.onGold(this::paintGold);
+        paintTint();
+        // one card for the window's life: it hears every tint chosen
+        Theme.onTint(this::paintTint);
         // the rule under the heading runs the card's width, as under a report's heading
         heading.setMaximumSize(new Dimension(Integer.MAX_VALUE, heading.getPreferredSize().height));
     }
@@ -439,7 +438,7 @@ final class TabCard {
         Font f = topic.getFont();
         topic.setFont(f.deriveFont(muted ? Font.ITALIC : Font.PLAIN));
         this.muted = muted;
-        paintGold();
+        paintTint();
         refresh.setEnabled(!reading);
         place();
     }
@@ -483,11 +482,11 @@ final class TabCard {
         facts.setMaximumSize(new Dimension(Integer.MAX_VALUE, facts.getPreferredSize().height));
     }
 
-    private void paintGold() {
-        Gold gold = Theme.gold();
-        heading.setForeground(gold.body);
+    private void paintTint() {
+        Tint tint = Theme.tint();
+        heading.setForeground(tint.body);
         heading.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, Gold.over(Theme.TRANSCRIPT, gold.shade, 0.7f)),
+                BorderFactory.createMatteBorder(0, 0, 1, 0, tint.headingRule()),
                 BorderFactory.createEmptyBorder(0, 0, 4, 0)));
         topic.setForeground(muted ? Theme.MUTED : Theme.TRANSCRIPT_TEXT);
         card.repaint();
@@ -587,7 +586,7 @@ final class TabCard {
     }
 
     /** The summary's own component, which wraps it; for tests. */
-    GoldTitle headingLabel() {
+    TintTitle headingLabel() {
         return heading;
     }
 

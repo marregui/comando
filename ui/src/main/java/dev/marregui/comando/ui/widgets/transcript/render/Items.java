@@ -9,7 +9,6 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Diffs;
-import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.transcript.ToolText;
 import dev.marregui.comando.ui.widgets.transcript.doc.MarkdownDoc;
@@ -155,8 +154,8 @@ final class Items {
         private List<Paras.View> views = List.of();
         private int[] tops = new int[0];
         /**
-         * True when this text ends its turn: the report, laid on a ground lifted a little from the transcript's, with a
-         * bar of gold down its left edge, so it is found again among the turn's cards.
+         * True when this text ends its turn: the report, on the transcript's ground with a bar of the tint down its left
+         * edge, so it is found again among the turn's cards.
          */
         private boolean report;
 
@@ -213,10 +212,8 @@ final class Items {
         @Override
         void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
             if (report) {
-                Gold gold = style().gold;
-                g.setColor(Gold.over(Theme.TRANSCRIPT, gold.highlight, 0.03f));
-                g.fillRoundRect(x, y, width(), height, 8, 8);
-                g.setPaint(gold.ramp(y, y + height, false));
+                // on the transcript's own ground, framed by the tint's bar alone (record 96)
+                g.setPaint(style().tint.ramp(y, y + height, false));
                 g.fillRect(x, y, 3, height);
             }
             x += inset();
@@ -815,7 +812,7 @@ final class Items {
                 mark.paintIcon(marks.component(), g, right - 16, cy + IN_Y + 1);
             }
             if (st != null) {
-                g.setColor(isActive() ? Theme.warn() : s.muted);
+                g.setColor(isActive() ? Theme.ATTENTION : s.muted);
                 st.draw(g, right - (iconWidth > 0 ? iconWidth + 6 : 0) - st.getAdvance(), cy + IN_Y + st.getAscent() + 1);
             }
             Shape old = g.getClip();

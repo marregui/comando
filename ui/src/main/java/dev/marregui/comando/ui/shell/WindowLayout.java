@@ -1,7 +1,7 @@
 package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.core.model.LinearTickets;
-import dev.marregui.comando.ui.kit.theme.Gold;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
 
 import javax.swing.JFrame;
@@ -15,7 +15,7 @@ import java.util.prefs.Preferences;
 
 /**
  * The window's layout across restarts, in the user's preferences: its bounds and whether it was maximized, the
- * dividers, the sidebar's state and tab, the side pane, the editors' theme, the gold and Linear's site. The one place each key is named.
+ * dividers, the sidebar's state and tab, the side pane, the editors' theme, the tint and Linear's site. The one place each key is named.
  */
 final class WindowLayout {
 
@@ -133,12 +133,14 @@ final class WindowLayout {
         prefs.put("linear.teams", String.join(",", new TreeSet<>(site.teams())));
     }
 
-    Gold gold() {
-        return Gold.named(prefs.get("theme.gold", Gold.TREASURE.name()));
+    /** The tint chosen; the gold chosen before tints, which keeps its name, when none is yet (record 96). */
+    Tint tint() {
+        return Tint.named(prefs.get("theme.tint", prefs.get("theme.gold", Tint.TREASURE.name())));
     }
 
-    void gold(Gold gold) {
-        prefs.put("theme.gold", gold.name());
+    void tint(Tint tint) {
+        prefs.put("theme.tint", tint.name());
+        prefs.remove("theme.gold");
     }
 
     boolean sidebarShown() {

@@ -71,7 +71,7 @@ pictures arrive, until the reader scrolls; any other link goes to the pane's own
 | `MovableTabs` | a tab dragged along the row reports where it lands |
 | `Overlay` | the empty, loading and error states a widget switches between |
 | `Balloon` | a short word beside a component that asks for nothing, gone after 2.5 s or at the next click or key |
-| `Flash` | the hint on what a click brought into view: the chosen gold fading to nothing over 2 s, one at a time on a component; a line's flash spans the text's whole width, under the text ([record 79](adr/0079-a-notice-takes-you-to-what-it-is-about.md)) |
+| `Flash` | the hint on what a click brought into view: attention's gold (`Theme.ATTENTION`) fading to nothing over 2 s, one at a time on a component; a line's flash spans the text's whole width, under the text ([record 79](adr/0079-a-notice-takes-you-to-what-it-is-about.md)) |
 
 A tree row is plain labels, never HTML, and the tree names a node by its label. Measured with HTML labels and a node
 record's own text as its name, a row cost 63 µs: HTML in a renderer is parsed again for every row, and a record's
@@ -93,15 +93,16 @@ record's own text as its name, a row cost 63 µs: HTML in a renderer is parsed a
 Every user action is a `Command`: id, label, icon, key, menu path or area, action, enablement. Key bindings and the
 palette (⌘⇧P) come from the `ActionRegistry`.
 
-The menu bar is built from `Menus`. After the application menu macOS draws come Edit and Actions, both flat. Actions
-holds four groups split by separators: the palette; the shell and the plots; the embedded QuestDB, when comando has
-one; help. The bar holds only what has no key or control in the window, and what macOS expects in a menu
+The menu bar is built from `Menus`. After the application menu macOS draws come Edit and Actions. Actions holds four
+groups split by separators: the palette and Tint, its one submenu, the six tints with their swatches, the one chosen
+ticked ([record 96](adr/0096-a-tint-chosen-in-actions.md)); the shell and the plots; the embedded QuestDB, when comando
+has one; help. The bar holds only what has no key or control in the window, and what macOS expects in a menu
 ([record 75](adr/0075-the-menu-bar-is-edit-and-actions-flat.md)). Every item has an icon and a tooltip saying what it
 does. A command in no menu is named by its area in the palette and in the keyboard shortcuts: Panels, Run, Session,
 Session ▸ Model, Session ▸ Effort, Connection, Results, Edit, Files, Kit, Window, comando. The registry refuses a
 command with neither.
 
-About comando, in the application menu and the palette, opens `About`'s card: drawn by hand (warm charcoal, a gold
+About comando, in the application menu and the palette, opens `About`'s card: drawn by hand (warm charcoal, a tinted
 hairline, Helvetica Neue Light, Charter italic, spaced small capitals) and worded by `about.md` beside the class, whose
 `{version}`, `{java}`, `{claude}`, `{system}`, `{home}` and `{year}` take the run's values
 ([record 60](adr/0060-about-is-a-card-worded-by-a-file.md)).
@@ -209,16 +210,17 @@ serif, which covers most of Unicode on every desktop.
 | What | Colour |
 |---|---|
 | text outside the prompt bubble and the tool cards: Claude's text, thinking, notes, hook lines, the turn's time | a warm ivory, low in saturation (`Theme.TRANSCRIPT_TEXT`, `#E2DCCD`) |
-| Claude's headings, list marks, a quote's bar, a table's head | the gold chosen beside the Session tab's Clear (`Theme.gold()`, Treasure by default) ([record 83](adr/0083-one-gold-chosen-beside-clear.md)) |
-| headings, first three levels | a serif: New York on macOS, else Georgia or another installed serif, else Java's logical serif. The first two levels run along the gold's ramp from highlight to shade, with a rule under them |
+| Claude's headings, list marks, a quote's bar, a table's head | the tint chosen in Actions ▸ Tint or beside the Session tab's Clear (`Theme.tint()`, Treasure gold by default) ([record 83](adr/0083-one-gold-chosen-beside-clear.md), [record 96](adr/0096-a-tint-chosen-in-actions.md)) |
+| headings, first three levels | a serif: New York on macOS, else Georgia or another installed serif, else Java's logical serif. The first two levels run along the tint's ramp from highlight to shade, with a rule under them. Sizes ×1.45, ×1.25, ×1.1 of the text's (`Theme.HEADING_SCALE`), in rendered pages too |
 | bold | a brighter ivory |
 | inline code | teal |
-| the turn's report: its last text, when only notes, hooks or thinking follow it | a ground lifted a little, a gold bar down its left edge |
+| the turn's report: its last text, when only notes, hooks or thinking follow it | the transcript's ground, a bar of the tint down its left edge |
 | errors, links, code | red, blue, the code's highlighting |
 
-Every tooltip, and the tab card, reads as a report: the lifted ground, a gold bar down the left edge, ivory text. A
-dark rendered Markdown page (an editor tab's preview, a view) reads as an answer, its headings in the serif and the
-gold.
+Every tooltip, and the tab card, reads as a report: the transcript's ground, a bar of the tint down the left edge,
+ivory text. A rendered Markdown page (an editor tab's preview, a view) reads as an answer, its headings in the serif and
+the tint. What asks to be looked at (an approval waiting, "● edited", the flash, the warning icons) is Treasure gold in
+every tint (`Theme.ATTENTION`), a status colour as red is for errors.
 
 | Item | Paints |
 |---|---|

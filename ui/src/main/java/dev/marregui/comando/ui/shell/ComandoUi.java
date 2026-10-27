@@ -58,7 +58,7 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.Plain;
-import dev.marregui.comando.ui.kit.theme.Gold;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
@@ -361,7 +361,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.topics(topics, deps.transcripts()::of);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
-        lower.onGoldChosen(this::goldChosen);
+        lower.onTintChosen(this::tintChosen);
         workspace.onRunsProgram(id -> lower.terminals().runningJob(id).isPresent());
         side = new SidePane(ctx, widgets);
         sidebar = new SessionsSidebar(deps.intents(), new SessionsSidebar.Dialogs() {
@@ -804,20 +804,20 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return shown;
     }
 
-    /** The gold was chosen: kept, and shown at once. */
-    private void goldChosen(Gold gold) {
-        windowLayout.gold(gold);
-        paintIn(gold);
+    /** A tint was chosen, from Actions ▸ Tint or the swatch beside Clear: kept, and shown at once. */
+    private void tintChosen(Tint tint) {
+        windowLayout.tint(tint);
+        paintIn(tint);
         // the colours set from the state (the Approvals tab's title, the status bar's approvals) are set again
         render();
     }
 
     /**
-     * Every window in {@code gold} now: what listens to the gold (the transcript, the tab card, rendered Markdown) lays
+     * Every window in {@code tint} now: what listens to the tint (the transcript, the tab card, rendered Markdown) lays
      * itself out or recolours in it, and the rest (icons, the Files tab, About) read it as they repaint.
      */
-    private void paintIn(Gold gold) {
-        Theme.gold(gold);
+    private void paintIn(Tint tint) {
+        Theme.tint(tint);
         for (Window w : Window.getWindows()) {
             w.repaint();
         }
@@ -1159,6 +1159,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("help.markdown", "Markdown sheet", null, help::showMarkdownSheet);
         cmd("help.log", "Show the log", null, help::showLog, () -> deps.logDir() != null);
         cmd("help.dataRoot", "Reveal comando folder", null, () -> help.reveal(deps.home()), () -> deps.home() != null);
+        // the tints, Actions ▸ Tint: each with its swatch (Menus), the one chosen ticked
+        for (Tint t : Tint.values()) {
+            cmd(t.commandId(), t.label, null, () -> tintChosen(t));
+            actions.choice(t.commandId(), () -> Theme.tint() == t);
+        }
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice
         boolean mac = Platform.isMac();
         cmd("app.about", "About comando", null, help::showAbout);
@@ -1644,7 +1649,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         int h = windowLayout.restoreBounds(frame);
         sidebar.selectTab(windowLayout.sidebarTab());
         sidebar.manualOrder(windowLayout.manualOrder());
-        paintIn(windowLayout.gold());
+        paintIn(windowLayout.tint());
         workspace.linear(windowLayout.linearSite(), windowLayout::linearSite);
         showSidebar(windowLayout.sidebarShown());
         vertical.setDividerLocation(windowLayout.lowerDivider(h));
