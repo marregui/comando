@@ -6,7 +6,7 @@
 
 ## 1. Context
 
-The project started as a desktop client for PostgreSQL-wire databases. It now drives Claude Code sessions as well as SQL, and stays a personal, private repository.
+The project started as a desktop client for PostgreSQL-wire databases. It now drives Claude Code sessions as well as SQL. It is a personal repository, public since 2026-10-27.
 
 ## 2. Decision
 

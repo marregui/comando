@@ -17,7 +17,7 @@ for the newest release). Run each step, report what it printed when it fails, an
 | Need | Check | When it is missing |
 |---|---|---|
 | Claude Code CLI | `claude --version` | the session running this recipe is Claude Code; comando finds `claude` at `~/.local/bin/claude`, `~/.claude/local/claude`, `/opt/homebrew/bin/claude`, `/usr/local/bin/claude`, else on `PATH` |
-| GitHub CLI, signed in with access to the private repository `marregui/comando` | `gh auth status` and `gh repo view marregui/comando --json name` | install `gh` (macOS `brew install gh`; Debian and Ubuntu `sudo apt-get install -y gh`; Windows `winget install --id GitHub.cli -e`), then ask the user to run `gh auth login`; access to the repository is granted by its owner |
+| GitHub CLI, signed in | `gh auth status` and `gh repo view marregui/comando --json name` | install `gh` (macOS `brew install gh`; Debian and Ubuntu `sudo apt-get install -y gh`; Windows `winget install --id GitHub.cli -e`), then ask the user to run `gh auth login` |
 | a desktop session | macOS; Linux with X11 or Wayland (XWayland); Windows 10 or 11 | comando is a window application |
 
 No Java is needed: each package carries its own runtime.

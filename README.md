@@ -68,14 +68,13 @@ Ask Claude Code:
 Install comando from https://github.com/marregui/comando/releases/latest
 ```
 
-It follows [INSTALL.md](INSTALL.md): it downloads the file for your system with `gh` (the repository is private, so
-your GitHub account needs access), installs it, checks that it starts, and asks whether to install the kit. Then open
-**Actions ▸ Tutorial**: *comando in ten minutes* takes you from an empty window to a database, a Claude session,
-approvals and plots.
+It follows [INSTALL.md](INSTALL.md): it downloads the file for your system with `gh`, installs it, checks that it
+starts, and asks whether to install the kit. Then open **Actions ▸ Tutorial**: *comando in ten minutes* takes you
+from an empty window to a database, a Claude session, approvals and plots.
 
 | System | Release file | Tested |
 |---|---|---|
-| macOS, Apple silicon | `comando-<version>-macos-arm64.dmg`, installed to `/Applications` | build, tests and window replay in CI weekly and on demand; daily use |
+| macOS, Apple silicon | `comando-<version>-macos-arm64.dmg`, installed to `/Applications` | build, tests and window replay in CI on every change; daily use |
 | Linux, x64 | `comando-<version>-linux-x64.tar.gz`, installed to `~/.local/share/comando` | build, tests and window replay in CI on every change |
 | Windows, x64 | `comando-<version>-windows-x64.zip`, installed to `%LOCALAPPDATA%\comando` | packaged only |
 

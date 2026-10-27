@@ -27,8 +27,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # macOS bills ten Linux minutes a minute and Windows two on a private repository; the packages are built
-        # without the tests, which the build workflow runs.
+        # The packages are built without the tests, which the build workflow runs.
         os: [macos-latest, ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
