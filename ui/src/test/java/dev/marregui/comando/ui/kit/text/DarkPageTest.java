@@ -26,7 +26,7 @@ class DarkPageTest {
         assertThat(dark.getForeground(dark.getRule("th"))).isEqualTo(Tint.TREASURE.highlight);
         assertThat(dark.getForeground(dark.getRule("body"))).isEqualTo(Theme.TRANSCRIPT_TEXT);
         assertThat(dark.getFont(dark.getRule("h1")).getFamily()).isEqualTo(Theme.serif().getFamily());
-        assertThat(dark.getForeground(dark.getRule("code"))).as("one code rule: teal, not Claude's orange").isEqualTo(Theme.ANSWER_CODE);
+        assertThat(dark.getForeground(dark.getRule("code"))).as("one code rule: the palette's code colour, not Claude's orange").isEqualTo(Theme.content().code);
         assertThat(dark.getForeground(dark.getRule("blockquote"))).as("one quote rule: ivory").isEqualTo(Theme.TRANSCRIPT_TEXT);
         int body = dark.getFont(dark.getRule("body")).getSize();
         int h1 = dark.getFont(dark.getRule("h1")).getSize();

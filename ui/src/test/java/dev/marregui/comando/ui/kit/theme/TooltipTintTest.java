@@ -54,15 +54,36 @@ class TooltipTintTest {
     @Test
     void everyTintReadsOnTheTranscriptsGroundAndAttentionStaysTreasureGold() {
         for (Tint t : Tint.values()) {
-            assertThat(contrast(t.body, Theme.TRANSCRIPT)).as(t + "'s body").isGreaterThan(8);
-            assertThat(contrast(t.shade, Theme.TRANSCRIPT)).as(t + "'s shade").isGreaterThan(4.5);
+            assertThat(contrast(t.body, Theme.ground())).as(t + "'s body").isGreaterThan(8);
+            assertThat(contrast(t.shade, Theme.ground())).as(t + "'s shade").isGreaterThan(4.5);
             assertThat(contrast(t.highlight, t.tableHeadGround())).as(t + "'s table head").isGreaterThan(7);
             Theme.tint(t);
             assertThat(Theme.ATTENTION).as("attention in " + t).isEqualTo(Tint.TREASURE.body);
         }
         assertThat(Tint.values()).extracting(t -> t.label).containsExactly(
                 "Treasure gold", "18k yellow gold", "Champagne gold", "Silver", "Tropical forest", "Electric blue");
-        assertThat(Tint.TROPICAL_FOREST.commandId()).isEqualTo("tint.tropical_forest");
+    }
+
+    @Test
+    void everyTintReadsOnEveryGroundAndAGroundChosenWithoutTheLookIsOnlyKept() {
+        for (Ground g : Ground.values()) {
+            assertThat(contrast(Theme.TRANSCRIPT_TEXT, g.color)).as("ivory on " + g).isGreaterThan(12);
+            assertThat(contrast(Theme.CARD, g.color)).as("a card stands off " + g).isGreaterThan(1.2);
+            for (Tint t : Tint.values()) {
+                assertThat(contrast(t.body, g.color)).as(t + "'s body on " + g).isGreaterThan(7.5);
+                assertThat(contrast(t.shade, g.color)).as(t + "'s shade on " + g).isGreaterThan(4);
+            }
+        }
+        assertThat(Ground.named("BEIGE")).isEqualTo(Ground.GRAPHITE);
+        List<String> heard = new ArrayList<>();
+        Runnable stop = Theme.onTint(() -> heard.add(Theme.groundChosen().name()));
+        Theme.ground(Ground.MIDNIGHT);
+        assertThat(Theme.ground()).isEqualTo(Ground.MIDNIGHT.color);
+        assertThat(Tint.TREASURE.tableHeadGround()).as("a band mixed over the ground chosen")
+                .isEqualTo(Tint.over(Ground.MIDNIGHT.color, Tint.TREASURE.shade, 0.22f));
+        Theme.ground(Ground.GRAPHITE);
+        stop.run();
+        assertThat(heard).as("what listens to the tint hears a ground chosen").containsExactly("MIDNIGHT", "GRAPHITE");
     }
 
     /** WCAG's contrast ratio of {@code a} over {@code b}. */

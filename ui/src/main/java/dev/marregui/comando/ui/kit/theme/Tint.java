@@ -3,7 +3,6 @@ package dev.marregui.comando.ui.kit.theme;
 import java.awt.Color;
 import java.awt.LinearGradientPaint;
 import java.util.Arrays;
-import java.util.Locale;
 
 /**
  * The tint of the window: the transcript's headings, list marks and table heads, the bar beside a turn's report and down
@@ -39,11 +38,6 @@ public enum Tint {
         return Arrays.stream(values()).filter(t -> t.name().equals(name)).findFirst().orElse(TREASURE);
     }
 
-    /** The command that chooses this tint: {@code tint.treasure}, {@code tint.tropical_forest}. */
-    public String commandId() {
-        return "tint." + name().toLowerCase(Locale.ROOT);
-    }
-
     /** The ramp at {@code t}, 0 the highlight's end, 1 the shade's: highlight to body in the first 45 %, then to the shade. */
     public Color at(float t) {
         float u = Math.clamp(t, 0f, 1f);
@@ -59,14 +53,14 @@ public enum Tint {
                 new Color[]{highlight, body, letters ? at(0.85f) : shade});
     }
 
-    /** The line under a first- or second-level heading: the shade at 70 % over the transcript's ground. */
+    /** The line under a first- or second-level heading: the shade at 70 % over the panels' ground. */
     public Color headingRule() {
-        return over(Theme.TRANSCRIPT, shade, 0.7f);
+        return over(Theme.ground(), shade, 0.7f);
     }
 
-    /** The band behind a table's head: the shade at 22 % over the transcript's ground. */
+    /** The band behind a table's head: the shade at 22 % over the panels' ground. */
     public Color tableHeadGround() {
-        return over(Theme.TRANSCRIPT, shade, 0.22f);
+        return over(Theme.ground(), shade, 0.22f);
     }
 
     /** {@code c} laid over {@code ground} at {@code amount} (0 to 1): a tinted band or rule on a dark ground. */

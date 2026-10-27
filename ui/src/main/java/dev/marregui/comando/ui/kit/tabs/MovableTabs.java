@@ -115,7 +115,7 @@ public final class MovableTabs extends JTabbedPane {
             return;
         }
         int x = gap < n ? r.x : r.x + r.width;
-        g.setColor(Theme.ACCENT);
+        g.setColor(Theme.tint().body);
         g.fillRect(Math.max(0, x - 1), r.y, 2, r.height);
     }
 }

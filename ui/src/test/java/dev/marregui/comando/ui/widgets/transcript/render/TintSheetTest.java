@@ -119,7 +119,7 @@ class TintSheetTest {
         canvas.setSize(WIDTH, Math.max(HEIGHT, canvas.contentHeight()));
         BufferedImage img = new BufferedImage(WIDTH, HEIGHT, BufferedImage.TYPE_INT_RGB);
         Graphics2D g = img.createGraphics();
-        g.setColor(Theme.TRANSCRIPT);
+        g.setColor(Theme.ground());
         g.fillRect(0, 0, WIDTH, HEIGHT);
         canvas.paint(g);
         g.dispose();

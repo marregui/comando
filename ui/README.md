@@ -92,7 +92,6 @@ edits, files, Gradle runs, folders, notices ([Architecture §4.2](../docs/archit
 | `icons/` | SVG icons, and the application's `comando.png` |
 | `shell/about.md` | the About card's text |
 | `shell/markdown-sheet.md` | the Markdown sheet Help shows |
-| `kit/text/editor-dark.xml` | the editors' theme |
 | `help/tutorial.md` | copied from `docs/tutorial.md` by `ui/build.gradle.kts`, so Actions ▸ Tutorial and the docs show one text |
 
 ## 3. Threads

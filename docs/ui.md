@@ -15,7 +15,7 @@ the painted transcript. For a reader changing the `ui` module; the package layer
 
 | Package | Holds |
 |---|---|
-| `theme` | `Theme`: FlatLaf dark (`FlatMacDarkLaf` on macOS), the colour tokens (accent, Claude, ok, warn, danger, muted, thinking, diff, card, the plot palette), spacing, the monospaced font. Dark only; a JVM option at launch sets the macOS appearance dark |
+| `theme` | `Theme`: FlatLaf dark (`FlatMacDarkLaf` on macOS) on the ground chosen, the colour tokens in four tiers ([record 100](adr/0100-a-theme-is-four-tiers-of-tokens.md)), spacing, the fonts; `Tint` and `Ground`, the two choices; `ContentPalette`, the colours of syntax, the terminal, diffs, plots and code derived from them in OKLCH (`Oklch`) ([record 101](adr/0101-content-colours-derived-from-the-theme.md)); `SidebarLook`; the swatches. Dark only; a JVM option at launch sets the macOS appearance dark |
 | `icon` | `Icons` (one SVG set under `/icons`, HiDPI); `SpinnerIcon` (one shared wheel, advanced by its owner's timer); `RowIcon` (icons in a row: two marks where a cell has room for one, [record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)) |
 | `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority`, `ToolButton` ([§2](#2-commands-and-keys)) |
 | `resource` | `ResourceActions`: a list of resources' add, from its tab's menu, and its removal question, from a row's menu; no bar of buttons ([Workbench §1.3](workbench.md#13-the-sidebar)) |
@@ -40,8 +40,8 @@ the painted transcript. For a reader changing the `ui` module; the package layer
 
 | Class | Does |
 |---|---|
-| `Editors` | configures every text area: IntelliJ's Dark colours, the font, syntax by extension, file name or fence language |
-| `EditorThemes`, `Fences` | IntelliJ's Dark editor theme, the only one ([record 93](adr/0093-comando-is-dark-throughout.md)); a fenced block's language |
+| `Editors` | configures every text area: the theme's content colours, the font, syntax by extension, file name or fence language |
+| `EditorThemes`, `Fences` | the editors' theme, built from `Theme.content()` and built again for another tint or ground, the font and zoom kept ([record 101](adr/0101-content-colours-derived-from-the-theme.md)); a fenced block's language |
 | `TextSearch` | find in a text area, with every match marked |
 | `Highlighter` | syntax colours for text painted outside a text area (the transcript); callable from any thread |
 | `Diffs`, `DiffPane` | a unified diff with three lines of context, coloured |
@@ -94,8 +94,8 @@ Every user action is a `Command`: id, label, icon, key, menu path or area, actio
 palette (⌘⇧P) come from the `ActionRegistry`.
 
 The menu bar is built from `Menus`. After the application menu macOS draws come Edit and Actions. Actions holds four
-groups split by separators: the palette and Tint, its one submenu, the six tints with their swatches, the one chosen
-ticked ([record 96](adr/0096-a-tint-chosen-in-actions.md)); the shell and the plots; the embedded QuestDB, when comando
+groups split by separators: the palette and three submenus, each item with its swatch and the one chosen ticked:
+Theme, the six curated themes ([record 103](adr/0103-curated-themes-in-actions.md)); the shell and the plots; the embedded QuestDB, when comando
 has one; help. The bar holds only what has no key or control in the window, and what macOS expects in a menu
 ([record 75](adr/0075-the-menu-bar-is-edit-and-actions-flat.md)). Every item has an icon and a tooltip saying what it
 does. A command in no menu is named by its area in the palette and in the keyboard shortcuts: Panels, Run, Session,
@@ -203,17 +203,17 @@ items are laid out at once. After a width or zoom change the rest get an estimat
 out in 8 ms slices, nearest the viewport first, keeping the first visible line in place. Painting finds the items in
 the clip by binary search.
 
-The canvas paints no ground of its own; the viewport under it is near-black (`Theme.TRANSCRIPT`, `#121212`), not pure
+The canvas paints no ground of its own; the viewport under it is the ground chosen (`Theme.ground()`, Graphite `#121212` by default), not pure
 black, as bright text on pure black blurs at its edges. A character a run's font lacks is drawn in Java's logical sans
 serif, which covers most of Unicode on every desktop.
 
 | What | Colour |
 |---|---|
 | text outside the prompt bubble and the tool cards: Claude's text, thinking, notes, hook lines, the turn's time | a warm ivory, low in saturation (`Theme.TRANSCRIPT_TEXT`, `#E2DCCD`) |
-| Claude's headings, list marks, a quote's bar, a table's head | the tint chosen in Actions ▸ Tint or beside the Session tab's Clear (`Theme.tint()`, Treasure gold by default) ([record 83](adr/0083-one-gold-chosen-beside-clear.md), [record 96](adr/0096-a-tint-chosen-in-actions.md)) |
+| Claude's headings, list marks, a quote's bar, a table's head | the theme's tint, chosen in Actions ▸ Theme or beside the Session tab's Clear (`Theme.tint()`, Treasure gold by default) ([record 83](adr/0083-one-gold-chosen-beside-clear.md), [record 96](adr/0096-a-tint-chosen-in-actions.md)) |
 | headings, first three levels | a serif: New York on macOS, else Georgia or another installed serif, else Java's logical serif. The first two levels run along the tint's ramp from highlight to shade, with a rule under them. Sizes ×1.45, ×1.25, ×1.1 of the text's (`Theme.HEADING_SCALE`), in rendered pages too |
 | bold | a brighter ivory |
-| inline code | teal |
+| inline code | a quiet teal of the content palette, on a ground a step above the panels' ([record 101](adr/0101-content-colours-derived-from-the-theme.md)) |
 | the turn's report: its last text, when only notes, hooks or thinking follow it | the transcript's ground, a bar of the tint down its left edge |
 | errors, links, code | red, blue, the code's highlighting |
 

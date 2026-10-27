@@ -10,6 +10,7 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.BorderFactory;
@@ -26,6 +27,8 @@ import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Component;
+import java.awt.Rectangle;
+import java.awt.Graphics;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -56,7 +59,19 @@ final class PanelsWithoutSession {
     private final PanelTexts texts;
     private final Consumer<String> newSession;
     private final DefaultListModel<Row> model = new DefaultListModel<>();
-    private final JList<Row> list = new JList<>(model);
+    private final JList<Row> list = new JList<>(model) {
+        /** The report's bar down the left edge of the selected row (record 98). */
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            for (int i : getSelectedIndices()) {
+                Rectangle r = getCellBounds(i, i);
+                if (r != null) {
+                    SidebarLook.bar(g, r);
+                }
+            }
+        }
+    };
     private final ResourceActions<Row> actions;
     private final JPanel section = new JPanel(new BorderLayout());
     private AppState state;
@@ -75,7 +90,7 @@ final class PanelsWithoutSession {
                 Row r = (Row) value;
                 label.setText(html(r));
                 label.setIcon(Icons.get("file"));
-                label.setBorder(BorderFactory.createEmptyBorder(5, 6, 5, 6));
+                label.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_XS, Theme.SPACE_S, Theme.SPACE_XS, Theme.SPACE_S));
                 label.setToolTipText(Plain.text(texts.file(r.panel().id()).map(Object::toString).orElse(r.panel().title())));
                 return label;
             }
@@ -124,13 +139,14 @@ final class PanelsWithoutSession {
                 // panels are not cloned (record 91)
             }
         }, id -> intents.dispatch(new Intent.RemovePanel(new PanelId(id))), questions);
-        JLabel title = new JLabel("Without a session");
-        title.setForeground(Theme.MUTED_STRONG);
-        title.setBorder(BorderFactory.createEmptyBorder(6, 8, 2, 8));
+        // a group's header, as the Files tab's (record 98)
+        JLabel title = SidebarLook.header("Without a session");
         JScrollPane scroll = new JScrollPane(list);
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
         scroll.setBorder(null);
-        section.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.CARD_BORDER));
+        SidebarLook.list(list);
+        SidebarLook.ground(scroll);
+        SidebarLook.ground(section);
         section.add(title, BorderLayout.NORTH);
         section.add(scroll, BorderLayout.CENTER);
         section.setVisible(false);
@@ -217,7 +233,7 @@ final class PanelsWithoutSession {
     /** Two lines: open or closed and the title; then the connection and the file. */
     private String html(Row r) {
         PanelState p = r.panel();
-        String dot = "<span style='color:" + Theme.hex(r.open() ? Theme.ACCENT : Theme.MUTED) + "'>" + (r.open() ? "●" : "○") + "</span>";
+        String dot = "<span style='color:" + Theme.hex(r.open() ? Theme.tint().body : Theme.MUTED) + "'>" + (r.open() ? "●" : "○") + "</span>";
         boolean focused = state != null && r.open() && Objects.equals(state.focused(), p.id());
         List<String> parts = new ArrayList<>();
         if (!p.connection().isEmpty()) {
@@ -225,7 +241,7 @@ final class PanelsWithoutSession {
         }
         texts.file(p.id()).ifPresent(f -> parts.add(f.getFileName().toString()));
         return "<html><nobr>" + dot + "&nbsp;<b>" + MarkdownHtml.escape(p.title()) + "</b>"
-                + (focused ? "&nbsp;<span style='color:" + Theme.hex(Theme.ACCENT) + "'>· focused</span>" : r.open() ? "" :
+                + (focused ? "&nbsp;<span style='color:" + Theme.hex(Theme.tint().body) + "'>· focused</span>" : r.open() ? "" :
                 "&nbsp;<span style='color:" + Theme.hex(Theme.MUTED) + "'>closed</span>")
                 + "</nobr><br><nobr><span style='color:" + Theme.hex(Theme.MUTED_STRONG) + "'>"
                 + MarkdownHtml.escape(String.join(" · ", parts)) + "</span></nobr></html>";

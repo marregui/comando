@@ -38,9 +38,9 @@ public final class Style {
     final Color muted;
     /** Every text drawn outside a bubble or a card, in one colour on the transcript's ground. */
     final Color outside = Theme.TRANSCRIPT_TEXT;
-    final Color accent = Theme.ACCENT;
-    final Color link = Theme.ACCENT;
-    final Color codeBackground = Theme.CODE_GROUND;
+    final Color accent = Theme.INFO;
+    final Color link = Theme.LINK;
+    final Color codeBackground = Theme.content().codeGround;
     final Color inlineCodeBackground;
     final Color selection = Theme.SELECTION;
     final Color findMatch = Theme.FIND_MATCH;
@@ -88,8 +88,8 @@ public final class Style {
             strong = Theme.ANSWER_STRONG;
             heading = tint.body;
             mark = tint.body;
-            codeText = Theme.ANSWER_CODE;
-            inlineCodeBackground = Theme.ANSWER_CODE_GROUND;
+            codeText = Theme.content().code;
+            inlineCodeBackground = Theme.content().codeInlineGround;
             tableHead = tint.highlight;
             tableHeadBackground = tint.tableHeadGround();
             headingRule = tint.headingRule();
@@ -104,14 +104,15 @@ public final class Style {
             headingRule = Theme.withAlpha(muted, 80);
         }
         float size = Zoomable.clampSize(base.getSize2D() + zoom);
-        float monoSize = Zoomable.clampSize(monoBase.getSize2D() - 1f + zoom);
+        // code a step below the text, its notes and small text a step below that (record 102)
+        float monoSize = Zoomable.clampSize(Theme.size(monoBase.getSize2D(), Theme.TextSize.SMALL) + zoom);
         body = base.deriveFont(Font.PLAIN, size);
         bold = base.deriveFont(Font.BOLD, size);
         italic = base.deriveFont(Font.ITALIC, size);
         boldItalic = base.deriveFont(Font.BOLD | Font.ITALIC, size);
         mono = monoBase.deriveFont(Font.PLAIN, monoSize);
-        monoSmall = monoBase.deriveFont(Font.PLAIN, Math.max(8f, monoSize - 1f));
-        small = base.deriveFont(Font.PLAIN, Math.max(8f, size - 1f));
+        monoSmall = monoBase.deriveFont(Font.PLAIN, Math.max(8f, Theme.size(monoBase.getSize2D(), Theme.TextSize.CAPTION) + zoom));
+        small = base.deriveFont(Font.PLAIN, Math.max(8f, Theme.size(base.getSize2D(), Theme.TextSize.SMALL) + zoom));
         // the first three levels in the serif, set apart from the text as a title is; the smaller ones bold
         Font serif = Theme.serif();
         float[] scale = Theme.HEADING_SCALE;

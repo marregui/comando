@@ -58,6 +58,7 @@ import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
@@ -361,7 +362,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.topics(topics, deps.transcripts()::of);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
-        lower.onTintChosen(this::tintChosen);
+        lower.onThemeChosen(this::themeChosen);
         workspace.onRunsProgram(id -> lower.terminals().runningJob(id).isPresent());
         side = new SidePane(ctx, widgets);
         sidebar = new SessionsSidebar(deps.intents(), new SessionsSidebar.Dialogs() {
@@ -804,10 +805,14 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return shown;
     }
 
-    /** A tint was chosen, from Actions ▸ Tint or the swatch beside Clear: kept, and shown at once. */
-    private void tintChosen(Tint tint) {
-        windowLayout.tint(tint);
-        paintIn(tint);
+    /**
+     * A theme was chosen, from Actions ▸ Theme or the swatch beside Clear: kept, and every window takes its ground and
+     * its tint at once (record 103).
+     */
+    private void themeChosen(NamedTheme theme) {
+        windowLayout.theme(theme);
+        Theme.ground(theme.ground);
+        paintIn(theme.tint);
         // the colours set from the state (the Approvals tab's title, the status bar's approvals) are set again
         render();
     }
@@ -1159,10 +1164,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("help.markdown", "Markdown sheet", null, help::showMarkdownSheet);
         cmd("help.log", "Show the log", null, help::showLog, () -> deps.logDir() != null);
         cmd("help.dataRoot", "Reveal comando folder", null, () -> help.reveal(deps.home()), () -> deps.home() != null);
-        // the tints, Actions ▸ Tint: each with its swatch (Menus), the one chosen ticked
-        for (Tint t : Tint.values()) {
-            cmd(t.commandId(), t.label, null, () -> tintChosen(t));
-            actions.choice(t.commandId(), () -> Theme.tint() == t);
+        // the themes, Actions ▸ Theme: a ground and its tint chosen together, each with its swatch (Menus), the one chosen
+        // ticked (record 103)
+        for (NamedTheme t : NamedTheme.values()) {
+            cmd(t.commandId(), t.label, null, () -> themeChosen(t));
+            actions.choice(t.commandId(), () -> NamedTheme.chosen().orElse(null) == t);
         }
         // on macOS the application menu owns ⌘Q and calls the quit handler; a second binding would quit twice
         boolean mac = Platform.isMac();
@@ -1649,7 +1655,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         int h = windowLayout.restoreBounds(frame);
         sidebar.selectTab(windowLayout.sidebarTab());
         sidebar.manualOrder(windowLayout.manualOrder());
-        paintIn(windowLayout.tint());
+        NamedTheme theme = windowLayout.theme();
+        Theme.ground(theme.ground);
+        paintIn(theme.tint);
         workspace.linear(windowLayout.linearSite(), windowLayout::linearSite);
         showSidebar(windowLayout.sidebarShown());
         vertical.setDividerLocation(windowLayout.lowerDivider(h));

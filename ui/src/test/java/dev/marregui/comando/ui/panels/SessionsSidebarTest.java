@@ -468,7 +468,7 @@ class SessionsSidebarTest {
         });
         JList<?> list = find(s[0].component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
         assertThat(rowText(list, 0)).as("running first; one of its panels has the focus")
-                .contains("<b style='color:" + Theme.hex(Theme.ACCENT) + "'>work</b>").doesNotContain("PLAN.md", "·");
+                .contains("<b style='color:" + Theme.hex(Theme.tint().body) + "'>work</b>").doesNotContain("PLAN.md", "·");
         String dimmed = "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";
         assertThat(rowText(list, 1)).as("its own panel closed").contains(dimmed + "edge</b>");
         assertThat(rowText(list, 2)).as("no panel").contains(dimmed + "old</b>");
@@ -666,7 +666,7 @@ class SessionsSidebarTest {
         assertThat(ConnectionRow.titleHtml(open, false)).isEqualTo("<html><nobr><b>live</b>&nbsp;<span style='color:"
                 + Theme.hex(Theme.DANGER) + "'>prod</span></nobr></html>");
         assertThat(ConnectionRow.titleHtml(open, true)).as("the focused panel uses it: the accent colour")
-                .contains("<b style='color:" + Theme.hex(Theme.ACCENT) + "'>live</b>");
+                .contains("<b style='color:" + Theme.hex(Theme.tint().body) + "'>live</b>");
         assertThat(List.of(ConnectionRow.icon(Status.OPEN), ConnectionRow.icon(Status.CLOSED), ConnectionRow.icon(Status.OPENING),
                 ConnectionRow.icon(Status.FAILED))).containsExactly("database", "database-off", "database-starting", "database-failed");
         assertThat(ConnectionRow.powerTip(open)).isEqualTo("Connected; click to disconnect");

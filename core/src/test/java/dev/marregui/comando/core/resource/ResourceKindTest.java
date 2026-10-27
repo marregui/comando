@@ -44,6 +44,11 @@ class ResourceKindTest {
         assertThat(FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(pad))).isEqualTo(pad);
         assertThat(pad.withName("Pad").deletable()).isTrue();
         assertThat(pad.withName("Pad").listedIn()).isEqualTo("ALPHA.md");
+        FolderRoot grouped = new FolderRoot("KB", "/b/kb", "", List.of(), "knowledge", false, "", "Brain");
+        assertThat(FolderKind.INSTANCE.fromAttributes(FolderKind.INSTANCE.toAttributes(grouped))).as("its group kept").isEqualTo(grouped);
+        assertThat(grouped.withName("Base").group()).isEqualTo("Brain");
+        assertThat(grouped.withTrash("INDEX.md").group()).isEqualTo("Brain");
+        assertThat(new FolderRoot("n", "/p", "", List.of(), "folder", false, "", null).group()).as("none read: empty").isEmpty();
         assertThat(FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p")).deletable()).as("by default a folder keeps its files").isFalse();
         for (String bad : List.of("day/ALPHA.md", "..", "a\\b")) {
             assertThatThrownBy(() -> FolderKind.INSTANCE.fromAttributes(Map.of("name", "n", "path", "/p", "listedIn", bad)))

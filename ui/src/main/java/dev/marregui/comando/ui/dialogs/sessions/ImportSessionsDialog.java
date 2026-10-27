@@ -77,7 +77,7 @@ public final class ImportSessionsDialog {
             }
         }
         table.setAutoCreateRowSorter(true);
-        table.setRowHeight(table.getRowHeight() + 4);
+        table.setRowHeight(Theme.rowHeight(table.getFontMetrics(table.getFont()).getHeight()));
         filter.putClientProperty("JTextField.placeholderText", "Filter by title, directory, branch or prompt");
         filter.getDocument().addDocumentListener(new DocumentListener() {
             @Override

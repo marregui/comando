@@ -23,6 +23,7 @@ import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.tabs.TabStrip;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 
@@ -384,7 +385,9 @@ public final class SessionsSidebar {
         sessionsTab.add(loosePanels.component(), BorderLayout.SOUTH);
         tabs.add("Sessions", "session", "Claude Code sessions and panels; right-click to add, import or sort", sessionsTab);
         tabs.add("Connections", "database", "databases; right-click to add one", section(new JScrollPane(connections)));
-        // its own mark, drawn as the other tabs' are: an outline in one colour; the tree's rows keep the plain folder
+        // the sidebar's look (record 98): the transcript's ground, ivory names, the tint for headers and the selection
+        SidebarLook.list(sessions);
+        SidebarLook.list(connections);
         tabs.add("Files", "files", "your folders and their git changes; double-click a file to open it",
                 section(files.component()));
         tabs.trailing(ToolButton.of("more", KeyText.of("Hide the sidebar (⌘B)"), toggle));
@@ -758,13 +761,20 @@ public final class SessionsSidebar {
         @Override
         protected void paintComponent(Graphics g) {
             super.paintComponent(g);
+            // the report's bar down the left edge of the selected row (record 98)
+            for (int i : getSelectedIndices()) {
+                Rectangle r = getCellBounds(i, i);
+                if (r != null) {
+                    SidebarLook.bar(g, r);
+                }
+            }
             int n = getModel().getSize();
             if (gap < 0 || n == 0) {
                 return;
             }
             Rectangle r = getCellBounds(Math.min(gap, n - 1), Math.min(gap, n - 1));
             int y = gap < n ? r.y : r.y + r.height;
-            g.setColor(Theme.ACCENT);
+            g.setColor(Theme.tint().body);
             g.fillRect(0, Math.max(0, y - 1), getWidth(), 2);
         }
 
@@ -956,7 +966,7 @@ public final class SessionsSidebar {
     private static <T> JList<T> emptyText(JList<T> list, String text) {
         JLabel hint = new JLabel("<html><div style='width:180px'>" + MarkdownHtml.escape(text) + "</div></html>");
         hint.setForeground(Theme.MUTED_STRONG);
-        hint.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
+        hint.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_S, Theme.SPACE_M));
         JPanel overlay = new JPanel(new BorderLayout());
         overlay.setOpaque(false);
         overlay.add(hint, BorderLayout.NORTH);
@@ -1013,6 +1023,18 @@ public final class SessionsSidebar {
             setToolTipText("");
         }
 
+        /** The report's bar down the left edge of the selected row (record 98). */
+        @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            for (int i : getSelectedIndices()) {
+                Rectangle r = getCellBounds(i, i);
+                if (r != null) {
+                    SidebarLook.bar(g, r);
+                }
+            }
+        }
+
         @Override
         public boolean getScrollableTracksViewportWidth() {
             return true;
@@ -1033,13 +1055,15 @@ public final class SessionsSidebar {
         return i >= 0 && list.getCellBounds(i, i).contains(e.getPoint()) ? list.getModel().getElementAt(i) : null;
     }
 
-    /** A tab's content, filling it. */
+    /** A tab's content, filling it, on the sidebar's ground. */
     private static JPanel section(JComponent content) {
         if (content instanceof JScrollPane sp) {
             sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
             sp.setBorder(null);
+            SidebarLook.ground(sp);
         }
         JPanel p = new JPanel(new BorderLayout());
+        SidebarLook.ground(p);
         p.add(content, BorderLayout.CENTER);
         return p;
     }

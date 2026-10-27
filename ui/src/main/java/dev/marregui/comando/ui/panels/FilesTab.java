@@ -11,11 +11,13 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.icon.OverlayIcon;
 import dev.marregui.comando.ui.kit.icon.RowIcon;
 import dev.marregui.comando.ui.kit.overlay.Balloon;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.tree.TreeView;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
@@ -66,9 +68,10 @@ import java.util.function.Consumer;
  * index file leads it, offered by name in its row's menu. Only the folders whose rows are open are read and kept in sync
  * ({@link Intent.WatchFolders}), so a closed folder costs nothing; the tree follows them as the tools adapter reads
  * them, keeping what the user opened and selected, and the newest day folder is open at a folder's first read. A
- * folder's row has the icon it was configured with. In a git repository, what git ignores is left out, and a file
- * that differs from {@code HEAD} (or a folder holding one) has git's colour for how it changed. A repository's top
- * folder has the git icon and, while the repository has changes, a rising arrow after its name; hovering it says its
+ * folder's row has the icon it was configured with. In a git repository, what git ignores is left out; every name has
+ * one colour, red only for a file in conflict, and how a file differs from {@code HEAD} is said by the marks after the
+ * names leading down to it: the rising arrow for a change, the dot for a new file (record 98). A repository's top
+ * folder has git's mark on its icon and, while the repository has changes, a rising arrow after its name; hovering it says its
  * branch and what it holds uncommitted. A double click on a folder's row opens the Changes view of what the repository
  * holding it changed inside it, or says there is nothing to see, and opens or closes nothing; a folder's or a
  * subfolder's menu shows the changes of the repository holding it inside that folder alone, and a changed file's
@@ -129,8 +132,6 @@ final class FilesTab {
     /** The files the user opened: a new file opened once is marked no more. */
     private OpenedFiles opened = OpenedFiles.inMemory();
     private Runnable stopHearingOpened = () -> { };
-    /** The folders holding a marked file: a change, or a new file not opened yet. Made when either changes. */
-    private Set<Path> marked = Set.of();
     /** The folders on the way down to a new file not opened yet. */
     private Set<Path> towardsNew = Set.of();
     /** The folders on the way down to a file git tracks that differs from {@code HEAD}. */
@@ -172,15 +173,18 @@ final class FilesTab {
             t.tree().setRootVisible(false);
             t.icons(n -> {
                 String icon = rowIcon(n).orElseGet(() -> iconName(n, indexNames));
-                return icon.isEmpty() ? null : Icons.get(icon);
+                return icon.isEmpty() ? null : icon(icon);
             });
             t.colors(this::colorOf);
-            t.nodeIcons(n -> repoAt(n).isPresent() ? Icons.get(GIT_ICON) : null);
+            // a repository's top folder: its own icon with git's mark on it, in git's colours
+            t.nodeIcons(n -> repoAt(n).map(r -> (Icon) new OverlayIcon(icon(n.getUserObject() instanceof ViewSpec.TreeNode node
+                    ? rowIcon(node).orElse("folder") : "folder"), Icons.get(Icons.GIT_BADGE))).orElse(null));
             t.tips(n -> repoAt(n).map(FilesTab::repoTip).or(() -> rowTip(n))
                     .orElse(holdsNew(n) ? NEW_TIP : isChanged(n) ? CHANGED_FILE_TIP : holdsChanged(n) ? CHANGED_TIP : null));
             t.trailing(this::marks);
             // one click opens or closes a folder; a double click on a folder's row shows its changes instead
             t.toggleOnClick(true);
+            t.sidebar(t == tree ? this::header : n -> null);
             t.tree().addMouseListener(new MouseAdapter() {
                 @Override
                 public void mouseClicked(MouseEvent e) {
@@ -247,6 +251,11 @@ final class FilesTab {
         JPanel bottom = new JPanel(new BorderLayout());
         bottom.setBorder(BorderFactory.createEmptyBorder(4, 4, 4, 4));
         bottom.add(filter, BorderLayout.CENTER);
+        // the sidebar's ground (record 98); the filter a field on it, its text the names' ivory
+        SidebarLook.ground(bottom);
+        SidebarLook.ground(center);
+        SidebarLook.ground(body);
+        filter.setForeground(SidebarLook.TEXT);
         body.add(center, BorderLayout.CENTER);
         body.add(bottom, BorderLayout.SOUTH); // under the tree (Miguel, 2026-10-19)
     }
@@ -352,7 +361,7 @@ final class FilesTab {
         }
     }
 
-    /** The open folders' git repositories as read: a changed file and a folder holding one take git's colours. */
+    /** The open folders' git repositories as read: the marks of a changed file, a new one and the folders leading to them. */
     void showRepos(List<RepoStatus> repos) {
         List<RepoStatus> before = changes.repos();
         changes.set(repos);
@@ -369,9 +378,8 @@ final class FilesTab {
         remark();
     }
 
-    /** Works out which folders hold a marked file, then repaints. */
+    /** Works out which folders lead down to a new file or a changed one, then repaints. */
     private void remark() {
-        Set<Path> holding = new HashSet<>();
         Set<Path> towards = new HashSet<>();
         Set<Path> towardsTracked = new HashSet<>();
         for (RepoStatus r : changes.repos()) {
@@ -382,11 +390,9 @@ final class FilesTab {
                 if (fresh && opened.contains(file)) {
                     continue;
                 }
-                addFolders(file, root, holding);
                 addFolders(file, root, fresh ? towards : towardsTracked);
             }
         }
-        marked = holding;
         towardsNew = towards;
         towardsChanged = towardsTracked;
         // a mark that appears or goes changes a row's width, which a repaint alone would not take
@@ -413,18 +419,15 @@ final class FilesTab {
     }
 
     /**
-     * The colour of a node's name: a file's for how it differs from {@code HEAD}, a folder's (or a folder row's) when
-     * it holds a changed file or a new one; none for anything else, a new file the user opened included.
+     * The colour of a node's name when it is not the names' one (record 98): red for a file in conflict, as an error is;
+     * none for anything else. How a file or folder differs from {@code HEAD} is said by the marks after its name, the
+     * arrow and the dot, not by its colour.
      */
     Color colorOf(DefaultMutableTreeNode n) {
-        if (!(n.getUserObject() instanceof ViewSpec.TreeNode node) || changes.repos().isEmpty()) {
+        if (!(n.getUserObject() instanceof ViewSpec.TreeNode node) || changes.repos().isEmpty() || !node.link().startsWith(SourceLinks.SCHEME)) {
             return null;
         }
-        if (node.link().startsWith(SourceLinks.SCHEME)) {
-            Path file = Path.of(SourceLinks.path(node.link()));
-            return changes.of(file).filter(k -> k != RepoStatus.Kind.UNTRACKED || !opened.contains(file)).map(RepoChanges::color).orElse(null);
-        }
-        return folderPath(n).filter(p -> marked.contains(p.toAbsolutePath().normalize())).map(p -> Theme.VCS_MODIFIED).orElse(null);
+        return changes.of(Path.of(SourceLinks.path(node.link()))).filter(k -> k == RepoStatus.Kind.CONFLICTED).map(k -> Theme.DANGER).orElse(null);
     }
 
     /** Whether {@code n} is a file git does not track yet and the user has not opened. */
@@ -653,6 +656,32 @@ final class FilesTab {
             }
         }
         return Optional.empty();
+    }
+
+    /**
+     * The icon called {@code name}: a folder's along the tint's ramp, from the sidebar's family (record 98); a file's as
+     * its kind's colours have it.
+     */
+    static Icon icon(String name) {
+        return Icons.folder(name);
+    }
+
+    /**
+     * The header above a folder's row: its group, on the first row of a run of rows in that group (record 98); null for
+     * any other node and for a folder in no group.
+     */
+    String header(DefaultMutableTreeNode n) {
+        if (!isRow(n) || !(n.getUserObject() instanceof ViewSpec.TreeNode node) || !(n.getParent() instanceof DefaultMutableTreeNode root)) {
+            return null;
+        }
+        String group = folder(node.label()).map(FolderRoot::group).orElse("");
+        if (group.isEmpty()) {
+            return null;
+        }
+        int i = root.getIndex(n);
+        String before = i <= 0 || !(((DefaultMutableTreeNode) root.getChildAt(i - 1)).getUserObject() instanceof ViewSpec.TreeNode prev)
+                ? "" : folder(prev.label()).map(FolderRoot::group).orElse("");
+        return group.equals(before) ? null : group;
     }
 
     /** {@code folder} for the plain icon, else {@code folder-<icon>}. */

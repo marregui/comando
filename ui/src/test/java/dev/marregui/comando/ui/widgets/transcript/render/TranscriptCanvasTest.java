@@ -181,7 +181,7 @@ class TranscriptCanvasTest {
         canvas.append(2, new Block.TurnEnd(0.1, 1_000, 2, false, ""));
         assertThat(pixels(paint(800, 300), Tint.TREASURE.highlight)).as("the bar's top").isPositive();
         assertThat(pixels(paint(800, 300), Tint.CHAMPAGNE.highlight)).isZero();
-        assertThat(pixels(paint(800, 300), Tint.over(Theme.TRANSCRIPT, Tint.TREASURE.highlight, 0.03f)))
+        assertThat(pixels(paint(800, 300), Tint.over(Theme.ground(), Tint.TREASURE.highlight, 0.03f)))
                 .as("no ground lifted towards the tint").isZero();
 
         Theme.tint(Tint.ELECTRIC_BLUE);

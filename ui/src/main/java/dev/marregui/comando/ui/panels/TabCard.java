@@ -78,7 +78,7 @@ final class TabCard {
         protected void paintComponent(Graphics g0) {
             Graphics2D g = (Graphics2D) g0.create();
             try {
-                g.setColor(Theme.TRANSCRIPT);
+                g.setColor(Theme.ground());
                 g.fillRect(0, 0, getWidth(), getHeight());
                 g.setPaint(Theme.tint().ramp(0, getHeight(), false));
                 g.fillRect(0, 0, BAR, getHeight());
@@ -147,21 +147,21 @@ final class TabCard {
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setOpaque(true);
         card.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.CARD_BORDER),
-                BorderFactory.createEmptyBorder(10, 10 + BAR + 4, 6, 12)));
+                BorderFactory.createEmptyBorder(Theme.SPACE_M, Theme.SPACE_M + BAR + Theme.SPACE_XS, Theme.SPACE_S, Theme.SPACE_M)));
         Font tip = UIManager.getFont("ToolTip.font");
         font = tip == null ? new Font(Font.DIALOG, Font.PLAIN, 12) : tip;
         // the report's first heading: the card's name
-        title = new TintTitle("", font.getSize2D() * 1.55f);
+        title = new TintTitle("", Theme.TextSize.TITLE.pt);
         title.setName("tab-card-title");
         title.setBorder(BorderFactory.createEmptyBorder(0, 0, 2, 0));
         facts.setName("tab-card-facts");
         facts.setOpaque(false);
-        facts.setBorder(BorderFactory.createEmptyBorder(6, 0, 0, 0));
+        facts.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_S, 0, 0, 0));
         facts.setVisible(false);
-        // the report's second heading, a size above the text
-        heading = new TintTitle("Summary", font.getSize2D() * 1.25f);
+        // the report's second heading, a step above the text
+        heading = new TintTitle("Summary", Theme.TextSize.SUBTITLE.pt);
         heading.setName("tab-card-heading");
-        topic.setFont(font.deriveFont(font.getSize2D() + 0.5f));
+        topic.setFont(Theme.font(font, Theme.TextSize.BODY));
         topic.setName("tab-card-topic");
         topic.setEditable(false);
         topic.setFocusable(false);
@@ -184,9 +184,9 @@ final class TabCard {
         }
         card.add(title);
         card.add(facts);
-        Component aboveHeading = Box.createVerticalStrut(10);
-        Component underHeading = Box.createVerticalStrut(6);
-        Component aboveActions = Box.createVerticalStrut(6);
+        Component aboveHeading = Box.createVerticalStrut(Theme.SPACE_M);
+        Component underHeading = Box.createVerticalStrut(Theme.SPACE_XS);
+        Component aboveActions = Box.createVerticalStrut(Theme.SPACE_S);
         card.add(aboveHeading);
         card.add(heading);
         card.add(underHeading);
@@ -281,7 +281,7 @@ final class TabCard {
             JLabel link = Plain.only(new JLabel(t.id()));
             link.setName("tab-card-ticket");
             link.setFont(font.deriveFont(Map.of(TextAttribute.UNDERLINE, TextAttribute.UNDERLINE_ON)));
-            link.setForeground(Theme.ACCENT);
+            link.setForeground(Theme.LINK);
             link.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
             link.setToolTipText("Double click to open " + t.id() + " in the browser");
             link.addMouseListener(new MouseAdapter() {
@@ -332,7 +332,7 @@ final class TabCard {
         public Shape paintLayer(Graphics g, int p0, int p1, Shape bounds, JTextComponent c, View view) {
             try {
                 Rectangle r = view == null ? bounds.getBounds() : view.modelToView(p0, Position.Bias.Forward, p1, Position.Bias.Backward, bounds).getBounds();
-                g.setColor(Theme.ACCENT);
+                g.setColor(Theme.LINK);
                 int y = r.y + r.height - 2;
                 g.drawLine(r.x, y, r.x + r.width - 1, y);
                 return r;
@@ -444,12 +444,12 @@ final class TabCard {
     }
 
     /**
-     * The facts as rows: the label in a quiet grey, a size below, the value in the transcript's ivory, clipped at the
+     * The facts as rows: the label in a quiet grey, a step below, the value in the transcript's ivory, clipped at the
      * card's edge rather than wrapped.
      */
     private void fill(List<CardFacts.Fact> list) {
         facts.removeAll();
-        Font label = font.deriveFont(font.getSize2D() - 1f).deriveFont(Map.of(TextAttribute.TRACKING, 0.04f));
+        Font label = Theme.font(font, Theme.TextSize.SMALL).deriveFont(Map.of(TextAttribute.TRACKING, 0.04f));
         GridBagConstraints at = new GridBagConstraints();
         at.anchor = GridBagConstraints.BASELINE_LEADING;
         at.insets = new Insets(1, 0, 1, 0);
@@ -466,7 +466,7 @@ final class TabCard {
             at.gridx = 0;
             at.weightx = 0;
             at.fill = GridBagConstraints.NONE;
-            at.insets = new Insets(1, 0, 1, 14);
+            at.insets = new Insets(1, 0, 1, Theme.SPACE_L);
             facts.add(name, at);
             at.gridx = 1;
             at.weightx = 1;

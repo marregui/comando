@@ -265,7 +265,7 @@ class FoldersEditorTest {
             labels(x.component(), out);
             return out;
         });
-        assertThat(tips.keySet()).containsExactly("Name", "Folder", "Index file", "Leave out", "Icon", "Trash", "Listed in");
+        assertThat(tips.keySet()).containsExactly("Name", "Folder", "Index file", "Leave out", "Icon", "Trash", "Listed in", "Group");
         assertThat(tips.values()).allSatisfy(t -> assertThat(t).isNotBlank());
         assertThat(tips.get("Index file")).contains("Named but missing: Save creates it").contains("Empty: the folder has no index");
         assertThat(tips.get("Listed in")).contains("An entry moved to the Trash takes its lines out");

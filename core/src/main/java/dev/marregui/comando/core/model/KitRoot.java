@@ -188,7 +188,7 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
     /** The kit's folders for the Files tab, their paths made absolute under the root; none without a kit. */
     public List<FolderRoot> folders() {
         return kit.map(k -> k.folders().stream().map(f -> new FolderRoot(f.name(), dir.resolve(f.path()).normalize().toString(), f.index(),
-                f.excludes(), f.icon(), f.deletable(), f.listedIn())).toList()).orElse(List.of());
+                f.excludes(), f.icon(), f.deletable(), f.listedIn(), f.group())).toList()).orElse(List.of());
     }
 
     /** Whether {@code workDir} names the root: the session there called {@link #UPGRADE_SESSION} upgrades the kit. */

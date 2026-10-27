@@ -5,6 +5,7 @@ import com.jediterm.terminal.StyledTextConsumer;
 import com.jediterm.terminal.SubstringFinder;
 import com.jediterm.terminal.TerminalColor;
 import com.jediterm.terminal.TextStyle;
+import com.jediterm.terminal.emulator.ColorPalette;
 import com.jediterm.terminal.model.CharBuffer;
 import com.jediterm.terminal.model.StyleState;
 import com.jediterm.terminal.model.SubCharBuffer;
@@ -20,6 +21,7 @@ import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Searchable;
@@ -35,6 +37,7 @@ import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Cursor;
 import java.awt.Font;
@@ -181,6 +184,9 @@ public final class TerminalWidget implements Zoomable, Searchable {
         }
         pty = started;
         term = new Term(new Settings(() -> fontSize));
+        // the palette is read at each paint; another tint or ground repaints it (record 101)
+        Term shown = term;
+        SidebarLook.whileShown(shown, shown::repaint);
         term.getTerminalTextBuffer().addModelListener(() -> bufferChanged = true);
         term.setTtyConnector(started);
         term.start();
@@ -608,6 +614,26 @@ public final class TerminalWidget implements Zoomable, Searchable {
         }
     }
 
+    /**
+     * The terminal's sixteen colours, read from {@code Theme.content()} at each lookup; indices past 15, the 256-colour
+     * cube and greys, are xterm's.
+     */
+    private static final ColorPalette PALETTE = new ColorPalette() {
+        @Override
+        protected com.jediterm.core.Color getForegroundByColorIndex(int i) {
+            return core(Theme.content().ansi(i));
+        }
+
+        @Override
+        protected com.jediterm.core.Color getBackgroundByColorIndex(int i) {
+            return core(Theme.content().ansi(i));
+        }
+
+        private static com.jediterm.core.Color core(Color c) {
+            return new com.jediterm.core.Color(c.getRGB() & 0xFFFFFF);
+        }
+    };
+
     /** Colours from the theme; the font is the theme's monospaced font at the terminal's own size. */
     static final class Settings extends DefaultSettingsProvider {
 
@@ -629,12 +655,21 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
         @Override
         public TerminalColor getDefaultForeground() {
-            return TerminalColor.rgb(0xDF, 0xE1, 0xE5);
+            Color ink = Theme.content().ink;
+            return TerminalColor.rgb(ink.getRed(), ink.getGreen(), ink.getBlue());
+        }
+
+        /** The sixteen colours of the content palette chosen now (record 101). */
+        @Override
+        public ColorPalette getTerminalColorPalette() {
+            return PALETTE;
         }
 
         @Override
         public TerminalColor getDefaultBackground() {
-            return TerminalColor.rgb(0x1E, 0x1F, 0x22);
+            // the panels' ground, set once in Theme (record 98)
+            Color g = Theme.ground();
+            return TerminalColor.rgb(g.getRed(), g.getGreen(), g.getBlue());
         }
 
         /** Deprecated in JediTerm, yet still read for text written before the first paint. */

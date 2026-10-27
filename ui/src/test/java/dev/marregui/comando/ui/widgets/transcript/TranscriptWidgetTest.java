@@ -60,7 +60,7 @@ class TranscriptWidgetTest {
             g.dispose();
         }
         assertThat(widget.canvas().isOpaque()).as("the canvas paints no ground; the viewport's shows through").isFalse();
-        assertThat(new Color(image.getRGB(399, 299))).as("a corner no block reaches").isEqualTo(Theme.TRANSCRIPT);
+        assertThat(new Color(image.getRGB(399, 299))).as("a corner no block reaches").isEqualTo(Theme.ground());
     }
 
     @Test

@@ -85,8 +85,10 @@ Any number of document panels may be attached to a session
   Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A production connection frames the panel in
   red ([record 57](adr/0057-a-light-editor-and-a-header-of-icons.md)).
 - **The theme** is dark throughout: the window is FlatLaf's dark look (`FlatMacDarkLaf` on macOS, `FlatDarkLaf`
-  elsewhere), the editors are IntelliJ's Dark: the text, its gutter, its rendered Markdown (code blocks in the
-  theme's colours, Mermaid diagrams drawn in Mermaid's dark theme by `mmdc` when it is installed; without it no
+  elsewhere) on the ground chosen. The editors' and the terminal's colours, diffs and plots are derived from the tint
+  and the ground: keywords in the tint, six syntax categories of one weight, comments muted
+  ([record 101](adr/0101-content-colours-derived-from-the-theme.md)): the text, its gutter, its rendered Markdown (code
+  blocks in the theme's colours, Mermaid diagrams drawn in Mermaid's dark theme by `mmdc` when it is installed; without it no
   diagram is drawn). There is no light theme
   ([record 93](adr/0093-comando-is-dark-throughout.md)).
 - **Pictures in Markdown**: an image link to a PNG, JPEG, GIF or SVG on this machine, named from the document's folder
@@ -102,11 +104,14 @@ Any number of document panels may be attached to a session
   answered, the others' until the tab is looked at. A waiting request or a failure bounces the Dock while the window
   is not active.
 - **The lower panel** follows the focused panel: its last SQL run, its session's transcript, its terminal. Approvals
-  lists every session's requests. At its right end, a swatch of the tint chosen opens the tints (as Actions ▸ Tint
-  does), and Clear empties the Session tab while the conversation goes on.
-- **Actions ▸ Tint** chooses the window's tint, the colour of headings, reports, tooltips and new files: Treasure gold,
-  18k yellow gold, Champagne gold, Silver, Tropical forest, Electric blue; Treasure until one is chosen; kept across
-  restarts ([record 96](adr/0096-a-tint-chosen-in-actions.md)).
+  lists every session's requests. At its right end, a swatch of the theme chosen (its ground with a bar of its tint)
+  opens the themes, as Actions ▸ Theme does, and Clear empties the Session tab
+  while the conversation goes on.
+- **Actions ▸ Theme** chooses a ground and the tint made for it together: Graphite and gold (the default), Espresso
+  and champagne, Aubergine and yellow gold, Midnight and electric blue, Evergreen and tropical forest, Slate and silver;
+  kept across restarts. Cards, borders and the prompt's bubble are laid over the ground and follow it
+  ([record 103](adr/0103-curated-themes-in-actions.md)). Text sizes are steps of one scale and spacing a 4-point grid
+  ([record 102](adr/0102-one-type-scale-and-a-grid.md)).
 - **Closing** (⌘W when no view has the keyboard; the last open panel cannot be closed) keeps a panel of comando's own,
   closed, with its file, title and bindings, until removed; a document is dropped
   ([record 39](adr/0039-panels-are-kept-until-removed.md)). ⌘⇧T reopens the last of ten recently closed. The Sessions
@@ -126,7 +131,11 @@ Any number of document panels may be attached to a session
 Three tabs in one row, each an icon named by its tooltip: Sessions, Connections, Files; the tab in front is kept across
 restarts ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md),
 [record 91](adr/0091-the-panels-tab-folds-into-the-sessions-tab.md)). A right click on a tab selects it and opens its
-menu: the tab's own actions, then the window's commands for it with their keys.
+menu: the tab's own actions, then the window's commands for it with their keys. Every panel of the window, the sidebar
+included, lies on one ground set once (`Theme.ground()`, the theme's); names are in the transcript's ivory; the folders' icons are
+outlines in one grey ink, told apart by their shape; the tint chosen draws the group headers, the tab in front's
+underline and the selection: a band of its shade, the name in its highlight and the report's bar at the left edge
+([record 98](adr/0098-the-sidebars-look.md), [record 100](adr/0100-a-theme-is-four-tiers-of-tokens.md)).
 
 | Tab | Its menu |
 |---|---|
@@ -366,7 +375,9 @@ edited and saved like any other; a `.log` stays read-only.
 
 - **Folders** are resources ([§1.1](#11-one-model-for-connections-sessions-and-folders)): a unique name, a full path,
   an optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge, skills,
-  plugin), whether its entries go to the Trash (`deletable`) and the file name that lists them (`listedIn`); a
+  plugin), whether its entries go to the Trash (`deletable`), the file name that lists them (`listedIn`) and a group
+  (`group`): the tab shows a group's name as a header above the first of a run of its folders, nothing nested (the
+  kit's Brain over Scratchpad, KB and Memory, [record 98](adr/0098-the-sidebars-look.md)); a
   `repository` key, written by older versions, is ignored. With a kit, its folders come first, as its `comando-kit.json` lists them
   ([§7](#7-the-kit)). Without a kit and without `folders.json` there is one folder, Claude Code's (`~/.claude`),
   opening `CLAUDE.md` and leaving out Claude Code's transcripts, caches and per-session state; an emptied list stays
@@ -413,11 +424,10 @@ edited and saved like any other; a `.log` stays read-only.
 - **Sync.** Only folders whose rows are open are read: at once when opened, then every 5 s on `folder-poll`, sent only
   when something changed. A tree carries the settings it was read with and is dropped if the folder was edited since;
   reads are ticketed so an older one never overwrites a newer one. The tree keeps what the user opened and selected.
-- **Git.** In a git repository a file that differs from `HEAD` takes git's colour for how (changed blue, added green,
-  untracked in the chosen tint, in conflict red), and a folder that holds one is blue
-  ([record 83](adr/0083-one-gold-chosen-beside-clear.md)). A new (untracked) file and every folder on the way down to it
+- **Git.** In a git repository a name keeps the names' colour whatever git says of it; only a file in conflict is red
+  ([record 98](adr/0098-the-sidebars-look.md)). How it differs is said by marks after the names: a new (untracked) file and every folder on the way down to it
   carry a dot in the tint after the name, so the closed folders to open are marked from the folder's row down. Once the new
-  file is opened (in a panel or the side pane, from any place) it reads as any other file, without tint or dot, and
+  file is opened (in a panel or the side pane, from any place) it reads as any other file, without its dot, and
   counts for its folders no more; comando keeps the opened files in `opened-files`
   ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)). A file git tracks that differs from `HEAD`
   (changed, added, renamed, in conflict) and every folder on the way down to it carry the rising arrow after the name,

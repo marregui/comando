@@ -855,7 +855,7 @@ public final class ResourceDialog<S> {
         hint.setName("hint:" + a.key());
         hint.setToolTipText(a.hint());
         hint.setForeground(Theme.MUTED);
-        hint.setFont(hint.getFont().deriveFont(hint.getFont().getSize2D() - 1f));
+        hint.setFont(Theme.font(hint.getFont(), Theme.TextSize.SMALL));
         g.gridy = row + 1;
         g.insets = new Insets(0, 6, 2, 3);
         panel.add(hint, g);

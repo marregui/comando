@@ -1,11 +1,15 @@
 package dev.marregui.comando.ui.kit.tree;
 
+import com.formdev.flatlaf.ui.FlatTreeUI;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
 import javax.swing.Icon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
@@ -21,16 +25,24 @@ import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import javax.swing.tree.DefaultTreeModel;
 import javax.swing.tree.TreePath;
+import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.FontMetrics;
+import java.awt.Graphics;
+import java.awt.Graphics2D;
+import java.awt.Insets;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -68,6 +80,23 @@ public final class TreeView {
         }
 
         @Override
+        protected void paintComponent(Graphics g) {
+            super.paintComponent(g);
+            if (sidebar) {
+                paintSidebar(g);
+            }
+        }
+
+        @Override
+        public void updateUI() {
+            if (sidebar) {
+                setUI(new SidebarTreeUI());
+            } else {
+                super.updateUI();
+            }
+        }
+
+        @Override
         public int getToggleClickCount() {
             // the look asks while it handles a press: with toggleOnClick only a sequence's first click opens or closes
             return toggleOnClick ? (clicks == 1 ? 1 : 0) : super.getToggleClickCount();
@@ -87,6 +116,14 @@ public final class TreeView {
     private Function<DefaultMutableTreeNode, Icon> nodeIcons = n -> null;
     private Function<DefaultMutableTreeNode, Icon> trailing = n -> null;
     private Function<DefaultMutableTreeNode, String> tips = n -> null;
+    /** Whether the tree has the sidebar's look (record 98): see {@link #sidebar}. */
+    private boolean sidebar;
+    /** The header above a node, null for none; only with the sidebar's look. */
+    private Function<DefaultMutableTreeNode, String> headers = n -> null;
+    /** A row under a header: the space the tree paints the header in, then the row. */
+    private final JPanel headed = new JPanel(new BorderLayout());
+    /** The height of a header's space above its row. */
+    static final int HEADER = 24;
     /** A cell with more than a name: the look's label with the name, the mark after it if any, then the detail, muted. */
     private final JPanel cell = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
     private final JLabel mark = new JLabel();
@@ -96,7 +133,7 @@ public final class TreeView {
         cell.setOpaque(false);
         mark.setBorder(BorderFactory.createEmptyBorder(0, 4, 0, 0));
         detail.setForeground(Theme.MUTED);
-        detail.setBorder(BorderFactory.createEmptyBorder(0, 6, 0, 0));
+        detail.setBorder(BorderFactory.createEmptyBorder(0, Theme.SPACE_S, 0, 0));
         tree.setRootVisible(true);
         tree.setShowsRootHandles(true);
         tree.addTreeExpansionListener(new TreeExpansionListener() {
@@ -134,6 +171,9 @@ public final class TreeView {
                         l.setIcon(icon);
                     }
                     Color color = failed ? Theme.DANGER : sel ? null : colors.apply(n);
+                    if (color == null && sidebar) {
+                        color = sel ? Theme.tint().highlight : SidebarLook.TEXT;
+                    }
                     if (color != null) {
                         l.setForeground(color);
                     }
@@ -152,8 +192,9 @@ public final class TreeView {
                             cell.add(detail);
                         }
                         cell.setToolTipText(l.getToolTipText());
-                        return cell;
+                        return underHeader(n, cell);
                     }
+                    return underHeader(n, l);
                 }
                 return l;
             }
@@ -191,6 +232,93 @@ public final class TreeView {
         });
         ToolTipManager.sharedInstance().registerComponent(tree);
         scroll.setBorder(null);
+    }
+
+    /** The look's tree, which centres a row's open-and-close mark on the row below its header's space, not on both. */
+    private final class SidebarTreeUI extends FlatTreeUI {
+        @Override
+        protected void paintExpandControl(Graphics g, Rectangle clip, Insets insets, Rectangle bounds, TreePath path, int row,
+                                          boolean expanded, boolean beenExpanded, boolean leaf) {
+            Rectangle below = headers.apply((DefaultMutableTreeNode) path.getLastPathComponent()) == null
+                    ? bounds : new Rectangle(bounds.x, bounds.y + HEADER, bounds.width, bounds.height - HEADER);
+            super.paintExpandControl(g, clip, insets, below, path, row, expanded, beenExpanded, leaf);
+        }
+    }
+
+    /** {@code c}, below the space of its header when {@code n} has one in the sidebar's look. */
+    private Component underHeader(DefaultMutableTreeNode n, JComponent c) {
+        if (!sidebar || headers.apply(n) == null) {
+            return c;
+        }
+        headed.removeAll();
+        headed.add(Box.createVerticalStrut(HEADER), BorderLayout.NORTH);
+        headed.add(c, BorderLayout.CENTER);
+        headed.setToolTipText(c.getToolTipText());
+        return headed;
+    }
+
+    /**
+     * The sidebar's marks over the painted rows: the report's bar down the left edge of each selected row, then each
+     * header in its space above its row, on the ground the selection's band does not reach: the header's words in spaced
+     * capitals in the tint's body, and a hairline of the tint's shade on to the edge.
+     */
+    private void paintSidebar(Graphics g0) {
+        Graphics2D g = (Graphics2D) g0.create();
+        try {
+            Rectangle clip = g.getClipBounds();
+            int first = clip == null ? 0 : Math.max(0, tree.getClosestRowForLocation(0, clip.y));
+            int last = clip == null ? tree.getRowCount() - 1 : tree.getClosestRowForLocation(0, clip.y + clip.height);
+            Font font = headerFont();
+            for (int row = first; row <= last && row >= 0; row++) {
+                Rectangle r = tree.getRowBounds(row);
+                TreePath path = tree.getPathForRow(row);
+                if (r == null || path == null) {
+                    continue;
+                }
+                String header = headers.apply((DefaultMutableTreeNode) path.getLastPathComponent());
+                int top = header == null ? 0 : HEADER;
+                if (tree.isRowSelected(row)) {
+                    SidebarLook.bar(g, new Rectangle(0, r.y + top, SidebarLook.BAR, r.height - top));
+                }
+                if (header != null) {
+                    g.setColor(Theme.ground());
+                    g.fillRect(0, r.y, tree.getWidth(), HEADER);
+                    g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                    g.setFont(font);
+                    String text = header.toUpperCase(Locale.ROOT);
+                    FontMetrics m = g.getFontMetrics();
+                    int baseline = r.y + HEADER - 7;
+                    g.setColor(Theme.tint().body);
+                    g.drawString(text, 8, baseline);
+                    int from = 8 + m.stringWidth(text) + 8;
+                    if (from < tree.getWidth() - 8) {
+                        g.setColor(Tint.over(Theme.ground(), Theme.tint().shade, 0.45f));
+                        g.fillRect(from, baseline - m.getAscent() / 2 + 1, tree.getWidth() - 8 - from, 1);
+                    }
+                }
+            }
+        } finally {
+            g.dispose();
+        }
+    }
+
+    private Font headerFont() {
+        return SidebarLook.headerFont(tree.getFont());
+    }
+
+    /**
+     * Gives the tree the sidebar's look (record 98): the transcript's ground, names in its ivory, the selection a band of
+     * the tint's shade with the name in its highlight and the report's bar at the left edge, and {@code headers}' text
+     * above the nodes it names one for, in spaced capitals in the tint, over a hairline; rows then take their own heights.
+     */
+    public void sidebar(Function<DefaultMutableTreeNode, String> headers) {
+        this.sidebar = true;
+        this.headers = headers;
+        headed.setOpaque(false);
+        tree.updateUI();
+        SidebarLook.tree(tree);
+        SidebarLook.ground(scroll);
+        tree.setRowHeight(0);
     }
 
     private void popup(MouseEvent e) {

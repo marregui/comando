@@ -1,6 +1,8 @@
 package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.core.model.LinearTickets;
+import dev.marregui.comando.ui.kit.theme.Ground;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
 
@@ -9,13 +11,14 @@ import java.awt.Frame;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.prefs.Preferences;
 
 /**
  * The window's layout across restarts, in the user's preferences: its bounds and whether it was maximized, the
- * dividers, the sidebar's state and tab, the side pane, the editors' theme, the tint and Linear's site. The one place each key is named.
+ * dividers, the sidebar's state and tab, the side pane, the editors' theme, the theme (its ground and tint) and Linear's site. The one place each key is named.
  */
 final class WindowLayout {
 
@@ -133,13 +136,19 @@ final class WindowLayout {
         prefs.put("linear.teams", String.join(",", new TreeSet<>(site.teams())));
     }
 
-    /** The tint chosen; the gold chosen before tints, which keeps its name, when none is yet (record 96). */
-    Tint tint() {
-        return Tint.named(prefs.get("theme.tint", prefs.get("theme.gold", Tint.TREASURE.name())));
+    /**
+     * The theme chosen (record 103), from the ground and tint it keeps: a pair kept from before themes maps to the
+     * closest theme; the gold chosen before tints keeps its name (record 96). Graphite and gold until one is chosen.
+     */
+    NamedTheme theme() {
+        Optional<Ground> ground = Optional.ofNullable(prefs.get("theme.ground", null)).map(Ground::named);
+        Tint tint = Tint.named(prefs.get("theme.tint", prefs.get("theme.gold", Tint.TREASURE.name())));
+        return NamedTheme.closest(ground, tint);
     }
 
-    void tint(Tint tint) {
-        prefs.put("theme.tint", tint.name());
+    void theme(NamedTheme theme) {
+        prefs.put("theme.ground", theme.ground.name());
+        prefs.put("theme.tint", theme.tint.name());
         prefs.remove("theme.gold");
     }
 

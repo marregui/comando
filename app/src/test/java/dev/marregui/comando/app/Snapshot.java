@@ -23,6 +23,10 @@ import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.dialogs.folders.FoldersDialog;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.text.LocalImages;
+import dev.marregui.comando.ui.kit.theme.Ground;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 
 import javax.imageio.ImageIO;
 import javax.swing.AbstractButton;
@@ -32,6 +36,7 @@ import javax.swing.JList;
 import javax.swing.JMenu;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
+import javax.swing.JRootPane;
 import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
@@ -262,6 +267,8 @@ public final class Snapshot {
         SwingUtilities.invokeAndWait(() -> app.ui().openFile(source));
         Thread.sleep(1500);
         shoot(out.resolve("02f-source-colours.png"));
+        // the same window in every curated theme, half size, three a row (record 103)
+        themes(out.resolve("02f2-themes.png"));
         // Help's tutorial and log open as documents from their files: the tutorial rendered, the log read-only at its end
         menuItem("Actions", "Tutorial");
         showing(loop, "tutorial.md");
@@ -978,6 +985,47 @@ public final class Snapshot {
                 }
             }
             throw new IllegalStateException("no dialog " + title);
+        });
+    }
+
+    /** The visible window painted in each curated theme, half size, three a row, each named; then the default theme. */
+    static void themes(Path file) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            for (Frame f : Frame.getFrames()) {
+                if (f instanceof JFrame jf && f.isVisible()) {
+                    JRootPane root = jf.getRootPane();
+                    NamedTheme[] themes = NamedTheme.values();
+                    int cols = 3;
+                    int cw = root.getWidth() / 2;
+                    int ch = root.getHeight() / 2;
+                    BufferedImage img = new BufferedImage(cols * cw, (themes.length + cols - 1) / cols * (ch + 22), BufferedImage.TYPE_INT_RGB);
+                    Graphics2D g = img.createGraphics();
+                    g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+                    for (int i = 0; i < themes.length; i++) {
+                        Theme.ground(themes[i].ground);
+                        Theme.tint(themes[i].tint);
+                        root.validate();
+                        int x = i % cols * cw;
+                        int y = i / cols * (ch + 22);
+                        g.setColor(Theme.ground());
+                        g.fillRect(x, y, cw, 22);
+                        g.setColor(Theme.TRANSCRIPT_TEXT);
+                        g.drawString(themes[i].label, x + 8, y + 15);
+                        Graphics2D one = (Graphics2D) g.create(x, y + 22, cw, ch);
+                        one.scale(0.5, 0.5);
+                        root.paint(one);
+                        one.dispose();
+                    }
+                    g.dispose();
+                    Theme.ground(Ground.GRAPHITE);
+                    Theme.tint(Tint.TREASURE);
+                    try {
+                        ImageIO.write(img, "png", file.toFile());
+                    } catch (IOException e) {
+                        throw new UncheckedIOException(e);
+                    }
+                }
+            }
         });
     }
 

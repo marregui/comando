@@ -113,5 +113,11 @@ has the same shape:
 | [93](0093-comando-is-dark-throughout.md) | comando is dark throughout | 2026-10-26 | Miguel and Claude | accepted |
 | [94](0094-links-in-both-styles-everywhere.md) | Links in both styles, followed everywhere at a double click | 2026-10-27 | Miguel and Claude | accepted |
 | [95](0095-the-files-tab-holds-no-code-repositories.md) | The Files tab holds no code repositories | 2026-10-27 | Miguel and Claude | accepted |
-| [96](0096-a-tint-chosen-in-actions.md) | A tint, chosen in Actions or beside Clear; the ground stays the transcript's; attention stays gold | 2026-10-27 | Miguel and Claude | accepted |
+| [96](0096-a-tint-chosen-in-actions.md) | A tint, chosen in Actions or beside Clear; the ground stays the transcript's; attention stays gold | 2026-10-27 | Miguel and Claude | accepted; the tint chosen apart replaced by [record 103](0103-curated-themes-in-actions.md) |
 | [97](0097-a-changed-files-trail-of-arrows.md) | A changed file's trail of arrows, as a new file's trail of dots | 2026-10-27 | Miguel and Claude | accepted |
+| [98](0098-the-sidebars-look.md) | One ground for every panel; the sidebar's look: groups as headers, one colour for names | 2026-10-27 | Miguel and Claude | accepted |
+| [99](0099-a-ground-chosen-beside-the-tint.md) | A ground, chosen beside the tint, for every panel | 2026-10-27 | Miguel and Claude | replaced by [record 103](0103-curated-themes-in-actions.md) |
+| [100](0100-a-theme-is-four-tiers-of-tokens.md) | A theme is four tiers of tokens; blue is a link; the tint is "where I am" | 2026-10-27 | Miguel and Claude | accepted |
+| [101](0101-content-colours-derived-from-the-theme.md) | The content's colours are derived from the tint and the ground | 2026-10-27 | Miguel and Claude | accepted |
+| [102](0102-one-type-scale-and-a-grid.md) | One type scale and a 4-point grid | 2026-10-27 | Miguel and Claude | accepted |
+| [103](0103-curated-themes-in-actions.md) | Six curated themes, chosen in Actions ▸ Theme or beside Clear; surfaces follow the ground | 2026-10-27 | Miguel and Claude | accepted |

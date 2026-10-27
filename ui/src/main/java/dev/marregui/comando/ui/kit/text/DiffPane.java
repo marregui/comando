@@ -44,10 +44,10 @@ public final class DiffPane {
             String l = lines.get(i);
             try {
                 if (Diffs.isAdded(i, l)) {
-                    area.addLineHighlight(i, Theme.DIFF_ADDED);
+                    area.addLineHighlight(i, Theme.content().added);
                     added++;
                 } else if (Diffs.isRemoved(i, l)) {
-                    area.addLineHighlight(i, Theme.DIFF_REMOVED);
+                    area.addLineHighlight(i, Theme.content().removed);
                     removed++;
                 }
             } catch (BadLocationException e) {

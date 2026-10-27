@@ -549,12 +549,12 @@ public final class ChangeEditor {
 
     private void build() {
         JPanel top = new JPanel(new BorderLayout());
-        top.setBorder(BorderFactory.createEmptyBorder(6, 10, 6, 6));
+        top.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_S, Theme.SPACE_S));
         title.setFont(title.getFont().deriveFont(Font.BOLD));
         top.add(title, BorderLayout.CENTER);
         JPanel buttons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         count.setForeground(Theme.MUTED_STRONG);
-        count.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 6));
+        count.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, Theme.SPACE_S));
         buttons.add(count);
         for (JButton b : List.of(previous, next, mode)) {
             buttons.add(b);

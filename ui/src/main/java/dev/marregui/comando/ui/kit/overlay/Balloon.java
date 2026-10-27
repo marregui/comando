@@ -41,7 +41,7 @@ public final class Balloon {
         label.setBackground(Theme.CARD);
         label.setForeground(Theme.MUTED_STRONG);
         label.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.CARD_BORDER),
-                BorderFactory.createEmptyBorder(6, 10, 6, 10)));
+                BorderFactory.createEmptyBorder(Theme.SPACE_S, Theme.SPACE_M, Theme.SPACE_S, Theme.SPACE_M)));
         Point p = new Point(at);
         SwingUtilities.convertPointToScreen(p, owner);
         shown = PopupFactory.getSharedInstance().getPopup(owner, label, p.x, p.y);

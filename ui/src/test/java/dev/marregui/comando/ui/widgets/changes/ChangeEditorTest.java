@@ -193,9 +193,9 @@ class ChangeEditorTest {
         assertThat(str(e, x -> x.sides().get(0).pane().getText())).contains("Old");
         assertThat(str(e, x -> x.sides().get(1).pane().getText())).contains("New");
         assertThat(str(e, x -> x.sides().get(0).pane().getText())).as("HEAD's changed heading shaded red")
-                .containsIgnoringCase(Theme.hex(Theme.DIFF_REMOVED));
+                .containsIgnoringCase(Theme.hex(Theme.content().removed));
         assertThat(str(e, x -> x.sides().get(1).pane().getText())).as("the working tree's shaded green")
-                .containsIgnoringCase(Theme.hex(Theme.DIFF_ADDED));
+                .containsIgnoringCase(Theme.hex(Theme.content().added));
 
         shown(e, texts("B.java", RepoStatus.Kind.MODIFIED, "a\n", "b\n"));
         run(e, x -> x.diff().right().insert("x", 0));

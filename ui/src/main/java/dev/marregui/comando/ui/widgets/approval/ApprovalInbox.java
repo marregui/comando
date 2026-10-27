@@ -681,7 +681,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             FocusAdapter border = new FocusAdapter() {
                 @Override
                 public void focusGained(FocusEvent e) {
-                    setBorder(border(Theme.ACCENT));
+                    setBorder(border(Theme.tint().body));
                     if (e.getComponent() == Card.this) {
                         scrollRectToVisible(new Rectangle(0, 0, getWidth(), getHeight()));
                     }

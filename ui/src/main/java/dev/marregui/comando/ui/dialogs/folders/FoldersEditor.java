@@ -81,6 +81,7 @@ public final class FoldersEditor {
     static final String ICON = "icon";
     static final String DELETABLE = "deletable";
     static final String LISTED_IN = "listedIn";
+    static final String GROUP = "group";
 
     /** What a folder's path is on disk, as looked up off the event thread. */
     record Facts(boolean exists, boolean readable, Path gitRoot) {
@@ -123,6 +124,7 @@ public final class FoldersEditor {
     private final JComboBox<String> icon = new JComboBox<>(FolderRoot.ICONS.toArray(String[]::new));
     private final JCheckBox deletable = new JCheckBox("its files and subfolders can go to the Trash");
     private final JTextField listedIn = new JTextField(24);
+    private final JTextField group = new JTextField(24);
     private final JButton chooseListing = new JButton("…");
     /** The fields by key, outlined in red while they fail. */
     private final Map<String, JComponent> inputs = new HashMap<>();
@@ -341,6 +343,7 @@ public final class FoldersEditor {
         fields.put(ICON, FolderRoot.FOLDER);
         fields.put(DELETABLE, "false");
         fields.put(LISTED_IN, "");
+        fields.put(GROUP, "");
         rows.addElement(new Row(fields));
         lookUp(fields.get(PATH));
         lookUpIndex(rows.lastElement());
@@ -424,6 +427,7 @@ public final class FoldersEditor {
             case ICON -> icon;
             case DELETABLE -> deletable;
             case LISTED_IN -> listedIn;
+            case GROUP -> group;
             default -> throw new IllegalArgumentException(key);
         };
     }
@@ -527,7 +531,7 @@ public final class FoldersEditor {
                     if (bad && !sel) {
                         c.setForeground(Theme.DANGER);
                     }
-                    c.setIcon(Icons.get(rowIcon(r)));
+                    c.setIcon(Icons.folder(rowIcon(r)));
                 }
                 return c;
             }
@@ -560,7 +564,7 @@ public final class FoldersEditor {
             public Component getListCellRendererComponent(JList<?> l, Object value, int i, boolean sel, boolean focus) {
                 JLabel c = (JLabel) super.getListCellRendererComponent(l, value, i, sel, focus);
                 if (value instanceof String s) {
-                    c.setIcon(Icons.get(FolderRoot.FOLDER.equals(s) ? "folder" : "folder-" + s));
+                    c.setIcon(Icons.folder(FolderRoot.FOLDER.equals(s) ? "folder" : "folder-" + s));
                 }
                 return c;
             }
@@ -601,6 +605,10 @@ public final class FoldersEditor {
                         "An entry moved to the Trash takes its lines out of the nearest such file above it",
                         "Missing in a subfolder: nothing to take out there; /reflect creates it with its first line",
                         "Empty, or Trash off: no file is changed"));
+        y = row(form, y, "Group", group, GROUP,
+                lines("A header the Files tab shows above this folder and the folders after it in the same group, such as Brain",
+                        "The folders stay where they are: nothing nests, nothing opens or closes",
+                        "Empty: the folder is in no group"));
         GridBagConstraints g = new GridBagConstraints();
         g.gridx = 1;
         g.gridy = y;
@@ -617,7 +625,7 @@ public final class FoldersEditor {
         g.weighty = 1;
         form.add(new JPanel(), g);
 
-        for (JTextField f : List.of(name, path, index, excludes, listedIn)) {
+        for (JTextField f : List.of(name, path, index, excludes, listedIn, group)) {
             f.getDocument().addDocumentListener(new DocumentListener() {
                 @Override
                 public void insertUpdate(DocumentEvent e) {
@@ -712,7 +720,7 @@ public final class FoldersEditor {
         loading = true;
         try {
             boolean on = r != null;
-            for (JComponent c : List.of(name, path, choosePath, index, chooseIndex, excludes, icon, deletable, listedIn, chooseListing, remove)) {
+            for (JComponent c : List.of(name, path, choosePath, index, chooseIndex, excludes, icon, deletable, listedIn, chooseListing, group, remove)) {
                 c.setEnabled(on);
             }
             name.setText(on ? r.get(NAME) : "");
@@ -722,6 +730,7 @@ public final class FoldersEditor {
             icon.setSelectedItem(on && FolderRoot.ICONS.contains(r.get(ICON)) ? r.get(ICON) : FolderRoot.FOLDER);
             deletable.setSelected(on && Boolean.parseBoolean(r.get(DELETABLE)));
             listedIn.setText(on ? r.get(LISTED_IN) : "");
+            group.setText(on ? r.get(GROUP) : "");
         } finally {
             loading = false;
         }
@@ -741,6 +750,7 @@ public final class FoldersEditor {
         r.fields.put(ICON, String.valueOf(icon.getSelectedItem()));
         r.fields.put(DELETABLE, Boolean.toString(deletable.isSelected()));
         r.fields.put(LISTED_IN, listedIn.getText());
+        r.fields.put(GROUP, group.getText());
         refused = "";
         lookUp(path.getText());
         lookUpIndex(r);

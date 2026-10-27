@@ -324,7 +324,7 @@ class FilesTabTest {
     }
 
     @Test
-    void aChangedFileAndTheFoldersHoldingItTakeGitsColours() throws Exception {
+    void aNameHasOneColourWhateverGitSaysButAFileInConflictIsRed() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Repo", "/s", "", List.of()));
         f.edt(() -> f.tree().expandRow(0));
         f.edt(() -> f.show("Repo", folder("Repo", folder("src", new ViewSpec.TreeNode("A.java", "", "comando-file:/s/src/A.java#0", List.of())),
@@ -336,14 +336,16 @@ class FilesTabTest {
         assertThat(before[0]).as("no repository read yet").isNull();
         f.edt(() -> f.tab.showRepos(List.of(new RepoStatus("/s", "main", List.of(
                 new RepoStatus.FileChange("src/A.java", "", RepoStatus.Kind.MODIFIED),
-                new RepoStatus.FileChange("new.md", "", RepoStatus.Kind.UNTRACKED)), false, ""))));
+                new RepoStatus.FileChange("new.md", "", RepoStatus.Kind.UNTRACKED),
+                new RepoStatus.FileChange("same.md", "", RepoStatus.Kind.CONFLICTED)), false, ""))));
         Color[] colors = new Color[5];
         f.edt(() -> {
             for (int i = 0; i < 5; i++) {
                 colors[i] = f.tab.colorOf(node(f.tree(), i));
             }
         });
-        assertThat(colors).containsExactly(Theme.VCS_MODIFIED, Theme.VCS_MODIFIED, Theme.VCS_MODIFIED, Theme.tint().body, null);
+        assertThat(colors).as("the marks say how a name differs (record 98); its colour only an error")
+                .containsExactly(null, null, null, null, Theme.DANGER);
     }
 
     @Test
@@ -405,8 +407,7 @@ class FilesTabTest {
         });
         assertThat(marks).as("the changed file's trail stays until it is committed")
                 .containsExactly(arrow, null, null, null, arrow, arrow, null);
-        assertThat(colors).as("the repository and src still hold the modified file")
-                .containsExactly(Theme.VCS_MODIFIED, null, null, null, Theme.VCS_MODIFIED, Theme.VCS_MODIFIED, null);
+        assertThat(colors).as("no name takes a colour from git").containsOnlyNulls();
         f.edt(() -> {
             Rectangle r = f.tree().getRowBounds(1);
             String tip = f.tree().getToolTipText(new MouseEvent(f.tree(), MouseEvent.MOUSE_MOVED, 0, 0, r.x + 4, r.y + r.height / 2, 0, false));

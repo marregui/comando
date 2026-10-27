@@ -25,6 +25,8 @@ import dev.marregui.comando.testkit.RecordingPorts;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.Command;
 import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.theme.Ground;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.shell.ComandoUi;
@@ -33,12 +35,14 @@ import dev.marregui.comando.ui.shell.Setup;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
 import org.awaitility.Awaitility;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import javax.imageio.ImageIO;
 import javax.swing.AbstractButton;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
@@ -46,24 +50,31 @@ import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JList;
+import javax.swing.JPanel;
 import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
+import javax.swing.UIManager;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Font;
 import java.awt.Frame;
 import java.awt.Graphics2D;
 import java.awt.GraphicsEnvironment;
 import java.awt.KeyEventDispatcher;
 import java.awt.KeyboardFocusManager;
 import java.awt.Rectangle;
+import java.awt.RenderingHints;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -76,6 +87,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntConsumer;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.prefs.Preferences;
@@ -484,99 +496,176 @@ class UiKeysTest {
     }
 
     @Test
-    void theTintIsChosenInActionsOrBesideClearAndKeptForTheNextWindow() throws Exception {
+    void theThemeIsChosenInActionsOrBesideClearEveryPanelTakesItAndTheNextWindowKeepsIt() throws Exception {
         Preferences prefs = Preferences.userRoot().node(PREFS);
-        Window w = open("mac");
-        settle(w);
-        AbstractButton swatch = await("the tint button", () -> find(w.frame(), AbstractButton.class,
-                b -> "Choose the tint".equals(b.getAccessibleContext().getAccessibleName())).orElse(null), WAIT_MILLIS);
-        List<String> row = onEdt(() -> Stream.of(swatch.getParent().getComponents())
-                .map(c -> ((JComponent) c).getAccessibleContext().getAccessibleName()).toList());
-        assertThat(row).as("left of Clear").containsExactly("Choose the tint", "Clear the Session tab");
-        JMenu tint = onEdt(() -> {
-            JMenuBar bar = w.frame().getJMenuBar();
-            for (int i = 0; i < bar.getMenuCount(); i++) {
-                JMenu m = bar.getMenu(i);
-                if ("Actions".equals(m.getText())) {
-                    for (int k = 0; k < m.getItemCount(); k++) {
-                        if (m.getItem(k) instanceof JMenu sub && "Tint".equals(sub.getText())) {
-                            return sub;
+        try {
+            Window w = open("mac");
+            settle(w);
+            AbstractButton swatch = await("the theme button", () -> find(w.frame(), AbstractButton.class,
+                    b -> "Choose the theme".equals(b.getAccessibleContext().getAccessibleName())).orElse(null), WAIT_MILLIS);
+            List<String> row = onEdt(() -> Stream.of(swatch.getParent().getComponents())
+                    .map(c -> ((JComponent) c).getAccessibleContext().getAccessibleName()).toList());
+            assertThat(row).as("left of Clear, the one chooser").containsExactly("Choose the theme", "Clear the Session tab");
+            JMenu menu = onEdt(() -> {
+                JMenuBar bar = w.frame().getJMenuBar();
+                for (int i = 0; i < bar.getMenuCount(); i++) {
+                    JMenu m = bar.getMenu(i);
+                    if ("Actions".equals(m.getText())) {
+                        for (Component c : m.getMenuComponents()) {
+                            assertThat(c instanceof JMenu sub && ("Tint".equals(sub.getText()) || "Ground".equals(sub.getText())))
+                                    .as("the tint and the ground are no longer chosen apart").isFalse();
+                        }
+                        for (Component c : m.getMenuComponents()) {
+                            if (c instanceof JMenu sub && "Theme".equals(sub.getText())) {
+                                return sub;
+                            }
                         }
                     }
                 }
+                return null;
+            });
+            assertThat(menu).as("Actions ▸ Theme").isNotNull();
+            List<JRadioButtonMenuItem> items = onEdt(() -> Stream.of(menu.getMenuComponents()).map(c -> (JRadioButtonMenuItem) c).toList());
+            assertThat(onEdt(() -> items.stream().map(AbstractButton::getText).toList())).containsExactly(
+                    Stream.of(NamedTheme.values()).map(t -> t.label).toArray(String[]::new));
+            assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
+                    .as("the theme chosen is ticked").containsExactly(NamedTheme.GRAPHITE_GOLD.label);
+            assertThat(NamedTheme.chosen()).as("by default").contains(NamedTheme.GRAPHITE_GOLD);
+
+            // a session bound to the panel, with a turn whose answer is its report, in the Session tab
+            w.loop().dispatch(new Intent.SaveSession("", SessionSpec.fresh("gilt", "/tmp")));
+            w.loop().dispatch(new Intent.BindSession(w.loop().state().focusedPanel().id(), "gilt"));
+            onEdt(() -> {
+                Transcript t = w.transcripts().of("gilt");
+                t.append(new Block.UserPrompt("go", "p", ""));
+                t.append(new Block.AssistantText("m", 0, "# Result\n\nDone.", false, ""));
+                t.append(new Block.TurnEnd(0.1, 1_000, 2, false, ""));
+                t.changed();
+                return null;
+            });
+            w.loop().dispatch(new Intent.SelectLowerTab(LowerTab.SESSION));
+            settle(w);
+            TranscriptCanvas canvas = await("the transcript", () -> find(w.frame(), TranscriptCanvas.class).orElse(null), WAIT_MILLIS);
+            await("the turn on the canvas", () -> canvas.contentHeight() > 100, WAIT_MILLIS);
+            assertThat(tintPixels(canvas, Tint.TREASURE)).as("the report's bar").isPositive();
+            RSyntaxTextArea editor = await("an editor shown", () -> find(w.frame(), RSyntaxTextArea.class, Component::isShowing).orElse(null),
+                    WAIT_MILLIS);
+            Font zoomed = onEdt(() -> {
+                editor.setFont(editor.getFont().deriveFont(editor.getFont().getSize2D() + 4f));
+                return editor.getFont();
+            });
+
+            JRadioButtonMenuItem midnight = items.get(NamedTheme.MIDNIGHT_BLUE.ordinal());
+            onEdt(() -> {
+                midnight.doClick();
+                return null;
+            });
+            assertThat(Theme.groundChosen()).isEqualTo(Ground.MIDNIGHT);
+            assertThat(Theme.tint()).isEqualTo(Tint.ELECTRIC_BLUE);
+            assertThat(prefs.get("theme.ground", null)).as("kept").isEqualTo("MIDNIGHT");
+            assertThat(prefs.get("theme.tint", null)).as("kept").isEqualTo("ELECTRIC_BLUE");
+            assertThat(tintPixels(canvas, Tint.ELECTRIC_BLUE)).as("the answer laid out again in the tint, at once").isPositive();
+            assertThat(tintPixels(canvas, Tint.TREASURE)).isZero();
+            Color ground = Ground.MIDNIGHT.color;
+            assertThat(UIManager.getColor("Panel.background")).as("the look's ground").isEqualTo(ground);
+            assertThat(onEdt(() -> find(w.frame(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()))
+                    .map(Component::getBackground).orElse(null))).as("the sidebar's list").isEqualTo(ground);
+            assertThat(onEdt(editor::getBackground)).as("an editor").isEqualTo(ground);
+            assertThat(onEdt(() -> find(w.frame(), JPanel.class, p -> p.isShowing() && p.isOpaque())
+                    .map(Component::getBackground).orElse(null))).as("a panel").isEqualTo(ground);
+            // the editor takes the theme's content palette, keeping its zoom (record 101)
+            assertThat(onEdt(editor::getSelectionColor)).as("the editor's selection").isEqualTo(Theme.content().selection);
+            assertThat(onEdt(() -> editor.getSyntaxScheme().getStyle(TokenTypes.RESERVED_WORD).foreground))
+                    .as("keywords in the tint").isEqualTo(Tint.ELECTRIC_BLUE.body);
+            assertThat(onEdt(editor::getFont)).as("the editor's zoom").isEqualTo(zoomed);
+            assertThat(onEdt(() -> editor.getSyntaxScheme().getStyle(TokenTypes.COMMENT_DOCUMENTATION).font.getSize2D()))
+                    .as("its scheme at the zoomed size").isEqualTo(zoomed.getSize2D());
+
+            // the same choice from the swatch beside Clear: its menu ticks the theme chosen, and Actions ▸ Theme follows
+            onEdt(() -> {
+                swatch.doClick();
+                return null;
+            });
+            // the menu shows in the frame or, heavyweight, in a window the frame owns
+            JRadioButtonMenuItem slate = await("the swatch's menu", () -> Stream.concat(Stream.of(w.frame()), Stream.of(w.frame().getOwnedWindows()))
+                    .map(win -> find(win, JRadioButtonMenuItem.class,
+                            i -> NamedTheme.SLATE_SILVER.label.equals(i.getText()) && !items.contains(i)).orElse(null))
+                    .filter(Objects::nonNull).findFirst().orElse(null), WAIT_MILLIS);
+            assertThat(onEdt(() -> Stream.of(slate.getParent().getComponents()).map(c -> (JRadioButtonMenuItem) c)
+                    .filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
+                    .as("the swatch's menu ticks the theme chosen").containsExactly(NamedTheme.MIDNIGHT_BLUE.label);
+            onEdt(() -> {
+                slate.doClick();
+                return null;
+            });
+            assertThat(NamedTheme.chosen()).contains(NamedTheme.SLATE_SILVER);
+            assertThat(prefs.get("theme.ground", null)).isEqualTo("SLATE");
+            assertThat(prefs.get("theme.tint", null)).isEqualTo("SILVER");
+            assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
+                    .as("Actions ▸ Theme ticks it too").containsExactly(NamedTheme.SLATE_SILVER.label);
+            assertThat(tintPixels(canvas, Tint.SILVER)).as("the answer laid out again in it, at once").isPositive();
+
+            NamedTheme[] themes = NamedTheme.values();
+            paintSheet(w, 3, Stream.of(themes).map(t -> t.label).toArray(String[]::new), i -> {
+                Theme.ground(themes[i].ground);
+                Theme.tint(themes[i].tint);
+            }, Path.of("build/snapshots/themes.png"));
+
+            SwingUtilities.invokeAndWait(() -> {
+                Theme.ground(Ground.GRAPHITE);
+                Theme.tint(Tint.TREASURE);
+            });
+            open("mac");
+            assertThat(NamedTheme.chosen()).as("a new window in the theme kept").contains(NamedTheme.SLATE_SILVER);
+
+            // the gold kept before tints, under its old key and with no ground, opens in the theme of that gold
+            prefs.remove("theme.ground");
+            prefs.remove("theme.tint");
+            prefs.put("theme.gold", "CHAMPAGNE");
+            open("mac");
+            assertThat(NamedTheme.chosen()).as("the gold kept before themes").contains(NamedTheme.ESPRESSO_CHAMPAGNE);
+        } finally {
+            prefs.remove("theme.ground");
+            prefs.remove("theme.tint");
+            prefs.remove("theme.gold");
+            SwingUtilities.invokeAndWait(() -> {
+                Theme.ground(Ground.GRAPHITE);
+                Theme.tint(Tint.TREASURE);
+            });
+        }
+    }
+
+    /**
+     * The window painted once per label, half size, {@code cols} a row, each named: {@code choose} sets the window up for
+     * the label at its index, on the EDT (records 99, 103).
+     */
+    private static void paintSheet(Window w, int cols, String[] labels, IntConsumer choose, Path out) throws Exception {
+        BufferedImage sheet = onEdt(() -> {
+            Container pane = w.frame().getContentPane();
+            int cw = pane.getWidth() / 2;
+            int ch = pane.getHeight() / 2;
+            BufferedImage img = new BufferedImage(cols * cw, (labels.length + cols - 1) / cols * (ch + 22), BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = img.createGraphics();
+            g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
+            for (int i = 0; i < labels.length; i++) {
+                choose.accept(i);
+                pane.validate();
+                int x = i % cols * cw;
+                int y = i / cols * (ch + 22);
+                g.setColor(Color.BLACK);
+                g.fillRect(x, y, cw, 22);
+                g.setColor(Theme.TRANSCRIPT_TEXT);
+                g.drawString(labels[i], x + 8, y + 15);
+                Graphics2D one = (Graphics2D) g.create(x, y + 22, cw, ch);
+                one.scale(0.5, 0.5);
+                pane.paint(one);
+                one.dispose();
             }
-            return null;
+            g.dispose();
+            return img;
         });
-        assertThat(tint).as("Actions ▸ Tint").isNotNull();
-        List<JRadioButtonMenuItem> items = onEdt(() -> Stream.of(tint.getMenuComponents()).map(c -> (JRadioButtonMenuItem) c).toList());
-        assertThat(onEdt(() -> items.stream().map(AbstractButton::getText).toList())).containsExactly(
-                Stream.of(Tint.values()).map(t -> t.label).toArray(String[]::new));
-        assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
-                .as("the tint chosen is ticked").containsExactly(Tint.TREASURE.label);
-        assertThat(Theme.tint()).as("by default").isEqualTo(Tint.TREASURE);
-        // a session bound to the panel, with a turn whose answer is its report, in the Session tab
-        w.loop().dispatch(new Intent.SaveSession("", SessionSpec.fresh("gilt", "/tmp")));
-        w.loop().dispatch(new Intent.BindSession(w.loop().state().focusedPanel().id(), "gilt"));
-        onEdt(() -> {
-            Transcript t = w.transcripts().of("gilt");
-            t.append(new Block.UserPrompt("go", "p", ""));
-            t.append(new Block.AssistantText("m", 0, "# Result\n\nDone.", false, ""));
-            t.append(new Block.TurnEnd(0.1, 1_000, 2, false, ""));
-            t.changed();
-            return null;
-        });
-        w.loop().dispatch(new Intent.SelectLowerTab(LowerTab.SESSION));
-        settle(w);
-        TranscriptCanvas canvas = await("the transcript", () -> find(w.frame(), TranscriptCanvas.class).orElse(null), WAIT_MILLIS);
-        await("the turn on the canvas", () -> canvas.contentHeight() > 100, WAIT_MILLIS);
-        assertThat(tintPixels(canvas, Tint.TREASURE)).as("the report's bar").isPositive();
-
-        JRadioButtonMenuItem blue = items.get(Tint.ELECTRIC_BLUE.ordinal());
-        onEdt(() -> {
-            blue.doClick();
-            return null;
-        });
-        assertThat(Theme.tint()).isEqualTo(Tint.ELECTRIC_BLUE);
-        assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
-                .as("one tick, on the tint chosen").containsExactly(Tint.ELECTRIC_BLUE.label);
-        assertThat(prefs.get("theme.tint", null)).isEqualTo("ELECTRIC_BLUE");
-        assertThat(tintPixels(canvas, Tint.ELECTRIC_BLUE)).as("the answer laid out again in the tint chosen, at once").isPositive();
-        assertThat(tintPixels(canvas, Tint.TREASURE)).isZero();
-
-        // the same choice from the swatch beside Clear: its menu ticks the tint chosen, and Actions ▸ Tint follows
-        onEdt(() -> {
-            swatch.doClick();
-            return null;
-        });
-        // the menu shows in the frame or, heavyweight, in a window the frame owns
-        JRadioButtonMenuItem silver = await("the swatch's menu", () -> Stream.concat(Stream.of(w.frame()), Stream.of(w.frame().getOwnedWindows()))
-                .map(win -> find(win, JRadioButtonMenuItem.class,
-                        i -> Tint.SILVER.label.equals(i.getText()) && !items.contains(i)).orElse(null))
-                .filter(Objects::nonNull).findFirst().orElse(null), WAIT_MILLIS);
-        assertThat(onEdt(() -> Stream.of(silver.getParent().getComponents()).map(c -> (JRadioButtonMenuItem) c)
-                .filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
-                .as("the swatch's menu ticks the tint chosen").containsExactly(Tint.ELECTRIC_BLUE.label);
-        onEdt(() -> {
-            silver.doClick();
-            return null;
-        });
-        assertThat(Theme.tint()).isEqualTo(Tint.SILVER);
-        assertThat(prefs.get("theme.tint", null)).isEqualTo("SILVER");
-        assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
-                .as("Actions ▸ Tint ticks it too").containsExactly(Tint.SILVER.label);
-        assertThat(tintPixels(canvas, Tint.SILVER)).as("the answer laid out again in it, at once").isPositive();
-
-        Theme.tint(Tint.TREASURE);
-        open("mac");
-        assertThat(Theme.tint()).as("a new window paints in the tint kept").isEqualTo(Tint.SILVER);
-
-        // the gold kept before tints, under its old key, is the tint of the next window
-        prefs.remove("theme.tint");
-        prefs.put("theme.gold", "CHAMPAGNE");
-        Theme.tint(Tint.TREASURE);
-        open("mac");
-        assertThat(Theme.tint()).as("the gold kept before tints").isEqualTo(Tint.CHAMPAGNE);
-        prefs.remove("theme.gold");
+        Files.createDirectories(out.getParent());
+        ImageIO.write(sheet, "png", out.toFile());
     }
 
     /** How many pixels of the canvas, painted as it stands, are {@code tint}'s highlight: the top of the report's bar. */

@@ -386,10 +386,10 @@ public final class SplitDiff {
         right.removeAllLineHighlights();
         left.getHighlighter().removeAllHighlights();
         right.getHighlighter().removeAllHighlights();
-        Highlighter.HighlightPainter removed = new DefaultHighlighter.DefaultHighlightPainter(Theme.DIFF_REMOVED_WORD);
-        Highlighter.HighlightPainter added = new DefaultHighlighter.DefaultHighlightPainter(Theme.DIFF_ADDED_WORD);
-        Color lost = Theme.DIFF_REMOVED;
-        Color gained = Theme.DIFF_ADDED;
+        Highlighter.HighlightPainter removed = new DefaultHighlighter.DefaultHighlightPainter(Theme.content().removedWord);
+        Highlighter.HighlightPainter added = new DefaultHighlighter.DefaultHighlightPainter(Theme.content().addedWord);
+        Color lost = Theme.content().removed;
+        Color gained = Theme.content().added;
         try {
             for (Chunk c : chunks) {
                 for (int i = c.leftStart(); i < c.leftEnd(); i++) {
@@ -614,7 +614,7 @@ public final class SplitDiff {
                         continue;
                     }
                     Color color = c.inserted() ? Theme.VCS_ADDED : c.deleted() ? Theme.DANGER : Theme.VCS_MODIFIED;
-                    g2.setColor(new Color(color.getRed(), color.getGreen(), color.getBlue(), 90));
+                    g2.setColor(Theme.withAlpha(color, 90));
                     g2.fillPolygon(new Polygon(new int[]{0, w, w, 0}, new int[]{l0, r0, r1, l1}, 4));
                     g2.setColor(color);
                     g2.drawLine(0, l0, w, r0);

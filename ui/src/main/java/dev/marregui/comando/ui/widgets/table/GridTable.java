@@ -48,7 +48,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
 
     public GridTable() {
         table.setFont(Theme.mono());
-        table.setRowHeight(table.getFontMetrics(table.getFont()).getHeight() + 6);
+        table.setRowHeight(Theme.rowHeight(table.getFontMetrics(table.getFont()).getHeight()));
         table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
         table.setCellSelectionEnabled(true);

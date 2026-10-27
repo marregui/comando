@@ -28,6 +28,7 @@ import javax.swing.text.Caret;
 import javax.swing.text.DefaultHighlighter;
 import javax.swing.text.Highlighter;
 import javax.swing.text.Position;
+import java.awt.Color;
 import java.awt.Rectangle;
 import java.util.function.Consumer;
 
@@ -52,8 +53,13 @@ public final class CommandEditor implements Searchable, Zoomable {
     private final TextSearch search = new TextSearch(area);
     private final Debouncer markers = new Debouncer(250, this::refreshMarkers);
     private final Debouncer occurrences = new Debouncer(150, this::refreshOccurrences);
-    private final Highlighter.HighlightPainter ranPainter =
-            new DefaultHighlighter.DefaultHighlightPainter(Theme.withAlpha(Theme.ACCENT, 40));
+    /** The statement that ran, behind a band of the tint chosen as it paints (record 100). */
+    private final Highlighter.HighlightPainter ranPainter = new DefaultHighlighter.DefaultHighlightPainter(null) {
+        @Override
+        public Color getColor() {
+            return Theme.withAlpha(Theme.tint().body, 40);
+        }
+    };
     private Object ranTag;
     private final Highlighter.HighlightPainter errorPainter = new SquiggleUnderlineHighlightPainter(Theme.DANGER);
     private Object errorTag;

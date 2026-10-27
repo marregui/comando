@@ -246,9 +246,9 @@ final class AgentStrip extends JPanel {
             this.description = Clip.keepStart(description.isEmpty() ? "sub-agent" : description, DESCRIPTION_CHARS);
             this.startedMillis = startedMillis;
             this.toolUseId = toolUseId;
-            setFont(getFont().deriveFont(getFont().getSize2D() - 1f));
-            setIconTextGap(5);
-            setBorder(BorderFactory.createEmptyBorder(2, 7, 2, 8));
+            setFont(Theme.font(getFont(), Theme.TextSize.SMALL));
+            setIconTextGap(Theme.SPACE_XS);
+            setBorder(BorderFactory.createEmptyBorder(2, Theme.SPACE_S, 2, Theme.SPACE_S));
             setOpaque(false);
         }
 

@@ -208,16 +208,15 @@ public class HtmlPane extends JEditorPane {
     /**
      * The page's rules, over Swing's defaults. It reads as a turn's answer in the transcript: ivory text, headings in the
      * headings' serif and the chosen tint over a tinted rule, at the transcript's scale ({@link Theme#HEADING_SCALE}),
-     * tinted table heads on a band of the tint's shade, bold brighter, inline code teal, quotes beside a tinted bar.
+     * tinted table heads on a band of the tint's shade, bold brighter, code in the content palette (record 101), quotes beside a tinted bar.
      */
     static StyleSheet styles() {
         StyleSheet css = new StyleSheet();
         css.addStyleSheet(new HTMLEditorKit().getStyleSheet());
         String fg = Theme.hex(Theme.TRANSCRIPT_TEXT);
-        String card = Theme.hex(Theme.CARD);
         String border = Theme.hex(Theme.CARD_BORDER);
         String muted = Theme.hex(Theme.MUTED);
-        String link = Theme.hex(Theme.ACCENT);
+        String link = Theme.hex(Theme.LINK);
         String mono = Theme.mono().getFamily();
         String serif = Theme.serif().getFamily();
         Tint tint = Theme.tint();
@@ -232,9 +231,9 @@ public class HtmlPane extends JEditorPane {
         css.addRule("h1, h2 { border-bottom-width: 1px; border-bottom-style: solid; border-bottom-color: " + Theme.hex(tint.headingRule())
                 + "; padding-bottom: 3px; }");
         css.addRule("b, strong { color: " + Theme.hex(Theme.ANSWER_STRONG) + "; }");
-        css.addRule("code { font-family: '" + mono + "'; color: " + Theme.hex(Theme.ANSWER_CODE) + "; background-color: "
-                + Theme.hex(Theme.ANSWER_CODE_GROUND) + "; }");
-        css.addRule("pre { font-family: '" + mono + "'; background-color: " + card + "; padding: 6px; margin: 4px 0 6px 0; }");
+        css.addRule("code { font-family: '" + mono + "'; color: " + Theme.hex(Theme.content().code) + "; background-color: "
+                + Theme.hex(Theme.content().codeInlineGround) + "; }");
+        css.addRule("pre { font-family: '" + mono + "'; background-color: " + Theme.hex(Theme.content().codeGround) + "; padding: 6px; margin: 4px 0 6px 0; }");
         css.addRule("pre.code code { color: " + fg + "; }");
         css.addRule("a { color: " + link + "; }");
         css.addRule("table { border-collapse: collapse; margin: 4px 0 6px 0; }");

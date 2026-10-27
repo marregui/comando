@@ -128,8 +128,8 @@ final class ViewTabs {
         JLabel title = new JLabel(Plain.text(v.title()), Icons.get(icon(v.spec().type()), 14), JLabel.LEFT);
         title.setToolTipText(Plain.text(v.session().isEmpty() ? v.title() : v.title() + " · placed by " + v.session()));
         JButton pin = small(v.pinned() ? "pin" : "pin", v.pinned() ? "Unpin: Claude may replace this view" : "Pin: Claude will not replace this view");
-        pin.setForeground(v.pinned() ? Theme.ACCENT : Theme.MUTED);
-        pin.setBorder(v.pinned() ? BorderFactory.createMatteBorder(0, 0, 2, 0, Theme.ACCENT) : BorderFactory.createEmptyBorder(0, 0, 2, 0));
+        pin.setForeground(v.pinned() ? Theme.tint().body : Theme.MUTED);
+        pin.setBorder(v.pinned() ? BorderFactory.createMatteBorder(0, 0, 2, 0, Theme.tint().body) : BorderFactory.createEmptyBorder(0, 0, 2, 0));
         pin.addActionListener(e -> context.intents().dispatch(new Intent.PinView(v.id(), !v.pinned())));
         JButton close = small("close", "Close the view");
         close.addActionListener(e -> context.intents().dispatch(new Intent.CloseView(v.id())));

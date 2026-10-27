@@ -5,12 +5,16 @@ import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.kit.tree.TreeView;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
 
+import javax.imageio.ImageIO;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JToggleButton;
 import javax.swing.JTree;
@@ -20,9 +24,11 @@ import javax.swing.tree.TreePath;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
+import java.awt.Graphics2D;
 import java.awt.Rectangle;
 import java.awt.event.InputEvent;
 import java.awt.event.MouseEvent;
+import java.awt.image.BufferedImage;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -91,8 +97,8 @@ class TreeClicksUiTest {
         Files.writeString(root.resolve(KitRoot.FILE), """
                 {"kit": 1, "name": "test-kit", "brain": "BRAIN",
                  "folders": [
-                   {"name": "Memory", "path": "BRAIN/MEMORY", "index": "MEMORY.md", "icon": "memory"},
-                   {"name": "KB", "path": "BRAIN/KB", "icon": "knowledge"},
+                   {"name": "Memory", "path": "BRAIN/MEMORY", "index": "MEMORY.md", "icon": "memory", "group": "Brain"},
+                   {"name": "KB", "path": "BRAIN/KB", "icon": "knowledge", "group": "Brain"},
                    {"name": "Skills", "path": "skills", "icon": "skills"}],
                  "requirements": [], "credentials": [], "jobs": []}
                 """);
@@ -112,6 +118,9 @@ class TreeClicksUiTest {
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> front("Files"));
             Awaitility.await("the Files tab's rows").atMost(Duration.ofSeconds(10)).until(() -> rows().size() >= 4);
             assertThat(rows()).as("in the Files tab").startsWith("Memory", "KB", "Skills").contains("Notes");
+            assertThat(loop.state().folders()).extracting(FolderRoot::group).as("the kit's groups (record 98)")
+                    .containsExactly("Brain", "Brain", "", "");
+            paintSidebar();
             Awaitility.await("folders.json saved").atMost(Duration.ofSeconds(10))
                     .until(() -> Files.readString(data.resolve("folders.json")).contains(root.resolve("BRAIN/MEMORY").toString()));
             Awaitility.await("the kit in the status bar").atMost(Duration.ofSeconds(10))
@@ -121,6 +130,37 @@ class TreeClicksUiTest {
         } finally {
             app.close();
         }
+    }
+
+    /**
+     * The sidebar as it shows, the Files tab in front with its second row selected, painted in three tints side by side to
+     * {@code build/snapshots/sidebar.png} (record 98): one header over the kit's Brain folders, the selection in the tint.
+     */
+    private static void paintSidebar() throws Exception {
+        Tint[] tints = {Tint.TREASURE, Tint.SILVER, Tint.ELECTRIC_BLUE};
+        BufferedImage sheet = onEdt(() -> {
+            JComponent sidebar = first(JComponent.class, c -> c.getAccessibleContext() != null && "Sidebar".equals(c.getAccessibleContext().getAccessibleName()) && c.isShowing());
+            JTree tree = first(JTree.class, t -> "Files".equals(t.getAccessibleContext().getAccessibleName()) && t.isShowing());
+            tree.setSelectionRow(1);
+            int w = sidebar.getWidth();
+            int h = Math.min(sidebar.getHeight(), 420);
+            BufferedImage out = new BufferedImage(w * tints.length, h, BufferedImage.TYPE_INT_RGB);
+            Graphics2D g = out.createGraphics();
+            for (int i = 0; i < tints.length; i++) {
+                Theme.tint(tints[i]);
+                Graphics2D one = (Graphics2D) g.create(i * w, 0, w, h);
+                sidebar.paint(one);
+                one.dispose();
+            }
+            g.dispose();
+            Theme.tint(Tint.TREASURE);
+            return out;
+        });
+        assertThat(sheet.getRGB(sheet.getWidth() / 6, sheet.getHeight() - 60) & 0xFFFFFF).as("the transcript's ground")
+                .isEqualTo(Theme.ground().getRGB() & 0xFFFFFF);
+        Path out = Path.of("build/snapshots/sidebar.png");
+        Files.createDirectories(out.getParent());
+        ImageIO.write(sheet, "png", out.toFile());
     }
 
     /** The Files tab's folder rows, top first. */

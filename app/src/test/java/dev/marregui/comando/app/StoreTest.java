@@ -104,6 +104,10 @@ class StoreTest {
         try (Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("as saved")
                     .containsExactly(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")), new FolderRoot("app", "/app", "", List.of()));
+            store.saveFolders(List.of(new FolderRoot("KB", "/kb", "", List.of(), "knowledge", false, "", "Brain")));
+        }
+        try (Store store = new Store(home)) {
+            assertThat(store.loadFolders(CLAUDE_DIR)).extracting(FolderRoot::group).as("a group kept (record 98)").containsExactly("Brain");
             store.saveFolders(List.of());
         }
         try (Store store = new Store(home)) {

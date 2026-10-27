@@ -86,7 +86,7 @@ public final class TextWidget implements Widget<ViewSpec.Text>, Searchable, Copy
             try {
                 int offset = area.getLineStartOffset(line - 1);
                 area.setCaretPosition(offset);
-                area.addLineHighlight(line - 1, Theme.withAlpha(Theme.ACCENT, 60));
+                area.addLineHighlight(line - 1, Theme.withAlpha(Theme.tint().body, 60));
                 SwingUtilities.invokeLater(() -> {
                     try {
                         Rectangle r = area.modelToView2D(offset).getBounds();

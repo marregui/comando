@@ -164,7 +164,7 @@ public final class Editors {
         RTextScrollPane sp = new RTextScrollPane(area, lineNumbers);
         sp.setFoldIndicatorEnabled(false);
         sp.setBorder(null);
-        sp.getGutter().setLineNumberFont(Theme.mono(Theme.mono().getSize2D() - 1f));
+        sp.getGutter().setLineNumberFont(Theme.font(Theme.mono(), Theme.TextSize.SMALL));
         return sp;
     }
 

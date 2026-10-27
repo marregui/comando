@@ -8,6 +8,7 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.WidgetContext;
@@ -72,7 +73,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         this.context = context;
         scroll.setBorder(null);
         // the canvas paints no ground of its own: the viewport's shows through it
-        scroll.getViewport().setBackground(Theme.TRANSCRIPT);
+        SidebarLook.ground(scroll); // the panels' ground, which follows a ground chosen (record 99)
         scroll.getViewport().setOpaque(true);
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);

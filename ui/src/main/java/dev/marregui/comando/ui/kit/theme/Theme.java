@@ -16,17 +16,25 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Design tokens and the look and feel. Widgets take colours, fonts and spacing from here, never from
- * literals, so the whole UI changes together.
+ * Design tokens and the look and feel (record 100). A theme is one set of tokens in four tiers: the palette (the ground
+ * chosen, surfaces, ink, the tint chosen, status, Claude's orange), the roles named here ({@link #LINK} a link and
+ * nothing else; the tint for structure, the selection, focus and the tab in front; {@link #ATTENTION} what needs the
+ * user; {@link #DANGER} what is broken), the component map (each widget naming roles), and the content palettes derived
+ * from them (syntax, terminal, diff, plots). Widgets take colours, fonts and spacing from here, never from literals:
+ * {@code ColourRulesTest} fails any class outside this package that makes or names a {@code Color}.
  */
 public final class Theme {
 
     // colours
-    public static final Color ACCENT = new Color(0x389FD6);
+    /** A link, and nothing else: the tint marks structure, the selection and focus (record 100). */
+    public static final Color LINK = new Color(0x389FD6);
+    /** Information inside content: a diff's hunk header, a shell command in a tool card. */
+    public static final Color INFO = new Color(0x389FD6);
     public static final Color CLAUDE = new Color(0xD97757);
     public static final Color OK = new Color(0x59A869);
     public static final Color DANGER = new Color(0xDB5860);
@@ -34,24 +42,18 @@ public final class Theme {
     /** Secondary text on list and card backgrounds, where MUTED falls short of 4.5:1 contrast. */
     public static final Color MUTED_STRONG = new Color(0xA8A8A8);
     public static final Color THINKING = new Color(0xB99BF8);
-    public static final Color DIFF_ADDED = new Color(0x2C4A33);
-    public static final Color DIFF_REMOVED = new Color(0x5A2E2E);
-    /** The words that changed inside a changed line, over {@link #DIFF_ADDED} and {@link #DIFF_REMOVED}. */
-    public static final Color DIFF_ADDED_WORD = new Color(0x3F7350);
-    public static final Color DIFF_REMOVED_WORD = new Color(0x8A4242);
     /** A file's name as git sees it, against {@code HEAD}: changed, new, gone, untracked, in conflict. */
     public static final Color VCS_MODIFIED = new Color(0x6897BB);
     public static final Color VCS_ADDED = new Color(0x629755);
     public static final Color VCS_DELETED = new Color(0x8C8C8C);
     public static final Color VCS_CONFLICTED = new Color(0xE0525C);
-    public static final Color CARD = new Color(0x2B2D30);
-    public static final Color CARD_BORDER = new Color(0x3C3F41);
-    public static final Color USER_BUBBLE = new Color(0x2E3A4A);
     /**
-     * The ground of the session's transcript: near-black, so its text and cards stand out more than on the window's
-     * grey; not pure black, on which bright text blurs at its edges.
+     * The surfaces: a card, its border, the prompt's bubble, laid over the ground chosen and following it (record 103);
+     * on Graphite #2D2D2D, #3C3C3C and #2E3A4A.
      */
-    public static final Color TRANSCRIPT = new Color(0x121212);
+    public static final Color CARD = new OnGround(Color.WHITE, 0.115f);
+    public static final Color CARD_BORDER = new OnGround(Color.WHITE, 0.177f);
+    public static final Color USER_BUBBLE = new OnGround(new Color(0x4A6282), 0.5f);
     /**
      * Every text of the transcript outside a bubble or a card: a warm ivory, low in saturation for long reading, so
      * that the tint of its headings and marks stands apart from it.
@@ -59,13 +61,8 @@ public final class Theme {
     public static final Color TRANSCRIPT_TEXT = new Color(0xE2DCCD);
     /** Bold text in Claude's answers and rendered pages: brighter than {@link #TRANSCRIPT_TEXT}. */
     public static final Color ANSWER_STRONG = new Color(0xFAF7F0);
-    /** Inline code in Claude's answers and rendered pages: teal on its own ground. */
-    public static final Color ANSWER_CODE = new Color(0x8FC9C0);
-    public static final Color ANSWER_CODE_GROUND = new Color(0x26282C);
     /** Inline code elsewhere in the transcript (a bubble, a card), in the text's colour. */
-    public static final Color INLINE_CODE_GROUND = new Color(0x393B40);
-    /** A code block's ground. */
-    public static final Color CODE_GROUND = new Color(0x1E1F22);
+    public static final Color INLINE_CODE_GROUND = new OnGround(Color.WHITE, 0.165f);
     /** Selected text in the transcript. */
     public static final Color SELECTION = new Color(0x214283);
     /**
@@ -75,7 +72,7 @@ public final class Theme {
     public static final Color FIND_MATCH = new Color(0x4A3560);
     public static final Color FIND_CURRENT = new Color(0x6F4C91);
     /** The rules of a table in the transcript. */
-    public static final Color TABLE_RULE = new Color(0x4E5157);
+    public static final Color TABLE_RULE = new OnGround(Color.WHITE, 0.253f);
     /** Text where the look and feel names no label colour. */
     public static final Color TEXT_FALLBACK = new Color(0xDFE1E5);
     /**
@@ -84,6 +81,10 @@ public final class Theme {
      * is (record 96). It followed the gold chosen while every tint was a gold (record 83).
      */
     public static final Color ATTENTION = Tint.TREASURE.body;
+    /** A window's ground that lets the desktop through: an undecorated card with the system's shadow. */
+    public static final Color CLEAR = new Color(0, 0, 0, 0);
+    /** A shadow's ink: an icon's shape filled with it casts the shadow under it. */
+    public static final Color SHADOW = new Color(0, 0, 0);
     /** About's card: warm charcoal from top to bottom, its ink, its soft and muted text (record 60). */
     public static final Color ABOUT_TOP = new Color(0x2C2926);
     public static final Color ABOUT_BOTTOM = new Color(0x1B1917);
@@ -92,21 +93,68 @@ public final class Theme {
     public static final Color ABOUT_MUTED = new Color(0x8E867A);
     /** Laid over a window that is closing: it greys what is under it. */
     public static final Color VEIL = new Color(0, 0, 0, 110);
-    /** Series colours, chosen to stay apart on a dark background. */
-    public static final Color[] SERIES = {
-            new Color(0x389FD6), new Color(0xD97757), new Color(0x59A869), new Color(0xB99BF8),
-            new Color(0xEDA200), new Color(0x4FC1C9), new Color(0xDB5860), new Color(0xC9C9C9)};
 
-    // spacing
-    public static final int GAP = 6;
-    public static final int PAD = 10;
+    // spacing: a 4-point grid (record 102); 1 to 3 pixels nudge a line or an icon into place and are not spacing
+    /** Between an icon and its text, between lines of a group. */
+    public static final int SPACE_XS = 4;
+    /** Between the parts of a row or a form: buttons, fields, a header's controls. */
+    public static final int SPACE_S = 8;
+    /** Inside a card, a dialog, a bar: from its edge to its content. */
+    public static final int SPACE_M = 12;
+    /** Between groups; the margins of a page. */
+    public static final int SPACE_L = 16;
+    public static final int GAP = SPACE_S;
+    public static final int PAD = SPACE_M;
     public static final int RADIUS = 8;
 
+    /** A row's height for text {@code textHeight} pixels high: the text with {@link #SPACE_S} around it, up to the grid. */
+    public static int rowHeight(int textHeight) {
+        int h = textHeight + SPACE_S;
+        return (h + SPACE_XS - 1) / SPACE_XS * SPACE_XS;
+    }
+
+    /** The text size the type scale is built on: the look and feel's, 13 pt. */
+    public static final float BASE_SIZE = 13f;
+
     /**
-     * The first three heading levels' sizes, as multiples of the text's: the transcript and rendered Markdown pages both
-     * (record 96). Levels 4 to 6 are the text's size, bold.
+     * The type scale (record 102): every size of text in the window is one of these six steps, in points at the base
+     * size. A text that zooms takes the same steps from its own base ({@link #size(float, TextSize)}).
      */
-    public static final float[] HEADING_SCALE = {1.45f, 1.25f, 1.1f};
+    public enum TextSize {
+        /** A group's header in small capitals; a code block's notes. */
+        CAPTION(11),
+        /** Hints, chips, a fact's label, line numbers, code in the transcript. */
+        SMALL(12),
+        BODY(13),
+        /** A card's second heading; a page's second-level heading. */
+        SUBTITLE(15),
+        /** A card's title; a page's first-level heading. */
+        TITLE(18),
+        DISPLAY(22);
+
+        public final float pt;
+
+        TextSize(float pt) {
+            this.pt = pt;
+        }
+    }
+
+    /** Step {@code s} of the scale for a text whose body is {@code base} points: {@code base} itself at {@code BODY}. */
+    public static float size(float base, TextSize s) {
+        return base * s.pt / BASE_SIZE;
+    }
+
+    /** {@code f}, taken as its context's body text, at step {@code s} of the scale. */
+    public static Font font(Font f, TextSize s) {
+        return f.deriveFont(size(f.getSize2D(), s));
+    }
+
+    /**
+     * The first three heading levels' sizes, as multiples of the text's, from the type scale: title, subtitle, body, the
+     * transcript and rendered Markdown pages both (records 96, 102). Levels 4 to 6 are the text's size, bold; the third
+     * is told from them by the headings' serif.
+     */
+    public static final float[] HEADING_SCALE = {TextSize.TITLE.pt / BASE_SIZE, TextSize.SUBTITLE.pt / BASE_SIZE, 1f};
 
     private static Font mono = new Font(Font.MONOSPACED, Font.PLAIN, 13);
     /**
@@ -117,6 +165,7 @@ public final class Theme {
     /** The headings' face where New York is not: serifs of Windows, macOS and the Linux distributions, in that order. */
     static final String[] SERIFS = {"Georgia", "Cambria", "Noto Serif", "DejaVu Serif", "Liberation Serif"};
     private static volatile Tint tint = Tint.TREASURE;
+    private static volatile Ground ground = Ground.GRAPHITE;
     /** What shows the tint and must lay itself out or recolour when another is chosen. */
     private static final List<Runnable> TINT_LISTENERS = new CopyOnWriteArrayList<>();
 
@@ -136,16 +185,60 @@ public final class Theme {
         UIManager.put("Table.showHorizontalLines", true);
         UIManager.put("Table.intercellSpacing", new Dimension(0, 1));
         UIManager.put("SplitPane.dividerSize", 5);
+        setUpLook();
+        FlatLaf.updateUI();
+        mono = pickMono();
+    }
+
+    /**
+     * The look and feel on the ground chosen, set here once for every panel (records 98, 99): its background, and the
+     * background of the content components that draw their own; then the tooltips, as a report reads.
+     */
+    private static void setUpLook() {
+        String g = hex(ground.color);
+        FlatLaf.setGlobalExtraDefaults(Map.of("@background", g, "List.background", g, "Tree.background", g,
+                "Table.background", g, "TextArea.background", g, "EditorPane.background", g,
+                "TextPane.background", g, "Viewport.background", g));
         boolean ok = Platform.isMac() ? FlatMacDarkLaf.setup() : FlatDarkLaf.setup();
         if (!ok) {
             FlatDarkLaf.setup();
         }
-        // tooltips read as a report: the transcript's ground, a bar of the tint down the left edge, its ivory
-        UIManager.put("ToolTip.background", new ColorUIResource(TRANSCRIPT));
+        // tooltips read as a report: the panels' ground, a bar of the tint down the left edge, the transcript's ivory
+        UIManager.put("ToolTip.background", new ColorUIResource(ground.color));
         UIManager.put("ToolTip.foreground", new ColorUIResource(TRANSCRIPT_TEXT));
         UIManager.put("ToolTip.border", new TintBarBorder());
-        FlatLaf.updateUI();
-        mono = pickMono();
+    }
+
+    /**
+     * The ground of every panel of the window: the sidebar, the editors, the lower panel's tabs, the side pane, the
+     * terminal, the transcript, tables, trees and lists (records 98, 99); {@link Ground#GRAPHITE} until one is chosen.
+     */
+    public static Color ground() {
+        return ground.color;
+    }
+
+    /** The ground chosen. */
+    public static Ground groundChosen() {
+        return ground;
+    }
+
+    /**
+     * Chooses the ground: the look and feel is set up again on it and every window takes it, then everything that
+     * listens to the tint ({@link #onTint}) lays itself out or recolours, as its colours mix the tint with the ground.
+     * Without the look and feel installed, as in a test, only the choice is kept. EDT only.
+     */
+    public static void ground(Ground chosen) {
+        if (ground == chosen) {
+            return;
+        }
+        ground = chosen;
+        if (UIManager.getLookAndFeel() instanceof FlatLaf) {
+            setUpLook();
+            FlatLaf.updateUI();
+        }
+        for (Runnable r : TINT_LISTENERS) {
+            r.run();
+        }
     }
 
     /** The monospaced font: JetBrains Mono when installed, then the platform's. */
@@ -212,6 +305,14 @@ public final class Theme {
         return new Font(Font.MONOSPACED, Font.PLAIN, 13);
     }
 
+    /**
+     * The content palettes of the tint and ground chosen (record 101): syntax, the editor around it, diffs, the
+     * terminal's colours, plot series and code in answers. Read it where it paints, or again on {@link #onTint}.
+     */
+    public static ContentPalette content() {
+        return ContentPalette.of(tint, ground);
+    }
+
     /** The tint chosen; {@link Tint#TREASURE} until one is. */
     public static Tint tint() {
         return tint;
@@ -231,7 +332,7 @@ public final class Theme {
         }
     }
 
-    /** Runs {@code listener} on the EDT each time another tint is chosen; returns what stops it. */
+    /** Runs {@code listener} on the EDT each time another tint, or another ground, is chosen; returns what stops it. */
     public static Runnable onTint(Runnable listener) {
         TINT_LISTENERS.add(listener);
         return () -> TINT_LISTENERS.remove(listener);

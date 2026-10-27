@@ -744,7 +744,7 @@ final class Items {
             for (int i = 0; i < shown; i++) {
                 String l = lines.get(i);
                 text.append(i == 0 ? "" : "\n").append(l);
-                backgrounds.add(Diffs.isAdded(i, l) ? Theme.DIFF_ADDED : Diffs.isRemoved(i, l) ? Theme.DIFF_REMOVED : null);
+                backgrounds.add(Diffs.isAdded(i, l) ? Theme.content().added : Diffs.isRemoved(i, l) ? Theme.content().removed : null);
             }
             if (lines.isEmpty()) {
                 text.append("(no changes)");

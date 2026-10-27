@@ -121,7 +121,7 @@ final class PlotCanvas extends JComponent {
         int i = 0;
         for (ViewSpec.Series s : plot.series()) {
             int[] order = lastX != null && Arrays.equals(lastX, s.x()) ? lastOrder : order(s.x());
-            sorted.add(sorted(s, order, Theme.SERIES[i++ % Theme.SERIES.length]));
+            sorted.add(sorted(s, order, Theme.content().series(i++)));
             lastX = s.x();
             lastOrder = order;
         }
@@ -366,7 +366,7 @@ final class PlotCanvas extends JComponent {
         }
         // zoom box and crosshair
         if (dragStart >= 0 && dragNow >= 0) {
-            g.setColor(Theme.withAlpha(Theme.ACCENT, 50));
+            g.setColor(Theme.withAlpha(Theme.tint().body, 50));
             g.fillRect(Math.min(dragStart, dragNow), a.y, Math.abs(dragNow - dragStart), a.height);
         } else if (hoverX >= a.x && hoverX <= a.x + a.width) {
             paintCrosshair(g, a, fm);

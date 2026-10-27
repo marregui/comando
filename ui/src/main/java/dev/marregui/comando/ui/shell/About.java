@@ -209,7 +209,7 @@ final class About {
     static JDialog show(Window owner, Content content, Consumer<String> follow) {
         JDialog d = new JDialog(owner, "About " + content.name());
         d.setUndecorated(true);
-        d.setBackground(new Color(0, 0, 0, 0));
+        d.setBackground(Theme.CLEAR);
         d.getRootPane().setOpaque(false);
         d.getRootPane().putClientProperty("Window.shadow", Boolean.TRUE);
         Card card = new Card(content, target -> {
@@ -523,7 +523,7 @@ final class About {
             g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
             g.drawImage(icon, pad, pad + 1, small, small, null);
             g.setComposite(AlphaComposite.SrcIn);
-            g.setColor(Color.BLACK);
+            g.setColor(Theme.SHADOW);
             g.fillRect(0, 0, s.getWidth(), s.getHeight());
             g.dispose();
             return s;

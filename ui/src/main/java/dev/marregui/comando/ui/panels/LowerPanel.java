@@ -12,9 +12,10 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.Ground;
+import dev.marregui.comando.ui.kit.theme.GroundIcon;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.kit.theme.Tint;
-import dev.marregui.comando.ui.kit.theme.TintIcon;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
 import dev.marregui.comando.ui.widgets.approval.ApprovalInbox;
@@ -61,9 +62,12 @@ public final class LowerPanel {
     private final ViewTabs views;
     private final TerminalTabs terminals = new TerminalTabs();
     private final JButton clearSession = new JButton(Icons.get("clear"));
-    /** Beside Clear: a swatch of the tint chosen, which opens the tints, as Actions ▸ Tint does (record 96). */
-    private final JButton tint = new JButton(new TintIcon(null));
-    private Consumer<Tint> tintChosen = t -> { };
+    /**
+     * Beside Clear: a swatch of the theme chosen, its ground with its tint's bar, which opens the themes, as Actions ▸
+     * Theme does (record 103).
+     */
+    private final JButton theme = new JButton(new GroundIcon((Ground) null));
+    private Consumer<NamedTheme> themeChosen = t -> { };
     private AppState state;
     private boolean rendering;
     private String transcriptSession = "";
@@ -89,7 +93,7 @@ public final class LowerPanel {
         views = new ViewTabs(tabs, FIXED_TABS, Placement.LOWER, registry, context);
         // icons alone, as every icon button of the window
         clearSession.putClientProperty("JButton.buttonType", "toolBarButton");
-        tint.putClientProperty("JButton.buttonType", "toolBarButton");
+        theme.putClientProperty("JButton.buttonType", "toolBarButton");
         clearSession.setFocusable(false);
         clearSession.getAccessibleContext().setAccessibleName("Clear the Session tab");
         clearSession.addActionListener(e -> {
@@ -97,13 +101,13 @@ public final class LowerPanel {
                 context.intents().dispatch(new Intent.ClearTranscript(transcriptSession));
             }
         });
-        tint.setFocusable(false);
-        tint.getAccessibleContext().setAccessibleName("Choose the tint");
-        tint.setToolTipText("Choose the tint of headings, reports and new files; also in Actions");
-        tint.addActionListener(e -> tintMenu().show(tint, 0, tint.getHeight()));
+        theme.setFocusable(false);
+        theme.getAccessibleContext().setAccessibleName("Choose the theme");
+        theme.setToolTipText("Choose the theme: the ground of every panel and its tint; also in Actions");
+        theme.addActionListener(e -> themeMenu().show(theme, 0, theme.getHeight()));
         JPanel trailing = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
         trailing.setOpaque(false);
-        trailing.add(tint);
+        trailing.add(theme);
         trailing.add(clearSession);
         tabs.putClientProperty("JTabbedPane.trailingComponent", trailing);
         tabs.addChangeListener(e -> {
@@ -139,18 +143,19 @@ public final class LowerPanel {
         return tabs;
     }
 
-    /** {@code chosen} hears the tint picked from the menu beside Clear. */
-    public void onTintChosen(Consumer<Tint> chosen) {
-        tintChosen = chosen;
+    /** {@code chosen} hears the theme picked from the menu beside Clear. */
+    public void onThemeChosen(Consumer<NamedTheme> chosen) {
+        themeChosen = chosen;
     }
 
-    /** One entry per tint, each with its swatch, in Actions ▸ Tint's order; the tint chosen is ticked. */
-    JPopupMenu tintMenu() {
+    /** One entry per theme, each with its swatch, in Actions ▸ Theme's order; the theme chosen is ticked. */
+    JPopupMenu themeMenu() {
         JPopupMenu menu = new JPopupMenu();
         ButtonGroup group = new ButtonGroup();
-        for (Tint t : Tint.values()) {
-            JRadioButtonMenuItem item = new JRadioButtonMenuItem(t.label, new TintIcon(t), t == Theme.tint());
-            item.addActionListener(e -> tintChosen.accept(t));
+        NamedTheme chosen = NamedTheme.chosen().orElse(null);
+        for (NamedTheme t : NamedTheme.values()) {
+            JRadioButtonMenuItem item = new JRadioButtonMenuItem(t.label, new GroundIcon(t), t == chosen);
+            item.addActionListener(e -> themeChosen.accept(t));
             group.add(item);
             menu.add(item);
         }
@@ -272,7 +277,7 @@ public final class LowerPanel {
         String title = marked ? name + " ●" : name;
         if (!tabs.getTitleAt(index).equals(title)) {
             tabs.setTitleAt(index, title);
-            tabs.setForegroundAt(index, marked ? Theme.ACCENT : null);
+            tabs.setForegroundAt(index, marked ? Theme.tint().body : null);
         }
     }
 

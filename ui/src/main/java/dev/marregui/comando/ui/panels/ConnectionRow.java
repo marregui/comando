@@ -95,7 +95,7 @@ final class ConnectionRow extends IconRow {
     /** The name, in the accent colour while the focused panel uses it, and "prod" in red. Never wraps. */
     static String titleHtml(ConnectionState c, boolean focused) {
         String prod = c.spec().prod() ? "&nbsp;<span style='color:" + Theme.hex(Theme.DANGER) + "'>prod</span>" : "";
-        String name = focused ? "<b style='color:" + Theme.hex(Theme.ACCENT) + "'>" : "<b>";
+        String name = focused ? "<b style='color:" + Theme.hex(Theme.tint().body) + "'>" : "<b>";
         return "<html><nobr>" + name + MarkdownHtml.escape(c.spec().name()) + "</b>" + prod + "</nobr></html>";
     }
 }

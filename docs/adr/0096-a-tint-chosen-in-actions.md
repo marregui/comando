@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-27 | accepted | Miguel and Claude |
+| 2026-10-27 | accepted; the tint chosen apart replaced by [record 103](0103-curated-themes-in-actions.md) | Miguel and Claude |
 
 ## 1. Context
 

@@ -70,7 +70,7 @@ does; the menus grey out what cannot run now.
 |---|---|---|
 | **Sessions** | Claude Code sessions, running first. A row is the session's state icon and its name. Under the sessions, while there is one, **Without a session** lists comando's own panels that belong to no session, open and closed | a click on the icon starts or stops the session; resting on the name shows its card (facts and a summary); a right click opens its menu, which does the rest; drag a row to order the list yourself |
 | **Connections** | databases. A row is the connection's state icon (grey while closed, blue while connected) and its name, with a red **prod** for production; the name is in the accent colour while the focused panel uses it | a click on the icon connects or disconnects; resting on the name shows a card of its facts, without a summary; a double click binds the connection to the focused panel |
-| **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, changed files and the folders holding them are named in git's colours; a file git does not track yet is in the tint, with a dot after each folder on the way down to it, until you open it; what git ignores is left out. Every folder lies inside Claude Code's folder; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a folder's right click shows the changes inside it |
+| **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, an arrow follows a changed file and each folder on the way down to it, until you commit; a dot follows a new file git does not track yet and each folder on the way down to it, until you open it; names keep one colour, red only for a conflict; what git ignores is left out. Every folder lies inside Claude Code's folder; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a folder's right click shows the changes inside it |
 
 The tabs' right-click menus:
 
@@ -270,8 +270,9 @@ choose.
 The **Session** tab shows the whole turn: your prompt in a bubble, every tool call as a card with its input and
 result, and everything else (Claude's text, notes, the turn's time, the "Thinking…" line while Claude thinks) in warm
 ivory on near-black, with headings, list marks and table heads in the tint, Treasure gold at first. The answer that
-ends a turn has a bar of the tint beside it. **Actions ▸ Tint**, or the swatch beside the tab's Clear, chooses another:
-three golds, silver, tropical forest, electric blue.
+ends a turn has a bar of the tint beside it. **Actions ▸ Theme**, or the swatch beside the tab's Clear, chooses another
+theme, a ground and its tint together: Graphite and gold, Espresso and champagne, Aubergine and yellow gold, Midnight
+and electric blue, Evergreen and tropical forest, Slate and silver. The editors', terminal's and diffs' colours follow.
 
 **⌘⇧.** interrupts a turn: the turn ends with an "interrupted" line and the session stays alive for the next prompt.
 While you read further up, new output does not scroll the view; **↓ Latest** jumps back, and sending a prompt follows
@@ -354,7 +355,7 @@ Your data lives in `~/.comando`; **Actions ▸ Reveal comando folder** opens it.
 | `questdb/` | the embedded QuestDB's data |
 | `help/` | this tutorial |
 | `folders.json` | the Files tab's folders, edited from the Files tab's menu |
-| `opened-files` | the files you opened: a new file stops being marked in the tint once opened |
+| `opened-files` | the files you opened: a new file loses its dot once opened |
 | `logs/` | comando's logs |
 
 On macOS, with the default data root, connection passwords are kept in the login keychain, not in the files;

@@ -11,6 +11,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public final class Icons {
 
     private static final ConcurrentHashMap<String, FlatSVGIcon> CACHE = new ConcurrentHashMap<>();
+    /** Icons made of others, by name: a repository's folder with git's mark. */
+    private static final ConcurrentHashMap<String, Icon> COMPOSED = new ConcurrentHashMap<>();
     /** Icons painted in code, by name, at any size asked: the tints' swatches. */
     private static final ConcurrentHashMap<String, Icon> PAINTED = new ConcurrentHashMap<>();
     /**
@@ -36,7 +38,7 @@ public final class Icons {
     static Color gilded(Color c) {
         int rgb = c.getRGB() & 0xFFFFFF;
         Color to = rgb == SVG_GOLD ? Theme.tint().body : rgb == SVG_AMBER ? Theme.ATTENTION : null;
-        return to == null ? c : new Color(to.getRed(), to.getGreen(), to.getBlue(), c.getAlpha());
+        return to == null ? c : Theme.withAlpha(to, c.getAlpha());
     }
 
     public static Icon get(String name, int size) {
@@ -46,6 +48,28 @@ public final class Icons {
         }
         return CACHE.computeIfAbsent(name + '@' + size, k -> new FlatSVGIcon("icons/" + name + ".svg", size, size));
     }
+
+    /**
+     * A folder's icon by its name ({@code folder}, {@code folder-scratchpad}, … {@code folder-git}): the sidebar's family
+     * ({@code icons/sidebar/}), drawn as the sidebar's tabs are, an outline in one colour per kind (record 98), with git's
+     * mark on a repository's; any other name as {@link #get}.
+     */
+    public static Icon folder(String name) {
+        return switch (name) {
+            case "folder" -> get("sidebar/folder");
+            case "folder-scratchpad" -> get("sidebar/scratchpad");
+            case "folder-knowledge" -> get("sidebar/knowledge");
+            case "folder-memory" -> get("sidebar/memory");
+            case "folder-skills" -> get("sidebar/skills");
+            case "folder-plugin" -> get("sidebar/plugin");
+            case "folder-work" -> get("sidebar/work");
+            case "folder-git" -> COMPOSED.computeIfAbsent("folder-git", k -> new OverlayIcon(get("sidebar/folder"), get(GIT_BADGE)));
+            default -> get(name);
+        };
+    }
+
+    /** Git's mark, in git's colours, drawn over a repository's folder. */
+    public static final String GIT_BADGE = "sidebar/git-badge";
 
     /** Names {@code icon}, painted in code, so that a command can name it as it names an SVG. */
     public static void put(String name, Icon icon) {

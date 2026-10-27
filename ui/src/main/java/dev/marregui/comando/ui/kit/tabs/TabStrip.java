@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.kit.tabs;
 
 import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.BorderFactory;
@@ -41,6 +42,9 @@ public final class TabStrip {
     public TabStrip(String accessibleName) {
         root.getAccessibleContext().setAccessibleName(accessibleName);
         row.setOpaque(false);
+        SidebarLook.ground(strip);
+        SidebarLook.ground(content);
+        SidebarLook.ground(root);
         strip.add(row, BorderLayout.CENTER);
         strip.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(2, 2, 0, 0)));
@@ -53,8 +57,9 @@ public final class TabStrip {
         int index = headers.size();
         JToggleButton b = new JToggleButton(Icons.get(icon));
         b.putClientProperty("JButton.buttonType", "tab");
-        b.putClientProperty("FlatLaf.style", "tab.underlineHeight: 2; tab.underlineColor: " + Theme.hex(Theme.ACCENT)
-                + "; margin: 4,7,4,7");
+        // the tab in front underlined in the tint, as every "where I am" mark is (record 100)
+        SidebarLook.whileShown(b, () -> b.putClientProperty("FlatLaf.style", "tab.underlineHeight: 2; tab.underlineColor: "
+                + Theme.hex(Theme.tint().body) + "; margin: 4,7,4,7"));
         b.setToolTipText(title + ": " + tip);
         b.getAccessibleContext().setAccessibleName(title);
         b.setFocusable(false);
@@ -89,6 +94,7 @@ public final class TabStrip {
     /** The component at the row's end, such as the button that hides the sidebar. */
     public void trailing(JComponent trailing) {
         JPanel corner = new JPanel(new BorderLayout());
+        corner.setOpaque(false);
         corner.add(trailing, BorderLayout.NORTH);
         strip.add(corner, BorderLayout.EAST);
         strip.revalidate();

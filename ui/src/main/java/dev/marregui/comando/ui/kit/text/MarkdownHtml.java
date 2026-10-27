@@ -76,11 +76,11 @@ public final class MarkdownHtml {
         }
 
         String lineColour() {
-            return Theme.hex(gained ? Theme.DIFF_ADDED : Theme.DIFF_REMOVED);
+            return Theme.hex(gained ? Theme.content().added : Theme.content().removed);
         }
 
         String wordColour() {
-            return Theme.hex(gained ? Theme.DIFF_ADDED_WORD : Theme.DIFF_REMOVED_WORD);
+            return Theme.hex(gained ? Theme.content().addedWord : Theme.content().removedWord);
         }
 
         /** Whether one of {@code node}'s source lines changed. */

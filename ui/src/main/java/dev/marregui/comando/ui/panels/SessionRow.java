@@ -243,7 +243,7 @@ final class SessionRow extends IconRow {
         String due = s.reflection().due() && EditorPanel.showsCheckpoint(s)
                 ? "&nbsp;<span style='color:" + Theme.hex(Theme.THINKING) + "'>" + (contextText(s).isEmpty() ? "◆" : contextText(s)) + "</span>" : "";
         String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>⚑" + approvals + "</span>";
-        String name = focused ? "<b style='color:" + Theme.hex(Theme.ACCENT) + "'>" : open ? "<b>" : "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";
+        String name = focused ? "<b style='color:" + Theme.hex(Theme.tint().body) + "'>" : open ? "<b>" : "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";
         return "<html><nobr>" + name + MarkdownHtml.escape(s.name()) + "</b>" + older + due + badge + "</nobr></html>";
     }
 }
