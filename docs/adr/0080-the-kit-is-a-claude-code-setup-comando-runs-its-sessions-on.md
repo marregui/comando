@@ -68,3 +68,10 @@ the brain, the Files tab, the upgrade and the backup.
 ## Amendments
 
 2026-10-27: the repository is public; the packages stay unsigned, as record 16's amendment of the same day decides.
+
+2026-10-27: the kit carries no plugin. Its agents, skills, workflows, hooks (in `settings.json`), scripts (`bin/`, put
+on the Bash tool's `PATH` by a hook at every session start) and tools sit where Claude Code loads them from a config
+folder, so the row "what the kit is" reads "the plugin" as those parts. The author's kit is the reference: a kit
+conforms when it has its layout ([workbench §7](../workbench.md#7-the-kit)). Conformance is documented, not checked;
+comando's code still reads only `comando-kit.json`. The agent that installs comando offers the reference kit or one the
+user names ([INSTALL.md §5](../../INSTALL.md#5-the-kit)). Miguel decided all three.

@@ -37,7 +37,7 @@ class KitJsonTest {
                 {"key": "LINEAR_API_KEY", "for": "linear-api.sh, /linear", "where": "Linear ▸ Settings ▸ API ▸ Personal API keys"}
               ],
               "jobs": [
-                {"name": "transcript-sweep", "schedule": {"daily": "07:15"}, "command": ["skills/local-marregui/bin/transcript-sweep"]}
+                {"name": "transcript-sweep", "schedule": {"daily": "07:15"}, "command": ["bin/transcript-sweep"]}
               ]
             }
             """;
@@ -60,7 +60,7 @@ class KitJsonTest {
         assertThat(kit.credentials()).containsExactly(new KitRoot.Credential("LINEAR_API_KEY", "linear-api.sh, /linear",
                 "Linear ▸ Settings ▸ API ▸ Personal API keys"));
         assertThat(kit.jobs()).containsExactly(new KitRoot.Job("transcript-sweep", Map.of("daily", "07:15"),
-                List.of("skills/local-marregui/bin/transcript-sweep")));
+                List.of("bin/transcript-sweep")));
     }
 
     @Test

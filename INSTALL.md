@@ -116,19 +116,23 @@ and Ubuntu. A second start while comando runs only says that it is already runni
 
 ## 5. The kit
 
-The kit is a Claude Code setup for the way of working comando is built for: instructions, skills, a plugin, and a
-brain (memory, knowledge base, scratchpad) kept in its own folder. It installs into `~/.claude/comando-kit` and leaves the
-user's own `~/.claude` alone; comando finds it at its next start and runs its sessions on it.
+The kit is a Claude Code setup for the way of working comando is built for: instructions, settings with their hooks,
+skills, agents, workflows and scripts, and a brain (memory, knowledge base, scratchpad) kept in its own folder. The
+reference kit is `marregui/comando-kit`; any kit with its layout serves
+([workbench §7](docs/workbench.md#7-the-kit)). It installs into `~/.claude/comando-kit` and leaves the user's own
+`~/.claude` alone; comando finds it at its next start and runs its sessions on it.
 
-Ask the user: "comando is installed. Install the kit as well?" On no, go to [§6](#6-start-comando). On yes, read the
-kit's recipe and follow it; it asks the user for consent before it changes anything:
+Ask the user: "comando is installed. Install the kit as well: the reference kit, `marregui/comando-kit`, or another kit
+you name?" On no, go to [§6](#6-start-comando). On yes, read the chosen kit's recipe and follow it; it asks the user for
+consent before it changes anything:
 
 ```sh
-gh api -H 'Accept: application/vnd.github.raw' repos/marregui/comando-kit/contents/INSTALL.md
+gh api -H 'Accept: application/vnd.github.raw' repos/<owner>/<repo>/contents/INSTALL.md
 ```
 
-(`https://github.com/marregui/comando-kit`, file `INSTALL.md`; the repository is private, so `gh` reads it.) When the
-kit is installed while comando runs, quit comando and start it again so its sessions use the kit.
+(`<owner>/<repo>` is `marregui/comando-kit` for the reference kit, `https://github.com/marregui/comando-kit`; it is
+private, so `gh` reads it for a user who has access. A kit kept elsewhere: its `INSTALL.md` from where the user names.)
+When the kit is installed while comando runs, quit comando and start it again so its sessions use the kit.
 
 ## 6. Start comando
 
