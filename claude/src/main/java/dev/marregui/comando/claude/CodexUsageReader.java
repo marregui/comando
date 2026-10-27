@@ -95,8 +95,9 @@ final class CodexUsageReader {
                     }
                 }
             }
-            return PlanUsage.failed(PlanUsage.CODEX, "'codex app-server' did not answer within " + timeout.toMillis() + " ms",
-                    System.currentTimeMillis());
+            return PlanUsage.failed(PlanUsage.CODEX, p.isAlive()
+                    ? "'codex app-server' did not answer within " + timeout.toMillis() + " ms"
+                    : "'codex app-server' exited with code " + p.exitValue() + " without answering", System.currentTimeMillis());
         } catch (IOException e) {
             return PlanUsage.failed(PlanUsage.CODEX, "cannot run '" + executable + "': " + e.getMessage(), System.currentTimeMillis());
         } catch (InterruptedException e) {
@@ -143,6 +144,10 @@ final class CodexUsageReader {
             return PlanUsage.failed(PlanUsage.CODEX, Clip.keepStart(why.isBlank() ? "the rate-limit read failed" : why, 200), readAtMillis);
         }
         JsonNode limits = msg.path("result").path("rateLimits");
+        // the account's bucket: limit id absent or "codex"; a model bucket does not describe the session or the week
+        if (!isAccount(limits)) {
+            limits = msg.path("result").path("rateLimitsByLimitId").path("codex");
+        }
         List<PlanUsage.Window> windows = new ArrayList<>();
         for (String position : List.of("primary", "secondary")) {
             JsonNode w = limits.path(position);
@@ -158,6 +163,11 @@ final class CodexUsageReader {
         return windows.isEmpty()
                 ? PlanUsage.failed(PlanUsage.CODEX, "no rate limits in Codex's answer", readAtMillis)
                 : new PlanUsage(PlanUsage.CODEX, windows, readAtMillis, "");
+    }
+
+    private static boolean isAccount(JsonNode limits) {
+        JsonNode id = limits.path("limitId");
+        return limits.isObject() && (id.isMissingNode() || id.isNull() || id.asText().equals("codex"));
     }
 
     /** "Session" for the 5-hour window, as Claude Code names its own; "Week"; "Month" on the monthly plans. */

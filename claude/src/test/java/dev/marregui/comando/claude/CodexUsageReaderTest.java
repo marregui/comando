@@ -82,6 +82,22 @@ class CodexUsageReaderTest {
     }
 
     @Test
+    void anAnswerInAModelBucketFallsBackToTheAccountBucket() {
+        String account = answer(80, FIVE_HOURS_ON, 3);
+        String accountLimits = account.substring(account.indexOf("\"rateLimits\":") + "\"rateLimits\":".length(), account.length() - 2);
+        String line = "{\"id\":2,\"result\":{\"rateLimits\":{\"limitId\":\"premium\",\"primary\":null,\"secondary\":null},"
+                + "\"rateLimitsByLimitId\":{\"codex\":" + accountLimits + "}}}";
+        assertThat(CodexUsageReader.answer(line, NOW, JSON, MADRID).windows()).extracting(PlanUsage.Window::percent).containsExactly(80, 3);
+    }
+
+    @Test
+    void aServerThatExitsAtOnceSaysSoNotATimeout() throws Exception {
+        // review F4, 2026-10-27: an exit was reported as "did not answer within 10000 ms"
+        PlanUsage u = CodexUsageReader.read(script("dead", "exit 7\n").toString(), JSON, Duration.ofSeconds(10), MADRID);
+        assertThat(u.problem()).isEqualTo("'codex app-server' exited with code 7 without answering");
+    }
+
+    @Test
     void aReadThatHangsIsStoppedAndSaysSo() throws Exception {
         Path exe = script("hang", "exec sleep 30\n");
         long start = System.nanoTime();
