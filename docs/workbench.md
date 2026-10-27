@@ -300,7 +300,7 @@ edited and saved like any other; a `.log` stays read-only.
   an optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge,
   skills, plugin), whether its entries go to the Trash (`deletable`), the file name that lists them (`listedIn`), and
   whether it is a repository (`repository`).
-  With a kit, its folders come first, as its `kit.json` lists them ([§7](#7-the-kit)). Without a kit and without
+  With a kit, its folders come first, as its `comando-kit.json` lists them ([§7](#7-the-kit)). Without a kit and without
   `folders.json` there is one folder, Claude Code's (`~/.claude`), opening `CLAUDE.md` and leaving out Claude Code's
   transcripts, caches and per-session state; an emptied list stays empty. Here and below, `~/.claude` stands for the
   root comando's sessions run on ([§7.1](#71-the-root)).
@@ -491,8 +491,8 @@ in Git.
 ## 7. The kit
 
 A kit is a Claude Code setup kept in a git repository and versioned by tags `vMAJOR.MINOR.PATCH`: `CLAUDE.md`,
-`settings.json`, skills, a plugin, `kit.json` (what comando reads) and `INSTALL.md` (the recipe its install, upgrade
-and uninstall follow). The standard kit is `marregui/claude-kit`. comando does not install a kit: the agent that
+`settings.json`, skills, a plugin, `comando-kit.json` (what comando reads) and `INSTALL.md` (the recipe its install, upgrade
+and uninstall follow). The standard kit is `marregui/comando-kit`. comando does not install a kit: the agent that
 installs comando offers it ([INSTALL.md §5](../INSTALL.md#5-the-kit)), and comando finds it at start
 ([record 80](adr/0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md)).
 
@@ -503,11 +503,11 @@ The root is the Claude Code folder comando's sessions run on, decided once at st
 | When | Root |
 |---|---|
 | comando was started with `CLAUDE_CONFIG_DIR` | that folder |
-| `~/.claude/kit.json` exists | `~/.claude`: the user's Claude Code folder is a kit checkout |
-| `~/.claude/kit/kit.json` exists | `~/.claude/kit`: a clone of a kit at a tag, beside the user's own setup |
+| `~/.claude/comando-kit.json` exists | `~/.claude`: the user's Claude Code folder is a kit checkout |
+| `~/.claude/comando-kit/comando-kit.json` exists | `~/.claude/comando-kit`: a clone of a kit at a tag, beside the user's own setup |
 | otherwise | `~/.claude`, without a kit |
 
-A `kit.json` that does not parse is logged and counts as no kit. Every `claude` comando starts (sessions, the plan
+A `comando-kit.json` that does not parse is logged and counts as no kit. Every `claude` comando starts (sessions, the plan
 usage reader, the topics, the version check) gets `CLAUDE_CONFIG_DIR=<root>` when the root is not `~/.claude`, and,
 with a kit, `--settings '{"autoMemoryDirectory": "<root>/<brain>/MEMORY"}'`. Stored conversations, their import and
 their retention are read from `<root>/projects`. A session on a root other than `~/.claude` neither reads nor writes
@@ -515,13 +515,13 @@ their retention are read from `<root>/projects`. A session on a root other than 
 
 ### 7.2 The brain
 
-The brain is `<root>/<brain>/` (`brain` in `kit.json`, `BRAIN` in the standard kit): `MEMORY/`, `KB/` and
+The brain is `<root>/<brain>/` (`brain` in `comando-kit.json`, `BRAIN` in the standard kit): `MEMORY/`, `KB/` and
 `SCRATCHPAD/`, what the sessions learn and write. It is never part of the kit, whose repository ignores it; it can be
 a git repository of its own.
 
 ### 7.3 The Files tab
 
-`kit.json` lists the kit's folders with the fields of a `folders.json` entry ([§5](#5-the-files-tab)), each path
+`comando-kit.json` lists the kit's folders with the fields of a `folders.json` entry ([§5](#5-the-files-tab)), each path
 relative to the root. When `folders.json` holds none of them, comando adds them at the top, their paths made absolute
 under the root, once, and saves; the user's own entries (other folders, repositories) stay. An entry whose path
 resolves to the same real path as a kit folder counts as that folder, so an entry through a link is not added twice.

@@ -34,7 +34,7 @@ transcripts, console output, schemas) lives in registries the state refers to by
 | `effect` | `Effect`, the sealed interface of work for adapters; `EffectRouter`, which hands each effect to its port |
 | `loop` | `StateLoop`: the queue, the reducer thread, its watchdog, listeners and observers |
 | `port` | the interfaces adapters implement ([§2](#2-interface-with-the-rest-of-the-app)) |
-| `model` | configuration and values shared by every module: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `Topic`, `HomeDir`, `Status`, `StartMode`; `KitRoot` (the Claude Code folder sessions run on and its kit's `kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the Files tab's); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for) |
+| `model` | configuration and values shared by every module: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `Topic`, `HomeDir`, `Status`, `StartMode`; `KitRoot` (the Claude Code folder sessions run on and its kit's `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the Files tab's); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for) |
 | `resource` | `ResourceKind`, its kinds (`ConnectionKind`, `SessionKind`, `FolderKind`) and `Attribute`: the attributes and rules one dialog edits |
 | `dispatch` | `Blocks`, `Statements`, `Classifier`, `Target`: editor text split into blocks and statements, and the SQL-or-prompt decision |
 | `view` | `ViewSpec` (the data of each view type), `Placement`, `Layout`, `FileView`, `Clip` |
@@ -79,7 +79,7 @@ intents.
 
 **Shared helpers.** `Classifier` is used by the reducer, by the editor (block colours, gutter, completion) and by
 `mcp` (DDL detection for `db_run_sql`); `Statements` by the reducer and the editor; `Intent.Notify.logged` writes a
-failure to the log and makes the notice whose click opens it there (`Notice.log`), for every adapter; `HomeDir` decides `~` expansion and Claude Code's folder for every module, the root `KitRoot` resolves: `CLAUDE_CONFIG_DIR` when comando was started with it, else `~/.claude` with a `kit.json`, else `~/.claude/kit` with one, else `~/.claude`; `app` names it once (`KitRoot.use`), and parses `kit.json` through `claude`'s `KitJson`, as `core` reads no JSON; `Clip` shortens labels the same
+failure to the log and makes the notice whose click opens it there (`Notice.log`), for every adapter; `HomeDir` decides `~` expansion and Claude Code's folder for every module, the root `KitRoot` resolves: `CLAUDE_CONFIG_DIR` when comando was started with it, else `~/.claude` with a `comando-kit.json`, else `~/.claude/comando-kit` with one, else `~/.claude`; `app` names it once (`KitRoot.use`), and parses `comando-kit.json` through `claude`'s `KitJson`, as `core` reads no JSON; `Clip` shortens labels the same
 way in the window and in what Claude is told; `PermissionRules` derives the allow rules an approval adds, for `mcp`
 and the approval card.
 

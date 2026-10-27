@@ -10,16 +10,16 @@ import java.util.Optional;
 
 /**
  * The Claude Code folder comando starts its sessions on, and the kit in it, when it has one. A kit is the setup of a
- * Claude Code folder, declared by the {@code kit.json} at its top: its name, its brain (the folder holding memory,
+ * Claude Code folder, declared by the {@code comando-kit.json} at its top: its name, its brain (the folder holding memory,
  * knowledge base and scratchpad), the folders the Files tab shows, and what it needs outside the folder. comando reads
  * nothing else of a kit.
  *
  * <p>The root is {@code CLAUDE_CONFIG_DIR} when comando itself was started with it; else {@code ~/.claude} when it holds
- * a {@code kit.json}; else {@code ~/.claude/kit} when that holds one; else {@code ~/.claude}, with no kit. A {@code
- * kit.json} that does not read is logged and counts as none.</p>
+ * a {@code comando-kit.json}; else {@code ~/.claude/comando-kit} when that holds one; else {@code ~/.claude}, with no kit. A {@code
+ * comando-kit.json} that does not read is logged and counts as none.</p>
  *
  * @param dir     the root, absolute and normalised
- * @param kit     the kit's {@code kit.json}, when the root has one that reads
+ * @param kit     the kit's {@code comando-kit.json}, when the root has one that reads
  * @param userDir the user's own Claude Code folder, {@code ~/.claude}: a root elsewhere is passed to every {@code claude}
  *                comando starts, and the session that upgrades the kit runs on the user's own
  */
@@ -27,9 +27,9 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
 
     private static final System.Logger LOG = System.getLogger(KitRoot.class.getName());
     /** The file at the top of a root that makes it a kit. */
-    public static final String FILE = "kit.json";
+    public static final String FILE = "comando-kit.json";
     /** The folder under {@code ~/.claude} a kit of someone else's is cloned into. */
-    public static final String CLONE = "kit";
+    public static final String CLONE = "comando-kit";
     /** The session that upgrades the kit: in the root, on the user's own Claude Code folder, so it can replace the kit. */
     public static final String UPGRADE_SESSION = "kit";
     /** Where the auto memory lives inside the brain. */
@@ -44,14 +44,14 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
         Objects.requireNonNull(kit, "kit");
     }
 
-    /** Reads a {@code kit.json}; a file that does not read, or breaks the schema, throws. */
+    /** Reads a {@code comando-kit.json}; a file that does not read, or breaks the schema, throws. */
     @FunctionalInterface
     public interface Reader {
         Manifest read(Path file) throws IOException;
     }
 
     /**
-     * A {@code kit.json}: version 1 of its schema.
+     * A {@code comando-kit.json}: version 1 of its schema.
      *
      * @param name         the kit's name, shown with its version
      * @param brain        the brain's folder, relative to the root
@@ -131,7 +131,7 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
         return new KitRoot(user, Optional.empty(), user);
     }
 
-    /** The kit of {@code dir}, when its {@code kit.json} exists and reads; one that does not is logged. */
+    /** The kit of {@code dir}, when its {@code comando-kit.json} exists and reads; one that does not is logged. */
     private static Optional<Manifest> read(Path dir, Reader reader) {
         Path file = dir.resolve(FILE);
         if (!Files.isRegularFile(file)) {

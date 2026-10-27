@@ -15,7 +15,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** {@code kit.json} as the kit's installer writes it (schema version 1), and the root it makes. */
+/** {@code comando-kit.json} as the kit's installer writes it (schema version 1), and the root it makes. */
 class KitJsonTest {
 
     static final String KIT_JSON = """
@@ -80,14 +80,14 @@ class KitJsonTest {
     void aMalformedKitJsonLeavesTheRootWithoutAKit(@TempDir Path home) throws Exception {
         Path user = home.resolve(".claude");
         write(user, "{ not json");
-        write(user.resolve("kit"), KIT_JSON);
+        write(user.resolve(KitRoot.CLONE), KIT_JSON);
 
         KitRoot r = KitRoot.resolve(null, home, KitJson::read);
-        assertThat(r.dir()).as("the clone's file reads; the user's own does not").isEqualTo(user.resolve("kit"));
+        assertThat(r.dir()).as("the clone's file reads; the user's own does not").isEqualTo(user.resolve(KitRoot.CLONE));
         assertThat(r.name()).isEqualTo("marregui");
-        assertThat(r.memory()).contains(user.resolve("kit/BRAIN/MEMORY"));
+        assertThat(r.memory()).contains(user.resolve(KitRoot.CLONE + "/BRAIN/MEMORY"));
 
-        write(user.resolve("kit"), "{\"kit\": 1}");
+        write(user.resolve(KitRoot.CLONE), "{\"kit\": 1}");
         assertThat(KitRoot.resolve(null, home, KitJson::read)).as("neither reads: no kit, the user's own folder")
                 .isEqualTo(new KitRoot(user, Optional.empty(), user));
     }

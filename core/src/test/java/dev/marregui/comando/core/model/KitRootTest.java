@@ -18,7 +18,7 @@ class KitRootTest {
                     new FolderRoot("Scratchpad", "BRAIN/SCRATCHPAD", "", List.of(), "scratchpad", true, "INDEX.md")),
             List.of(), List.of(), List.of());
 
-    /** Reads every {@code kit.json} as {@link #KIT}, but one whose text is {@code broken}. */
+    /** Reads every {@code comando-kit.json} as {@link #KIT}, but one whose text is {@code broken}. */
     private static final KitRoot.Reader READER = file -> {
         if (Files.readString(file).contains("broken")) {
             throw new IOException("not JSON");
@@ -52,7 +52,7 @@ class KitRootTest {
         kitJson(user.resolve(KitRoot.CLONE), "{}");
 
         KitRoot cloned = KitRoot.resolve(null, home, READER);
-        assertThat(cloned.dir()).isEqualTo(user.resolve("kit"));
+        assertThat(cloned.dir()).isEqualTo(user.resolve("comando-kit"));
         assertThat(cloned.kit()).contains(KIT);
         assertThat(cloned.own()).isFalse();
 
@@ -82,7 +82,7 @@ class KitRootTest {
 
         assertThat(KitRoot.resolve(null, home, READER)).as("no kit at all").isEqualTo(new KitRoot(user, Optional.empty(), user));
         kitJson(user.resolve(KitRoot.CLONE), "{}");
-        assertThat(KitRoot.resolve(null, home, READER).dir()).as("the clone, whose file reads").isEqualTo(user.resolve("kit"));
+        assertThat(KitRoot.resolve(null, home, READER).dir()).as("the clone, whose file reads").isEqualTo(user.resolve("comando-kit"));
         assertThat(KitRoot.resolve(null, home, file -> {
             throw new IllegalArgumentException("no name");
         }).kit()).as("a schema broken").isEmpty();
@@ -90,7 +90,7 @@ class KitRootTest {
 
     @Test
     void theKitsFoldersBrainAndMemoryAreUnderTheRoot(@TempDir Path home) throws Exception {
-        Path root = home.resolve(".claude/kit");
+        Path root = home.resolve(".claude/comando-kit");
         kitJson(root, "{}");
         KitRoot r = KitRoot.resolve(null, home, READER);
 

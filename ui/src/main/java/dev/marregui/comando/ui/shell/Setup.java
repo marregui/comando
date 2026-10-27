@@ -6,7 +6,7 @@ import dev.marregui.comando.core.model.KitVersion;
 import java.io.IOException;
 
 /**
- * The kit comando runs its sessions on, as the window reaches it: the root and its {@code kit.json}, the kit's version
+ * The kit comando runs its sessions on, as the window reaches it: the root and its {@code comando-kit.json}, the kit's version
  * and newer releases, and the brain's backup. {@link #status} and {@link #backUpBrain} block (git, a remote): call them
  * off the EDT.
  */

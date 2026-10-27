@@ -16,7 +16,7 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * A kit's {@code kit.json} read into a {@link KitRoot.Manifest}: schema version 1, a name, the brain's folder and the
+ * A kit's {@code comando-kit.json} read into a {@link KitRoot.Manifest}: schema version 1, a name, the brain's folder and the
  * Files tab's folders inside the root, the requirements, credentials and jobs. A file that is no JSON, of another
  * version, without a name or brain, or with a folder outside the root, is refused whole.
  */

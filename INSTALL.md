@@ -117,17 +117,17 @@ and Ubuntu. A second start while comando runs only says that it is already runni
 ## 5. The kit
 
 The kit is a Claude Code setup for the way of working comando is built for: instructions, skills, a plugin, and a
-brain (memory, knowledge base, scratchpad) kept in its own folder. It installs into `~/.claude/kit` and leaves the
+brain (memory, knowledge base, scratchpad) kept in its own folder. It installs into `~/.claude/comando-kit` and leaves the
 user's own `~/.claude` alone; comando finds it at its next start and runs its sessions on it.
 
 Ask the user: "comando is installed. Install the kit as well?" On no, go to [§6](#6-start-comando). On yes, read the
 kit's recipe and follow it; it asks the user for consent before it changes anything:
 
 ```sh
-gh api -H 'Accept: application/vnd.github.raw' repos/marregui/claude-kit/contents/INSTALL.md
+gh api -H 'Accept: application/vnd.github.raw' repos/marregui/comando-kit/contents/INSTALL.md
 ```
 
-(`https://github.com/marregui/claude-kit`, file `INSTALL.md`; the repository is private, so `gh` reads it.) When the
+(`https://github.com/marregui/comando-kit`, file `INSTALL.md`; the repository is private, so `gh` reads it.) When the
 kit is installed while comando runs, quit comando and start it again so its sessions use the kit.
 
 ## 6. Start comando
@@ -166,4 +166,4 @@ and offers **Upgrade the kit…** when a newer one is released.
 3. Ask the user before removing their data: `~/.comando` holds their panels, connections, sessions and logs; on macOS
    the connection passwords are in the login keychain under the service `comando`
    (`security delete-generic-password -s comando`, once per saved password).
-4. The kit is removed by its own recipe, section Uninstall, in `~/.claude/kit/INSTALL.md`.
+4. The kit is removed by its own recipe, section Uninstall, in `~/.claude/comando-kit/INSTALL.md`.

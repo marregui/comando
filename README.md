@@ -87,9 +87,9 @@ Your data stays in `~/.comando`: panels as Markdown files, connections, sessions
 
 ## The kit and the brain
 
-The kit is a Claude Code setup in a repository of its own, [`marregui/claude-kit`](https://github.com/marregui/claude-kit),
+The kit is a Claude Code setup in a repository of its own, [`marregui/comando-kit`](https://github.com/marregui/comando-kit),
 versioned by tags: instructions, settings, skills and a plugin for the way of working comando is built for. It
-installs into `~/.claude/kit` beside your own setup, which it leaves alone. comando finds it at start and runs every
+installs into `~/.claude/comando-kit` beside your own setup, which it leaves alone. comando finds it at start and runs every
 session on it, with one memory for all of them; the Files tab opens on its folders, the status bar shows its version,
 and **Upgrade the kit…** moves it to a newer tag when you choose. The brain, `BRAIN/` in the kit's folder, holds what
 the sessions learn (memory, knowledge base, scratchpad); it is never part of the kit, and **Back up the brain**

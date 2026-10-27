@@ -3,7 +3,7 @@
 The Claude Code adapter: one headless `claude -p` process per session, speaking stream-JSON on standard input and
 output, mapped into transcript blocks and intents. It also lists the conversations Claude Code stored, follows
 sub-agents' stored conversations, reads the plan's usage, checks the installed CLI's version, and reads a kit's
-`kit.json`, so that every `claude` it starts runs on the kit's root. It depends on `core` and Jackson.
+`comando-kit.json`, so that every `claude` it starts runs on the kit's root. It depends on `core` and Jackson.
 
 1. [Architecture](#1-architecture)
 2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
@@ -24,7 +24,7 @@ sub-agents' stored conversations, reads the plan's usage, checks the installed C
 | `ClaudeTopics` | the tabs' topics: one line each from Haiku (`claude --safe-mode -p --model haiku`, no tools, no thinking, no saved session), one read at a time, one ask waiting per tab |
 | `ClaudeVersion` | `claude --version` against the tested line (2.1.296 up to 2.2.0): a warning outside it, not a refusal |
 | `GitBranch` | the working directory's branch from `.git/HEAD`, without running git |
-| `KitJson` | a kit's `kit.json` (schema version 1) read into `core`'s `KitRoot.Manifest`, refused whole when it breaks the schema; `resolve()`, the root comando runs on |
+| `KitJson` | a kit's `comando-kit.json` (schema version 1) read into `core`'s `KitRoot.Manifest`, refused whole when it breaks the schema; `resolve()`, the root comando runs on |
 | `RootLaunch` | what every `claude` comando starts gets from the root: `CLAUDE_CONFIG_DIR=<root>` when the root is not `~/.claude`, and with a kit `--settings {"autoMemoryDirectory": "<root>/<brain>/MEMORY"}`, merged into a `--settings` already given; the session `kit` in the root runs on the user's own `~/.claude`, so it can replace the kit |
 | `ClaudeSettings` | the executable (found in the usual install paths, since an app started from Finder has a short `PATH`), the MCP configuration folder, Claude Code's `projects` folder under the root, the appended instructions, the `RootLaunch` |
 | `UiInstructions` | the text appended to the system prompt that tells a session about comando's tools |
@@ -75,7 +75,7 @@ start sessions without comando's tools) and `ClaudeSettings`.
 `SessionTasksChanged`, `SessionExited`, `SessionBranch`, `PlanUsageRead`, `ShowView` and `RefreshView` (a sub-agent's
 conversation as a lower view, followed while it grows), `Notify`.
 
-**Reads, never writes:** the root's `projects/` and its `kit.json`. **Writes outside the data root:** only a temporary
+**Reads, never writes:** the root's `projects/` and its `comando-kit.json`. **Writes outside the data root:** only a temporary
 file in the system temp folder for each plan-usage read, each topic read and each process's stderr, deleted after it.
 
 ## 3. Threads
@@ -104,7 +104,7 @@ file in the system temp folder for each plan-usage read, each topic read and eac
   they go; `SubagentFilesProbeTest` feeds `SubagentFiles` generated inputs.
 - `PlanUsageReaderTest` and `ClaudeTopicsTest` run their reads against fake scripts written in a temporary folder;
   `ClaudeTopicsTest` also paces a stubbed read to check one read at a time, the replacement of a waiting ask and the close.
-- `KitJsonTest` reads a `kit.json` as the kit's installer writes it, refuses broken ones, and resolves roots with it;
+- `KitJsonTest` reads a `comando-kit.json` as the kit's installer writes it, refuses broken ones, and resolves roots with it;
   `RootLaunchTest` checks the environment and `--settings` each `claude` gets, the upgrade session's exception, and a
   real process's `CLAUDE_CONFIG_DIR`.
 

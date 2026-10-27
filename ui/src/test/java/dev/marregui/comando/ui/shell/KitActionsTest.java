@@ -63,7 +63,7 @@ class KitActionsTest {
 
     @Test
     void theUpgradeMakesTheKitsSessionInTheRootAndSendsItThePrompt(@TempDir Path tmp) {
-        Path root = tmp.resolve(".claude/kit");
+        Path root = tmp.resolve(".claude/comando-kit");
         KitActions kit = actions(new KitRoot(root, Optional.of(KIT), tmp.resolve(".claude")));
 
         kit.send(with(), new KitRoot(root, Optional.of(KIT), tmp.resolve(".claude")), "v1.3.0");
@@ -77,7 +77,7 @@ class KitActionsTest {
 
     @Test
     void aSessionCalledKitElsewhereIsNotTakenForTheKits(@TempDir Path tmp) {
-        Path root = tmp.resolve(".claude/kit");
+        Path root = tmp.resolve(".claude/comando-kit");
         KitRoot r = new KitRoot(root, Optional.of(KIT), tmp.resolve(".claude"));
         KitActions kit = actions(r);
 

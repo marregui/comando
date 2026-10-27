@@ -93,7 +93,7 @@ at the first start on it.
 | `COMANDO_CLAUDE` | the `claude` executable; else the usual install paths, else `claude` on `PATH` |
 | `-Dcomando.recordIntents=true` | writes the intent log to `logs/intents-<millis>.jsonl` |
 | `-Dcomando.keychain` | passwords in the keychain; on by default only for `~/.comando` |
-| `CLAUDE_CONFIG_DIR` | the kit root; else `~/.claude` when it has a `kit.json`, else `~/.claude/kit` when that has one, else `~/.claude` |
+| `CLAUDE_CONFIG_DIR` | the kit root; else `~/.claude` when it has a `comando-kit.json`, else `~/.claude/comando-kit` when that has one, else `~/.claude` |
 
 So a test or tool pointing the data root elsewhere never writes the user's keychain; tests name a temporary root
 through `AppConfig`, never the user's `~/.claude`. The JVM options (`-Xms64m -Xmx4g`, periodic G1, the QuestDB export, the dark appearance) are in

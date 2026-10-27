@@ -9,7 +9,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The kit's folders that {@code kit.json} declares, merged into the Files tab's at start and by "Use the kit's folders". */
+/** The kit's folders that {@code comando-kit.json} declares, merged into the Files tab's at start and by "Use the kit's folders". */
 class KitFoldersTest {
 
     private static FolderRoot folder(String name, Path path) {

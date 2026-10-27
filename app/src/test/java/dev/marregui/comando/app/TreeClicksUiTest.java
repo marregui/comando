@@ -83,7 +83,7 @@ class TreeClicksUiTest {
      */
     @Test
     void theKitsFoldersOpenTheFilesTabOfAWindowStartedOnItsRoot(@TempDir Path home) throws Exception {
-        Path root = home.resolve("claude-kit");
+        Path root = home.resolve("comando-kit");
         for (String dir : List.of("BRAIN/MEMORY", "BRAIN/KB", "skills/reflect")) {
             Files.createDirectories(root.resolve(dir));
         }

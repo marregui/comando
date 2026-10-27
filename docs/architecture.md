@@ -31,7 +31,7 @@ test trees, and a browser over folders of documents.
 | `core` | state, intents, reducer, effects, ports, the stores outside the state, the SQL-or-prompt classifier, the root sessions run on and its kit (`KitRoot`) | JDK only |
 | `testkit` | fakes for every effect port, a fake clock, recorded Claude streams, a synthetic session, a recording intent sink | `core` |
 | `db` | JDBC lanes (one thread per connection), cancel, columnar results, schema reading, queries for Claude | `core`, pgjdbc |
-| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, `kit.json` read (`KitJson`) | `core`, Jackson |
+| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, `comando-kit.json` read (`KitJson`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log | `core`, Jackson |
 | `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash, the folders' git repositories (the `git` command line) | `core` |
 | `ui` | the Swing shell, panels, dialogs, the kit, the widgets | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |

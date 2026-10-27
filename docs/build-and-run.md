@@ -46,7 +46,7 @@ Tests run headless, with the data root in each module's `build/test-home` and wi
 | `comando.recordIntents` | system property | `false` | write the intent log to `logs/` in the data root |
 | `comando.prefsNode` | system property | `dev/marregui/comando` | the Java preferences node for window layout |
 | `comando.offScreen` | system property | `false` | `true` opens the window undecorated, left of every screen, never taking the focus; set by `:app:uiTest`, `:app:snapshot` and `:app:hero` |
-| `CLAUDE_CONFIG_DIR` | environment | unset | the root comando's sessions run on, in place of `~/.claude` or `~/.claude/kit` ([Workbench §7.1](workbench.md#71-the-root)) |
+| `CLAUDE_CONFIG_DIR` | environment | unset | the root comando's sessions run on, in place of `~/.claude` or `~/.claude/comando-kit` ([Workbench §7.1](workbench.md#71-the-root)) |
 
 System properties go to the JVM through `COMANDO_OPTS` (or `JAVA_OPTS`) for the installed launcher:
 
