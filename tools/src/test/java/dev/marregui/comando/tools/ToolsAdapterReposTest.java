@@ -61,6 +61,38 @@ class ToolsAdapterReposTest {
         }
     }
 
+    /**
+     * The kit's layout: a folder that is itself a repository's top (Claude Code's folder, the kit), which ignores a
+     * repository inside it (the brain), configured beside folders of that inner one. Each folder's changes come from its
+     * own repository: the kit's from the kit, the brain's from the brain.
+     */
+    @Test
+    void aFolderThatIsARepositorysTopIsReadBesideTheRepositoryItIgnoresInside(@TempDir Path dir) throws Exception {
+        Path kit = dir.toRealPath();
+        GitTest.git(kit, "init", "-q");
+        Files.writeString(kit.resolve(".gitignore"), "BRAIN/\n");
+        Files.createDirectories(kit.resolve("hooks"));
+        Files.writeString(kit.resolve("hooks/guard.py"), "a = 1\n");
+        GitTest.git(kit, "add", "-A");
+        GitTest.git(kit, "commit", "-q", "-m", "kit");
+        Path brain = Files.createDirectories(kit.resolve("BRAIN"));
+        GitTest.git(brain, "init", "-q");
+        Files.createDirectories(brain.resolve("MEMORY"));
+        Files.writeString(brain.resolve("MEMORY/m.md"), "m\n");
+        GitTest.git(brain, "add", "-A");
+        GitTest.git(brain, "commit", "-q", "-m", "brain");
+        Files.writeString(kit.resolve("hooks/guard.py"), "a = 2\n");
+        Files.writeString(brain.resolve("MEMORY/m.md"), "n\n");
+        try (ToolsAdapter tools = adapter()) {
+            tools.watchRepos(List.of(new FolderRoot("Kit", kit.toString(), "", List.of("BRAIN", ".git")),
+                    folder("Memory", brain.resolve("MEMORY"))), true);
+            Intent.ReposLoaded loaded = sink.await(Intent.ReposLoaded.class, r -> r.repos().size() == 2, WAIT);
+            assertThat(loaded.repos()).extracting(RepoStatus::root).containsExactly(kit.toString(), brain.toString());
+            assertThat(loaded.repos().get(0).changes()).extracting(RepoStatus.FileChange::path).containsExactly("hooks/guard.py");
+            assertThat(loaded.repos().get(1).changes()).extracting(RepoStatus.FileChange::path).containsExactly("MEMORY/m.md");
+        }
+    }
+
     @Test
     void aChangeIsReadAndSent(@TempDir Path dir) throws Exception {
         Path root = GitTest.repo(dir.toRealPath());

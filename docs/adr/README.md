@@ -114,3 +114,4 @@ has the same shape:
 | [94](0094-links-in-both-styles-everywhere.md) | Links in both styles, followed everywhere at a double click | 2026-10-27 | Miguel and Claude | accepted |
 | [95](0095-the-files-tab-holds-no-code-repositories.md) | The Files tab holds no code repositories | 2026-10-27 | Miguel and Claude | accepted |
 | [96](0096-a-tint-chosen-in-actions.md) | A tint, chosen in Actions or beside Clear; the ground stays the transcript's; attention stays gold | 2026-10-27 | Miguel and Claude | accepted |
+| [97](0097-a-changed-files-trail-of-arrows.md) | A changed file's trail of arrows, as a new file's trail of dots | 2026-10-27 | Miguel and Claude | accepted |

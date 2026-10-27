@@ -419,7 +419,9 @@ edited and saved like any other; a `.log` stays read-only.
   carry a dot in the tint after the name, so the closed folders to open are marked from the folder's row down. Once the new
   file is opened (in a panel or the side pane, from any place) it reads as any other file, without tint or dot, and
   counts for its folders no more; comando keeps the opened files in `opened-files`
-  ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)).
+  ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)). A file git tracks that differs from `HEAD`
+  (changed, added, renamed, in conflict) and every folder on the way down to it carry the rising arrow after the name,
+  until a commit or a roll back clears it; opening the file does not ([record 97](adr/0097-a-changed-files-trail-of-arrows.md)).
 - **Repository marks.** A repository's top folder (a folder row, such as the kit's, or a subfolder, such as the
   brain) has the git icon, and a rising arrow after its name while the repository has changes; hovering
   it says its branch (or a detached `HEAD`) and what it holds uncommitted, by kind ("On main · 3 uncommitted: 2

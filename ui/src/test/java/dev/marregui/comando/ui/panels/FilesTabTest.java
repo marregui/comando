@@ -374,13 +374,20 @@ class FilesTabTest {
         Icon mark = Icons.get(FilesTab.NEW_ICON);
         assertThat(marks[0]).as("the repository's row: the mark of changes and the dot, the trail's start").isInstanceOf(RowIcon.class);
         assertThat(marks[0].getIconWidth()).isEqualTo(Icons.get(FilesTab.CHANGES_ICON).getIconWidth() + 2 + mark.getIconWidth());
-        assertThat(Arrays.copyOfRange(marks, 1, marks.length)).as("the trail runs from it down to the new file")
-                .containsExactly(mark, mark, mark, null, null, null);
+        Icon arrow = Icons.get(FilesTab.CHANGES_ICON);
+        assertThat(Arrays.copyOfRange(marks, 1, marks.length)).as("the dots run down to the new file, the arrows to the changed one")
+                .containsExactly(mark, mark, mark, arrow, arrow, null);
         assertThat(selected[0]).as("a selected row loses its colour, not its mark").isSameAs(mark);
         f.edt(() -> {
             Rectangle r = f.tree().getRowBounds(1);
             String tip = f.tree().getToolTipText(new MouseEvent(f.tree(), MouseEvent.MOUSE_MOVED, 0, 0, r.x + 4, r.y + r.height / 2, 0, false));
             assertThat(tip).isEqualTo(FilesTab.NEW_TIP);
+            Rectangle src = f.tree().getRowBounds(4);
+            assertThat(f.tree().getToolTipText(new MouseEvent(f.tree(), MouseEvent.MOUSE_MOVED, 0, 0, src.x + 4, src.y + src.height / 2, 0, false)))
+                    .isEqualTo(FilesTab.CHANGED_TIP);
+            Rectangle a = f.tree().getRowBounds(5);
+            assertThat(f.tree().getToolTipText(new MouseEvent(f.tree(), MouseEvent.MOUSE_MOVED, 0, 0, a.x + 4, a.y + a.height / 2, 0, false)))
+                    .isEqualTo(FilesTab.CHANGED_FILE_TIP);
         });
 
 
@@ -396,7 +403,8 @@ class FilesTabTest {
                 colors[i] = f.tab.colorOf(node(f.tree(), i));
             }
         });
-        assertThat(marks).containsExactly(Icons.get(FilesTab.CHANGES_ICON), null, null, null, null, null, null);
+        assertThat(marks).as("the changed file's trail stays until it is committed")
+                .containsExactly(arrow, null, null, null, arrow, arrow, null);
         assertThat(colors).as("the repository and src still hold the modified file")
                 .containsExactly(Theme.VCS_MODIFIED, null, null, null, Theme.VCS_MODIFIED, Theme.VCS_MODIFIED, null);
         f.edt(() -> {

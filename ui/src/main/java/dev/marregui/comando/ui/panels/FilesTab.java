@@ -89,6 +89,9 @@ final class FilesTab {
     /** After the name of a new (untracked) file and of each folder on the way down to one. */
     static final String NEW_ICON = "new-file";
     static final String NEW_TIP = "Open to reach the new files inside, which git does not track yet";
+    /** On a folder on the way down to a changed file, and on the file: the trail of the rising arrow (record 97). */
+    static final String CHANGED_TIP = "Open to reach the files inside that differ from the last commit";
+    static final String CHANGED_FILE_TIP = "Differs from the last commit; right-click to compare with HEAD";
     /** Where a folder's top-level row is in a node's path: under the tree's hidden root. */
     static final int ROW = 1;
 
@@ -130,6 +133,8 @@ final class FilesTab {
     private Set<Path> marked = Set.of();
     /** The folders on the way down to a new file not opened yet. */
     private Set<Path> towardsNew = Set.of();
+    /** The folders on the way down to a file git tracks that differs from {@code HEAD}. */
+    private Set<Path> towardsChanged = Set.of();
     /** The arrow and the dot after one name, made once. */
     private Icon changedAndNew;
 
@@ -171,7 +176,8 @@ final class FilesTab {
             });
             t.colors(this::colorOf);
             t.nodeIcons(n -> repoAt(n).isPresent() ? Icons.get(GIT_ICON) : null);
-            t.tips(n -> repoAt(n).map(FilesTab::repoTip).or(() -> rowTip(n)).orElse(holdsNew(n) ? NEW_TIP : null));
+            t.tips(n -> repoAt(n).map(FilesTab::repoTip).or(() -> rowTip(n))
+                    .orElse(holdsNew(n) ? NEW_TIP : isChanged(n) ? CHANGED_FILE_TIP : holdsChanged(n) ? CHANGED_TIP : null));
             t.trailing(this::marks);
             // one click opens or closes a folder; a double click on a folder's row shows its changes instead
             t.toggleOnClick(true);
@@ -367,6 +373,7 @@ final class FilesTab {
     private void remark() {
         Set<Path> holding = new HashSet<>();
         Set<Path> towards = new HashSet<>();
+        Set<Path> towardsTracked = new HashSet<>();
         for (RepoStatus r : changes.repos()) {
             Path root = Path.of(r.root()).toAbsolutePath().normalize();
             for (RepoStatus.FileChange c : r.changes()) {
@@ -376,13 +383,12 @@ final class FilesTab {
                     continue;
                 }
                 addFolders(file, root, holding);
-                if (fresh) {
-                    addFolders(file, root, towards);
-                }
+                addFolders(file, root, fresh ? towards : towardsTracked);
             }
         }
         marked = holding;
         towardsNew = towards;
+        towardsChanged = towardsTracked;
         // a mark that appears or goes changes a row's width, which a repaint alone would not take
         tree.rowsChanged();
         found.rowsChanged();
@@ -433,6 +439,19 @@ final class FilesTab {
     /** Whether {@code n} is a folder (a folder row or a subfolder) on the way down to a new file not opened yet. */
     boolean holdsNew(DefaultMutableTreeNode n) {
         return folderPath(n).filter(p -> towardsNew.contains(p.toAbsolutePath().normalize())).isPresent();
+    }
+
+    /** Whether {@code n} is a file git tracks that differs from {@code HEAD}: changed, added, renamed, in conflict. */
+    boolean isChanged(DefaultMutableTreeNode n) {
+        if (!(n.getUserObject() instanceof ViewSpec.TreeNode node) || !node.link().startsWith(SourceLinks.SCHEME)) {
+            return false;
+        }
+        return changes.of(Path.of(SourceLinks.path(node.link()))).filter(k -> k != RepoStatus.Kind.UNTRACKED).isPresent();
+    }
+
+    /** Whether {@code n} is a folder (a folder row or a subfolder) on the way down to a file {@link #isChanged}. */
+    boolean holdsChanged(DefaultMutableTreeNode n) {
+        return folderPath(n).filter(p -> towardsChanged.contains(p.toAbsolutePath().normalize())).isPresent();
     }
 
     /** The repository whose top folder node {@code n} is, a folder row or a subfolder; empty for any other node. */
@@ -502,11 +521,13 @@ final class FilesTab {
 
     /**
      * The marks after a node's name: a row's rising arrow while what it holds differs from {@code HEAD} (a repository's
-     * top folder's anywhere), and the dot on the way down to a new file not opened yet; both on a row that has both.
+     * top folder's anywhere), and the same arrow on the way down to each file git tracks that differs and on the file
+     * (record 97); the dot on the way down to a new file not opened yet; both on a node that has both.
      */
     private Icon marks(DefaultMutableTreeNode n) {
         boolean changed = repoAt(n).filter(r -> !r.changes().isEmpty()).isPresent()
-                || isRow(n) && folderPath(n).filter(changes::holdsChanges).isPresent();
+                || isRow(n) && folderPath(n).filter(changes::holdsChanges).isPresent()
+                || isChanged(n) || holdsChanged(n);
         boolean fresh = isNew(n) || holdsNew(n);
         if (changed && fresh) {
             if (changedAndNew == null) {
