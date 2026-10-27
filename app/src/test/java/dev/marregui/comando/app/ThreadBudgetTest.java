@@ -89,7 +89,8 @@ class ThreadBudgetTest {
             app.close();
         }
         Awaitility.await("nothing of comando's left after close").atMost(Duration.ofSeconds(20))
-                .untilAsserted(() -> assertThat(comandos(before)).as("comando's platform threads after close").isEmpty());
+                .untilAsserted(() -> assertThat(comandos(before)).as(() -> "comando's platform threads after close, "
+                        + "each with where it stands, to name the code that started it:\n" + stacks(before)).isEmpty());
     }
 
     /** The virtual threads' scheduler's carriers: one per core at most while none is held in file or pipe I/O. */
@@ -106,6 +107,25 @@ class ThreadBudgetTest {
             }
         });
         return out;
+    }
+
+    /**
+     * Each thread {@link #comandos} counts: its class, whether a daemon, its state and its top frames. A thread named
+     * by the JDK's default ({@code Thread-5}) says nothing of its owner; its frames do (macOS CI, 2026-10-27).
+     */
+    private static String stacks(Set<Long> before) {
+        StringBuilder out = new StringBuilder();
+        Thread.getAllStackTraces().forEach((t, frames) -> {
+            if (t.isAlive() && !t.isVirtual() && !before.contains(t.threadId())
+                    && NOT_COMANDO.stream().noneMatch(t.getName()::startsWith)) {
+                out.append(t.getName()).append(" (").append(t.getClass().getName()).append(t.isDaemon() ? ", daemon, " : ", ")
+                        .append(t.getState()).append(")\n");
+                for (int i = 0; i < Math.min(12, frames.length); i++) {
+                    out.append("    at ").append(frames[i]).append('\n');
+                }
+            }
+        });
+        return out.toString();
     }
 
     /** Every live platform thread by id; virtual threads are not listed by the JDK. */
