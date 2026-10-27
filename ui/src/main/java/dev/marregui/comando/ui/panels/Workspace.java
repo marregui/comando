@@ -23,6 +23,7 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.tabs.MovableTabs;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.Icon;
@@ -106,6 +107,8 @@ public final class Workspace {
     /** Panels whose work ended while another tab was in front, until the user looks at them. */
     private final Set<PanelId> unseen = new HashSet<>();
     private final Map<PanelId, TabStatus> statuses = new HashMap<>();
+    /** The theme chosen, beside New panel (record 104). */
+    private final ThemeButton theme = new ThemeButton();
     /** One wheel for every spinning tab; the timer turns it and repaints only the spinning tabs' bounds. */
     private final SpinnerIcon spinner = new SpinnerIcon(16);
     private final Timer spin = new Timer(SpinnerIcon.STEP_MILLIS, e -> spinTabs());
@@ -192,13 +195,17 @@ public final class Workspace {
         add.getAccessibleContext().setAccessibleName("New panel");
         add.putClientProperty("JButton.buttonType", "toolBarButton");
         add.addActionListener(e -> newPanel());
-        // the look stretches the trailing component over the space the tabs leave: the button sits at its right end,
-        // centred in the tabs' height, rather than in the middle of that space
+        // the look stretches the trailing component over the space the tabs leave: the buttons sit at its right end,
+        // centred in the tabs' height, rather than in the middle of that space; the theme's swatch left of New panel,
+        // which keeps the corner (record 104)
         JPanel trailing = new JPanel(new GridBagLayout());
         trailing.setOpaque(false);
         GridBagConstraints at = new GridBagConstraints();
         at.weightx = 1;
         at.anchor = GridBagConstraints.EAST;
+        at.insets = new Insets(0, 0, 0, Theme.SPACE_XS);
+        trailing.add(theme, at);
+        at.weightx = 0;
         at.insets = new Insets(0, 0, 0, Theme.GAP);
         trailing.add(add, at);
         tabs.putClientProperty("JTabbedPane.trailingComponent", trailing);
@@ -414,6 +421,11 @@ public final class Workspace {
             return;
         }
         intents.dispatch(new Intent.RemovePanel(deleted.panel()));
+    }
+
+    /** {@code chosen} hears the theme picked from the swatch beside New panel. */
+    public void onThemeChosen(Consumer<NamedTheme> chosen) {
+        theme.onChosen(chosen);
     }
 
     /** How a tab's close button closes its panel: the shell asks first when the panel's shell runs a job. */

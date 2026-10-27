@@ -496,7 +496,7 @@ class UiKeysTest {
     }
 
     @Test
-    void theThemeIsChosenInActionsOrBesideClearEveryPanelTakesItAndTheNextWindowKeepsIt() throws Exception {
+    void theThemeIsChosenInActionsOrBesideNewPanelEveryPanelTakesItAndTheNextWindowKeepsIt() throws Exception {
         Preferences prefs = Preferences.userRoot().node(PREFS);
         try {
             Window w = open("mac");
@@ -505,7 +505,10 @@ class UiKeysTest {
                     b -> "Choose the theme".equals(b.getAccessibleContext().getAccessibleName())).orElse(null), WAIT_MILLIS);
             List<String> row = onEdt(() -> Stream.of(swatch.getParent().getComponents())
                     .map(c -> ((JComponent) c).getAccessibleContext().getAccessibleName()).toList());
-            assertThat(row).as("left of Clear, the one chooser").containsExactly("Choose the theme", "Clear the Session tab");
+            assertThat(row).as("at the top right, left of New panel (record 104)").containsExactly("Choose the theme", "New panel");
+            assertThat(onEdt(() -> swatch.getToolTipText())).as("the tooltip names the theme").startsWith("Theme: " + NamedTheme.GRAPHITE_GOLD.label + ";");
+            assertThat(onEdt(() -> find(w.frame(), AbstractButton.class,
+                    b -> "Clear the Session tab".equals(b.getAccessibleContext().getAccessibleName())))).as("no Clear button").isEmpty();
             JMenu menu = onEdt(() -> {
                 JMenuBar bar = w.frame().getJMenuBar();
                 for (int i = 0; i < bar.getMenuCount(); i++) {
@@ -562,6 +565,7 @@ class UiKeysTest {
             });
             assertThat(Theme.groundChosen()).isEqualTo(Ground.MIDNIGHT);
             assertThat(Theme.tint()).isEqualTo(Tint.ELECTRIC_BLUE);
+            assertThat(onEdt(() -> swatch.getToolTipText())).as("the tooltip follows").startsWith("Theme: " + NamedTheme.MIDNIGHT_BLUE.label + ";");
             assertThat(prefs.get("theme.ground", null)).as("kept").isEqualTo("MIDNIGHT");
             assertThat(prefs.get("theme.tint", null)).as("kept").isEqualTo("ELECTRIC_BLUE");
             assertThat(tintPixels(canvas, Tint.ELECTRIC_BLUE)).as("the answer laid out again in the tint, at once").isPositive();
@@ -581,7 +585,7 @@ class UiKeysTest {
             assertThat(onEdt(() -> editor.getSyntaxScheme().getStyle(TokenTypes.COMMENT_DOCUMENTATION).font.getSize2D()))
                     .as("its scheme at the zoomed size").isEqualTo(zoomed.getSize2D());
 
-            // the same choice from the swatch beside Clear: its menu ticks the theme chosen, and Actions ▸ Theme follows
+            // the same choice from the swatch beside New panel: its menu ticks the theme chosen, and Actions ▸ Theme follows
             onEdt(() -> {
                 swatch.doClick();
                 return null;
@@ -610,6 +614,15 @@ class UiKeysTest {
                 Theme.ground(themes[i].ground);
                 Theme.tint(themes[i].tint);
             }, Path.of("build/snapshots/themes.png"));
+
+            // Clear, from the palette alone: it empties the Session tab once the turn has ended
+            Command clear = w.ui().commands().stream().filter(c -> "transcript.clear".equals(c.id())).findFirst().orElseThrow();
+            assertThat(onEdt(() -> clear.enabled().getAsBoolean())).as("Clear offered for the ended turn").isTrue();
+            onEdt(() -> {
+                clear.run().run();
+                return null;
+            });
+            assertThat(w.intents()).as("the Session tab cleared").contains(new Intent.ClearTranscript("gilt"));
 
             SwingUtilities.invokeAndWait(() -> {
                 Theme.ground(Ground.GRAPHITE);

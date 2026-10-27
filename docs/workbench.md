@@ -104,9 +104,12 @@ Any number of document panels may be attached to a session
   answered, the others' until the tab is looked at. A waiting request or a failure bounces the Dock while the window
   is not active.
 - **The lower panel** follows the focused panel: its last SQL run, its session's transcript, its terminal. Approvals
-  lists every session's requests. At its right end, a swatch of the theme chosen (its ground with a bar of its tint)
-  opens the themes, as Actions ▸ Theme does, and Clear empties the Session tab
-  while the conversation goes on.
+  lists every session's requests. Its tab strip holds the tabs alone; the palette's "Clear the Session tab" empties
+  the Session tab once the turn has ended, while the conversation goes on
+  ([record 104](adr/0104-the-theme-beside-new-panel.md)).
+- **The theme's swatch**, the theme's ground with a bar of its tint, sits at the top right, left of New panel; its
+  tooltip names the theme, and a click opens the six, as Actions ▸ Theme does
+  ([record 104](adr/0104-the-theme-beside-new-panel.md)).
 - **Actions ▸ Theme** chooses a ground and the tint made for it together: Graphite and gold (the default), Espresso
   and champagne, Aubergine and yellow gold, Midnight and electric blue, Evergreen and tropical forest, Slate and silver;
   kept across restarts. Cards, borders and the prompt's bubble are laid over the ground and follow it

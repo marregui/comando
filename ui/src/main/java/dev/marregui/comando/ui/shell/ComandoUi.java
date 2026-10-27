@@ -362,7 +362,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.topics(topics, deps.transcripts()::of);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
-        lower.onThemeChosen(this::themeChosen);
+        workspace.onThemeChosen(this::themeChosen);
         workspace.onRunsProgram(id -> lower.terminals().runningJob(id).isPresent());
         side = new SidePane(ctx, widgets);
         sidebar = new SessionsSidebar(deps.intents(), new SessionsSidebar.Dialogs() {
@@ -806,7 +806,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /**
-     * A theme was chosen, from Actions ▸ Theme or the swatch beside Clear: kept, and every window takes its ground and
+     * A theme was chosen, from Actions ▸ Theme or the swatch beside New panel: kept, and every window takes its ground and
      * its tint at once (record 103).
      */
     private void themeChosen(NamedTheme theme) {
@@ -1051,6 +1051,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("session.interrupt", "Interrupt the turn", key(KeyEvent.VK_PERIOD, shortcut | SHIFT),
                 () -> focusedSession().ifPresent(x -> deps.intents().dispatch(new Intent.InterruptSession(x.name()))),
                 () -> focusedSession().map(SessionState::isBusy).orElse(false));
+        // the Session tab emptied, the conversation going on: from the palette alone, once a turn has ended (record 104)
+        cmd("transcript.clear", "Clear the Session tab", null, lower::clearTranscript, lower::canClearTranscript);
         // as the panel's and the row's buttons do: only a running session has a conversation to compact
         cmd("session.compact", "Compact the conversation", null, () -> focusedSession().ifPresent(x ->
                         deps.intents().dispatch(new Intent.SessionCommand(x.name(), SessionSpec.COMPACT_COMMAND))),

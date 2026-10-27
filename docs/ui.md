@@ -210,7 +210,7 @@ serif, which covers most of Unicode on every desktop.
 | What | Colour |
 |---|---|
 | text outside the prompt bubble and the tool cards: Claude's text, thinking, notes, hook lines, the turn's time | a warm ivory, low in saturation (`Theme.TRANSCRIPT_TEXT`, `#E2DCCD`) |
-| Claude's headings, list marks, a quote's bar, a table's head | the theme's tint, chosen in Actions ▸ Theme or beside the Session tab's Clear (`Theme.tint()`, Treasure gold by default) ([record 83](adr/0083-one-gold-chosen-beside-clear.md), [record 96](adr/0096-a-tint-chosen-in-actions.md)) |
+| Claude's headings, list marks, a quote's bar, a table's head | the theme's tint, chosen in Actions ▸ Theme or from the swatch left of New panel (`Theme.tint()`, Treasure gold by default) ([record 83](adr/0083-one-gold-chosen-beside-clear.md), [record 96](adr/0096-a-tint-chosen-in-actions.md)) |
 | headings, first three levels | a serif: New York on macOS, else Georgia or another installed serif, else Java's logical serif. The first two levels run along the tint's ramp from highlight to shade, with a rule under them. Sizes ×1.45, ×1.25, ×1.1 of the text's (`Theme.HEADING_SCALE`), in rendered pages too |
 | bold | a brighter ivory |
 | inline code | a quiet teal of the content palette, on a ground a step above the panels' ([record 101](adr/0101-content-colours-derived-from-the-theme.md)) |

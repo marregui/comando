@@ -12,9 +12,6 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.theme.Ground;
-import dev.marregui.comando.ui.kit.theme.GroundIcon;
-import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import dev.marregui.comando.ui.widget.WidgetRegistry;
@@ -22,20 +19,13 @@ import dev.marregui.comando.ui.widgets.approval.ApprovalInbox;
 import dev.marregui.comando.ui.widgets.transcript.TranscriptView;
 import dev.marregui.comando.ui.widgets.transcript.TranscriptWidget;
 
-import javax.swing.ButtonGroup;
-import javax.swing.JButton;
 import javax.swing.JComponent;
-import javax.swing.JPanel;
-import javax.swing.JPopupMenu;
-import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
-import java.awt.FlowLayout;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 /**
  * The lower panel: Session (the focused panel's transcript), Approvals (every session), Terminal (the focused
@@ -61,13 +51,6 @@ public final class LowerPanel {
     private final ApprovalInbox inbox;
     private final ViewTabs views;
     private final TerminalTabs terminals = new TerminalTabs();
-    private final JButton clearSession = new JButton(Icons.get("clear"));
-    /**
-     * Beside Clear: a swatch of the theme chosen, its ground with its tint's bar, which opens the themes, as Actions ▸
-     * Theme does (record 103).
-     */
-    private final JButton theme = new JButton(new GroundIcon((Ground) null));
-    private Consumer<NamedTheme> themeChosen = t -> { };
     private AppState state;
     private boolean rendering;
     private String transcriptSession = "";
@@ -91,25 +74,7 @@ public final class LowerPanel {
         tabs.putClientProperty("JTabbedPane.tabType", "underlined");
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         views = new ViewTabs(tabs, FIXED_TABS, Placement.LOWER, registry, context);
-        // icons alone, as every icon button of the window
-        clearSession.putClientProperty("JButton.buttonType", "toolBarButton");
-        theme.putClientProperty("JButton.buttonType", "toolBarButton");
-        clearSession.setFocusable(false);
-        clearSession.getAccessibleContext().setAccessibleName("Clear the Session tab");
-        clearSession.addActionListener(e -> {
-            if (!transcriptSession.isEmpty()) {
-                context.intents().dispatch(new Intent.ClearTranscript(transcriptSession));
-            }
-        });
-        theme.setFocusable(false);
-        theme.getAccessibleContext().setAccessibleName("Choose the theme");
-        theme.setToolTipText("Choose the theme: the ground of every panel and its tint; also in Actions");
-        theme.addActionListener(e -> themeMenu().show(theme, 0, theme.getHeight()));
-        JPanel trailing = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
-        trailing.setOpaque(false);
-        trailing.add(theme);
-        trailing.add(clearSession);
-        tabs.putClientProperty("JTabbedPane.trailingComponent", trailing);
+        // no buttons at the strip's end: the theme is chosen at the top right, Clear from the palette (record 104)
         tabs.addChangeListener(e -> {
             if (rendering) {
                 return;
@@ -141,25 +106,6 @@ public final class LowerPanel {
 
     public JComponent component() {
         return tabs;
-    }
-
-    /** {@code chosen} hears the theme picked from the menu beside Clear. */
-    public void onThemeChosen(Consumer<NamedTheme> chosen) {
-        themeChosen = chosen;
-    }
-
-    /** One entry per theme, each with its swatch, in Actions ▸ Theme's order; the theme chosen is ticked. */
-    JPopupMenu themeMenu() {
-        JPopupMenu menu = new JPopupMenu();
-        ButtonGroup group = new ButtonGroup();
-        NamedTheme chosen = NamedTheme.chosen().orElse(null);
-        for (NamedTheme t : NamedTheme.values()) {
-            JRadioButtonMenuItem item = new JRadioButtonMenuItem(t.label, new GroundIcon(t), t == chosen);
-            item.addActionListener(e -> themeChosen.accept(t));
-            group.add(item);
-            menu.add(item);
-        }
-        return menu;
     }
 
     public ResultsView results() {
@@ -240,7 +186,6 @@ public final class LowerPanel {
             markResults(s);
             markSession();
             state = s;
-            showClear();
         } finally {
             rendering = false;
         }
@@ -286,26 +231,22 @@ public final class LowerPanel {
         transcriptSession = session;
         transcript.render(session.isEmpty() ? null : new TranscriptView(session, transcripts.of(session)));
         markSession();
-        showClear();
     }
 
     /**
-     * Clear shows while Session is in front with a session's transcript, and acts once there are blocks and no turn
-     * writes more.
+     * Whether the Session tab can be cleared, from the palette (record 104): it shows a session's transcript, which has
+     * blocks, and no turn writes more. The conversation itself goes on.
      */
-    private void showClear() {
-        boolean shown = tabs.getSelectedIndex() == SESSION && !transcriptSession.isEmpty();
+    public boolean canClearTranscript() {
         boolean busy = state != null && state.session(transcriptSession).map(SessionState::isBusy).orElse(false);
-        Transcript t = transcriptSession.isEmpty() ? null : transcripts.of(transcriptSession);
-        clearSession.setVisible(shown);
-        clearSession.setEnabled(shown && !busy && t != null && t.size() > 0);
-        clearSession.setToolTipText(busy ? "Clear the Session tab once the turn has ended"
-                : "Clear the Session tab; the conversation itself goes on");
+        return !transcriptSession.isEmpty() && !busy && transcripts.of(transcriptSession).size() > 0;
     }
 
-    /** For tests: whether Clear is shown and acts. */
-    boolean clearOffered() {
-        return clearSession.isVisible() && clearSession.isEnabled();
+    /** Empties the Session tab, when {@link #canClearTranscript()}. */
+    public void clearTranscript() {
+        if (canClearTranscript()) {
+            context.intents().dispatch(new Intent.ClearTranscript(transcriptSession));
+        }
     }
 
     private static JTabbedPane named(JTabbedPane tabs, String name) {

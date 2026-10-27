@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-27 | accepted | Miguel and Claude |
+| 2026-10-27 | accepted; the swatch's place replaced by [record 104](0104-the-theme-beside-new-panel.md) | Miguel and Claude |
 
 ## 1. Context
 

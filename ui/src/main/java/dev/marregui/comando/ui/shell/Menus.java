@@ -145,7 +145,7 @@ final class Menus {
             a.put("panel." + i, "Panels");
         }
         put(a, "Run", "run", "run.claude", "run.sql", "terminal.run", "run.stop", "tools.gradle");
-        put(a, "Session", "session.toggle", "session.interrupt", "session.compact", "panel.bindSession", "session.dialog",
+        put(a, "Session", "session.toggle", "session.interrupt", "session.compact", "transcript.clear", "panel.bindSession", "session.dialog",
                 "session.import");
         SessionSpec.MODELS.forEach(m -> a.put("session.model." + m, "Session ▸ Model"));
         SessionSpec.EFFORTS.forEach(e -> a.put("session.effort." + e, "Session ▸ Effort"));

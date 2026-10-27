@@ -270,7 +270,7 @@ choose.
 The **Session** tab shows the whole turn: your prompt in a bubble, every tool call as a card with its input and
 result, and everything else (Claude's text, notes, the turn's time, the "Thinking…" line while Claude thinks) in warm
 ivory on near-black, with headings, list marks and table heads in the tint, Treasure gold at first. The answer that
-ends a turn has a bar of the tint beside it. **Actions ▸ Theme**, or the swatch beside the tab's Clear, chooses another
+ends a turn has a bar of the tint beside it. **Actions ▸ Theme**, or the swatch at the top right beside **+**, chooses another
 theme, a ground and its tint together: Graphite and gold, Espresso and champagne, Aubergine and yellow gold, Midnight
 and electric blue, Evergreen and tropical forest, Slate and silver. The editors', terminal's and diffs' colours follow.
 
