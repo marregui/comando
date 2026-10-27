@@ -29,6 +29,7 @@ import java.util.concurrent.TimeUnit;
  */
 final class CodexUsageReader {
 
+    private static final System.Logger LOG = System.getLogger(CodexUsageReader.class.getName());
     static final Duration TIMEOUT = Duration.ofSeconds(10);
     private static final int WEEK_MINUTES = 10_080;
     private static final int MONTH_MINUTES = 43_200;
@@ -58,14 +59,38 @@ final class CodexUsageReader {
         return "codex";
     }
 
+    private static PlanUsage exitedWithoutAnswering(Process p) {
+        return PlanUsage.failed(PlanUsage.CODEX, "'codex app-server' exited with code " + p.exitValue() + " without answering",
+                System.currentTimeMillis());
+    }
+
+    /** Closes the server's input; a server that already exited makes the close fail, which changes nothing. */
+    private static void closeQuietly(OutputStream in) {
+        try {
+            in.close();
+        } catch (IOException e) {
+            LOG.log(System.Logger.Level.DEBUG, "closing 'codex app-server' input: " + e.getMessage());
+        }
+    }
+
     /** Runs the read; blocks up to {@code timeout}. Call it off the EDT and the reducer. */
     static PlanUsage read(String executable, ObjectMapper json, Duration timeout, ZoneId zone) {
         Process p = null;
         try {
             p = new ProcessBuilder(executable, "app-server").redirectError(ProcessBuilder.Redirect.DISCARD).start();
-            try (OutputStream in = p.getOutputStream()) {
+            OutputStream in = p.getOutputStream();
+            try {
                 in.write(REQUESTS.getBytes(StandardCharsets.UTF_8));
                 in.flush();
+            } catch (IOException e) {
+                // a server that exits at once can close its end before the requests are written (a broken pipe on
+                // Linux): say how it exited, as when it exits after reading them
+                if (p.waitFor(1, TimeUnit.SECONDS)) {
+                    return exitedWithoutAnswering(p);
+                }
+                throw e;
+            }
+            try {
                 long deadline = System.nanoTime() + timeout.toNanos();
                 InputStream out = p.getInputStream();
                 ByteArrayOutputStream line = new ByteArrayOutputStream();
@@ -94,10 +119,13 @@ final class CodexUsageReader {
                         }
                     }
                 }
+            } finally {
+                closeQuietly(in);
             }
-            return PlanUsage.failed(PlanUsage.CODEX, p.isAlive()
-                    ? "'codex app-server' did not answer within " + timeout.toMillis() + " ms"
-                    : "'codex app-server' exited with code " + p.exitValue() + " without answering", System.currentTimeMillis());
+            return p.isAlive()
+                    ? PlanUsage.failed(PlanUsage.CODEX, "'codex app-server' did not answer within " + timeout.toMillis() + " ms",
+                    System.currentTimeMillis())
+                    : exitedWithoutAnswering(p);
         } catch (IOException e) {
             return PlanUsage.failed(PlanUsage.CODEX, "cannot run '" + executable + "': " + e.getMessage(), System.currentTimeMillis());
         } catch (InterruptedException e) {
