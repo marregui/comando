@@ -52,6 +52,13 @@ class MarkdownDocTest {
     }
 
     @Test
+    void aCodeSpanIsAsWrittenButForItsSourceReferences() {
+        Para.Text p = (Para.Text) MarkdownDoc.parse("`https://example.org/x` and `[[notes]]` but `db/Lane.java:118`").getFirst();
+        assertThat(p.spans()).containsExactly(new Span("https://example.org/x", Span.CODE, ""), Span.plain(" and "),
+                new Span("[[notes]]", Span.CODE, ""), Span.plain(" but "), new Span("db/Lane.java:118", Span.CODE, "comando-file:db/Lane.java#118"));
+    }
+
+    @Test
     void unchangedParagraphsCompareEqualWhileTheLastOneStreams() {
         List<Para> before = MarkdownDoc.parse("First paragraph.\n\nSecond, stre");
         List<Para> after = MarkdownDoc.parse("First paragraph.\n\nSecond, streaming on");

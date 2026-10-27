@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.widgets.transcript.doc;
 
 import dev.marregui.comando.ui.kit.text.Fences;
 import dev.marregui.comando.ui.kit.text.NoteLinks;
+import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.text.TextLinks;
 import org.commonmark.Extension;
 import org.commonmark.ext.gfm.tables.TableBlock;
@@ -38,7 +39,7 @@ import java.util.List;
 /**
  * Markdown to the transcript's paragraph list. A soft line break stays a line break: Claude's text uses
  * single newlines as line ends. Raw HTML is kept as literal text. {@code path:line} references in text and
- * code spans become links, and so do web addresses and {@code [[name]]} notes in text.
+ * code spans become links, and so do web addresses and {@code [[name]]} notes outside code spans.
  */
 public final class MarkdownDoc {
 
@@ -160,15 +161,20 @@ public final class MarkdownDoc {
 
     /**
      * Adds text, splitting out its links unless the text is inside a link: {@code path:line} references, web addresses,
-     * and {@code [[name]]} notes, shown as their labels ({@link TextLinks}).
+     * and {@code [[name]]} notes, shown as their labels ({@link TextLinks}). A code span is as written, as on the rendered
+     * page: only its {@code path:line} references are links.
      */
     private static void text(String text, int style, String href, List<Span> out) {
         if (!href.isEmpty()) {
             out.add(new Span(text, style, href));
             return;
         }
+        boolean code = (style & Span.CODE) != 0;
         int at = 0;
         for (TextLinks.Ref r : TextLinks.refs(text, false)) {
+            if (code && !r.href().startsWith(SourceLinks.SCHEME)) {
+                continue;
+            }
             if (r.start() > at) {
                 out.add(new Span(text.substring(at, r.start()), style, ""));
             }
