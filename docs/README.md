@@ -23,6 +23,6 @@ and fixed plan usage in the status bar.
 | `hero.png` | a session's panel: the query, the prompt, the transcript of the turn, the plot it placed | [README](../README.md) |
 | `approvals.png` | a tool's and a question's approval cards, a diff in the side pane | [README](../README.md), [Claude §3.1](claude.md#31-approval-cards) |
 | `sql.png` | a `SAMPLE BY` query and its result grid | [README](../README.md), [Workbench §3.2](workbench.md#32-results) |
-| `changes.png` | a repository in the Files tab and its uncommitted changes | [README](../README.md), [Workbench §5.1](workbench.md#51-changes) |
+| `changes.png` | a folder in the Files tab and its uncommitted changes | [README](../README.md), [Workbench §5.1](workbench.md#51-changes) |
 | `diff.png` | a file compared with `HEAD`, side by side | [README](../README.md), [Workbench §5.1](workbench.md#51-changes) |
 | `comando.png` | the icon, drawn from `app/src/main/icon/comando.svg` | [README](../README.md) |

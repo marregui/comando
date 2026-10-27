@@ -17,9 +17,8 @@ who checks a behaviour against the code; the [tutorial](tutorial.md) is the shor
 ### 1.1 One model for connections, sessions and folders
 
 A connection, a session and a folder of the Files tab are resources: configured, stored and listed in the sidebar.
-Each is written once as a resource kind. Connections and sessions are edited in one dialog; folders in two windows of
-their own, Configure ~/.claude folders and Configure repositories, which keep them in `folders.json`
-([§5](#5-the-files-tab)).
+Each is written once as a resource kind. Connections and sessions are edited in one dialog; folders in a window of
+their own, Configure ~/.claude folders, which keeps them in `folders.json` ([§5](#5-the-files-tab)).
 
 | Layer | Connection | Session | Folder |
 |---|---|---|---|
@@ -131,7 +130,7 @@ menu: the tab's own actions, then the window's commands for it with their keys.
 |---|---|
 | Sessions | New session…, Import stored conversations…, Sort: running first, then by name (on only after a drag ordered the rows by hand); New panel, Reopen closed panel |
 | Connections | New connection…; Start embedded QuestDB, Stop embedded QuestDB |
-| Files | Configure ~/.claude folders, Configure repositories ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)) |
+| Files | Configure ~/.claude folders ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)) |
 
 No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)): a row's menu edits,
 clones and removes it (`ResourceActions`). Removing something in use asks **Stop and remove**, **Disconnect and remove**
@@ -356,35 +355,32 @@ session: the nearest directory at or above its working directory with an executa
 
 ## 5. The Files tab
 
-The folders the user chose, one top-level row each, as a navigator of their folders and files
-([records 49, 51, 52, 55](adr/0055-the-files-tab-only-shows-folders-json-configures-it.md)). The tab only shows and
+The folders the user chose inside `~/.claude`, one top-level row each, as a navigator of their folders and files
+([records 49, 51, 52, 55](adr/0055-the-files-tab-only-shows-folders-json-configures-it.md)). It is no browser of code
+repositories: those are read in an IDE ([record 95](adr/0095-the-files-tab-holds-no-code-repositories.md)). The tab only shows and
 opens: it has no buttons, and writes nothing but the Trash of a deletable folder
 ([record 63](adr/0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md)). The files it opens are
 edited and saved like any other; a `.log` stays read-only.
 
 - **Folders** are resources ([§1.1](#11-one-model-for-connections-sessions-and-folders)): a unique name, a full path,
   an optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge, skills,
-  plugin), whether its entries go to the Trash (`deletable`), the file name that lists them (`listedIn`), and whether
-  it is a repository (`repository`). With a kit, its folders come first, as its `comando-kit.json` lists them
+  plugin), whether its entries go to the Trash (`deletable`) and the file name that lists them (`listedIn`); a
+  `repository` key, written by older versions, is ignored. With a kit, its folders come first, as its `comando-kit.json` lists them
   ([§7](#7-the-kit)). Without a kit and without `folders.json` there is one folder, Claude Code's (`~/.claude`),
   opening `CLAUDE.md` and leaving out Claude Code's transcripts, caches and per-session state; an emptied list stays
   empty. Here and below, `~/.claude` stands for the root comando's sessions run on ([§7.1](#71-the-root)).
-- **Repositories.** The folders configured as repositories are rows of one node, Repositories (its own icon), after
-  the other folders, which lie inside `~/.claude` ([record 71](adr/0071-repositories-in-the-files-tab.md)).
-- **Configuring.** The Files tab's menu (a right click on its header) opens the `~/.claude` folders window (its title
-  names Claude Code's folder wherever it is) or the repositories window (Configure repositories)
-  ([records 69, 71, 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)). The entries are on the
+- **Configuring.** The Files tab's menu (a right click on its header) and the Files menu open the `~/.claude` folders
+  window (its title names Claude Code's folder wherever it is)
+  ([records 69, 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md), [record 95](adr/0095-the-files-tab-holds-no-code-repositories.md)). The entries are on the
   left in the tab's order (+ chooses a folder first and names it after it, − takes one out, ↑ ↓ or ⌥↑ ⌥↓ move it), and
   the selected one's fields on the right, each field's name explaining it under the mouse. Each field is checked as it
-  is typed: a name used once in `folders.json`; a folder that exists and can be read, set only by choosing it (inside
-  `~/.claude` for a folder, a git repository's top folder for a repository); an index inside it whose own folder
-  exists; a listing file name. A field that fails is outlined in red and one line under the form says why, or notes
+  is typed: a name used once in `folders.json`; a folder that exists and can be read, set only by choosing it, inside
+  `~/.claude` (an entry elsewhere, as an older file's repository, is marked until taken out); an index inside it whose
+  own folder exists; a listing file name. A field that fails is outlined in red and one line under the form says why, or notes
   what Save will do. A pick outside `~/.claude`, or a file outside the entry's folder, is not taken, and that line says
   so. The index file and the listing file are typed or picked (…); a picked listing file gives its name. Under that
-  line, the git repository holding the folder: `repo: ~/.claude · master · 1 uncommitted`, or `repo: none`. A
-  repository has a name, its folder, an index file and the names left out; a folder has every field.
-- **Saving.** Save, on only when every entry passes, writes `folders.json` once, keeping the entries of the other
-  window, and creates the index file a folder inside `~/.claude` names but does not have, with a title and one line on
+  line, the git repository holding the folder: `repo: ~/.claude · master · 1 uncommitted`, or `repo: none`.
+- **Saving.** Save, on only when every entry passes, writes `folders.json` once, and creates the index file a folder inside `~/.claude` names but does not have, with a title and one line on
   how it is kept. Cancel or Esc drop the edits, asking first. The store checks `folders.json` every second: a change it
   did not write is read again and the tab follows; an entry that breaks the rules is left out with a notice; a file
   that does not parse keeps the tab's folders, says why and stays where it is. A `readOnly` key is ignored.
@@ -395,14 +391,14 @@ edited and saved like any other; a `.log` stays read-only.
 - **Bounds.** 12 levels; at most 80 000 names listed and 20 000 entries kept per folder tree; past a bound the folder
   ends with `…`. An unreadable subfolder says why and the rest stands.
 - **Clicks.** A click on a folder opens or closes it; on a file it selects. A double click opens a file in a panel
-  (Enter opens a file). On a folder's row (a folder of `~/.claude` or a repository) a double click shows the row's
+  (Enter opens a file). On a folder's row a double click shows the row's
   changes instead and leaves the row open or closed as it was; on a subfolder it does nothing more than its first
   click ([record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)). A text file of at most 2 MB opens in
   a panel bound to it; a larger one (to 4 MB) or a binary one shows in the side pane. Opening a folder opens no file;
   the first time, its newest date-named folder opens too.
 - **Menus.** A file's: Open in a panel, Edit in a panel (its text rather than rendered), and Compare with HEAD when it
   changed. A folder row's: Open ‹index file›. A folder row's and a subfolder's: Show changes in it (off, as No changes
-  in it, when it holds none): the Changes view of the repository holding it, `~/.claude` for a folder, inside it alone,
+  in it, when it holds none): the Changes view of the repository holding it (`~/.claude`'s, the brain's), inside it alone,
   its row named after the folder's row and the subfolders leading to it. A row of a folder inside the brain also
   offers Back up the brain ([§7.4](#74-back-up-the-brain)).
 - **Trash.** In a deletable folder, a file's or subfolder's menu moves the selection (⌘- or ⇧-click for several) to the
@@ -422,14 +418,14 @@ edited and saved like any other; a `.log` stays read-only.
   file is opened (in a panel or the side pane, from any place) it reads as any other file, without gold or dot, and
   counts for its folders no more; comando keeps the opened files in `opened-files`
   ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)).
-- **Repository marks.** A repository's top folder (a folder row or a subfolder) has the git icon (under Repositories,
-  where every row is one, a plain folder), and a rising arrow after its name while the repository has changes; hovering
+- **Repository marks.** A repository's top folder (a folder row, such as the kit's, or a subfolder, such as the
+  brain) has the git icon, and a rising arrow after its name while the repository has changes; hovering
   it says its branch (or a detached `HEAD`) and what it holds uncommitted, by kind ("On main · 3 uncommitted: 2
   modified, 1 untracked"). A folder's row inside a repository (KB, Memory, any folder of `~/.claude`) has the same
   arrow while what it holds differs from `HEAD`, and says so for what it holds ("On master · 2 uncommitted here: 1
   modified, 1 untracked"); a row holding both a change and a new file not opened yet shows the arrow, then the dot. A
-  double click on a row opens the Changes view of what it holds: a repository's row all of the repository, a folder's
-  row its folder only (KB's shows `KB/`, not the whole of `~/.claude`); with nothing to show, or no repository holding
+  double click on a row opens the Changes view of what it holds: a repository's top folder all of the repository, a
+  folder's row its folder only (KB's shows `KB/`, not the whole of `~/.claude`); with nothing to show, or no repository holding
   the folder, a balloon says so ([record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)). The open
   folders' repositories are read with them every 5 s, the others every 30 s
   ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)).
@@ -440,7 +436,7 @@ edited and saved like any other; a `.log` stays read-only.
 | Entry | Icon |
 |---|---|
 | a folder row | its icon setting: folder; a pencil, chip, book, bolt or puzzle piece on it |
-| Repositories; a repository's row | two folders with git's mark; a folder |
+| a git repository's top folder | folder with git's mark |
 | a folder; `work` | folder; folder with a gear |
 | `*plan*.md`; `READ-*`; an index file name; Markdown | plan; book; index; Markdown |
 | code; data (`.json`, `.yaml`, …); shell; `.sql`; `.csv`; images; diffs; `.txt`, `.log` | code; braces; terminal; database; table; image; diff; text |
@@ -449,12 +445,12 @@ edited and saved like any other; a `.log` stays read-only.
 
 The Changes view, titled Uncommitted changes, in the side pane, lists what the repositories of the Files tab's folders
 hold that their last commits do not, read only, as IntelliJ's commit view does
-([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)). ⌘K opens it on every repository, and closes it when it
-shows them all. A repository's double click in the Files tab shows that repository alone, and a folder's menu the
-changes inside that folder alone ([record 71](adr/0071-repositories-in-the-files-tab.md)), each replacing what the view
-showed.
+([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)). ⌘K opens it on every folder's repository, and closes
+it when it shows them all. A row's double click in the Files tab shows what that row holds, and a folder's menu the
+changes inside that folder alone ([records 71, 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)), each
+replacing what the view showed.
 
-![The Files tab with the repository lane marked as changed, and the Uncommitted changes view: changed, untracked and removed files](images/changes.png)
+![The Files tab with the folder lane marked as changed, and the Uncommitted changes view: changed, untracked and removed files](images/changes.png)
 
 ![Lane.java compared with HEAD side by side: a removed field, a changed return and a multiplication turned into a shift: three differences](images/diff.png)
 
@@ -619,7 +615,7 @@ learn and write. It is never part of the kit, whose repository ignores it; it ca
 
 `comando-kit.json` lists the kit's folders with the fields of a `folders.json` entry ([§5](#5-the-files-tab)), each path
 relative to the root. When `folders.json` holds none of them, comando adds them at the top, their paths made absolute
-under the root, once, and saves; the user's own entries (other folders, repositories) stay, and a kit folder whose name
+under the root, once, and saves; the user's own entries stay, and a kit folder whose name
 an entry already takes is not added (`KitFolders`). An entry that names the same folder on disk as a kit folder (links
 followed, letter case ignored) counts as that folder, so an entry through a link is not added twice. **Use the kit's
 folders** in the Files tab's folders window adds the missing ones again.

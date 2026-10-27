@@ -114,7 +114,7 @@ One immutable record of metadata and ids. Lists hold tens of entries, so lookups
 | `focused` | the panel the user works in; the lower panel follows it |
 | `connections` | each connection's spec, status (closed, opening, open, closing, failed) and last error |
 | `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, process and turn start, last turn error, background tasks and whether the last turn handed work to them, whether a checkpoint is due (`Reflection`), whether the running checkpoint clears when it ends |
-| `folders` | the Files tab's folders and repositories in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository (shown under Repositories) |
+| `folders` | the Files tab's folders in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file |
 | `runs` | at most one SQL run per panel: request id, SQL, status, counts, timings, error, whether it is a live plot's background refresh |
 | `approvals` | permission prompts waiting for an answer, from every session |
 | `views` | views placed by Claude or the user: id, title, spec, placement (lower or side), pinned, owning session, version |

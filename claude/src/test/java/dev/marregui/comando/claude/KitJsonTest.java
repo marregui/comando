@@ -25,9 +25,9 @@ class KitJsonTest {
               "brain": "BRAIN",
               "folders": [
                 {"name": "Scratchpad", "path": "BRAIN/SCRATCHPAD", "index": "", "excludes": [], "icon": "scratchpad",
-                 "deletable": true, "listedIn": "INDEX.md", "repository": false},
+                 "deletable": true, "listedIn": "INDEX.md"},
                 {"name": "Memory", "path": "BRAIN/MEMORY", "index": "MEMORY.md", "excludes": ["old"], "icon": "memory",
-                 "deletable": false, "listedIn": "", "repository": false}
+                 "deletable": false, "listedIn": ""}
               ],
               "requirements": [
                 {"tool": "git", "check": ["git", "--version"],

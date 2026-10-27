@@ -312,13 +312,6 @@ public final class Snapshot {
                 }
             }
         });
-        // the repositories window: the list, the selected repository's fields, its facts
-        SwingUtilities.invokeLater(() -> findCommand("files.repositories"));
-        await(loop, st -> dialogShown("Repositories"), 10_000);
-        SwingUtilities.invokeAndWait(() -> selectInDialogList("Repositories", "Repo"));
-        flushEdt();
-        flushEdt();
-        shootDialog("Repositories", out.resolve("02k2-folders-window.png"));
         // the repository's row: git icon and flag; a double click opens the Changes view and leaves the row open
         await(loop, st -> rowExpanded("Files", "Repo") && repoMarked(), 15_000);
         SwingUtilities.invokeAndWait(() -> doubleClickRow(tree("Files"), "Repo"));
@@ -491,7 +484,7 @@ public final class Snapshot {
                 new FolderRoot("Skills", root.resolve("skills").toString(), "", List.of(), "skills"),
                 new FolderRoot("Plugin", root.resolve("plugin").toString(), "", List.of(), "plugin"),
                 new FolderRoot("Notes", root.resolve("notes").toString(), "", List.of()),
-                new FolderRoot("Repo", repo.toString(), "", List.of()).asRepository())));
+                new FolderRoot("Repo", repo.toString(), "", List.of()))));
         return repo;
     }
 
@@ -632,8 +625,7 @@ public final class Snapshot {
      */
     static void findCommand(String id) {
         String text = switch (id) {
-            case "files.settings" -> "Configure " + FoldersDialog.title(false);
-            case "files.repositories" -> "Configure repositories";
+            case "files.settings" -> "Configure " + FoldersDialog.title();
             default -> throw new IllegalArgumentException(id);
         };
         for (Frame f : Frame.getFrames()) {
@@ -682,20 +674,6 @@ public final class Snapshot {
             }
         }
         return null;
-    }
-
-    /** Selects the entry labelled {@code label} in the list of the open dialog titled {@code title}. */
-    private static void selectInDialogList(String title, String label) {
-        for (Window w : Window.getWindows()) {
-            if (w instanceof JDialog d && d.isVisible() && title.equals(d.getTitle())) {
-                JList<?> l = find(d.getContentPane(), JList.class, x -> true);
-                for (int i = 0; l != null && i < l.getModel().getSize(); i++) {
-                    if (String.valueOf(l.getModel().getElementAt(i)).equals(label)) {
-                        l.setSelectedIndex(i);
-                    }
-                }
-            }
-        }
     }
 
     /** Runs every task posted to the event thread before this call. */

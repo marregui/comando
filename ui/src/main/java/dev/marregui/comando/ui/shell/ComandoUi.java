@@ -828,7 +828,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         List<String> ids = switch (tab) {
             case SessionsSidebar.SESSIONS -> List.of("panel.new", "panel.reopen");
             case SessionsSidebar.CONNECTIONS -> deps.server() == null ? List.<String>of() : List.of("server.start", "server.stop");
-            case SessionsSidebar.FILES -> List.of("files.settings", "files.repositories");
+            case SessionsSidebar.FILES -> List.of("files.settings");
             default -> List.of();
         };
         for (String id : ids) {
@@ -841,9 +841,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
     }
 
-    /** The Files tab's folders in their window, {@code select} selected (empty: the first); saving replaces them. */
-    private void editFolders(boolean repositories) {
-        FoldersDialog.show(frame, deps.state().get().folders(), repositories, repoChanges, deps.intents(), deps.setup().root().folders());
+    /** The Files tab's folders in their window; saving replaces them. */
+    private void editFolders() {
+        FoldersDialog.show(frame, deps.state().get().folders(), repoChanges, deps.intents(), deps.setup().root().folders());
     }
 
     /** The kit's menu under its label in the status bar: its upgrade and the brain's backup, enabled as each can run. */
@@ -886,7 +886,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return a.startsWith(b);
     }
 
-    /** Opens the Changes view of every repository in the side pane; closes it when it shows them all, widens it when it shows one. */
+    /** Opens the Changes view of every folder's repository in the side pane; closes it when it shows them all, widens it when it shows one. */
     private void toggleChanges() {
         Optional<ViewState> open = deps.state().get().views().stream().filter(v -> v.spec() instanceof ViewSpec.Changes).findFirst();
         if (open.isPresent() && ((ViewSpec.Changes) open.get().spec()).root().isEmpty()) {
@@ -1090,11 +1090,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("run.plotStop", "Stop refreshing plots", null, livePlots::stopAll, () -> livePlots.size() > 0);
         // panel: tools that run in its project
         cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, shortcut | ALT), this::runGradle, () -> focusedSession().isPresent());
-        cmd("files.settings", "Configure " + FoldersDialog.title(false), null, () -> editFolders(false));
+        cmd("files.settings", "Configure " + FoldersDialog.title(), null, this::editFolders);
         // the kit: its upgrade, by a session in its root, and the brain's backup; never on their own
         cmd("kit.upgrade", KitActions.UPGRADE, null, kit::upgrade, kit::canUpgrade);
         cmd("kit.backup", KitActions.BACK_UP, null, kit::backUp, kit::canBackUp);
-        cmd("files.repositories", "Configure repositories", null, () -> editFolders(true));
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         // view
         cmd("view.palette", "Command palette", key(KeyEvent.VK_P, shortcut | SHIFT), () -> new CommandPalette(actions).show(frame));

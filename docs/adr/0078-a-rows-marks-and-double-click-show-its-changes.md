@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-20 | accepted | Miguel and Claude |
+| 2026-10-20 | accepted; the repository's double click amended by [record 95](0095-the-files-tab-holds-no-code-repositories.md) | Miguel and Claude |
 
 ## 1. Context
 

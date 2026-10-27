@@ -21,7 +21,7 @@ class KitFoldersTest {
         Path root = Files.createDirectories(tmp.resolve("kit"));
         FolderRoot memory = folder("Memory", Files.createDirectories(root.resolve("BRAIN/MEMORY")));
         FolderRoot skills = folder("Skills", Files.createDirectories(root.resolve("skills")));
-        FolderRoot repo = folder("comando", Files.createDirectories(tmp.resolve("comando"))).asRepository();
+        FolderRoot repo = folder("Plans", Files.createDirectories(root.resolve("plans")));
         FolderRoot notes = folder("Notes", Files.createDirectories(tmp.resolve("notes")));
 
         assertThat(KitFolders.atStart(List.of(repo, notes), List.of(memory, skills))).containsExactly(memory, skills, repo, notes);

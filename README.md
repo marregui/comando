@@ -63,17 +63,17 @@ it runs: ⌘⏎ lets comando decide, ⌘⇧⏎ sends it to Claude, ⌥⏎ runs i
 | **Claude drives the window** | An MCP server inside the app: tables, plots, diffs, files, Markdown and trees on screen; text into the editor; SQL under a lexical policy (writes refused on production connections); the window's state. Sessions can prompt one another and read each other's transcripts. |
 | **Sessions at a glance** | Tab icons for working, waiting on background work, waiting for the user, failed and finished; the Dock bounces when the user is needed or something failed. The status bar shows the usage limits of the Claude plan and, with Codex installed, of the Codex plan; no spend is shown. |
 | **Databases** | PostgreSQL and QuestDB over the PostgreSQL wire protocol, with an embedded QuestDB one menu item away. One lane per connection, cancel within two seconds, results stored by column (up to 5 000 000 rows), plots and live plots, `EXPLAIN` trees, a schema explorer. |
-| **Documents and changes** | Chosen folders and repositories as trees in one tab, searchable by name and kept in sync while open. A double click opens a file in a panel: Markdown rendered (Mermaid diagrams drawn when `mmdc` is installed), source coloured by language. A repository row marks what is uncommitted; ⌘K shows every repository's uncommitted changes, and a file opens side by side against `HEAD`, to edit, roll back or remove. |
+| **Documents and changes** | Chosen folders of Claude Code's folder (the kit, its brain) as trees in one tab, searchable by name and kept in sync while open; code repositories stay in the IDE. A double click opens a file in a panel: Markdown rendered (Mermaid diagrams drawn when `mmdc` is installed), source coloured by language. A folder row marks what is uncommitted; ⌘K shows the folders' uncommitted changes, and a file opens side by side against `HEAD`, to edit, roll back or remove. |
 | **Development tools** | A terminal per panel; Gradle runs with test results as a tree and failures sent to Claude. |
 
 <table>
   <tr>
     <td width="50%"><img src="docs/images/approvals.png" alt="Two approval cards in the lower panel, a shell command with Allow once, For session, Always and Deny, and a question with two options; beside the editor, a diff in the side pane"></td>
-    <td width="50%"><img src="docs/images/changes.png" alt="The Files tab with a repository marked as changed, and the Uncommitted changes view grouped into changed, untracked and removed files"></td>
+    <td width="50%"><img src="docs/images/changes.png" alt="The Files tab with a folder marked as changed, and the Uncommitted changes view grouped into changed, untracked and removed files"></td>
   </tr>
   <tr>
     <td><sub>Approval cards for a tool and a question; a diff in the side pane.</sub></td>
-    <td><sub>A repository in the Files tab and its uncommitted changes, grouped by kind.</sub></td>
+    <td><sub>A folder in the Files tab and its uncommitted changes, grouped by kind.</sub></td>
   </tr>
   <tr>
     <td width="50%"><img src="docs/images/sql.png" alt="A SAMPLE BY query in the editor and its 72 rows in the result grid, with the run's figures: exec 45 ms, fetch 1 ms"></td>

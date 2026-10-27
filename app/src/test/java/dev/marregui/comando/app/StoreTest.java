@@ -98,12 +98,12 @@ class StoreTest {
         try (Store store = new Store(home)) {
             assertThat(store.loadFolders(CLAUDE_DIR)).as("no folders.json: the default").isEqualTo(FolderRoot.defaults(CLAUDE_DIR));
             store.saveFolders(List.of(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")),
-                    new FolderRoot("app", "/app", "", List.of()).asRepository()));
+                    new FolderRoot("app", "/app", "", List.of())));
         }
-        assertThat(Files.readString(home.resolve("folders.json"))).contains("\"index\" : \"ALPHA.md\"", "\"tools\"", "\"repository\" : true");
+        assertThat(Files.readString(home.resolve("folders.json"))).contains("\"index\" : \"ALPHA.md\"", "\"tools\"").doesNotContain("repository");
         try (Store store = new Store(home)) {
-            assertThat(store.loadFolders(CLAUDE_DIR)).as("a repository stays one")
-                    .containsExactly(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")), new FolderRoot("app", "/app", "", List.of()).asRepository());
+            assertThat(store.loadFolders(CLAUDE_DIR)).as("as saved")
+                    .containsExactly(new FolderRoot("KB", "/kb", "ALPHA.md", List.of("tools")), new FolderRoot("app", "/app", "", List.of()));
             store.saveFolders(List.of());
         }
         try (Store store = new Store(home)) {
@@ -141,7 +141,7 @@ class StoreTest {
                 List.of(new FolderRoot("Memory", "BRAIN/MEMORY", "MEMORY.md", List.of(), "memory")), List.of(), List.of(), List.of())),
                 home.resolve("claude"));
         FolderRoot kitMemory = new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory");
-        FolderRoot repo = new FolderRoot("app", "/app", "", List.of()).asRepository();
+        FolderRoot repo = new FolderRoot("app", "/app", "", List.of());
         Files.writeString(home.resolve("folders.json"), "[{\"name\":\"app\",\"path\":\"/app\",\"repository\":true}]");
         try (Store store = new Store(home)) {
             assertThat(store.withKitFolders(store.loadFolders(CLAUDE_DIR), kitRoot)).containsExactly(kitMemory, repo);
@@ -415,14 +415,12 @@ class StoreTest {
                 new FolderRoot("Skills", skills.toString(), "INDEX.md", List.of()),
                 new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of()),
                 new FolderRoot("Deep", skills.toString(), "gone/INDEX.md", List.of()),
-                new FolderRoot("Repo", repo.toString(), "README.md", List.of()).asRepository(),
                 new FolderRoot("Outside", repo.toString(), "INDEX.md", List.of()));
 
         assertThat(Store.createIndexes(folders, claude)).containsExactly(skills.resolve("INDEX.md"));
         assertThat(Files.readString(skills.resolve("INDEX.md"))).startsWith("# Skills\n").contains("`/reflect` keeps it current");
         assertThat(Files.readString(memory.resolve("MEMORY.md"))).as("an index that exists is left").isEqualTo("kept\n");
         assertThat(skills.resolve("gone")).as("no folder is made for it").doesNotExist();
-        assertThat(repo.resolve("README.md")).doesNotExist();
         assertThat(repo.resolve("INDEX.md")).as("outside Claude Code's folder").doesNotExist();
         assertThat(Store.createIndexes(folders, claude)).as("once").isEmpty();
     }

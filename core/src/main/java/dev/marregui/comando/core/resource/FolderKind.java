@@ -13,7 +13,7 @@ import java.util.Map;
 
 /**
  * The Files tab's folders as a resource kind: a name, a folder, an index file, what to leave out, the row's icon,
- * whether its entries may go to the Trash, the file that lists them, and whether it is one of the Repositories.
+ * whether its entries may go to the Trash and the file that lists them.
  * Its rules are the ones every entry of {@code folders.json} meets as the store reads it.
  */
 public final class FolderKind implements ResourceKind<FolderRoot> {
@@ -31,9 +31,7 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
             Attribute.of("deletable", "Trash", Attribute.Kind.BOOLEAN, false,
                     "whether the Files tab moves the folder's files and subfolders to the Trash"),
             Attribute.of("listedIn", "Listed in", Attribute.Kind.TEXT, false,
-                    "a file name, such as INDEX.md: an entry moved to the Trash leaves the nearest one above it"),
-            Attribute.of("repository", "Repository", Attribute.Kind.BOOLEAN, false,
-                    "a git repository's top folder, shown under the Files tab's Repositories"));
+                    "a file name, such as INDEX.md: an entry moved to the Trash leaves the nearest one above it"));
 
     private FolderKind() {
     }
@@ -58,7 +56,6 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
         m.put("icon", f.icon());
         m.put("deletable", Boolean.toString(f.deletable()));
         m.put("listedIn", f.listedIn());
-        m.put("repository", Boolean.toString(f.repository()));
         return m;
     }
 
@@ -95,8 +92,7 @@ public final class FolderKind implements ResourceKind<FolderRoot> {
                 Arrays.asList(a.getOrDefault("excludes", "").split(",")),
                 icon,
                 Boolean.parseBoolean(a.getOrDefault("deletable", "false").strip()),
-                listedIn,
-                Boolean.parseBoolean(a.getOrDefault("repository", "false").strip()));
+                listedIn);
     }
 
     @Override

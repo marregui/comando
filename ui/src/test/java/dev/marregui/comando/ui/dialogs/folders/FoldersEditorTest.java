@@ -40,12 +40,12 @@ class FoldersEditorTest {
 
     /** The folders' window, with Claude Code's folder at the file system's root so that every folder is inside it. */
     private FoldersEditor editor(List<FolderRoot> folders, RepoChanges repos) throws Exception {
-        return editor(folders, false, Path.of("/"), repos);
+        return editor(folders, Path.of("/"), repos);
     }
 
-    private FoldersEditor editor(List<FolderRoot> folders, boolean repositories, Path claudeDir, RepoChanges repos) throws Exception {
+    private FoldersEditor editor(List<FolderRoot> folders, Path claudeDir, RepoChanges repos) throws Exception {
         AtomicReference<FoldersEditor> e = new AtomicReference<>();
-        SwingUtilities.invokeAndWait(() -> e.set(new FoldersEditor(folders, repositories, claudeDir, repos, new FoldersEditor.Chooser() {
+        SwingUtilities.invokeAndWait(() -> e.set(new FoldersEditor(folders, claudeDir, repos, new FoldersEditor.Chooser() {
             @Override
             public Optional<Path> folder(Component owner, Path start) {
                 return chosen.isEmpty() ? Optional.empty() : Optional.of(chosen.removeFirst());
@@ -115,14 +115,13 @@ class FoldersEditorTest {
                 List.of(), "memory");
         FolderRoot skills = new FolderRoot("Skills", Files.createDirectories(dir.resolve("kit/skills")).toString(), "", List.of(), "skills");
         FolderRoot mine = new FolderRoot("Mine", Files.createDirectories(dir.resolve("notes")).toString(), "", List.of());
-        FolderRoot repo = new FolderRoot("repo", Files.createDirectories(dir.resolve("repo")).toString(), "", List.of()).asRepository();
-        FoldersEditor e = editor(List.of(skills, mine, repo), new RepoChanges());
+        FoldersEditor e = editor(List.of(skills, mine), new RepoChanges());
         settled(e);
 
         assertThat(on(e, (FoldersEditor x) -> x.addFirst(List.of(memory, skills)))).as("Skills is there already").isEqualTo(1);
         settled(e);
         assertThat(on(e, FoldersEditor::dirty)).isTrue();
-        assertThat(on(e, FoldersEditor::folders)).contains(List.of(memory, skills, mine, repo));
+        assertThat(on(e, FoldersEditor::folders)).contains(List.of(memory, skills, mine));
         assertThat(on(e, (FoldersEditor x) -> x.addFirst(List.of(memory, skills)))).as("once").isZero();
     }
 
@@ -197,63 +196,29 @@ class FoldersEditorTest {
     }
 
     @Test
-    void aFolderMustLieInsideTheFoldersHomeAndTheRepositoriesStayAsTheyAre(@TempDir Path dir) throws Exception {
+    void aFolderMustLieInsideTheFoldersHome(@TempDir Path dir) throws Exception {
         Path claude = Files.createDirectories(dir.resolve(".claude"));
         FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(claude.resolve("MEMORY")).toString(), "", List.of());
-        FolderRoot repo = new FolderRoot("app", Files.createDirectories(dir.resolve("app")).toString(), "", List.of()).asRepository();
-        FoldersEditor e = editor(List.of(repo, memory), false, claude, new RepoChanges());
+        FolderRoot kb = new FolderRoot("KB", Files.createDirectories(claude.resolve("KB")).toString(), "", List.of());
+        FoldersEditor e = editor(List.of(memory, kb), claude, new RepoChanges());
         settled(e);
-        assertThat(on(e, (FoldersEditor x) -> x.list().getModel().getSize())).as("the folders alone").isEqualTo(1);
-        assertThat(on(e, FoldersEditor::folders)).as("folders, then repositories").contains(List.of(memory, repo));
+        assertThat(on(e, FoldersEditor::folders)).contains(List.of(memory, kb));
         assertThat(on(e, FoldersEditor::dirty)).isFalse();
 
         type(e, FoldersEditor.PATH, Files.createDirectories(dir.resolve("elsewhere")).toString());
         settled(e);
         assertThat(on(e, (FoldersEditor x) -> x.problemShown(FoldersEditor.PATH))).startsWith("must be inside ");
         type(e, FoldersEditor.PATH, memory.path());
-        type(e, FoldersEditor.NAME, "app");
-        assertThat(on(e, (FoldersEditor x) -> x.problemShown(FoldersEditor.NAME))).isEqualTo("a repository has this name");
+        type(e, FoldersEditor.NAME, "KB");
+        assertThat(on(e, (FoldersEditor x) -> x.problemShown(FoldersEditor.NAME))).isEqualTo("another folder has this name");
         assertThat(on(e, (FoldersEditor x) -> ((JTextField) x.field(FoldersEditor.PATH)).isEditable())).as("chosen, not typed").isFalse();
-    }
-
-    @Test
-    void aRepositoryIsAGitRepositorysTopFolderAndAddsAsOne(@TempDir Path dir) throws Exception {
-        Path claude = Files.createDirectories(dir.resolve(".claude"));
-        FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(claude.resolve("MEMORY")).toString(), "", List.of());
-        Path top = Files.createDirectories(dir.resolve("app"));
-        Files.createDirectories(top.resolve(".git"));
-        FolderRoot repo = new FolderRoot("app", top.toString(), "", List.of()).asRepository();
-        FoldersEditor e = editor(List.of(memory, repo), true, claude, new RepoChanges());
-        settled(e);
-        assertThat(on(e, (FoldersEditor x) -> x.list().getModel().getSize())).as("the repositories alone").isEqualTo(1);
-        assertThat(on(e, FoldersEditor::valid)).isTrue();
-
-        type(e, FoldersEditor.PATH, Files.createDirectories(top.resolve("src")).toString());
-        settled(e);
-        assertThat(on(e, (FoldersEditor x) -> x.problemShown(FoldersEditor.PATH))).startsWith("not the repository's top folder: ");
-        type(e, FoldersEditor.PATH, Files.createDirectories(dir.resolve("plain")).toString());
-        settled(e);
-        assertThat(on(e, (FoldersEditor x) -> x.problemShown(FoldersEditor.PATH))).isEqualTo("not a git repository");
-        type(e, FoldersEditor.PATH, top.toString());
-        type(e, FoldersEditor.NAME, "Memory");
-        assertThat(on(e, (FoldersEditor x) -> x.problemShown(FoldersEditor.NAME))).isEqualTo("a folder has this name");
-        type(e, FoldersEditor.NAME, "app");
-
-        Path other = Files.createDirectories(dir.resolve("lib"));
-        Files.createDirectories(other.resolve(".git"));
-        chosen.add(other);
-        SwingUtilities.invokeAndWait(e::add);
-        settled(e);
-        List<FolderRoot> saved = on(e, FoldersEditor::folders).orElseThrow();
-        assertThat(saved).extracting(FolderRoot::name).containsExactly("Memory", "app", "lib");
-        assertThat(saved.get(2).repository()).as("added as a repository").isTrue();
     }
 
     @Test
     void onlyFoldersInsideTheConfigFolderArePickedAndARefusedPickChangesNothing(@TempDir Path dir) throws Exception {
         Path claude = Files.createDirectories(dir.resolve(".claude"));
         FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(claude.resolve("MEMORY")).toString(), "", List.of());
-        FoldersEditor e = editor(List.of(memory), false, claude, new RepoChanges());
+        FoldersEditor e = editor(List.of(memory), claude, new RepoChanges());
         settled(e);
         chosen.add(Files.createDirectories(dir.resolve("elsewhere")));
         SwingUtilities.invokeAndWait(e::add);
@@ -277,7 +242,7 @@ class FoldersEditorTest {
     void anIndexNamedButMissingIsCreatedAtSaveUnlessItsFolderIsMissing(@TempDir Path dir) throws Exception {
         Path claude = Files.createDirectories(dir.resolve(".claude"));
         FolderRoot skills = new FolderRoot("Skills", Files.createDirectories(claude.resolve("skills")).toString(), "", List.of());
-        FoldersEditor e = editor(List.of(skills), false, claude, new RepoChanges());
+        FoldersEditor e = editor(List.of(skills), claude, new RepoChanges());
         settled(e);
         type(e, FoldersEditor.INDEX, "INDEX.md");
         await().atMost(Duration.ofSeconds(10)).until(() -> on(e, FoldersEditor::messageShown).equals("INDEX.md does not exist yet: Save creates it"));

@@ -58,8 +58,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
-import java.util.stream.Stream;
 
 /**
  * The sidebar's Files tab: the folders the user configured ({@link FolderRoot}), one top-level row each, as a navigator
@@ -70,12 +68,12 @@ import java.util.stream.Stream;
  * them, keeping what the user opened and selected, and the newest day folder is open at a folder's first read. A
  * folder's row has the icon it was configured with. In a git repository, what git ignores is left out, and a file
  * that differs from {@code HEAD} (or a folder holding one) has git's colour for how it changed. A repository's top
- * folder has the git icon (a plain folder under Repositories, where every row is one) and, while the repository has
- * changes, a rising arrow after its name; hovering it says its branch and what it holds uncommitted; a double click on it opens the
- * Changes view of that repository alone, or says there is nothing to see, and opens or closes
- * nothing. The folders configured as repositories are rows of one node, Repositories, after the others; a folder's or a
+ * folder has the git icon and, while the repository has changes, a rising arrow after its name; hovering it says its
+ * branch and what it holds uncommitted. A double click on a folder's row opens the Changes view of what the repository
+ * holding it changed inside it, or says there is nothing to see, and opens or closes nothing; a folder's or a
  * subfolder's menu shows the changes of the repository holding it inside that folder alone, and a changed file's
- * compares it with {@code HEAD}.
+ * compares it with {@code HEAD}. Every folder lies inside Claude Code's folder: the tab is no browser of code
+ * repositories.
  *
  * <p>The tab has no buttons, and a file's menu opens it, rendered or as text; the folders are configured in {@code
  * folders.json}, through the windows the tab's own menu opens. In a folder configured as deletable, the menu also moves the selected files and subfolders to the
@@ -85,17 +83,14 @@ import java.util.stream.Stream;
  */
 final class FilesTab {
 
-    /** A git repository's top folder outside Repositories: its icon; any repository's mark after its name while it has changes. */
+    /** A git repository's top folder: its icon; its mark after its name while it has changes. */
     static final String GIT_ICON = "folder-git";
     static final String CHANGES_ICON = "changes";
     /** After the name of a new (untracked) file and of each folder on the way down to one. */
     static final String NEW_ICON = "new-file";
     static final String NEW_TIP = "Open to reach the new files inside, which git does not track yet";
-    /** The node holding the folders configured as repositories, and its icon. */
-    static final String REPOSITORIES = "Repositories";
-    static final String REPOSITORIES_ICON = "repositories";
-    /** The Repositories node's detail, which no folder's row (a path) or subfolder (a count of entries) has. */
-    private static final Pattern REPOSITORIES_DETAIL = Pattern.compile("\\d+ repositor(y|ies)");
+    /** Where a folder's top-level row is in a node's path: under the tree's hidden root. */
+    static final int ROW = 1;
 
     /** The entry an unread folder shows until its tree arrives; it also makes the row openable. */
     static final String READING = "reading…";
@@ -171,12 +166,11 @@ final class FilesTab {
         for (TreeView t : List.of(tree, found)) {
             t.tree().setRootVisible(false);
             t.icons(n -> {
-                String icon = repositoriesNode(n) ? REPOSITORIES_ICON : rowIcon(n).orElseGet(() -> iconName(n, indexNames));
+                String icon = rowIcon(n).orElseGet(() -> iconName(n, indexNames));
                 return icon.isEmpty() ? null : Icons.get(icon);
             });
             t.colors(this::colorOf);
-            // under Repositories every row is one: the plain folder says enough
-            t.nodeIcons(n -> repoAt(n).isPresent() && !isRepositories(n.getParent()) ? Icons.get(GIT_ICON) : null);
+            t.nodeIcons(n -> repoAt(n).isPresent() ? Icons.get(GIT_ICON) : null);
             t.tips(n -> repoAt(n).map(FilesTab::repoTip).or(() -> rowTip(n)).orElse(holdsNew(n) ? NEW_TIP : null));
             t.trailing(this::marks);
             // one click opens or closes a folder; a double click on a folder's row shows its changes instead
@@ -208,14 +202,14 @@ final class FilesTab {
                 if (!restoring && isRow(e.getPath().getPath())) {
                     folderOf(e.getPath()).ifPresent(x -> openNewestDay(x.name()));
                 }
-                if (!restoring && (isRow(e.getPath().getPath()) || isRepositories(e.getPath().getLastPathComponent()))) {
+                if (!restoring && isRow(e.getPath().getPath())) {
                     watchOpen(false);
                 }
             }
 
             @Override
             public void treeCollapsed(TreeExpansionEvent e) {
-                if (!restoring && (isRow(e.getPath().getPath()) || isRepositories(e.getPath().getLastPathComponent()))) {
+                if (!restoring && isRow(e.getPath().getPath())) {
                     watchOpen(false);
                 }
             }
@@ -455,10 +449,9 @@ final class FilesTab {
             return Optional.empty();
         }
         TreeNode[] path = n.getPath();
-        int at = rowAt(path);
-        if (path.length < at + 1 || node.label().equals(ViewSpec.TreeNode.MORE) || node.label().startsWith("✗ ")
+        if (path.length < ROW + 1 || node.label().equals(ViewSpec.TreeNode.MORE) || node.label().startsWith("✗ ")
                 || node.children().isEmpty() && node.detail().isEmpty()
-                || !(((DefaultMutableTreeNode) path[at]).getUserObject() instanceof ViewSpec.TreeNode row)) {
+                || !(((DefaultMutableTreeNode) path[ROW]).getUserObject() instanceof ViewSpec.TreeNode row)) {
             return Optional.empty();
         }
         Optional<FolderRoot> folder = folder(row.label());
@@ -466,7 +459,7 @@ final class FilesTab {
             return Optional.empty();
         }
         Path p = Path.of(folder.get().path());
-        for (int i = at + 1; i < path.length; i++) {
+        for (int i = ROW + 1; i < path.length; i++) {
             if (((DefaultMutableTreeNode) path[i]).getUserObject() instanceof ViewSpec.TreeNode c) {
                 p = p.resolve(c.label());
             }
@@ -476,7 +469,7 @@ final class FilesTab {
 
     /**
      * A folder's row double-clicked: the Changes view of what the repository holding it has changed inside it, all of it
-     * for a repository's own row, when there is any; else a word beside the row that there is none.
+     * when the row is the repository's top folder, when there is any; else a word beside the row that there is none.
      */
     private void openChanges(TreeView t, TreePath row) {
         String title = title(row);
@@ -502,7 +495,7 @@ final class FilesTab {
         return Path.of(repo.root()).toAbsolutePath().normalize().relativize(folder).toString().replace('\\', '/');
     }
 
-    /** Whether {@code n} is a folder's top-level row: a folder of {@code ~/.claude} or a repository. */
+    /** Whether {@code n} is a folder's top-level row. */
     private static boolean isRow(DefaultMutableTreeNode n) {
         return isRow(n.getPath());
     }
@@ -545,7 +538,7 @@ final class FilesTab {
     private static String title(TreePath p) {
         Object[] path = p.getPath();
         StringBuilder out = new StringBuilder();
-        for (int i = rowAt(path); i < path.length; i++) {
+        for (int i = ROW; i < path.length; i++) {
             if (((DefaultMutableTreeNode) path[i]).getUserObject() instanceof ViewSpec.TreeNode c) {
                 out.append(out.isEmpty() ? "" : "/").append(c.label());
             }
@@ -553,28 +546,9 @@ final class FilesTab {
         return out.toString();
     }
 
-    /** Where the row of the folder holding a node is in its path: 1 for a folder, 2 for a repository under Repositories. */
-    static int rowAt(Object[] path) {
-        return path.length >= 2 && isRepositories(path[1]) ? 2 : 1;
-    }
-
     /** Whether {@code path} ends at a folder's top-level row. */
     private static boolean isRow(Object[] path) {
-        return path.length == rowAt(path) + 1;
-    }
-
-    /** Whether {@code node} is the Repositories node: a child of the root with that name and its count. */
-    static boolean isRepositories(Object node) {
-        return node instanceof DefaultMutableTreeNode d && d.getParent() != null && d.getParent().getParent() == null
-                && d.getUserObject() instanceof ViewSpec.TreeNode t && repositoriesNode(t);
-    }
-
-    private static boolean repositoriesNode(ViewSpec.TreeNode t) {
-        return t.label().equals(REPOSITORIES) && REPOSITORIES_DETAIL.matcher(t.detail()).matches();
-    }
-
-    private static String repositoriesDetail(int n) {
-        return n + (n == 1 ? " repository" : " repositories");
+        return path.length == ROW + 1;
     }
 
     /** What a repository's top folder says on hover: its branch, and what it holds that its last commit does not. */
@@ -620,19 +594,14 @@ final class FilesTab {
 
     private void rebuild() {
         List<ViewSpec.TreeNode> rows = new ArrayList<>(folders.size());
-        List<ViewSpec.TreeNode> repositories = new ArrayList<>();
         for (FolderRoot f : folders) {
             ViewSpec.TreeNode t = read.get(f.name());
             List<ViewSpec.TreeNode> children = t == null ? List.of(placeholder(READING))
                     : t.children().isEmpty() ? List.of(placeholder(EMPTY)) : t.children();
-            (f.repository() ? repositories : rows).add(new ViewSpec.TreeNode(f.name(), rowDetail(f), children));
-        }
-        if (!repositories.isEmpty()) {
-            rows.add(new ViewSpec.TreeNode(REPOSITORIES, repositoriesDetail(repositories.size()), repositories));
+            rows.add(new ViewSpec.TreeNode(f.name(), rowDetail(f), children));
         }
         ViewSpec.TreeNode root = new ViewSpec.TreeNode("Files", "",
                 rows.isEmpty() ? List.of(placeholder("No folders yet: right-click the Files tab to add some")) : rows);
-        boolean first = !built || repositoriesRow() == null;
         restoring = true;
         try {
             if (built) {
@@ -641,24 +610,9 @@ final class FilesTab {
                 built = true;
                 tree.setRoot(root, 1);
             }
-            TreePath repos = repositoriesRow();
-            if (first && repos != null) {
-                tree.tree().expandPath(repos); // its repositories show, each closed until opened
-            }
         } finally {
             restoring = false;
         }
-    }
-
-    /** The Repositories node's path in the tree, or null when no folder is a repository. */
-    private TreePath repositoriesRow() {
-        DefaultMutableTreeNode root = (DefaultMutableTreeNode) tree.tree().getModel().getRoot();
-        for (int i = 0; root != null && i < root.getChildCount(); i++) {
-            if (isRepositories(root.getChildAt(i))) {
-                return new TreePath(root).pathByAddingChild(root.getChildAt(i));
-            }
-        }
-        return null;
     }
 
     /** A folder's row's detail: its path. */
@@ -718,17 +672,9 @@ final class FilesTab {
 
     private TreePath folderRow(String name) {
         DefaultMutableTreeNode root = (DefaultMutableTreeNode) tree.tree().getModel().getRoot();
-        boolean repository = folder(name).map(FolderRoot::repository).orElse(false);
         for (int i = 0; i < root.getChildCount(); i++) {
             DefaultMutableTreeNode c = (DefaultMutableTreeNode) root.getChildAt(i);
-            if (repository && isRepositories(c)) {
-                for (int k = 0; k < c.getChildCount(); k++) {
-                    DefaultMutableTreeNode r = (DefaultMutableTreeNode) c.getChildAt(k);
-                    if (r.getUserObject() instanceof ViewSpec.TreeNode n && n.label().equals(name)) {
-                        return new TreePath(root).pathByAddingChild(c).pathByAddingChild(r);
-                    }
-                }
-            } else if (!repository && !isRepositories(c) && c.getUserObject() instanceof ViewSpec.TreeNode n && n.label().equals(name)) {
+            if (c.getUserObject() instanceof ViewSpec.TreeNode n && n.label().equals(name)) {
                 return new TreePath(root).pathByAddingChild(c);
             }
         }
@@ -751,9 +697,8 @@ final class FilesTab {
     }
 
     private Optional<FolderRoot> folderOf(TreePath path) {
-        int at = rowAt(path.getPath());
-        return path.getPathCount() < at + 1 || !(((DefaultMutableTreeNode) path.getPathComponent(at)).getUserObject() instanceof ViewSpec.TreeNode n)
-                ? Optional.empty() : folder(n.label()).filter(f -> f.repository() == (at == 2));
+        return path.getPathCount() < ROW + 1 || !(((DefaultMutableTreeNode) path.getPathComponent(ROW)).getUserObject() instanceof ViewSpec.TreeNode n)
+                ? Optional.empty() : folder(n.label());
     }
 
     /** The tree in front: the filter's while it has text, else the folders'. */
@@ -845,7 +790,7 @@ final class FilesTab {
     /** Whether {@code n} is a file or a subfolder, not a folder's row, a placeholder or a note such as "more…". */
     private boolean entry(ViewSpec.TreeNode n) {
         TreePath p = shown().tree().getSelectionPath();
-        return p != null && p.getPathCount() > rowAt(p.getPath()) + 1 && !n.label().equals(ViewSpec.TreeNode.MORE) && !n.label().startsWith("✗ ")
+        return p != null && p.getPathCount() > ROW + 1 && !n.label().equals(ViewSpec.TreeNode.MORE) && !n.label().startsWith("✗ ")
                 && (n.link().startsWith(SourceLinks.SCHEME) || !n.children().isEmpty() || !n.detail().isEmpty());
     }
 
@@ -864,7 +809,7 @@ final class FilesTab {
             Optional<FolderRoot> f = folderOf(p);
             if (f.isEmpty() || !f.get().deletable() || folder != null && !folder.equals(f.get())
                     || !(((DefaultMutableTreeNode) p.getLastPathComponent()).getUserObject() instanceof ViewSpec.TreeNode n)
-                    || p.getPathCount() <= rowAt(p.getPath()) + 1 || n.label().equals(ViewSpec.TreeNode.MORE) || n.label().startsWith("✗ ")
+                    || p.getPathCount() <= ROW + 1 || n.label().equals(ViewSpec.TreeNode.MORE) || n.label().startsWith("✗ ")
                     || !(n.link().startsWith(SourceLinks.SCHEME) || !n.children().isEmpty() || !n.detail().isEmpty())) {
                 return Optional.empty();
             }
@@ -880,7 +825,7 @@ final class FilesTab {
             return Path.of(SourceLinks.path(n.link()));
         }
         Path out = Path.of(folder.path());
-        for (int i = rowAt(p.getPath()) + 1; i < p.getPathCount(); i++) {
+        for (int i = ROW + 1; i < p.getPathCount(); i++) {
             if (((DefaultMutableTreeNode) p.getPathComponent(i)).getUserObject() instanceof ViewSpec.TreeNode c) {
                 out = out.resolve(c.label());
             }
@@ -950,21 +895,16 @@ final class FilesTab {
     private void refilter(boolean reset) {
         String q = filter.getText().strip().toLowerCase(Locale.ROOT);
         List<ViewSpec.TreeNode> rows = new ArrayList<>();
-        List<ViewSpec.TreeNode> repositories = new ArrayList<>();
         for (FolderRoot f : folders) {
             ViewSpec.TreeNode t = read.get(f.name());
             if (t != null) {
                 List<ViewSpec.TreeNode> kids = matches(t.children(), q);
                 if (!kids.isEmpty()) {
-                    (f.repository() ? repositories : rows).add(new ViewSpec.TreeNode(f.name(), rowDetail(f), kids));
+                    rows.add(new ViewSpec.TreeNode(f.name(), rowDetail(f), kids));
                 }
             }
         }
         Set<String> opening = new HashSet<>(rows.stream().map(ViewSpec.TreeNode::label).toList());
-        repositories.forEach(r -> opening.add(r.label()));
-        if (!repositories.isEmpty()) {
-            rows.add(new ViewSpec.TreeNode(REPOSITORIES, repositoriesDetail(repositories.size()), repositories));
-        }
         ViewSpec.TreeNode root = new ViewSpec.TreeNode("Found", "", rows.isEmpty() ? List.of(placeholder(NO_MATCH)) : rows);
         if (reset) {
             found.setRoot(root, 1);
@@ -972,24 +912,14 @@ final class FilesTab {
             found.update(root);
             opening.removeAll(foundRows);
         }
-        foundRows = Set.copyOf(rows.stream().flatMap(r -> repositoriesNode(r) ? r.children().stream() : Stream.of(r))
-                .map(ViewSpec.TreeNode::label).toList());
-        Set<String> repositoryNames = Set.copyOf(repositories.stream().map(ViewSpec.TreeNode::label).toList());
-        boolean openRepositories = reset || opening.stream().anyMatch(repositoryNames::contains);
+        foundRows = Set.copyOf(rows.stream().map(ViewSpec.TreeNode::label).toList());
         // open the folders leading to a match, not the matches: a matching folder stays closed until opened
         for (int i = 0; i < found.tree().getRowCount() && i < MAX_FOUND_ROWS; i++) {
             TreePath p = found.tree().getPathForRow(i);
-            if (isRepositories(p.getLastPathComponent())) {
-                if (openRepositories && !found.tree().isExpanded(p)) {
-                    found.tree().expandRow(i);
-                }
-                continue;
-            }
-            int at = rowAt(p.getPath());
-            if (p.getPathCount() >= at + 1 && ((DefaultMutableTreeNode) p.getPathComponent(at)).getUserObject() instanceof ViewSpec.TreeNode row
+            if (p.getPathCount() >= ROW + 1 && ((DefaultMutableTreeNode) p.getPathComponent(ROW)).getUserObject() instanceof ViewSpec.TreeNode row
                     && opening.contains(row.label())
                     && ((DefaultMutableTreeNode) p.getLastPathComponent()).getUserObject() instanceof ViewSpec.TreeNode n
-                    && !n.children().isEmpty() && (p.getPathCount() == at + 1 || !matches(n.label(), q))) {
+                    && !n.children().isEmpty() && (p.getPathCount() == ROW + 1 || !matches(n.label(), q))) {
                 found.tree().expandRow(i);
             }
         }

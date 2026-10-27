@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | accepted; the window amended by [record 73](0073-the-claude-folders-window-explains-and-creates-the-index.md); the double click amended by [record 78](0078-a-rows-marks-and-double-click-show-its-changes.md) | Miguel and Claude |
+| 2026-10-19 | accepted; the window amended by [record 73](0073-the-claude-folders-window-explains-and-creates-the-index.md); the double click amended by [record 78](0078-a-rows-marks-and-double-click-show-its-changes.md); the Repositories node and window replaced by [record 95](0095-the-files-tab-holds-no-code-repositories.md) | Miguel and Claude |
 
 ## 1. Context
 

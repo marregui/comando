@@ -10,8 +10,8 @@ import java.util.Set;
  * A folder the Files tab shows at its top level, configured like a connection: a name, the folder, the file its name
  * opens (its index, such as {@code 00_START_HERE.md}), the names of entries left out besides {@link #ALWAYS_EXCLUDED}, the
  * icon of its row, whether its entries may go to the Trash and the file each of its folders lists them in. The
- * folders are configured in {@code folders.json}; the Files tab shows them, and moves entries of a deletable folder to
- * the Trash.
+ * folders are configured in {@code folders.json} and lie inside Claude Code's folder ({@link HomeDir#claudeDir}); the
+ * Files tab shows them, and moves entries of a deletable folder to the Trash.
  *
  * <p>The record takes any name and path, as read from a hand-edited {@code folders.json}; {@link
  * dev.marregui.comando.core.resource.FolderKind} holds the rules (a name, a full path, an index inside the folder), and
@@ -23,11 +23,8 @@ import java.util.Set;
  * @param deletable whether the Files tab moves the folder's files and subfolders to the Trash; never the folder itself
  * @param listedIn  a file name, such as {@code INDEX.md}, that lists the entries beside it: an entry moved to the Trash
  *                  leaves the nearest such file above it, without its own lines; empty when none
- * @param repository whether the folder is a git repository's top folder shown under the Files tab's Repositories, rather
- *                   than a folder of Claude Code's own ({@link HomeDir#claudeDir})
  */
-public record FolderRoot(String name, String path, String index, List<String> excludes, String icon, boolean deletable, String listedIn,
-                         boolean repository) {
+public record FolderRoot(String name, String path, String index, List<String> excludes, String icon, boolean deletable, String listedIn) {
 
     /** The plain folder icon, the default. */
     public static final String FOLDER = "folder";
@@ -45,11 +42,6 @@ public record FolderRoot(String name, String path, String index, List<String> ex
         excludes = excludes == null ? List.of() : excludes.stream().map(String::strip).filter(e -> !e.isEmpty()).toList();
         icon = icon == null || icon.isBlank() ? FOLDER : icon.strip();
         listedIn = listedIn == null ? "" : listedIn.strip();
-    }
-
-    /** A folder that is no repository of the Repositories node. */
-    public FolderRoot(String name, String path, String index, List<String> excludes, String icon, boolean deletable, String listedIn) {
-        this(name, path, index, excludes, icon, deletable, listedIn, false);
     }
 
     /** A folder whose entries stay where they are. */
@@ -92,16 +84,11 @@ public record FolderRoot(String name, String path, String index, List<String> ex
     }
 
     public FolderRoot withName(String newName) {
-        return new FolderRoot(newName, path, index, excludes, icon, deletable, listedIn, repository);
+        return new FolderRoot(newName, path, index, excludes, icon, deletable, listedIn);
     }
 
     /** A folder whose entries go to the Trash from the Files tab, each leaving its lines in {@code listing}, if set. */
     public FolderRoot withTrash(String listing) {
-        return new FolderRoot(name, path, index, excludes, icon, true, listing, repository);
-    }
-
-    /** The same folder as a repository of the Files tab's Repositories node. */
-    public FolderRoot asRepository() {
-        return new FolderRoot(name, path, index, excludes, icon, deletable, listedIn, true);
+        return new FolderRoot(name, path, index, excludes, icon, true, listing);
     }
 }

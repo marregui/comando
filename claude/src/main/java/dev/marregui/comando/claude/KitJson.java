@@ -55,7 +55,7 @@ public final class KitJson {
                 throw new IOException("a folder has no name");
             }
             folders.add(new FolderRoot(folder, inside(text(f, "path"), "folder " + folder), text(f, "index"), strings(f.path("excludes")),
-                    text(f, "icon"), f.path("deletable").asBoolean(false), text(f, "listedIn"), f.path("repository").asBoolean(false)));
+                    text(f, "icon"), f.path("deletable").asBoolean(false), text(f, "listedIn")));
         }
         List<KitRoot.Requirement> requirements = list(root.path("requirements"), r -> {
             Map<String, List<String>> install = new LinkedHashMap<>();

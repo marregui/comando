@@ -52,14 +52,12 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The Files tab's folders, or its repositories, as a list with the selected one's fields beside it: add (a folder
- * chosen first), remove, move up and down, and the fields of an entry of {@code folders.json}. A folder lies inside
- * Claude Code's folder ({@code ~/.claude}) and has every field; a repository is a git repository's top folder, with a
- * name, an index file and the names left out. The folder is set only by choosing it. Each field is checked as it is
- * typed, with {@link FolderKind}'s rules, a name used once in {@code folders.json} and a folder that exists and can be
- * read; a field that fails says why beside it, the list marks its entry, and the list can be saved only when every
- * entry passes. Whether a folder exists, and the git repository it belongs to, are looked up off the event thread. The
- * entries of the other kind are kept as they are. EDT only.
+ * The Files tab's folders as a list with the selected one's fields beside it: add (a folder chosen first), remove, move
+ * up and down, and the fields of an entry of {@code folders.json}. A folder lies inside Claude Code's folder ({@code
+ * ~/.claude}) and is set only by choosing it. Each field is checked as it is typed, with {@link FolderKind}'s rules, a
+ * name used once in {@code folders.json} and a folder that exists and can be read; a field that fails says why beside
+ * it, the list marks its entry, and the list can be saved only when every entry passes. Whether a folder exists, and
+ * the git repository it belongs to, are looked up off the event thread. EDT only.
  */
 public final class FoldersEditor {
 
@@ -83,7 +81,6 @@ public final class FoldersEditor {
     static final String ICON = "icon";
     static final String DELETABLE = "deletable";
     static final String LISTED_IN = "listedIn";
-    static final String REPOSITORY = "repository";
 
     /** What a folder's path is on disk, as looked up off the event thread. */
     record Facts(boolean exists, boolean readable, Path gitRoot) {
@@ -112,11 +109,7 @@ public final class FoldersEditor {
     }
 
     private final List<FolderRoot> base;
-    /** Whether the list is of repositories, rather than of folders in {@link #claudeDir}. */
-    private final boolean repositories;
     private final Path claudeDir;
-    /** The entries of the other kind, kept as they are. */
-    private final List<FolderRoot> others;
     private final RepoChanges repos;
     private final Chooser chooser;
     private final DefaultListModel<Row> rows = new DefaultListModel<>();
@@ -154,26 +147,18 @@ public final class FoldersEditor {
     /** True while code fills the fields, so filling them is not taken for an edit. */
     private boolean loading;
 
-    /**
-     * Edits the entries of {@code folders} that are repositories ({@code repositories}) or folders inside {@code
-     * claudeDir}; the others stay as they are.
-     */
-    public FoldersEditor(List<FolderRoot> folders, boolean repositories, Path claudeDir, RepoChanges repos, Chooser chooser) {
+    /** Edits {@code folders}, which lie inside {@code claudeDir}. */
+    public FoldersEditor(List<FolderRoot> folders, Path claudeDir, RepoChanges repos, Chooser chooser) {
         this.base = List.copyOf(folders);
-        this.repositories = repositories;
         this.claudeDir = claudeDir.toAbsolutePath().normalize();
-        this.others = folders.stream().filter(f -> f.repository() != repositories).toList();
         this.repos = repos;
         this.chooser = chooser;
-        String one = repositories ? "repository" : "folder";
-        add = tool("add", repositories ? "Add a repository: choose its top folder" : "Add a folder: choose it inside " + configShown());
-        remove = tool("close", "Take the selected " + one + " out of the Files tab; nothing on disk changes");
-        up = tool("↑", KeyText.of("Move the selected " + one + " up (⌥↑)"));
-        down = tool("↓", KeyText.of("Move the selected " + one + " down (⌥↓)"));
+        add = tool("add", "Add a folder: choose it inside " + configShown());
+        remove = tool("close", "Take the selected folder out of the Files tab; nothing on disk changes");
+        up = tool("↑", KeyText.of("Move the selected folder up (⌥↑)"));
+        down = tool("↓", KeyText.of("Move the selected folder down (⌥↓)"));
         for (FolderRoot f : folders) {
-            if (f.repository() == repositories) {
-                rows.addElement(new Row(FolderKind.INSTANCE.toAttributes(f)));
-            }
+            rows.addElement(new Row(FolderKind.INSTANCE.toAttributes(f)));
         }
         build();
         rows.elements().asIterator().forEachRemaining(r -> {
@@ -205,7 +190,7 @@ public final class FoldersEditor {
         }
     }
 
-    /** Every entry of {@code folders.json} as edited: the folders, then the repositories; empty while any fails a check. */
+    /** Every entry of {@code folders.json} as edited; empty while any fails a check. */
     public Optional<List<FolderRoot>> folders() {
         if (!problemsOfAll().isEmpty()) {
             return Optional.empty();
@@ -218,14 +203,7 @@ public final class FoldersEditor {
                 return Optional.empty();
             }
         }
-        List<FolderRoot> out = new ArrayList<>(repositories ? others : edited);
-        out.addAll(repositories ? edited : others);
-        return Optional.of(out);
-    }
-
-    /** Whether the list is of repositories. */
-    public boolean repositories() {
-        return repositories;
+        return Optional.of(List.copyOf(edited));
     }
 
     /** The list the editor started from. */
@@ -235,12 +213,11 @@ public final class FoldersEditor {
 
     /** Whether the list differs from the one it started from. */
     public boolean dirty() {
-        List<FolderRoot> mine = base.stream().filter(f -> f.repository() == repositories).toList();
-        if (rows.size() != mine.size()) {
+        if (rows.size() != base.size()) {
             return true;
         }
         for (int i = 0; i < rows.size(); i++) {
-            if (!normalized(rows.get(i).fields).equals(normalized(FolderKind.INSTANCE.toAttributes(mine.get(i))))) {
+            if (!normalized(rows.get(i).fields).equals(normalized(FolderKind.INSTANCE.toAttributes(base.get(i))))) {
                 return true;
             }
         }
@@ -272,8 +249,8 @@ public final class FoldersEditor {
 
     /**
      * Entry {@code i}'s problems by field: a name missing or used twice in {@code folders.json}, a folder not chosen, not
-     * a full path, not there, not readable, or still being looked up, outside {@code ~/.claude} (a folder) or not a git
-     * repository's top folder (a repository); an index outside the folder; a listing file that is no file name.
+     * a full path, not there, not readable, still being looked up, or outside {@code ~/.claude}; an index outside the
+     * folder; a listing file that is no file name.
      */
     Map<String, String> problems(int i) {
         Row r = rows.get(i);
@@ -284,12 +261,9 @@ public final class FoldersEditor {
         } else {
             for (int k = 0; k < rows.size(); k++) {
                 if (k != i && rows.get(k).get(NAME).strip().equals(n)) {
-                    out.put(NAME, "another " + (repositories ? "repository" : "folder") + " has this name");
+                    out.put(NAME, "another folder has this name");
                     break;
                 }
-            }
-            if (!out.containsKey(NAME) && others.stream().anyMatch(o -> o.name().equals(n))) {
-                out.put(NAME, repositories ? "a folder has this name" : "a repository has this name");
             }
         }
         String p = r.get(PATH).strip();
@@ -305,10 +279,8 @@ public final class FoldersEditor {
                 out.put(PATH, "no such folder");
             } else if (!f.readable()) {
                 out.put(PATH, "cannot be read");
-            } else if (!repositories && !Path.of(HomeDir.expand(p)).toAbsolutePath().normalize().startsWith(claudeDir)) {
+            } else if (!Path.of(HomeDir.expand(p)).toAbsolutePath().normalize().startsWith(claudeDir)) {
                 out.put(PATH, "must be inside " + HomeDir.shorten(claudeDir.toString()));
-            } else if (repositories && !Path.of(HomeDir.expand(p)).toAbsolutePath().normalize().equals(f.gitRoot())) {
-                out.put(PATH, f.gitRoot() == null ? "not a git repository" : "not the repository's top folder: " + HomeDir.shorten(f.gitRoot().toString()));
             }
         }
         String ix = r.get(INDEX).strip();
@@ -339,18 +311,13 @@ public final class FoldersEditor {
 
     /** Adds a folder chosen first: named after it (made unique), its index the first guess found in it, selected. */
     void add() {
-        Row selected = list.getSelectedValue();
-        Path start = !repositories ? claudeDir
-                : selected == null || selected.get(PATH).isBlank() ? Path.of(HomeDir.home())
-                : Path.of(HomeDir.expand(selected.get(PATH))).getParent() == null ? Path.of(HomeDir.home())
-                : Path.of(HomeDir.expand(selected.get(PATH))).getParent();
-        chooser.folder(body, start).ifPresent(this::add);
+        chooser.folder(body, claudeDir).ifPresent(this::add);
     }
 
-    /** Adds {@code folder} after the others, selected; a folder outside {@code ~/.claude} is refused, for the folders. */
+    /** Adds {@code folder} after the others, selected; a folder outside {@code ~/.claude} is refused. */
     void add(Path folder) {
         Path dir = folder.toAbsolutePath().normalize();
-        if (!repositories && !dir.startsWith(claudeDir)) {
+        if (!dir.startsWith(claudeDir)) {
             refuse(HomeDir.shorten(dir.toString()) + " is outside " + configShown() + ": not added");
             return;
         }
@@ -374,7 +341,6 @@ public final class FoldersEditor {
         fields.put(ICON, FolderRoot.FOLDER);
         fields.put(DELETABLE, "false");
         fields.put(LISTED_IN, "");
-        fields.put(REPOSITORY, Boolean.toString(repositories));
         rows.addElement(new Row(fields));
         lookUp(fields.get(PATH));
         lookUpIndex(rows.lastElement());
@@ -388,7 +354,7 @@ public final class FoldersEditor {
      * name) go first, in the kit's order, the first selected; answers how many were added.
      */
     int addFirst(List<FolderRoot> kit) {
-        List<FolderRoot> have = new ArrayList<>(others);
+        List<FolderRoot> have = new ArrayList<>(rows.size());
         for (int i = 0; i < rows.size(); i++) {
             have.add(new FolderRoot(rows.get(i).get(NAME).strip(), HomeDir.expand(rows.get(i).get(PATH).strip()), "", List.of()));
         }
@@ -414,7 +380,7 @@ public final class FoldersEditor {
                 return true;
             }
         }
-        return others.stream().anyMatch(o -> o.name().equals(n));
+        return false;
     }
 
     /** Takes the selected folder out of the list; the next one is selected. */
@@ -550,7 +516,7 @@ public final class FoldersEditor {
 
     private void build() {
         list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        list.getAccessibleContext().setAccessibleName(repositories ? "Repositories" : "Folders");
+        list.getAccessibleContext().setAccessibleName("Folders");
         list.setCellRenderer(new DefaultListCellRenderer() {
             @Override
             public Component getListCellRendererComponent(JList<?> l, Object value, int i, boolean sel, boolean focus) {
@@ -599,13 +565,13 @@ public final class FoldersEditor {
                 return c;
             }
         });
-        choosePath.setToolTipText(repositories ? "Choose the repository's top folder" : "Choose a folder inside " + configShown());
+        choosePath.setToolTipText("Choose a folder inside " + configShown());
         path.setEditable(false); // chosen, never typed: it exists when chosen
         choosePath.addActionListener(e -> {
             String p = HomeDir.expand(path.getText().strip());
-            Path start = p.isEmpty() || !Path.of(p).isAbsolute() ? (repositories ? Path.of(HomeDir.home()) : claudeDir) : Path.of(p);
+            Path start = p.isEmpty() || !Path.of(p).isAbsolute() ? claudeDir : Path.of(p);
             chooser.folder(body, start).map(dir -> dir.toAbsolutePath().normalize()).ifPresent(dir -> {
-                if (!repositories && !dir.startsWith(claudeDir)) {
+                if (!dir.startsWith(claudeDir)) {
                     refuse(HomeDir.shorten(dir.toString()) + " is outside " + configShown() + ": not taken");
                 } else {
                     path.setText(HomeDir.shorten(dir.toString()));
@@ -620,28 +586,21 @@ public final class FoldersEditor {
         String home = configShown();
         JPanel form = new JPanel(new GridBagLayout());
         int y = 0;
-        y = row(form, y, "Name", name, NAME, "The row's name in the Files tab; unique across folders and repositories");
-        y = row(form, y, repositories ? "Repository" : "Folder", withButton(path, choosePath), PATH, repositories
-                ? "The repository's top folder; chosen with …, it must exist and hold .git"
-                : "The folder the row shows; chosen with …, only inside " + home);
-        y = row(form, y, "Index file", withButton(index, chooseIndex), INDEX, repositories
-                ? lines("The folder's own index, such as README.md: listed first, opened by Open in the row's menu",
-                        "Missing: the row's menu still names it, and opening it says it is not there",
-                        "Empty: the repository has no index")
-                : lines("The folder's catalogue, one line per entry: listed first, opened by Open in the row's menu",
+        y = row(form, y, "Name", name, NAME, "The row's name in the Files tab; unique");
+        y = row(form, y, "Folder", withButton(path, choosePath), PATH, "The folder the row shows; chosen with …, only inside " + home);
+        y = row(form, y, "Index file", withButton(index, chooseIndex), INDEX,
+                lines("The folder's catalogue, one line per entry: listed first, opened by Open in the row's menu",
                         "Named but missing: Save creates it, and /reflect keeps a line in it for each entry",
                         "Empty: the folder has no index"));
         y = row(form, y, "Leave out", excludes, EXCLUDES, lines("Names hidden from the tree wherever they appear, comma-separated, any case",
                 "Always hidden: names starting with a dot, " + String.join(", ", FolderRoot.ALWAYS_EXCLUDED.stream().sorted().toList())));
-        if (!repositories) {
-            y = row(form, y, "Icon", icon, ICON, "The icon of the folder's row");
-            y = row(form, y, "Trash", deletable, DELETABLE, "Whether the Files tab moves the folder's files and subfolders to the Trash; never the folder");
-            y = row(form, y, "Listed in", withButton(listedIn, chooseListing), LISTED_IN,
-                    lines("The name of the file that, in each subfolder, lists the entries beside it, such as INDEX.md",
-                            "An entry moved to the Trash takes its lines out of the nearest such file above it",
-                            "Missing in a subfolder: nothing to take out there; /reflect creates it with its first line",
-                            "Empty, or Trash off: no file is changed"));
-        }
+        y = row(form, y, "Icon", icon, ICON, "The icon of the folder's row");
+        y = row(form, y, "Trash", deletable, DELETABLE, "Whether the Files tab moves the folder's files and subfolders to the Trash; never the folder");
+        y = row(form, y, "Listed in", withButton(listedIn, chooseListing), LISTED_IN,
+                lines("The name of the file that, in each subfolder, lists the entries beside it, such as INDEX.md",
+                        "An entry moved to the Trash takes its lines out of the nearest such file above it",
+                        "Missing in a subfolder: nothing to take out there; /reflect creates it with its first line",
+                        "Empty, or Trash off: no file is changed"));
         GridBagConstraints g = new GridBagConstraints();
         g.gridx = 1;
         g.gridy = y;
@@ -813,23 +772,20 @@ public final class FoldersEditor {
         changed.run();
     }
 
-    /** What Save does with {@code r} beyond {@code folders.json}: an index file named but missing is created, for a folder. */
+    /** What Save does with {@code r} beyond {@code folders.json}: an index file named but missing is created. */
     private String note(Row r) {
         String ix = r.get(INDEX).strip();
         IndexFacts f = ix.isEmpty() ? null : indexes.get(indexPath(r).toString());
         if (f == null || f.exists()) {
             return "";
         }
-        return repositories ? ix + " is not in the repository" : ix + " does not exist yet: Save creates it";
+        return ix + " does not exist yet: Save creates it";
     }
 
     private String rowIcon(Row r) {
         Facts f = looked.get(HomeDir.expand(r.get(PATH).strip()));
         if (f != null && f.gitRoot() != null && f.gitRoot().equals(Path.of(HomeDir.expand(r.get(PATH).strip())).toAbsolutePath().normalize())) {
             return "folder-git";
-        }
-        if (repositories) {
-            return "folder"; // every entry is one: the plain folder says enough
         }
         String i = r.get(ICON);
         return FolderRoot.ICONS.contains(i) && !FolderRoot.FOLDER.equals(i) ? "folder-" + i : "folder";

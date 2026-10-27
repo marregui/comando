@@ -546,8 +546,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     /**
      * Creates the index file each folder inside {@code claudeDir} names but does not have, when the file's own folder
-     * exists: a title and how the file is kept, which {@code /reflect} then fills. Repositories, folders elsewhere and
-     * files that exist are left as they are; a file that cannot be written is logged. Answers the files created.
+     * exists: a title and how the file is kept, which {@code /reflect} then fills. Folders elsewhere and files that
+     * exist are left as they are; a file that cannot be written is logged. Answers the files created.
      */
     static List<Path> createIndexes(List<FolderRoot> specs, Path claudeDir) {
         Path claude = claudeDir.toAbsolutePath().normalize();
@@ -555,7 +555,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         for (FolderRoot f : specs) {
             Path dir = Path.of(f.path()).toAbsolutePath().normalize();
             Optional<Path> index = f.indexFile().map(i -> i.toAbsolutePath().normalize());
-            if (f.repository() || !dir.startsWith(claude) || index.isEmpty() || !index.get().startsWith(dir)
+            if (!dir.startsWith(claude) || index.isEmpty() || !index.get().startsWith(dir)
                     || Files.exists(index.get()) || !Files.isDirectory(index.get().getParent())) {
                 continue;
             }

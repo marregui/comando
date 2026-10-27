@@ -484,45 +484,33 @@ class FilesTabTest {
     }
 
     @Test
-    void theRepositoriesAreRowsOfTheirOwnNodeAndAFoldersMenuShowsItsOwnChanges() throws Exception {
-        Fixture f = new Fixture(new FolderRoot("Memory", "/c/MEMORY", "", List.of()), new FolderRoot("app", "/r", "", List.of()).asRepository(),
-                new FolderRoot("lib", "/l", "", List.of()).asRepository());
-        assertThat(f.labels()).containsExactly("Memory", "Repositories", "app", "lib");
-        f.edt(() -> assertThat(FilesTab.isRepositories(node(f.tree(), 1))).isTrue());
-        f.edt(() -> assertThat(f.tab.rowIcon(new ViewSpec.TreeNode("app", "/r", List.of()))).contains("folder"));
+    void everyFolderIsARowOfTheTreeAndItsMenusShowItsOwnChanges() throws Exception {
+        Fixture f = new Fixture(new FolderRoot("Memory", "/c/MEMORY", "", List.of()), new FolderRoot("app", "/r", "", List.of()));
+        assertThat(f.labels()).as("one row per folder, no node above them").containsExactly("Memory", "app");
 
         f.intents.clear();
-        f.edt(() -> f.tree().expandRow(2));
-        assertThat(f.intents).as("an open repository is read").containsExactly(new Intent.WatchFolders(List.of("app")));
+        f.edt(() -> f.tree().expandRow(1));
+        assertThat(f.intents).as("an open folder is read").containsExactly(new Intent.WatchFolders(List.of("app")));
         ViewSpec.TreeNode java = new ViewSpec.TreeNode("A.java", "", "comando-file:/r/A.java#0", List.of());
         f.edt(() -> f.show("app", folder("app", java)));
-        assertThat(f.labels()).containsExactly("Memory", "Repositories", "app", "A.java", "lib");
-        f.intents.clear();
-        f.edt(() -> f.tree().collapseRow(1));
-        assertThat(f.intents).as("closing Repositories closes its rows").containsExactly(new Intent.WatchFolders(List.of()));
-        f.edt(() -> f.tree().expandRow(1));
+        assertThat(f.labels()).containsExactly("Memory", "app", "A.java");
 
         RepoStatus.FileChange changed = new RepoStatus.FileChange("A.java", "", RepoStatus.Kind.MODIFIED);
         f.edt(() -> f.tab.showRepos(List.of(
                 new RepoStatus("/c", "master", List.of(new RepoStatus.FileChange("MEMORY/a.md", "", RepoStatus.Kind.MODIFIED)), false, ""),
                 new RepoStatus("/r", "main", List.of(changed), false, ""))));
+        f.edt(() -> assertThat(tip(f.tree(), 1)).as("a repository's top folder says its branch and what it holds")
+                .isEqualTo("On main · 1 uncommitted: 1 modified"));
         f.edt(() -> {
-            Rectangle r = f.tree().getRowBounds(2);
-            String tip = f.tree().getToolTipText(new MouseEvent(f.tree(), MouseEvent.MOUSE_MOVED, 0, 0, r.x + 4, r.y + r.height / 2, 0, false));
-            assertThat(tip).as("a repository's row says its branch and what it holds").isEqualTo("On main · 1 uncommitted: 1 modified");
-        });
-        f.edt(() -> {
-            Component cell = f.tree().getCellRenderer().getTreeCellRendererComponent(f.tree(), node(f.tree(), 2), false, false, false, 2, false);
-            Container row = (Container) cell;
-            assertThat(((JLabel) row.getComponent(0)).getIcon()).as("under Repositories a plain folder").isSameAs(Icons.get("folder"));
-            assertThat(((JLabel) row.getComponent(1)).getIcon()).as("the mark of changes").isSameAs(Icons.get(FilesTab.CHANGES_ICON));
+            Component cell = f.tree().getCellRenderer().getTreeCellRendererComponent(f.tree(), node(f.tree(), 1), false, false, false, 1, false);
+            assertThat(((JLabel) ((Container) cell).getComponent(1)).getIcon()).as("the mark of changes").isSameAs(Icons.get(FilesTab.CHANGES_ICON));
         });
         f.intents.clear();
-        f.edt(() -> doubleClick(f.tree(), 2));
+        f.edt(() -> doubleClick(f.tree(), 1));
         assertThat(f.intents).containsExactly(new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes("/r", "", "app"), Placement.SIDE));
 
         f.intents.clear();
-        f.edt(() -> f.tree().setSelectionRow(3));
+        f.edt(() -> f.tree().setSelectionRow(2));
         f.edt(() -> {
             JPopupMenu menu = f.tab.menuFor(java);
             assertThat(items(menu)).containsExactly("Open in a panel", "Edit in a panel", "Compare with HEAD");

@@ -70,7 +70,7 @@ does; the menus grey out what cannot run now.
 |---|---|---|
 | **Sessions** | Claude Code sessions, running first. A row is the session's state icon and its name. Under the sessions, while there is one, **Without a session** lists comando's own panels that belong to no session, open and closed | a click on the icon starts or stops the session; resting on the name shows its card (facts and a summary); a right click opens its menu, which does the rest; drag a row to order the list yourself |
 | **Connections** | databases. A row is the connection's state icon (grey while closed, blue while connected) and its name, with a red **prod** for production; the name is in the accent colour while the focused panel uses it | a click on the icon connects or disconnects; resting on the name shows a card of its facts, without a summary; a double click binds the connection to the focused panel |
-| **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, changed files and the folders holding them are named in git's colours; a file git does not track yet is gold, with a dot after each folder on the way down to it, until you open it; what git ignores is left out. The git repositories you add sit under one **Repositories** node | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a folder's right click shows the changes inside it |
+| **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, changed files and the folders holding them are named in git's colours; a file git does not track yet is gold, with a dot after each folder on the way down to it, until you open it; what git ignores is left out. Every folder lies inside Claude Code's folder; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a folder's right click shows the changes inside it |
 
 The tabs' right-click menus:
 
@@ -78,7 +78,7 @@ The tabs' right-click menus:
 |---|---|
 | **Sessions** | New session…, Import stored conversations…, sorting, a new panel or a closed one reopened |
 | **Connections** | New connection…, starting or stopping the embedded QuestDB |
-| **Files** | the windows that add, remove, reorder and set the folders and the repositories |
+| **Files** | the window that adds, removes, reorders and sets the folders |
 
 ### 1.2 The panel tabs and their cards
 
@@ -352,7 +352,7 @@ Your data lives in `~/.comando`; **Actions ▸ Reveal comando folder** opens it.
 | `panels/` | each panel's text as a Markdown file named after the panel. **⌘O** opens a file as a panel; edit a panel's file in another editor and the panel shows the change within a second |
 | `questdb/` | the embedded QuestDB's data |
 | `help/` | this tutorial |
-| `folders.json` | the Files tab's folders and repositories, edited from the Files tab's menu |
+| `folders.json` | the Files tab's folders, edited from the Files tab's menu |
 | `opened-files` | the files you opened: a new file stops being marked gold once opened |
 | `logs/` | comando's logs |
 

@@ -70,15 +70,15 @@ public final class DocImages {
     public static void main(String[] args) throws Exception {
         Path out = Files.createDirectories(Path.of(args.length > 0 ? args[0] : "build/doc-images"));
         // Claude Code and its folder are found in the painter's home; the window then runs in a scratch home, so every
-        // path it shows reads ~/projects/lane, the same on every machine
+        // path it shows reads ~/.claude/lane, the same on every machine
         String claude = ClaudeSettings.findExecutable();
         KitRoot root = KitRoot.current();
         Path userHome = Files.createTempDirectory("comando-docs-home");
         System.setProperty("user.home", userHome.toString());
         Path home = Files.createDirectories(userHome.resolve(".comando"));
-        Path repo = Snapshot.sampleRepo(userHome.resolve("projects").resolve("lane"));
+        Path repo = Snapshot.sampleRepo(userHome.resolve(".claude").resolve("lane"));
         Files.writeString(home.resolve("folders.json"), JsonFile.JSON.writeValueAsString(List.of(
-                new FolderRoot("lane", repo.toString(), "README.md", List.of()).asRepository())));
+                new FolderRoot("lane", repo.toString(), "README.md", List.of()))));
         AppConfig config = new AppConfig(home, claude, root, true);
         App app = new App(config, "docs", () -> {
         });
