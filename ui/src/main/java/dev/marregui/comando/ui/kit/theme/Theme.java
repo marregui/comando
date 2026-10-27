@@ -139,9 +139,13 @@ public final class Theme {
         }
     }
 
-    /** Step {@code s} of the scale for a text whose body is {@code base} points: {@code base} itself at {@code BODY}. */
+    /**
+     * Step {@code s} of the scale for a text whose body is {@code base} points: {@code base} itself at {@code BODY}. To
+     * the half point, so that a base other than 13, as Linux's look and feel gives, lands on a size its fonts draw
+     * (12 pt's small step is 11, not 11.08).
+     */
     public static float size(float base, TextSize s) {
-        return base * s.pt / BASE_SIZE;
+        return Math.round(base * s.pt / BASE_SIZE * 2) / 2f;
     }
 
     /** {@code f}, taken as its context's body text, at step {@code s} of the scale. */
@@ -343,10 +347,12 @@ public final class Theme {
         return new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha);
     }
 
-    /** The spinner's bar {@code behindHead} bars behind its head: deep blue at the head, lighter with each bar behind. */
+    /**
+     * The spinner's bar {@code behindHead} bars behind its head: the tint's body at the head, fading into the ground with
+     * each bar behind; something running is "where I am", which the tint marks (records 100, 103).
+     */
     public static Color spinnerShade(int behindHead) {
-        int g = 0xFF - 0x7F / (behindHead + 1);
-        return new Color(g >>> 2, g, 0xFF);
+        return Tint.over(ground(), tint.body, 1f - 0.11f * behindHead);
     }
 
     public static String hex(Color c) {

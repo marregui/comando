@@ -54,6 +54,9 @@ class TranscriptCanvasTest {
         canvas.setSize(width, canvas.contentHeight());
         BufferedImage img = new BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB);
         Graphics2D g = img.createGraphics();
+        // the canvas paints no ground of its own: the viewport under it does, and glyphs blend over it
+        g.setColor(Theme.ground());
+        g.fillRect(0, 0, width, height);
         g.translate(0, -(canvas.contentHeight() - height));
         g.setClip(0, canvas.contentHeight() - height, width, height);
         canvas.paint(g);

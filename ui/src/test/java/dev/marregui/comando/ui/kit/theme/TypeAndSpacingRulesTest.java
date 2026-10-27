@@ -73,6 +73,7 @@ class TypeAndSpacingRulesTest {
     void theScaleAndTheGridHoldTheirSteps() {
         assertThat(Theme.size(13f, Theme.TextSize.SMALL)).isEqualTo(12f);
         assertThat(Theme.size(17f, Theme.TextSize.BODY)).as("a zoomed text's body is itself").isEqualTo(17f);
+        assertThat(Theme.size(12f, Theme.TextSize.SMALL)).as("to the half point: Linux's 12 pt base").isEqualTo(11f);
         assertThat(Theme.HEADING_SCALE[0] * Theme.BASE_SIZE).isEqualTo(Theme.TextSize.TITLE.pt);
         assertThat(Theme.rowHeight(16)).isEqualTo(24);
         assertThat(Theme.rowHeight(17)).isEqualTo(28);

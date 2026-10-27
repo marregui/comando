@@ -14,8 +14,9 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.Rectangle2D;
 
 /**
- * The bar spinner of the original SQL client's {@code InfiniteSpinner}, as an icon: bars around a centre, shaded
- * along a colour wheel that turns clockwise one bar per {@link #advance()}. The icon has no clock of its own; its
+ * The bar spinner of the original SQL client's {@code InfiniteSpinner}, as an icon: bars around a centre, the head in
+ * the tint chosen and the bars behind it fading into the ground, turning clockwise one bar per {@link #advance()}; the
+ * shades are read at each paint, so another theme shows at the next turn. The icon has no clock of its own; its
  * owner advances it on a timer and repaints where it is drawn, so one icon serves every place that spins, in step.
  * Not thread-safe: advanced and painted on the event thread.
  */
@@ -28,7 +29,6 @@ public final class SpinnerIcon implements Icon {
 
     private final int size;
     private final Area[] bars = new Area[BAR_COUNT];
-    private final Color[] colors = new Color[BAR_COUNT];
     private int head = BAR_COUNT - 1;
 
     public SpinnerIcon(int size) {
@@ -49,8 +49,6 @@ public final class SpinnerIcon implements Icon {
             bar.transform(toCentre);
             bar.transform(AffineTransform.getRotateInstance(2.0 * Math.PI / BAR_COUNT * i, c, c));
             bars[i] = bar;
-            // the original's shades of blue: the head bar deep, the tail lighter with every step
-            colors[i] = Theme.spinnerShade(i);
         }
     }
 
@@ -72,7 +70,7 @@ public final class SpinnerIcon implements Icon {
             g2.clipRect(x, y, size, size);
             g2.translate(x, y);
             for (int i = 0; i < BAR_COUNT; i++) {
-                g2.setColor(colors[(i + head) % BAR_COUNT]);
+                g2.setColor(Theme.spinnerShade((i + head) % BAR_COUNT));
                 g2.fill(bars[i]);
             }
         } finally {

@@ -18,6 +18,7 @@ The theme sheet showed cards, borders and the prompt's bubble in one grey on eve
 | where | Actions ▸ Theme, first of the three submenus, each with its swatch (the ground with its tint's bar), the theme chosen ticked when the ground and tint chosen make one; choosing one keeps both choices | D3 |
 | the two choosers | retired: Actions holds Theme alone, and one swatch beside Clear (the theme's ground with its tint's bar) opens the six; Miguel chose the set on 2026-10-27 ("I like the 6 of them") | D3 |
 | a ground and tint kept from before | the theme they make; else the theme on the ground kept; else the theme of the tint kept (the gold kept before tints too); else Graphite and gold. The preferences keep `theme.ground` and `theme.tint` | a window opens in a theme of the set |
+| running and waiting | the spinner's head is the tint's body and its bars fade into the ground; the hourglass is drawn in the tint; both were blue, which now means a link alone | records 100 and 101: activity is "where I am" |
 | surfaces | a card, its border, the prompt's bubble, inline code's ground in the transcript and a table's rules are laid over the ground chosen (`OnGround`), read at each paint, so a background or border made once follows another ground | tier 1 of record 100: surfaces belong to the theme |
 
 Miguel decided D3 and chose the set. Claude chose the six pairs.
@@ -32,5 +33,6 @@ Tested in `NamedThemeTest`, `MenusTest` (the submenu and its swatches), `OnGroun
 once take another ground; every surface stands off every ground), `NamedThemeTest` (a pair kept from before maps to
 the closest theme) and `UiKeysTest` (Actions ▸ Theme and the swatch beside Clear set and keep a theme; every panel, the
 transcript and an editor take it, the editor keeping its zoom; no Tint or Ground submenu; the gold kept before tints
-opens in Espresso and champagne). Sheets: `app/build/snapshots/themes.png` and `02f2-themes.png` of `:app:snapshot`,
+opens in Espresso and champagne); `SpinnerIconTest` (the head in each theme's tint, no bar in the old blue; mutation-checked
+with the old shades put back) and its hourglass check. Sheets: `app/build/snapshots/themes.png` and `02f2-themes.png` of `:app:snapshot`,
 the whole window in each theme.

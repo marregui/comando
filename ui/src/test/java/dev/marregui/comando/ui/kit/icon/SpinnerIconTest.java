@@ -1,9 +1,17 @@
 package dev.marregui.comando.ui.kit.icon;
 
+import dev.marregui.comando.ui.kit.theme.Ground;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import org.junit.jupiter.api.Test;
 
+import java.awt.Color;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -39,6 +47,54 @@ class SpinnerIconTest {
                 }
             }
         }
+    }
+
+    @Test
+    void theHeadIsTheTintChosenAndTheTailFadesIntoTheGroundInEveryTheme() throws Exception {
+        try {
+            SpinnerIcon icon = new SpinnerIcon(32);
+            for (NamedTheme t : NamedTheme.values()) {
+                Theme.ground(t.ground);
+                Theme.tint(t.tint);
+                assertThat(Theme.spinnerShade(0)).as("the head in " + t).isEqualTo(t.tint.body);
+                assertThat(distance(Theme.spinnerShade(7), t.ground.color))
+                        .as("the tail nearer the ground than the head, in " + t)
+                        .isLessThan(distance(Theme.spinnerShade(0), t.ground.color));
+                BufferedImage img = new BufferedImage(40, 40, BufferedImage.TYPE_INT_ARGB);
+                Graphics2D g = img.createGraphics();
+                icon.paintIcon(null, g, 4, 4);
+                g.dispose();
+                assertThat(count(img, t.tint.body)).as("the head painted in " + t).isPositive();
+                assertThat(IntStream.range(0, 8).mapToObj(Theme::spinnerShade).filter(c -> c.getBlue() == 0xFF && c.getRed() < 0x40))
+                        .as("no bar in the old blue, in " + t).isEmpty();
+            }
+        } finally {
+            Theme.ground(Ground.GRAPHITE);
+            Theme.tint(Tint.TREASURE);
+        }
+    }
+
+    @Test
+    void theHourglassIsDrawnInTheSvgsGoldSoItPaintsInTheTint() throws Exception {
+        String svg = Files.readString(Path.of("src/main/resources/icons/hourglass.svg"));
+        assertThat(svg).contains(String.format("#%06X", Icons.SVG_GOLD)).doesNotContain("#548AF7");
+    }
+
+    private static int distance(Color a, Color b) {
+        int r = a.getRed() - b.getRed();
+        int g = a.getGreen() - b.getGreen();
+        int bl = a.getBlue() - b.getBlue();
+        return r * r + g * g + bl * bl;
+    }
+
+    private static int count(BufferedImage img, Color c) {
+        int n = 0;
+        for (int p : pixels(img)) {
+            if ((p >>> 24) == 0xFF && (p & 0xFFFFFF) == (c.getRGB() & 0xFFFFFF)) {
+                n++;
+            }
+        }
+        return n;
     }
 
     private static BufferedImage paint(SpinnerIcon icon) {
