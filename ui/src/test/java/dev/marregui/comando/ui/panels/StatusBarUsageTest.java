@@ -48,6 +48,39 @@ class StatusBarUsageTest {
     }
 
     @Test
+    void codexHasALabelOfItsOwnAfterClaudes() throws Exception {
+        StatusBar bar = new StatusBar(intent -> {
+        });
+        PlanUsage codex = new PlanUsage(PlanUsage.CODEX, List.of(new PlanUsage.Window("Session", 4, "Oct 27 at 12:06"),
+                new PlanUsage.Window("Week", 92, "Nov 2 at 14:15")), 1L, "");
+        SwingUtilities.invokeAndWait(() -> bar.planUsage(READ));
+        SwingUtilities.invokeAndWait(() -> bar.planUsage(codex));
+        assertThat(StatusBar.usageText(codex)).isEqualTo("Codex Session 4% (resets 12:06) · Week 92%");
+        assertThat(bar.codexUsageLabel().isVisible()).isTrue();
+        assertThat(bar.codexUsageLabel().getText()).isEqualTo("Codex Session 4% (resets 12:06) · Week 92%");
+        assertThat(bar.codexUsageLabel().getForeground()).isEqualTo(Theme.DANGER);
+        assertThat(bar.codexUsageLabel().getToolTipText()).contains("Week: 92% used, resets Nov 2 at 14:15").contains("from codex app-server");
+        assertThat(bar.usageLabel().getText()).as("Claude's label keeps its own read").isEqualTo("Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
+        assertThat(bar.usageLabel().getForeground()).isEqualTo(Theme.MUTED);
+        int[] order = {bar.usageLabel().getParent().getComponentZOrder(bar.usageLabel()),
+                bar.usageLabel().getParent().getComponentZOrder(bar.codexUsageLabel())};
+        assertThat(order[0]).as("Claude's first, then Codex's").isLessThan(order[1]);
+
+        SwingUtilities.invokeAndWait(() -> bar.planUsage(PlanUsage.failed(PlanUsage.CODEX, "timeout", 2L)));
+        assertThat(bar.codexUsageLabel().getText()).as("the last good Codex read stays").isEqualTo("Codex Session 4% (resets 12:06) · Week 92%");
+        assertThat(bar.codexUsageLabel().getForeground()).isEqualTo(Theme.MUTED);
+        assertThat(bar.usageLabel().getToolTipText()).as("a Codex failure is not Claude's").doesNotContain("failed");
+    }
+
+    @Test
+    void withoutCodexItsLabelNeverShows() throws Exception {
+        StatusBar bar = new StatusBar(intent -> {
+        });
+        SwingUtilities.invokeAndWait(() -> bar.planUsage(PlanUsage.failed(PlanUsage.CODEX, "cannot run 'codex'", 2L)));
+        assertThat(bar.codexUsageLabel().isVisible()).isFalse();
+    }
+
+    @Test
     void aReadWithNothingToShowLeavesTheKitShown() throws Exception {
         StatusBar bar = new StatusBar(intent -> {
         });

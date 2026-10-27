@@ -47,7 +47,7 @@ import java.util.regex.Pattern;
 
 /**
  * The standing notice on the left, which takes the user to what it is about when clicked and opens the recent notices
- * on a right click (or a click, when it is about nothing to go to); the plan's usage limits, the focused panel's
+ * on a right click (or a click, when it is about nothing to go to); Claude's and Codex's plan usage, the focused panel's
  * session, connection and running work on the right.
  */
 public final class StatusBar {
@@ -62,14 +62,30 @@ public final class StatusBar {
     private final JLabel session = new JLabel();
     private final JLabel connection = new JLabel();
     private final JLabel work = new JLabel();
-    private final JLabel usage = new JLabel();
+    /** Claude's plan usage, then Codex's, each a label of its own. */
+    private final Usage claudeUsage = new Usage(PlanUsage.CLAUDE, "Claude Code's /usage");
+    private final Usage codexUsage = new Usage(PlanUsage.CODEX, "codex app-server");
     /** The kit's name and version, and a newer release when one is out; hidden without a kit. */
     private final JLabel kit = new JLabel();
     /** Opens the kit's menu under its label. */
     private Consumer<JComponent> kitMenu = c -> {
     };
-    /** The last read that had windows; a failed read after it keeps showing it, marked as old. */
-    private PlanUsage lastUsage;
+
+    /** One plan's usage label. */
+    private static final class Usage {
+        final JLabel label = new JLabel();
+        /** Where the numbers come from, for the tooltip. */
+        final String source;
+        /** The last read that had windows; a failed read after it keeps showing it, marked as old. */
+        PlanUsage last;
+
+        Usage(String provider, String source) {
+            this.source = source;
+            label.setVisible(false);
+            label.getAccessibleContext().setAccessibleName(provider.equals(PlanUsage.CLAUDE) ? "Plan usage" : provider + " plan usage");
+        }
+    }
+
     private final IntentSink intents;
     private List<Notice> history = List.of();
     private Notice shown = Notice.NONE;
@@ -88,11 +104,11 @@ public final class StatusBar {
                 BorderFactory.createEmptyBorder(3, Theme.PAD, 3, Theme.PAD)));
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.PAD * 2, 0));
         right.add(kit);
-        right.add(usage);
+        right.add(claudeUsage.label);
+        right.add(codexUsage.label);
         right.add(session);
         right.add(connection);
         right.add(work);
-        usage.setVisible(false);
         kit.setVisible(false);
         kit.setForeground(Theme.MUTED);
         kit.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
@@ -103,7 +119,6 @@ public final class StatusBar {
                 kitMenu.accept(kit);
             }
         });
-        usage.getAccessibleContext().setAccessibleName("Plan usage");
         notice.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         notice.getAccessibleContext().setAccessibleName("Status");
         notice.addMouseListener(new MouseAdapter() {
@@ -147,35 +162,36 @@ public final class StatusBar {
     private static final DateTimeFormatter HOUR_MINUTE = DateTimeFormatter.ofPattern("HH:mm").withZone(ZoneId.systemDefault());
 
     /**
-     * Shows the plan's usage limits: each window's share used, and when the session window resets; the tooltip has
-     * every reset time. A failed read keeps the last good one, muted, with the reason in the tooltip; with none, it
-     * shows nothing.
+     * Shows a plan's usage limits, Claude's or Codex's, each on its own label: each window's share used, and when the
+     * session window resets; the tooltip has every reset time. A failed read keeps the last good one, muted, with the
+     * reason in the tooltip; with none, it shows nothing.
      */
     public void planUsage(PlanUsage read) {
+        Usage u = read.provider().equals(PlanUsage.CODEX) ? codexUsage : claudeUsage;
         if (!read.windows().isEmpty()) {
-            lastUsage = read;
+            u.last = read;
         }
-        if (lastUsage == null) {
-            usage.setVisible(false);
+        if (u.last == null) {
+            u.label.setVisible(false);
             return;
         }
-        boolean stale = read != lastUsage;
-        usage.setVisible(true);
-        usage.setText(usageText(lastUsage));
-        int worst = lastUsage.windows().stream().mapToInt(PlanUsage.Window::percent).max().orElse(0);
-        usage.setForeground(stale ? Theme.MUTED : worst >= USAGE_DANGER ? Theme.DANGER : worst >= USAGE_WARN ? Theme.warn() : Theme.MUTED);
+        boolean stale = read != u.last;
+        u.label.setVisible(true);
+        u.label.setText(usageText(u.last));
+        int worst = u.last.windows().stream().mapToInt(PlanUsage.Window::percent).max().orElse(0);
+        u.label.setForeground(stale ? Theme.MUTED : worst >= USAGE_DANGER ? Theme.DANGER : worst >= USAGE_WARN ? Theme.warn() : Theme.MUTED);
         StringBuilder tip = new StringBuilder();
-        for (PlanUsage.Window w : lastUsage.windows()) {
+        for (PlanUsage.Window w : u.last.windows()) {
             tip.append(MarkdownHtml.escape(w.name() + ": " + w.percent() + "% used" + (w.resets().isEmpty() ? "" : ", resets " + w.resets())))
                     .append("<br>");
         }
-        tip.append(MarkdownHtml.escape("Read at " + HOUR_MINUTE.format(Instant.ofEpochMilli(lastUsage.readAtMillis()))
-                + " from Claude Code's /usage, every 5 minutes"));
+        tip.append(MarkdownHtml.escape("Read at " + HOUR_MINUTE.format(Instant.ofEpochMilli(u.last.readAtMillis()))
+                + " from " + u.source + ", every 5 minutes"));
         if (stale) {
             tip.append("<br>").append(MarkdownHtml.escape("The read at " + HOUR_MINUTE.format(Instant.ofEpochMilli(read.readAtMillis()))
                     + " failed: " + read.problem()));
         }
-        usage.setToolTipText("<html>" + tip + "</html>");
+        u.label.setToolTipText("<html>" + tip + "</html>");
     }
 
     /**
@@ -199,9 +215,14 @@ public final class StatusBar {
         return kit;
     }
 
-    /** The usage label; for tests. */
+    /** Claude's usage label; for tests. */
     JLabel usageLabel() {
-        return usage;
+        return claudeUsage.label;
+    }
+
+    /** Codex's usage label; for tests. */
+    JLabel codexUsageLabel() {
+        return codexUsage.label;
     }
 
     /** The standing notice's label; for tests. */
@@ -209,11 +230,15 @@ public final class StatusBar {
         return notice;
     }
 
-    /** "Session 5% (resets 7:19pm) · Week 43% · Fable 17%": the session's reset is the one that comes within hours. */
+    /**
+     * "Session 5% (resets 7:19pm) · Week 43% · Fable 17%": the session's reset is the one that comes within hours.
+     * Codex's starts with its name: "Codex Session 4% (resets 12:06) · Week 3%".
+     */
     static String usageText(PlanUsage u) {
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(u.provider().equals(PlanUsage.CLAUDE) ? "" : u.provider() + " ");
+        int start = sb.length();
         for (PlanUsage.Window w : u.windows()) {
-            if (!sb.isEmpty()) {
+            if (sb.length() > start) {
                 sb.append(" · ");
             }
             sb.append(w.name()).append(' ').append(w.percent()).append('%');

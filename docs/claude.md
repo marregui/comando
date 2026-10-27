@@ -44,7 +44,8 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
 - **Other runs.** Besides one process per running session, comando runs `claude --safe-mode -p /usage` at start and
   every 5 minutes for the plan's usage (no prompt, no saved session; 30 s bound), `claude --version` once at start
   ([§1.3](#13-turns-interrupt-stop)), and `claude --safe-mode -p --model haiku` for the summary on a tab's card, one at a
-  time; each runs on the root, as a session does.
+  time; each runs on the root, as a session does. After each `/usage` read, the same thread runs `codex app-server`
+  for the Codex plan's usage (`account/rateLimits/read`, no prompt; 10 s bound), when Codex is installed.
 
 ### 1.2 Mapping the stream
 

@@ -38,7 +38,7 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [28](0028-the-sidebar-has-three-tabs.md) | The sidebar has three tabs | Miguel, Claude | accepted; reading rules replaced by 29; a fourth tab, Panels, by 39; one row replaced by two, 40 |
 | [29](0029-the-scratchpad-is-a-navigator.md) | The scratchpad is a navigator | Miguel, Claude | accepted; Markdown row replaced by 30, deletion by 34; fixed folder and always-on read by 49; its JFR icon removed by 54 |
 | [30](0030-documents-open-rendered-and-coloured.md) | Documents open rendered and coloured | Miguel, Claude | accepted |
-| [31](0031-the-status-bar-shows-plan-usage.md) | The status bar shows the plan's usage | Miguel, Claude | accepted |
+| [31](0031-the-status-bar-shows-plan-usage.md) | The status bar shows the plan's usage | Miguel, Claude | accepted; Codex's plan added 2026-10-27 |
 | [32](0032-session-rows-carry-their-controls.md) | Session rows carry their controls | Miguel, Claude | accepted; edit control and plug icons replaced by 37 |
 | [33](0033-thinking-gives-way-and-the-conclusion-is-gold.md) | Thinking gives way, and the conclusion is gold | Miguel, Claude | accepted; the gold superseded 2026-10-19 by one amber text on near-black |
 | [34](0034-a-deleted-document-closes-its-panel.md) | A deleted document closes its panel | Miguel, Claude | accepted |

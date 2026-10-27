@@ -263,7 +263,7 @@ default.
 | `claude-strand-<session>` | K4 | every change to a session: start, send, interrupt, stop, history; the transcript's one writer |
 | `claude-timer` | K4, timed | the stop sequence's deadlines |
 | `subagent-tail` | K4, timed | finds and renders a sub-agent's stored conversation; follows up to 4 of them every 2 s while they run, reading only what their files gained |
-| `plan-usage` | K4, timed | `claude --safe-mode -p /usage` at start and every 5 minutes, stopped after 30 s |
+| `plan-usage` | K4, timed | `claude --safe-mode -p /usage` at start and every 5 minutes, stopped after 30 s; then `codex app-server` for Codex's plan, stopped after 10 s |
 | `topic-reader` | K4 | the tabs' topics with Haiku, one `claude --safe-mode -p --model haiku` at a time; at most one ask waiting per tab, the card shown first |
 | `db-<connection>` | K4 | opens the connection, runs statements one at a time, fetches rows |
 | `db-timer` | K4, timed | health checks every 60 s; the abort after an unanswered cancel |

@@ -27,3 +27,13 @@ the week for Fable. He wants them in comando, refreshed every 5 minutes, without
 The parser depends on the wording of `/usage` ("Current week (Fable): 17% used · resets …"). A Claude Code release
 that rewords it leaves the bar on its last good read, with the reason in the tooltip and a warning in the log.
 A model-only week such as "Current week (Sonnet only)" shows as `Sonnet`.
+
+Amended on 2026-10-27 (Miguel: the Codex plan's usage in the status bar too). After each Claude read, the same
+`plan-usage` thread reads Codex's plan from the Codex CLI: `codex app-server`, JSON-RPC over stdio, method
+`account/rateLimits/read`, which answers with the 5-hour window and the week, each with its share used and reset time
+(no prompt, no tokens; about 1.1 s, measured on codex-cli 0.163.0). The label sits after Claude's,
+`Codex Session 4% (resets 12:06) · Week 3%`, with the same colours, tooltip and failed-read rule; a window whose reset
+has passed shows 0 %. The read is bounded at 10 s. Codex is found as `COMANDO_CODEX`, else `~/.local/bin/codex`,
+`/opt/homebrew/bin/codex`, `/usr/local/bin/codex`, else `codex` on the PATH; without Codex installed or signed in,
+the label never shows and the log says why once. Not the session files Codex writes under `~/.codex/sessions`: they
+carry the same windows but only as of the last local Codex run.

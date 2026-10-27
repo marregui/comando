@@ -26,6 +26,7 @@ import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,6 +61,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     /** Reads the plan's usage limits; a thread of its own, as a read can take seconds. */
     private final ScheduledExecutorService planUsage =
             Threads.timedStrand("plan-usage");
+    /** The last Codex read's problem, so that the same one is logged once; touched only on {@link #planUsage}. */
+    private String lastCodexProblem = "";
 
     /** The most sub-agent views that follow their file at once; opening another stops the oldest. */
     static final int TAILS = 4;
@@ -756,10 +759,12 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     }
 
     /**
-     * Reads the plan's usage limits now and then every {@code every}, and sends each read to the status bar. A read
-     * runs Claude Code's local {@code /usage} command: no prompt, no tokens, no saved session.
+     * Reads the plans' usage limits now and then every {@code every}, and sends each read to the status bar: Claude's
+     * through Claude Code's local {@code /usage} command (no prompt, no tokens, no saved session), then Codex's through
+     * {@code codex app-server} (no prompt either), one after the other on the same strand.
      */
     public void watchPlanUsage(Duration every) {
+        String codex = CodexUsageReader.findExecutable();
         planUsage.scheduleWithFixedDelay(() -> {
             // an exception escaping a periodic task cancels every later run
             try {
@@ -769,6 +774,15 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 }
                 if (!closed) {
                     sink.dispatch(new Intent.PlanUsageRead(usage));
+                }
+                PlanUsage codexUsage = CodexUsageReader.read(codex, json, CodexUsageReader.TIMEOUT, ZoneId.systemDefault());
+                // logged when it changes: without Codex installed, every read fails the same way
+                if (!codexUsage.problem().isEmpty() && !codexUsage.problem().equals(lastCodexProblem)) {
+                    LOG.log(System.Logger.Level.INFO, "cannot read the Codex plan's usage limits: " + codexUsage.problem());
+                }
+                lastCodexProblem = codexUsage.problem();
+                if (!closed) {
+                    sink.dispatch(new Intent.PlanUsageRead(codexUsage));
                 }
             } catch (RuntimeException e) {
                 LOG.log(System.Logger.Level.ERROR, "plan usage read failed", e);
