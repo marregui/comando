@@ -216,7 +216,7 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌘T / ⌘W / ⌘⇧T | new panel / close the panel, or the view that has the keyboard / reopen the last closed panel |
 | ⌘O | open a file in a panel |
 | ⌘⇧M | switch a Markdown panel between its text and the rendered page |
-| double-click | on a link to another Markdown or HTML file in a rendered page: open that file in a panel |
+| double-click | on a link anywhere (a rendered page, a panel's text, the transcript, a tool's result, a tab's card): a web address opens in the browser; a file, or a `[[name]]` note, opens in a panel |
 | ⌘⇧W | close the lower view in front |
 | ⌘1…⌘9, ⌘⇧[ ⌘⇧] | go to a panel |
 | ⌘⇧O / ⌘⇧K | the focused panel's connection / session settings (a new one when the panel has none) |

@@ -23,6 +23,8 @@ import javax.swing.text.html.ImageView;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Point;
+import java.awt.event.InputEvent;
+import java.awt.geom.Rectangle2D;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.io.StringReader;
@@ -140,6 +142,39 @@ class HtmlPaneTest {
         } finally {
             LocalImages.install(null);
         }
+    }
+
+    @Test
+    void aNoteLinkAndAnAddressAreFollowedAtARealDoubleClick() throws Exception {
+        List<String> opened = new CopyOnWriteArrayList<>();
+        HtmlPane[] pane = new HtmlPane[1];
+        SwingUtilities.invokeAndWait(() -> {
+            pane[0] = new HtmlPane();
+            pane[0].setLinkHandler(opened::add);
+            pane[0].setMarkdown("Read [[feedback-verification-discipline]] before https://example.org/guide today.");
+            JScrollPane scroll = new JScrollPane(pane[0]);
+            scroll.setSize(600, 200);
+            layOut(scroll);
+        });
+        for (String at : List.of("feedback-verification-discipline", "example.org")) {
+            SwingUtilities.invokeAndWait(() -> {
+                Rectangle2D r;
+                try {
+                    String shown = pane[0].getDocument().getText(0, pane[0].getDocument().getLength());
+                    r = pane[0].modelToView2D(shown.indexOf(at) + 3);
+                } catch (BadLocationException e) {
+                    throw new IllegalStateException(e);
+                }
+                int x = (int) r.getCenterX();
+                int y = (int) r.getCenterY();
+                for (int clicks = 1; clicks <= 2; clicks++) {
+                    pane[0].dispatchEvent(new MouseEvent(pane[0], MouseEvent.MOUSE_PRESSED, 0L, InputEvent.BUTTON1_DOWN_MASK, x, y, clicks, false, MouseEvent.BUTTON1));
+                    pane[0].dispatchEvent(new MouseEvent(pane[0], MouseEvent.MOUSE_RELEASED, 0L, 0, x, y, clicks, false, MouseEvent.BUTTON1));
+                    pane[0].dispatchEvent(new MouseEvent(pane[0], MouseEvent.MOUSE_CLICKED, 0L, 0, x, y, clicks, false, MouseEvent.BUTTON1));
+                }
+            });
+        }
+        assertThat(opened).containsExactly("comando-note:feedback-verification-discipline", "https://example.org/guide");
     }
 
     @Test

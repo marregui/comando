@@ -1,5 +1,14 @@
 package dev.marregui.comando.ui.panels;
 
+import dev.marregui.comando.ui.kit.desktop.Links;
+import dev.marregui.comando.ui.kit.text.TextLinks;
+import javax.swing.text.BadLocationException;
+import javax.swing.text.Highlighter;
+import javax.swing.text.JTextComponent;
+import javax.swing.text.LayeredHighlighter;
+import javax.swing.text.Position;
+import javax.swing.text.View;
+import java.awt.Shape;
 import dev.marregui.comando.core.model.LinearTickets;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.icon.Icons;
@@ -191,8 +200,31 @@ final class TabCard {
         card.add(actions);
         summaryParts.addAll(List.of(aboveHeading, heading, underHeading, topic, aboveActions, actions));
         card.addMouseListener(closeOnPress);
-        // the summary is a text area, which takes the press itself: a press closes the card as on the rest
-        topic.addMouseListener(closeOnPress);
+        // the summary is a text area, which takes the press itself: a press closes the card as on the rest, but on a
+        // link, which a double click follows (record 94)
+        MouseAdapter summaryLinks = new MouseAdapter() {
+            @Override
+            public void mousePressed(MouseEvent e) {
+                if (topicLinkAt(e.getPoint()) == null) {
+                    hide();
+                }
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                TextLinks.Ref link = topicLinkAt(e.getPoint());
+                if (link != null && e.getClickCount() == 2) {
+                    follow(link.href());
+                }
+            }
+
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                topic.setCursor(topicLinkAt(e.getPoint()) == null ? Cursor.getDefaultCursor() : Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            }
+        };
+        topic.addMouseListener(summaryLinks);
+        topic.addMouseMotionListener(summaryLinks);
         hearPointer(card);
         paintGold();
         // one card for the window's life: it hears every gold chosen
@@ -274,6 +306,68 @@ final class TabCard {
         }
     }
 
+    /** The links in the summary shown: web addresses, notes, Markdown links, as {@link TextLinks} finds them. */
+    private List<TextLinks.Ref> topicLinks = List.of();
+
+    private void underlineLinks(String text) {
+        topicLinks = TextLinks.refs(text, true);
+        Highlighter h = topic.getHighlighter();
+        h.removeAllHighlights();
+        for (TextLinks.Ref r : topicLinks) {
+            try {
+                h.addHighlight(r.start(), r.end(), UNDERLINE);
+            } catch (BadLocationException e) {
+                // the text changed under it: the next update underlines again
+            }
+        }
+    }
+
+    /** Underlines a link in the summary in the links' colour. */
+    private static final Highlighter.HighlightPainter UNDERLINE = new LayeredHighlighter.LayerPainter() {
+        @Override
+        public void paint(Graphics g, int p0, int p1, Shape bounds, JTextComponent c) {
+            paintLayer(g, p0, p1, bounds, c, null);
+        }
+
+        @Override
+        public Shape paintLayer(Graphics g, int p0, int p1, Shape bounds, JTextComponent c, View view) {
+            try {
+                Rectangle r = view == null ? bounds.getBounds() : view.modelToView(p0, Position.Bias.Forward, p1, Position.Bias.Backward, bounds).getBounds();
+                g.setColor(Theme.ACCENT);
+                int y = r.y + r.height - 2;
+                g.drawLine(r.x, y, r.x + r.width - 1, y);
+                return r;
+            } catch (BadLocationException e) {
+                return null;
+            }
+        }
+    };
+
+    /** The link in the summary under {@code p}, in the summary's coordinates; null when there is none. */
+    TextLinks.Ref topicLinkAt(Point p) {
+        int at = topic.viewToModel2D(p);
+        for (TextLinks.Ref r : topicLinks) {
+            if (at >= r.start() && at < r.end()) {
+                return r;
+            }
+        }
+        return null;
+    }
+
+    /** Follows a link of the card: a web page in the browser, a file in a panel. */
+    private void follow(String href) {
+        if (Browser.isWebLink(href)) {
+            browse.accept(href);
+        } else {
+            Links.open(href, null);
+        }
+    }
+
+    /** The links in the summary shown; for tests. */
+    List<TextLinks.Ref> topicLinks() {
+        return topicLinks;
+    }
+
     /** The tickets shown, for tests. */
     List<JLabel> ticketLinks() {
         return Arrays.stream(tickets.getComponents()).filter(c -> "tab-card-ticket".equals(c.getName())).map(c -> (JLabel) c).toList();
@@ -341,6 +435,7 @@ final class TabCard {
         }
         this.head = head;
         topic.setText(topicText);
+        underlineLinks(topicText);
         Font f = topic.getFont();
         topic.setFont(f.deriveFont(muted ? Font.ITALIC : Font.PLAIN));
         this.muted = muted;

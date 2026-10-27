@@ -1,5 +1,7 @@
 package dev.marregui.comando.ui.panels;
 
+import dev.marregui.comando.ui.kit.desktop.Links;
+import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.PanelState;
@@ -211,25 +213,53 @@ class EditorPanelPreviewTest {
     }
 
     @Test
-    void aLinkToAnotherMarkdownOrHtmlFileNamesThatFileBesideTheDocument() {
-        Path doc = Path.of("/kb/claude/INTERNALS.md");
-        assertThat(EditorPanel.linkedDocument(doc, "EXT.md")).contains(Path.of("/kb/claude/EXT.md"));
-        assertThat(EditorPanel.linkedDocument(doc, "../ALPHA.md#claude")).as("the heading is dropped").contains(Path.of("/kb/ALPHA.md"));
-        assertThat(EditorPanel.linkedDocument(doc, "notes/My%20Notes.markdown")).contains(Path.of("/kb/claude/notes/My Notes.markdown"));
-        assertThat(EditorPanel.linkedDocument(doc, "my notes.md#top")).as("an angle-bracket destination keeps its spaces")
-                .contains(Path.of("/kb/claude/my notes.md"));
-        assertThat(EditorPanel.linkedDocument(doc, "/abs/README.MD")).contains(Path.of("/abs/README.MD"));
-        assertThat(EditorPanel.linkedDocument(doc, "file:///abs/a.md")).contains(Path.of("/abs/a.md"));
+    void anyLinkDoubleClickedInThePreviewIsFollowed() throws Exception {
+        List<String> opened = new CopyOnWriteArrayList<>();
+        List<String> browsed = new CopyOnWriteArrayList<>();
+        Links.browseWith(browsed::add);
+        try {
+            EditorPanel doc = panel("build", p -> {
+                p.editor().load("[build](build.gradle.kts), [site](https://example.com/x) and [mail](mailto:a@b.c)");
+                p.file(Path.of("/kb/claude/INTERNALS.md"), true);
+                p.onOpenFile((f, heading) -> opened.add(f.toString()));
+            });
+            SwingUtilities.invokeAndWait(() -> {
+                doc.rendered().fireHyperlinkUpdate(link(doc, "https://example.com/x", 1));
+                doc.rendered().fireHyperlinkUpdate(link(doc, "build.gradle.kts", 2));
+                doc.rendered().fireHyperlinkUpdate(link(doc, "https://example.com/x", 2));
+                doc.rendered().fireHyperlinkUpdate(link(doc, "mailto:a@b.c", 2));
+            });
+            assertThat(opened).as("a file of any kind beside the document opens in a panel").containsExactly("/kb/claude/build.gradle.kts");
+            assertThat(browsed).as("a web page at the double click only").containsExactly("https://example.com/x");
+        } finally {
+            Links.browseWith(Browser::open);
+        }
+    }
 
-        assertThat(EditorPanel.linkedDocument(doc, "#a-heading")).as("a heading of the same document").isEmpty();
-        assertThat(EditorPanel.linkedDocument(doc, "https://example.com/x.md")).isEmpty();
-        assertThat(EditorPanel.linkedDocument(doc, "mailto:a@b.c")).isEmpty();
-        assertThat(EditorPanel.linkedDocument(doc, "file://host/abs/a.md")).as("a file on another machine").isEmpty();
-        assertThat(EditorPanel.linkedDocument(doc, "//host/abs/a.md")).as("scheme-relative, another machine").isEmpty();
-        assertThat(EditorPanel.linkedDocument(doc, "build.gradle.kts")).as("not rendered by comando").isEmpty();
-        assertThat(EditorPanel.linkedDocument(doc, "report/index.html#tests")).contains(Path.of("/kb/claude/report/index.html"));
-        assertThat(EditorPanel.linkedDocument(doc, "file:/kb/old.HTM")).as("a page's link, read against its base").contains(Path.of("/kb/old.HTM"));
-        assertThat(EditorPanel.linkedDocument(null, "EXT.md")).as("relative to nothing").isEmpty();
+    @Test
+    void aLinkDoubleClickedInTheTextIsFollowedAsInThePreview() throws Exception {
+        List<String> opened = new CopyOnWriteArrayList<>();
+        List<String> browsed = new CopyOnWriteArrayList<>();
+        Links.browseWith(browsed::add);
+        try {
+            String text = "SELECT 1;\n-- see https://example.org/q and [setup](setup.md#2-install) here\n";
+            EditorPanel own = panel("sql", p -> {
+                p.editor().load(text);
+                p.file(Path.of("/docs/guide.sql"), true);
+                p.onOpenFile((f, heading) -> opened.add(f + (heading == null ? "" : " at " + heading)));
+            });
+            boolean[] followed = new boolean[3];
+            SwingUtilities.invokeAndWait(() -> {
+                followed[0] = own.followLinkAt(text.indexOf("example.org"));
+                followed[1] = own.followLinkAt(text.indexOf("setup]"));
+                followed[2] = own.followLinkAt(text.indexOf("SELECT"));
+            });
+            assertThat(followed).containsExactly(true, true, false);
+            assertThat(browsed).containsExactly("https://example.org/q");
+            assertThat(opened).containsExactly("/docs/setup.md at 2-install");
+        } finally {
+            Links.browseWith(Browser::open);
+        }
     }
 
     @Test
@@ -251,16 +281,6 @@ class EditorPanelPreviewTest {
         SwingUtilities.invokeAndWait(() -> doc.rendered().fireHyperlinkUpdate(link(doc, "setup.md#2-install", 2)));
         assertThat(opened).as("the file, and the heading the link names in it")
                 .containsExactly("/docs/setup.md", "/docs/setup.md at 2-install");
-    }
-
-    @Test
-    void aLinksHeadingIsWhatFollowsTheHashAsWritten() {
-        assertThat(EditorPanel.linkedHeading("setup.md#2-install")).isEqualTo("2-install");
-        assertThat(EditorPanel.linkedHeading("../ALPHA.md#caf%C3%A9")).as("decoded where it is looked up").isEqualTo("caf%C3%A9");
-        assertThat(EditorPanel.linkedHeading("my notes.md#top")).isEqualTo("top");
-        assertThat(EditorPanel.linkedHeading("file:///abs/a.md#x")).isEqualTo("x");
-        assertThat(EditorPanel.linkedHeading("setup.md")).isNull();
-        assertThat(EditorPanel.linkedHeading("setup.md#")).as("no heading: the top").isNull();
     }
 
     private static HyperlinkEvent link(EditorPanel p, String href, int clicks) {

@@ -111,7 +111,7 @@ final class Items {
                 String o = prompt().origin();
                 String who = o.isEmpty() ? "you" : o.equals("subagent") ? "task for the subagent" : "you · " + o;
                 origin = new TextBox(new Rich(s.small, s.muted).append(who));
-                text = new TextBox(new Rich(s.mono, s.text).append(prompt().text()));
+                text = new TextBox(new Rich(s.mono, s.text).append(prompt().text()).linked(s.link));
             }
             int inner = Math.max(40, w - 2 * IN_X);
             return TOP + IN_Y + origin.layout(inner, s) + 2 + text.layout(inner, s) + IN_Y + BOTTOM;
@@ -771,10 +771,10 @@ final class Items {
                 return new Rich(s.monoSmall, s.muted);
             }
             if (c.isSubagent()) {
-                return new Rich(s.monoSmall, s.muted).append("Report: " + clipLines(c.resultText(), 60));
+                return new Rich(s.monoSmall, s.muted).append("Report: " + clipLines(c.resultText(), 60)).linked(s.link);
             }
             return new Rich(s.monoSmall, c.status() == Block.ToolStatus.ERROR ? Theme.DANGER : s.muted)
-                    .append(clipLines(c.resultText(), MAX_RESULT_LINES));
+                    .append(clipLines(c.resultText(), MAX_RESULT_LINES)).linked(s.link);
         }
 
         /** The status layout for {@code text}, rebuilt only when the text or the style changed. */

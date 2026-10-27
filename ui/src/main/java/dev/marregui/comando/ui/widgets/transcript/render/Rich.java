@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
+import dev.marregui.comando.ui.kit.text.TextLinks;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import java.awt.Color;
@@ -118,6 +119,18 @@ final class Rich {
 
     Rich link(int start, int end, String href) {
         links.add(new Link(start, end, href));
+        return this;
+    }
+
+    /**
+     * Makes the links in the text links, in {@code color} and underlined: web addresses, {@code [[name]]} notes,
+     * Markdown links and {@code path:line} references, as written ({@link TextLinks}).
+     */
+    Rich linked(Color color) {
+        for (TextLinks.Ref r : TextLinks.refs(text, true)) {
+            runs.add(new Run(r.start(), r.end(), null, color, null, true, false));
+            link(r.start(), r.end(), r.href());
+        }
         return this;
     }
 

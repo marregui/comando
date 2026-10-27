@@ -52,6 +52,7 @@ import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.EdtWatchdog;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
+import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
@@ -347,6 +348,14 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.onAttention(notifier::attention);
         workspace.onClose(this::closePanel);
         workspace.onOpenFile(this::openFile);
+        // a link double-clicked anywhere opens its file as a link in a panel's page does: a panel, at its heading (record 94)
+        Links.install((file, heading) -> {
+            if (heading != null) {
+                workspace.headingWhenOpen(file, heading);
+            }
+            openFile(file);
+        }, text -> deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, text, false)),
+                session -> deps.state().get().session(session).map(x -> Path.of(x.spec().workDir())).orElse(null));
         // a panel's "New session ‹title›…": the session dialog, named after the panel, which becomes its own (record 88)
         workspace.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
         workspace.topics(topics, deps.transcripts()::of);

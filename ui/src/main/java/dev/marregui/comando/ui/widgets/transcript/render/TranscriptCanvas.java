@@ -114,6 +114,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private TextBox focusBox;
     private int focusChar;
     private String pressedLink;
+    /** The clicks of the press on {@link #pressedLink}: a link is followed at a double click, as everywhere in comando. */
+    private int pressedClicks;
     private final List<int[]> matches = new ArrayList<>();
     private Map<TextBox, List<int[]>> matchesByBox = new IdentityHashMap<>();
     private int currentMatch = -1;
@@ -1079,9 +1081,10 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         if (i < items.size() && e.getY() >= tops[i] && items.get(i).laidOut()) {
             String link = items.get(i).headerLinkAt(e.getX() - PAD_X, e.getY() - tops[i]);
             if (link != null) {
-                // followed on release, as a link in text is
+                // followed on the double click's release, as a link in text is
                 clearSelection();
                 pressedLink = link;
+                pressedClicks = e.getClickCount();
                 repaint();
                 return;
             }
@@ -1101,7 +1104,11 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             return;
         }
         pressedLink = p.contains(e.getX(), e.getY()) ? p.box().linkAt(e.getX() - p.x(), e.getY() - p.y()) : null;
-        if (e.getClickCount() == 2) {
+        pressedClicks = e.getClickCount();
+        if (e.getClickCount() == 2 && pressedLink != null) {
+            // a link's double click follows it (record 94): no word to select
+            clearSelection();
+        } else if (e.getClickCount() == 2) {
             selectWord(p, p.box().indexAt(e.getX() - p.x(), e.getY() - p.y()));
         } else if (e.isShiftDown() && anchorBox != null) {
             focusBox = p.box();
@@ -1128,7 +1135,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     private void released(MouseEvent e) {
-        if (pressedLink != null && anchorBox == focusBox && anchorChar == focusChar) {
+        if (pressedLink != null && pressedClicks == 2 && anchorBox == focusBox && anchorChar == focusChar) {
             String href = pressedLink;
             pressedLink = null;
             links.accept(href);

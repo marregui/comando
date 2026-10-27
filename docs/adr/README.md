@@ -101,3 +101,4 @@ that names the one it replaces, or, for a small change, by a dated paragraph at 
 | [91](0091-the-panels-tab-folds-into-the-sessions-tab.md) | The Panels tab folds into the Sessions tab | Miguel, Claude | accepted; amends 39 and 70 |
 | [92](0092-a-connection-row-is-its-icon-and-name.md) | A connection row is its icon and its name, as a session's | Miguel, Claude | accepted; extends 90 to connections |
 | [93](0093-comando-is-dark-throughout.md) | comando is dark throughout | Miguel, Claude | accepted; withdraws 57's light editor |
+| [94](0094-links-in-both-styles-everywhere.md) | Links in both styles, followed everywhere at a double click | Miguel, Claude | accepted |

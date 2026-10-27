@@ -17,6 +17,7 @@ import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.desktop.Browser;
+import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
@@ -25,7 +26,8 @@ import dev.marregui.comando.ui.kit.overlay.Flash;
 import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.text.RenderedMarkdown;
-import dev.marregui.comando.ui.kit.text.LocalLinks;
+import dev.marregui.comando.ui.kit.text.SourceLinks;
+import dev.marregui.comando.ui.kit.text.TextLinks;
 import dev.marregui.comando.ui.kit.text.LogLines;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -44,6 +46,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
+import javax.swing.text.Element;
 import javax.swing.text.Document;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
@@ -52,6 +55,8 @@ import java.awt.FlowLayout;
 import java.awt.Rectangle;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.geom.Rectangle2D;
 import java.nio.file.Path;
 import java.util.List;
@@ -180,7 +185,16 @@ public final class EditorPanel extends JPanel {
         header.add(left, BorderLayout.CENTER);
         header.add(right, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
-        rendered.setLinkHandler(href -> linkedDocument(file, href).ifPresent(f -> opener.accept(f, linkedHeading(href))));
+        rendered.setLinkHandler(href -> Links.open(href, linkFolder(), (f, heading) -> opener.accept(f, heading)));
+        // a link in the text itself, double-clicked as in the rendered page (record 94)
+        editor.area().addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
+                    followLinkAt(editor.area().viewToModel2D(e.getPoint()));
+                }
+            }
+        });
         // a panel opened for a link to one of its headings is laid out after it is made
         renderedScroll.addComponentListener(new ComponentAdapter() {
             @Override
@@ -357,12 +371,6 @@ public final class EditorPanel extends JPanel {
         opener = open;
     }
 
-    /** The heading a link names after the file's name, as written (percent-encoded or not); null when it names none. */
-    static String linkedHeading(String href) {
-        int hash = href.indexOf('#');
-        return hash < 0 || hash == href.length() - 1 ? null : href.substring(hash + 1);
-    }
-
     /**
      * Scrolls the preview to the heading whose id is {@code fragment}: now when it is laid out, else once it is. A panel
      * showing its text, not the preview, stays as it is.
@@ -385,13 +393,42 @@ public final class EditorPanel extends JPanel {
     }
 
     /**
-     * The Markdown or HTML file a link names, a relative one read from {@code document}'s folder; empty for a link to
-     * anything else: a web page, a heading of the same document, a file comando does not render. A heading after the
-     * file's name is not part of it: {@link #linkedHeading} reads it.
+     * Where the panel's links are read from: its file's folder; for the panel's own text, its session's working
+     * directory; else none.
      */
-    static Optional<Path> linkedDocument(Path document, String href) {
-        Path folder = document == null ? null : document.toAbsolutePath().getParent();
-        return LocalLinks.file(folder, href).filter(f -> markdownName(f) || htmlName(f));
+    Path linkFolder() {
+        Path folder = folder();
+        if (folder != null || state == null) {
+            return folder;
+        }
+        return state.session(panel.session()).map(x -> Path.of(x.spec().workDir())).orElse(null);
+    }
+
+    /**
+     * Follows the link in the text at {@code offset}, if there is one there: a web address, a {@code [[name]]} note, a
+     * Markdown link or a {@code path:line} reference, as the transcript finds them. Reads only the line it is on.
+     */
+    boolean followLinkAt(int offset) {
+        Element root = editor.area().getDocument().getDefaultRootElement();
+        if (offset < 0) {
+            return false;
+        }
+        Element line = root.getElement(root.getElementIndex(offset));
+        String text;
+        try {
+            text = editor.area().getText(line.getStartOffset(), line.getEndOffset() - line.getStartOffset());
+        } catch (BadLocationException e) {
+            return false;
+        }
+        TextLinks.Ref ref = TextLinks.at(text, offset - line.getStartOffset(), true);
+        if (ref == null) {
+            return false;
+        }
+        if (ref.href().startsWith(SourceLinks.SCHEME)) {
+            intents.dispatch(new Intent.OpenFile(panel.session(), SourceLinks.path(ref.href()), SourceLinks.line(ref.href())));
+            return true;
+        }
+        return Links.open(ref.href(), linkFolder(), (f, heading) -> opener.accept(f, heading));
     }
 
     /** The rendered view; for tests. */

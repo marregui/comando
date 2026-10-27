@@ -44,9 +44,12 @@ Text:
 | `Highlighter` | syntax colours for text painted outside a text area (the transcript); any thread |
 | `Diffs`, `DiffPane` | unified diff with three lines of context, coloured |
 | `SplitDiff` | two versions side by side in editors with their syntax colours and own line numbers, the right one editable (`remark` marks a comparison worked out for its new text without setting it): lost lines red, gained green, changed words marked, a band joining each difference, scrolling kept in step by the diff's line mapping; F7 and ⇧F7 move between differences; `compute` works the match out off the EDT, stopped at a deadline ([record 68](adr/0068-git-changes-and-a-side-by-side-diff.md)) |
-| `MarkdownHtml`, `HtmlPane` | CommonMark with tables to HTML for Swing; raw HTML escaped; an image is its picture when it is a file on this machine (`LocalImages`: PNG, JPEG, GIF as they are, an SVG drawn by jsvg into `cache/images/`), else its alt text; fences coloured as the editors; a light page or a dark one, each pane with its own style sheet; headings carry GitHub's ids; a web link opens in the browser at a click, a `#` link scrolls to its heading at a double click and keeps it there as pictures arrive until the reader scrolls, any other goes to the pane's owner at a double click (`Workspace.headingWhenOpen` scrolls another document's panel to the heading its link names) |
+| `MarkdownHtml`, `HtmlPane` | CommonMark with tables to HTML for Swing; raw HTML escaped; an image is its picture when it is a file on this machine (`LocalImages`: PNG, JPEG, GIF as they are, an SVG drawn by jsvg into `cache/images/`), else its alt text; fences coloured as the editors; a light page or a dark one, each pane with its own style sheet; headings carry GitHub's ids; web addresses and `[[name]]` note links in text become links; front matter shows as a table of its facts (`FrontMatter`); a link is followed at a double click: a `#` link scrolls to its heading and keeps it there as pictures arrive until the reader scrolls, any other goes to the pane's owner, else to `Links` (`Workspace.headingWhenOpen` scrolls another document's panel to the heading its link names) |
 | `MermaidDiagrams` | Mermaid blocks drawn by `mmdc` into `cache/mermaid/`, once per diagram text, one at a time; a diagram or picture not ready yet stands as an element of its own, which the picture replaces when it arrives, the rest of the page untouched |
 | `SourceLinks` | `path/File.java:42` becomes a link that opens the file at the line |
+| `TextLinks` | the one finder of links in plain text: web addresses, `[[name]]` notes, `path:line` references and, outside parsed Markdown, Markdown links |
+| `NoteLinks` | `[[name]]`, `[[name#heading]]`, `[[name\|label]]` as `comando-note:` links; `resolve` looks in the repository that holds the document (else its folder), hidden folders left out: a file named `name` or `name.md`, then a Markdown file whose front matter says `name: <name>`, then the name with `-` and `_` swapped; the nearest wins; off the EDT |
+| `Links` (`kit/desktop`) | follows a link from any surface: a web address to the browser, a file or a note to the opener the shell installs (a panel), a note that names no file told as a notice; a session's links are read from its working directory ([record 94](adr/0094-links-in-both-styles-everywhere.md)) |
 | `Plain` | `Plain.only(c)` turns HTML rendering off before text is set; `Plain.text(s)` guards a string starting with `<html>` |
 
 Rules: colours, fonts and spacing come from `Theme` (excepted: the transcript's `Style`, the terminal's palette);
@@ -185,7 +188,8 @@ serif, which covers most of Unicode on every desktop. Errors stay red, links blu
 `TranscriptWidget` loads the last 2 000 blocks, with a button for the 2 000 before; later blocks are appended. It follows
 the end until the user scrolls; a "↓ Latest" button returns, and sending a prompt follows again. Selection runs across
 blocks; ⌘⇧C copies it, or the loaded blocks, as Markdown; ⌘F opens the cards that hold matches and closes them again
-afterwards. A `path:line` link opens the file in the side pane.
+afterwards. Links are followed at a double click: a `path:line` link opens the file in the side pane; a web address,
+a `[[name]]` note or a Markdown link, in the text, a prompt or a tool's result, goes to `Links`.
 
 While a subagent runs, a strip above the transcript holds one chip per running top-level Agent card, foreground or
 background, in start order (spinner, description clipped to 28 characters, elapsed time), then one per background

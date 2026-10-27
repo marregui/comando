@@ -77,4 +77,45 @@ class MarkdownHtmlTest {
         assertThat(MarkdownHtml.render(md, null, MarkdownHtml.Pictures.NONE, MarkdownHtml.Marks.NONE))
                 .as("no marks: as ever").isEqualTo(MarkdownHtml.render(md));
     }
+    @Test
+    void webAddressesAndNoteLinksInTextAreLinks() {
+        String html = MarkdownHtml.render("See [[feedback-verification-discipline]], [[notes#setup|the setup]] and https://example.org/a.");
+        assertThat(html).contains("<a href=\"comando-note:feedback-verification-discipline\">feedback-verification-discipline</a>",
+                "<a href=\"comando-note:notes#setup\">the setup</a>", "href=\"https://example.org/a\">https://example.org/a</a>.");
+        assertThat(html).doesNotContain("[[");
+    }
+
+    @Test
+    void textInALinkOrCodeStaysAsWritten() {
+        assertThat(MarkdownHtml.render("[https://a.b/c](https://x.y)")).contains("href=\"https://x.y\"").doesNotContain("href=\"https://a.b/c\"");
+        assertThat(MarkdownHtml.render("`[[name]]` and `https://a.b`")).contains("<code>[[name]]</code>").doesNotContain("<a ");
+        assertThat(MarkdownHtml.render("```\n[[name]]\n```")).doesNotContain("<a ");
+    }
+
+    @Test
+    void aMemoryFilesFrontMatterShowsAsItsFactsNotAHeading() {
+        String memory = """
+                ---
+                name: reference-video-transcripts
+                description: "How to get a transcript, see [[feedback-ui-requests]]"
+                metadata:
+                  node_type: memory
+                  type: reference
+                ---
+
+                Proven 2026-10-22.
+                """;
+        String html = MarkdownHtml.render(memory);
+        assertThat(html).doesNotContain("<h2", "<hr");
+        assertThat(html).contains("<td class=\"front-key\" valign=\"top\">name</td><td class=\"front-value\">reference-video-transcripts</td>",
+                "metadata.type", "<a href=\"comando-note:feedback-ui-requests\">feedback-ui-requests</a>", "<p>Proven 2026-10-22.</p>");
+        assertThat(html.indexOf("front-key")).as("the facts come first").isLessThan(html.indexOf("Proven"));
+    }
+
+    @Test
+    void aComparedTextWithFrontMatterShadesTheSameLines() {
+        String text = "---\nname: x\n---\n\nfirst\n\nsecond\n";
+        String html = MarkdownHtml.render(text, null, MarkdownHtml.Pictures.NONE, new MarkdownHtml.Marks(Set.of(6), List.of(), true));
+        assertThat(html).containsPattern("<p style=\"background-color: [^\"]+\">second</p>").contains("<p>first</p>");
+    }
 }

@@ -45,6 +45,13 @@ class MarkdownDocTest {
     }
 
     @Test
+    void webAddressesAndNoteLinksBecomeLinksShownAsTheirLabels() {
+        Para.Text p = (Para.Text) MarkdownDoc.parse("Read [[project-current-lane|the lane]] and https://example.org/x.").getFirst();
+        assertThat(p.spans()).containsExactly(Span.plain("Read "), new Span("the lane", 0, "comando-note:project-current-lane"),
+                Span.plain(" and "), new Span("https://example.org/x", 0, "https://example.org/x"), Span.plain("."));
+    }
+
+    @Test
     void unchangedParagraphsCompareEqualWhileTheLastOneStreams() {
         List<Para> before = MarkdownDoc.parse("First paragraph.\n\nSecond, stre");
         List<Para> after = MarkdownDoc.parse("First paragraph.\n\nSecond, streaming on");

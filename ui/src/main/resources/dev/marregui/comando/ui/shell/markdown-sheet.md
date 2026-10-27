@@ -21,6 +21,7 @@ What you write in a panel, and what its preview (⌘⇧M) shows. comando draws C
 | `1. item` or `1) item` | a numbered list |
 | `> quoted` | a quotation |
 | `---` alone on a line | a rule across the page |
+| `---` on the first line, `key: value` lines, `---` | front matter: its keys and values at the top of the page, not a rule and a heading |
 | a blank line | a new paragraph |
 | a line break | a new line in the same paragraph (GitHub would join the two lines) |
 
@@ -28,10 +29,11 @@ What you write in a panel, and what its preview (⌘⇧M) shows. comando draws C
 
 | Write | Shows |
 |---|---|
-| `[text](https://example.org)` | a link; a click opens the browser |
-| `[text](notes.md)` | a link to a Markdown or HTML file beside the document; a double click opens it in a panel |
+| `[text](https://example.org)` | a link; a double click opens the browser |
+| `[text](notes.md)` | a link to a file beside the document; a double click opens it in a panel |
+| `[[notes]]`, `[[notes#heading]]`, `[[notes\|text]]` | a link to a note, shown as its name or text: a double click opens the file named `notes` or `notes.md`, or the one whose front matter says `name: notes`, the nearest in the document's repository |
 | `[text](#3-decisions)` or `[text](notes.md#3-decisions)` | a link to a heading of this document or another; a double click scrolls to it, opening the other document first. The id is the heading's text in lower case, punctuation dropped, each space a hyphen: `## 3. Decisions` is `#3-decisions`; a repeated heading adds `-1`, `-2` |
-| `<https://example.org>` | the address as a link; without the angle brackets it stays text |
+| `https://example.org` or `<https://example.org>` | the address as a link |
 | `![what it shows](images/chart.png)` | the picture: a PNG, JPEG, GIF or SVG on this machine, named from the document's folder (`images/chart.png`, `../img/flow.svg`) or by its full path; one wider than the panel is shown narrower |
 | `![what it shows](https://example.org/chart.png)` | *what it shows*, the alt text: comando fetches nothing from the web. A file that is not there also shows its alt text, with the reason |
 

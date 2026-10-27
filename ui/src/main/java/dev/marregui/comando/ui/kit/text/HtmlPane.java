@@ -1,7 +1,7 @@
 package dev.marregui.comando.ui.kit.text;
 
 import dev.marregui.comando.ui.kit.async.Edt;
-import dev.marregui.comando.ui.kit.desktop.Browser;
+import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.theme.Gold;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -51,13 +51,15 @@ public class HtmlPane extends JEditorPane {
 
     private static final System.Logger LOG = System.getLogger(HtmlPane.class.getName());
 
-    /** Receives the links that are not web links, double-clicked or activated from the keyboard: a file beside the document. */
+    /**
+     * Receives the links double-clicked or activated from the keyboard, but a heading of the page: a web page, a file
+     * beside the document, a {@code [[name]]} note. Unless set, {@link Links} follows them, read from the page's folder.
+     */
     public interface LinkHandler {
         void open(String href);
     }
 
-    private LinkHandler links = href -> {
-    };
+    private LinkHandler links = href -> Links.open(href, this.folder);
 
     public void setLinkHandler(LinkHandler handler) {
         links = handler;
@@ -102,19 +104,17 @@ public class HtmlPane extends JEditorPane {
             if (href == null) {
                 return;
             }
-            // the pane activates a link at every click of a double click; a keyboard activation has no clicks
+            // the pane activates a link at every click of a double click; a keyboard activation has no clicks. A link,
+            // to a page or a file, is followed at the double click, as everywhere in comando (record 94)
             int clicks = e.getInputEvent() instanceof MouseEvent m ? m.getClickCount() : 0;
-            if (Browser.isWebLink(href)) {
-                if (clicks <= 1) {
-                    Browser.open(href);
-                }
-            } else if (clicks == 0 || clicks == 2) {
-                String raw = e.getDescription();
-                if (raw != null && raw.startsWith("#")) {
-                    scrollToHeading(raw.substring(1));
-                } else {
-                    links.open(href);
-                }
+            if (clicks != 0 && clicks != 2) {
+                return;
+            }
+            String raw = e.getDescription();
+            if (raw != null && raw.startsWith("#")) {
+                scrollToHeading(raw.substring(1));
+            } else {
+                links.open(href);
             }
         });
     }
@@ -232,6 +232,12 @@ public class HtmlPane extends JEditorPane {
         css.addRule("th { border: 1px solid " + border + "; padding: 2px 6px; background-color: " + card + "; }");
         css.addRule("td { border: 1px solid " + border + "; padding: 2px 6px; }");
         css.addRule("blockquote { margin-left: 8px; color: " + muted + "; }");
+        // front matter: its facts as a tab's card shows them, a quiet key and the value, no grid
+        css.addRule("table.front { margin: 0 0 8px 0; }");
+        // Swing reads padding side by side, not a shorthand of four
+        css.addRule("td.front-key { border-width: 0; padding-top: 1px; padding-bottom: 1px; padding-left: 0; padding-right: 14px; color: "
+                + muted + "; }");
+        css.addRule("td.front-value { border-width: 0; padding-top: 1px; padding-bottom: 1px; padding-left: 0; padding-right: 0; }");
         css.addRule("ul, ol { margin-left: 18px; margin-top: 2px; margin-bottom: 4px; }");
         Gold gold = Theme.gold();
         String rule = Theme.hex(Gold.over(Theme.TRANSCRIPT, gold.shade, 0.7f));

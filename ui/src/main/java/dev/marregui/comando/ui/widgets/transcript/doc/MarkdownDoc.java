@@ -1,7 +1,8 @@
 package dev.marregui.comando.ui.widgets.transcript.doc;
 
 import dev.marregui.comando.ui.kit.text.Fences;
-import dev.marregui.comando.ui.kit.text.SourceLinks;
+import dev.marregui.comando.ui.kit.text.NoteLinks;
+import dev.marregui.comando.ui.kit.text.TextLinks;
 import org.commonmark.Extension;
 import org.commonmark.ext.gfm.tables.TableBlock;
 import org.commonmark.ext.gfm.tables.TableBody;
@@ -37,7 +38,7 @@ import java.util.List;
 /**
  * Markdown to the transcript's paragraph list. A soft line break stays a line break: Claude's text uses
  * single newlines as line ends. Raw HTML is kept as literal text. {@code path:line} references in text and
- * code spans become links.
+ * code spans become links, and so do web addresses and {@code [[name]]} notes in text.
  */
 public final class MarkdownDoc {
 
@@ -157,18 +158,21 @@ public final class MarkdownDoc {
         return n.getClass().getSimpleName().equals("Strikethrough");
     }
 
-    /** Adds text, splitting out {@code path:line} references as links unless the text is inside a link. */
+    /**
+     * Adds text, splitting out its links unless the text is inside a link: {@code path:line} references, web addresses,
+     * and {@code [[name]]} notes, shown as their labels ({@link TextLinks}).
+     */
     private static void text(String text, int style, String href, List<Span> out) {
         if (!href.isEmpty()) {
             out.add(new Span(text, style, href));
             return;
         }
         int at = 0;
-        for (SourceLinks.Ref r : SourceLinks.refs(text)) {
+        for (TextLinks.Ref r : TextLinks.refs(text, false)) {
             if (r.start() > at) {
                 out.add(new Span(text.substring(at, r.start()), style, ""));
             }
-            out.add(new Span(text.substring(r.start(), r.end()), style, r.href()));
+            out.add(new Span(NoteLinks.is(r.href()) ? r.label() : text.substring(r.start(), r.end()), style, r.href()));
             at = r.end();
         }
         if (at < text.length()) {

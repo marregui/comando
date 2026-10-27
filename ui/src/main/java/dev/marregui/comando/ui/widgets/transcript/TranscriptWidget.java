@@ -5,7 +5,7 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
-import dev.marregui.comando.ui.kit.desktop.Browser;
+import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.overlay.Overlay;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -283,7 +283,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         } else if (href.startsWith(TranscriptCanvas.SUBAGENT_SCHEME)) {
             context.intents().dispatch(new Intent.OpenSubagent(session, href.substring(TranscriptCanvas.SUBAGENT_SCHEME.length())));
         } else {
-            Browser.open(href);
+            Links.open(href, Links.folderOf(session));
         }
     }
 

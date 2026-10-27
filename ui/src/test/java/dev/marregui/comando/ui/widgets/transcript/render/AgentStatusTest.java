@@ -189,6 +189,9 @@ class AgentStatusTest {
         boolean open = canvas.isCardOpen("a1");
         canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_PRESSED, 0L, MouseEvent.BUTTON1_DOWN_MASK, x, y, 1, false, MouseEvent.BUTTON1));
         canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_RELEASED, 0L, 0, x, y, 1, false, MouseEvent.BUTTON1));
+        assertThat(links).as("a single click follows nothing (record 94)").isEmpty();
+        canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_PRESSED, 0L, MouseEvent.BUTTON1_DOWN_MASK, x, y, 2, false, MouseEvent.BUTTON1));
+        canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_RELEASED, 0L, 0, x, y, 2, false, MouseEvent.BUTTON1));
 
         assertThat(links).containsExactly("subagent:a1");
         assertThat(canvas.isCardOpen("a1")).as("following the link does not toggle the card").isEqualTo(open);

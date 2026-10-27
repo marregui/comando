@@ -4,11 +4,14 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import org.commonmark.Extension;
 import org.commonmark.ext.gfm.tables.TableCell;
 import org.commonmark.ext.gfm.tables.TablesExtension;
+import org.commonmark.node.AbstractVisitor;
 import org.commonmark.node.Code;
+import org.commonmark.node.CustomNode;
 import org.commonmark.node.FencedCodeBlock;
 import org.commonmark.node.Heading;
 import org.commonmark.node.Image;
 import org.commonmark.node.IndentedCodeBlock;
+import org.commonmark.node.Link;
 import org.commonmark.node.ListItem;
 import org.commonmark.node.Node;
 import org.commonmark.node.Paragraph;
@@ -23,6 +26,7 @@ import org.commonmark.renderer.html.HtmlNodeRendererContext;
 import org.commonmark.renderer.html.HtmlRenderer;
 import org.commonmark.renderer.html.HtmlWriter;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -39,7 +43,9 @@ import java.util.regex.Pattern;
  * view would be a network request nobody approved. A code block that names its language takes the editors' syntax
  * colours. A heading has the id GitHub gives it, which a link to {@code #} and that id names. With {@link Marks}, the
  * blocks whose source lines changed are shaded as a comparison shades lines, and the words that changed inside them
- * more strongly: the rendered sides of a comparison read as its texts do.
+ * more strongly: the rendered sides of a comparison read as its texts do. A web address in the text is a link, and so
+ * is a wiki link, {@code [[name]]}, shown as its label ({@link NoteLinks}); front matter at the top shows as its facts,
+ * a key and its value a row ({@link FrontMatter}).
  */
 public final class MarkdownHtml {
 
@@ -100,6 +106,7 @@ public final class MarkdownHtml {
             .attributeProviderFactory(c -> new HeadingIds())
             .nodeRendererFactory(c -> new ImageAsText(c, Pictures.NONE))
             .nodeRendererFactory(c -> new ColouredCode(c, null, Marks.NONE))
+            .nodeRendererFactory(NoteLinkHtml::new)
             .build();
 
     /** What a heading's id leaves out of its text: all but letters, marks, digits, connectors such as {@code _}, spaces and hyphens. */
@@ -135,12 +142,16 @@ public final class MarkdownHtml {
                 .softbreak("<br>")
                 .attributeProviderFactory(c -> new HeadingIds())
                 .nodeRendererFactory(c -> new ImageAsText(c, pictures))
-                .nodeRendererFactory(c -> new ColouredCode(c, mermaid, marks));
+                .nodeRendererFactory(c -> new ColouredCode(c, mermaid, marks))
+                .nodeRendererFactory(NoteLinkHtml::new);
         if (marked) {
             b.attributeProviderFactory(c -> new ShadedBlocks(marks)).nodeRendererFactory(c -> new ShadedWords(c, marks));
         }
         HtmlRenderer renderer = mermaid == null && pictures == Pictures.NONE && !marked ? RENDERER : b.build();
-        String html = renderer.render((marked ? SPANNING : PARSER).parse(markdown));
+        FrontMatter.Split front = FrontMatter.split(markdown);
+        Node document = (marked ? SPANNING : PARSER).parse(front.body());
+        linkText(document);
+        String html = (front.any() ? facts(front.facts()) : "") + renderer.render(document);
         // Swing's renderer does not know <del>, and draws <pre><code> with a wrapping paragraph margin
         return html.replace("<pre><code", "<pre class=\"code\"><code").replace("<del>", "<strike>").replace("</del>", "</strike>");
     }
@@ -245,6 +256,112 @@ public final class MarkdownHtml {
                 done = to;
             }
             w.text(text.substring(done));
+        }
+    }
+
+    /** The front matter's facts as a quiet table: the key muted, the value with its links. */
+    static String facts(List<FrontMatter.Fact> facts) {
+        StringBuilder out = new StringBuilder("<table class=\"front\" cellspacing=\"0\">");
+        for (FrontMatter.Fact f : facts) {
+            out.append("<tr><td class=\"front-key\" valign=\"top\">").append(escape(f.key()))
+                    .append("</td><td class=\"front-value\">").append(linkedHtml(f.value())).append("</td></tr>");
+        }
+        return out.append("</table>\n").toString();
+    }
+
+    /** {@code text} escaped, its web addresses and wiki links as links. */
+    static String linkedHtml(String text) {
+        StringBuilder out = new StringBuilder();
+        int at = 0;
+        for (TextLinks.Ref r : rendered(text)) {
+            out.append(escape(text.substring(at, r.start())));
+            out.append("<a href=\"").append(escape(r.href()).replace("\"", "&quot;")).append("\">").append(escape(r.label())).append("</a>");
+            at = r.end();
+        }
+        return out.append(escape(text.substring(at))).toString();
+    }
+
+    /** The links of a text that rendered Markdown shows as links: web addresses and wiki links. */
+    private static List<TextLinks.Ref> rendered(String text) {
+        return TextLinks.refs(text, false).stream().filter(r -> !r.href().startsWith(SourceLinks.SCHEME)).toList();
+    }
+
+    /**
+     * Makes the web addresses and wiki links in the document's text links; text already in a link or an image stays as
+     * it is. A wiki link becomes a {@link NoteLink}, which {@link NoteLinkHtml} writes, as the renderer would drop its
+     * {@code comando-note:} address.
+     */
+    static void linkText(Node document) {
+        List<Text> texts = new ArrayList<>();
+        document.accept(new AbstractVisitor() {
+            @Override
+            public void visit(Text text) {
+                texts.add(text);
+            }
+
+            @Override
+            public void visit(Link link) {
+                // its text is the link's already
+            }
+
+            @Override
+            public void visit(Image image) {
+                // its text is its alt text
+            }
+        });
+        for (Text t : texts) {
+            String literal = t.getLiteral();
+            List<TextLinks.Ref> refs = rendered(literal);
+            if (refs.isEmpty()) {
+                continue;
+            }
+            int at = 0;
+            for (TextLinks.Ref r : refs) {
+                if (r.start() > at) {
+                    t.insertBefore(new Text(literal.substring(at, r.start())));
+                }
+                Node link = NoteLinks.is(r.href()) ? new NoteLink(r.href()) : new Link(r.href(), null);
+                link.appendChild(new Text(r.label()));
+                t.insertBefore(link);
+                at = r.end();
+            }
+            if (at < literal.length()) {
+                t.insertBefore(new Text(literal.substring(at)));
+            }
+            t.unlink();
+        }
+    }
+
+    /** A wiki link in the document: its {@code comando-note:} address; its label is its text. */
+    static final class NoteLink extends CustomNode {
+        final String href;
+
+        NoteLink(String href) {
+            this.href = href;
+        }
+    }
+
+    /** Writes a {@link NoteLink} as an anchor to its note. */
+    private static final class NoteLinkHtml implements NodeRenderer {
+        private final HtmlNodeRendererContext context;
+
+        NoteLinkHtml(HtmlNodeRendererContext context) {
+            this.context = context;
+        }
+
+        @Override
+        public Set<Class<? extends Node>> getNodeTypes() {
+            return Set.of(NoteLink.class);
+        }
+
+        @Override
+        public void render(Node node) {
+            HtmlWriter w = context.getWriter();
+            w.tag("a", Map.of("href", ((NoteLink) node).href));
+            for (Node c = node.getFirstChild(); c != null; c = c.getNext()) {
+                context.render(c);
+            }
+            w.tag("/a");
         }
     }
 

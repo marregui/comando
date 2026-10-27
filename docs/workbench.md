@@ -56,13 +56,15 @@ Document panels may be attached to a session, any number of them ([record 38](ad
 - **Moving** a tab: drag it along the row; a line marks where it lands. The order is saved and kept across restarts.
 - **HTML files** open as text, to edit; the Browser button opens the page in the desktop's browser
   ([record 56](adr/0056-html-opens-in-the-browser-not-in-comando.md)).
-- **Links** in rendered Markdown: a web link opens in the browser at a click; a link to another Markdown or HTML
-  file, beside the document or by its full path, opens that file in a panel at a double click, or brings forward the
-  panel that has it. A link to a heading (`#` and the heading's id, as GitHub makes it: the text in lower case,
-  punctuation dropped, each space a hyphen, `-1`, `-2` on a repeated heading) scrolls that heading to the top at a
-  double click: in the same document, or in the other one, as it opens or in its open panel (one showing its text
-  stays as it is); `#` alone goes to the top. Until the reader scrolls, the heading stays at the top as pictures and
-  diagrams arrive above it.
+- **Links**, wherever text shows (a rendered page, a panel's text, the transcript, a tool's result, a tab's card), are
+  followed at a double click ([record 94](adr/0094-links-in-both-styles-everywhere.md)): a web address, written as a
+  link or bare, opens in the browser; a link to a file, beside the document or by its full path, opens that file in a
+  panel, or brings forward the panel that has it; a note link, `[[name]]`, opens the file it names, found in the
+  document's repository. Front matter at the top of a page shows as its keys and values. A link to a heading (`#`
+  and the heading's id, as GitHub makes it: the text in lower case, punctuation dropped, each space a hyphen, `-1`,
+  `-2` on a repeated heading) scrolls that heading to the top at a double click: in the same document, or in the
+  other one, as it opens or in its open panel (one showing its text stays as it is); `#` alone goes to the top. Until
+  the reader scrolls, the heading stays at the top as pictures and diagrams arrive above it.
 - **Running** SQL opens the panel's connection when closed; a prompt starts its session when stopped.
 - **The header** shows the session, then the connection, as chips with a status dot and a plug (green when running or
   connected) that starts or stops, connects or disconnects. Next to the session's plug: a fresh start (while stopped

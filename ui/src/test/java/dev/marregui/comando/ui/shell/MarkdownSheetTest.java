@@ -28,7 +28,9 @@ class MarkdownSheetTest {
         assertThat(MarkdownHtml.render("- a\n  - b")).as("two spaces nest").contains("<li>a\n<ul>\n<li>b</li>");
         assertThat(MarkdownHtml.render("1) one")).contains("<ol>");
         assertThat(MarkdownHtml.render("<https://example.org>")).contains("href=\"https://example.org\"");
-        assertThat(MarkdownHtml.render("see https://example.org")).doesNotContain("<a ");
+        assertThat(MarkdownHtml.render("see https://example.org")).contains("href=\"https://example.org\"");
+        assertThat(MarkdownHtml.render("see [[notes#heading|the notes]]")).contains("<a href=\"comando-note:notes#heading\">the notes</a>");
+        assertThat(MarkdownHtml.render("---\nname: notes\n---\n# Notes")).contains("valign=\"top\">name</td>").doesNotContain("<h2>");
         assertThat(LocalImages.resolve(Path.of("/kb/notes"), "images/chart.png")).as("a picture from the document's folder")
                 .contains(Path.of("/kb/notes/images/chart.png"));
         assertThat(LocalImages.resolve(Path.of("/kb/notes"), "../img/flow.svg")).contains(Path.of("/kb/img/flow.svg"));

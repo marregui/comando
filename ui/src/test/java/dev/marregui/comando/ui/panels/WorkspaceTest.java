@@ -1,5 +1,8 @@
 package dev.marregui.comando.ui.panels;
 
+import java.awt.geom.Rectangle2D;
+import javax.swing.JTextArea;
+import dev.marregui.comando.ui.kit.text.TextLinks;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalKind;
@@ -767,6 +770,50 @@ class WorkspaceTest {
         // a text area, which never renders HTML: the summary shows as typed
         assertThat(w[0].card().topicText()).isEqualTo("<html><img src='http://example.com/x.png'>");
         assertThat(w[0].card().topicArea().getDocument()).isInstanceOf(PlainDocument.class);
+    }
+
+    @Test
+    void aLinkInTheCardsSummaryOpensAtADoubleClickAndKeepsTheCard() throws Exception {
+        PanelId a = new PanelId("a");
+        Asks asks = new Asks();
+        Workspace[] w = new Workspace[1];
+        List<String> opened = new CopyOnWriteArrayList<>();
+        JRootPane root = new JRootPane();
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry());
+            w[0].topics(asks, name -> null);
+            w[0].card().browseWith(opened::add);
+            w[0].render(AppState.initial(List.of(new PanelState(a, "first panel", "", "")), List.of(), List.of()));
+            root.getContentPane().add(w[0].component());
+            layOut(root, 900, 600);
+            w[0].showCard(0);
+        });
+        asks.asks.getLast().done().accept(new Topic("Reviewing https://example.org/pr/7 against the plan.", 1L, ""));
+        SwingUtilities.invokeAndWait(() -> layOut(w[0].card().component()));
+        TabCard card = w[0].card();
+        assertThat(card.topicLinks()).extracting(TextLinks.Ref::href).containsExactly("https://example.org/pr/7");
+        JTextArea topic = card.topicArea();
+        int at = card.topicLinks().getFirst().start() + 3;
+        Point[] p = new Point[1];
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                Rectangle2D r = topic.modelToView2D(at);
+                p[0] = new Point((int) r.getCenterX(), (int) r.getCenterY());
+            } catch (BadLocationException e) {
+                throw new IllegalStateException(e);
+            }
+        });
+        SwingUtilities.invokeAndWait(() -> {
+            for (int clicks = 1; clicks <= 2; clicks++) {
+                topic.dispatchEvent(new MouseEvent(topic, MouseEvent.MOUSE_PRESSED, 0, 0, p[0].x, p[0].y, clicks, false, MouseEvent.BUTTON1));
+                topic.dispatchEvent(new MouseEvent(topic, MouseEvent.MOUSE_RELEASED, 0, 0, p[0].x, p[0].y, clicks, false, MouseEvent.BUTTON1));
+                topic.dispatchEvent(new MouseEvent(topic, MouseEvent.MOUSE_CLICKED, 0, 0, p[0].x, p[0].y, clicks, false, MouseEvent.BUTTON1));
+            }
+        });
+        assertThat(opened).containsExactly("https://example.org/pr/7");
+        assertThat(w[0].cardShown()).as("a press on a link keeps the card").isEqualTo(a);
+        SwingUtilities.invokeAndWait(() -> topic.dispatchEvent(new MouseEvent(topic, MouseEvent.MOUSE_PRESSED, 0, 0, 1, 1, 1, false, MouseEvent.BUTTON1)));
+        assertThat(w[0].cardShown()).as("a press elsewhere on the summary closes it").isNull();
     }
 
     private static void mouseMoved(Component c, int x, int y) {

@@ -11,6 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.awt.Color;
+import java.awt.Cursor;
+import java.awt.event.InputEvent;
+import java.awt.event.MouseEvent;
 import java.awt.Graphics2D;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
@@ -341,5 +344,42 @@ class TranscriptCanvasTest {
     void tabsExpandToFourColumnStops() {
         assertThat(Rich.detab("1\tab\n\tx\tyz")).isEqualTo("1   ab\n    x   yz");
         assertThat(Rich.detab("no tabs")).isEqualTo("no tabs");
+    }
+    @Test
+    void aLinkInTextIsFollowedAtADoubleClickNotASingleOne() {
+        canvas.append(0, new Block.AssistantText("m", 0, "Open [[project-current-lane]] now", false, ""));
+        paint(800, 200);
+        canvas.setSize(800, canvas.contentHeight());
+        int[] at = null;
+        for (int y = 2; y < canvas.contentHeight() && at == null; y += 2) {
+            for (int x = 2; x < 800 && at == null; x += 3) {
+                canvas.getMouseMotionListeners()[0].mouseMoved(new MouseEvent(canvas, MouseEvent.MOUSE_MOVED, 0L, 0, x, y, 0, false, MouseEvent.NOBUTTON));
+                if (canvas.getCursor().getType() == Cursor.HAND_CURSOR) {
+                    at = new int[]{x + 4, y};
+                }
+            }
+        }
+        assertThat(at).as("the label shows as a link").isNotNull();
+        for (int clicks = 1; clicks <= 2; clicks++) {
+            canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_PRESSED, 0L, InputEvent.BUTTON1_DOWN_MASK, at[0], at[1], clicks, false, MouseEvent.BUTTON1));
+            canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_RELEASED, 0L, 0, at[0], at[1], clicks, false, MouseEvent.BUTTON1));
+            if (clicks == 1) {
+                assertThat(opened).as("a single click follows nothing").isEmpty();
+            }
+        }
+        assertThat(opened).containsExactly("comando-note:project-current-lane");
+        assertThat(canvas.selectionText()).as("the double click selects no word").isEmpty();
+    }
+
+    @Test
+    void aToolsResultShowsItsLinks() {
+        Rich r = new Rich(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12), Color.GRAY)
+                .append("wrote /tmp/x.md\nsee https://example.org/y, [[notes]] and [guide](docs/guide.md)").linked(Color.BLUE);
+        String text = r.text();
+        assertThat(r.linkAt(text.indexOf("example.org"))).isEqualTo("https://example.org/y");
+        assertThat(r.linkAt(text.indexOf("notes"))).isEqualTo("comando-note:notes");
+        assertThat(r.linkAt(text.indexOf("guide]"))).isEqualTo("docs/guide.md");
+        assertThat(r.linkAt(text.indexOf("wrote"))).isNull();
+        assertThat(text).as("the text stays as written").contains("[[notes]]");
     }
 }
