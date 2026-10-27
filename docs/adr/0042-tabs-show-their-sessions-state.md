@@ -2,14 +2,14 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-15 | accepted | Miguel (the states and their precedence, the spinner, the Dock bounce, an icon of comando's own), Claude (how) |
+| 2026-10-15 | accepted; its statuses amended by [record 43](0043-a-session-waiting-on-background-work-shows-it.md) (waiting) | Miguel and Claude |
 
 ## 1. Context
 
 With many panels open, each bound to its own session, the user moves between tabs to see whether a session has
 finished, is waiting for an answer, or failed. The tab bar said nothing of this: every tab had the file icon, and
-only a query that finished while another tab was in front put a "● " before its title. Finding out meant
-clicking the tab and reading its Session tab.
+only a query that finished while another tab was in front put a "● " before its title. Finding out meant clicking the
+tab and reading its Session tab.
 
 The window and the Dock showed the Java runtime's icon.
 
@@ -39,14 +39,17 @@ attention.
   Dock icon bounces until comando is brought to the front. Done does not; it has the Notification Center notice.
 - The window and the Dock show comando's own icon: a command prompt on a dark glass tile with a rim light and a
   shadow, the chevron in phosphor green with its glow, the block cursor in Claude's colour. The name comando came
-  from three ideas at once (the one who commands, going commando, and the 1985 arcade game played at home on an
-  8-bit machine); the icon takes the first, the glow the third. A first, pixel-drawn version read as plain next to
-  the Dock's other icons and was replaced the same day. The disk image bundles the same picture as `comando.icns`.
+  from three ideas (the one who commands, going commando, and the 1985 arcade game played at home on an 8-bit
+  machine); the icon takes the first, the glow the third. A first, pixel-drawn version was replaced the same day. The
+  disk image bundles the same picture as `comando.icns`.
+
+Miguel decided the states and their precedence, the spinner, the Dock bounce and an icon of comando's own; Claude
+decided how.
 
 ## 3. Consequences
 
 `SessionState` gains `lastTurnError`, set by a turn that ends in error (other than the user's interrupt) and cleared
-by the next turn, so a failure is observable after the fact. `TabStatus` (ui, panels) holds the rule and is unit-tested
-on its own; `Workspace` keeps, per panel, whether work was going on at the last render, and marks a panel whose work
-ended while another tab was in front. `SpinnerIcon` joins the kit's icon package. `Notifier.attention` asks the
-desktop; `AppIcon` installs the icon on the window and the Dock; `:app:dmg` passes it to jpackage.
+by the next turn, so a failure is observable after the fact. `TabStatus` (ui, panels) holds the rule and is
+unit-tested on its own; `Workspace` keeps, per panel, whether work was going on at the last render, and marks a panel
+whose work ended while another tab was in front. `SpinnerIcon` joins the kit's icon package. `Notifier.attention` asks
+the desktop; `AppIcon` installs the icon on the window and the Dock; `:app:dmg` passes it to jpackage.

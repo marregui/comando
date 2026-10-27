@@ -594,7 +594,7 @@ public final class Reducer {
         String subject = Notice.panel(panel.id().value());
         if (panel.session().isEmpty()) {
             return Transition.of(notice(s, Notice.Level.ERROR, "Panel " + panel.title()
-                    + " has no session: pick one from its header, or add one with Sessions… (⌘⇧K)", subject));
+                    + " has no session: pick one from its header, or add one with Session settings… (⌘⇧K)", subject));
         }
         Optional<SessionState> found = s.session(panel.session());
         if (found.isEmpty()) {

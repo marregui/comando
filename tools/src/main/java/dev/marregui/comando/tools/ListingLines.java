@@ -6,7 +6,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The lines a listing file (such as a scratchpad day's {@code INDEX.md}) gives an entry beside it, taken out once the
+ * The lines a listing file (such as a folder's {@code INDEX.md}) gives an entry beside it, taken out once the
  * entry went to the Trash. An entry's own line is a list item or a table row whose first element names it: a code span,
  * a link or bare text holding the entry's path relative to the listing file's folder ({@code READ-01-X.md},
  * {@code work/a.py}, {@code work/} for a folder, with its slash). A list item takes the lines indented under it.

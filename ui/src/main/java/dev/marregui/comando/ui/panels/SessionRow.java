@@ -122,8 +122,8 @@ final class SessionRow extends IconRow {
     }
 
     /**
-     * What the copy button, the menu's Copy details and ⌘C put on the clipboard: what a decision on the session (go on,
-     * compact, clear, stop) needs, one fact a line; {@code newestCli} as in {@link #show}.
+     * What the menu's Copy details and ⌘C put on the clipboard: what a decision on the session (go on, compact, stop)
+     * needs, one fact a line; {@code newestCli} as in {@link #show}.
      */
     static String details(SessionState s, long nowMillis, ZoneId zone, String newestCli) {
         StringBuilder sb = new StringBuilder();

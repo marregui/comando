@@ -11,7 +11,7 @@ import java.util.regex.Pattern;
 /**
  * Linear ticket ids in a text, each with the address Linear shows it at. Which ids are tickets, and the workspace whose
  * address they take, are learnt from Linear's own links ({@code linear.app/<workspace>/issue/<TEAM>-<n>}), so that a
- * word shaped like an id ({@code UTF-8}, {@code S7-1500}) is never taken for one.
+ * word shaped like an id ({@code UTF-8}, {@code ISO-8859}) is never taken for one.
  */
 public final class LinearTickets {
 

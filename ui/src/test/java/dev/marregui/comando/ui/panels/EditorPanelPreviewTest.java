@@ -125,25 +125,25 @@ class EditorPanelPreviewTest {
 
     @Test
     void aMarkdownDocumentOpensRenderedAndEditSwitchesToTheText() throws Exception {
-        EditorPanel panel = panel("NEVSKY-PLAN", p -> {
-            p.editor().load("# Nevsky\n\nThe **plan**.\n");
-            p.file(Path.of("/s/NEVSKY-PLAN.md"), true);
+        EditorPanel panel = panel("LANE-PLAN", p -> {
+            p.editor().load("# Lane\n\nThe **plan**.\n");
+            p.file(Path.of("/s/LANE-PLAN.md"), true);
         });
         assertThat(panel.previewOffered()).isTrue();
         assertThat(panel.previewing()).as("a scratchpad document opens rendered").isTrue();
         assertThat(panel.modeLabel()).as("the button names the other view").isEqualTo("Edit");
-        assertThat(shown(panel)).contains("Nevsky").contains("The plan.").doesNotContain("**").doesNotContain("#");
+        assertThat(shown(panel)).contains("Lane").contains("The plan.").doesNotContain("**").doesNotContain("#");
         assertThat(panel.editor().area().getSyntaxEditingStyle()).isEqualTo(SyntaxConstants.SYNTAX_STYLE_MARKDOWN);
 
-        SwingUtilities.invokeAndWait(() -> panel.reload("# Nevsky v2\n"));
-        assertThat(panel.editor().text()).isEqualTo("# Nevsky v2\n");
-        assertThat(shown(panel)).as("an outside change shows in the preview too").contains("Nevsky v2");
+        SwingUtilities.invokeAndWait(() -> panel.reload("# Lane v2\n"));
+        assertThat(panel.editor().text()).isEqualTo("# Lane v2\n");
+        assertThat(shown(panel)).as("an outside change shows in the preview too").contains("Lane v2");
 
         SwingUtilities.invokeAndWait(panel::togglePreview);
         assertThat(panel.previewing()).as("Edit shows the text").isFalse();
         assertThat(panel.modeLabel()).isEqualTo("Preview");
 
-        SwingUtilities.invokeAndWait(() -> panel.file(Path.of("/s/NEVSKY-PLAN.md"), true));
+        SwingUtilities.invokeAndWait(() -> panel.file(Path.of("/s/LANE-PLAN.md"), true));
         assertThat(panel.previewing()).as("a render does not take the editor away").isFalse();
     }
 

@@ -148,7 +148,7 @@ class ResourceDialogTest {
 
     private static AppState twoSessions() {
         return AppState.initial(List.of(new PanelState(States.P1, "one", "", "edge")), List.of(),
-                List.of(SessionState.closed(SessionSpec.fresh("edge", "/tmp")), SessionState.closed(SessionSpec.fresh("edge2", "/var"))));
+                List.of(SessionState.closed(SessionSpec.fresh("edge", "/tmp")), SessionState.closed(SessionSpec.fresh("lane2", "/var"))));
     }
 
     @Test
@@ -162,7 +162,7 @@ class ResourceDialogTest {
         combo(d, "model").setSelectedItem("opus");
         text(d, "budgetUsd").setText("2");
 
-        d.prepare(s, "edge2");
+        d.prepare(s, "lane2");
         assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to edge?");
         assertThat(text(d, "name").getText()).isEqualTo("edge");
         click(d, "Keep editing", confirmRow(d));
@@ -175,17 +175,17 @@ class ResourceDialogTest {
         assertThat(text(d, "name").getText()).as("Esc keeps editing too").isEqualTo("edge");
         assertThat(d.isDirty()).isTrue();
 
-        d.prepareClone(s, "edge2");
+        d.prepareClone(s, "lane2");
         click(d, "Discard", confirmRow(d));
-        assertThat(text(d, "name").getText()).isEqualTo("edge2 copy");
+        assertThat(text(d, "name").getText()).isEqualTo("lane2 copy");
         assertThat(text(d, "workDir").getText()).isEqualTo("/var");
         assertThat(d.isDirty()).isFalse();
 
         text(d, "name").setText("mine");
-        d.prepare(s, "edge2");
+        d.prepare(s, "lane2");
         assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to the new session?");
         click(d, "Discard", confirmRow(d));
-        assertThat(text(d, "name").getText()).isEqualTo("edge2");
+        assertThat(text(d, "name").getText()).isEqualTo("lane2");
         assertThat(sink.intents()).isEmpty();
     }
 
@@ -209,7 +209,7 @@ class ResourceDialogTest {
 
         // a question open when the close button is clicked is answered with its safe button first
         text(d, "name").setText("mine");
-        d.prepare(s, "edge2");
+        d.prepare(s, "lane2");
         d.close();
         assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to edge?");
         assertThat(sink.intents()).isEmpty();
@@ -228,8 +228,8 @@ class ResourceDialogTest {
         assertThat(text(d, "name").getText()).isEqualTo("new session");
         assertThat(d.title()).isEqualTo("New session");
 
-        d.prepareClone(s, "edge2");
-        assertThat(text(d, "name").getText()).isEqualTo("edge2 copy");
+        d.prepareClone(s, "lane2");
+        assertThat(text(d, "name").getText()).isEqualTo("lane2 copy");
         assertThat(text(d, "workDir").getText()).isEqualTo("/var");
         assertThat(d.title()).as("a copy is new until saved").isEqualTo("New session");
 

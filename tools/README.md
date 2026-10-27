@@ -1,9 +1,10 @@
 # `tools`
 
-The development tools behind `core`'s `ToolPort`: Gradle runs with their console and test tree, the Files tab's
-folders read as trees and their entries moved to the Trash, and the git repositories of those folders read, and
-changed on request from the comparison window (roll back, remove, unstage). Everything runs outside the reducer and
-the EDT and ends in an intent. It depends on `core` only.
+The development tools behind `core`'s `ToolPort`: Gradle runs with their console and test tree, the Files tab's folders
+read as trees and their entries moved to the Trash, and the git repositories of those folders read, and changed on
+request from the comparison window (roll back, remove, unstage). It also reads a kit's version and backs up its brain
+for `app`. Everything runs outside the reducer and the EDT and ends in an intent or a returned value. It depends on
+`core` only, and never imports Swing or AWT.
 
 1. [Architecture](#1-architecture)
 2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
@@ -12,33 +13,40 @@ the EDT and ends in an intent. It depends on `core` only.
 
 ## 1. Architecture
 
+One package, `dev.marregui.comando.tools`.
+
 | Class | Does |
 |---|---|
 | `ToolsAdapter` | the port: Gradle runs as child processes, folder reads, the folder poll, moves to the Trash, the repositories' reads, and roll back, removal and unstaging through git and the Trash |
-| `Git` | the `git` command line: the repositories a folder belongs to, `git status --porcelain=v2` parsed into a `RepoStatus` and the ignored entries, a changed file's `HEAD` and working-tree versions, and the runs behind roll back, remove and unstage (`restore`, `rm --cached`); each run bounded (10 s, 32 MB), without optional locks or prompts, killed at close |
+| `Git` | the `git` command line: the repositories a folder belongs to (at most 20), `git status --porcelain=v2` parsed into a `RepoStatus` and the ignored entries, a changed file's `HEAD` and working-tree versions (a version over 4 MB is not compared); every run bounded (10 s, 32 MB of output), without optional locks or prompts, killed at close |
 | `GradleBuild` | the build a directory belongs to (the nearest directory at or above it with an executable `gradlew`) and the command: `<gradle-serial> <root> <tasks>`, else `<root>/gradlew --console=plain <tasks>` |
 | `Args` | splits the tasks the user typed as a POSIX shell splits words, without expansion |
 | `TestReports` | JUnit XML written since the run started, as a tree with failures first, each linked to its source line |
-| `FolderTree` | a folder as a tree, ordered and bounded (12 levels; 80 000 names listed, 20 000 entries kept), without the entries a caller skips |
-| `ListingLines` | the lines a listing file (such as a scratchpad day's `INDEX.md`) gives an entry, taken out once the entry went to the Trash |
-| `ToolSettings` | where the tools are, by convention: a `gradle-serial` on comando's `PATH` when there is one, and the JDK for child processes |
-| `KitGit` | the kit's root and brain as git checkouts: `git describe --tags --always` and the newer `vX.Y.Z` tags of `git ls-remote --tags origin` (`core`'s `KitVersion`); the brain's backup, `git add -A`, a commit `Brain backup <date>` when anything changed, `git push`, only when the brain is a repository of its own with a remote; remote runs bounded at 120 s |
+| `FolderTree` | a folder as a tree, ordered and bounded (12 levels; 80 000 names listed, 20 000 entries kept), without hidden entries, excluded names and the entries a caller skips |
+| `ListingLines` | the lines a listing file (an index file that names the entries beside it) gives an entry, taken out once the entry went to the Trash; other lines naming it stay and are reported |
+| `ToolSettings` | where the tools are, by convention: a `gradle-serial` executable on comando's `PATH` when there is one, and the JDK for child processes |
+| `KitGit` | the kit's root and brain as git checkouts: `git describe --tags --always` and the newer `vX.Y.Z` tags of `git ls-remote --tags origin` (`core`'s `KitVersion`); the brain's backup (`git add -A`, a commit `Brain backup <date>` when anything changed, `git push`) only when the brain is a repository of its own with a remote; remote runs bounded at 120 s, the commit at 60 s |
 
-- **A Gradle run.** The process runs on a virtual thread that copies its output into the run's `Console` (past 4 MB
-  the rest is held and its last 64 kB shown at the end) and sends `CommandFinished` with the exit code, the test tree
-  and the failures. A stop sends SIGTERM to the process tree, SIGKILL 2 s later; output is read at most 2 s after the
-  process exits.
-- **Settings per run.** `ToolsAdapter` takes a `Supplier<ToolSettings>` and asks it at each run, so a `gradle-serial` installed
-  while comando runs is used from the next run.
-- **Folders.** `readFolders` reads once and sends each tree; `watchFolders` replaces the set the poll reads, and the
-  poll sends a tree only when it changed. Reads are ticketed, so an older read never overwrites a newer one.
-- **Repositories.** `watchRepos` names every configured folder. The poll reads, before the folders, the repositories
-  of the watched folders (of all while the Changes view is open) every poll, the others every sixth, and sends
-  `ReposLoaded`, every repository, when any changed. A folder
-  in a repository is read without what git ignores, from a status at most 30 s old; a folder git ignores as a whole is
-  read whole. `readChange` reads a change's two versions on one thread, in the order asked, and sends `ChangeRead`.
-- **The Trash.** `deleteFiles` moves entries through a `ToolsAdapter.Trash`, then edits the folder's listing file and
-  reads the open folders again. Nothing is deleted for good.
+**A Gradle run.** The process runs on an errand that copies its output into the run's `Console` and sends
+`CommandFinished` with the exit code, the test tree and the failures. Past 4 Mi characters the rest of the output is
+held back and its last 64 Ki characters are shown at the end, where a build's failure summary is. A stop sends SIGTERM
+to the process tree and SIGKILL 2 s later; output is read at most 2 s after the process exits, so a child holding the
+pipe does not hold the run.
+
+**Settings per run.** `ToolsAdapter` takes a `Supplier<ToolSettings>` and asks it at each run, so a `gradle-serial`
+installed while comando runs is used from the next run.
+
+**Folders.** `readFolders` reads once and sends each tree. `watchFolders` replaces the set the poll reads, and the poll
+sends a tree only when it changed. Reads are ticketed, so an older read never overwrites a newer one.
+
+**Repositories.** `watchRepos` names every configured folder. Each poll first reads the repositories of the watched
+folders (of all folders while the Changes view is open), the others every sixth poll, and sends `ReposLoaded`, with
+every repository, when any changed. A folder in a repository is read without what git ignores, from a status at most 30
+s old; a folder git ignores as a whole is read whole. `readChange` reads a change's two versions on one thread, in the
+order asked, and sends `ChangeRead`.
+
+**The Trash.** `deleteFiles` moves entries through a `ToolsAdapter.Trash`, then edits the folder's listing file and
+reads the open folders again. Nothing is deleted for good.
 
 ## 2. Interface with the rest of the app
 
@@ -46,11 +54,12 @@ the EDT and ends in an intent. It depends on `core` only.
 flowchart LR
   ER["core EffectRouter"] -->|"ToolPort"| TA["ToolsAdapter"]
   APP["app"] -->|"pollFolders, settings supplier, Trash"| TA
+  APP -->|"version, backUp"| KG["KitGit"]
   TA -->|"output"| CR[("ConsoleRegistry")]
   TA -->|"CommandFinished, FolderLoaded, ReposLoaded, ChangeRead, Notify"| SINK["core IntentSink"]
   CR --> UI["ui console view"]
   SINK -->|"FolderLoaded → effect ShowFolder"| UIF["ui Files tab"]
-  SINK -->|"ReposLoaded → ShowRepos; ChangeRead → ShowChange"| UIC["ui Files tab, Changes view, diff window"]
+  SINK -->|"ReposLoaded → ShowRepos, ChangeRead → ShowChange"| UIC["ui Files tab, Changes view, diff window"]
 ```
 
 **Provides.**
@@ -59,41 +68,46 @@ flowchart LR
 |---|---|---|
 | `ToolPort` | `runGradle(runId, workDir, tasks)`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles(folder, paths)`, `watchRepos(folders, changesShown)`, `readChange(root, change, ask)`, `rollBack(root, changes)`, `removeFiles(root, paths)`, `unstage(root, paths)` | the reducer's effects, through `EffectRouter` |
 | `ToolsAdapter.pollFolders(every)` | starts the folder poll | `app` at start (every 5 s) |
-| `ToolsAdapter.Trash` | `moveToTrash(file)`; `Trash.NONE` for tests and desktops without one | implemented in `ui` (`DesktopTrash`), passed in by `app`, so `tools` never imports Swing or AWT |
+| `ToolsAdapter.Trash` | `moveToTrash(file)`; `Trash.NONE` for tests and desktops without one | implemented in `ui` (`DesktopTrash`), passed in by `app` |
+| `KitGit` | `version(root)`, `canBackUp(brain)`, `backUp(brain, today)` | `app`'s `RootSetup`, off the EDT: the kit's version at start and every 6 hours, the brain's backup when the user asks for it |
 
 **Needs.** The `IntentSink`, the `ConsoleRegistry` it writes, a `Supplier<ToolSettings>` (`app` passes
 `ToolSettings::now`), and a `Trash`.
 
-`KitGit` is used by `app` alone, off the EDT: the kit's version at start and every 6 hours, and the brain's backup when
-the user asks for it.
-
-**Sends back.** `CommandFinished` (the reducer updates the run's console view and may ask for a desktop
-notification), `FolderLoaded` (the reducer turns it into a `ShowFolder` effect for the Files tab), `ReposLoaded`
-(`ShowRepos`: the Files tab's colours and the Changes view), `ChangeRead` (`ShowChange`: the diff window), `Notify`.
+**Sends back.** `CommandFinished` (the reducer updates the run's console view and may ask for a desktop notification),
+`FolderLoaded` (the reducer turns it into a `ShowFolder` effect for the Files tab), `ReposLoaded` (`ShowRepos`: the
+Files tab's colours and the Changes view), `ChangeRead` (`ShowChange`: the diff window), `Notify`.
 
 The terminal is not here: JediTerm is a Swing component and lives in `ui`.
 
 ## 3. Threads
 
-| Thread | Does |
-|---|---|
-| `gradle-<run>`, `tool-kill-<run>` | errands of the adapter: the run's process; the SIGKILL after a stop |
-| `tool-output-<run>` | fork: the run's output while the run waits for its process |
-| `folder-read`, `repo-read`, `file-trash` | errands: a read asked for now; the repositories read at once when `watchRepos` changes them; moves to the Trash and the listing edits |
-| `folder-poll` | timed strand: reads the watched folders every period |
-| `change-read` | strand: a changed file's two versions, one at a time |
-| `repo-write` | strand: `RollBack`, `RemoveFiles`, `Unstage` through git (`restore`, `rm --cached`) and the Trash, then the repositories read again |
-| `git-out`, `git-err` | forks, per git run: its output and the start of its errors |
+| Thread | Kind | Does | Stopped by |
+|---|---|---|---|
+| `gradle-<run>`, `tool-kill-<run>` | errands of the adapter | the run's process; the SIGKILL 2 s after a stop | `close()`, last, once the processes have ended |
+| `tool-output-<run>` | fork | the run's output while the run waits for its process | its run, at most 2 s after the exit |
+| `folder-read`, `repo-read`, `file-trash` | errands | a read asked for now; the repositories read at once when `watchRepos` changes them; moves to the Trash and the listing edits | `close()` |
+| `folder-poll` | timed strand | reads the watched repositories, then the open folders, every period | `close()` |
+| `change-read` | strand | a changed file's two versions, one at a time | `close()` |
+| `repo-write` | strand | `RollBack`, `RemoveFiles`, `Unstage` through git (`restore`, `rm --cached`) and the Trash, then the repositories read again | `close()` |
+| `git-out`, `git-err` | forks, per git run | its output and the start of its errors | the run's bound, or `close()` |
 
-`close()` stops every run's process tree (SIGTERM, SIGKILL 2 s later), the folder poll, the change reads, the
-repository writes, every git run and, last, the errands.
+`close()` stops the folder poll, the change reads, the repository writes and every git run, sends SIGTERM to every run's
+process tree and SIGKILL 2 s later, and closes the errands last.
 
 ## 4. Tests
 
-`ToolsAdapterTest` runs a fake `gradlew` (a shell script that prints its arguments and writes one failing JUnit report)
-and folder reads in temporary directories; `GitTest` and `ToolsAdapterReposTest` build a repository with the real
-`git` in a temporary directory (a change of each kind, an ignored folder); `ListingLinesTest` and `ToolSettingsTest`
-are unit tests.
+| Test | Covers |
+|---|---|
+| `ToolsAdapterTest` | Gradle runs against a fake `gradlew` (a shell script that prints its arguments and writes one failing JUnit report); folder reads in temporary directories |
+| `GitTest`, `ToolsAdapterReposTest` | a repository built with the real `git` in a temporary directory: a change of each kind, an ignored folder |
+| `KitGitTest` | the kit's version and the brain's backup against a checkout and a bare remote on disk |
+| `ListingLinesTest`, `ToolSettingsTest` | unit tests |
 
-Further reading: [Workbench §4.2](../docs/workbench.md#42-gradle-runs), [Workbench §5](../docs/workbench.md#5-the-files-tab),
-[record 62](../docs/adr/0062-gradle-runs-by-convention.md), [record 68](../docs/adr/0068-git-changes-and-a-side-by-side-diff.md).
+```
+./gradlew :tools:test
+```
+
+Further reading: [Workbench §4.2](../docs/workbench.md#42-gradle-runs),
+[Workbench §5](../docs/workbench.md#5-the-files-tab), [record 62](../docs/adr/0062-gradle-runs-by-convention.md),
+[record 68](../docs/adr/0068-git-changes-and-a-side-by-side-diff.md).

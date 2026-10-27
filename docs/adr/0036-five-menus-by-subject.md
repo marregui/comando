@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-14 | superseded by [59](0059-three-menus-for-what-has-no-key.md); Help items carry icons since [47](0047-help-opens-its-files-as-documents.md) | Miguel (fewer menus, submenus, consistent icons; the proposal), Claude (layout and icon rule) |
+| 2026-10-14 | replaced by [record 59](0059-three-menus-for-what-has-no-key.md); its icon rule amended by [record 47](0047-help-opens-its-files-as-documents.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -24,6 +24,9 @@ unrelated items), and half the items had none.
 | the panel header's session toggle | the plug, as on the session's row | a ▶ next to the session read as Run |
 | out of the menus | Go to panel 1–9, the ⌘⌥1–4 alternates, the second completion key, Quit (the application menu's) | they keep their keys and the palette |
 | palette | matches the label, then the menu path ("model" finds the models) | short labels in submenus stay findable |
+
+Miguel asked for fewer menus, submenus and consistent icons, and accepted the proposal; Claude decided the layout and
+the icon rule.
 
 ## 3. Consequences
 

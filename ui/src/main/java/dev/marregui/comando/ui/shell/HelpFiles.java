@@ -103,7 +103,7 @@ final class HelpFiles {
 
     /**
      * The tutorial as the app shows it: links to other docs are relative to the repository, which the app does not
-     * ship, and the preview does not follow in-page anchors, so those links keep their text only.
+     * ship, so those links keep their text only; so do in-page anchors, which the shown tutorial does not need.
      */
     static String tutorialText(String markdown) {
         return markdown.replaceAll("\\[([^\\]]+)\\]\\((\\.\\./[^)]+|[a-z-]+\\.md[^)]*|#[^)]+)\\)", "$1");

@@ -2,13 +2,14 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-16 | accepted | Miguel (icons on the Help items; the tutorial and the log open as scratchpad documents do, each backed by a file that can also be opened as a file; Keyboard shortcuts stays in the side pane; "Reveal comando folder"; the order unchanged), Claude (how) |
+| 2026-10-16 | accepted | Miguel and Claude |
 
 ## 1. Context
 
 Help ▸ Tutorial showed the tutorial from a resource in the build, and Help ▸ Show the log showed the log's last 2000
 lines, both in the side pane, as views that last one run and have no file. [Record 36](0036-five-menus-by-subject.md)
-let a menu item carry an icon only when the same action is a button with that icon, so the Help items had none.
+let a menu item carry an icon only when the same action is a button with that icon, so the Help items had none. This
+record amends that rule for the Help items.
 
 ## 2. Decision
 
@@ -20,8 +21,12 @@ let a menu item carry an icon only when the same action is a button with that ic
 | log rotation | 10 files of 1 MiB, instead of 5 of 5 MB | a panel takes files up to 2 MiB; a larger one would fall back to the side pane |
 | Keyboard shortcuts | the side pane, as before | generated from the commands; nothing to keep as a file |
 | Reveal | renamed "Reveal comando folder" | names the folder the user sees |
-| icons | the Help items carry icons of their own, which nothing else uses: a mortarboard (Tutorial), a keyboard (Keyboard shortcuts), a page with green, amber and red lines (Show the log), a folder holding comando's chevron and cursor (Reveal comando folder) | Miguel's call; each still means one thing |
+| icons | the Help items carry icons of their own, which nothing else uses: a mortarboard (Tutorial), a keyboard (Keyboard shortcuts), a page with green, amber and red lines (Show the log), a folder holding comando's chevron and cursor (Reveal comando folder) | each still means one thing |
 | order | Tutorial, Keyboard shortcuts, then Show the log, Reveal comando folder | unchanged |
+
+Miguel decided icons on the Help items, the tutorial and the log opening as scratchpad documents do (each backed by a
+file that can also be opened as a file), Keyboard shortcuts staying in the side pane, the name "Reveal comando folder"
+and the order; Claude decided how.
 
 ## 3. Consequences
 

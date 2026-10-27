@@ -2,20 +2,22 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-26 | accepted | Miguel (the user installs Claude Code and asks it to install comando from a release; that agent installs comando and asks whether to install the kit, which it installs on a yes from the kit's own `INSTALL.md`; a release is made when he pushes a version tag; "when the user starts comando it notices that ~/.claude has the kit, so then comando uses the kit when it starts its sessions"; "the user decides whether there is time to upgrade, in which case through comando we tell the agent to proceed"; the Files tab laid out for improving skills and the brain; the brain backed up "only from comando, by hand"; macOS, Linux and Windows), Claude (the root's resolution, the session environment, the Files-tab merge, the release workflow, the install recipe) |
+| 2026-10-26 | accepted; amended 2026-10-27 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
 [Record 50](0050-comando-ships-a-claude-code-kit.md) shipped a kit inside comando: the repository's `kit/` folder, a
 Claude Code plugin with two skills, a few scripts and a skeleton, bundled into the build, copied to `~/.comando/kit` at
-every start, and installed through Claude Code's plugin commands from **Actions ▸ Claude Code kit**, or from an offer at
-start. [Record 61](0061-the-kit-overrides-a-setup-of-the-users-own-with-consent.md) had the kit override a user's own
-`reflect` and `deep-review`, with consent; it was not built. A first version of this record (proposed 2026-10-20)
-planned a manifest, an install record kept by comando, uninstall, and revert to an earlier version.
+every start, and installed through Claude Code's plugin commands from **Actions ▸ Claude Code kit**
+([record 75](0075-the-menu-bar-is-edit-and-actions-flat.md)), or from an offer at start.
+[Record 61](0061-the-kit-overrides-a-setup-of-the-users-own-with-consent.md) had the kit override a user's own `reflect`
+and `deep-review`, with consent; it was not built. A Gradle run ([record 62](0062-gradle-runs-by-convention.md)) used
+the kit's `gradle-serial` by default. A first version of this record (proposed 2026-10-20) planned a
+manifest, an install record kept by comando, uninstall, and revert to an earlier version.
 
 The author's working setup is his Claude Code folder itself: `CLAUDE.md`, `settings.json`, user skills, and a plugin
-with agents, scripts, hooks, Semgrep rules and scheduled jobs. comando's kit carried a small part of it, and its
-scripts existed in both places, kept equal by a test.
+with agents, scripts, hooks, Semgrep rules and scheduled jobs. comando's kit carried a small part of it, and its scripts
+existed in both places, kept equal by a test.
 
 Claude Code 2.1.310, checked on 2026-10-26: `CLAUDE_CONFIG_DIR=<folder>` makes a session use that folder for
 everything (settings, `CLAUDE.md`, skills, plugins, transcripts in `<folder>/projects`); a new folder answers "Not
@@ -38,19 +40,31 @@ user's and accepts `autoMemoryDirectory` as an absolute path.
 | the brain's backup | **Back up the brain**: `git add -A`, a commit, `git push` in `<root>/BRAIN`, only on the user's click | a commit and a push of what the sessions learnt are the user's act; nothing sends it unseen |
 | platforms | macOS, Linux and Windows, for comando's packages and for the kit's installer (Python 3, standard library only) | the users of comando and of the kit work on all three |
 
+Miguel decided: the user installs Claude Code and asks it to install comando from a release; that agent installs comando
+and asks whether to install the kit, which it installs on a yes from the kit's own `INSTALL.md`; a release is made when
+he pushes a version tag; comando, when it starts, notices that `~/.claude` has the kit and runs its sessions on it; the
+user decides when there is time to upgrade, and comando then tells the agent to proceed; the Files tab is laid out for
+improving skills and the brain; the brain is backed up only from comando, by hand; macOS, Linux and Windows. Claude
+decided the root's resolution, the session environment, the Files tab's merge, the release workflow and the install
+recipe.
+
 ## 3. Consequences
 
-Replaces records 50 and 61 in what they say of installing the kit and of a setup of the user's own; record 50's one
-memory for every project stands, now set per session through `autoMemoryDirectory`. The kit inside comando is gone:
-the `kit/` folder and its bundling, `Kit`, `KitSetup`, the offer at start and the system property that switched it,
-**Actions ▸ Claude Code kit**, and the tests `KitTest`, `KitLiveTest` and `KitAtStartTest`. Of the proposal of
-2026-10-20, the manifest is `comando-kit.json` and the install record is the kit's `.comando-kit-install.json`; revert to an earlier
-version is an upgrade to an earlier tag. A Gradle run ([record 62](0062-gradle-runs-by-convention.md)) goes through the
-first `gradle-serial` on comando's `PATH`, the kit's copy in comando's folder being gone, else the checkout's
-`./gradlew`.
+This record replaces records 50 and 61 in what they say of installing the kit and of a setup of the user's own; record
+50's one memory for every project stands, now set per session through `autoMemoryDirectory`. The kit inside comando is
+gone: the `kit/` folder and its bundling, `Kit`, `KitSetup`, the offer at start and the system property that switched
+it, **Actions ▸ Claude Code kit** (record 75's item), and the tests `KitTest`, `KitLiveTest` and `KitAtStartTest`. Of
+the proposal of 2026-10-20, the manifest is `comando-kit.json` and the install record is the kit's
+`.comando-kit-install.json`; revert to an earlier version is an upgrade to an earlier tag. A Gradle run
+([record 62](0062-gradle-runs-by-convention.md)) goes through the first `gradle-serial` on comando's `PATH`, the kit's
+copy in comando's folder being gone, else the checkout's `./gradlew`.
 
-`KitRoot` (core) resolves the root; `KitJson` (claude) reads `comando-kit.json` into it. `./gradlew :app:package` builds the running system's release
-file in `app/build/package`; `.github/workflows/release.yml` builds it on the three systems on a tag, and makes the
-release with the commits since the previous tag as its notes; run by hand, it builds the three files as the run's
-artifacts without a release. [Workbench §7](../workbench.md#7-the-kit) describes the root, the brain, the Files tab,
-the upgrade and the backup.
+`KitRoot` (core) resolves the root; `KitJson` (claude) reads `comando-kit.json` into it. `./gradlew :app:package` builds
+the running system's release file in `app/build/package`; `.github/workflows/release.yml` builds it on the three
+systems on a tag, and makes the release with the commits since the previous tag as its notes; run by hand, it builds
+the three files as the run's artifacts without a release. [Workbench §7](../workbench.md#7-the-kit) describes the root,
+the brain, the Files tab, the upgrade and the backup.
+
+## Amendments
+
+2026-10-27: the repository is public; the packages stay unsigned, as record 16's amendment of the same day decides.

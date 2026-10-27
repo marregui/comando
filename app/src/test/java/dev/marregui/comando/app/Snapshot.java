@@ -496,7 +496,7 @@ public final class Snapshot {
     }
 
     /** A repository whose working tree has a file changed, one added, one deleted and one untracked, and an ignored folder. */
-    private static Path sampleRepo(Path repo) throws Exception {
+    static Path sampleRepo(Path repo) throws Exception {
         Path src = Files.createDirectories(repo.resolve("src/main/java/demo"));
         StringBuilder lane = new StringBuilder("package demo;\n\n/** A lane of work: one writer, many readers. */\nfinal class Lane {\n\n");
         for (int i = 1; i <= 12; i++) {
@@ -527,7 +527,7 @@ public final class Snapshot {
         return repo;
     }
 
-    private static void git(Path dir, String... args) throws Exception {
+    static void git(Path dir, String... args) throws Exception {
         List<String> cmd = new ArrayList<>(List.of("git", "-c", "user.name=snapshot", "-c", "user.email=s@s", "-c", "commit.gpgsign=false",
                 "-c", "init.defaultBranch=main", "-C", dir.toString()));
         cmd.addAll(List.of(args));
@@ -539,7 +539,7 @@ public final class Snapshot {
     }
 
     /** Whether the row labelled {@code label} of the tree named {@code name} is open; asked on the event thread. */
-    private static boolean rowExpanded(String name, String label) {
+    static boolean rowExpanded(String name, String label) {
         boolean[] open = new boolean[1];
         try {
             SwingUtilities.invokeAndWait(() -> {
@@ -558,7 +558,7 @@ public final class Snapshot {
     }
 
     /** Whether the Files tab knows the sample repository, so its row has the git icon and the flag. */
-    private static boolean repoMarked() {
+    static boolean repoMarked() {
         boolean[] marked = new boolean[1];
         try {
             SwingUtilities.invokeAndWait(() -> {
@@ -580,7 +580,7 @@ public final class Snapshot {
     }
 
     /** A user's double click on the row labelled {@code label}: press, release and click, twice. */
-    private static void doubleClickRow(JTree t, String label) {
+    static void doubleClickRow(JTree t, String label) {
         for (int i = 0; i < t.getRowCount(); i++) {
             if (t.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n
                     && n.getUserObject() instanceof ViewSpec.TreeNode node && node.label().equals(label)) {
@@ -600,7 +600,7 @@ public final class Snapshot {
     }
 
     /** Clicks the button whose accessible name is {@code name} in the open dialog titled {@code title}. */
-    private static void clickInDialog(String title, String name) throws Exception {
+    static void clickInDialog(String title, String name) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             for (Window w : Window.getWindows()) {
                 if (w instanceof JDialog d && d.isVisible() && title.equals(d.getTitle())) {
@@ -630,7 +630,7 @@ public final class Snapshot {
      * Runs the Files tab's command {@code id} as the user would: a right click on the tab's header, then its item in the
      * menu that opens. EDT only.
      */
-    private static void findCommand(String id) {
+    static void findCommand(String id) {
         String text = switch (id) {
             case "files.settings" -> "Configure " + FoldersDialog.title(false);
             case "files.repositories" -> "Configure repositories";
@@ -699,13 +699,13 @@ public final class Snapshot {
     }
 
     /** Runs every task posted to the event thread before this call. */
-    private static void flushEdt() throws Exception {
+    static void flushEdt() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
         });
     }
 
     /** Whether a dialog titled {@code title} is on screen; asked on the event thread. */
-    private static boolean dialogShown(String title) {
+    static boolean dialogShown(String title) {
         boolean[] shown = new boolean[1];
         try {
             SwingUtilities.invokeAndWait(() -> {
@@ -720,7 +720,7 @@ public final class Snapshot {
     }
 
     /** Whether the visible window's tree named {@code name} shows a row labelled {@code label}; asked on the event thread. */
-    private static boolean rowShown(String name, String label) {
+    static boolean rowShown(String name, String label) {
         boolean[] shown = new boolean[1];
         try {
             SwingUtilities.invokeAndWait(() -> {
@@ -763,7 +763,7 @@ public final class Snapshot {
     }
 
     /** The visible window's tree named {@code name}, or null. */
-    private static JTree tree(String name) {
+    static JTree tree(String name) {
         for (Frame f : Frame.getFrames()) {
             if (f instanceof JFrame jf && f.isVisible()) {
                 JTree t = find(jf.getContentPane(), JTree.class, x -> name.equals(x.getAccessibleContext().getAccessibleName()));
@@ -946,7 +946,7 @@ public final class Snapshot {
     }
 
     /** Brings a tab of the sidebar to the front by clicking its header, as a user would. */
-    private static void selectSidebarTab(String title) throws Exception {
+    static void selectSidebarTab(String title) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             for (Frame f : Frame.getFrames()) {
                 if (f instanceof JFrame jf && f.isVisible()) {

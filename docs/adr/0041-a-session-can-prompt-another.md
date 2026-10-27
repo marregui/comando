@@ -2,14 +2,14 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-15 | accepted; consent replaced by [44](0044-sessions-prompt-each-other-without-asking.md) | Miguel (sessions may hand work to each other; the user tracks it and chooses each time), Claude (how) |
+| 2026-10-15 | accepted; its consent rule replaced by [record 44](0044-sessions-prompt-each-other-without-asking.md) | Miguel and Claude |
 
 ## 1. Context
 
 Two sessions, each in its own panel, could not work together: a session could write into another session's panel
-(`ui_insert` with `force`), but not run that text, and could not see what the other session did with it. Miguel
-wants a session able to prompt another and read back its work, with the user always able to follow it and the
-choice to let it happen. Sending one prompt to several sessions at once stays out ([record 38](0038-a-session-has-one-panel.md)).
+(`ui_insert` with `force`), but not run that text, and could not see what the other session did with it. A session was
+to be able to prompt another and read back its work, with the user always able to follow it and to choose whether it
+happens. Sending one prompt to several sessions at once stays out ([record 38](0038-a-session-has-one-panel.md)).
 
 ## 2. Decision
 
@@ -23,9 +23,13 @@ choice to let it happen. Sending one prompt to several sessions at once stays ou
 | reading | from comando's own transcript of the session, by block index; without a cursor the last 40 blocks; a block still being written or run stops the cursor so the next read shows it finished; `wait_seconds` (at most 600) waits for the receiving session's turns to end | the same blocks the user sees; a reader never misses a tool's result that arrived later |
 | what is refused | prompting itself; an unknown session; a panel closed or rebound while the card waited | nothing runs where the user did not see it |
 
+Miguel decided that sessions may hand work to each other, with the user following it and choosing each time; Claude
+decided how.
+
 ## 3. Consequences
 
-`McpTools` takes the `TranscriptRegistry`; `ApprovalKind` gains `SESSION_PROMPT`; the inbox draws its card. A
-prompt run in a panel the user is not looking at leaves the lower panel on its tab ([record 24](0024-the-window-belongs-to-the-user.md));
-the user's own runs, always from the focused panel, still bring the Session tab forward. The
-session instructions name both tools, for use when the user asks a session to hand work to another.
+`McpTools` takes the `TranscriptRegistry`; `ApprovalKind` gains `SESSION_PROMPT`; the inbox draws its card. A prompt
+run in a panel the user is not looking at leaves the lower panel on its tab
+([record 24](0024-the-window-belongs-to-the-user.md)); the user's own runs, always from the focused panel, still bring
+the Session tab forward. The session instructions name both tools, for use when the user asks a session to hand work
+to another.

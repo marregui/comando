@@ -2,11 +2,13 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-14 | accepted; replaces the rule for edits made outside comando in [record 26](0026-a-file-per-panel.md) | Miguel (reload), Claude (how) |
+| 2026-10-14 | accepted; its "file deleted outside" row replaced for documents by [record 34](0034-a-deleted-document-closes-its-panel.md), and for panels without a session by [record 39](0039-panels-are-kept-until-removed.md) and [record 88](0088-a-session-and-its-panel-share-a-name.md) | Miguel and Claude |
 
 ## 1. Context
 
-Record 26 kept an outside edit aside at comando's next write and never reloaded a file while comando ran. Panel files are specs that other editors and Claude's Edit tool also change; Miguel wants comando to show those changes.
+[Record 26](0026-a-file-per-panel.md) kept an outside edit aside at comando's next write and never reloaded a file
+while comando ran. Panel files are specs that other editors and Claude's Edit tool also change, and comando was to show
+those changes. This record replaces that rule of record 26.
 
 ## 2. Decision
 
@@ -19,8 +21,17 @@ Record 26 kept an outside edit aside at comando's next write and never reloaded 
 | a file deleted outside | a notice, once; the panel keeps its text and writes the file again on its next save | |
 | a file half written by another editor | a read whose stamp changed while reading is dropped; the next check reads the whole file | |
 
+Miguel decided that panels reload; Claude decided how.
+
 ## 3. Consequences
 
-A change shows within about a second. Only open panels' files are checked; a new file in the folder opens through Open spec…. A change that keeps both the modification time and the size of comando's last write is not seen.
+A change shows within about a second. Only open panels' files are checked; a new file in the folder opens through
+Open spec…. A change that keeps both the modification time and the size of comando's last write is not seen.
 
-Two windows stay open, because closing them needs a lock every editor honours, which macOS editors do not share (found by the concurrency review of 2026-10-14, accepted as risks): an outside write landing in the instant between comando's check and its replacing move is overwritten (comando writes its temporary file before the check, so the window is that instant only); and a file an editor has written in part and paused on reads as complete. The second corrects itself at the next check, or, when the panel was typed in meanwhile, its complete version is kept aside.
+Two windows stay open, because closing them needs a lock every editor honours, and macOS editors share none. The
+concurrency review of 2026-10-14 found both, and they were accepted as risks:
+
+- an outside write landing in the instant between comando's check and its replacing move is overwritten. comando
+  writes its temporary file before the check, so the window is that instant only;
+- a file an editor has written in part and paused on reads as complete. This corrects itself at the next check, or,
+  when the panel was typed in meanwhile, its complete version is kept aside.

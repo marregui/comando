@@ -22,7 +22,7 @@ class LinearTicketsTest {
     @Test
     void theTicketsOfTheLastParagraphComeFirstThenTheOthersNewestFirstEachOnce() {
         LinearTickets.Site site = new LinearTickets.Site("acme", Set.of("ENG", "OPS"));
-        String text = "ENG-1 then ENG-2, UTF-8 and S7-1500, ABC-9\n\nmore on ENG-2 and OPS-3\n  \nnow ENG-1125 with ENG-7 (ENG-1125 again)";
+        String text = "ENG-1 then ENG-2, UTF-8 and ISO-8859, ABC-9\n\nmore on ENG-2 and OPS-3\n  \nnow ENG-1125 with ENG-7 (ENG-1125 again)";
         assertThat(LinearTickets.in(text, site, 9)).extracting(LinearTickets.Ticket::id)
                 .containsExactly("ENG-1125", "ENG-7", "OPS-3", "ENG-2", "ENG-1");
         assertThat(LinearTickets.in(text, site, 2)).extracting(LinearTickets.Ticket::id).containsExactly("ENG-1125", "ENG-7");

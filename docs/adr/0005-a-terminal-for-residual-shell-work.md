@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-12 | accepted | Miguel, on the defaults proposed in the plan review |
+| 2026-10-12 | accepted | Miguel |
 
 ## 1. Context
 
@@ -12,6 +12,9 @@ With Claude in comando, the remaining reasons to open iTerm2 are interactive log
 
 An embedded terminal, one per editor panel, after M1.
 
+Miguel decided, on the default proposed in the review of the design plan.
+
 ## 3. Consequences
 
-JediTerm and pty4j are dependencies: JediTerm is LGPL-3.0, pty4j EPL-1.0. Both are used unmodified as libraries. See [Development tools](../workbench.md#41-terminal).
+JediTerm and pty4j are dependencies: JediTerm is LGPL-3.0, pty4j EPL-1.0. Both are used unmodified, as libraries. The
+terminal is described in [Terminal](../workbench.md#41-terminal).

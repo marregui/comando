@@ -55,7 +55,7 @@ class FilesTabTest {
         Set<String> none = Set.of();
         assertThat(FilesTab.iconName(folder("2026-10-14"), none)).isEqualTo("folder");
         assertThat(FilesTab.iconName(folder("work"), none)).isEqualTo("folder-work");
-        assertThat(FilesTab.iconName(file("NEVSKY-PLAN.md"), none)).isEqualTo("plan");
+        assertThat(FilesTab.iconName(file("LANE-PLAN.md"), none)).isEqualTo("plan");
         assertThat(FilesTab.iconName(file("READ-01-X-OCT-14.md"), none)).isEqualTo("read");
         assertThat(FilesTab.iconName(file("ALPHA.md"), Set.of("alpha.md"))).as("a folder's index").isEqualTo("index");
         assertThat(FilesTab.iconName(file("ALPHA.md"), none)).as("not an index anywhere").isEqualTo("markdown");
@@ -149,17 +149,17 @@ class FilesTabTest {
     void theFilterSearchesEveryFolderAndClearingItBringsBackTheTreeAsLeft() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of()), new FolderRoot("KB", "/kb", "", List.of()));
         f.edt(() -> f.tree().expandRow(0));
-        f.edt(() -> f.show("Scratchpad", folder("Scratchpad", folder("2026-10-16", file("NEVSKY-PLAN.md")), file("notes.md"))));
+        f.edt(() -> f.show("Scratchpad", folder("Scratchpad", folder("2026-10-16", file("LANE-PLAN.md")), file("notes.md"))));
         f.intents.clear();
 
         f.edt(() -> f.tab.filter().setText("plan"));
         assertThat(f.intents).as("the folders never read are read once, so the filter searches them too")
                 .containsExactly(new Intent.BrowseFolders(List.of("KB")));
-        assertThat(f.foundLabels()).containsExactly("Scratchpad", "2026-10-16", "NEVSKY-PLAN.md");
+        assertThat(f.foundLabels()).containsExactly("Scratchpad", "2026-10-16", "LANE-PLAN.md");
 
         f.edt(() -> f.show("KB", folder("KB", folder("plans", file("q4.md")), file("design.md"))));
-        assertThat(f.foundLabels()).as("a matching folder stays closed").containsExactly("Scratchpad", "2026-10-16", "NEVSKY-PLAN.md", "KB", "plans");
-        assertThat(f.labels()).as("the tree behind keeps KB closed").containsExactly("Scratchpad", "2026-10-16", "NEVSKY-PLAN.md", "notes.md", "KB");
+        assertThat(f.foundLabels()).as("a matching folder stays closed").containsExactly("Scratchpad", "2026-10-16", "LANE-PLAN.md", "KB", "plans");
+        assertThat(f.labels()).as("the tree behind keeps KB closed").containsExactly("Scratchpad", "2026-10-16", "LANE-PLAN.md", "notes.md", "KB");
 
         f.intents.clear();
         f.edt(() -> f.tab.filter().setText("plann"));
@@ -170,7 +170,7 @@ class FilesTabTest {
         f.edt(() -> f.tab.filter().setText(""));
         assertThat(f.tab.tree().component().isVisible()).isTrue();
         assertThat(f.tab.found().component().isVisible()).isFalse();
-        assertThat(f.labels()).containsExactly("Scratchpad", "2026-10-16", "NEVSKY-PLAN.md", "notes.md", "KB");
+        assertThat(f.labels()).containsExactly("Scratchpad", "2026-10-16", "LANE-PLAN.md", "notes.md", "KB");
     }
 
     @Test

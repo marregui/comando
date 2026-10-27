@@ -2,6 +2,7 @@ package dev.marregui.comando.app;
 
 import dev.marregui.comando.claude.ClaudeSettings;
 import dev.marregui.comando.claude.KitJson;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.KitRoot;
 
 import java.nio.file.Path;
@@ -26,12 +27,18 @@ public record AppConfig(Path home, String claudeExecutable, KitRoot root, boolea
         this(home, claudeExecutable, root, recordIntents, false);
     }
 
+    /**
+     * The data root as asked: {@code -Dcomando.home}, else {@code COMANDO_HOME}, else {@code ~/.comando}; a leading
+     * {@code ~} is the home folder, as in {@code CLAUDE_CONFIG_DIR}, so a quoted {@code ~/x} is not a folder named
+     * {@code ~} under the working directory.
+     */
+    static Path dataRoot(String prop, String env) {
+        String chosen = prop != null && !prop.isBlank() ? prop : env != null && !env.isBlank() ? env : null;
+        return chosen != null ? Path.of(HomeDir.expand(chosen.strip())) : Path.of(System.getProperty("user.home"), ".comando");
+    }
+
     public static AppConfig fromEnvironment() {
-        String prop = System.getProperty("comando.home");
-        String env = System.getenv("COMANDO_HOME");
-        Path chosen = prop != null && !prop.isBlank() ? Path.of(prop)
-                : env != null && !env.isBlank() ? Path.of(env)
-                : Path.of(System.getProperty("user.home"), ".comando");
+        Path chosen = dataRoot(System.getProperty("comando.home"), System.getenv("COMANDO_HOME"));
         String claude = System.getenv("COMANDO_CLAUDE");
         Path standard = Path.of(System.getProperty("user.home"), ".comando").toAbsolutePath().normalize();
         // normalised: a data root written ./x or a/../b names one folder

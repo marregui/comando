@@ -24,8 +24,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
- * The git command line, read only: which repositories a folder belongs to, what {@code git status} says of one, and a
- * changed file's two versions. Every run is bounded in time and in output, takes no optional lock (so it never holds
+ * The git command line: which repositories a folder belongs to, what {@code git status} says of one, a changed file's
+ * two versions, and the few writes the comparison window asks for (restore, unstage, remove from the index). Every run is bounded in time and in output, takes no optional lock (so it never holds
  * up the user's own git commands), never asks for credentials, and ends when this closes.
  */
 final class Git implements AutoCloseable {

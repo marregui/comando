@@ -1,7 +1,8 @@
 # Architecture
 
-How comando is built: the modules, the one state and its reducer, the threads, who owns what, the UI's package rules, the
-code rules and the tests.
+How comando is built: the modules, the one state and its reducer, the ports, the threads, who owns what, the UI's
+package rules, the code rules and the tests. For contributors and for readers of the module READMEs, which hold each
+module's classes in detail.
 
 1. [What comando is](#1-what-comando-is)
 2. [Modules](#2-modules)
@@ -19,32 +20,34 @@ code rules and the tests.
 A Java Swing desktop application for working with Claude Code and SQL databases in one window. It runs Claude Code
 headless (`claude -p`, stream-JSON on standard input and output) and shows each session as a painted transcript with
 tool cards, diffs and approval cards. One editor holds SQL and prompts: a block runs on the panel's database connection
-when it is SQL and goes to the panel's Claude session otherwise. Claude Code reaches back into the window through an
-MCP server comando runs on `127.0.0.1`: tables, plots, diffs and trees, text in the editor, SQL under a policy, and
-permission prompts answered on cards. The rest of the window replaces the terminal: a shell per panel, Gradle runs with
-test trees, and a browser over folders of documents.
+when it is SQL and goes to the panel's Claude session otherwise. Claude Code reaches back into the window through an MCP
+server comando runs on `127.0.0.1`: tables, plots, diffs and trees, text in the editor, SQL under a policy, and
+permission prompts answered on cards. The rest of the window covers what a terminal beside it would: a shell per panel,
+Gradle runs with test trees, and a browser over folders of documents and their git changes.
+
+comando is built with and runs on JDK 25.
 
 ## 2. Modules
 
 | Module | Holds | Depends on |
 |---|---|---|
-| `core` | state, intents, reducer, effects, ports, the stores outside the state, the SQL-or-prompt classifier, the root sessions run on and its kit (`KitRoot`) | JDK only |
+| `core` | state, intents, reducer, effects, ports, the stores outside the state, the SQL-or-prompt classifier, the thread kit, the root sessions run on and its kit (`KitRoot`) | JDK only |
 | `testkit` | fakes for every effect port, a fake clock, recorded Claude streams, a synthetic session, a recording intent sink | `core` |
-| `db` | JDBC lanes (one thread per connection), cancel, columnar results, schema reading, queries for Claude | `core`, pgjdbc |
-| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, `comando-kit.json` read (`KitJson`) | `core`, Jackson |
+| `db` | JDBC lanes (one strand per connection), cancel, columnar results, schema reading, queries for Claude | `core`, PostgreSQL JDBC driver |
+| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, subagents' conversations, the plans' usage, the tabs' topics, `comando-kit.json` (`KitJson`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log | `core`, Jackson |
-| `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash, the folders' git repositories (the `git` command line) | `core` |
-| `ui` | the Swing shell, panels, dialogs, the kit, the widgets | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
-| `app` | wiring, the store files, the keychain, the intent log, the embedded QuestDB, `main` | all, QuestDB |
+| `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's backup (the `git` command line) | `core` |
+| `ui` | the Swing shell, panels, dialogs, widgets and the kit they share | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
+| `app` | wiring, the store files, the keychain, the intent log, the embedded QuestDB, `main` | every module, Jackson, QuestDB |
 
 `ui` depends on `core` only; `app` is the one module that sees every other.
 
-A module exists only where it separates an external dependency or enforces a boundary a package cannot: `core`
-depends on the JDK alone, each adapter module wraps one outside system, only `app` sees them all, and `testkit` holds
-the fakes every module's tests share. Merging `mcp` into `db` would be the riskiest merge, because it would open a
-route from Claude to the database that does not pass the approval card.
+A module exists only where it separates an external dependency or enforces a boundary a package cannot: `core` depends
+on the JDK alone, each adapter module wraps one outside system, only `app` sees them all, and `testkit` holds the fakes
+every module's tests share. `mcp` stays apart from `db` so that every route from Claude to the database passes
+`QueryPort` and, for a statement that is not read-only, the approval card.
 
-Each module has a README on its classes, its threads and its interface with the others:
+Each module has a README on its classes, its interface with the others, its threads and its tests:
 [`core`](../core/README.md), [`testkit`](../testkit/README.md), [`db`](../db/README.md),
 [`claude`](../claude/README.md), [`mcp`](../mcp/README.md), [`tools`](../tools/README.md), [`ui`](../ui/README.md),
 [`app`](../app/README.md).
@@ -87,21 +90,22 @@ flowchart LR
 
 Principles:
 
-1. **Ports and adapters.** `core` names every outside system as a port; adapters implement them; tests replace each
-   effect port with a fake from `testkit`; `McpGateway.NONE` and a test's own `QueryPort` stand in for the other two.
+1. **Ports and adapters.** `core` names every outside system as a port; adapters implement them. Tests replace each
+   effect port with a fake from `testkit`; `McpGateway.NONE`, `TopicPort.NONE` and a test's own `QueryPort` stand in for
+   the others.
 2. **One state, one direction.** `AppState` is immutable; only the reducer replaces it, one intent at a time.
 3. **Request identity.** Every SQL run and command run has an id the reducer assigns; every approval has an id the MCP
    server assigns. A late event for a superseded id is dropped.
 4. **Nothing blocks the EDT or the reducer.** Port methods queue work and return; every wait has a deadline.
 5. **Ownership is a tree.** `App` creates every part and closes them in reverse order, each once.
-6. **Replay.** Every intent can be logged, after the state the log started from; a log replayed against the real Swing shell
-   with fake adapters is a UI test.
+6. **Replay.** Every intent can be logged, after the state the log started from; a log replayed against the real Swing
+   shell with fake adapters is a UI test.
 
 ## 4. State, intents, effects
 
 ### 4.1 `AppState`
 
-One immutable record of metadata and ids. Lists are tens of entries, so lookups scan.
+One immutable record of metadata and ids. Lists hold tens of entries, so lookups scan.
 
 | Field | Holds |
 |---|---|
@@ -109,7 +113,7 @@ One immutable record of metadata and ids. Lists are tens of entries, so lookups 
 | `closed` | comando's own panels the user closed, kept with their bindings until removed |
 | `focused` | the panel the user works in; the lower panel follows it |
 | `connections` | each connection's spec, status (closed, opening, open, closing, failed) and last error |
-| `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, process and turn start, last turn error, background tasks, whether a checkpoint is due, whether the running checkpoint clears when it ends |
+| `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, process and turn start, last turn error, background tasks and whether the last turn handed work to them, whether a checkpoint is due (`Reflection`), whether the running checkpoint clears when it ends |
 | `folders` | the Files tab's folders and repositories in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, whether it is a repository (shown under Repositories) |
 | `runs` | at most one SQL run per panel: request id, SQL, status, counts, timings, error, whether it is a live plot's background refresh |
 | `approvals` | permission prompts waiting for an answer, from every session |
@@ -120,7 +124,7 @@ One immutable record of metadata and ids. Lists are tens of entries, so lookups 
 
 Invariants: at least one panel; `focused` names a panel (both checked by the record's constructor); connection and
 session names are unique; one run per panel; a session has at most one panel of comando's own, open or closed, titled
-with its name, and any number of documents attached (record 88).
+with its name, and any number of documents attached ([record 88](adr/0088-a-session-and-its-panel-share-a-name.md)).
 
 ### 4.2 Intents
 
@@ -147,26 +151,23 @@ A null panel in `RunText`, `RunGradle` or `EditPanel` means the focused panel.
 arguments, a `Clock` and the home folder, so tests drive it with a fake clock. Nothing a user or an adapter sends makes
 it throw: an intent naming a missing panel, connection or session changes nothing or sets a notice.
 
-- **Ids.** Request, run and view ids come from `nextId`; an event for a run no longer active is dropped.
-- **Start on demand.** SQL on a closed connection opens it first; a prompt to a stopped session starts it first.
-- **Same state for no change.** Focusing the focused panel returns the same object, so nothing re-renders.
-- **User wins.** `ShowView` replaces an unpinned view with the same title, session and placement; a pinned view is
-  never replaced.
-- **Notices.** Every notice joins the history. A new notice replaces the standing one, except that a standing ERROR
-  stays until dismissed, replaced by another error, or settled by its own subject. An event that settles a subject
-  clears its notice (a run completing, a connection opening, a turn succeeding, an approval answered). A new ERROR also
-  asks for a desktop notification while the window is behind. The subject is also where a click on the notice goes,
-  where the window has a target: `log:<millis>` opens the log at that entry, found by its time, and `panel:<id>` focuses
-  the panel ([record 79](adr/0079-a-notice-takes-you-to-what-it-is-about.md)); a notice of another subject opens the recent
-  notices;
-  `Intent.Notify.logged` writes a failure to the log and names that entry.
-- **Repositories.** After any intent, folders that changed or a Changes view that appeared or went add `WatchRepos`
-  with every folder and whether the view shows; `App` sends the first at start.
-- **The folders window.** `SaveFolders` replaces the folders and saves them; its notice says when it replaced a change
-  to `folders.json` read while the window was open; a list naming one folder twice saves nothing.
-- **The user's file.** `FoldersRead`, `folders.json` read again after the user changed it, replaces the folders and
-  saves nothing. The kit's folders join the list read at start, once per root, and are saved
-  ([Workbench §7.3](workbench.md#73-the-files-tab)).
+| Rule | What the reducer does |
+|---|---|
+| Ids | request, run and view ids come from `nextId`; an event for a run no longer active is dropped |
+| Start on demand | SQL on a closed connection opens it first; a prompt to a stopped session starts it first |
+| Same state for no change | focusing the focused panel returns the same object, so nothing re-renders |
+| User wins | `ShowView` replaces an unpinned view with the same title, session and placement; a pinned view is never replaced |
+| Repositories | after any intent, folders that changed, or a Changes view that appeared or went, add `WatchRepos` with every folder and whether the view shows; `App` asks for the first read at start |
+| The folders window | `SaveFolders` replaces the folders and saves them; its notice says when it replaced a change to `folders.json` read while the window was open; a list naming one folder twice saves nothing |
+| The user's file | `FoldersRead`, `folders.json` read again after the user changed it, replaces the folders and saves nothing; the kit's folders join the list read at start, once per root, and are saved ([Workbench §7.3](workbench.md#73-the-files-tab)) |
+
+**Notices.** Every notice joins the history. A new notice replaces the standing one, except that a standing ERROR stays
+until it is dismissed, replaced by another error, or settled by its own subject. An event that settles a subject clears
+its notice: a run completing, a connection opening, a turn succeeding, an approval answered. A new ERROR also asks for a
+desktop notification while the window is behind. The subject is also where a click on the notice goes, where the window
+has a target: `log:<millis>` opens the log at that entry, found by its time, and `panel:<id>` focuses the panel
+([record 79](adr/0079-a-notice-takes-you-to-what-it-is-about.md)); a notice of another subject opens the recent notices.
+`Intent.Notify.logged` writes a failure to the log and names that entry.
 
 ### 4.4 Effects
 
@@ -182,32 +183,32 @@ queues and returns.
 | `PersistencePort` | `SaveConnections`, `SaveSessions`, `SaveFolders`, `SavePanels` |
 | `ToolPort` | `RunGradle`, `CancelCommand`, `ForgetCommand`, `ReadFolders`, `WatchFolders`, `DeleteFiles`, `WatchRepos`, `ReadChange`, `RollBack`, `RemoveFiles`, `Unstage` |
 
-`StateLoop` runs one intent at a time: observers (the intent log), the reducer, the effects in order, then the state
-listeners (the UI's coalesced render). The reducer, each effect and each listener are guarded, so a failure is logged and
-the loop goes on; an observer must not throw (the intent log catches its own failures).
+`StateLoop` runs one intent at a time: the observers (the intent log), the reducer, the effects in order, then the state
+listeners (the UI's coalesced render). The reducer, each effect and each listener are guarded, so a failure is logged
+and the loop goes on; an observer must not throw (the intent log catches its own failures).
 
 ### 4.5 Stores outside the state
 
-Large data would make every state copy expensive, so it lives in stores the state refers to by id. Each has one writer
-thread.
+Large data (result rows, transcripts, console output, schemas) would be copied with every state, so it lives in stores
+the state refers to by id. Each has one writer thread.
 
 | Store | Keyed by | Written by | Read by |
 |---|---|---|---|
 | `ResultRegistry` → `ColumnarResult` | SQL request id | the connection's lane | Results tab, plots, attachments |
-| `TranscriptRegistry` → `Transcript` | session name | the session's strand | Session tab |
+| `TranscriptRegistry` → `Transcript` | session name | the session's strand | Session tab, `session_read` |
 | `ConsoleRegistry` → `Console` | command run id | the run's thread | console views |
 | `SchemaRegistry` → `Schema` | connection name | the database adapter | completion, schema explorer |
 | `PanelTexts` | panel id | the EDT | the store thread, on save |
 
 `ColumnarResult` and `Transcript` publish their size through a `volatile` field written after the data, so a reader
-that reads the size first sees complete rows or blocks. `Console` guards its buffer with its own lock.
+that reads the size first sees complete rows or blocks. `Console` synchronizes on its buffer.
 
 ### 4.6 The intent log
 
-With `-Dcomando.recordIntents=true`, `IntentLog` writes one JSON line per intent to `logs/intents-<millis>.jsonl`; the
+With `-Dcomando.recordIntents=true`, `IntentLog` writes one JSON line per intent to `logs/intents-<millis>.jsonl`. The
 first line is the starting state; every `password` field is blanked. `UiReplayTest` feeds a log to a real `StateLoop`
-and the real Swing shell, with recording fakes for every other port, and checks the window against the final state.
-The stores outside the state are not recorded, so a replay reproduces layout, panels, views and run states, not rows or
+and the real Swing shell, with recording fakes for every other port, and checks the window against the final state. The
+stores outside the state are not recorded, so a replay reproduces layout, panels, views and run states, not rows or
 transcript text.
 
 ## 5. Ports and test fakes
@@ -219,6 +220,7 @@ transcript text.
 | `DatabasePort` | `open`, `close`, `forgetSchema`, `test`, `execute`, `cancel`, `release`, `loadSchema` | `DbAdapter` |
 | `QueryPort` | `query`, `describe` (futures of text rows, for Claude) | `DbAdapter` |
 | `ClaudePort` | `start`, `stop`, `send`, `interrupt`, `clearTranscript`, `clearConversation`, `loadHistory`, `forget`, `showSubagent` | `ClaudeAdapter` |
+| `TopicPort` | `read` (a tab's topic, delivered to a callback; it never passes the reducer) | `ClaudeTopics` |
 | `McpGateway` | `register(session)` gives the URL and bearer token a session's CLI uses; `unregister` | `McpServer` |
 | `ApprovalPort` | `resolve` | `McpServer` |
 | `ToolPort` | `runGradle`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles`, `watchRepos`, `readChange`, `rollBack`, `removeFiles`, `unstage` | `ToolsAdapter` |
@@ -227,16 +229,16 @@ transcript text.
 
 `testkit` holds what every module's tests share: `RecordingPorts` (every effect port, each call recorded as a line),
 `RecordingSink` (keeps intents, awaits one with a deadline), `FakeClock`, `States` (a two-panel state), `Fixtures`
-(sanitized stream-JSON recorded from Claude Code), `SyntheticSession` (a deterministic eight-turn session replayed delta
+(sanitised stream-JSON recorded from Claude Code), `SyntheticSession` (a deterministic eight-turn session replayed delta
 by delta), `FakeResult`.
 
 ## 6. Threads
 
 comando's threads are of six kinds ([record 82](adr/0082-threads-by-kind-with-a-budget.md)). Only the first three use
 operating-system threads, and their number is fixed: **two, plus one per running Claude session**, whatever the number
-of connections, folders, panels, diagrams or runs. `ThreadBudgetTest` (in `:app:uiTest`) holds the budget with five
-sessions and checks nothing is left after the close; `ThreadRulesTest` fails the build when code outside the kinds below
-starts a thread or an executor.
+of connections, folders, panels, diagrams or runs. `ThreadBudgetTest` (in `:app:uiTest`) holds the budget with more
+sessions than cores (cores + 4) and checks that nothing is left after the close. `ThreadRulesTest` fails the build when
+code outside the kinds below starts a thread or an executor.
 
 | # | Kind | Is | Threads |
 |---|---|---|---|
@@ -247,22 +249,22 @@ starts a thread or an executor.
 | K5 | Errand | one blocking call started by a gesture or an event, then gone | a virtual thread from its owner's `Errands` (`App`, `ToolsAdapter`, `EmbeddedQuestDb`, the window's `UiErrands`), interrupted and waited for at the owner's close |
 | K6 | Fork | a thread its caller collects in the same call, with a bound | a virtual thread from `Threads.fork` |
 
-The rest of a running process is not comando's: the JVM's (GC, compiler, VM; about 30), AWT's and Java2D's (6), the
-virtual threads' scheduler (its carriers: one per core while busy, plus one for each virtual thread held in file or
-pipe I/O, which is why a session's reader is a platform thread), the JDK's `process reaper` (one per child
-process), the MCP server's dispatcher and the libraries' (JNA, a `java.util.Timer`). The GC threads were measured too:
-halving them to two lengthened the G1 pause p99 from 6 to 30–48 ms on `:ui:transcriptGate`, so the JVM keeps its
-default.
+The rest of a running process is not comando's: the JVM's (GC, compiler, VM), AWT's and Java2D's, the virtual threads'
+scheduler (its carriers: one per core while busy, plus one for each virtual thread held in file or pipe I/O, which is
+why a session's reader is a platform thread), the JDK's `process reaper` (one per child process), the MCP server's
+dispatcher and the libraries' (JNA, a `java.util.Timer`). Measured with five sessions: about 45 threads in all, 7 of
+them comando's own platform threads. The GC threads were measured too: halving them to two lengthened the G1 pause p99
+from 5–6 ms to 30–48 ms on `:ui:transcriptGate`, so the JVM keeps its default.
 
 | Thread | Kind | Does |
 |---|---|---|
 | EDT | K1 | renders the state, turns input into intents; owns every Swing component |
 | `comando-reducer` | K1 | applies intents in order; the only writer of `AppState` |
-| `watchdog` | K2 | every 100 ms: a probe to the EDT, a look at the reducer; an EDT held 200 ms or an intent applying 1 s is a stall, logged |
+| `watchdog` | K2 | every 100 ms: a probe to the EDT, a look at the reducer; an EDT held 200 ms is a stall, an intent still applying at 1 s a hang, each logged |
 | `claude-out-<session>` | K3 | stdout lines of the session's process; stderr goes to a file, read once at the exit |
 | `claude-strand-<session>` | K4 | every change to a session: start, send, interrupt, stop, history; the transcript's one writer |
 | `claude-timer` | K4, timed | the stop sequence's deadlines |
-| `subagent-tail` | K4, timed | finds and renders a sub-agent's stored conversation; follows up to 4 of them every 2 s while they run, reading only what their files gained |
+| `subagent-tail` | K4, timed | finds and renders a subagent's stored conversation; follows up to 4 of them every 2 s while they run, reading only what their files gained |
 | `plan-usage` | K4, timed | `claude --safe-mode -p /usage` at start and every 5 minutes, stopped after 30 s; then `codex app-server` for Codex's plan, stopped after 10 s |
 | `topic-reader` | K4 | the tabs' topics with Haiku, one `claude --safe-mode -p --model haiku` at a time; at most one ask waiting per tab, the card shown first |
 | `db-<connection>` | K4 | opens the connection, runs statements one at a time, fetches rows |
@@ -272,13 +274,13 @@ default.
 | `store` | K4, timed | atomic writes of the store files; panel text 800 ms after the first unsaved change; a check of open panels' files and `folders.json` every second |
 | `store-secrets` | K4 | keychain calls apart, so an unlock prompt never holds back panel text |
 | `mermaid`, `local-images` | K4 | `mmdc`, one diagram at a time, 30 s bound; the pictures a Markdown view names, SVGs drawn into `cache/images/` |
-| `claude-in-`, `claude-exit-<session>` | K6 | the stdin queue; the wait for the process's exit, then the stderr tail |
-| `git-out`, `git-err`, `tool-output-<run>`, `keychain-output`, `claude-output`, `claude-version` | K6 | one process's output while its caller waits for it, bounded |
-| `gradle-<run>`, `tool-kill-<run>`, `folder-read`, `repo-read`, `file-trash` | K5 (`ToolsAdapter`) | a run's process; SIGKILL what a stop left alive after 2 s; folder and repository reads; moving files to the Trash |
 | `kit-check` | K4, timed | the kit's version and newer tags, at start and every 6 hours |
+| `claude-in-`, `claude-exit-<session>` | K6 | the stdin queue; the wait for the process's exit, then the stderr tail |
+| `git-out`, `git-err`, `tool-output-<run>`, `keychain-output`, `claude-version` | K6 | one process's output while its caller waits for it, bounded |
+| `gradle-<run>`, `tool-kill-<run>`, `folder-read`, `repo-read`, `file-trash` | K5 (`ToolsAdapter`) | a run's process; SIGKILL what a stop left alive after 2 s; folder and repository reads; moving files to the Trash |
 | `claude-version`, `questdb-toggle` | K5 (`App`, `EmbeddedQuestDb`) | the start-up check; one start or stop of the embedded QuestDB |
-| `open-file`, `show-file`, `log-entry`, `open-link`, `external-editor`, `notify`, `export`, `plot-prepare`, `diff-compute`, `folder-facts`, `read-conversations`, `opened-files`, `kit-status`, `brain-backup`, the tutorial's | K5 (`UiErrands`) | one blocking call each off the EDT |
-| MCP requests; a connection test, a cancel | owned per-task executors | JSON-RPC (an `approve` call waits for its card); `DbAdapter`'s testers and cancellers |
+| `open-file`, `show-file`, `log-entry`, `open-link`, `note-link`, `reveal`, `external-editor`, `notify`, `export`, `plot-prepare`, `diff-compute`, `folder-facts`, `read-conversations`, `opened-files`, `kit-status`, `brain-backup`, `write-tutorial`, `show-tutorial`, `pty-preload`, `terminal-exit` | K5 (`UiErrands`) | one blocking call each, off the EDT |
+| MCP requests; a connection test, a cancel | per-task virtual executors | JSON-RPC (an `approve` call waits for its card); `DbAdapter`'s testers and cancellers |
 | `exit`, `shutdown` | platform, at quit only | close the application after Quit, or from the shutdown hook |
 
 How work crosses threads:
@@ -305,7 +307,8 @@ Bounded waits:
 | `claude --version` | 5 s | a warning |
 | A tab's topic read (Haiku) | 30 s | killed; the card says Haiku did not answer |
 | Desktop notification (`osascript`) | 10 s | killed, not shown |
-| A `git` command | 10 s | killed and its whole tree with it; the read or write says git took too long |
+| A `git` command | 10 s | killed with its whole process tree; the read or write says git took too long |
+| A kit's remote (`git ls-remote`, `git push`); the brain's commit | 120 s; 60 s | killed; the status bar or the backup says why |
 | Keychain calls | 10 s | killed; the connection loads without its password, the item is kept |
 | Closing the window at quit | 5 s | quit anyway |
 | The EDT | 200 ms | a stall, one INFO line when it ends; past 1 s (2 s in the JDK's drawing) a hang, logged with the EDT's stack; a stall of 1 s or more a notice whose click opens the log at the stack, or at the stall's line |
@@ -314,55 +317,64 @@ Bounded waits:
 ## 7. Ownership and exit
 
 `App` creates every long-lived part in dependency order on a stack; `close()` pops it, so parts close in reverse order,
-each once. Two are moved to the end: the embedded QuestDB, which the lanes may still use, and the window, titled "comando —
-closing…" and greyed under a cover until everything behind it has closed. Every `close()` is idempotent, never throws
-(failures are logged with the part's name), and is safe on a half-built part; a failed constructor step closes what was
-built and rethrows.
+each once. Two are moved to the end: the embedded QuestDB, which the lanes may still use, and the window, titled
+"comando — closing…" and greyed under a cover until everything behind it has closed. Every `close()` is idempotent,
+never throws (failures are logged with the part's name), and is safe on a half-built part; a failed constructor step
+closes what was built and rethrows. A part that takes 100 ms or more to close is named in the log.
 
-| Created | Part | Closing it |
-|---|---|---|
-| 1 | `Store` | writes pending panel text and `panels.json`, finishes queued writes; waits up to 5 s (11 s for connections, one keychain call) |
-| 2 | `IntentLog` | closes the log after the loop, so the shutdown's intents are recorded |
-| 3 | `StateLoop` | stops the reducer after the queued intents, then its watchdog |
-| 4 | `DbAdapter` | cancels running statements, closes connections |
-| 5 | `MermaidDiagrams` | stops `mmdc` and its children |
-| 6 | `LocalImages` | stops reading pictures and drawing SVGs |
-| 7 | `McpServer` | denies every waiting approval, stops the server |
-| 8 | `ClaudeAdapter` | SIGTERM, SIGKILL 2 s later; deletes every MCP configuration file and revokes its token |
-| 9 | `ToolsAdapter` | SIGTERM to every run's process tree, SIGKILL 2 s later; stops the folder poll |
-| 10 | `EmbeddedQuestDb` | closes after the lanes |
-| 11 | `ComandoUi` | closes last: terminals, live plots, the EDT watchdog, the window |
+| Created | Part | Closed | Closing it |
+|---|---|---|---|
+| 1 | the root, named for every module (`KitRoot.use`) | 14 | restores the root that was named before |
+| 2 | `kit-check` | 13 | stops the kit's periodic read |
+| 3 | `KitGit` | 12 | kills its git runs |
+| 4 | `Store` | 11 | writes pending panel text and `panels.json`, finishes queued writes; waits up to 5 s (11 s for connections, one keychain call) |
+| 5 | `App`'s errands | 10 | interrupts the start-up check and waits for it |
+| 6 | `IntentLog` (when recording) | 9 | closes the log after the loop, so the shutdown's intents are recorded |
+| 7 | `StateLoop` | 8 | stops the reducer after the queued intents, then its look on the watchdog |
+| 8 | `DbAdapter` | 7 | cancels running statements, closes the lanes, stops the timer |
+| 9 | `MermaidDiagrams` | 6 | stops `mmdc` and its children |
+| 10 | `LocalImages` | 5 | stops reading pictures and drawing SVGs |
+| 11 | `McpServer` | 4 | denies every waiting approval, stops the server |
+| 12 | `ClaudeAdapter` | 3 | SIGTERM, SIGKILL 2 s later; deletes every MCP configuration file and revokes its token |
+| 13 | `ToolsAdapter` | 2 | SIGTERM to every run's process tree, SIGKILL 2 s later; stops the folder poll and git; its errands last |
+| 14 | `ClaudeTopics` | 1 | drops the waiting asks, stops a read under way |
+| 15 | `EmbeddedQuestDb` | 15 | closes after the lanes |
+| 16 | `ComandoUi` | 16 | closes last: terminals, live plots, the EDT's watchdog look, the window, the window's errands |
 
-Quit (window, Dock, menu) first asks when work would stop: a running query, a turn, a session's background work, a shell job in the foreground, a
-Gradle run; Cancel is the default. It then saves the layout, ends terminals and live plots, greys the window, and
-runs `onQuit`, which starts the `exit` thread: `App.close()`, then `System.exit(0)`. A shutdown hook calls `App.close()`
-too; the second call does nothing.
+Quit (window, Dock, menu) first asks when work would stop: a running query, a turn, a session's background work, a shell
+job in the foreground, a Gradle run; Cancel is the default. It then saves the layout, ends terminals and live plots,
+greys the window, and runs `onQuit`, which starts the `exit` thread: `App.close()`, then `System.exit(0)`. A shutdown
+hook calls `App.close()` too; the second call does nothing.
 
 ## 8. UI packages
 
-```
-dev.marregui.comando.ui
-├── kit/            theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, layout, resource
-│                   actions, desktop, vcs
-├── widget/         the contract: Widget, WidgetContext, WidgetRegistry; capability/ (Searchable, Copyable, …)
-├── widgets/        one package per widget: approval, changes, console, diff, editor, markdown, plot, table, terminal, text,
-│                   transcript (with doc/ and render/), tree
-├── panels/         the window's regions: Workspace, EditorPanel, LowerPanel, SessionsSidebar (its rows: SessionRow, ConnectionRow), PanelsWithoutSession, FilesTab,
-│                   SidePane, StatusBar, ResultsView, TerminalTabs, ViewTabs, …
-├── dialogs/        folders/ (the Files tab's folders: FoldersEditor, FoldersDialog), resource/ (ResourceDialog, one dialog for connections and sessions), sessions/ (import)
-├── shell/          ComandoUi (the frame and the UI port), WindowLayout, HelpActions, Menus, Keys, LivePlots, Notifier, HelpFiles, OpenFiles, DiffWindow, …
-└── PanelTexts      editor text between saves
-```
+The packages of `ui`, under `dev.marregui.comando.ui`, in layer order. The classes of each are listed in the
+[`ui` README](../ui/README.md#1-architecture).
 
-A layer uses only those above it in this list: `kit` uses `core` and the UI libraries; `widget` adds `kit`; a widget
+| Package | Holds |
+|---|---|
+| `kit` | theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, layout, resource actions, desktop, vcs |
+| `widget` | the contract: `Widget`, `WidgetContext`, `WidgetRegistry`; `capability` (`Searchable`, `Copyable`, …) |
+| `widgets` | one package per widget: approval, changes, console, diff, editor, markdown, plot, table, terminal, text, transcript (with `doc` and `render`), tree |
+| `panels` | the window's regions: `Workspace`, `EditorPanel`, `LowerPanel`, `SessionsSidebar` (its rows: `SessionRow`, `ConnectionRow`), `PanelsWithoutSession`, `FilesTab`, `SidePane`, `StatusBar`, `ResultsView`, `TerminalTabs`, `ViewTabs`, … |
+| `dialogs` | `folders` (the Files tab's folders: `FoldersEditor`, `FoldersDialog`), `resource` (`ResourceDialog`, one dialog for connections and sessions), `sessions` (import) |
+| `shell` | `ComandoUi` (the frame and the UI port), `WindowLayout`, `HelpActions`, `Menus`, `Keys`, `LivePlots`, `Notifier`, `HelpFiles`, `OpenFiles`, `DiffWindow`, … |
+| (top) | `PanelTexts`: editor text between saves |
+
+A layer uses only those above it in this table: `kit` uses `core` and the UI libraries; `widget` adds `kit`; a widget
 package adds `widget` but no other widget package; `panels`, `dialogs` and `shell` use everything before them.
-`UiArchitectureTest` (ArchUnit) fails the build when a widget imports another widget or `panels`, `shell` or
-`dialogs`; when the kit imports a widget, `panels` or `shell`; or when any UI class refers to `db`, `claude`, `mcp`,
+`UiArchitectureTest` (ArchUnit) fails the build when a widget imports another widget or `panels`, `shell` or `dialogs`;
+when the kit imports `widget`, `widgets`, `panels` or `shell`; or when any UI class refers to `db`, `claude`, `mcp`,
 `tools` or `java.sql`. The Gradle module graph enforces it a second time for `db`, `claude`, `mcp` and `tools`.
 
-New code goes: a view Claude or the user can place → `widgets/<name>`, a `ViewSpec` record in `core`, a registration
-in `ComandoUi`, and for Claude a case in `mcp`'s `ViewSpecs` and its schema in the tool list; behaviour two widgets share → `kit` or a capability; a region of the window → `panels`; a user action →
-a `Command`.
+Where new code goes:
+
+| New | Goes to |
+|---|---|
+| a view Claude or the user can place | `widgets/<name>`, a `ViewSpec` record in `core`, a registration in `ComandoUi`; for Claude, a case in `mcp`'s `ViewSpecs` and its schema in the tool list |
+| behaviour two widgets share | `kit` or a capability |
+| a region of the window | `panels` |
+| a user action | a `Command` |
 
 ## 9. Code rules
 
@@ -383,21 +395,21 @@ a `Command`.
 11. Logging is `System.Logger`; messages read `verb phrase [key=value]`; a failure logs its exception, a handled
     condition its message.
 
-Hot paths follow the author's high-throughput Java guidelines: results stored by column in primitive chunks, grid
-cells formatted into one reused buffer, plots reduced to min and max per pixel column, transcript layouts kept and only
-the clip painted, release-acquire publication in the stores. Object pools, ring queues, padding and worker pools are not
-used: comando's event rates are UI rates.
+Hot paths: results are stored by column in primitive chunks, grid cells are formatted into one reused buffer, plots are
+reduced to min and max per pixel column, transcript layouts are kept and only the clip is painted, and the stores
+publish with release-acquire ordering. Object pools, ring queues, padding and worker pools are not used: comando's event
+rates are UI rates.
 
 ## 10. Quality
 
-`./gradlew build` compiles every module with warnings as errors and runs the unit and adapter tests. The database tests run against an embedded QuestDB, and against PostgreSQL through Testcontainers
-when Docker is there; the Claude adapter runs against fake CLI scripts and recorded streams; the MCP server is tested
-over HTTP.
+`./gradlew build` compiles every module with warnings as errors and runs the unit and adapter tests. The database tests
+run against an embedded QuestDB, and against PostgreSQL through Testcontainers when Docker is there; the Claude adapter
+runs against fake CLI scripts and recorded streams; the MCP server is tested over HTTP.
 
 | Opt-in test | Enabled by | Why |
 |---|---|---|
 | keychain round trip | `./gradlew test -PkeychainTest=true` | writes and deletes a login keychain item |
-| window replay | `./gradlew :app:uiTest` | needs a display; its windows open on no screen and take no focus |
+| window tests | `./gradlew :app:uiTest` | need a display; their windows open on no screen and take no focus |
 
 Gates:
 
@@ -405,23 +417,24 @@ Gates:
 |---|---|---|
 | transcript frame time | `./gradlew :ui:transcriptGate` | p99 ≤ 16 ms ([UI](ui.md#43-the-frame-time-gate)) |
 | EDT responsiveness | always on: `EdtWatchdog` | a probe answered within 200 ms |
-| reducer responsiveness | always on: `StateLoop` and its watchdog | each intent applied within 200 ms |
+| reducer responsiveness | always on: `StateLoop` and its watchdog look | each intent applied within 200 ms |
 
-comando has no JFR code. It is profiled from outside like any JVM, with the JDK's own events, and its EDT stalls are
-in its log ([UI §1](ui.md#1-the-kit)); the packaged runtime keeps `jdk.jfr`, `jdk.management.jfr` and
-`jdk.management.agent` so the installed app can be recorded, and watched over JMX, too
+comando has no JFR code. It is profiled from outside like any JVM, with the JDK's own events, and its EDT stalls are in
+its log ([UI §1](ui.md#1-the-kit)). The packaged runtime keeps `jdk.jfr`, `jdk.management.jfr` and
+`jdk.management.agent`, so the installed application can be recorded and watched over JMX
 ([record 54](adr/0054-comando-knows-nothing-of-jfr.md)).
 
-CI (`.github/workflows/build.yml`, Temurin 25, actions pinned by SHA) runs `build`, `:app:uiTest`
-(under `xvfb-run` on Ubuntu), a test summary (`ci/TestReport.java`), the transcript gate (reported, not enforced), and on
-macOS `:app:dmg` as a packaging smoke test. Ubuntu runs on every push and pull request that changes more than the docs
-(`docs/tutorial.md` counts as code: the ui jar bundles it); macOS, whose minutes bill at ten times Ubuntu's on a
-private repository, runs weekly and on demand (`workflow_dispatch`). `dependabot.yml` groups monthly updates of the
-actions and the Gradle dependencies. `./gradlew :app:dmg` builds an unsigned disk image with `jpackage` and a runtime of the modules listed in `app/build.gradle.kts`
-([decision 16](adr/0016-unsigned-macos-build.md)).
+CI (`.github/workflows/build.yml`, Temurin 25, actions pinned by SHA) runs on Ubuntu and macOS for every push to `main`
+and every pull request that changes more than the docs (`docs/tutorial.md` counts as code: the ui jar bundles it), every
+Monday, and on demand (`workflow_dispatch`). Each system runs `build`, `:app:uiTest` (under `xvfb-run` on Ubuntu, on the
+runner's display on macOS), a test summary (`ci/TestReport.java`) and the transcript gate (reported, not enforced, as
+runner speed varies); macOS also builds `:app:dmg` as a packaging smoke test. PostgreSQL through Testcontainers runs on
+Ubuntu only, as macOS runners have no Docker. `dependabot.yml` groups monthly updates of the actions and of the Gradle
+dependencies. `./gradlew :app:dmg` builds an unsigned disk image with `jpackage` and a runtime of the modules listed in
+`app/build.gradle.kts` ([record 16](adr/0016-unsigned-macos-build.md)).
 
 Releases (`.github/workflows/release.yml`): a pushed tag `v*` runs `:app:package` with `-PreleaseVersion=<tag without
 v>` on `macos-latest`, `ubuntu-latest` and `windows-latest`, without the tests, keeps each file as an artifact, and a
 last job on Ubuntu makes the tag's GitHub release with the three files and the commits since the previous tag as its
-notes. Run by hand (`workflow_dispatch`), it builds the three files as artifacts kept 7 days and makes no release
-unless it runs on a tag with dry run off. Nothing is signed; [INSTALL.md](../INSTALL.md) is the install recipe.
+notes. Run by hand (`workflow_dispatch`), it builds the three files as artifacts kept 7 days and makes no release unless
+it runs on a tag with dry run off. Nothing is signed; [INSTALL.md](../INSTALL.md) is the install recipe.

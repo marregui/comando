@@ -43,9 +43,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * A read-only HTML pane styled from the theme, for rendered Markdown. A web link opens in the browser at a click; a
- * link to a heading of the page ({@code #} and its id) scrolls to it at a double click; any other link goes to the
- * {@link LinkHandler} at a double click.
+ * A read-only HTML pane styled from the theme, for rendered Markdown. Every link is followed at a double click (record
+ * 94): a link to a heading of the page ({@code #} and its id) scrolls to it; any other link, a web page or a file, goes
+ * to the {@link LinkHandler}.
  */
 public class HtmlPane extends JEditorPane {
 

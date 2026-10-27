@@ -2,15 +2,17 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-14 | the file per panel and its naming accepted; the close rule replaced by [39](0039-panels-are-kept-until-removed.md), edits outside by [27](0027-panels-reload-files-changed-outside.md) | Miguel (a file per panel), Claude (naming, closing, edits outside comando) |
+| 2026-10-14 | accepted; the close rule replaced by [record 39](0039-panels-are-kept-until-removed.md), the rule for edits made outside comando by [record 27](0027-panels-reload-files-changed-outside.md), "specs open only from `panels/`" by [record 29](0029-the-scratchpad-is-a-navigator.md) | Miguel and Claude |
 
 ## 1. Context
 
-Panel text lived inside `panels.json`, one JSON string per panel, which nothing but comando reads. Miguel wants each panel to be a full spec, a document that stands on its own.
+Panel text lived inside `panels.json`, one JSON string per panel, which only comando reads. A panel was to be a full
+spec: a document that stands on its own.
 
 ## 2. Decision
 
-Each panel's text is a Markdown file in `panels/` under the data root; `panels.json` keeps the panel's title, bindings and file name.
+Each panel's text is a Markdown file in `panels/` under the data root; `panels.json` keeps the panel's title, bindings
+and file name.
 
 | Question | Rule | Why |
 |---|---|---|
@@ -21,6 +23,16 @@ Each panel's text is a Markdown file in `panels/` under the data root; `panels.j
 | a new panel's title equal to a kept file's | the new panel takes the next free name | a closed spec is never overwritten |
 | an edit made outside comando | before writing, a file whose modification time or size differs from comando's last write or read is kept aside as `<name> (outside comando <date time>).md`, with a notice | nothing typed anywhere is lost |
 
+Miguel decided a file per panel; Claude decided how: the naming, the close rule and edits made outside comando.
+
 ## 3. Consequences
 
-The folder can be opened in an IDE, diffed or kept in Git. comando does not reload a file changed outside while it runs: the next save keeps the outside version aside, and the panel shows comando's text; a reload on change is open. Specs open only from `panels/`; a file elsewhere is refused rather than adopted. A `panels.json` from before this record moves its text into files at the first save. A panel whose file cannot be written, open or just closed, keeps its text in `panels.json` until it can; a closed one comes back as a panel at the next start if it never lands. One file is never bound to two panels (amended 2026-10-14 after the concurrency review of `bfb5f63`).
+The folder can be opened in an IDE, diffed or kept in Git. comando does not reload a file changed outside while it
+runs: the next save keeps the outside version aside, and the panel shows comando's text; a reload on change was left
+open. Specs open only from `panels/`; a file elsewhere is refused rather than adopted. A `panels.json` from before this
+record moves its text into files at the first save. A panel whose file cannot be written, open or just closed, keeps
+its text in `panels.json` until it can; a closed one comes back as a panel at the next start if it never lands.
+
+## Amendments
+
+2026-10-14, after the concurrency review of `bfb5f63`: one file is never bound to two panels.

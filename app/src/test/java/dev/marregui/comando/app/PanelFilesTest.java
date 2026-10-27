@@ -42,21 +42,21 @@ class PanelFilesTest {
         PanelId notes = new PanelId("b");
         try (Store store = new Store(home)) {
             store.load();
-            store.savePanels(List.of(new PanelState(spec, "nevsky spec", "", ""), new PanelState(notes, "notes", "", "")), List.of());
-            store.changed(spec, "# Nevsky\n\nSELECT 1;\n");
+            store.savePanels(List.of(new PanelState(spec, "lane spec", "", ""), new PanelState(notes, "notes", "", "")), List.of());
+            store.changed(spec, "# Lane\n\nSELECT 1;\n");
             store.changed(notes, "todo");
             assertThat(store.saveNow().get(5, TimeUnit.SECONDS)).isNull();
             assertThat(store.document(spec)).as("a panel's own file, not a document opened in it").isFalse();
         }
-        assertThat(Files.readString(dir().resolve("nevsky spec.md"))).isEqualTo("# Nevsky\n\nSELECT 1;\n");
+        assertThat(Files.readString(dir().resolve("lane spec.md"))).isEqualTo("# Lane\n\nSELECT 1;\n");
         assertThat(Files.readString(dir().resolve("notes.md"))).isEqualTo("todo");
         String json = Files.readString(home.resolve("panels.json"));
-        assertThat(json).contains("\"file\" : \"nevsky spec.md\"").doesNotContain("content").doesNotContain("SELECT 1");
+        assertThat(json).contains("\"file\" : \"lane spec.md\"").doesNotContain("content").doesNotContain("SELECT 1");
         try (Store store = new Store(home)) {
             Store.Loaded loaded = store.load();
-            assertThat(loaded.panels()).extracting(PanelState::title).containsExactly("nevsky spec", "notes");
-            assertThat(store.load(spec)).isEqualTo("# Nevsky\n\nSELECT 1;\n");
-            assertThat(store.file(spec)).contains(dir().resolve("nevsky spec.md"));
+            assertThat(loaded.panels()).extracting(PanelState::title).containsExactly("lane spec", "notes");
+            assertThat(store.load(spec)).isEqualTo("# Lane\n\nSELECT 1;\n");
+            assertThat(store.file(spec)).contains(dir().resolve("lane spec.md"));
         }
     }
 

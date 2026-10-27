@@ -2,15 +2,18 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-16 | accepted; its rows bar, tips, clone a file, remove a file and read-only removed by [record 55](0055-the-files-tab-only-shows-folders-json-configures-it.md); replaces the one click and the index opened with its folder of [record 49](0049-the-files-tab-shows-folders-the-user-chooses.md), and the row "files" of [record 51](0051-folder-buttons-together-read-only-folders-icons.md), to which it adds the scratchpad icon | Miguel (a click on a folder opens no file; only a double click on a file opens it; the bar follows the selection, add off for a file; the bar acts on files too, each tip saying whether it affects a file or a folder; a scratchpad icon; the New panel button at the right end of the panel tabs), Claude (how: what edit, clone and remove do to a file, the Trash, what a folder inside a folder and an empty selection turn on, the pencil, the button's placement) |
+| 2026-10-16 | accepted; the rows bar, tips, clone a file, remove a file and read-only removed by [record 55](0055-the-files-tab-only-shows-folders-json-configures-it.md); the click amended by [record 78](0078-a-rows-marks-and-double-click-show-its-changes.md) | Miguel and Claude |
 
 ## 1. Context
 
-Record 49 opened a file with one click and, when a folder's row was opened by hand, its index file in a panel: browsing
-the tree opened panels the user had not asked for. The bar's add stayed on whatever was selected, while edit, clone and
-remove followed only top-level rows, so the buttons read as not following the tree. The Scratchpad row had the plain
-folder icon. The panel tabs' New panel button sat in the middle of the space the tabs leave, since the look stretches
-the tab area's trailing component over that space.
+[Record 49](0049-the-files-tab-shows-folders-the-user-chooses.md) opened a file with one click and, when a folder's row
+was opened by hand, its index file in a panel, so browsing the tree opened panels the user had not asked for. The bar's
+add stayed on whatever was selected, while edit, clone and remove followed only top-level rows, so the buttons did not
+follow the tree. The Scratchpad row had the plain folder icon. The panel tabs' New panel button sat in the middle of
+the space the tabs leave, since the look stretches the tab area's trailing component over that space.
+
+This record replaces the one click and the index opened with its folder of record 49, and the row "files" of
+[record 51](0051-folder-buttons-together-read-only-folders-icons.md), to which it adds the scratchpad icon.
 
 ## 2. Decision
 
@@ -24,18 +27,23 @@ the tab area's trailing component over that space.
 | clone a file | asks for the copy's name, "notes copy.md" offered; a name with a folder in it, `.`, `..` or the original's is refused with a notice; the copy goes beside the original and never over another file | the Finder's habit; nothing is overwritten |
 | remove a file | asks first, the safe answer the default: "Move notes.md to the Trash? It can be put back from there." where the desktop has a Trash, else "Delete notes.md for good? … it cannot be undone."; a Trash asked for and missing fails rather than deleting for good; folders are never deleted from the tab | a deletion can be taken back where the desktop allows; consent to the Trash is not consent to delete |
 | read-only | the reducer refuses a copy into, or a deletion in, a read-only folder, with a notice; a copy out of one is allowed | as record 51 for the folder itself |
-| scratchpad icon | `scratchpad`, the folder with a green pencil; the kit sets it on its Scratchpad | each of the kit's folders recognisable |
+| scratchpad icon | `scratchpad`, the folder with a green pencil; the kit sets it on its Scratchpad | each of the kit's folders told apart |
 | New panel | at the right end of the panel tabs' row, centred in its height | a fixed place, as the lower panel's Clear |
+
+Miguel decided that a click on a folder opens no file and only a double click on a file opens it, that the bar follows
+the selection with add off for a file, that the bar acts on files too with each tip saying whether it affects a file or
+a folder, the scratchpad icon, and the New panel button at the right end of the panel tabs; Claude decided how: what
+edit, clone and remove do to a file, the Trash, what a folder inside a folder and an empty selection turn on, the
+pencil, and the button's placement.
 
 ## 3. Consequences
 
 `Intent.CopyFile` and `Intent.DeleteFile` become `Effect.CopyFile` and `Effect.DeleteFile` unless the reducer refuses
 them; `ToolPort.copyFile` and `deleteFile` run on virtual threads (`file-copy`, `file-delete`) in `ToolsAdapter`, which
-says how each went in a notice and reads the open folders again at once. The Trash is
-`ui.kit.desktop.DesktopTrash`, handed to the adapter by `App`, so the tools module stays free of AWT.
-`ResourceActions.Target` lets a list decide what edit, clone and remove do and say; `FilesTab` gives one for every
-selection. `SessionsSidebar.Dialogs.editFile` and `Workspace.editWhenOpen` open a file showing its text.
-`TreeView` loses its one-click mode: every tree activates a leaf on a double click, and JTree opens a folder on one.
-`FilesTab` no longer looks for the index file when a row opens, so it no longer takes an executor.
-`ResourceActions.Selection.canAdd` (true by default) turns add off; `FilesTab` answers false while a file is selected.
-`Workspace` wraps the New panel button in a panel that places it at the east end.
+says how each went in a notice and reads the open folders again at once. The Trash is `ui.kit.desktop.DesktopTrash`,
+handed to the adapter by `App`, so the tools module stays free of AWT. `ResourceActions.Target` lets a list decide what
+edit, clone and remove do and say; `FilesTab` gives one for every selection. `SessionsSidebar.Dialogs.editFile` and
+`Workspace.editWhenOpen` open a file showing its text. `TreeView` loses its one-click mode: every tree activates a leaf
+on a double click, and JTree opens a folder on one. `FilesTab` no longer looks for the index file when a row opens, so
+it no longer takes an executor. `ResourceActions.Selection.canAdd` (true by default) turns add off; `FilesTab` answers
+false while a file is selected. `Workspace` wraps the New panel button in a panel that places it at the east end.

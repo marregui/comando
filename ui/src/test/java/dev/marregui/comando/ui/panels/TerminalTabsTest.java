@@ -28,9 +28,9 @@ class TerminalTabsTest {
     @Test
     void aTerminalNotStartedTakesItsPanelsCurrentDirectoryOnEveryRender(@TempDir Path root) throws Exception {
         Path edge = Files.createDirectory(root.resolve("edge"));
-        Path edge2 = Files.createDirectory(root.resolve("edge2"));
+        Path lane2 = Files.createDirectory(root.resolve("lane2"));
         List<SessionState> sessions = List.of(SessionState.closed(SessionSpec.fresh("edge", edge.toString())),
-                SessionState.closed(SessionSpec.fresh("edge2", edge2.toString())));
+                SessionState.closed(SessionSpec.fresh("lane2", lane2.toString())));
         TerminalTabs tabs = new TerminalTabs();
 
         AppState unbound = AppState.initial(List.of(new PanelState(P1, "one", "", ""), new PanelState(P2, "two", "", "")), List.of(), sessions);
@@ -43,10 +43,10 @@ class TerminalTabsTest {
 
         AppState focusTwo = bound.withFocused(P2);
         tabs.render(focusTwo, false);
-        AppState rebound = AppState.initial(List.of(new PanelState(P1, "one", "", "edge2"), new PanelState(P2, "two", "", "")), List.of(), sessions)
+        AppState rebound = AppState.initial(List.of(new PanelState(P1, "one", "", "lane2"), new PanelState(P2, "two", "", "")), List.of(), sessions)
                 .withFocused(P2);
         tabs.render(rebound, false);
-        assertThat(tabs.terminal(P1).directory()).as("not only the shown terminal").isEqualTo(edge2);
+        assertThat(tabs.terminal(P1).directory()).as("not only the shown terminal").isEqualTo(lane2);
         assertThat(tabs.terminal(P2).directory()).isEqualTo(HOME);
         assertThat(tabs.focused()).isSameAs(tabs.terminal(P2));
     }
@@ -58,11 +58,11 @@ class TerminalTabsTest {
     @Test
     void anExitedShellRestartsWhereItsPanelIsBoundNow(@TempDir Path root) throws Exception {
         Path edge = Files.createDirectory(root.resolve("edge"));
-        Path edge2 = Files.createDirectory(root.resolve("edge2"));
+        Path lane2 = Files.createDirectory(root.resolve("lane2"));
         List<SessionState> sessions = List.of(SessionState.closed(SessionSpec.fresh("edge", edge.toString())),
-                SessionState.closed(SessionSpec.fresh("edge2", edge2.toString())));
+                SessionState.closed(SessionSpec.fresh("lane2", lane2.toString())));
         AppState bound = AppState.initial(List.of(new PanelState(P1, "one", "", "edge")), List.of(), sessions);
-        AppState rebound = AppState.initial(List.of(new PanelState(P1, "one", "", "edge2")), List.of(), sessions);
+        AppState rebound = AppState.initial(List.of(new PanelState(P1, "one", "", "lane2")), List.of(), sessions);
         TerminalTabs tabs = new TerminalTabs(dir -> new TerminalWidget(dir, List.of("/bin/sh", "-c", "sleep 1")));
         AtomicBoolean runningAtRebind = new AtomicBoolean();
         AtomicReference<Path> atRebind = new AtomicReference<>();
@@ -80,7 +80,7 @@ class TerminalTabsTest {
             AtomicReference<Path> dir = new AtomicReference<>(edge);
             AtomicBoolean running = new AtomicBoolean(true);
             long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(6);
-            while (System.nanoTime() < deadline && (running.get() || !dir.get().equals(edge2))) {
+            while (System.nanoTime() < deadline && (running.get() || !dir.get().equals(lane2))) {
                 Thread.sleep(50);
                 SwingUtilities.invokeAndWait(() -> {
                     running.set(t.isRunning());
@@ -88,14 +88,14 @@ class TerminalTabsTest {
                 });
             }
             assertThat(running).as("the shell exited").isFalse();
-            assertThat(dir.get()).as("the exit bar names the directory the panel is bound to now").isEqualTo(edge2);
+            assertThat(dir.get()).as("the exit bar names the directory the panel is bound to now").isEqualTo(lane2);
 
             SwingUtilities.invokeAndWait(() -> {
                 t.restart();
                 dir.set(t.directory());
                 running.set(t.isRunning());
             });
-            assertThat(dir.get()).isEqualTo(edge2);
+            assertThat(dir.get()).isEqualTo(lane2);
             assertThat(running).isTrue();
         } finally {
             SwingUtilities.invokeAndWait(tabs::closeAll);

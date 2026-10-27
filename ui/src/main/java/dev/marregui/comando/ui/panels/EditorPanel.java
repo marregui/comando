@@ -74,8 +74,8 @@ import java.util.regex.Pattern;
  * prompts; a panel opened on a file, such as a document from the Files tab, is coloured as the file's language, and a
  * Markdown one opens rendered. Such a panel switches between the editor and the rendered text with its header button,
  * which names the other view: Preview while editing, Edit while previewing. An HTML file opens as its text, with a
- * button that opens it in the browser. A link to another Markdown or HTML file, double-clicked in the rendered text,
- * opens that file in a panel. A production connection frames the panel in red.
+ * button that opens it in the browser. A link to a file on this machine, of any kind, double-clicked in the rendered
+ * text, opens that file in a panel (record 94). A production connection frames the panel in red.
  */
 public final class EditorPanel extends JPanel {
 
@@ -746,7 +746,7 @@ public final class EditorPanel extends JPanel {
             m.add(none);
         }
         if (state.connections().isEmpty()) {
-            m.add(new JMenuItem("No connections; + in the sidebar's Connections tab adds one")).setEnabled(false);
+            m.add(new JMenuItem("No connections; New connection… in the Connections tab's menu adds one")).setEnabled(false);
         }
         return m;
     }
@@ -787,7 +787,7 @@ public final class EditorPanel extends JPanel {
             m.add(item);
         }
         if (state.sessions().isEmpty() && panel.document()) {
-            m.add(new JMenuItem("No sessions; + or import in the sidebar's Sessions tab adds one")).setEnabled(false);
+            m.add(new JMenuItem("No sessions; New session… or Import stored conversations… in the Sessions tab's menu adds one")).setEnabled(false);
         }
         return m;
     }

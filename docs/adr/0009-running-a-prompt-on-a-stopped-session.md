@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-12 | accepted | Miguel, on the defaults proposed in the plan review |
+| 2026-10-12 | accepted | Miguel |
 
 ## 1. Context
 
@@ -11,6 +11,8 @@ Running SQL on a closed connection opens it. A prompt on a stopped session needs
 ## 2. Decision
 
 Sending a prompt starts the panel's session when it is stopped, resuming its conversation when it has one.
+
+Miguel decided, on the default proposed in the review of the design plan.
 
 ## 3. Consequences
 

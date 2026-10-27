@@ -2,13 +2,13 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-14 | accepted; edit control and plug icons replaced by [37](0037-session-actions-act-on-the-selected-row.md) | Miguel (no cost or time, the controls), Claude (how) |
+| 2026-10-14 | accepted; its edit control and plug icons replaced by [record 37](0037-session-actions-act-on-the-selected-row.md) | Miguel and Claude |
 
 ## 1. Context
 
 A row in the Sessions tab showed the conversation's cost (Claude Code's estimate at API prices, which a subscription
-does not bill) and the time since its last activity. Miguel found neither useful. Starting or stopping a session,
-and changing its model or effort, took the context menu, the command palette or the session dialog.
+does not bill) and the time since its last activity. Neither was used. Starting or stopping a session, and changing its
+model or effort, took the context menu, the command palette or the session dialog.
 
 ## 2. Decision
 
@@ -16,7 +16,7 @@ and changing its model or effort, took the context menu, the command palette or 
 |---|---|---|
 | cost, time since last activity | removed from the row | not used; a turn in progress still shows what it is doing |
 | cost in the status bar | removed from the focused session's item; the model, effort, context share and activity stay | the same figure, as little used there |
-| the embedded server in the status bar | removed, with its click to start or stop; Start and Stop stay in the palette and the Connections menu, and the start still reports in a notice | Miguel does not want the server one click away in the bar |
+| the embedded server in the status bar | removed, with its click to start or stop; Start and Stop stay in the palette and the Connections menu, and the start still reports in a notice | Miguel's choice: the server is not one click away in the bar |
 | order in the panel header and the status bar | the session first, then the connection | Claude is what a panel is for; the database is the least used feature |
 | order of the lower tabs | Session, Approvals, Terminal, Results; ⌃1–⌃4 (and ⌘⌥1–4) follow it, so Approvals moves to ⌃2, Terminal to ⌃3, Results to ⌃4; Session is the initial tab and the one a closed view returns to | Results, leftmost, took the eye; the keys follow the positions, as tab keys do |
 | controls | a row under the folder line: connect or disconnect (plug, unplug), model ▾, effort ▾, edit (pencil) | one click from the list, without opening the dialog |
@@ -24,6 +24,8 @@ and changing its model or effort, took the context menu, the command palette or 
 | what the row names | the model the session asks for, else the one Claude Code reported, else "default"; a full id by its family | a session on the CLI's default still says what runs |
 | the list | stays a `JList`: the row is its renderer, and a click is matched to the control under it | selection, double-click to bind, the context menu and keyboard navigation stay as they were |
 | keyboard | the context menu gains Model and Effort submenus | a painted button takes no focus |
+
+Miguel decided to drop the cost and the time, and which controls the row carries; Claude decided how.
 
 ## 3. Consequences
 

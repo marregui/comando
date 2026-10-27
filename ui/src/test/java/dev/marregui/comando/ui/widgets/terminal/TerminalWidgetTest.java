@@ -32,9 +32,9 @@ class TerminalWidgetTest {
 
     @Test
     void beforeItsShellStartsTheAreaSaysWhereAndHow() {
-        TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge2"));
+        TerminalWidget t = new TerminalWidget(Path.of(HOME, "lane2"));
         assertThat(t.isStarted()).isFalse();
-        assertThat(t.emptyText()).isEqualTo(KeyText.of("Shell in ~/edge2 — click or press ⌃3 to start"));
+        assertThat(t.emptyText()).isEqualTo(KeyText.of("Shell in ~/lane2 — click or press ⌃3 to start"));
         t.setDirectory(Path.of("/srv/x"));
         assertThat(t.emptyText()).isEqualTo(KeyText.of("Shell in /srv/x — click or press ⌃3 to start"));
     }
@@ -42,9 +42,9 @@ class TerminalWidgetTest {
     @Test
     void theExitBarNamesTheDirectoryOfTheRestart() {
         TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge"));
-        t.setDirectory(Path.of(HOME, "edge2"));
+        t.setDirectory(Path.of(HOME, "lane2"));
         t.showExited(1);
-        assertThat(t.restartButtonText()).isEqualTo("Restart in ~/edge2");
+        assertThat(t.restartButtonText()).isEqualTo("Restart in ~/lane2");
     }
 
     @Test
@@ -52,10 +52,10 @@ class TerminalWidgetTest {
         TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge"));
         AtomicReference<Path> bound = new AtomicReference<>(Path.of(HOME, "edge"));
         t.setDirectorySource(bound::get);
-        bound.set(Path.of(HOME, "edge2")); // the panel was rebound while the shell ran: no render reached the terminal
+        bound.set(Path.of(HOME, "lane2")); // the panel was rebound while the shell ran: no render reached the terminal
         t.showExited(0);
-        assertThat(t.restartButtonText()).isEqualTo("Restart in ~/edge2");
-        assertThat(t.directory()).isEqualTo(Path.of(HOME, "edge2"));
+        assertThat(t.restartButtonText()).isEqualTo("Restart in ~/lane2");
+        assertThat(t.directory()).isEqualTo(Path.of(HOME, "lane2"));
     }
 
     /** ⌃⏎ into a silent shell, then a restart: the held text must not run in the new shell. */

@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-18 | accepted | Miguel (watch the reducer), Claude (how: per-intent timing, the slowest part, a hang's stack) |
+| 2026-10-18 | accepted; its watchdog thread shared with the EDT's by [record 82](0082-threads-by-kind-with-a-budget.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -18,10 +18,20 @@ session, so nothing in the window changed state, with nothing in the log: the ED
 |---|---|---|
 | a stall | an intent that takes 200 ms or more: one INFO line when it ends, `the reducer was busy for <ms> ms [part=<part>]` | the length and the part group stalls by cause with a search |
 | part | `observe`, `reduce <Intent>`, `effect <Effect>` or `listeners`; the line names the part that took longest | timed on the reducer thread itself, so the part is exact, not a sample |
-| a hang | an intent still applying at 1 s: a WARNING with the reducer's stack taken then by `reducer-watchdog` (every 100 ms), once per intent; a WARNING when it ends, and the user's notice | the stack of what holds the reducer while it holds, even if it never ends |
-| no probe intent | the watchdog reads what the loop applies now; it puts nothing on the queue | a probe would sit behind a backlog and would enter the intent log |
+| a hang | an intent still applying at 1 s: a WARNING with the reducer's stack, taken then by a watchdog thread that looks every 100 ms, once per intent; a WARNING when it ends, and the user's notice | the stack of what holds the reducer while it holds, even if it never ends |
+| no probe intent | the watchdog reads what the loop applies now; it puts nothing on the queue | a probe would wait behind a backlog (§4) |
+
+Miguel decided that the reducer is watched; Claude decided how: per-intent timing, the slowest part, and a hang's stack.
 
 ## 3. Consequences
 
-`StateLoop` owns the watchdog: started by `start`, stopped by `close` after the queued intents, so the shutdown is
-watched too. A queue backlog with every intent fast is not a stall; it is not measured.
+`StateLoop` owns the watchdog's look: started by `start`, stopped by `close` after the queued intents, so the shutdown
+is watched too. A queue backlog with every intent fast is not a stall; it is not measured. The watchdog thread was
+`reducer-watchdog`; since record 82 one platform thread, `watchdog`, runs the EDT's probe and the reducer's look every
+100 ms (`Watchdog`).
+
+## 4. Alternatives
+
+| Option | Why rejected |
+|---|---|
+| a probe intent put on the queue | it would sit behind a backlog, and would enter the intent log |

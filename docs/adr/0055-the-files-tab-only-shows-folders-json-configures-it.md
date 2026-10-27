@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-17 | accepted; removes the bar, the folder dialog and the configuration row of [record 49](0049-the-files-tab-shows-folders-the-user-chooses.md), the rows bar, files and read-only of [record 51](0051-folder-buttons-together-read-only-folders-icons.md), the rows bar, tips, clone a file, remove a file and read-only of [record 52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md); the Trash returns for deletable folders in [record 63](0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md) | Miguel (no buttons in the Files tab, which is read-only; the files it opens are edited, saved and added to like any other; folders configured by a menu entry that opens `folders.json`; the read-only flag and the tab's file operations dropped), Claude (how: the menu entry's place, the file read again when it changes, what a file that does not read does) |
+| 2026-10-17 | accepted; the Trash returns for folders marked deletable in [record 63](0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md); the configuration row replaced by [record 69](0069-a-window-edits-the-files-tab-folders.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -10,6 +10,11 @@ The Files tab had a bar (add, edit, clone, remove) and a context menu that added
 the resource dialog, and cloned files or moved them to the Trash. A folder marked `readOnly` (the kit marked the memory
 folder so) opened its files in panels that could not be edited. The tab is where files are found and opened; the
 writing belongs to the panel that opens a file, and to Claude.
+
+This record removes the bar, the folder dialog and the configuration row of
+[record 49](0049-the-files-tab-shows-folders-the-user-chooses.md), the rows bar, files and read-only of
+[record 51](0051-folder-buttons-together-read-only-folders-icons.md), and the rows bar, tips, clone a file, remove a
+file and read-only of [record 52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md).
 
 ## 2. Decision
 
@@ -22,12 +27,17 @@ writing belongs to the panel that opens a file, and to Claude.
 | follow | the store checks `folders.json` every second, with the open panels' files; a change it did not write is read again and the tab shows the new folders; entries that break the rules are left out with a notice; a file that does not parse keeps the tab's folders, says why and stays where it is; its own writes (the kit adding its folders) are not read back | a save shows within a second; a file half edited is never moved aside |
 | kit | adds its folders as before (`Intent.AddFolder`), which saves `folders.json` | the one writer of the configuration besides the user |
 
+Miguel decided that the Files tab has no buttons and is read-only, that the files it opens are edited, saved and added
+to like any other, that a menu entry opening `folders.json` configures the folders, and that the read-only flag and the
+tab's file operations go; Claude decided how: the menu entry's place, the file read again when it changes, and what a
+file that does not parse does.
+
 ## 3. Consequences
 
 `Intent.RemoveFolder`, `Intent.CopyFile`, `Intent.DeleteFile`, their effects, `ToolPort.copyFile` and `deleteFile`,
 `ToolsAdapter.Trash` and `ui.kit.desktop.DesktopTrash` are gone; `Intent.SaveFolder` becomes `Intent.AddFolder`, and
 `Intent.FoldersRead` carries a re-read `folders.json`, saving nothing. `FolderKind` stays as the entries' rules.
 `ResourceActions` loses `leftAligned`, `addTip` and `Target`, which only the Files tab used. `SessionsSidebar.Dialogs`
-loses `folders()`; `EditorPanel.file` loses its read-only argument. `Store` gains `foldersFile`, `onFoldersChanged`
-and its check; `JsonFile.readAsIs` reads without moving a bad file aside. `Setup.folderSettings` reaches the file from
-the menu.
+loses `folders()`; `EditorPanel.file` loses its read-only argument. `Store` gains `foldersFile`, `onFoldersChanged` and
+its check; `JsonFile.readAsIs` reads without moving a bad file aside. `Setup.folderSettings` reaches the file from the
+menu.

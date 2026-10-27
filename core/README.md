@@ -1,8 +1,9 @@
 # `core`
 
-The domain of comando: one immutable state, the intents that change it, the reducer that applies them, the effects
-it asks for, and the ports through which every outside system is reached. It depends on the JDK only; every other
-module depends on it (`api(project(":core"))`, `implementation` in `app`), and none of them depends on another except through `app`.
+The domain of comando: one immutable state, the intents that change it, the reducer that applies them, the effects it
+asks for, the ports through which every outside system is reached, and the thread kit every module uses. It depends on
+the JDK only. Every other module depends on it (`api(project(":core"))`; `implementation` in `app`), and no adapter
+module depends on another: `app` connects them.
 
 1. [Architecture](#1-architecture)
 2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
@@ -21,20 +22,20 @@ flowchart LR
   S --> L["listeners (the UI's render)"]
 ```
 
-`StateLoop` takes intents from any thread, applies each with `Reducer` on its own thread, publishes the new
-`AppState` through a volatile field, hands the effects to `EffectRouter` in order, then tells its listeners. The
-reducer is pure in its arguments, a `Clock` and the home folder. Data too large to copy with every state (result rows,
+`StateLoop` takes intents from any thread and applies each with `Reducer` on its own thread. It publishes the new
+`AppState` through a volatile field, hands the effects to `EffectRouter` in order, then tells its listeners. The reducer
+is pure in its arguments, a `Clock` and the home folder. Data too large to copy with every state (result rows,
 transcripts, console output, schemas) lives in registries the state refers to by id.
 
 | Package | Holds |
 |---|---|
 | `state` | `AppState` and its parts: `PanelState`, `ConnectionState`, `SessionState`, `SqlRun`, `ViewState`, `Notice`, `LowerTab`, `BackgroundTask`, `Reflection`, `RunStatus`, `SessionInfo` |
 | `intent` | `Intent`, the sealed interface of every change; `EditMode` |
-| `reduce` | `Reducer` (intent → `Transition`), `Transition` (next state and effects) |
+| `reduce` | `Reducer` (intent → `Transition`), `Transition` (the next state and its effects) |
 | `effect` | `Effect`, the sealed interface of work for adapters; `EffectRouter`, which hands each effect to its port |
-| `loop` | `StateLoop`: the queue, the reducer thread, its watchdog, listeners and observers |
+| `loop` | `StateLoop` (the queue, the reducer thread, its look on the watchdog, listeners and observers); the thread kit: `Threads`, `Errands`, `Watchdog` |
 | `port` | the interfaces adapters implement ([§2](#2-interface-with-the-rest-of-the-app)) |
-| `model` | configuration and values shared by every module: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `Topic`, `HomeDir`, `Status`, `StartMode`; `KitRoot` (the Claude Code folder sessions run on and its kit's `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the Files tab's); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for) |
+| `model` | configuration and values every module shares: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `Topic`, `HomeDir`, `Status`, `StartMode`; `KitRoot` (the Claude Code folder sessions run on and its `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the Files tab's); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for); `LinearTickets` (ticket ids in a text, with the address Linear shows each at) |
 | `resource` | `ResourceKind`, its kinds (`ConnectionKind`, `SessionKind`, `FolderKind`) and `Attribute`: the attributes and rules one dialog edits |
 | `dispatch` | `Blocks`, `Statements`, `Classifier`, `Target`: editor text split into blocks and statements, and the SQL-or-prompt decision |
 | `view` | `ViewSpec` (the data of each view type), `Placement`, `Layout`, `FileView`, `Clip` |
@@ -77,37 +78,52 @@ intents.
 | `ConsoleRegistry` | `tools` (a run's thread) | `ui` (console views) |
 | `SchemaRegistry` | `db` | `ui` (completion, schema explorer) |
 
-**Shared helpers.** `Classifier` is used by the reducer, by the editor (block colours, gutter, completion) and by
-`mcp` (DDL detection for `db_run_sql`); `Statements` by the reducer and the editor; `Intent.Notify.logged` writes a
-failure to the log and makes the notice whose click opens it there (`Notice.log`), for every adapter; `HomeDir` decides `~` expansion and Claude Code's folder for every module, the root `KitRoot` resolves: `CLAUDE_CONFIG_DIR` when comando was started with it, else `~/.claude` with a `comando-kit.json`, else `~/.claude/comando-kit` with one, else `~/.claude`; `app` names it once (`KitRoot.use`), and parses `comando-kit.json` through `claude`'s `KitJson`, as `core` reads no JSON; `Clip` shortens labels the same
-way in the window and in what Claude is told; `PermissionRules` derives the allow rules an approval adds, for `mcp`
-and the approval card.
+**Shared helpers.**
 
-**Adding a change.** A new intent is a record in `Intent` and a case in `Reducer`; a new effect is a record in
-`Effect`, a case in `EffectRouter` and a port method, which `testkit`'s `RecordingPorts` must then implement too.
+| Helper | Decides | Used by |
+|---|---|---|
+| `Classifier` | SQL or prompt, and DDL | the reducer, the editor (block colours, gutter, completion), `mcp` (DDL in `db_run_sql`) |
+| `Statements` | the statements of a block | the reducer, the editor |
+| `Intent.Notify.logged` | a failure written to the log, and the notice whose click opens it there (`Notice.log`) | every adapter |
+| `HomeDir` | `~` expansion and shortening; Claude Code's folder, the root `KitRoot` resolves | every module |
+| `KitRoot` | the root: `CLAUDE_CONFIG_DIR` when comando was started with it, else `~/.claude` with a `comando-kit.json`, else `~/.claude/comando-kit` with one, else `~/.claude` | `app` names it once (`KitRoot.use`) and parses `comando-kit.json` through `claude`'s `KitJson`, as `core` reads no JSON |
+| `Clip` | a label shortened the same way in the window and in what Claude is told | `ui`, `claude`, `mcp`, `tools` |
+| `PermissionRules` | the allow rules an approval adds | `mcp`, the approval card |
+
+**Adding a change.** A new intent is a record in `Intent` and a case in `Reducer`. A new effect is a record in `Effect`,
+a case in `EffectRouter` and a port method, which `testkit`'s `RecordingPorts` must then implement too.
 
 ## 3. Threads
 
-| Thread | Does |
-|---|---|
-| `comando-reducer` | platform: applies intents in order; the only writer of `AppState` |
-| `watchdog` | platform, shared with the EDT's watchdog (`Watchdog.shared()`): looks at the loop every 100 ms; an intent still applying at 1 s is logged with the loop's stack |
+| Thread | Kind | Does | Stopped by |
+|---|---|---|---|
+| `comando-reducer` | platform | applies intents in order; the only writer of `AppState` | `StateLoop.close`, after the queued intents |
+| `watchdog` | platform, shared with the EDT's watchdog (`Watchdog.shared()`) | every 100 ms runs each registered look; an intent still applying at 1 s is logged with the loop's stack | itself, a period after the last look is closed |
 
-`loop` also holds the thread kit every module uses ([Architecture §6](../docs/architecture.md#6-threads)): `Threads`
-makes strands (`strand`, `timedStrand`) and forks on virtual threads and lists the live ones by name for tests;
-`Errands` is one owner's errands, interrupted and waited for at its close; `Watchdog` is the one platform thread that
+`loop` also holds the thread kit of [Architecture §6](../docs/architecture.md#6-threads). `Threads` makes strands
+(`strand`, `timedStrand`) and forks on virtual threads, and lists the live ones by name for tests (`Threads.alive`).
+`Errands` holds one owner's errands, interrupted and waited for at its close. `Watchdog` is the one platform thread that
 runs every watchdog's look.
 
-An intent that takes 200 ms or more is a stall, logged once it ends with the slowest part; one of 1 s or more also
-sets a notice whose click opens the log at the hang. The reducer, each effect
-and each listener are guarded: a failure is logged and the loop goes on.
+An intent that takes 200 ms or more is a stall, logged once it ends with its slowest part. One of 1 s or more also sets
+a notice whose click opens the log at the hang. The reducer, each effect and each listener are guarded: a failure is
+logged and the loop goes on.
 
 ## 4. Tests
 
-Unit tests, with no I/O except the temporary files of `FileViewTest`, `KitRootTest` and `KitFoldersTest`: `ReducerTest`, `ReducerNoticeAndLayoutTest`,
-`ReducerSubagentTest`, `ReducerChangesTest`, `StateLoopTest` (`applyNow` drives the loop without its thread),
-`NotifyLoggedTest`, `ThreadKitTest`, `ClassifierTest`, `BlocksTest`, `StatementsTest`, `TranscriptTest`, `TopicSourceTest`, `ConsoleTest`, `FormatsTest`,
-`ReflectionTest`, `ResourceKindTest`, `FileViewTest`, `HomeDirTest`, `ClipTest`, `KitRootTest`, `KitVersionTest`, `KitFoldersTest`. They use `testkit`'s `FakeClock` and
-`States`.
+Unit tests, with no I/O except the temporary files of `FileViewTest`, `KitRootTest` and `KitFoldersTest`. They use
+`testkit`'s `FakeClock` and `States`.
+
+| Subject | Tests |
+|---|---|
+| reducer | `ReducerTest`, `ReducerNoticeAndLayoutTest`, `ReducerSubagentTest`, `ReducerChangesTest` |
+| loop and threads | `StateLoopTest` (`applyNow` drives the loop without its thread), `ThreadKitTest`, `NotifyLoggedTest` |
+| dispatch | `ClassifierTest`, `BlocksTest`, `StatementsTest` |
+| stores | `TranscriptTest`, `TopicSourceTest`, `ConsoleTest`, `FormatsTest` |
+| state and model | `ReflectionTest`, `ResourceKindTest`, `FileViewTest`, `HomeDirTest`, `ClipTest`, `KitRootTest`, `KitVersionTest`, `KitFoldersTest`, `LinearTicketsTest` |
+
+```
+./gradlew :core:test
+```
 
 Further reading: [Architecture §3–§6](../docs/architecture.md#3-the-flow-of-one-command).

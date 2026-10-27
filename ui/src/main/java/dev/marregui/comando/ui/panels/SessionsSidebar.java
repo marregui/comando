@@ -70,13 +70,13 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
- * The left column, three tabs in one row of icons: Sessions (every session with its project, branch, state, context,
- * conversation and pending approvals, and controls to connect or disconnect it, compact or clear its conversation and
- * change its model or effort; under them, the panels of comando's own that belong to no session:
+ * The left column, three tabs in one row of icons: Sessions (every session as one row, its state icon and its name,
+ * the rest in its card and its menu; under them, the panels of comando's own that belong to no session:
  * {@link PanelsWithoutSession}), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). No tab has a bar of buttons: a tab's menu adds (and, for sessions, imports
  * and sorts), and a row's menu edits, clones and removes, through the same {@link ResourceActions}. Double-click on a
  * session opens it in a panel ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. A session
- * row and a connection row are alike: the state icon, which a click connects or disconnects, the name, a card over the
+ * row and a connection row are alike: the state icon, which a click starts or stops (a session) or connects or
+ * disconnects (a connection), the name, a card over the
  * name (a connection's has no summary) and everything else in the row's menu. Sessions are
  * listed running first, then by name, until the user drags one: from then on in the order the user left them, until
  * the tab menu's Sort. Hidden, the column collapses to a rail whose button shows it again.
@@ -686,7 +686,7 @@ public final class SessionsSidebar {
             setToolTipText("");
         }
 
-        /** As wide as the tab: a row's lines clip at its edge, and its right-hand controls stay in view. */
+        /** As wide as the tab: a row's line clips at its edge. */
         @Override
         public boolean getScrollableTracksViewportWidth() {
             return true;
