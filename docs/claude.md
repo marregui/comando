@@ -40,7 +40,7 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   after the session and a random UUID. It names comando's server, the process's bearer token, and `"timeout": 3600000`,
   which lets an approval card wait up to 55 minutes. Deleted when the process exits; files a killed comando left are
   deleted at the next start.
-- **Working directory.** The session's; the panel header shows its git branch, read from `.git/HEAD` after each turn.
+- **Working directory.** The session's; the session bar shows its git branch, read from `.git/HEAD` after each turn.
 - **Threads.** stdout is read on a platform thread, `claude-out-<session>`, the one operating-system thread a session
   costs: a read of a process pipe holds its carrier thread even from a virtual thread (measured on JDK 25). The stdin
   writer, fed by a queue, and the exit waiter are virtual threads. stderr goes to a temporary file (`0600`) whose last

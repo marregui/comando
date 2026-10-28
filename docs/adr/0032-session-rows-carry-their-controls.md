@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-14 | accepted; its edit control and plug icons replaced by [record 37](0037-session-actions-act-on-the-selected-row.md) | Miguel and Claude |
+| 2026-10-14 | accepted; its edit control and plug icons replaced by [record 37](0037-session-actions-act-on-the-selected-row.md); the header's and the status bar's session moved to the session bar by [record 105](0105-a-session-bar-under-the-lower-panel.md) | Miguel and Claude |
 
 ## 1. Context
 

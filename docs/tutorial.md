@@ -49,11 +49,12 @@ the sessions run on the kit, the Files tab opens on its folders and the status b
 | **Menu bar** | **Edit**, and **Actions**: the palette; **Tint**, the colour of headings, reports and new files; restart the shell, stop refreshing plots; start or stop the embedded QuestDB; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
 | **Sidebar**, left | three tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it |
-| **Panel header** | two chips, the panel's **session** and its **connection**, each with a status dot (○ closed, ● open) and a plug button that starts or connects it. On the right: **Preview** (Markdown), **Run**, **Stop**, **Clear**; rest the pointer on one for its name |
+| **Panel header** | the panel's **connection** chip, with a status dot (○ closed, ● open) and a plug button that connects it. On the right: **Preview** (Markdown), **Run**, **Stop**, **Clear**; rest the pointer on one for its name |
 | **Editor** | where you write SQL and prompts, mixed in one text |
 | **Lower tabs** | **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell), **Results** (SQL output). Plots and kept results open more tabs here |
 | **Uncommitted changes**, right, ⌘K | what the Files tab's git repositories hold that their last commits do not ([§1.4](#14-uncommitted-changes)) |
-| **Status bar**, bottom | the current message on the left; plan usage, the panel's session, connection and running work on the right ([§1.5](#15-the-status-bar)) |
+| **Session bar**, under the lower tabs | the focused panel's **session** chip, its icon showing whether it runs, a plug button that starts it, and what it does ([§1.3](#13-the-session-bar)); on the right its model and effort, which you can change there, and its context with the checkpoint button |
+| **Status bar**, bottom | the current message on the left; plan usage and the work running in every session and query on the right ([§1.5](#15-the-status-bar)) |
 
 One idea runs through the whole tool: **a panel is bound to at most one connection and one session**. SQL you run in
 the panel goes to its connection; anything else goes to its session.
@@ -104,17 +105,19 @@ it says. The summary is written the first time the card shows, again when it sho
 session's last response changed, and when you press ↻; never on a timer. The card closes when the pointer leaves it, or
 leaves the tab without entering the card; ✕ or a click on the card closes it too.
 
-### 1.3 The panel header
+### 1.3 The session bar
 
-Next to the session's plug sit two more buttons:
+The bar under the lower tabs belongs to the focused panel's session. Next to its plug is **new conversation**; the
+**checkpoint** sits at the right end, beside the context it depends on:
 
 | Button | Does |
 |---|---|
-| **new conversation** | starts a stopped session on a new conversation; shown when it has one to leave |
+| **new conversation** | starts a stopped session on a new conversation; shown once it has one, greyed out while the session runs |
 | **checkpoint** | sends the session's checkpoint command (`/reflect` by default; change or clear it in the session dialog). Once that turn has finished, the conversation is cleared, the **Session** tab shows only its summary, and the summary goes in front of your next prompt |
 
-While the session runs, a **compact** button compacts its conversation. **Rewrite ‹panel› as a document** is in the
-session's menu in the sidebar.
+The context and the checkpoint turn purple together when a checkpoint is due. Click the model or the effort to change
+it, even mid-session. To compact the conversation, use **Compact the conversation** in the palette or type
+`/compact`. **Rewrite ‹panel› as a document** is in the session's menu in the sidebar.
 
 ### 1.4 Uncommitted changes
 
@@ -132,8 +135,8 @@ three groups (Changed, Untracked, Removed), each by folder.
 On the left, the current message: click it to go where it is about (a failure's line in the log, which flashes);
 right-click it for the recent messages. On the right: your Claude plan's usage (the session window, the week, and a
 model's weekly window where the plan has one; rest the pointer on it for the reset times; read every 5 minutes), then
-Codex's (session, week) when Codex is installed, then the panel's session, connection and running work. Usage takes
-the warning colour at 75% of a window and the danger colour at 90%.
+Codex's (session, week) when Codex is installed, then the queries and sessions working and the requests waiting for
+approval. Usage takes the warning colour at 75% of a window and the danger colour at 90%.
 
 ## 2. A database
 
@@ -246,7 +249,7 @@ choose.
 
    Leave the rest as it is; the line under each field says what it does. Click **Save**, then press **Esc**.
    *You should see* a new panel, **tutor**. A session comes with its own panel, titled with its name, and the two are
-   one: renamed and removed together. `tutor` shows in the panel header, in the sidebar and in the window title.
+   one: renamed and removed together. `tutor` shows in the session bar, in the sidebar and in the window title.
 2. In the **tutor** panel, type `In one sentence, what is QuestDB?` and press **⌘⇧⏎**, which sends the block to the
    panel's session. *You should see* the session start (its icon in the sidebar and on the tab turns Claude's orange),
    the lower panel switch to **Session**, and the answer stream in, with the time it took under it. While the turn runs,
@@ -327,8 +330,8 @@ your Claude Code permission settings, which comando leaves as they are; a databa
 2. Go back to the editor with **⌘E**. At the end, after an empty line, type `date` and press **⌃⏎**. The line under
    the caret is typed into the terminal and runs there; a shell still starting gets it once it is ready.
 3. Press **⌘T** for a second panel. It starts with the connection of the panel you were in and no session, as a
-   session has one panel, its own. Double-click `tutor` in the sidebar, and the **tutor** panel comes forward. The new
-   panel's session chip offers **New session ‹its title›…**, which would make it a new session's own panel. Change the
+   session has one panel, its own. Double-click `tutor` in the sidebar, and the **tutor** panel comes forward. With the
+   new panel in front, the session bar's chip offers **New session ‹its title›…**, which would make it a new session's own panel. Change the
    new panel's connection from the chip in its header. **⌘1**…**⌘9** jump between panels.
 4. Press **⌘W** to close the new panel, then **⌘⇧T**: it comes back with its text and bindings. A closed panel is kept,
    with its file, until you remove it: the Sessions tab lists it as closed under **Without a session**, and a double

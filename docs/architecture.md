@@ -356,7 +356,7 @@ The packages of `ui`, under `dev.marregui.comando.ui`, in layer order. The class
 | `kit` | theme, icons, commands, overlays, EDT helpers, formatting, text, trees, tabs, layout, resource actions, desktop, vcs |
 | `widget` | the contract: `Widget`, `WidgetContext`, `WidgetRegistry`; `capability` (`Searchable`, `Copyable`, …) |
 | `widgets` | one package per widget: approval, changes, console, diff, editor, markdown, plot, table, terminal, text, transcript (with `doc` and `render`), tree |
-| `panels` | the window's regions: `Workspace`, `EditorPanel`, `LowerPanel`, `SessionsSidebar` (its rows: `SessionRow`, `ConnectionRow`), `PanelsWithoutSession`, `FilesTab`, `SidePane`, `StatusBar`, `ResultsView`, `TerminalTabs`, `ViewTabs`, … |
+| `panels` | the window's regions: `Workspace`, `EditorPanel`, `LowerPanel`, `SessionsSidebar` (its rows: `SessionRow`, `ConnectionRow`), `PanelsWithoutSession`, `FilesTab`, `SidePane`, `SessionBar`, `StatusBar`, `ResultsView`, `TerminalTabs`, `ViewTabs`, … |
 | `dialogs` | `folders` (the Files tab's folders: `FoldersEditor`, `FoldersDialog`), `resource` (`ResourceDialog`, one dialog for connections and sessions), `sessions` (import) |
 | `shell` | `ComandoUi` (the frame and the UI port), `WindowLayout`, `HelpActions`, `Menus`, `Keys`, `LivePlots`, `Notifier`, `HelpFiles`, `OpenFiles`, `DiffWindow`, … |
 | (top) | `PanelTexts`: editor text between saves |

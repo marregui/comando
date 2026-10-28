@@ -66,6 +66,7 @@ import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 import dev.marregui.comando.ui.panels.EditorPanel;
 import dev.marregui.comando.ui.panels.LowerPanel;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
+import dev.marregui.comando.ui.panels.SessionBar;
 import dev.marregui.comando.ui.panels.SidePane;
 import dev.marregui.comando.ui.panels.StatusBar;
 import dev.marregui.comando.ui.panels.TerminalTabs;
@@ -197,6 +198,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private SidePane side;
     private SessionsSidebar sidebar;
     private StatusBar status;
+    /** The focused panel's session, under the lower panel. */
+    private SessionBar sessionBar;
     private FindBar findBar;
     private JSplitPane outer;
     private int outerDividerSize;
@@ -358,7 +361,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }, text -> deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, text, false)),
                 session -> deps.state().get().session(session).map(x -> Path.of(x.spec().workDir())).orElse(null));
         // a panel's "New session ‹title›…": the session dialog, named after the panel, which becomes its own (record 88)
-        workspace.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
         workspace.topics(topics, deps.transcripts()::of);
         deps.schemas().addListener(schemaListener);
         lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
@@ -407,6 +409,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         sidebar.cards(workspace.rowCards());
         sidebar.watchOpened(openedFiles);
         status = new StatusBar(deps.intents(), this::noticeTarget);
+        sessionBar = new SessionBar(deps.intents());
+        sessionBar.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
         status.onKitMenu(this::kitMenu);
         kit.attach(status);
         sidebar.onFolderMenu(this::folderMenu);
@@ -419,7 +423,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         vertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, lower.component());
         vertical.setResizeWeight(0.45);
         vertical.setBorder(null);
-        outer = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sidebar.component(), vertical);
+        // the session bar closes the column of the panels and the lower panel; the window's status bar runs under all
+        JPanel column = new JPanel(new BorderLayout());
+        column.add(vertical, BorderLayout.CENTER);
+        column.add(sessionBar.component(), BorderLayout.SOUTH);
+        outer = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, sidebar.component(), column);
         outer.setBorder(null);
         outerDividerSize = outer.getDividerSize();
         JPanel south = new JPanel(new BorderLayout());
@@ -560,8 +568,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return stall.where().isEmpty() ? "[" + stall.kind() + "]" : "[" + stall.kind() + "] " + stall.where();
     }
 
-    /** Once a second: elapsed times on the panels and the results, uptimes on the session rows. */
+    /** Once a second: elapsed times on the session bar, the panels' tabs and the results, uptimes on the session rows. */
     private void tick() {
+        sessionBar.tick();
         workspace.tick();
         lower.results().tick();
     }
@@ -604,6 +613,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             showSidePane(show);
         }
         status.render(s);
+        sessionBar.render(s);
         kit.render(s);
         connectionsDialog.render(s);
         sessionsDialog.render(s);
@@ -1053,7 +1063,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 () -> focusedSession().map(SessionState::isBusy).orElse(false));
         // the Session tab emptied, the conversation going on: from the palette alone, once a turn has ended (record 104)
         cmd("transcript.clear", "Clear the Session tab", null, lower::clearTranscript, lower::canClearTranscript);
-        // as the panel's and the row's buttons do: only a running session has a conversation to compact
+        // as the session's menu in the sidebar: only a running session has a conversation to compact
         cmd("session.compact", "Compact the conversation", null, () -> focusedSession().ifPresent(x ->
                         deps.intents().dispatch(new Intent.SessionCommand(x.name(), SessionSpec.COMPACT_COMMAND))),
                 () -> focusedSession().filter(x -> x.status().isUsable()).isPresent());

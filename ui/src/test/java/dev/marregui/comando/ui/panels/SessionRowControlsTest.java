@@ -16,18 +16,18 @@ class SessionRowControlsTest {
 
     @Test
     void theFreshStartShowsOnlyForAStoppedSessionWithAConversation() {
-        assertThat(EditorPanel.showsFresh(closed("", "/reflect"))).as("nothing to leave behind").isFalse();
-        assertThat(EditorPanel.showsFresh(closed("conv", "/reflect"))).isTrue();
-        assertThat(EditorPanel.showsFresh(closed("conv", "/reflect").withStatus(Status.OPEN, ""))).as("running: unplug first").isFalse();
-        assertThat(EditorPanel.showsFresh(closed("conv", "/reflect").withStatus(Status.CLOSING, ""))).isFalse();
-        assertThat(EditorPanel.showsFresh(closed("conv", "/reflect").withStatus(Status.FAILED, "exit 1"))).as("a dead session can start over").isTrue();
+        assertThat(SessionBar.showsFresh(closed("", "/reflect"))).as("nothing to leave behind").isFalse();
+        assertThat(SessionBar.showsFresh(closed("conv", "/reflect"))).isTrue();
+        assertThat(SessionBar.showsFresh(closed("conv", "/reflect").withStatus(Status.OPEN, ""))).as("running: unplug first").isFalse();
+        assertThat(SessionBar.showsFresh(closed("conv", "/reflect").withStatus(Status.CLOSING, ""))).isFalse();
+        assertThat(SessionBar.showsFresh(closed("conv", "/reflect").withStatus(Status.FAILED, "exit 1"))).as("a dead session can start over").isTrue();
     }
 
     @Test
     void theCheckpointShowsWhileTheSessionHasACommand() {
-        assertThat(EditorPanel.showsCheckpoint(closed("", "/reflect"))).isTrue();
-        assertThat(EditorPanel.showsCheckpoint(closed("", ""))).isFalse();
-        assertThat(EditorPanel.showsCheckpoint(closed("conv", "/reflect").withStatus(Status.OPEN, ""))).isTrue();
+        assertThat(SessionBar.showsCheckpoint(closed("", "/reflect"))).isTrue();
+        assertThat(SessionBar.showsCheckpoint(closed("", ""))).isFalse();
+        assertThat(SessionBar.showsCheckpoint(closed("conv", "/reflect").withStatus(Status.OPEN, ""))).isTrue();
         assertThat(SessionSpec.fresh("s", "/tmp").checkpoint()).isEqualTo(SessionSpec.DEFAULT_CHECKPOINT);
     }
 }

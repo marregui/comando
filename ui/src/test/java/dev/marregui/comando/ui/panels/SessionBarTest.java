@@ -1,0 +1,265 @@
+package dev.marregui.comando.ui.panels;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.state.Reflection;
+import dev.marregui.comando.core.state.SessionInfo;
+import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.ui.kit.format.Labels;
+import dev.marregui.comando.ui.kit.icon.Icons;
+import dev.marregui.comando.ui.kit.theme.Theme;
+import org.junit.jupiter.api.Test;
+
+import javax.swing.AbstractButton;
+import javax.swing.JCheckBoxMenuItem;
+import javax.swing.JComponent;
+import javax.swing.JLabel;
+import javax.swing.JMenuItem;
+import javax.swing.JPopupMenu;
+import javax.swing.SwingUtilities;
+import java.awt.Component;
+import java.awt.Container;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+class SessionBarTest {
+
+    private static final PanelId A = new PanelId("a");
+
+    @Test
+    void theBarShowsTheFocusedPanelsSessionAndFollowsTheFocus() throws Exception {
+        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w").withModel("opus").withEffort("high"))
+                .withStatus(Status.OPEN, "").withUsage(1.0, 412_000, 1_000_000, 1L);
+        PanelState own = new PanelState(A, "work", "", "work");
+        PanelState notes = new PanelState(new PanelId("n"), "notes", "", "");
+        AppState state = AppState.initial(List.of(own, notes), List.of(), List.of(work));
+        SessionBar[] bar = new SessionBar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            bar[0] = new SessionBar(i -> { });
+            bar[0].render(state.withFocused(A));
+        });
+        assertThat(button(bar[0], "Session").getText()).as("no dot: the icon shows the state").isEqualTo("work");
+        assertThat(button(bar[0], "Session").getIcon()).isSameAs(Icons.get("claude"));
+        assertThat(button(bar[0], "Session").getToolTipText()).startsWith("Running");
+        assertThat(button(bar[0], "Start or stop the session").isVisible()).isTrue();
+        assertThat(button(bar[0], "Compact the conversation")).as("compact is a command, not a button").isNull();
+        assertThat(button(bar[0], "Model").getText()).isEqualTo("opus ▾");
+        assertThat(button(bar[0], "Effort").getText()).isEqualTo("high ▾");
+        assertThat(label(bar[0], "Context").getText()).isEqualTo("ctx " + Labels.tokens(412_000) + " (41%)").doesNotContain("$");
+
+        SwingUtilities.invokeAndWait(() -> bar[0].render(state.withFocused(notes.id())));
+        assertThat(button(bar[0], "Session").getText()).as("a panel without a session binds one").isEqualTo("no session ▾");
+        for (String name : List.of("Start or stop the session", "Start a new conversation", "Checkpoint", "Model", "Effort")) {
+            assertThat(button(bar[0], name).isVisible()).as(name).isFalse();
+        }
+        assertThat(label(bar[0], "Context").isVisible()).isFalse();
+        assertThat(label(bar[0], "Activity").isVisible()).isFalse();
+    }
+
+    @Test
+    void whatTheSessionDoesChangesNoControlsPlace() throws Exception {
+        SessionState idle = SessionState.closed(SessionSpec.imported("work", "/w", "c1").withCheckpoint("/reflect"))
+                .withStatus(Status.OPEN, "");
+        SessionState busy = idle.withTurns(3, System.currentTimeMillis() - 65_000);
+        PanelState own = new PanelState(A, "work", "", "work");
+        SessionBar[] bar = new SessionBar[1];
+        List<Integer> before = new ArrayList<>();
+        List<Integer> after = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            bar[0] = new SessionBar(i -> { });
+            bar[0].render(AppState.initial(List.of(own), List.of(), List.of(idle)));
+            before.addAll(places(bar[0]));
+            bar[0].render(AppState.initial(List.of(own), List.of(), List.of(busy)));
+            after.addAll(places(bar[0]));
+        });
+        assertThat(label(bar[0], "Activity").getText()).startsWith("working · ").endsWith(" · 2 queued");
+        assertThat(after).as("the chip, plug, new conversation, model, effort and checkpoint stay put").isEqualTo(before);
+        assertThat(button(bar[0], "Start a new conversation").isVisible()).as("it has a conversation").isTrue();
+        assertThat(button(bar[0], "Start a new conversation").isEnabled()).as("greyed out while it runs").isFalse();
+    }
+
+    @Test
+    void theModelAndTheEffortAreMenusThatChangeThem() throws Exception {
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        SessionState x = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").withModel("sonnet"))
+                .withInfo(new SessionInfo("", "claude-opus-4-5", "", "", "", List.of()), 1L);
+        PanelState own = new PanelState(A, "edge", "", "edge");
+        SessionBar[] bar = new SessionBar[1];
+        List<String> checked = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            bar[0] = new SessionBar(intents::add);
+            bar[0].render(AppState.initial(List.of(own), List.of(), List.of(x)));
+            for (Component c : bar[0].modelMenu().getComponents()) {
+                if (c instanceof JCheckBoxMenuItem m && m.isSelected()) {
+                    checked.add(m.getText());
+                }
+            }
+            click(bar[0].modelMenu(), "opus");
+            click(bar[0].effortMenu(), "max");
+        });
+        assertThat(button(bar[0], "Model").getText()).as("named as the session's row names it").isEqualTo(SessionRow.modelName(x) + " ▾").isEqualTo("sonnet ▾");
+        assertThat(button(bar[0], "Model").getToolTipText()).endsWith("click to change");
+        assertThat(checked).containsExactly("sonnet");
+        assertThat(intents).containsExactly(new Intent.SetSessionModel("edge", "opus"), new Intent.SetSessionEffort("edge", "max"));
+        assertThat(button(bar[0], "Effort").getText()).isEqualTo("default ▾");
+    }
+
+    @Test
+    void theContextTurnsPurpleOnceTheCheckpointIsDue() throws Exception {
+        SessionState x = SessionState.closed(SessionSpec.fresh("work", "/w").withCheckpoint("/reflect"))
+                .withStatus(Status.OPEN, "").withUsage(1.0, 700_000, 1_000_000, 1L);
+        PanelState own = new PanelState(A, "work", "", "work");
+        SessionBar[] bar = new SessionBar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            bar[0] = new SessionBar(i -> { });
+            bar[0].render(AppState.initial(List.of(own), List.of(), List.of(x.withReflection(new Reflection(false, true)))));
+        });
+        assertThat(label(bar[0], "Context").getForeground()).isEqualTo(Theme.MUTED);
+        SwingUtilities.invokeAndWait(() -> bar[0].render(AppState.initial(List.of(own), List.of(), List.of(x.withReflection(new Reflection(true, false))))));
+        assertThat(label(bar[0], "Context").getForeground()).as("as the session's row in the sidebar").isEqualTo(Theme.THINKING);
+        assertThat(label(bar[0], "Context").getToolTipText()).endsWith("the checkpoint beside it is due");
+        SwingUtilities.invokeAndWait(() -> bar[0].render(AppState.initial(List.of(own), List.of(),
+                List.of(x.withSpec(x.spec().withCheckpoint("")).withReflection(new Reflection(true, false))))));
+        assertThat(label(bar[0], "Context").getForeground()).as("no checkpoint, nothing due").isEqualTo(Theme.MUTED);
+    }
+
+    @Test
+    void theCheckpointSitsBesideTheContextAndNeitherClearsNorRewritesFromTheBar() throws Exception {
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        SessionState running = SessionState.closed(SessionSpec.fresh("work", "/w").withCheckpoint("/reflect")).withStatus(Status.OPEN, "");
+        PanelState panel = new PanelState(A, "one", "", "work");
+        SessionBar[] bar = new SessionBar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            bar[0] = new SessionBar(intents::add);
+            bar[0].render(AppState.initial(List.of(panel), List.of(), List.of(running)));
+        });
+        assertThat(button(bar[0], "Clear the conversation")).as("the checkpoint clears").isNull();
+        assertThat(button(bar[0], "Rewrite as a document")).as("in the session's menu in the sidebar").isNull();
+        assertThat(button(bar[0], "Checkpoint").getParent()).as("in the context's group").isSameAs(label(bar[0], "Context").getParent());
+        assertThat(label(bar[0], "Context").getText()).as("before a turn reports it").isEqualTo("ctx –");
+        assertThat(label(bar[0], "Context").getToolTipText()).endsWith("the checkpoint beside it falls due at 60%");
+        assertThat(button(bar[0], "Checkpoint").getToolTipText()).contains("then clears the conversation and carries its summary");
+        SwingUtilities.invokeAndWait(() -> button(bar[0], "Checkpoint").doClick());
+        assertThat(intents).containsExactly(new Intent.Checkpoint("work"));
+    }
+
+    @Test
+    void theSessionChipsMenuFollowsTheFocusedPanelsKind() throws Exception {
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        List<String> created = new CopyOnWriteArrayList<>();
+        SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w"));
+        PanelState own = new PanelState(A, "work", "", "work");
+        PanelState notes = new PanelState(new PanelId("n"), "notes", "", "");
+        PanelState doc = new PanelState(new PanelId("d"), "PLAN.md", "", "", true);
+        PanelState attached = new PanelState(new PanelId("e"), "NOTES.md", "", "work", true);
+        AppState state = AppState.initial(List.of(own, notes, doc, attached), List.of(), List.of(work));
+        List<List<String>> menus = new ArrayList<>();
+        SessionBar[] bar = new SessionBar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            bar[0] = new SessionBar(intents::add);
+            bar[0].onNewSession(created::add);
+            for (PanelState p : List.of(own, notes, doc, attached)) {
+                bar[0].render(state.withFocused(p.id()));
+                menus.add(texts(bar[0].sessionMenu()));
+            }
+        });
+        assertThat(menus.get(0)).as("its own panel").containsExactly("work's own panel: removing either removes both");
+        assertThat(menus.get(1)).as("a panel without a session").containsExactly("New session notes…", "Open work  /w");
+        assertThat(menus.get(2)).as("a document").containsExactly("Attach to work  /w");
+        assertThat(menus.get(3)).as("a document attached").containsExactly("Detach from work");
+
+        SwingUtilities.invokeAndWait(() -> {
+            bar[0].render(state.withFocused(notes.id()));
+            click(bar[0].sessionMenu(), "New session notes…");
+        });
+        assertThat(created).containsExactly("notes");
+        SwingUtilities.invokeAndWait(() -> click(bar[0].sessionMenu(), "Open work  /w"));
+        assertThat(intents).singleElement().isInstanceOfSatisfying(Intent.OpenSession.class,
+                o -> assertThat(o.session()).as("its own panel comes forward; this one is not taken").isEqualTo("work"));
+    }
+
+    @Test
+    void aSessionNamedLikeHtmlIsShownAsText() throws Exception {
+        SessionState imported = SessionState.closed(SessionSpec.fresh("<html><b>bold</b>", "/w"));
+        PanelState panel = new PanelState(A, "one", "", imported.name());
+        SessionBar[] bar = new SessionBar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            bar[0] = new SessionBar(i -> { });
+            bar[0].render(AppState.initial(List.of(panel), List.of(), List.of(imported)));
+        });
+        assertThat(button(bar[0], "Session").getText()).contains("bold</b>").doesNotStartWith("<html>");
+    }
+
+    /** The x of each control a session always shows, laid out at a fixed width. */
+    private static List<Integer> places(SessionBar bar) {
+        JComponent root = bar.component();
+        root.setSize(900, 32);
+        layOut(root);
+        List<Integer> xs = new ArrayList<>();
+        for (String name : List.of("Session", "Start or stop the session", "Start a new conversation", "Model", "Effort", "Checkpoint")) {
+            AbstractButton b = button(bar, name);
+            xs.add(SwingUtilities.convertPoint(b.getParent(), b.getLocation(), root).x);
+        }
+        return xs;
+    }
+
+    private static void layOut(Component c) {
+        if (c instanceof Container k) {
+            k.doLayout();
+            for (Component child : k.getComponents()) {
+                layOut(child);
+            }
+        }
+    }
+
+    private static List<String> texts(JPopupMenu menu) {
+        List<String> out = new ArrayList<>();
+        for (Component c : menu.getComponents()) {
+            if (c instanceof JMenuItem m) {
+                out.add(m.getText());
+            }
+        }
+        return out;
+    }
+
+    private static void click(JPopupMenu menu, String text) {
+        for (Component c : menu.getComponents()) {
+            if (c instanceof JMenuItem m && text.equals(m.getText())) {
+                m.doClick();
+                return;
+            }
+        }
+        throw new AssertionError("no item " + text);
+    }
+
+    private static AbstractButton button(SessionBar bar, String name) {
+        List<AbstractButton> out = new ArrayList<>();
+        collect(bar.component(), AbstractButton.class, name, out);
+        return out.isEmpty() ? null : out.getFirst();
+    }
+
+    private static JLabel label(SessionBar bar, String name) {
+        List<JLabel> out = new ArrayList<>();
+        collect(bar.component(), JLabel.class, name, out);
+        assertThat(out).as("a label %s", name).isNotEmpty();
+        return out.getFirst();
+    }
+
+    private static <T extends Component> void collect(Component c, Class<T> type, String name, List<T> out) {
+        if (type.isInstance(c) && name.equals(c.getAccessibleContext().getAccessibleName())) {
+            out.add(type.cast(c));
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                collect(child, type, name, out);
+            }
+        }
+    }
+}

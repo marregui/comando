@@ -1,10 +1,6 @@
 package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.model.PlanUsage;
-import dev.marregui.comando.core.model.SessionSpec;
-import dev.marregui.comando.core.state.SessionInfo;
-import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.Test;
 
@@ -89,20 +85,6 @@ class StatusBarUsageTest {
         SwingUtilities.invokeAndWait(() -> bar.planUsage(PlanUsage.failed("not logged in", 2L)));
         assertThat(bar.kitLabel().isVisible()).isTrue();
         assertThat(bar.kitLabel().getMouseListeners()).hasSize(listeners);
-    }
-
-    @Test
-    void theStatusBarNamesTheModelAsTheSessionRowDoes() {
-        SessionState x = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").withModel("sonnet"))
-                .withInfo(new SessionInfo("", "claude-opus-4-5", "", "", "", List.of()), 1L);
-        assertThat(StatusBar.sessionText(x)).isEqualTo("edge · " + SessionRow.modelName(x)).isEqualTo("edge · sonnet");
-    }
-
-    @Test
-    void theSessionItemShowsTheContextAndNoCost() {
-        SessionState x = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").withModel("opus").withEffort("high"))
-                .withUsage(4.12, 412_000, 1_000_000, 1L);
-        assertThat(StatusBar.sessionText(x)).isEqualTo("edge · opus · high · ctx " + Labels.tokens(412_000) + " (41%)").doesNotContain("$");
     }
 
     @Test

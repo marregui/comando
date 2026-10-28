@@ -62,22 +62,22 @@ class PanelTextsTest {
     @Test
     void theCheckpointButtonIsPurpleOnlyWhenDue() {
         SessionState x = SessionState.closed(States.WORK);
-        assertThat(EditorPanel.checkpointIcon(x)).isEqualTo("checkpoint");
-        assertThat(EditorPanel.checkpointTip(x))
+        assertThat(SessionBar.checkpointIcon(x)).isEqualTo("checkpoint");
+        assertThat(SessionBar.checkpointTip(x))
                 .isEqualTo("Checkpoint: sends /reflect, then clears the conversation and carries its summary into the next prompt");
         SessionState due = x.withReflection(Reflection.FRESH.afterTurn(700_000L, 1_000_000L));
-        assertThat(EditorPanel.checkpointIcon(due)).isEqualTo("checkpoint-due");
-        assertThat(EditorPanel.checkpointTip(due)).isEqualTo("Checkpoint due, context past 60%: sends /reflect, then clears the conversation"
+        assertThat(SessionBar.checkpointIcon(due)).isEqualTo("checkpoint-due");
+        assertThat(SessionBar.checkpointTip(due)).isEqualTo("Checkpoint due, context past 60%: sends /reflect, then clears the conversation"
                 + " and carries its summary into the next prompt");
-        assertThat(EditorPanel.checkpointTip(x.withSpec(x.spec().withCarried("the summary"))))
+        assertThat(SessionBar.checkpointTip(x.withSpec(x.spec().withCarried("the summary"))))
                 .isEqualTo("Checkpoint: sends /reflect; the last checkpoint's summary still waits for the next prompt");
     }
 
     @Test
     void aBusySessionShowsHowLongItWorksAndWhatIsQueued() {
         SessionState x = SessionState.closed(States.WORK).withTurns(2, System.currentTimeMillis() - 5_000);
-        assertThat(EditorPanel.busyText(x)).contains("working · ").endsWith(" · 1 queued");
-        assertThat(EditorPanel.busyText(SessionState.closed(States.WORK))).isEmpty();
+        assertThat(SessionBar.busyText(x)).contains("working · ").endsWith(" · 1 queued");
+        assertThat(SessionBar.busyText(SessionState.closed(States.WORK))).isEmpty();
     }
 
     @Test
@@ -85,12 +85,12 @@ class PanelTextsTest {
         long started = System.currentTimeMillis() - 5_000;
         BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
         SessionState one = SessionState.closed(States.WORK).withTasks(List.of(agent), started);
-        assertThat(EditorPanel.busyText(one)).startsWith("  waiting on review agent · ").endsWith(" s");
+        assertThat(SessionBar.busyText(one)).startsWith("  waiting on review agent · ").endsWith(" s");
         SessionState two = one.withTasks(List.of(agent, new BackgroundTask("b2", "local_bash", "build in the background", 0L)), started);
-        assertThat(EditorPanel.busyText(two)).startsWith("  waiting on 2 background tasks · ");
-        assertThat(StatusBar.sessionText(two)).endsWith(" · waiting on 2 background tasks");
-        assertThat(EditorPanel.counting(one)).as("the tick moves a waiting chip's time on, as a working one's").isTrue();
-        assertThat(EditorPanel.counting(SessionState.closed(States.WORK))).isFalse();
+        assertThat(SessionBar.busyText(two)).startsWith("  waiting on 2 background tasks · ");
+        assertThat(SessionBar.chipText(two)).as("the chip keeps still; the activity is a label of its own").isEqualTo("work");
+        assertThat(SessionBar.counting(one)).as("the tick moves a waiting chip's time on, as a working one's").isTrue();
+        assertThat(SessionBar.counting(SessionState.closed(States.WORK))).isFalse();
     }
 
     @Test

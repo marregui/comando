@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-25 | accepted; its rule for which panel the rewrite acts on amended by [record 88](0088-a-session-and-its-panel-share-a-name.md) | Miguel and Claude |
+| 2026-10-25 | accepted; its rule for which panel the rewrite acts on amended by [record 88](0088-a-session-and-its-panel-share-a-name.md); the header's buttons moved to the session bar by [record 105](0105-a-session-bar-under-the-lower-panel.md) | Miguel and Claude |
 
 ## 1. Context
 

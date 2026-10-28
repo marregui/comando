@@ -5,12 +5,10 @@ import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.KeyText;
-import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -46,9 +44,10 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /**
- * The standing notice on the left, which takes the user to what it is about when clicked and opens the recent notices
- * on a right click (or a click, when it is about nothing to go to); Claude's and Codex's plan usage, the focused panel's
- * session, connection and running work on the right.
+ * The window's status: the standing notice on the left, which takes the user to what it is about when clicked and
+ * opens the recent notices on a right click (or a click, when it is about nothing to go to); the kit, Claude's and
+ * Codex's plan usage and the work running across every panel and session on the right. The focused panel's session is
+ * in the {@link SessionBar}, its connection in the panel's header (record 105).
  */
 public final class StatusBar {
 
@@ -59,8 +58,6 @@ public final class StatusBar {
 
     private final JPanel root = new JPanel(new BorderLayout());
     private final JLabel notice = new JLabel(" ");
-    private final JLabel session = new JLabel();
-    private final JLabel connection = new JLabel();
     private final JLabel work = new JLabel();
     /** Claude's plan usage, then Codex's, each a label of its own. */
     private final Usage claudeUsage = new Usage(PlanUsage.CLAUDE, "Claude Code's /usage");
@@ -106,8 +103,6 @@ public final class StatusBar {
         right.add(kit);
         right.add(claudeUsage.label);
         right.add(codexUsage.label);
-        right.add(session);
-        right.add(connection);
         right.add(work);
         kit.setVisible(false);
         kit.setForeground(Theme.MUTED);
@@ -146,9 +141,7 @@ public final class StatusBar {
         });
         root.add(notice, BorderLayout.CENTER);
         root.add(right, BorderLayout.EAST);
-        for (JLabel l : new JLabel[]{session, connection, work}) {
-            l.setForeground(Theme.MUTED);
-        }
+        work.setForeground(Theme.MUTED);
     }
 
     public JComponent component() {
@@ -410,11 +403,6 @@ public final class StatusBar {
                 ? " · click to go there, right-click for recent notices" : " · click for recent notices")));
         notice.setForeground(color(n.level()));
         notice.setIcon(n.text().isEmpty() ? null : Icons.get(icon(n.level()), 14));
-        PanelState p = s.focusedPanel();
-        session.setText(s.session(p.session()).map(x -> Plain.text(sessionText(x))).orElse(""));
-        session.setIcon(p.session().isEmpty() ? null : Icons.get("claude", 14));
-        connection.setText(s.connection(p.connection()).map(c -> c.name() + " " + EditorPanel.dot(c.status())).orElse(""));
-        connection.setIcon(p.connection().isEmpty() ? null : Icons.get("database", 14));
         int running = 0;
         for (SqlRun r : s.runs()) {
             if (r.status().isActive()) {
@@ -445,27 +433,5 @@ public final class StatusBar {
         }
         work.setText(w.toString());
         work.setForeground(s.approvals().isEmpty() ? Theme.MUTED : Theme.ATTENTION);
-    }
-
-    /** The focused panel's session: name, model, effort, context used and, during a turn, what it does; no cost. */
-    static String sessionText(SessionState x) {
-        StringBuilder sb = new StringBuilder(x.name());
-        String model = SessionRow.modelName(x);
-        if (!model.equals("default")) {
-            sb.append(" · ").append(model);
-        }
-        if (!x.spec().effort().isEmpty()) {
-            sb.append(" · ").append(x.spec().effort());
-        }
-        if (x.contextTokens() > 0) {
-            sb.append(" · ctx ").append(Labels.tokens(x.contextTokens()))
-                    .append(x.contextWindow() > 0 ? " (" + Math.min(100, x.contextTokens() * 100 / x.contextWindow()) + "%)" : "");
-        }
-        if (x.isBusy()) {
-            sb.append(" · ").append(TabStatus.working(x));
-        } else if (x.isWaiting()) {
-            sb.append(" · ").append(TabStatus.waiting(x));
-        }
-        return sb.toString();
     }
 }

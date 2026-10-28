@@ -655,11 +655,21 @@ public final class SessionsSidebar {
 
     /** One item per model, the session's own checked; a choice applies now to a running session and is saved. */
     List<JMenuItem> modelItems(SessionState s) {
+        return modelItems(s, intents);
+    }
+
+    List<JMenuItem> effortItems(SessionState s) {
+        return effortItems(s, intents);
+    }
+
+    /** The model menu's items, the sidebar's and the session bar's. */
+    static List<JMenuItem> modelItems(SessionState s, IntentSink intents) {
         String current = SessionRow.modelName(s);
         return SessionSpec.MODELS.stream().map(m -> choice(m, m.equals(current), () -> intents.dispatch(new Intent.SetSessionModel(s.name(), m)))).toList();
     }
 
-    List<JMenuItem> effortItems(SessionState s) {
+    /** The effort menu's items, the sidebar's and the session bar's. */
+    static List<JMenuItem> effortItems(SessionState s, IntentSink intents) {
         String current = SessionRow.effortName(s);
         return SessionSpec.EFFORTS.stream().map(e -> choice(e, e.equals(current), () -> intents.dispatch(new Intent.SetSessionEffort(s.name(), e)))).toList();
     }
@@ -888,12 +898,12 @@ public final class SessionsSidebar {
         } else {
             m.add(item("Start", "play", () -> intents.dispatch(new Intent.StartSession(s.name()))));
         }
-        if (EditorPanel.showsFresh(s)) {
+        if (SessionBar.showsFresh(s)) {
             m.add(tipped(item("Start a new conversation", "fresh", () -> intents.dispatch(new Intent.StartFresh(s.name()))), SessionRow.freshTip(s)));
         }
-        if (EditorPanel.showsCheckpoint(s)) {
-            m.add(tipped(item(s.reflection().due() ? "Checkpoint, due" : "Checkpoint", EditorPanel.checkpointIcon(s),
-                    () -> intents.dispatch(new Intent.Checkpoint(s.name()))), EditorPanel.checkpointTip(s)));
+        if (SessionBar.showsCheckpoint(s)) {
+            m.add(tipped(item(s.reflection().due() ? "Checkpoint, due" : "Checkpoint", SessionBar.checkpointIcon(s),
+                    () -> intents.dispatch(new Intent.Checkpoint(s.name()))), SessionBar.checkpointTip(s)));
         }
         if (s.status().isUsable()) {
             m.add(tipped(item("Compact the conversation", "compact", () -> intents.dispatch(new Intent.SessionCommand(s.name(), SessionSpec.COMPACT_COMMAND))),

@@ -240,7 +240,7 @@ final class SessionRow extends IconRow {
      */
     static String titleHtml(SessionState s, boolean open, boolean focused, int approvals, String newestCli) {
         String older = olderCli(s, newestCli) ? "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>↑</span>" : "";
-        String due = s.reflection().due() && EditorPanel.showsCheckpoint(s)
+        String due = s.reflection().due() && SessionBar.showsCheckpoint(s)
                 ? "&nbsp;<span style='color:" + Theme.hex(Theme.THINKING) + "'>" + (contextText(s).isEmpty() ? "◆" : contextText(s)) + "</span>" : "";
         String badge = approvals == 0 ? "" : "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>⚑" + approvals + "</span>";
         String name = focused ? "<b style='color:" + Theme.hex(Theme.tint().body) + "'>" : open ? "<b>" : "<b style='color:" + Theme.hex(Theme.MUTED) + "'>";

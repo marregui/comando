@@ -43,15 +43,15 @@ name: the two are one, renamed together (refused while the session runs) and rem
 Any number of document panels may be attached to a session
 ([record 38](adr/0038-a-session-has-one-panel.md), [record 88](adr/0088-a-session-and-its-panel-share-a-name.md)).
 
-- **Opening a session** (a double click on its row, Open in a panel, the dialog's Open its panel, the header chip)
+- **Opening a session** (a double click on its row, Open in a panel, the dialog's Open its panel, the session bar's chip)
   brings its own panel forward, open or closed. A session that has none (a conversation imported and never opened)
   takes a panel of comando's own without a session that bears its name, or else gets a new panel titled with its name
   and the focused panel's connection. A new session opens its own panel the same way.
 - **The session chip's menu** depends on the panel's kind. On a session's own panel it says so and offers nothing
   else. On a panel without a session it offers "New session ‹title›…" (the session dialog, named after the panel) and
   lists the sessions, whose own panels a choice brings forward. On a document it offers "Attach to ‹session›" or
-  "Detach from ‹session›". A selection run in an attached document goes to its session, and the session buttons in
-  its header act on that session.
+  "Detach from ‹session›". A selection run in an attached document goes to its session, and while the document is
+  focused the session bar shows that session and its buttons act on it.
 - **A new panel** (⌘T) gets the focused panel's connection and no session. A title already taken, or a session's
   name, gets a number.
 - **Renaming** a panel: double-click its tab, Rename… on its row under the sessions (a panel without a session), or
@@ -73,15 +73,25 @@ Any number of document panels may be attached to a session
   to the top. Until the reader scrolls, the heading stays at the top as pictures and diagrams arrive above it.
   Front matter at the top of a page shows as a table of its keys and values.
 - **Running** SQL opens the panel's connection when closed; a prompt starts its session when stopped.
-- **The header** shows the session, then the connection, as chips with a status dot and a plug (green when running or
-  connected) that starts or stops, connects or disconnects. Next to the session's plug: a fresh start, shown while the
-  session is stopped with a conversation (a new conversation starts; the old one stays importable); a checkpoint, shown
-  while the session has a checkpoint command, `/reflect` by default; and compact (`/compact`), shown while the session
-  runs ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)). The checkpoint turns
-  purple once a turn ended with the context at 60% of the window or more and the command was not sent since; after a
-  checkpoint the context has to drop below 60% and cross it again before the next one is due. What a checkpoint does
-  once its turn has finished is in [§1.4](#14-the-checkpoint).
-  On the right, icons without a button's shape: Browser (HTML: the page in the browser), Preview or Edit (Markdown),
+- **The session bar**, under the lower panel, shows the focused panel's session
+  ([record 105](adr/0105-a-session-bar-under-the-lower-panel.md)). On the left: its chip, the session's state icon
+  (as on its row: orange running, grey stopped, faint starting, red failed) with its name and ⎇ branch, whose menu is
+  the session chip's menu above; a plug (green when running) that starts or stops it; a fresh start, shown once the
+  session has a conversation and usable while it is stopped (a new conversation starts; the old one stays
+  importable); then what the session does, "working · 12 s", last, so that nothing moves as it changes. On the right:
+  the model and the effort, each a menu that changes it now and keeps it, as the session's menu in the sidebar does;
+  the context ("ctx 412k (41%)", "ctx –" until a turn reports it); and right after it the checkpoint, shown while the
+  session has a checkpoint command, `/reflect` by default
+  ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)). The context and the
+  checkpoint turn purple together once a turn ended with the context at 60% of the window or more and the command was
+  not sent since; after a checkpoint the context has to drop below 60% and cross it again before the next one is due.
+  What a checkpoint does once its turn has finished is in [§1.4](#14-the-checkpoint). Compact has no button: the
+  palette's "Compact the conversation", the session's menu and `/compact` do it. A panel without a session shows only
+  the chip, "no session ▾".
+- **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the kit,
+  the plans' usage and the work running in every session and query on the right.
+- **The header** shows the connection as a chip with a status dot and a plug (green when connected) that connects or
+  disconnects. On the right, icons without a button's shape: Browser (HTML: the page in the browser), Preview or Edit (Markdown),
   Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A production connection frames the panel in
   red ([record 57](adr/0057-a-light-editor-and-a-header-of-icons.md)).
 - **The theme** is dark throughout: the window is FlatLaf's dark look (`FlatMacDarkLaf` on macOS, `FlatDarkLaf`

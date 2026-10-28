@@ -123,9 +123,6 @@ public final class Workspace {
     /** Opens a file a panel's link names; the shell's own open. */
     private Consumer<Path> opener = f -> {
     };
-    /** Opens the session dialog on a new session named as given: a panel's "New session ‹title›…". */
-    private Consumer<String> newSession = name -> {
-    };
     /** Panels removed because their file was deleted outside comando, with the file's name. EDT only. */
     private final Map<PanelId, String> deletedFiles = new HashMap<>();
     private boolean rendering;
@@ -436,11 +433,6 @@ public final class Workspace {
     /** Whether a panel's shell runs a program: a tab closed with others stays open while it does. */
     public void onRunsProgram(Predicate<PanelId> runs) {
         runsProgram = runs;
-    }
-
-    /** How a panel's "New session ‹title›…" opens the session dialog, with the panel's title as the name. */
-    public void onNewSession(Consumer<String> open) {
-        newSession = open;
     }
 
     /** How a link followed in a panel's rendered Markdown opens its file. */
@@ -782,7 +774,6 @@ public final class Workspace {
      * waiting tab's tooltip, and the end of the grace a returned background task has to start its reading turn.
      */
     public void tick() {
-        panels.values().forEach(EditorPanel::tick);
         if (shown == null) {
             return;
         }
@@ -984,7 +975,6 @@ public final class Workspace {
                         }
                         opener.accept(f);
                     });
-                    view.onNewSession(name -> newSession.accept(name));
                     panels.put(p.id(), view);
                     tabs.insertTab(title(p, false), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
                 } else if (tabs.indexOfComponent(view) != i) {

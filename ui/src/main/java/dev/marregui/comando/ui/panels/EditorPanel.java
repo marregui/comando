@@ -2,8 +2,6 @@ package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
-import dev.marregui.comando.core.model.PanelId;
-import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.schema.Schema;
@@ -11,15 +9,12 @@ import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.PanelState;
-import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
-import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.format.KeyText;
-import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.layout.ShrinkingRow;
 import dev.marregui.comando.ui.kit.overlay.Flash;
@@ -35,7 +30,6 @@ import dev.marregui.comando.ui.widgets.editor.CommandEditor;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 import javax.swing.BorderFactory;
-import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JMenuItem;
 import javax.swing.JPanel;
@@ -65,14 +59,13 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
-import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * One editor panel: a header with its session and connection, and the command editor. A panel's own text is SQL and
- * prompts; a panel opened on a file, such as a document from the Files tab, is coloured as the file's language, and a
- * Markdown one opens rendered. Such a panel switches between the editor and the rendered text with its header button,
+ * One editor panel: a header with its connection and its controls, and the command editor; its session is shown in the
+ * session bar under the lower panel (record 105). A panel's own text is SQL and prompts; a panel opened on a file, such
+ * as a document from the Files tab, is coloured as the file's language, and a Markdown one opens rendered. Such a panel switches between the editor and the rendered text with its header button,
  * which names the other view: Preview while editing, Edit while previewing. An HTML file opens as its text, with a
  * button that opens it in the browser. A link to a file on this machine, of any kind, double-clicked in the rendered
  * text, opens that file in a panel (record 94). A production connection frames the panel in red.
@@ -83,17 +76,6 @@ public final class EditorPanel extends JPanel {
     private final CommandEditor editor = new CommandEditor();
     private final JButton connection = chip();
     private final JButton connectionToggle = iconButton();
-    private final JButton session = chip();
-    private final JButton sessionToggle = iconButton();
-    /** Starts a stopped session on a new conversation; shown only while there is a conversation to leave. */
-    private final JButton sessionFresh = iconButton();
-    /**
-     * Sends the session's checkpoint command; once its turn has finished, the conversation is cleared and the turn's
-     * summary goes in front of the next prompt. Shown only while the session has one.
-     */
-    private final JButton sessionCheckpoint = iconButton();
-    /** Sends {@code /compact} from this panel; shown while the session runs. */
-    private final JButton sessionCompact = iconButton();
     private final JButton run = iconButton();
     private final JButton stop = iconButton();
     /** Empties the panel's own text in one step ⌘Z takes back; a document, a file of its own, is never emptied from here. */
@@ -113,9 +95,6 @@ public final class EditorPanel extends JPanel {
     private PanelState panel;
     private AppState state;
     private BiConsumer<Path, String> opener = (f, heading) -> {
-    };
-    /** Opens the session dialog on a new session with the name given; the shell's. */
-    private Consumer<String> newSession = name -> {
     };
     private final JScrollPane renderedScroll = preview.scroll();
     /** A heading the preview scrolls to once it is laid out; null when none waits. EDT only. */
@@ -139,28 +118,13 @@ public final class EditorPanel extends JPanel {
         clear.getAccessibleContext().setAccessibleName("Clear");
         browser.setIcon(Icons.get("browser"));
         connectionToggle.getAccessibleContext().setAccessibleName("Connect or disconnect");
-        sessionToggle.getAccessibleContext().setAccessibleName("Start or stop the session");
         JPanel header = new JPanel(new BorderLayout());
         header.setBorder(BorderFactory.createEmptyBorder(4, Theme.GAP, 4, Theme.GAP));
-        // on a narrow panel the chips' names give way, ending in "…"; the plugs and buttons beside them stay whole
-        JPanel left = new JPanel(new ShrinkingRow(2, 64, Set.of(session, connection)));
-        // the session first, as a panel is mostly for it; the database second
-        left.add(session);
-        left.add(sessionToggle);
-        left.add(sessionFresh);
-        left.add(sessionCheckpoint);
-        sessionFresh.setIcon(Icons.get("fresh"));
-        sessionFresh.getAccessibleContext().setAccessibleName("Start a new conversation");
-        sessionCheckpoint.setIcon(Icons.get("checkpoint"));
-        sessionCheckpoint.getAccessibleContext().setAccessibleName("Checkpoint");
-        left.add(sessionCompact);
-        sessionCompact.setIcon(Icons.get("compact"));
-        sessionCompact.getAccessibleContext().setAccessibleName("Compact the conversation");
-        sessionCompact.setToolTipText(SessionRow.COMPACT_TIP);
-        left.add(Box.createHorizontalStrut(Theme.PAD));
+        // on a narrow panel the chip's name gives way, ending in "…"; the plug and the buttons stay whole
+        JPanel left = new JPanel(new ShrinkingRow(2, 64, Set.of(connection)));
         left.add(connection);
         left.add(connectionToggle);
-        // icons close together, as the session's at the left
+        // icons close together, as the connection's at the left
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
         run.setToolTipText(KeyText.of("Run the selection or block (⌘⏎); to Claude ⌘⇧⏎, as SQL ⌥⏎"));
         stop.setToolTipText(KeyText.of("Stop the running SQL or interrupt the session (⌘.)"));
@@ -237,14 +201,7 @@ public final class EditorPanel extends JPanel {
         });
         showClear();
         connection.addActionListener(e -> connectionMenu().show(connection, 0, connection.getHeight()));
-        session.addActionListener(e -> sessionMenu().show(session, 0, session.getHeight()));
         connectionToggle.addActionListener(e -> toggleConnection());
-        sessionToggle.addActionListener(e -> toggleSession());
-        // the panel as rendered last, not as made: a session bound since is the one they act on
-        sessionFresh.addActionListener(e -> state.session(this.panel.session()).ifPresent(x -> intents.dispatch(new Intent.StartFresh(x.name()))));
-        sessionCheckpoint.addActionListener(e -> state.session(this.panel.session()).ifPresent(x -> intents.dispatch(new Intent.Checkpoint(x.name()))));
-        sessionCompact.addActionListener(e -> state.session(this.panel.session())
-                .ifPresent(x -> intents.dispatch(new Intent.SessionCommand(x.name(), SessionSpec.COMPACT_COMMAND))));
     }
 
     /** The tooltip of the sessions sidebar's menu item that has a session rewrite its panel. */
@@ -607,35 +564,6 @@ public final class EditorPanel extends JPanel {
             connectionToggle.setVisible(false);
             setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
         }
-        // session chip
-        if (x.isPresent()) {
-            SessionState ss = x.get();
-            session.setIcon(Icons.get("claude"));
-            session.setText(chipText(ss));
-            session.setToolTipText(Labels.shortPath(ss.spec().workDir()) + " · " + ss.status()
-                    + (ss.error().isEmpty() ? "" : " · " + ss.error()));
-            sessionToggle.setVisible(true);
-            // the plug, as on the session's row in the sidebar: green while running, grey while not; a ▶ here would read as Run
-            sessionToggle.setIcon(Icons.get(ss.status().isUsable() ? "plug" : "unplug"));
-            sessionToggle.setToolTipText(ss.status().isUsable() ? "Connected; click to disconnect (stops the session)"
-                    : "Disconnected; click to connect (starts the session)");
-            sessionFresh.setVisible(showsFresh(ss));
-            sessionFresh.setToolTipText(SessionRow.freshTip(ss));
-            sessionCheckpoint.setVisible(showsCheckpoint(ss));
-            sessionCheckpoint.setEnabled(ss.status() != Status.CLOSING);
-            sessionCheckpoint.setIcon(Icons.get(checkpointIcon(ss)));
-            sessionCheckpoint.setToolTipText(checkpointTip(ss));
-            // as on the session's row: compact only while it runs
-            sessionCompact.setVisible(ss.status().isUsable());
-        } else {
-            sessionFresh.setVisible(false);
-            sessionCheckpoint.setVisible(false);
-            sessionCompact.setVisible(false);
-            session.setIcon(Icons.get("claude"));
-            session.setText("no session ▾");
-            session.setToolTipText("Bind a session");
-            sessionToggle.setVisible(false);
-        }
         editor.setSchema(p.connection().isEmpty() ? Schema.EMPTY : schemas.of(p.connection()));
         // with no open database, the text is prompts and notes: nothing is coloured as SQL
         editor.sqlLive(c.map(cs -> cs.status().isUsable()).orElse(false));
@@ -665,71 +593,9 @@ public final class EditorPanel extends JPanel {
         }
     }
 
-    /** The session chip: name, branch, status dot and what it does; a name from a stored conversation is shown as text. */
-    private static String chipText(SessionState ss) {
-        String branch = ss.branch().isEmpty() ? "" : "  ⎇ " + ss.branch();
-        return Plain.text(ss.name() + branch + "  " + dot(ss.status()) + busyText(ss));
-    }
-
-    /** "working · 12 s" while a turn runs; the shell's one-second tick refreshes it. */
-    static String busyText(SessionState ss) {
-        if (ss.isWaiting()) {
-            long since = ss.waitingSinceMillis();
-            return "  " + TabStatus.waiting(ss) + (since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "");
-        }
-        if (!ss.isBusy()) {
-            return "";
-        }
-        String what = TabStatus.working(ss);
-        long since = ss.turnStartedMillis();
-        int queued = ss.pendingTurns() - 1;
-        return "  " + what + (since > 0 ? " · " + Labels.elapsed(System.currentTimeMillis() - since) : "")
-                + (queued > 0 ? " · " + queued + " queued" : "");
-    }
-
-    /** Whether the session chip shows a time that the shell's one-second tick moves on: working, or waiting. */
-    static boolean counting(SessionState ss) {
-        return ss.isBusy() || ss.isWaiting();
-    }
-
-    /** Refreshes what changes with time alone: the session chip's elapsed time, working or waiting. */
-    public void tick() {
-        if (state != null) {
-            state.session(panel.session()).filter(EditorPanel::counting).ifPresent(ss -> session.setText(chipText(ss)));
-        }
-    }
-
     private void toggleConnection() {
         state.connection(panel.connection()).ifPresent(c -> intents.dispatch(c.status().isUsable()
                 ? new Intent.CloseConnection(c.name()) : new Intent.OpenConnection(c.name())));
-    }
-
-    /** The fresh-start button shows while the session is stopped and has a conversation to leave behind. */
-    static boolean showsFresh(SessionState ss) {
-        return !ss.status().isUsable() && ss.status() != Status.CLOSING && !ss.spec().claudeSessionId().isEmpty();
-    }
-
-    static boolean showsCheckpoint(SessionState ss) {
-        return !ss.spec().checkpoint().isEmpty();
-    }
-
-    /** Grey, purple once the session is due its checkpoint: the context filled past the threshold since the last one. */
-    static String checkpointIcon(SessionState ss) {
-        return ss.reflection().due() ? "checkpoint-due" : "checkpoint";
-    }
-
-    /** What the checkpoint sends and what follows: the clear, or nothing while the last one's summary still waits. */
-    static String checkpointTip(SessionState ss) {
-        String send = "sends " + Clip.keepStart(ss.spec().checkpoint(), 40) + (ss.spec().carried().isEmpty()
-                ? ", then clears the conversation and carries its summary into the next prompt"
-                : "; the last checkpoint's summary still waits for the next prompt");
-        return ss.reflection().due() ? "Checkpoint due, context past " + Math.round(Reflection.THRESHOLD * 100) + "%: " + send
-                : "Checkpoint: " + send;
-    }
-
-    private void toggleSession() {
-        state.session(panel.session()).ifPresent(x -> intents.dispatch(x.status().isUsable()
-                ? new Intent.StopSession(x.name()) : new Intent.StartSession(x.name())));
     }
 
     private JPopupMenu connectionMenu() {
@@ -751,52 +617,6 @@ public final class EditorPanel extends JPanel {
         return m;
     }
 
-    /**
-     * The session chip's menu, by the panel's kind (record 88). A session's own panel names itself as such: the two are
-     * one, removed together. A document attached to a session detaches from it; one attached to none lists the sessions
-     * to attach to. A panel of comando's own without a session offers a new session with its name, and lists the
-     * sessions, whose own panels a choice brings forward.
-     */
-    JPopupMenu sessionMenu() {
-        JPopupMenu m = new JPopupMenu();
-        if (!panel.session().isEmpty()) {
-            if (panel.document()) {
-                JMenuItem detach = new JMenuItem(Plain.text("Detach from " + panel.session()));
-                detach.setToolTipText("The document stays open; its selection no longer runs in the session");
-                detach.addActionListener(e -> intents.dispatch(new Intent.BindSession(panel.id(), "")));
-                m.add(detach);
-            } else {
-                m.add(new JMenuItem(Plain.text(panel.session() + "'s own panel: removing either removes both"))).setEnabled(false);
-            }
-            return m;
-        }
-        if (!panel.document()) {
-            JMenuItem create = new JMenuItem(Plain.text("New session " + panel.title() + "…"), Icons.get("add"));
-            create.setToolTipText("A session with this panel's name, this panel its own");
-            create.addActionListener(e -> newSession.accept(panel.title()));
-            m.add(create);
-            if (!state.sessions().isEmpty()) {
-                m.addSeparator();
-            }
-        }
-        for (SessionState x : state.sessions()) {
-            String verb = panel.document() ? "Attach to " : "Open ";
-            JMenuItem item = new JMenuItem(Plain.text(verb + x.name() + "  " + Labels.shortPath(x.spec().workDir())), Icons.get("claude"));
-            item.addActionListener(e -> intents.dispatch(panel.document() ? new Intent.BindSession(panel.id(), x.name())
-                    : new Intent.OpenSession(x.name(), panel.id(), PanelId.random())));
-            m.add(item);
-        }
-        if (state.sessions().isEmpty() && panel.document()) {
-            m.add(new JMenuItem("No sessions; New session… or Import stored conversations… in the Sessions tab's menu adds one")).setEnabled(false);
-        }
-        return m;
-    }
-
-    /** What "New session ‹title›…" opens: the session dialog with the name filled in. */
-    public void onNewSession(Consumer<String> open) {
-        newSession = open;
-    }
-
     static String dot(Status s) {
         return switch (s) {
             case OPEN -> "●";
@@ -815,14 +635,15 @@ public final class EditorPanel extends JPanel {
         };
     }
 
-    private static JButton chip() {
+    /** A chip: a name with an icon, a button that opens its menu; the session bar's too. */
+    static JButton chip() {
         JButton b = new JButton();
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setFocusable(false);
         return b;
     }
 
-    private static JButton iconButton() {
+    static JButton iconButton() {
         JButton b = new JButton();
         b.putClientProperty("JButton.buttonType", "toolBarButton");
         b.setFocusable(false);

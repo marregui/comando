@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-15 | accepted | Miguel and Claude |
+| 2026-10-15 | accepted; the header's text moved to the session bar by [record 105](0105-a-session-bar-under-the-lower-panel.md) | Miguel and Claude |
 
 ## 1. Context
 

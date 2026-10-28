@@ -103,9 +103,9 @@ class CheckpointClearUiTest {
                     .until(() -> !session(loop).isBusy() && session(loop).spec().claudeSessionId().equals("fake-1"));
             Awaitility.await("the Session tab shows it").atMost(Duration.ofSeconds(10)).until(() -> transcript().contains("pong 1"));
 
-            // the gesture: a click on the panel's Checkpoint button
+            // the gesture: a click on the session bar's Checkpoint button, the focused panel's session (record 105)
             EditorPanel view = editor();
-            SwingUtilities.invokeAndWait(() -> button(view, "Checkpoint").doClick());
+            SwingUtilities.invokeAndWait(() -> button(SwingUtilities.getWindowAncestor(view), "Checkpoint").doClick());
             Awaitility.await("checkpointed, cleared, the summary carried").atMost(Duration.ofSeconds(20)).untilAsserted(() -> {
                 SessionState x = session(loop);
                 assertThat(List.of(x.pendingTurns(), x.spec().claudeSessionId(), x.spec().carried()))
