@@ -9,8 +9,12 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Paras] reuses the views of paragraphs that did not change while text streams.
+/// - a streamed code block keeps the layouts of its whole lines and lays out the new ones
 class ParasTest {
 
+    /// When a code block grows from a partial third line to four whole lines, the first two lines keep their layout
+    /// objects, the third is laid out again, and the fourth is added with its text.
     @Test
     void aStreamedCodeBlockKeepsTheLayoutsOfItsWholeLinesAndLaysOutTheNewOnes() throws Exception {
         SwingUtilities.invokeAndWait(() -> {

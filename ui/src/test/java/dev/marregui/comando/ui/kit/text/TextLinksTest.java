@@ -4,8 +4,16 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [TextLinks] finds note, web, source and Markdown links in text, in order.
+/// - Every kind of link is found in text order with its span and label.
+/// - A note link carries its heading and label; an empty note is no link.
+/// - A web address ends before trailing punctuation but keeps a bracket it opened, and its port.
+/// - Markdown links are read only when the text is not parsed as Markdown.
+/// - [TextLinks#at] gives the link covering an index, end exclusive.
 class TextLinksTest {
 
+    /// A note, a URL and a `path:line` in one sentence come back in order; the note's span is its brackets and its label
+    /// its name.
     @Test
     void findsEveryKindOfLinkInOrder() {
         String text = "See [[feedback-verification-discipline]], https://example.org/a and core/Reducer.java:42.";
@@ -16,6 +24,8 @@ class TextLinksTest {
         assertThat(note.label()).isEqualTo("feedback-verification-discipline");
     }
 
+    /// `[[name#heading|label]]` keeps the heading in the href and uses the label; without a label it reads
+    /// `name › heading`; blank and empty brackets are no link.
     @Test
     void aNoteLinkNamesItsHeadingAndItsLabel() {
         TextLinks.Ref labelled = TextLinks.refs("[[notes#2-install|the install]]", false).getFirst();
@@ -27,6 +37,7 @@ class TextLinksTest {
         assertThat(TextLinks.refs("[[ ]] and [[]]", false)).as("no name, no link").isEmpty();
     }
 
+    /// A closing bracket and period after a URL are dropped, a bracket pair inside it is kept, and a port stays part of it.
     @Test
     void aWebAddressEndsBeforeThePunctuationAfterIt() {
         assertThat(TextLinks.refs("(see https://x.y/z).", false)).extracting(TextLinks.Ref::href).containsExactly("https://x.y/z");
@@ -36,6 +47,8 @@ class TextLinksTest {
                 .as("a port is not a line").containsExactly("http://h:8080/x");
     }
 
+    /// With Markdown links on, `[text](target)` yields its target and an image is skipped; off, the path and URL inside
+    /// are found as source and web links.
     @Test
     void markdownLinksOnlyInTextNotParsedAsMarkdown() {
         String text = "read [the guide](docs/guide.md#setup) or [site](https://example.org), not ![pic](a.png)";
@@ -45,6 +58,7 @@ class TextLinksTest {
                 .containsExactly(SourceLinks.SCHEME + "docs/guide.md", "https://example.org");
     }
 
+    /// An index inside the note finds it; an index before it or at its end finds null.
     @Test
     void theLinkAtAnIndex() {
         String text = "x [[a]] y";

@@ -8,8 +8,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/// [Transcript] publishes one writer's ordered blocks safely to concurrent readers.
+///
+/// - Appends grow the log and replacements advance its version.
+/// - Readers see a block or a clear boundary, never an unwritten slot.
+/// - Readers racing a clear complete without an indexing failure.
 class TranscriptTest {
 
+    /// [Transcript] assigns sequential append indexes, retains the 200-block size after replacement, and increments
+    /// its version so views can observe an in-place block change.
     @Test
     void appendGrowsAndReplaceBumpsVersion() {
         Transcript t = new Transcript();
@@ -23,6 +30,8 @@ class TranscriptTest {
         assertThat(t.size()).isEqualTo(200);
     }
 
+    /// [Transcript] publishes each of 200,000 appended blocks before its size, so a concurrent reader never finds a
+    /// null block below the size it observed.
     @Test
     void readerNeverSeesAHoleBelowSize() throws Exception {
         Transcript t = new Transcript();
@@ -47,6 +56,8 @@ class TranscriptTest {
         assertThat(failure.get()).isNull();
     }
 
+    /// [Transcript#get] returns null for a non-negative index retained from before `clear`, while negative indexes
+    /// remain invalid, allowing an old reader to stop safely.
     @Test
     void aReaderHoldingASizeFromBeforeAClearGetsNull() {
         Transcript t = new Transcript();
@@ -60,6 +71,8 @@ class TranscriptTest {
         assertThatThrownBy(() -> t.get(-1)).isInstanceOf(IndexOutOfBoundsException.class);
     }
 
+    /// [Transcript] lets a reader stop at null while 20,000 clears replace the backing array, without exposing an
+    /// exception from a size-and-get race.
     @Test
     void aReaderRacingClearsNeverFails() throws Exception {
         Transcript t = new Transcript();

@@ -23,6 +23,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ViewTabs] keeps a placement's views as tabs after the fixed ones, one widget per view.
+/// - a view replaced in place by another type renders in the same tab, still selected, the old widget unmounted
 class ViewTabsTest {
 
     /** A widget that remembers what it rendered and whether it was unmounted. */
@@ -47,10 +49,9 @@ class ViewTabsTest {
         }
     }
 
-    /**
-     * A session shows a markdown view titled Results, then a table view with the same title: the reducer replaces it
-     * in place, and the tab shows the table in the same place, still selected, the markdown widget released.
-     */
+    /// A markdown view titled Results replaced by a table view with the same title keeps its id; the tab shows the new
+    /// table widget in the same place, still selected, and the markdown widget is unmounted. Rendering the same state twice
+    /// creates no second widget.
     @Test
     void aViewReplacedInPlaceByAnotherTypeRendersInTheSameTab() throws Exception {
         Reducer reducer = new Reducer(new FakeClock());

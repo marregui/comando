@@ -27,7 +27,12 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The sub-agent tail at its edges: close with a read under way, titles kept by followed sub-agents, restarts, the cut. */
+/// The sub-agent tail of [ClaudeAdapter] and [SubagentFiles#render] at their edges.
+/// - a cut inside or after a CRLF line ending keeps every line after it whole
+/// - a file at the size limit renders whole; one byte over, it is cut with a notice
+/// - a stopped session's sub-agents are not followed; restarted, they are followed again
+/// - a followed sub-agent keeps its title against another with the same description, past the title map's 256 entries
+/// - an open under way when `close()` returns sends nothing afterward
 class SubagentTailEdgesTest {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
@@ -91,6 +96,8 @@ class SubagentTailEdgesTest {
 
     // ---- the cut, with CRLF lines
 
+    /// Rendering the last bytes of a CRLF file from just after a line's `\r\n`, from between its `\r` and `\n`, and from on
+    /// its `\r` each drops the cut line and keeps the following lines whole, under the "longer than" notice.
     @Test
     void aCutBetweenCrAndLfAndACutAfterCrLfKeepTheWholeLine() throws IOException {
         String first = text("FIRST");
@@ -110,6 +117,8 @@ class SubagentTailEdgesTest {
         assertThat(md3).doesNotContain("FIRST").contains("SECOND", "THIRD");
     }
 
+    /// A CRLF file rendered with a limit equal to its size has no notice and both lines; one byte under its size it starts
+    /// with the notice and keeps only the last line.
     @Test
     void sizeAtTheLimitAndOneOverWithCrLf() throws IOException {
         String first = text("FIRST");
@@ -123,6 +132,8 @@ class SubagentTailEdgesTest {
 
     // ---- the live flag across a stop and a restart
 
+    /// A sub-agent shown while its session is stopped is not followed (`followedSubagents()` is 0); shown again after the
+    /// session restarts, it is followed (1).
     @Test
     void aStoppedThenRestartedSessionIsFollowedAgainAndNotInBetween() throws Exception {
         live();
@@ -143,10 +154,8 @@ class SubagentTailEdgesTest {
 
     // ---- the title map's eviction
 
-    /**
-     * A followed sub-agent re-opened keeps its title, but the map evicts by first insertion: after 256 other titles, its
-     * title is free while its tail still runs, and another sub-agent with its description takes the same title.
-     */
+    /// A followed sub-agent re-opened between 256 other sub-agents keeps its tail; a later sub-agent with the same
+    /// description gets a different title, though the title map, which evicts by first insertion, has dropped the first's.
     @Test
     void aLiveTailsTitleIsNotGivenToAnotherSubagent() throws Exception {
         live();
@@ -169,10 +178,8 @@ class SubagentTailEdgesTest {
 
     // ---- close while an open is under way
 
-    /**
-     * close() says a read under way sends nothing after it returns. A read that blocks past the 2 s wait (a FIFO stands
-     * for a slow file system) sends its view after close, then fails to schedule its tail and reports a false failure.
-     */
+    /// With the tail's thread blocked opening a FIFO past the 2 s wait, a `close()` followed by releasing the FIFO sends no
+    /// further intent, neither a late view nor a false failure, and the tail thread ends.
     @Test
     void anOpenUnderWayWhenCloseReturnsSendsNothingAfterward() throws Exception {
         live();

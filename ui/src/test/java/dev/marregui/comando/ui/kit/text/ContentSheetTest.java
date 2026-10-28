@@ -22,11 +22,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * The content palettes painted, to {@code build/snapshots/content.png} (record 101): a Java snippet in the editors' colours, the
- * terminal's sixteen colours, an added and a removed line, the plot series; every tint on the default ground, then every
- * ground in the default tint. The sheet to look at when the generator changes.
- */
+/// [ContentPalette], painted to `build/snapshots/content.png` (record 101): a Java snippet in the editors' colours, the
+/// terminal's sixteen colours, an added and a removed line, the plot series; every tint on the default ground, then every
+/// ground in the default tint. The sheet to look at when the generator changes.
+/// - Every tint and every ground yields a content palette that paints without failing.
 class ContentSheetTest {
 
     private static final String CODE = """
@@ -58,6 +57,8 @@ class ContentSheetTest {
         });
     }
 
+    /// Painting one panel per tint on graphite and one per ground in treasure, through [Highlighter#runs] and
+    /// [ContentPalette#ansi], completes and writes a non-empty PNG.
     @Test
     void everyTintAndEveryGroundPaintsItsOwnContentPalette() throws Exception {
         Tint[] tints = Tint.values();

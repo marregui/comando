@@ -7,8 +7,13 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Diffs] builds unified diffs of tool edits and classifies their lines.
+/// - Only the first two lines are headers; a removed `--` or added `++` line is content.
+/// - Each edit tool maps to the text it replaces and writes; other tools map to nothing.
 class DiffsTest {
 
+    /// In a diff of SQL whose removed line is a `--` comment and whose added line starts `++`, lines 0 and 1 are headers
+    /// and the `---` and `+++` content lines are removed and added.
     @Test
     void removedSqlCommentsAreContentNotHeaders() {
         List<String> lines = Diffs.unified("q.sql", "-- old comment\nSELECT 1", "++ added\nSELECT 1");
@@ -22,6 +27,8 @@ class DiffsTest {
         assertThat(Diffs.isAdded(added, lines.get(added))).isTrue();
     }
 
+    /// [Diffs#edit] maps Edit to old and new strings, Write to empty and content, MultiEdit to its edits joined with
+    /// `…` separators, and Bash to null.
     @Test
     void eachEditToolMapsToTheTextItReplacesAndWrites() {
         assertThat(Diffs.edit("Edit", Json.parse("{\"file_path\":\"/a\",\"old_string\":\"x\",\"new_string\":\"y\"}")))

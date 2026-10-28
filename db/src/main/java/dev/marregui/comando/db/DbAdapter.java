@@ -2,6 +2,7 @@ package dev.marregui.comando.db;
 
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.port.DatabasePort;
@@ -49,7 +50,8 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     private final ConcurrentHashMap<String, AtomicLong> changes = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, Lane> laneOfRequest = new ConcurrentHashMap<>();
     private final ScheduledExecutorService timer;
-    private final ExecutorService testers = Executors.newVirtualThreadPerTaskExecutor();
+    /** Connection tests: one blocking connect per gesture, named, interrupted and waited for at close. */
+    private final Errands testers = new Errands("db");
     private final ExecutorService cancellers = Executors.newVirtualThreadPerTaskExecutor();
     private volatile boolean closed;
 
@@ -130,7 +132,7 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
         if (closed) {
             return;
         }
-        testers.execute(() -> {
+        testers.start("db-test-" + spec.name(), () -> {
             try (Connection c = DriverManager.getConnection(spec.jdbcUrl(), Lane.driverProperties(spec))) {
                 boolean ok = c.isValid(10);
                 sink.dispatch(new Intent.ConnectionTested(spec.name(), ok, ok ? "reachable" : "not valid"));
@@ -339,7 +341,7 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
         }
         lanes.clear();
         timer.shutdownNow();
-        testers.shutdownNow();
+        testers.close();
         cancellers.shutdown();
     }
 }

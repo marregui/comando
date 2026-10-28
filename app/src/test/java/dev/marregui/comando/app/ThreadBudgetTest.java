@@ -18,12 +18,12 @@ import java.util.TreeMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * comando's own platform threads stay within their budget: the reducer and the watchdog, plus one reader per
- * running session (a process pipe keeps an operating-system thread even when read from a virtual thread). Strands,
- * errands and timers add none. The JVM's, the toolkit's, the libraries' and the JDK's process reapers are not
- * comando's and are left out by name. Opens the real window, so this runs in {@code ./gradlew :app:uiTest}.
- */
+/// comando's own platform threads stay within their budget. Opens the real window, so this runs in
+/// `./gradlew :app:uiTest`.
+/// - the reducer and the watchdog, plus one reader per running session, since a process pipe keeps an operating-system
+///   thread even when read from a virtual thread
+/// - strands, errands and timers add none
+/// - the JVM's, the toolkit's, the libraries' and the JDK's process reapers are not comando's and are left out by name
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class ThreadBudgetTest {
 
@@ -41,6 +41,9 @@ class ThreadBudgetTest {
     @TempDir
     Path home;
 
+    /// With the window open and sessions running, comando's platform threads number at most the reducer, the watchdog
+    /// and one pipe reader per session, the virtual threads' carriers stay bounded while the sessions idle, and none of
+    /// comando's platform threads is left after the window closes.
     @Test
     void comandosOwnThreadsAreTheReducerTheWatchdogAndOneReaderPerRunningSession() throws Exception {
         Path claude = home.resolve("fake-claude.sh");

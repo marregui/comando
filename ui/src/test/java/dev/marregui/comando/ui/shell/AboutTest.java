@@ -15,8 +15,15 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [About] draws the About card from its Markdown file, filled with this run's facts.
+/// - The file words the card; this run fills its facts, links and footer.
+/// - A fact left empty is not shown; an unknown placeholder stays as written.
+/// - The card paints at retina scale with rounded corners, and a clicked link goes where it says.
+/// - A value too long is cut in its middle.
 class AboutTest {
 
+    /// [About#load] gives the name, tagline, the five fact rows with the version, runtime, CLI version and the data folder
+    /// shortened to `~`, the three links, and a footer with the current year.
     @Test
     void theFileWordsTheCardAndThisRunFillsItsFacts() {
         Map<String, String> facts = About.facts("2.0.0", Path.of(System.getProperty("user.home"), ".comando"), "2.1.302");
@@ -32,6 +39,8 @@ class AboutTest {
         assertThat(c.footer()).isEqualTo("Made by hand by Miguel Arregui, " + Year.now().getValue() + ".");
     }
 
+    /// [About#parse] drops a row whose fact is empty, keeps an unknown `{placeholder}` literally, takes the last paragraph as
+    /// the footer, and gives no footer when there is only a tagline.
     @Test
     void aFactLeftEmptyIsNotShownAndAnUnknownPlaceholderStaysAsWritten() {
         About.Content c = About.parse("""
@@ -53,6 +62,8 @@ class AboutTest {
         assertThat(About.parse("# x\n\nOnly a tagline.\n", Map.of()).footer()).as("one paragraph is the tagline alone").isEmpty();
     }
 
+    /// Painted at scale 2, the card is opaque inside and transparent at its rounded corner; it has three link bounds, a
+    /// point inside the second hits it and a corner hits none, and a click follows `comando:tutorial`.
     @Test
     void theCardPaintsAtRetinaScaleAndALinkClickedGoesWhereItSays() {
         List<String> followed = new CopyOnWriteArrayList<>();
@@ -79,11 +90,18 @@ class AboutTest {
         assertThat(followed).containsExactly("comando:tutorial");
     }
 
+    /// [About.Card#fit] keeps both ends of a long path around `…` within the width, and leaves a short value whole.
     @Test
     void aValueTooLongIsCutInItsMiddle() {
         String path = "/Users/someone/Library/Application Support/comando/a/very/deep/folder/of/data";
         String cut = About.Card.fit(path, 160);
         assertThat(cut).contains("…").startsWith("/Users").endsWith("data").hasSizeLessThan(path.length());
         assertThat(About.Card.fit("2.0.0", 160)).isEqualTo("2.0.0");
+    }
+
+    /// A width too narrow for even one character on each side of the cut leaves only the ellipsis.
+    @Test
+    void aWidthTooNarrowForAnyTextLeavesTheEllipsis() {
+        assertThat(About.Card.fit("/Users/someone/data", 1)).isEqualTo("…");
     }
 }

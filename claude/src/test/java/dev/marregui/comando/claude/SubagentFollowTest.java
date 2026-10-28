@@ -27,12 +27,14 @@ import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * When a followed sub-agent view stops: at the end the session's stream reports (a foreground sub-agent's result, a
- * background one's task notification), at its meta file's {@code finished}, when the session stops, or after the idle
- * backstop; never because the file was quiet a while, as a sub-agent writes nothing while a tool runs or the model
- * answers. The fake CLI emits the events Claude Code 2.1.302 sends.
- */
+/// When [ClaudeAdapter] stops following a sub-agent view: at the end the session's stream reports (a foreground
+/// sub-agent's result, a background one's task notification), at its meta file's `finished`, when the session stops, or
+/// after the idle backstop; never because the file was quiet a while, as a sub-agent writes nothing while a tool runs or
+/// the model answers. The fake CLI emits the events the CLI 2.1.302 sends.
+/// - a foreground sub-agent is followed through a quiet spell and stops at its result
+/// - a background one is followed past its launch and stops at its task notification
+/// - a meta file marked `finished`, a stopped session and the idle backstop each end the following, and the view says so
+/// - a sub-agent that ended before its view opened is shown once, as ended
 class SubagentFollowTest {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
@@ -130,6 +132,8 @@ class SubagentFollowTest {
         }
     }
 
+    /// A foreground sub-agent's tab opens as `FOLLOWING` in its session with its transcript, stays followed through three
+    /// periods without growth, and stops being followed once its result arrives, its transcript holding every step.
     @Test
     void aForegroundSubagentIsFollowedThroughAQuietSpellAndStopsAtItsResult() throws Exception {
         stream("agent:fg");
@@ -154,6 +158,8 @@ class SubagentFollowTest {
         assertThat(adapter.followedSubagents()).isZero();
     }
 
+    /// A background sub-agent is still followed after the launch result, and stops being followed at its task notification
+    /// with its later text in the transcript.
     @Test
     void aBackgroundSubagentIsFollowedPastItsLaunchAndStopsAtItsTaskNotification() throws Exception {
         stream("agent:bg");
@@ -174,6 +180,7 @@ class SubagentFollowTest {
         assertThat(adapter.followedSubagents()).isZero();
     }
 
+    /// Writing `"finished":true` to the meta file refreshes the view as `ENDED` and stops the following.
     @Test
     void aSubagentWhoseMetaFileSaysFinishedStopsBeingFollowed() throws Exception {
         stream("agent:mf");
@@ -188,6 +195,8 @@ class SubagentFollowTest {
         assertThat(adapter.followedSubagents()).isZero();
     }
 
+    /// A sub-agent whose end the stream reported before its view opened is shown as `ENDED` with its whole transcript and is
+    /// never followed.
     @Test
     void aSubagentThatEndedBeforeItsViewOpenedIsShownOnceAsEnded() throws Exception {
         stream("agent:early");
@@ -202,6 +211,8 @@ class SubagentFollowTest {
         assertThat(adapter.followedSubagents()).isZero();
     }
 
+    /// With the idle backstop at two periods, a sub-agent that writes nothing is refreshed as `STOPPED_IDLE` and no longer
+    /// followed.
     @Test
     void theIdleBackstopStopsAndSaysSo() throws Exception {
         adapter.tailIdleMillis = 2 * PERIOD_MILLIS;
@@ -214,6 +225,7 @@ class SubagentFollowTest {
         assertThat(adapter.followedSubagents()).isZero();
     }
 
+    /// Stopping the session refreshes its sub-agent view as `STOPPED_SESSION` and ends the following.
     @Test
     void aStoppedSessionsViewSaysItIsNotUpdatedAnyMore() throws Exception {
         stream("agent:st");

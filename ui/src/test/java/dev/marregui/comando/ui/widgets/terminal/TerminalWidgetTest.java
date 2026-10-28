@@ -26,10 +26,20 @@ import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [TerminalWidget]: a panel's shell, started on demand, with its exit bar, input gate, job check, zoom and find.
+/// - before its shell starts the area says where and how; the exit bar names the directory of the restart
+/// - text held for a shell that closes never reaches the next; text sent before the shell is ready arrives in order
+/// - the job in front fails closed: unreadable `ps` output is an unchecked job; a shell in front is no job
+/// - a job is named as typed, a script by its own name, clipped
+/// - zoom stays in bounds and resets; find counts case-insensitively and searches again after new output
+/// - only a foreground job counts as running
+/// - on macOS ⌘A selects the terminal buffer
 class TerminalWidgetTest {
 
     private static final String HOME = System.getProperty("user.home");
 
+    /// An unstarted terminal names its directory, with `~` for home, and the key that starts it; a new directory updates
+    /// the text.
     @Test
     void beforeItsShellStartsTheAreaSaysWhereAndHow() {
         TerminalWidget t = new TerminalWidget(Path.of(HOME, "lane2"));
@@ -39,6 +49,7 @@ class TerminalWidgetTest {
         assertThat(t.emptyText()).isEqualTo(KeyText.of("Shell in /srv/x — click or press ⌃3 to start"));
     }
 
+    /// After the shell exits, the restart button names the directory set since.
     @Test
     void theExitBarNamesTheDirectoryOfTheRestart() {
         TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge"));
@@ -47,6 +58,7 @@ class TerminalWidgetTest {
         assertThat(t.restartButtonText()).isEqualTo("Restart in ~/lane2");
     }
 
+    /// The exit bar reads the directory source when it shows, so a rebinding no render reached is used for the restart.
     @Test
     void theExitBarAndRestartReadTheDirectorySourceWhenTheBarShows() {
         TerminalWidget t = new TerminalWidget(Path.of(HOME, "edge"));
@@ -58,7 +70,7 @@ class TerminalWidgetTest {
         assertThat(t.directory()).isEqualTo(Path.of(HOME, "lane2"));
     }
 
-    /** ⌃⏎ into a silent shell, then a restart: the held text must not run in the new shell. */
+    /// Text sent before the shell settles waits; a restart drops it, and the new shell's screen never shows it.
     @Test
     void textWaitingWhenTheShellClosesNeverReachesTheNextShell(@TempDir Path dir) throws Exception {
         AtomicReference<TerminalWidget> t = new AtomicReference<>();
@@ -91,18 +103,22 @@ class TerminalWidgetTest {
 
     // ---- what the shell runs in front: fails closed
 
+    /// Empty `ps` output, or a line without a command, reports [TerminalWidget#UNCHECKED_JOB].
     @Test
     void whenPsFailsOrPrintsWhatCannotBeReadTheJobIsUnchecked() {
         assertThat(TerminalWidget.foregroundJob(4242, "/bin/zsh", args -> List.of())).contains(TerminalWidget.UNCHECKED_JOB);
         assertThat(TerminalWidget.foregroundJob(4242, "/bin/zsh", args -> List.of("4242"))).contains(TerminalWidget.UNCHECKED_JOB);
     }
 
+    /// A shell process whose command became `ssh` by `exec` reports `ssh`, also from a full path.
     @Test
     void aShellReplacedByExecReportsTheProgram() {
         assertThat(TerminalWidget.foregroundJob(4242, "/bin/zsh", args -> List.of("4242 4242 ssh"))).contains("ssh");
         assertThat(TerminalWidget.foregroundJob(4242, "/bin/zsh", args -> List.of("4242 4242 /usr/bin/ssh"))).contains("ssh");
     }
 
+    /// A login shell's `-zsh`, a full shell path, another shell started by `exec` and a shell under its install path are
+    /// no job.
     @Test
     void aShellInFrontRunsNoJobWhateverItsNameLooksLike() {
         assertThat(TerminalWidget.foregroundJob(4242, "/bin/zsh", args -> List.of("4242 4242 -zsh"))).isEmpty();
@@ -111,6 +127,8 @@ class TerminalWidgetTest {
         assertThat(TerminalWidget.foregroundJob(4242, "/opt/homebrew/bin/fish", args -> List.of("4242 4242 fish"))).isEmpty();
     }
 
+    /// [TerminalWidget#jobName] drops an interpreter in front of a script, keeps a shell given an option, keeps a program's
+    /// arguments, and clips at [TerminalWidget#JOB_CHARS] with `…`.
     @Test
     void aJobIsNamedAsTypedAScriptByItsOwnNameNotItsInterpreters() {
         assertThat(TerminalWidget.jobName("/bin/sh /usr/bin/man cat")).isEqualTo("man cat");
@@ -121,6 +139,8 @@ class TerminalWidgetTest {
         assertThat(TerminalWidget.jobName("java " + "-D".repeat(60))).hasSize(TerminalWidget.JOB_CHARS).endsWith("…");
     }
 
+    /// The job in front is named from its process group's leader, a script such as `man` rather than `sh` or `less`; with
+    /// the leader gone, another member of the group names it.
     @Test
     void theJobInFrontIsReadFromItsGroupsLeader() throws Exception {
         // the test's own process, given a child, stands for a shell with a job; ps is told what that job is
@@ -142,6 +162,7 @@ class TerminalWidgetTest {
         }
     }
 
+    /// A foreground group whose members cannot be listed is reported as "a program".
     @Test
     void aJobInFrontWhoseNameCannotBeReadIsStillAJob() {
         long self = ProcessHandle.current().pid();
@@ -152,6 +173,7 @@ class TerminalWidgetTest {
         })).contains("a program");
     }
 
+    /// Zoom adds points, stops at 8 pt, and reset returns to the base size.
     @Test
     void zoomChangesTheFontSizeWithinBoundsAndResets() {
         TerminalWidget t = new TerminalWidget(Path.of(HOME));
@@ -164,6 +186,7 @@ class TerminalWidgetTest {
         assertThat(t.fontSize()).isEqualTo(base);
     }
 
+    /// The widget's component names the widget as its capability owner, and find without a shell finds nothing.
     @Test
     void zoomAndFindReachTheTerminalThroughItsRoot() {
         TerminalWidget t = new TerminalWidget(Path.of(HOME));
@@ -171,10 +194,7 @@ class TerminalWidgetTest {
         assertThat(t.find("anything", true)).isZero(); // no shell yet: nothing to search
     }
 
-    /**
-     * The pseudo-terminal echoes what is written at once, even while the shell is still busy: text written
-     * before the shell is ready shows above its first output. Written after, it shows below.
-     */
+    /// Two lines sent before a slow shell prints its first output appear after that output, in order.
     @Test
     void textSentBeforeTheShellIsReadyArrivesAfterItsFirstOutputInOrder(@TempDir Path dir) throws Exception {
         AtomicReference<TerminalWidget> t = new AtomicReference<>();
@@ -200,6 +220,8 @@ class TerminalWidgetTest {
         }
     }
 
+    /// Find counts both matches of a lower-case word for an upper-case query, and zoom and clear find on a live terminal do
+    /// not fail.
     @Test
     void findCountsMatchesInTheBufferIgnoringCaseAndZoomRefontsALiveTerminal(@TempDir Path dir) throws Exception {
         AtomicReference<TerminalWidget> t = new AtomicReference<>();
@@ -226,6 +248,8 @@ class TerminalWidgetTest {
         }
     }
 
+    /// With no new output, find steps through the same results; after new output on the same screen it counts the new
+    /// matches and steps on from the match the user was on.
     @Test
     void findNextSearchesAgainOnceTheOutputChanged(@TempDir Path dir) throws Exception {
         AtomicReference<TerminalWidget> t = new AtomicReference<>();
@@ -304,12 +328,13 @@ class TerminalWidgetTest {
         return n;
     }
 
+    /// A terminal that never started a shell reports no running job.
     @Test
     void aTerminalWithoutAShellRunsNoJob() {
         assertThat(new TerminalWidget(Path.of(HOME)).hasRunningJob()).isFalse();
     }
 
-    /** A job the shell runs in front counts; one it put in the background, like a prompt's git daemon, does not. */
+    /// In an interactive shell, a job started with `&` is not a foreground job; a job run in front is, by its command.
     @Test
     void onlyAForegroundJobCountsAsRunning(@TempDir Path dir) throws Exception {
         Pty pty = Pty.start(List.of("/bin/sh", "-i"), dir, 80, 24);
@@ -345,7 +370,7 @@ class TerminalWidgetTest {
         }
     }
 
-    /** JediTerm ships Select All with no key; on macOS the terminal takes ⌘A for it, as the Edit menu promises. */
+    /// With macOS keys, Select All is bound to ⌘A; elsewhere it has no key so Ctrl+A stays the shell's.
     @Test
     void commandASelectsTheTerminalBufferOnMacOs() {
         var keys = new TerminalWidget.Settings(() -> 13).getSelectAllActionPresentation().getKeyStrokes();

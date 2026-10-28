@@ -17,7 +17,11 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** What every {@code claude} comando starts gets from the kit root: its folder, and the kit's memory through {@code --settings}. */
+/// [RootLaunch] supplies kit-root environment and memory settings to child processes.
+///
+/// - names a non-default root in the environment
+/// - merges the memory directory into settings JSON
+/// - exempts the root-upgrade session from kit settings
 class RootLaunchTest {
 
     private static final KitRoot.Manifest KIT = new KitRoot.Manifest("marregui", "BRAIN", List.of(), List.of(), List.of(), List.of());
@@ -28,6 +32,8 @@ class RootLaunchTest {
         return env;
     }
 
+    /// A non-default root adds its configuration directory and memory directory before remaining command arguments.
+    /// The input carries a root distinct from the user's ordinary configuration directory.
     @Test
     void aRootElsewhereIsNamedToEveryProcessAndItsKitsMemoryIsSet(@TempDir Path tmp) throws Exception {
         Path user = tmp.resolve(".claude");
@@ -41,6 +47,8 @@ class RootLaunchTest {
         assertThat(launch.toString()).isEqualTo("CLAUDE_CONFIG_DIR=" + root);
     }
 
+    /// The ordinary user folder leaves configuration inherited, while a root without a kit adds no settings.
+    /// The inherited launch also retains an unrelated environment entry unchanged.
     @Test
     void theUsersOwnFolderNeedsNoConfigDirAndWithoutAKitNoSettings(@TempDir Path tmp) {
         Path user = tmp.resolve(".claude");
@@ -55,6 +63,8 @@ class RootLaunchTest {
         assertThat(env(RootLaunch.INHERIT, Map.of("A", "b"))).isEqualTo(Map.of("A", "b"));
     }
 
+    /// Existing settings preserve their model property while the root's memory directory replaces the prior value.
+    /// The supplied JSON contains both a retained key and an obsolete memory path.
     @Test
     void settingsComandoAlreadyPassesAreMergedWithTheKits(@TempDir Path tmp) throws Exception {
         Path user = tmp.resolve(".claude");
@@ -66,6 +76,8 @@ class RootLaunchTest {
                 "{\"model\":\"haiku\",\"autoMemoryDirectory\":\"" + user.resolve("kit/BRAIN/MEMORY") + "\"}"));
     }
 
+    /// The upgrade session at the root removes configuration and memory settings so it uses the user's folder.
+    /// A different work directory and ordinary session retain the original launch unchanged.
     @Test
     void theSessionThatUpgradesTheKitRunsOnTheUsersOwnFolder(@TempDir Path tmp) {
         Path user = tmp.resolve(".claude");
@@ -80,6 +92,8 @@ class RootLaunchTest {
         assertThat(launch.forSession("work", root.toString())).isSameAs(launch);
     }
 
+    /// A started session process receives the selected root through its environment.
+    /// The child shell prints the configuration variable after the process callback signals exit.
     @Test
     void aSessionsProcessGetsTheRootInItsEnvironment(@TempDir Path tmp) throws Exception {
         Path user = tmp.resolve(".claude");

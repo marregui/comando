@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.kit.text;
 
+import dev.marregui.comando.ui.kit.async.Debouncer;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -8,20 +9,17 @@ import dev.marregui.comando.ui.kit.theme.Tint;
 import javax.swing.JEditorPane;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 import javax.swing.UIManager;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.AttributeSet;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.Element;
 import javax.swing.text.ElementIterator;
-import javax.swing.text.View;
 import javax.swing.text.html.HTML;
 import javax.swing.text.html.HTMLDocument;
 import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.StyleSheet;
 import java.awt.Font;
-import java.awt.Dimension;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -70,11 +68,10 @@ public class HtmlPane extends JEditorPane {
     /** The width the page's pictures and diagrams were sized for; -1 when it has none. */
     private int sizedFor = -1;
     /** Sizes the pictures again once a resize settles: a page rendered before it was laid out had no width to fit. */
-    private final Timer resized = new Timer(150, e -> redraw(this.markdown));
+    private final Debouncer resized = new Debouncer(150, () -> redraw(this.markdown));
 
     public HtmlPane() {
         setContentType("text/html");
-        resized.setRepeats(false);
         OwnStyles kit = new OwnStyles();
         kit.setStyleSheet(styles());
         setEditorKit(kit);
@@ -92,7 +89,7 @@ public class HtmlPane extends JEditorPane {
                     scrollToHeading(anchored);
                 }
                 if (sizedFor >= 0 && Math.abs(getWidth() - sizedFor) > RESIZE_SLACK) {
-                    resized.restart();
+                    resized.request();
                 }
             }
         });
@@ -329,7 +326,7 @@ public class HtmlPane extends JEditorPane {
 
     /** Runs a re-size waiting for the resize to settle, now; false when none waits. For tests. */
     boolean flushResize() {
-        if (!resized.isRunning()) {
+        if (!resized.pending()) {
             return false;
         }
         resized.stop();
@@ -557,29 +554,4 @@ public class HtmlPane extends JEditorPane {
         setText("<html><body>" + bodyHtml + "</body></html>");
     }
 
-    private boolean fitWidth;
-
-    /** Sizes the pane to its parent's width and its content's height, for panes in a vertical list. */
-    public void setFitWidth(boolean fit) {
-        fitWidth = fit;
-    }
-
-    @Override
-    public Dimension getPreferredSize() {
-        if (fitWidth && getParent() != null && getParent().getWidth() > 0) {
-            Insets pi = getParent().getInsets();
-            int w = Math.max(50, getParent().getWidth() - pi.left - pi.right);
-            View root = getUI().getRootView(this);
-            Insets in = getInsets();
-            root.setSize(w - in.left - in.right, Integer.MAX_VALUE);
-            int h = (int) Math.ceil(root.getPreferredSpan(View.Y_AXIS)) + in.top + in.bottom;
-            return new Dimension(w, h);
-        }
-        return super.getPreferredSize();
-    }
-
-    @Override
-    public Dimension getMaximumSize() {
-        return fitWidth ? new Dimension(Integer.MAX_VALUE, getPreferredSize().height) : super.getMaximumSize();
-    }
 }

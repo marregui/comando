@@ -2,18 +2,17 @@ package dev.marregui.comando.claude;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.view.Clip;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -29,6 +28,8 @@ final class PlanUsageReader {
     private static final Pattern WINDOW = Pattern.compile(
             "^Current (session|week)(?: \\(([^)]*)\\))?: (\\d+(?:\\.\\d+)?)% used(?: · resets (.+))?$");
     static final Duration TIMEOUT = Duration.ofSeconds(30);
+    /** The most of the command's answer kept: its JSON is a few kilobytes. */
+    static final int MAX_OUT = 1 << 20;
 
     private PlanUsageReader() {
     }
@@ -39,40 +40,19 @@ final class PlanUsageReader {
     }
 
     static PlanUsage read(String executable, RootLaunch launch, Path workDir, ObjectMapper json, Duration timeout) {
-        Path out = null;
-        Process p = null;
         try {
-            out = Files.createTempFile("comando-usage", ".json");
-            ProcessBuilder pb = new ProcessBuilder(launch.argv(List.of(executable, "--safe-mode", "-p", "/usage", "--no-session-persistence",
-                    "--output-format", "json")))
-                    .redirectOutput(out.toFile())
-                    .redirectError(ProcessBuilder.Redirect.DISCARD);
-            launch.environment(pb.environment());
-            if (workDir != null && Files.isDirectory(workDir)) {
-                pb.directory(workDir.toFile());
-            }
-            p = pb.start();
-            p.getOutputStream().close();
-            if (!p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+            Processes.Result r = Processes.run(launch.argv(List.of(executable, "--safe-mode", "-p", "/usage", "--no-session-persistence",
+                    "--output-format", "json")), launch::environment, workDir != null && Files.isDirectory(workDir) ? workDir : null, null,
+                    timeout, MAX_OUT);
+            if (r.timedOut()) {
                 return PlanUsage.failed("'claude -p /usage' did not answer within " + timeout.toMillis() + " ms", System.currentTimeMillis());
             }
-            return parse(Files.readString(out, StandardCharsets.UTF_8), System.currentTimeMillis(), json);
+            return parse(r.out(), System.currentTimeMillis(), json);
         } catch (IOException e) {
             return PlanUsage.failed("cannot run '" + executable + "': " + e.getMessage(), System.currentTimeMillis());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return PlanUsage.failed("interrupted", System.currentTimeMillis());
-        } finally {
-            if (p != null && p.isAlive()) {
-                p.destroyForcibly();
-            }
-            if (out != null) {
-                try {
-                    Files.deleteIfExists(out);
-                } catch (IOException e) {
-                    // a temporary file left behind; the system cleans its temporary folder
-                }
-            }
         }
     }
 

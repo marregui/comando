@@ -2,6 +2,7 @@ package dev.marregui.comando.tools;
 
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.result.Formats;
 import dev.marregui.comando.core.view.ViewSpec;
 
 import java.io.IOException;
@@ -186,8 +187,7 @@ final class FolderTree {
 
     private static String size(Path p) {
         try {
-            long b = Files.size(p);
-            return b < 1024 ? b + " B" : b < 1024 * 1024 ? (b / 1024) + " kB" : (b / (1024 * 1024)) + " MB";
+            return Formats.bytes(Files.size(p));
         } catch (IOException e) {
             return "";
         }

@@ -15,7 +15,13 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** A sub-agent card's live status, the running sub-agents, revealing a card and the link to its stored conversation. */
+/// [TranscriptCanvas]'s sub-agent cards: live status, the running list, revealing a card and the link to its transcript.
+/// - a card counts the tools its blocks call, nested ones too, and names the latest, clipped
+/// - the latest tool's summary follows its input when it arrives later
+/// - a finished card says how long it ran and how many tools it called; a failed one keeps its own mark
+/// - running sub-agents are top-level, in start order, and leave when they finish
+/// - reveal opens a card and scrolls it into view
+/// - the header link opens the card's transcript on a double click without toggling it
 @ExtendWith(OnEdt.class)
 class AgentStatusTest {
 
@@ -48,6 +54,8 @@ class AgentStatusTest {
         return new Block.ToolCall(id, name, input, "", Block.ToolStatus.RUNNING, parent);
     }
 
+    /// A running card counts its two tool calls, ignoring text blocks, and reads "running · 12 s · 2 tools" with the
+    /// latest tool and its input.
     @Test
     void aSubagentCardCountsTheToolsItsBlocksCallAndNamesTheLatest() {
         add(agent("a1", "survey", ""));
@@ -63,6 +71,8 @@ class AgentStatusTest {
         assertThat(canvas.cardStatus("a1")).isEqualTo("running · 12 s · 2 tools · Read /w/docs/ui.md");
     }
 
+    /// A nested call and its tools count in the outer card as well, the outer card names the innermost latest tool, and
+    /// only the outer call is a running top-level sub-agent.
     @Test
     void aNestedSubagentAndItsToolsCountInEveryCardAroundThem() {
         add(agent("a1", "outer", ""));
@@ -77,6 +87,7 @@ class AgentStatusTest {
                 .as("a nested sub-agent is not a top-level one").containsExactly("a1");
     }
 
+    /// An update that adds a tool's input changes the latest tool's summary without counting another call.
     @Test
     void theLatestToolsSummaryFollowsItsInputWhenItArrivesLater() {
         add(agent("a1", "survey", ""));
@@ -89,6 +100,7 @@ class AgentStatusTest {
         assertThat(canvas.toolCount("a1")).as("an update is not another call").isEqualTo(1);
     }
 
+    /// A long command is clipped to `Items.ToolItem.LAST_CHARS` characters ending in `…`.
     @Test
     void aLongLatestToolIsClipped() {
         add(agent("a1", "survey", ""));
@@ -97,6 +109,7 @@ class AgentStatusTest {
         assertThat(canvas.lastTool("a1")).hasSize(Items.ToolItem.LAST_CHARS).startsWith("Bash xxx").endsWith("…");
     }
 
+    /// A finished card reads "done · 20 s · 1 tool"; a failed card and a finished non-sub-agent card have an empty status.
     @Test
     void aFinishedSubagentSaysHowLongItRanAndHowManyToolsItCalled() {
         Block.ToolCall a = agent("a1", "survey", "");
@@ -118,6 +131,8 @@ class AgentStatusTest {
         assertThat(canvas.cardStatus("t1")).as("other cards say nothing when done").isEmpty();
     }
 
+    /// Running sub-agents are listed with their start times in start order, excluding other tools; a finished one leaves and
+    /// clearing the canvas empties the list.
     @Test
     void runningAgentsAreInStartOrderAndLeaveWhenTheyFinish() {
         Block.ToolCall first = agent("a1", "first", "");
@@ -137,6 +152,7 @@ class AgentStatusTest {
         assertThat(canvas.runningAgents()).isEmpty();
     }
 
+    /// Revealing a closed card far down opens it and scrolls its top into the viewport; an unknown id returns false.
     @Test
     void revealOpensTheCardAndScrollsItIntoView() {
         for (int i = 0; i < 80; i++) {
@@ -167,6 +183,8 @@ class AgentStatusTest {
         assertThat(canvas.reveal("nope")).isFalse();
     }
 
+    /// The card header shows a [TranscriptCanvas#SUBAGENT_SCHEME] link; a single click follows nothing, a double click follows it without toggling
+    /// the card, and elsewhere the header still toggles.
     @Test
     void theHeaderLinkOfASubagentCardOpensItsTranscript() {
         int at = add(agent("a1", "survey", ""));

@@ -16,8 +16,15 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [HelpFiles] writes the tutorial into comando's folder and finds the log a moment was written to.
+/// - The tutorial is written into `help/`, kept in step with the build, and not rewritten when unchanged.
+/// - Without atomic rename the tutorial is still written, leaving no temporary file.
+/// - Links the app cannot follow keep their text.
+/// - The log is the one being written; the log holding an entry is the newest that does, or none once rotated away.
 class HelpFilesTest {
 
+    /// [HelpFiles#writeTutorial] writes `help/tutorial.md` with no `../` links, leaves an identical file's time untouched,
+    /// overwrites a user's edit with the build's text, and leaves only that file in the folder.
     @Test
     void theTutorialIsWrittenIntoComandosFolderAndKeptInStepWithTheBuild(@TempDir Path home) throws Exception {
         Path file = HelpFiles.writeTutorial(home);
@@ -38,6 +45,8 @@ class HelpFilesTest {
         }
     }
 
+    /// When the atomic move throws [java.nio.file.AtomicMoveNotSupportedException], a second, plain move writes the file and
+    /// no temporary file remains.
     @Test
     void onAFileSystemWithoutAtomicRenameTheTutorialIsStillWritten(@TempDir Path home) throws Exception {
         List<List<CopyOption>> moves = new ArrayList<>();
@@ -55,17 +64,21 @@ class HelpFilesTest {
         }
     }
 
+    /// [HelpFiles#tutorialText] turns relative and fragment links into their text and keeps web links.
     @Test
     void linksTheAppCannotFollowKeepTheirText() {
         assertThat(HelpFiles.tutorialText("see [Build](../guides/build.md), [keys](#keys) and [web](https://x.dev)"))
                 .isEqualTo("see Build, keys and [web](https://x.dev)");
     }
 
+    /// [HelpFiles#log] is `comando-0.log` in the logs folder.
     @Test
     void theLogIsTheOneBeingWritten() {
         assertThat(HelpFiles.log(Path.of("/h/logs"))).isEqualTo(Path.of("/h/logs/comando-0.log"));
     }
 
+    /// [HelpFiles#logHolding] finds the current log for a recent entry, the rotated log for an older one, and nothing for an
+    /// entry older than every log or a missing folder.
     @Test
     void theLogHoldingAnEntryIsTheNewestThatDoesAndNoneOnceRotatedAway(@TempDir Path logs) throws Exception {
         long t = Instant.parse("2026-10-20T10:00:00Z").toEpochMilli();

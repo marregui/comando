@@ -23,14 +23,22 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/// [ResourceKind] implementations convert editable attributes to connection, folder, and session specifications with validated defaults.
+///
+/// - connection and session forms round-trip their values
+/// - folder paths and listing names are constrained to safe forms
+/// - session conversation settings govern start and clone modes
+/// - removal prompts count affected state
 class ResourceKindTest {
 
+    /// A connection with TLS verification round-trips through attributes without changing any field.
     @Test
     void connectionRoundTrip() {
         ConnectionSpec spec = new ConnectionSpec("lab", "10.0.0.5", 8812, "qdb", "admin", "s3cret", true, "verify-full");
         assertThat(ConnectionKind.INSTANCE.fromAttributes(ConnectionKind.INSTANCE.toAttributes(spec))).isEqualTo(spec);
     }
 
+    /// Omitted or null TLS mode defaults to `prefer`, while an unsupported mode is rejected by the specification.
     @Test
     void tlsModeDefaultsToPreferAndIsChecked() {
         assertThat(new ConnectionSpec("a", "h", 1, "d", "u", "p", false).sslMode()).isEqualTo("prefer");
@@ -38,6 +46,7 @@ class ResourceKindTest {
         assertThatThrownBy(() -> new ConnectionSpec("a", "h", 1, "d", "u", "p", false, "maybe")).hasMessageContaining("sslMode is one of");
     }
 
+    /// A deletable folder preserves its listing file and group, while listing files with separators or traversal are rejected.
     @Test
     void aFolderWhoseEntriesGoToTheTrashKeepsItsListingFileAndTheListingIsAFileName() {
         FolderRoot pad = new FolderRoot("Scratchpad", "/s", "", List.of(), "scratchpad").withTrash("ALPHA.md");
@@ -56,6 +65,7 @@ class ResourceKindTest {
         }
     }
 
+    /// Folder attributes round-trip exclusions and home paths, reject invalid names and paths, and retain only supported icons and in-folder indexes.
     @Test
     void folderRoundTripAndItsFormIsChecked() {
         FolderRoot spec = new FolderRoot("Plugin", "/Users/x/.claude/plugins/p", "README.md", List.of("tools", "bin"));
@@ -82,6 +92,7 @@ class ResourceKindTest {
                 .hasMessage("the icon must be one of folder, scratchpad, memory, knowledge, skills, plugin: rocket");
     }
 
+    /// Folder exclusions always include build output and compare configured names ignoring case, while defaults retain the root and index file.
     @Test
     void aFolderLeavesOutBuildOutputAndItsOwnNamesIgnoringCase() {
         FolderRoot f = new FolderRoot("p", "/p", null, List.of("Tools"));
@@ -99,6 +110,7 @@ class ResourceKindTest {
         });
     }
 
+    /// Session budgets reject non-finite or negative values and accept a non-negative decimal amount.
     @Test
     void aSessionBudgetIsAFiniteAmount() {
         for (String budget : List.of("NaN", "Infinity", "1e400", "-1")) {
@@ -108,6 +120,7 @@ class ResourceKindTest {
         assertThat(SessionKind.INSTANCE.fromAttributes(Map.of("name", "s", "workDir", "/w", "budgetUsd", "0.5")).budgetUsd()).isEqualTo(0.5);
     }
 
+    /// Session attributes retain all explicit fields, preserve an empty checkpoint, and supply the legacy checkpoint default for null data.
     @Test
     void sessionRoundTrip() {
         SessionSpec spec = new SessionSpec("edge", "/Users/x/edge", "opus", "high", "acceptEdits",
@@ -120,6 +133,7 @@ class ResourceKindTest {
                 .as("a spec read from a file written before the field existed gets the default").isEqualTo("/reflect");
     }
 
+    /// Invalid numeric ports and a resume request without a stored conversation id report the corresponding form errors.
     @Test
     void invalidFormsExplainThemselves() {
         Map<String, String> attrs = ConnectionKind.INSTANCE.toAttributes(ConnectionSpec.questDbDefaults("x"));
@@ -132,6 +146,7 @@ class ResourceKindTest {
                 .hasMessage("Next start RESUME needs a Claude session id; choose NEW for a new conversation");
     }
 
+    /// Start modes accept case-insensitive known choices and reject names outside NEW, RESUME, and FORK.
     @Test
     void aStartModeOutsideTheChoicesNamesTheChoices() {
         Map<String, String> s = SessionKind.INSTANCE.toAttributes(SessionSpec.imported("s", "/tmp", "id-1"));
@@ -141,6 +156,7 @@ class ResourceKindTest {
         assertThat(SessionKind.INSTANCE.fromAttributes(s).startMode()).isEqualTo(StartMode.RESUME);
     }
 
+    /// Only the model choice permits typed values; every other choice remains constrained while text attributes stay editable.
     @Test
     void onlyTheModelAcceptsTypedValues() {
         assertThat(SessionKind.INSTANCE.attributes()).filteredOn(a -> a.kind() == Attribute.Kind.CHOICE)
@@ -152,6 +168,7 @@ class ResourceKindTest {
         assertThat(Attribute.of("x", "X", Attribute.Kind.TEXT, false, "").editable()).isTrue();
     }
 
+    /// Stored conversation fields are advanced and open only when a conversation id is present.
     @Test
     void theConversationFieldsAreAdvancedAndOpenWhenAnIdIsSet() {
         assertThat(SessionKind.INSTANCE.attributes()).filteredOn(Attribute::advanced).extracting(Attribute::key)
@@ -161,6 +178,7 @@ class ResourceKindTest {
         assertThat(ConnectionKind.INSTANCE.attributes()).noneMatch(Attribute::advanced);
     }
 
+    /// Choosing NEW for a stored conversation warns that it will not continue, while fresh sessions receive no advice.
     @Test
     void choosingNewForAStoredConversationSaysItWillNotBeContinued() {
         Map<String, String> s = SessionKind.INSTANCE.toAttributes(SessionSpec.imported("s", "/tmp", "c0ffee"));
@@ -170,6 +188,7 @@ class ResourceKindTest {
         assertThat(SessionKind.INSTANCE.advice(SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("n", "/tmp")))).isEmpty();
     }
 
+    /// A session removal question counts its open state, two pending approvals, home panel, attached document, and stored conversation.
     @Test
     void removingASessionNamesWhatItStopsDeniesRemovesAndDetaches() {
         SessionSpec work = SessionSpec.imported("work", "/tmp", "id-1");
@@ -188,6 +207,7 @@ class ResourceKindTest {
         assertThat(SessionKind.INSTANCE.removalQuestion(idle, "new")).isEqualTo("Remove session new?");
     }
 
+    /// A connection removal question lists closing, unbinding, and password deletion, and both resource kinds map names to their notice subjects.
     @Test
     void removingAConnectionNamesWhatItClosesUnbindsAndDeletes() {
         ConnectionSpec lab = new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "s3cret", false, "prefer");
@@ -199,6 +219,7 @@ class ResourceKindTest {
         assertThat(SessionKind.INSTANCE.noticeSubject("w")).isEqualTo(Notice.session("w"));
     }
 
+    /// Removal prompts count bindings on closed panels as well as open panels and name the closed home panel.
     @Test
     void removalCountsAClosedPanelItUnbinds() {
         ConnectionSpec lab = new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "", false, "prefer");
@@ -209,6 +230,7 @@ class ResourceKindTest {
         assertThat(ConnectionKind.INSTANCE.removalQuestion(s, "lab")).isEqualTo("Remove connection lab? This unbinds 1 panel.");
     }
 
+    /// Cloning a session with a conversation switches it to FORK, while a fresh session clone remains NEW.
     @Test
     void cloningASessionWithAConversationForksIt() {
         SessionSpec spec = SessionSpec.imported("edge", "/x", "id-1");

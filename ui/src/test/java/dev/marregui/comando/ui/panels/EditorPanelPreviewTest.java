@@ -27,6 +27,14 @@ import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// How [EditorPanel] shows a file by kind: log, Markdown, HTML, source, or the panel's own text; and how it follows links.
+/// - a log is read-only and follows its end unless the reader scrolled up
+/// - a Markdown document opens rendered, with an Edit switch, and stays editable
+/// - an HTML document opens as text with a browser button; comando does not render HTML
+/// - Clear empties the panel's own text, undoably, and never a document
+/// - the panel's own text opens in the editor with the panel style and may be previewed
+/// - a source file is coloured as its language and has no preview
+/// - the preview shows pictures beside the Markdown file and follows double-clicked links to files, headings and pages
 class EditorPanelPreviewTest {
 
     private static String shown(EditorPanel p) {
@@ -47,6 +55,8 @@ class EditorPanelPreviewTest {
         return p[0];
     }
 
+    /// A document whose name ends in `.log` opens read-only with the caret at its end, follows appended text on reload, and keeps
+    /// a caret the reader moved up; a Markdown file stays editable.
     @Test
     void aLogIsReadOnlyAndFollowsItsEnd() throws Exception {
         EditorPanel log = panel("comando-0.log", p -> {
@@ -68,6 +78,8 @@ class EditorPanelPreviewTest {
         assertThat(notes.editor().area().isEditable()).isTrue();
     }
 
+    /// A Markdown document is editable, opens rendered with the Edit switch offered, and [EditorPanel#edit] shows the
+    /// text; a JSON document is editable with no preview offered.
     @Test
     void aMarkdownDocumentOpensRenderedAndIsEditedLikeAnyOther() throws Exception {
         EditorPanel memory = panel("MEMORY", p -> {
@@ -85,6 +97,8 @@ class EditorPanelPreviewTest {
         assertThat(json.previewOffered()).as("only Markdown renders").isFalse();
     }
 
+    /// An HTML document opens as editable text with the browser button and no preview; a Markdown document and a panel's
+    /// own `.html` text get no browser button.
     @Test
     void anHtmlDocumentOpensAsTextWithTheBrowserAtHand() throws Exception {
         EditorPanel page = panel("report", p -> {
@@ -102,6 +116,8 @@ class EditorPanelPreviewTest {
         assertThat(own.browserOffered()).as("a panel's own text is never a page").isFalse();
     }
 
+    /// Clear empties the panel's own text and is then no longer offered; undo restores the text and the offer; a document
+    /// of its own is never offered Clear.
     @Test
     void clearEmptiesThePanelsOwnTextButNeverADocument() throws Exception {
         EditorPanel own = panel("notes", p -> {
@@ -123,6 +139,8 @@ class EditorPanelPreviewTest {
         assertThat(document.clearOffered()).as("a file of its own is not emptied from the panel").isFalse();
     }
 
+    /// A Markdown document opens rendered without its Markdown marks, with Markdown syntax colouring and a button naming the
+    /// other view; an outside reload updates both views; toggling shows the text, and a later render keeps the editor.
     @Test
     void aMarkdownDocumentOpensRenderedAndEditSwitchesToTheText() throws Exception {
         EditorPanel panel = panel("LANE-PLAN", p -> {
@@ -147,6 +165,8 @@ class EditorPanelPreviewTest {
         assertThat(panel.previewing()).as("a render does not take the editor away").isFalse();
     }
 
+    /// The panel's own Markdown text opens in the editor with [CommandEditor#PANEL_STYLE], also after the panel is renamed,
+    /// and the toggle can still preview it.
     @Test
     void aPanelsOwnTextStaysInTheEditorAsSqlAndPrompts() throws Exception {
         EditorPanel panel = panel("spec", p -> {
@@ -165,6 +185,7 @@ class EditorPanelPreviewTest {
         assertThat(panel.previewing()).isTrue();
     }
 
+    /// A `.java` or `.py` file gets its language's syntax style, offers no preview and ignores a preview toggle.
     @Test
     void aSourceFileIsColouredAsItsLanguageAndStaysAsText() throws Exception {
         EditorPanel java = panel("Red.java", p -> {
@@ -179,6 +200,8 @@ class EditorPanelPreviewTest {
         assertThat(python.editor().area().getSyntaxEditingStyle()).isEqualTo(SyntaxConstants.SYNTAX_STYLE_PYTHON);
     }
 
+    /// A relative picture link resolves against the document's folder, also as `./images/…` after a reload; the panel's own
+    /// text, whose folder has no such picture, shows "no such file".
     @Test
     void aMarkdownFileShowsThePicturesBesideItAsItIsEditedAndReloaded(@TempDir Path dir) throws Exception {
         Path doc = dir.resolve("SCRATCHPAD/2026-10-17/READ-01.md");
@@ -212,6 +235,8 @@ class EditorPanelPreviewTest {
         }
     }
 
+    /// In the preview a double-clicked relative link of any file type opens in a panel, an `https` link opens in the browser
+    /// only on a double click, and a `mailto` link does nothing.
     @Test
     void anyLinkDoubleClickedInThePreviewIsFollowed() throws Exception {
         List<String> opened = new CopyOnWriteArrayList<>();
@@ -236,6 +261,7 @@ class EditorPanelPreviewTest {
         }
     }
 
+    /// In the editor text, a URL and a Markdown link with a heading anchor are followed; a position on no link is not.
     @Test
     void aLinkDoubleClickedInTheTextIsFollowedAsInThePreview() throws Exception {
         List<String> opened = new CopyOnWriteArrayList<>();
@@ -262,6 +288,8 @@ class EditorPanelPreviewTest {
         }
     }
 
+    /// A rendered relative link keeps its target; a single click and a same-document `#heading` open nothing, and a double
+    /// click opens the file, at the heading the link names.
     @Test
     void aMarkdownLinkDoubleClickedInThePreviewOpensItsFile() throws Exception {
         List<String> opened = new CopyOnWriteArrayList<>();

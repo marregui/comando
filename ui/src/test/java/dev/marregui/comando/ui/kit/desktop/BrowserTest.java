@@ -8,8 +8,14 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Browser] opens web links, and only web links, in the system browser off the caller's thread.
+/// - A web link is `http` or `https` in any letter case; other schemes are not.
+/// - The browser is called on a thread of its own.
+/// - A link that is not a web link, or not a valid URI, is not opened.
 class BrowserTest {
 
+    /// [Browser#isWebLink] accepts `http` and `https` in any case and refuses `comando-file`, `file` and a scheme that
+    /// only starts with `http`.
     @Test
     void webLinksAreHttpAndHttpsInAnyLetterCase() {
         assertThat(Browser.isWebLink("https://example.com")).isTrue();
@@ -20,6 +26,7 @@ class BrowserTest {
         assertThat(Browser.isWebLink("httpx://example.com")).isFalse();
     }
 
+    /// [Browser#open] hands the parsed URI to the opener on a thread named `open-link`.
     @Test
     void theBrowserIsCalledOnAThreadOfItsOwnNotTheCallers() throws Exception {
         CompletableFuture<String> thread = new CompletableFuture<>();
@@ -27,6 +34,7 @@ class BrowserTest {
         assertThat(thread.get(5, TimeUnit.SECONDS)).isEqualTo("open-link " + URI.create("https://example.com/a"));
     }
 
+    /// A `file` URI and a URI with a space in its host never reach the opener; the valid web link after them does.
     @Test
     void aLinkThatIsNotAWebLinkIsNotOpened() throws Exception {
         CompletableFuture<URI> opened = new CompletableFuture<>();

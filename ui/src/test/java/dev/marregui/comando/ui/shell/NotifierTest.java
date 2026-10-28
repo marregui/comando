@@ -8,8 +8,13 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
+/// [Notifier] runs the desktop notification command, bounded, and quotes its text for AppleScript.
+/// - A notification that does not finish is stopped at its bound.
+/// - A notification that waits for input gets none and ends.
+/// - The text is escaped for AppleScript and clipped to 200 characters.
 class NotifierTest {
 
+    /// `sleep 30` with a 200 ms bound returns false well within 5 s.
     @Test
     void aNotificationThatDoesNotFinishIsStoppedAtItsBound() {
         boolean done = assertTimeoutPreemptively(Duration.ofSeconds(5),
@@ -17,6 +22,7 @@ class NotifierTest {
         assertThat(done).isFalse();
     }
 
+    /// `cat` returns true within its bound because its standard input is closed.
     @Test
     void aNotificationThatWaitsForInputGetsNoneAndEnds() {
         boolean done = assertTimeoutPreemptively(Duration.ofSeconds(5),
@@ -24,6 +30,8 @@ class NotifierTest {
         assertThat(done).as("stdin is closed, so cat ends").isTrue();
     }
 
+    /// [Notifier#escape] backslash-escapes quotes and backslashes, turns a newline into a space, and clips 300 characters
+    /// to 200 ending in `…`.
     @Test
     void theNotificationTextIsClippedAndQuotedForAppleScript() {
         assertThat(Notifier.escape("say \"hi\"\\\nnow")).isEqualTo("say \\\"hi\\\"\\\\ now");

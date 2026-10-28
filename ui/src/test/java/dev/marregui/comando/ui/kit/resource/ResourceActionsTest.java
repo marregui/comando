@@ -24,6 +24,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ResourceActions] adds, edits, clones and removes the resources of a list, asking before a removal.
+/// - Add opens the editor on a new resource.
+/// - Remove asks first; Cancel or closing the question keeps the resource.
+/// - A resource in use is offered to be stopped and removed, naming the panels it takes with it, or left.
 class ResourceActionsTest {
 
     private static LookAndFeel previous;
@@ -60,6 +64,7 @@ class ResourceActionsTest {
         }
     };
 
+    /// [ResourceActions#addNew] calls the editor's add once.
     @Test
     void addOpensTheEditorOnANewResource() throws Exception {
         AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(), List.of());
@@ -67,6 +72,8 @@ class ResourceActionsTest {
         assertThat(opened).containsExactly("new");
     }
 
+    /// A closed session asks `Remove, Cancel` and is removed only on the first; an open session's question names its
+    /// panel, offers `Stop and remove, Leave it`, and closing the dialog (-1) leaves it like `Leave it`.
     @Test
     void removeAsksFirstAndOffersToStopAResourceInUseOrLeaveIt() throws Exception {
         SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));

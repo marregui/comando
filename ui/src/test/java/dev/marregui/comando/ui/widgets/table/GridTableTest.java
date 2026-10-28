@@ -13,6 +13,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [GridTable]'s find and its CSV of line breaks.
+/// - find forward and backward wraps at the ends, ignoring case
+/// - a find without a match counts zero and moves nothing
+/// - CSV quotes a field holding a carriage return or a newline
 class GridTableTest {
 
     /** Ten rows of one column; rows 3, 5 and 8 hold the word. */
@@ -38,6 +42,7 @@ class GridTableTest {
         return matches.get();
     }
 
+    /// Searching "MATCH" forward counts three matches and selects rows 3, 5, 8, then wraps to 3.
     @Test
     void findForwardWrapsToTheFirstMatch() throws Exception {
         GridTable grid = grid();
@@ -51,6 +56,7 @@ class GridTableTest {
         assertThat(selectedRow(grid)).as("past the last match: the first").isEqualTo(3);
     }
 
+    /// A first backward search selects the last match, row 8, then 5 and 3, and wraps to 8.
     @Test
     void findBackwardsWrapsToTheLastMatch() throws Exception {
         GridTable grid = grid();
@@ -64,6 +70,24 @@ class GridTableTest {
         assertThat(selectedRow(grid)).as("before the first match: the last").isEqualTo(8);
     }
 
+    /// A query that matches no cell counts zero and leaves the selection where it was; an empty query counts zero.
+    @Test
+    void findWithoutAMatchKeepsTheSelection() throws Exception {
+        GridTable grid = grid();
+        find(grid, true);
+        assertThat(selectedRow(grid)).isEqualTo(3);
+        AtomicInteger none = new AtomicInteger(-1);
+        AtomicInteger empty = new AtomicInteger(-1);
+        SwingUtilities.invokeAndWait(() -> {
+            none.set(grid.find("absent", true));
+            empty.set(grid.find("", true));
+        });
+        assertThat(none.get()).isZero();
+        assertThat(empty.get()).isZero();
+        assertThat(selectedRow(grid)).as("no match moves nothing").isEqualTo(3);
+    }
+
+    /// A field with `\r` or `\n` is quoted, and an export writes a `\r` cell quoted.
     @Test
     void csvQuotesACarriageReturn(@TempDir Path dir) throws Exception {
         assertThat(GridTable.csv("line1\rline2")).isEqualTo("\"line1\rline2\"");

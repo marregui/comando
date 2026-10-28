@@ -6,6 +6,7 @@ import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.ui.kit.action.ToolButton;
+import dev.marregui.comando.ui.kit.async.Debouncer;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Platform;
@@ -100,7 +101,7 @@ public final class ChangeEditor {
     private final JMenuItem rollBack;
     private final JMenuItem remove;
     private final JButton mode;
-    private final Timer recompare;
+    private final Debouncer recompare;
     private final Timer autosave;
     /** Hears whether edits wait to be written: the window marks itself modified while they do. */
     private Consumer<Boolean> modified = m -> {
@@ -137,8 +138,7 @@ public final class ChangeEditor {
         rollBack = menuItem("Roll back to HEAD", "rollback", this::rollBack);
         remove = menuItem("Move to the Trash…", "trash", this::remove);
         mode = ToolButton.of("preview", "", this::toggleRendered);
-        recompare = new Timer(RECOMPARE_MILLIS, e -> recompare());
-        recompare.setRepeats(false);
+        recompare = new Debouncer(RECOMPARE_MILLIS, this::recompare);
         autosave = new Timer(AUTOSAVE_MILLIS, e -> {
             if (edited) {
                 save();
@@ -599,7 +599,7 @@ public final class ChangeEditor {
             return;
         }
         edited = true;
-        recompare.restart();
+        recompare.request();
         updateButtons();
         say(Said.EDITED);
         // the undo manager hears of the edit after the document's listeners: Undo is offered once it has

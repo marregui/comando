@@ -15,7 +15,12 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** {@code comando-kit.json} as the kit's installer writes it (schema version 1), and the root it makes. */
+/// [KitJson] reads schema-version-one kit manifests and rejects roots or folders that escape the kit directory.
+///
+/// - Maps folders, requirements, credentials, and jobs from a complete manifest.
+/// - Allows a Files folder at the root but not the brain itself.
+/// - Rejects malformed, incomplete, incompatible, and escaping manifests.
+/// - Falls back from unreadable configured roots to a usable root.
 class KitJsonTest {
 
     static final String KIT_JSON = """
@@ -46,6 +51,8 @@ class KitJsonTest {
         return Files.writeString(Files.createDirectories(dir).resolve(KitRoot.FILE), text);
     }
 
+    /// The complete version-one fixture maps its name, brain, two folders, platform installs, credential, and scheduled
+    /// job, preserving all manifest sections rather than only the root fields.
     @Test
     void theKitsFileReadsWhole(@TempDir Path tmp) throws Exception {
         KitRoot.Manifest kit = KitJson.read(write(tmp, KIT_JSON));
@@ -63,6 +70,8 @@ class KitJsonTest {
                 List.of("bin/transcript-sweep")));
     }
 
+    /// A folder path of `.` resolves to the kit directory, whereas a brain of `.` is rejected because the brain must be
+    /// below that directory.
     @Test
     void aFolderMayBeTheKitsWholeFolderButTheBrainMayNot(@TempDir Path tmp) throws Exception {
         KitRoot.Manifest kit = KitJson.read(write(tmp, KIT_JSON.replace("\"BRAIN/MEMORY\"", "\".\"")));
@@ -72,6 +81,8 @@ class KitJsonTest {
                 .hasMessageContaining("brain is not a folder inside the root");
     }
 
+    /// Truncated JSON, a non-object, another schema version, missing name, absolute or escaping paths, and a tilde path
+    /// each fail manifest reading rather than constructing a partial kit.
     @Test
     void aFileThatBreaksTheSchemaIsRefused(@TempDir Path tmp) {
         assertThatThrownBy(() -> KitJson.read(write(tmp, "{\"kit\": 1, \"name\": \"x\""))).as("cut short").isInstanceOf(IOException.class);
@@ -85,6 +96,8 @@ class KitJsonTest {
         assertThatThrownBy(() -> KitJson.read(write(tmp, KIT_JSON.replace("BRAIN/MEMORY", "~/MEMORY")))).isInstanceOf(IOException.class);
     }
 
+    /// When the user manifest is malformed, resolution uses a readable clone manifest; when neither is readable it
+    /// returns the user's directory with no manifest.
     @Test
     void aMalformedKitJsonLeavesTheRootWithoutAKit(@TempDir Path home) throws Exception {
         Path user = home.resolve(".claude");
@@ -101,6 +114,7 @@ class KitJsonTest {
                 .isEqualTo(new KitRoot(user, Optional.empty(), user));
     }
 
+    /// An explicit configuration directory becomes the resolved root and expands each relative folder path below it.
     @Test
     void comandosOwnConfigDirIsTheRoot(@TempDir Path home) throws Exception {
         Path other = home.resolve("other");

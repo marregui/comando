@@ -16,6 +16,12 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+/// [Links] follows a link from rendered text to the browser, a file at a heading, or a note.
+/// - A web address goes to the browser.
+/// - A file link resolves against the page's folder and opens at its heading.
+/// - What names no file on this machine is not followed.
+/// - A note link opens the file it resolves to on the EDT, or tells that none was found.
+/// - A session's links resolve against its folder; a link's heading is its fragment as written.
 class LinksTest {
 
     @TempDir
@@ -40,6 +46,7 @@ class LinksTest {
         Links.browseWith(Browser::open);
     }
 
+    /// An `https` link is handed to the browser and opens no file.
     @Test
     void aWebAddressGoesToTheBrowser() {
         assertThat(Links.open("https://example.org/x", null)).isTrue();
@@ -47,6 +54,8 @@ class LinksTest {
         assertThat(opened).isEmpty();
     }
 
+    /// A relative link resolves against the folder, `..` included, and opens at its fragment kept percent-encoded; a
+    /// file of any kind is opened.
     @Test
     void aFileIsReadFromTheFolderAndOpensAtItsHeading() {
         assertThat(Links.open("../ALPHA.md#caf%C3%A9", Path.of("/kb/claude"))).isTrue();
@@ -54,6 +63,8 @@ class LinksTest {
         assertThat(opened).containsExactly("/kb/ALPHA.md at caf%C3%A9", "/kb/claude/build.gradle.kts");
     }
 
+    /// A `mailto` link, a relative link with no folder, a folder and a `file` URI naming another host return false
+    /// and open nothing.
     @Test
     void whatNamesNoFileIsNotFollowed() {
         assertThat(Links.open("mailto:a@b.c", Path.of("/kb"))).isFalse();
@@ -64,6 +75,8 @@ class LinksTest {
         assertThat(browsed).isEmpty();
     }
 
+    /// A [NoteLinks] href for a note whose front matter name matches a file in the session's repository opens that
+    /// file at the heading, and the opener runs on the EDT.
     @Test
     void aNoteOpensTheFileItResolvesToOnTheEdt() throws Exception {
         Files.createDirectories(repo.resolve(".git"));
@@ -80,6 +93,7 @@ class LinksTest {
         assertThat(onEdt).containsExactly(true);
     }
 
+    /// A note href that resolves to no file tells the user `No file for [[name]] under …` and opens nothing.
     @Test
     void aNoteThatNamesNoFileIsTold() throws Exception {
         SwingUtilities.invokeAndWait(() -> Links.open(NoteLinks.href("no-such-note", null), repo));
@@ -88,6 +102,7 @@ class LinksTest {
         assertThat(opened).isEmpty();
     }
 
+    /// [Links#folderOf] returns the folder the resolver gives a session, and null for an unknown or empty session.
     @Test
     void aSessionsLinksAreReadFromItsFolder() {
         assertThat(Links.folderOf("work")).isEqualTo(repo);
@@ -95,6 +110,14 @@ class LinksTest {
         assertThat(Links.folderOf("")).isNull();
     }
 
+    /// A null session, as a panel without one has, has no folder and never reaches the resolver.
+    @Test
+    void aNullSessionHasNoFolder() {
+        assertThat(Links.folderOf(null)).isNull();
+    }
+
+    /// [Links#heading] returns the text after `#`, spaces in the file name included; no `#`, or nothing after it,
+    /// means the top and returns null.
     @Test
     void aLinksHeadingIsWhatFollowsTheHashAsWritten() {
         assertThat(Links.heading("setup.md#2-install")).isEqualTo("2-install");

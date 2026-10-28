@@ -16,6 +16,13 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [MermaidDiagrams] draws Mermaid text to cached PNGs with `mmdc`, off the EDT, one drawing at a time.
+/// - A diagram is drawn once, then shown from the cache at half its pixels, with no temporary files left.
+/// - The same callback handed in again while drawing runs once.
+/// - A rejection, an unreadable picture or a timeout is remembered as unavailable with its reason, not retried.
+/// - A timed-out `mmdc` is stopped with the processes it started.
+/// - Without `mmdc` the reason says how to install it; the dark theme is asked for.
+/// - The cache key ignores surrounding blank lines; the preview fits the pane or shows the source under a note.
 class MermaidDiagramsTest {
 
     private static final String FLOW = "flowchart LR\n    A --> B\n";
@@ -50,6 +57,8 @@ class MermaidDiagramsTest {
         return Files.exists(runs) ? Files.readAllLines(runs).size() : 0;
     }
 
+    /// The first ask is pending and calls back when drawn; the second is ready at the cached path with half the 400×120
+    /// picture's size, `mmdc` ran once, and the cache holds only the PNG.
     @Test
     void aDiagramIsDrawnOnceThenShownFromTheCacheAtHalfItsPixels() throws Exception {
         MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), fakeMmdc(false));
@@ -71,6 +80,8 @@ class MermaidDiagramsTest {
         }
     }
 
+    /// Three asks with one callback while the script waits at a gate stay pending; once a second diagram queued behind it
+    /// calls back, the shared callback has run exactly once.
     @Test
     void theSameCallbackHandedInAgainWhileTheDiagramIsDrawnRunsOnce() throws Exception {
         Path picture = dir.resolve("picture.png");
@@ -102,6 +113,8 @@ class MermaidDiagramsTest {
         }
     }
 
+    /// A script that exits 1 with a parse error yields unavailable with `mmdc cannot draw it:` and the stderr line, and a
+    /// second ask runs no second process.
     @Test
     void aDiagramMmdcRejectsSaysWhyAndIsNotDrawnAgain() throws Exception {
         MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), fakeMmdc(true));
@@ -126,6 +139,7 @@ class MermaidDiagramsTest {
         return exe;
     }
 
+    /// `mmdc` is called with `-t dark`.
     @Test
     void aDiagramIsDrawnInMermaidsDarkTheme() throws Exception {
         Path picture = dir.resolve("picture.png");
@@ -149,6 +163,8 @@ class MermaidDiagramsTest {
         }
     }
 
+    /// When `mmdc` writes something that is not a PNG, the re-ask from the ready callback is unavailable, the caller is
+    /// told once with no drawing queued after it, and the unreadable file is removed.
     @Test
     void aPictureThatCannotBeReadIsShownAsAFailureNotAnnouncedAgainAndAgain() throws Exception {
         MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), script("""
@@ -180,6 +196,8 @@ class MermaidDiagramsTest {
         }
     }
 
+    /// A script that outlives the 500 ms bound yields unavailable `mmdc did not finish within…`, and the child it started
+    /// is no longer alive.
     @Test
     void mmdcThatDoesNotFinishIsStoppedWithWhatItStarted() throws Exception {
         Path child = dir.resolve("child.pid");
@@ -206,6 +224,7 @@ class MermaidDiagramsTest {
         }
     }
 
+    /// With no executable the diagram is unavailable at once, and the reason names the `npm install` command.
     @Test
     void withoutMmdcTheSourceShowsWithHowToGetIt() {
         MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), null);
@@ -213,6 +232,8 @@ class MermaidDiagramsTest {
                 u -> assertThat(u.why()).contains("npm install -g @mermaid-js/mermaid-cli"));
     }
 
+    /// [MermaidDiagrams#key] is a 32-character key equal for the text with blank lines around it and different for other
+    /// text; [MermaidDiagrams#compareVersions] compares Node versions numerically.
     @Test
     void theKeyFollowsTheTextNotItsSurroundingBlankLines() {
         assertThat(MermaidDiagrams.key(FLOW)).isEqualTo(MermaidDiagrams.key("\n" + FLOW + "\n\n"))
@@ -221,6 +242,9 @@ class MermaidDiagramsTest {
         assertThat(MermaidDiagrams.compareVersions("v9.0.0", "v10.0.0")).isNegative();
     }
 
+    /// [HtmlPane#diagramHtml] scales a ready picture to the pane's width keeping its ratio, shows a pending one's escaped
+    /// source under `drawing the diagram…`; [MarkdownHtml#render] hands mermaid fences to the diagram function, or renders
+    /// them as code without one.
     @Test
     void thePreviewShowsThePictureNoWiderThanThePaneElseTheSourceUnderANote() {
         Path png = dir.resolve("d.png");

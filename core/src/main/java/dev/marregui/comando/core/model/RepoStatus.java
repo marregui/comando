@@ -37,20 +37,7 @@ public record RepoStatus(String root, String branch, List<FileChange> changes, b
 
     /** How a file differs from {@code HEAD}. */
     public enum Kind {
-        MODIFIED, ADDED, DELETED, RENAMED, COPIED, UNTRACKED, CONFLICTED;
-
-        /** The letter git and IDEs mark it with. */
-        public String letter() {
-            return switch (this) {
-                case MODIFIED -> "M";
-                case ADDED -> "A";
-                case DELETED -> "D";
-                case RENAMED -> "R";
-                case COPIED -> "C";
-                case UNTRACKED -> "?";
-                case CONFLICTED -> "U";
-            };
-        }
+        MODIFIED, ADDED, DELETED, RENAMED, COPIED, UNTRACKED, CONFLICTED
     }
 
     /**

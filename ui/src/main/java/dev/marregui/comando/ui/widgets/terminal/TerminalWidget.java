@@ -15,6 +15,7 @@ import com.jediterm.terminal.ui.TerminalActionPresentation;
 import com.jediterm.terminal.ui.TerminalPanel;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import com.jediterm.terminal.ui.settings.SettingsProvider;
+import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
@@ -28,6 +29,7 @@ import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
 
+import java.time.Duration;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -47,7 +49,6 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
@@ -71,6 +72,8 @@ public final class TerminalWidget implements Zoomable, Searchable {
 
     private static final System.Logger LOG = System.getLogger(TerminalWidget.class.getName());
     private static final int GATE_POLL_MILLIS = 50;
+    /** How long a closed panel's shell has to end after the hangup before it is killed. */
+    private static final long KILL_GRACE_MILLIS = 2_000;
     /** The job reported when {@code ps} cannot say what the shell runs: closing asks rather than kills unseen. */
     public static final String UNCHECKED_JOB = "a program comando could not check";
     /** Names of shells: a pty whose process carries another name has been replaced by a program ({@code exec ssh host}). */
@@ -422,20 +425,20 @@ public final class TerminalWidget implements Zoomable, Searchable {
         return c.startsWith("-") ? c.substring(1) : c;
     }
 
-    /** The lines {@code ps} prints for {@code args}, or none when it fails or takes over a second. */
+    /**
+     * The lines {@code ps} prints for {@code args}, or none when it fails or takes over a second. Its output is read
+     * while it runs: a long command line (a {@code java -cp …} child) fills the pipe before {@code ps} can exit.
+     */
     private static List<String> ps(List<String> args) {
         List<String> command = new ArrayList<>();
         command.add("ps");
         command.addAll(args);
         try {
-            Process ps = new ProcessBuilder(command).redirectErrorStream(true).start();
-            ps.getOutputStream().close();
-            if (!ps.waitFor(1, TimeUnit.SECONDS)) {
-                ps.destroyForcibly();
+            Processes.Result r = Processes.run(command, Duration.ofSeconds(1), PS_MAX_OUT);
+            if (r.timedOut()) {
                 return List.of();
             }
-            String out = new String(ps.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
-            return out.lines().filter(l -> !l.isBlank()).toList();
+            return (r.out() + r.stderr()).lines().filter(l -> !l.isBlank()).toList();
         } catch (IOException e) {
             return List.of();
         } catch (InterruptedException e) {
@@ -443,6 +446,9 @@ public final class TerminalWidget implements Zoomable, Searchable {
             return List.of();
         }
     }
+
+    /** The most of {@code ps}'s output read: every process of a busy machine with long command lines. */
+    private static final int PS_MAX_OUT = 4 << 20;
 
     public void focus() {
         if (term != null) {
@@ -459,7 +465,19 @@ public final class TerminalWidget implements Zoomable, Searchable {
         removeTerm();
         exitedBar.setVisible(false);
         if (p != null && p.process().isAlive()) {
-            p.process().destroy();
+            Process shell = p.process();
+            shell.destroy();
+            // a job that ignores the hangup (nohup, a trap, a stuck ssh) would outlive the panel: killed after a grace
+            UiErrands.start("terminal-kill", () -> {
+                try {
+                    if (!shell.waitFor(KILL_GRACE_MILLIS, TimeUnit.MILLISECONDS)) {
+                        shell.destroyForcibly();
+                    }
+                } catch (InterruptedException e) {
+                    shell.destroyForcibly();
+                    Thread.currentThread().interrupt();
+                }
+            });
         }
     }
 

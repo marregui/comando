@@ -6,6 +6,11 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [KitVersion] identifies semantic release tags, orders remote upgrades, and formats the kit version label.
+///
+/// - described commits retain their nearest release
+/// - peeled and non-release tags are excluded from upgrades
+/// - the newest upgrade appears in the label
 class KitVersionTest {
 
     private static final String LS_REMOTE = """
@@ -18,6 +23,7 @@ class KitVersionTest {
             7777777777777777777777777777777777777777\trefs/tags/v1.1.9
             """;
 
+    /// Exact release tags and commits past them yield the release, whereas partial tags, plain commits, and blanks do not.
     @Test
     void aDescribedVersionIsAtOrPastARelease() {
         assertThat(KitVersion.release("v1.2.0")).contains("v1.2.0");
@@ -27,6 +33,7 @@ class KitVersionTest {
         assertThat(KitVersion.release("")).isEmpty();
     }
 
+    /// Remote semantic releases newer than `v1.2.0` sort by numeric components and deduplicate peeled tag records.
     @Test
     void theNewerReleasesComeNewestFirstEachOnceComparedByNumber() {
         assertThat(KitVersion.newerThan(Optional.of("v1.2.0"), LS_REMOTE))
@@ -37,6 +44,7 @@ class KitVersionTest {
         assertThat(KitVersion.newerThan(Optional.of("v1.2.0"), "")).isEmpty();
     }
 
+    /// A described release shows the newest available upgrade, while an untagged commit and a failed remote retain their respective text and problem.
     @Test
     void theStatusBarSaysTheKitsNameVersionAndTheNewestRelease() {
         KitVersion past = KitVersion.of("v1.2.0-3-gabc1234\n", LS_REMOTE);

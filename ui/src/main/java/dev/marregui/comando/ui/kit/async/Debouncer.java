@@ -19,4 +19,9 @@ public final class Debouncer {
     public void stop() {
         timer.stop();
     }
+
+    /** True while a request waits for its delay to pass. */
+    public boolean pending() {
+        return timer.isRunning();
+    }
 }

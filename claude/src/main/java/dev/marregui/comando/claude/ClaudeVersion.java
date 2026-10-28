@@ -1,15 +1,12 @@
 package dev.marregui.comando.claude;
 
-import dev.marregui.comando.core.loop.Threads;
 
-import java.io.BufferedReader;
+import dev.marregui.comando.core.loop.Processes;
+
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -58,43 +55,26 @@ public record ClaudeVersion(int major, int minor, int patch) implements Comparab
      * reducer thread.
      */
     public static String check(String executable, RootLaunch launch) {
-        Process p;
+        Processes.Result r;
         try {
-            ProcessBuilder pb = new ProcessBuilder(executable, "--version").redirectErrorStream(true);
-            launch.environment(pb.environment());
-            p = pb.start();
+            r = Processes.run(List.of(executable, "--version"), launch::environment, null, null, TIMEOUT, MAX_OUT);
         } catch (IOException e) {
             return "Claude Code not found at '" + executable + "'. Install it, or set COMANDO_CLAUDE to its path.";
-        }
-        try (InputStream in = p.getInputStream()) {
-            p.getOutputStream().close();
-            // read on a thread of its own: a child the CLI left running can hold the output open after the exit
-            StringBuffer read = new StringBuffer();
-            Thread reader = Threads.fork("claude-version", () -> {
-                try (BufferedReader lines = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
-                    for (String line = lines.readLine(); line != null; line = lines.readLine()) {
-                        read.append(line).append('\n');
-                    }
-                } catch (IOException e) {
-                    // closed while reading: what was read stands
-                }
-            });
-            if (!p.waitFor(5, TimeUnit.SECONDS)) {
-                p.destroyForcibly();
-                return "'" + executable + " --version' did not answer within 5 s.";
-            }
-            // what the CLI wrote before it exited is read at once; a pipe still held open is not waited for
-            reader.join(Duration.ofSeconds(1));
-            String out = read.toString().strip();
-            return parse(out)
-                    .map(v -> v.tested() ? "" : "Claude Code " + v + " is outside the tested range " + TESTED_FROM + " to "
-                            + TESTED_UNTIL + " (exclusive); the transcript may miss events.")
-                    .orElse("Cannot read the Claude Code version from: " + out);
-        } catch (IOException e) {
-            return "Cannot read the Claude Code version: " + e.getMessage();
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return "";
         }
+        if (r.timedOut()) {
+            return "'" + executable + " --version' did not answer within 5 s.";
+        }
+        // the version is on standard output; an error the CLI printed instead is shown with it
+        String out = (r.out() + r.stderr()).strip();
+        return parse(out)
+                .map(v -> v.tested() ? "" : "Claude Code " + v + " is outside the tested range " + TESTED_FROM + " to "
+                        + TESTED_UNTIL + " (exclusive); the transcript may miss events.")
+                .orElse("Cannot read the Claude Code version from: " + out);
     }
+
+    private static final Duration TIMEOUT = Duration.ofSeconds(5);
+    private static final int MAX_OUT = 64 * 1024;
 }

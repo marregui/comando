@@ -14,8 +14,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Threads], [Errands], and [Watchdog] supply named threads with the ownership and shutdown rules of the runtime.
+///
+/// - strands serialize work on virtual threads
+/// - closing errands interrupts active calls and rejects new ones
+/// - one platform watchdog serves all registered looks
 class ThreadKitTest {
 
+    /// A twenty-task strand keeps submission order on one live virtual thread carrying the requested name.
     @Test
     void strandsRunInOrderOnOneVirtualThreadThatTestsCanFindByName() throws Exception {
         ExecutorService strand = Threads.strand("kit-strand");
@@ -37,6 +43,7 @@ class ThreadKitTest {
         });
     }
 
+    /// A delayed task runs on a named virtual thread, and cancelling a later one immediately removes it from the timed strand queue.
     @Test
     void aTimedStrandRunsOnAVirtualThreadAndACancelledTaskLeavesItsQueue() throws Exception {
         ScheduledExecutorService timed = Threads.timedStrand("kit-timed");
@@ -56,6 +63,7 @@ class ThreadKitTest {
         assertThat(timed.awaitTermination(5, TimeUnit.SECONDS)).isTrue();
     }
 
+    /// Closing two blocked errands interrupts and joins both within `CLOSE_WAIT`, then makes a later start return null.
     @Test
     void closingErrandsInterruptsAndWaitsForThoseRunningAndRefusesNewOnes() throws Exception {
         Errands errands = new Errands("test");
@@ -82,6 +90,7 @@ class ThreadKitTest {
         assertThat(errands.start("late", () -> { })).isNull();
     }
 
+    /// Two registrations execute on the same platform `watchdog` thread, which ends after the final handle closes.
     @Test
     void oneWatchdogThreadRunsEveryLookAndEndsWhenTheLastLeaves() throws Exception {
         CountDownLatch both = new CountDownLatch(4);

@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.kit.text;
 
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 
@@ -10,10 +11,8 @@ import javax.imageio.stream.ImageInputStream;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
@@ -186,11 +185,7 @@ public final class MermaidDiagrams {
                 } else if (p.exitValue() != 0 || !Files.isRegularFile(out)) {
                     failures.put(key, "mmdc cannot draw it: " + firstLine(Files.readString(err, StandardCharsets.UTF_8)));
                 } else {
-                    try {
-                        Files.move(out, png, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                    } catch (AtomicMoveNotSupportedException e) {
-                        Files.move(out, png, StandardCopyOption.REPLACE_EXISTING);
-                    }
+                    AtomicFiles.move(out, png);
                 }
             } finally {
                 drawing = null;

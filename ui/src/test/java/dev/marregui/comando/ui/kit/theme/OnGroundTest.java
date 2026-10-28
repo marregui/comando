@@ -11,15 +11,21 @@ import java.awt.image.BufferedImage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The surfaces follow the ground chosen, even where they were set once (record 103). */
+/// [Theme]'s surfaces follow the ground chosen, even where they were set once (record 103).
+/// - On graphite the surfaces keep their colours.
+/// - A border and a background made once repaint in another ground.
+/// - Every surface stands off every ground, and a card's border off the card.
 class OnGroundTest {
 
+    /// On the default ground the card and user bubble are their historic hex values.
     @Test
     void onGraphiteTheSurfacesKeepTheirColours() {
         assertThat(Theme.hex(Theme.CARD)).isEqualTo("#2d2d2d");
         assertThat(Theme.hex(Theme.USER_BUBBLE)).isEqualTo("#2e3a4a");
     }
 
+    /// A matte border and a panel background created from the card colours before a ground change paint the midnight
+    /// mixes afterwards, and the dynamic colour still equals a plain [Color] of its current RGB.
     @Test
     void aBorderAndABackgroundMadeOnceTakeAnotherGround() {
         Border border = BorderFactory.createMatteBorder(2, 0, 0, 0, Theme.CARD_BORDER);
@@ -41,6 +47,8 @@ class OnGroundTest {
         }
     }
 
+    /// On each ground the card, its border, the user bubble and the inline code ground differ from the ground by more than
+    /// 0.04 in Oklch, and the border from the card by more than 0.03.
     @Test
     void everySurfaceStandsOffEveryGround() {
         try {

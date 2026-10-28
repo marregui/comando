@@ -7,6 +7,7 @@ import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.PermissionRules;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.Json;
 import dev.marregui.comando.ui.kit.format.Labels;
@@ -131,7 +132,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     private final Map<Long, Card> cards = new LinkedHashMap<>();
     /** The approvals the user answered in this inbox whose cards are still shown. */
     private final Set<Long> answered = new HashSet<>();
-    private final Timer ages = new Timer(AGE_TICK_MILLIS, e -> tick());
+    private final ShownTimer ages = new ShownTimer(overlay, AGE_TICK_MILLIS, this::tick);
 
     public ApprovalInbox(WidgetContext context) {
         this(context, System::currentTimeMillis, Focus.WINDOW);
@@ -191,13 +192,10 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         answered.retainAll(ids);
         if (cards.isEmpty()) {
             overlay.showEmpty(EMPTY);
-            ages.stop();
         } else {
             overlay.showContent();
-            if (!ages.isRunning()) {
-                ages.start();
-            }
         }
+        ages.want(!cards.isEmpty());
         list.revalidate();
         list.repaint();
         if (holding != null && !cards.containsValue(holding)) {
@@ -265,7 +263,12 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     }
 
     boolean ticking() {
-        return ages.isRunning();
+        return ages.running();
+    }
+
+    /** For tests: whether waiting cards want their ages ticked, shown or not. */
+    boolean ageWanted() {
+        return ages.wanted();
     }
 
     /** The card that took the place of {@code gone} in view order: the next remaining one, else the previous one. */

@@ -40,11 +40,12 @@ import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * A tree that opens a folder on one click, as the Files tab's: the look opens and closes folders on a press, which needs
- * a display, so this runs in {@code ./gradlew :app:uiTest} (on Linux under {@code xvfb-run}). And the Files tab of a
- * window started on a kit's root, which opens on the kit's folders.
- */
+/// A tree that opens a folder on one click, as the Files tab's, and the Files tab of a window started on a kit's root.
+/// The look opens and closes folders on a press, which needs a display, so this runs in `./gradlew :app:uiTest` (on
+/// Linux under `xvfb-run`).
+/// - the first click opens or closes a folder, and a double click puts it back as it was, once
+/// - other trees keep the look's double click
+/// - a window started on a kit's root lists the kit's folders first and names the kit in the status bar
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class TreeClicksUiTest {
 
@@ -52,6 +53,8 @@ class TreeClicksUiTest {
         return new ViewSpec.TreeNode(label, "", List.of(children));
     }
 
+    /// One click opens a folder; the second click of a double click leaves it, and the double click puts it back as before,
+    /// once only; two single clicks open and close it; a tree without one-click folders keeps a toggle click count of 2.
     @Test
     void theFirstClickOpensOrClosesAFolderAndADoubleClickCanPutItBack() throws Exception {
         TreeView view = new TreeView();
@@ -82,11 +85,9 @@ class TreeClicksUiTest {
         assertThat(plain.tree().getToggleClickCount()).as("other trees keep the look's double click").isEqualTo(2);
     }
 
-    /**
-     * comando started on a kit's root shows the kit's folders at the top of the Files tab, before the user's own, and
-     * saves them; the status bar names the kit. The root is a temporary folder named as {@code CLAUDE_CONFIG_DIR} would
-     * name it; no {@code claude} runs.
-     */
+    /// comando started on a temporary folder named as `CLAUDE_CONFIG_DIR` would name it puts the kit's Memory, KB and Skills
+    /// folders, with the kit's groups, before the user's own, saves them, and the status bar reads "kit test-kit"; no
+    /// `claude` runs.
     @Test
     void theKitsFoldersOpenTheFilesTabOfAWindowStartedOnItsRoot(@TempDir Path home) throws Exception {
         Path root = home.resolve("comando-kit");

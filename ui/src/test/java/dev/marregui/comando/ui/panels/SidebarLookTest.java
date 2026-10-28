@@ -26,11 +26,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * The Files tab in the sidebar's look (record 98), painted in three tints: the transcript's ground, a header over the
- * first folder of each group and none over the others, the selected row's bar in the tint. Headless, so without the
- * look and feel; the window's own picture is {@code TreeClicksUiTest}'s, {@code app/build/snapshots/sidebar.png}.
- */
+/// [FilesTab] in the sidebar's look, painted headless in three tints, so without the look and feel. The window's own
+/// picture is `TreeClicksUiTest`'s, `app/build/snapshots/sidebar.png`.
+/// - a group has one header over its first folder and none over the others
+/// - the ground, the selected row's bar and the headers follow the tint chosen
 @ExtendWith(OnEdt.class)
 class SidebarLookTest {
 
@@ -79,6 +78,8 @@ class SidebarLookTest {
         throw new AssertionError("no row " + label);
     }
 
+    /// Only the first folder of each group carries the group's header, with extra height above its row; in each of three
+    /// tints the ground is the theme's, the selected row's bar is in the tint and the headers are painted in its body colour.
     @Test
     void aGroupHasOneHeaderOverItsFirstFolderAndTheTabPaintsInTheTintChosen() {
         FilesTab tab = tab();

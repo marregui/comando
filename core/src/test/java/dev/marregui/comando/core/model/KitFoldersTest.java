@@ -9,13 +9,18 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The kit's folders that {@code comando-kit.json} declares, merged into the Files tab's at start and by "Use the kit's folders". */
+/// [KitFolders] recognizes configured kit folders by name or resolved location and merges only missing folders.
+///
+/// - startup preserves an existing kit-folder selection
+/// - symbolic links resolve to their target folders
+/// - duplicate folder names exclude the kit entry
 class KitFoldersTest {
 
     private static FolderRoot folder(String name, Path path) {
         return new FolderRoot(name, path.toString(), "", List.of());
     }
 
+    /// Startup prepends kit folders only when none is already shown, retaining user folders and omitting kit names already taken.
     @Test
     void atStartTheKitsFoldersGoFirstWhenTheTabShowsNoneOfThemAndTheUsersStay(@TempDir Path tmp) throws Exception {
         Path root = Files.createDirectories(tmp.resolve("kit"));
@@ -31,6 +36,7 @@ class KitFoldersTest {
         assertThat(KitFolders.atStart(List.of(repo), List.of())).as("no kit").containsExactly(repo);
     }
 
+    /// A symbolic link to a kit directory counts as present, so `missing` and `use` add only the other kit folder.
     @Test
     void aFolderShownThroughALinkIsTheKitsFolder(@TempDir Path tmp) throws Exception {
         Path brainMemory = Files.createDirectories(tmp.resolve("claude/BRAIN/MEMORY"));
@@ -44,6 +50,7 @@ class KitFoldersTest {
         assertThat(KitFolders.use(List.of(mine), List.of(kit, kb))).as("the action adds what is missing, first").containsExactly(kb, mine);
     }
 
+    /// A user folder with the kit folder's name blocks that kit entry, and path comparison ignores case after normalization.
     @Test
     void aNameTakenByAnotherFolderLeavesTheKitsFolderOut(@TempDir Path tmp) throws Exception {
         FolderRoot elsewhere = folder("Memory", Files.createDirectories(tmp.resolve("elsewhere")));

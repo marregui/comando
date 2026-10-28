@@ -17,11 +17,16 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ResultsView] shows a panel's run: the running overlay, the error, the grid, and what the tab copies.
+/// - the tick paints no run the panel does not have
+/// - a failed run shows the database's error as given
+/// - the tab copies the error of a failed run, else the grid's text
+/// - with no run or no rows yet there is nothing to copy
 class ResultsViewTest {
 
     private static final String EMPTY = KeyText.of("Run SQL from the editor: select it, or put the caret in its block, and press ⌘⏎.");
 
-    /** A panel without a run never shows another panel's running statement on the tick. */
+    /// After a running statement is replaced by no run, the tick keeps the empty-state text instead of the running text.
     @Test
     void theTickDoesNotPaintARunThePanelDoesNotHave() {
         onEdt(() -> {
@@ -36,7 +41,7 @@ class ResultsViewTest {
         });
     }
 
-    /** The error is shown as the database gave it; the overlay claims no underline it cannot see. */
+    /// The overlay of a failed run shows the error text exactly as the database gave it, position line included.
     @Test
     void aFailedRunShowsTheErrorWithoutAClaimAboutTheEditor() {
         onEdt(() -> {
@@ -49,7 +54,8 @@ class ResultsViewTest {
         });
     }
 
-    /** The Results tab copies as a whole: the error of a failed run, else the grid's text. */
+    /// The tab's [Copyable] copies the error of a failed run and the grid's text for a completed one; the grid keeps its own
+    /// copy owner.
     @Test
     void theResultsTabCopiesTheErrorOfAFailedRun() {
         onEdt(() -> {
@@ -66,7 +72,7 @@ class ResultsViewTest {
         });
     }
 
-    /** With no run, or a run without rows yet, there is nothing to copy, and ⌘⇧C is disabled rather than claim a copy. */
+    /// With no run, or a run still without rows, the tab cannot copy; a failed run can.
     @Test
     void anEmptyResultsTabHasNothingToCopy() {
         onEdt(() -> {

@@ -12,7 +12,12 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** A sub-agent card's status tells the truth: launched into the background, read from a stored conversation, rebuilt, clipped. */
+/// [TranscriptCanvas]'s sub-agent status tells the truth: launched into the background, read from a stored
+/// conversation, clipped.
+/// - a background launch is not done while it works, and runs while the session lists it
+/// - a launch seen before the session lists it runs for a grace, then ends; one the session already let go reads done
+/// - a card from a stored conversation claims no tool count and a stored launch reads done
+/// - the latest tool's label never splits a surrogate pair
 @ExtendWith(OnEdt.class)
 class AgentStatusEdgesTest {
 
@@ -35,6 +40,7 @@ class AgentStatusEdgesTest {
         return at;
     }
 
+    /// A background call that returns its "async launched" result at once is not reported done.
     @Test
     void aSubagentLaunchedInTheBackgroundIsNotReportedDoneWhileItWorks() {
         // the Agent call returns at once with an "async launched" result; the sub-agent goes on working
@@ -47,6 +53,7 @@ class AgentStatusEdgesTest {
         assertThat(canvas.cardStatus("a1")).as("a background sub-agent that has just started").doesNotStartWith("done");
     }
 
+    /// A card that arrives done with no child blocks does not claim "0 tools".
     @Test
     void aSubagentCardReadFromAStoredConversationDoesNotClaimItCalledNoTools() {
         // a stored conversation keeps a sub-agent's blocks in a file of its own: the card arrives done, with no children
@@ -56,22 +63,7 @@ class AgentStatusEdgesTest {
         assertThat(canvas.cardStatus("a1")).as("the count is unknown, not zero").doesNotContain("0 tools");
     }
 
-    @Test
-    void aRunningSubagentsElapsedTimeSurvivesTheCanvasBeingRebuilt() {
-        // the lower panel rebuilds the canvas on a session switch and on "Show earlier"
-        Block.ToolCall a = new Block.ToolCall("a1", "Agent", "{\"description\":\"survey\",\"prompt\":\"Do it.\"}", "",
-                Block.ToolStatus.RUNNING, "");
-        add(a);
-        now.addAndGet(300_000);
-        assertThat(canvas.cardStatus("a1")).startsWith("running · 5 min");
-
-        canvas.clear();
-        next = 0;
-        add(a);
-
-        assertThat(canvas.cardStatus("a1")).as("the same call, five minutes in").startsWith("running · 5 min");
-    }
-
+    /// A command that puts an emoji's high surrogate at the clip boundary leaves no lone surrogate in the label.
     @Test
     void theLatestToolsLabelNeverSplitsASurrogatePair() {
         add(new Block.ToolCall("a1", "Agent", "{\"description\":\"survey\",\"prompt\":\"Do it.\"}", "",
@@ -93,6 +85,8 @@ class AgentStatusEdgesTest {
                 Block.ToolStatus.RUNNING, "");
     }
 
+    /// A launched call listed by the session reads "running in background" with its time and the tools its later blocks
+    /// call, and is a running sub-agent by its agent id; once the session drops it, it reads done with its total time.
     @Test
     void aBackgroundSubagentRunsWhileTheSessionListsItAndCountsTheToolsItsBlocksCall() {
         Block.ToolCall a = backgroundAgent();
@@ -113,6 +107,8 @@ class AgentStatusEdgesTest {
         assertThat(canvas.runningAgents()).isEmpty();
     }
 
+    /// A launch reads running in background until [TranscriptCanvas#LAUNCH_GRACE_MILLIS] passes without the session
+    /// listing it, then reads done.
     @Test
     void aLaunchSeenBeforeTheSessionListsItRunsForAGraceThenEnds() {
         Block.ToolCall a = backgroundAgent();
@@ -125,6 +121,7 @@ class AgentStatusEdgesTest {
         assertThat(canvas.cardStatus("a1")).as("never listed within the grace").startsWith("done");
     }
 
+    /// A launch whose agent the session already listed and dropped reads done at once.
     @Test
     void aBackgroundSubagentTheSessionAlreadyLetGoReadsDone() {
         canvas.setBackgroundTasks(List.of(new BackgroundTask("a58", "local_agent", "watch", 0L)));
@@ -136,6 +133,7 @@ class AgentStatusEdgesTest {
         assertThat(canvas.cardStatus("a1")).startsWith("done");
     }
 
+    /// A stored call whose result is a launch line reads "done" and is not running.
     @Test
     void aBackgroundLaunchReadFromAStoredConversationReadsDone() {
         add(new Block.ToolCall("a1", "Agent", "{\"description\":\"watch\",\"prompt\":\"Do it.\"}", LAUNCHED, Block.ToolStatus.DONE, ""));

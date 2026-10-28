@@ -13,6 +13,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Reducer] opens a session's child conversation only when that session has a recorded conversation identifier.
+///
+/// - an initialized session forwards its conversation id
+/// - missing and unknown sessions receive an informational notice
 class ReducerSubagentTest {
 
     private final Reducer reducer = new Reducer(new FakeClock());
@@ -25,6 +29,7 @@ class ReducerSubagentTest {
         effects = t.effects();
     }
 
+    /// An initialized `work` session routes child conversation `toolu_7` to the display effect with conversation `conv-1`.
     @Test
     void openingASubagentAsksTheAdapterWithTheSessionsConversation() {
         apply(new Intent.StartSession("work"));
@@ -36,6 +41,7 @@ class ReducerSubagentTest {
         assertThat(effects).containsExactly(new Effect.ShowSubagent("work", "conv-1", "toolu_7"));
     }
 
+    /// A known session without an initialized conversation produces no display effect and explains why.
     @Test
     void aSessionWithoutAConversationHasNoSubagentToShow() {
         apply(new Intent.OpenSubagent("work", "toolu_7"));
@@ -45,6 +51,7 @@ class ReducerSubagentTest {
         assertThat(state.notice().text()).isEqualTo("Session work: the session has no conversation yet");
     }
 
+    /// An unknown session produces no display effect and receives the same no-conversation outcome.
     @Test
     void anUnknownSessionHasNoSubagentToShow() {
         apply(new Intent.OpenSubagent("gone", "toolu_7"));

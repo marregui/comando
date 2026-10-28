@@ -22,11 +22,9 @@ import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * The divider between the panels and the lower panel is each panel's own: moved while one panel is in front, it goes
- * back where it was for another when that one comes to the front, and back again. Opens the window, so this runs in
- * {@code ./gradlew :app:uiTest}.
- */
+/// The divider between the panels and the lower panel is each panel's own. Opens the window, so this runs in
+/// `./gradlew :app:uiTest`.
+/// - moved while one panel is in front, it returns to another panel's position when that one comes forward, and back
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class LowerDividerUiTest {
 
@@ -35,6 +33,8 @@ class LowerDividerUiTest {
     @TempDir
     Path home;
 
+    /// A panel never in front keeps the divider at its 150 px; the divider moved with one panel in front goes back to the
+    /// other panel's position when that one comes forward, and to the moved position when the first returns.
     @Test
     void eachPanelBringsBackItsOwnLowerDivider() throws Exception {
         Path one = Files.writeString(home.resolve("one.md"), "# One\n");

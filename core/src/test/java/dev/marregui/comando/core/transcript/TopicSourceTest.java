@@ -4,8 +4,15 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [TopicSource] builds bounded summary input from a session conversation, panel text, or document text.
+///
+/// - Session sources retain main-conversation prompts, tool calls, and responses in chronological order.
+/// - Panel sources prioritize the latest paragraph and the most recent session response.
+/// - Empty input produces no source and oversized text is clipped without splitting emoji.
 class TopicSourceTest {
 
+    /// [TopicSource#ofSession] includes the main conversation's prompt, tool input, and response oldest first while
+    /// excluding thinking, notes, nested conversation blocks, and turn-end metadata.
     @Test
     void theEndOfTheMainConversationIsReadOldestFirstWithoutThinkingNotesOrSubAgents() {
         Transcript t = new Transcript();
@@ -26,6 +33,8 @@ class TopicSourceTest {
                 .as("a headless session names no panel").startsWith("A coding session named \"main\", working in /w/comando. The end of its conversation");
     }
 
+    /// [TopicSource#ofSession] keeps the latest prompt ahead of the newest response when 40 later 200-character
+    /// responses exceed a 2,000-character budget, while omitting the older prompt.
     @Test
     void theLatestPromptIsKeptWhenTheConversationAfterItFillsTheBudget() {
         Transcript t = new Transcript();
@@ -42,6 +51,8 @@ class TopicSourceTest {
         assertThat(source.length()).isLessThan(2_000 + 300);
     }
 
+    /// [TopicSource#ofSession] takes the beginning of an oversized tool input and emoji response within their shares,
+    /// preserving the preceding prompt and a complete surrogate pair before the ellipsis.
     @Test
     void aHugeBlockIsReadOnlyFromItsStart() {
         Transcript t = new Transcript();
@@ -56,6 +67,8 @@ class TopicSourceTest {
         assertThat(Character.isHighSurrogate(source.charAt(source.length() - 3))).as("no pair split before the ellipsis").isFalse();
     }
 
+    /// [TopicSource] returns empty for no readable conversation or blank text, but identifies document text and clips
+    /// the beginning of an oversized document.
     @Test
     void aConversationOrTextWithNothingToReadHasNoSource() {
         Transcript t = new Transcript();
@@ -67,6 +80,8 @@ class TopicSourceTest {
         assertThat(TopicSource.ofText("big.log", "", "y".repeat(500), 100)).endsWith("y…");
     }
 
+    /// [TopicSource#ofPanel] makes the final paragraph the summary subject, appends a bounded response, and keeps the
+    /// end of earlier text as context so the current request survives a 200-character limit.
     @Test
     void aSessionPanelsTopicIsAboutItsLastParagraphWithTheRestForContext() {
         String text = "# notes\nold idea about the cache\n\nfix ENG-1125: the browse regression\n \nnow port the fix to v1\nand open the PR";
@@ -84,6 +99,8 @@ class TopicSourceTest {
         assertThat(bounded.length()).isLessThan(200 + 300);
     }
 
+    /// [TopicSource#lastResponse] finds the latest nonblank top-level response, which [TopicSource#ofPanel] places
+    /// after the current paragraph before clipping earlier context.
     @Test
     void theSessionsLastResponseIsReadWithTheLastParagraphBeforeTheContext() {
         Transcript t = new Transcript();

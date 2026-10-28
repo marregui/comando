@@ -21,6 +21,16 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [TranscriptCanvas] lays out, paints, finds in and links a session's blocks.
+/// - thinking shows until the next item in its list takes its place, at the top level and inside a card
+/// - text outside a bubble or card reads in one colour; an answer's headings, marks and table heads take the tint
+/// - the text that ends a turn is its report, repainted in another tint on the transcript's ground
+/// - a whole session lays out; a width change or a rebuild lays out the view now and the rest when idle
+/// - sub-agent steps are quoted under their call in the Markdown
+/// - zoom keeps the text between 8 and 40 points and lays everything out again
+/// - find opens closed cards and keeps the reader's match while typing on; select all copies every box
+/// - streaming keeps the layouts of finished paragraphs; tabs expand to four-column stops
+/// - links in text, tool summaries, inputs and results are followed on a double click
 @ExtendWith(OnEdt.class)
 class TranscriptCanvasTest {
 
@@ -89,6 +99,8 @@ class TranscriptCanvasTest {
         return new Block.ToolCall(id, "Bash", "{\"command\":\"ls\"}", "ok", Block.ToolStatus.DONE, parent);
     }
 
+    /// A thinking block shows while it is the latest item of its list and is hidden once another item follows, at the top
+    /// level and inside a card, while every block stays counted.
     @Test
     void thinkingShowsUntilTheNextItemInItsListTakesItsPlace() {
         canvas.append(0, new Block.UserPrompt("go", "p", ""));
@@ -107,6 +119,7 @@ class TranscriptCanvasTest {
         paint(800, 400);
     }
 
+    /// A turn end read from a stored conversation has an empty summary and Markdown.
     @Test
     void aStoredTurnEndRecordsNoTime() {
         // a stored conversation's turn end, as its messages record it
@@ -119,6 +132,8 @@ class TranscriptCanvasTest {
         paint(800, 300);
     }
 
+    /// The style outside bubbles and cards uses [Theme#TRANSCRIPT_TEXT] for text and quotes and is built once; a prompt and
+    /// a card paint none of it, an answer and its time do, and a note adds more.
     @Test
     void everyTextOutsideABubbleOrACardReadsInOneColour() {
         Style s = Style.of(0);
@@ -141,6 +156,8 @@ class TranscriptCanvasTest {
         assertThat(pixels(paint(800, 300), Theme.TRANSCRIPT_TEXT)).as("a note").isGreaterThan(answer);
     }
 
+    /// Outside cards headings and marks take the tint's body and table heads its highlight, bold is brighter; inside cards
+    /// they keep the text colour; a find match uses [Theme#FIND_MATCH]; h1 uses the shared heading scale.
     @Test
     void anAnswersHeadingsMarksAndTableHeadsAreTintedElsewhereTheTextsColour() {
         Style s = Style.of(0);
@@ -159,6 +176,8 @@ class TranscriptCanvasTest {
                 .isEqualTo(s.body.getSize2D() * Theme.HEADING_SCALE[0]);
     }
 
+    /// The text that ends a turn is its report even with notes after it; a text followed by a tool call is not, nor is
+    /// anything in a turn that ended on a tool call.
     @Test
     void theTextThatEndsATurnIsItsReport() {
         canvas.append(0, new Block.UserPrompt("go", "p", ""));
@@ -177,6 +196,8 @@ class TranscriptCanvasTest {
         assertThat(((Items.TextItem) canvas.itemAt(7)).isReport()).as("a turn that ended on a tool call has none").isFalse();
     }
 
+    /// A report paints its bar in the current tint only, without lifting the ground towards it; after another tint and a
+    /// restyle it paints in the new tint only.
     @Test
     void choosingAnotherTintRepaintsTheReportInItOnTheTranscriptsGround() {
         canvas.append(0, new Block.UserPrompt("go", "p", ""));
@@ -193,6 +214,7 @@ class TranscriptCanvasTest {
         assertThat(pixels(paint(800, 300), Tint.TREASURE.highlight)).isZero();
     }
 
+    /// A synthetic session lays out taller than 5 000 px, and taller still at half the width.
     @Test
     void wholeSessionLaysOutAndPaints() {
         load(SyntheticSession.steps(24));
@@ -204,6 +226,8 @@ class TranscriptCanvasTest {
         assertThat(canvas.contentHeight()).isGreaterThan(wide);
     }
 
+    /// After a width change the height is estimated within a factor of two; refining yields the same exact height as a full
+    /// layout at that width.
     @Test
     void aWidthChangeLaysOutTheViewNowAndTheRestWhenIdle() {
         load(SyntheticSession.steps(10_000));
@@ -221,6 +245,8 @@ class TranscriptCanvasTest {
         assertThat(guessed).isBetween(exact / 2, exact * 2);
     }
 
+    /// A rebuilt view of 10 000 steps lays out fewer than half its items at first, the end when painted, and the rest when
+    /// idle, reaching the same height as laying out everything at once; the first guess is within a factor of two.
     @Test
     void aRebuiltViewLaysOutWhatIsVisibleNowAndTheRestWhenIdle() {
         // a panel switching sessions rebuilds the view from the session's history: no block has been laid out yet
@@ -254,19 +280,13 @@ class TranscriptCanvasTest {
         assertThat(guessed).as("the first guess is in the right range").isBetween(exact / 2, exact * 2);
     }
 
-    @Test
-    void subagentBlocksNestInTheirCall() {
-        load(SyntheticSession.steps(10_000));
-        canvas.ensureLayout(1000);
-        // 8 turns of prompt, thinking, text, 5 calls, text, turn end, plus the subagent's call; its prompt and text nest
-        assertThat(canvas.markdown()).contains("**Agent** · survey the module").doesNotContain("\n\n> List the classes.");
-    }
-
+    /// A sub-agent's prompt and answer are quoted under its call, after the call's result, and never at the top level.
     @Test
     void theMarkdownOfASubagentCallQuotesItsSteps() {
         load(SyntheticSession.steps(10_000));
         canvas.ensureLayout(1000);
         String md = canvas.markdown();
+        assertThat(md).as("its prompt is not quoted at the top level").doesNotContain("\n\n> List the classes.");
         int call = md.indexOf("**Agent** · survey the module");
         assertThat(call).isNotNegative();
         String card = md.substring(call);
@@ -277,6 +297,7 @@ class TranscriptCanvasTest {
                 .isGreaterThan(card.indexOf("The module has 12 classes."));
     }
 
+    /// [Style#of] clamps the body and mono fonts to 8 pt and 40 pt.
     @Test
     void zoomKeepsTheTextBetween8And40Points() {
         assertThat(Style.of(-100).body.getSize2D()).isEqualTo(8f);
@@ -285,6 +306,7 @@ class TranscriptCanvasTest {
         assertThat(Style.of(100).mono.getSize2D()).isEqualTo(40f);
     }
 
+    /// Find counts matches inside closed tool results, opening their cards; a text found nowhere counts zero.
     @Test
     void findOpensClosedCardsAndCountsMatches() {
         load(SyntheticSession.steps(10_000));
@@ -296,6 +318,7 @@ class TranscriptCanvasTest {
         assertThat(canvas.find("no such text anywhere", true)).isZero();
     }
 
+    /// Extending the query after rewinding keeps the current match at or after the one the reader was on, not the first.
     @Test
     void typingOnInTheFindBarKeepsTheMatchUnderTheReader() {
         load(SyntheticSession.steps(10_000));
@@ -315,6 +338,7 @@ class TranscriptCanvasTest {
         assertThat(before).as("the third match is below the first").isGreaterThan(first);
     }
 
+    /// Select all copies the text of every box, prompt and answer alike; clearing the selection empties it.
     @Test
     void selectAllCopiesTextOfEveryBox() {
         load(SyntheticSession.steps(10_000));
@@ -326,6 +350,7 @@ class TranscriptCanvasTest {
         assertThat(canvas.selectionText()).isEmpty();
     }
 
+    /// Two hundred streaming updates of the last paragraph grow the height without failing.
     @Test
     void streamingKeepsLayoutsOfFinishedParagraphs() {
         canvas.append(0, new Block.AssistantText("m", 0, "First paragraph.\n\nSecond", true, ""));
@@ -338,6 +363,7 @@ class TranscriptCanvasTest {
         assertThat(canvas.contentHeight()).isGreaterThan(h1);
     }
 
+    /// A larger zoom lays the whole session out taller.
     @Test
     void zoomRelaysOutEverything() {
         load(SyntheticSession.steps(10_000));
@@ -348,11 +374,13 @@ class TranscriptCanvasTest {
         assertThat(canvas.contentHeight()).isGreaterThan(before);
     }
 
+    /// [Rich#detab] expands each tab to the next four-column stop and leaves text without tabs alone.
     @Test
     void tabsExpandToFourColumnStops() {
         assertThat(Rich.detab("1\tab\n\tx\tyz")).isEqualTo("1   ab\n    x   yz");
         assertThat(Rich.detab("no tabs")).isEqualTo("no tabs");
     }
+    /// A note link shows the hand cursor; a single click follows nothing, a double click follows it without selecting a word.
     @Test
     void aLinkInTextIsFollowedAtADoubleClickNotASingleOne() {
         canvas.append(0, new Block.AssistantText("m", 0, "Open [[project-current-lane]] now", false, ""));
@@ -379,6 +407,8 @@ class TranscriptCanvasTest {
         assertThat(canvas.selectionText()).as("the double click selects no word").isEmpty();
     }
 
+    /// A Read card links its whole path though the summary is clipped, and paths and addresses in a command, a prompt and
+    /// skill arguments are links; a double click on one follows it.
     @Test
     void aToolCardsSummaryAndInputAreLinksADoubleClickFollows() {
         canvas.append(0, new Block.ToolCall("r", "Read", "{\"file_path\":\"/w/docs/very/long/folder/names/that/run/past/the/summary/limit/of/one/hundred/and/forty/characters/to/be/clipped/plan.md\"}",
@@ -413,6 +443,7 @@ class TranscriptCanvasTest {
         assertThat(opened).as("a double click on a path in a command opens it").containsExactly("comando-file:docs/adr/0108-links.md");
     }
 
+    /// [Rich#linked] links URLs, note links and Markdown links in a result, not plain words, and keeps the text as written.
     @Test
     void aToolsResultShowsItsLinks() {
         Rich r = new Rich(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12), Color.GRAY)

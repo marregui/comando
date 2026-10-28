@@ -11,10 +11,13 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * The return path (record 112): closing the place the user is at returns to where they were just before they last
- * arrived at it; closing a tab they are not at moves nothing.
- */
+/// [FocusOrigins] keeps the return path (record 112): closing the place the user is at returns to where they were just
+/// before they last arrived at it; closing a tab they are not at moves nothing.
+/// - Openings chain and unwind in order.
+/// - The way back is where the user came from last, not what opened the place.
+/// - Closing a tab the user is not at moves nothing.
+/// - An arrival told at the request wins over the render.
+/// - A way back that closed meanwhile hands on to its own; a place reached because another closed keeps its own.
 class FocusOriginsTest {
 
     private final FocusOrigins origins = new FocusOrigins();
@@ -35,6 +38,7 @@ class FocusOriginsTest {
                 o -> !gone.contains(o.owner()) && (o.ownerKey() == null || shown.contains(o.ownerKey())));
     }
 
+    /// The first render returns no origin; after A, B, C open in turn, closing C returns to B and closing B to A.
     @Test
     void openingsChainAndUnwindInOrder() {
         assertThat(render(Set.of("panel:a"), "panel:a")).as("the first render remembers what is open").isNull();
@@ -44,6 +48,7 @@ class FocusOriginsTest {
         assertThat(render(Set.of("panel:a"), "panel:a").owner()).as("B closed: back to A").isSameAs(text.get("panel:a"));
     }
 
+    /// F opened from review, then the user visited main and came back to F; closing F returns to main.
     @Test
     void theWayBackIsWhereTheUserCameFromLastNotWhatOpenedIt() {
         render(Set.of("panel:review", "panel:main"), "panel:review");
@@ -54,6 +59,7 @@ class FocusOriginsTest {
         assertThat(back.owner()).as("F closed: back to main, where the user came from").isSameAs(text.get("panel:main"));
     }
 
+    /// Closing F while the user is at main returns no origin.
     @Test
     void closingATabTheUserIsNotAtMovesNothing() {
         render(Set.of("panel:review", "panel:main"), "panel:review");
@@ -62,6 +68,8 @@ class FocusOriginsTest {
         assertThat(render(Set.of("panel:review", "panel:main"), "panel:main")).as("F closed in the background").isNull();
     }
 
+    /// An origin given by [FocusOrigins#opened] (the Files tree) replaces the panel in front at the render, and closing
+    /// returns to it.
     @Test
     void anArrivalToldAtTheRequestWinsOverTheRender() {
         render(Set.of("panel:a", "panel:b"), "panel:a");
@@ -71,6 +79,7 @@ class FocusOriginsTest {
         assertThat(render(Set.of("panel:a", "panel:b"), "panel:a").owner()).isSameAs(tree);
     }
 
+    /// With C from B from A and B closed in the background, closing C returns to A.
     @Test
     void aWayBackThatClosedMeanwhileHandsOnToItsOwn() {
         render(Set.of("panel:a"), "panel:a");
@@ -81,6 +90,7 @@ class FocusOriginsTest {
         assertThat(render(Set.of("panel:a"), "panel:a").owner()).as("C came from B, B from A").isSameAs(text.get("panel:a"));
     }
 
+    /// Returning to B because C closed keeps B's own origin, A, instead of recording C.
     @Test
     void reachingAPlaceBecauseAnotherClosedKeepsItsOwnWayBack() {
         render(Set.of("panel:a"), "panel:a");

@@ -104,14 +104,14 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * The keyboard in a real window, with macOS's keys and with the other desktops', so CI on Linux checks that comando
- * there works as it does on a Mac: each key is macOS's with Ctrl for ⌘, but for the few that would be another
- * command's; no two commands share a key; in the terminal Ctrl with a letter reaches the shell, as ⌃ does on macOS;
- * the editor's run keys run, and every text that names a key names this desktop's. Either set of keys is chosen with
- * {@link Platform#KEYS_PROPERTY}, so both run on any desktop. Needs a display: {@code ./gradlew :app:uiTest} (on
- * Linux under {@code xvfb-run}).
- */
+/// The keyboard in a real window, with macOS's keys and with the other desktops', so CI on Linux checks that comando
+/// there works as on a Mac. Either set of keys is chosen with [Platform#KEYS_PROPERTY], so both run on any desktop. Needs
+/// a display: `./gradlew :app:uiTest` (on Linux under `xvfb-run`).
+/// - each key is macOS's with Ctrl for ⌘, but for the few that would be another command's; no two commands share a key
+/// - in the terminal Ctrl with a letter reaches the shell, as ⌃ does on macOS, and the commands' keys still work
+/// - the editor's run keys run, and every text and the shortcuts table name this desktop's keys
+/// - the welcome text names only menu items the bar has; every tooltip is one short line
+/// - the theme is chosen beside New panel, every panel takes it at once, and the next window keeps it
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class UiKeysTest {
 
@@ -258,6 +258,8 @@ class UiKeysTest {
 
     // ---- the key map
 
+    /// Neither key map gives two commands one key, both bind the same commands, Quit is Ctrl+Q off macOS, and every other
+    /// key differs from macOS's only by Ctrl for ⌘, except the moved ones, which are ⌃ keys on macOS.
     @Test
     void theOtherDesktopsKeysAreMacOssWithCtrlForCmdButForTheMovedOnesAndNoTwoCommandsShareAKey() throws Exception {
         Map<String, KeyStroke> mac;
@@ -302,7 +304,7 @@ class UiKeysTest {
 
     // ---- the window
 
-    /** The first panel on a fresh data root names menu items; each must be one the menu bar has. */
+    /// Every menu path the first panel's welcome text names on a fresh data root starts with an item the menu bar has.
     @Test
     void theWelcomeTextNamesOnlyMenuItemsTheBarHas() throws Exception {
         Window w = open("mac", new ServerToggle() {
@@ -341,6 +343,7 @@ class UiKeysTest {
         }
     }
 
+    /// The test window lies outside every screen's bounds and is still showing, so it is painted and given keys.
     @Test
     @EnabledIfSystemProperty(named = "comando.offScreen", matches = "true")
     void offScreenTheWindowIsOnNoScreenAndShowing() throws Exception {
@@ -358,6 +361,8 @@ class UiKeysTest {
     private static final int[] SHELL_LETTERS = {KeyEvent.VK_W, KeyEvent.VK_E, KeyEvent.VK_B, KeyEvent.VK_T, KeyEvent.VK_J,
             KeyEvent.VK_O, KeyEvent.VK_A, KeyEvent.VK_F, KeyEvent.VK_K, KeyEvent.VK_U, KeyEvent.VK_L, KeyEvent.VK_C};
 
+    /// With either key set, Ctrl with each shell letter reaches the terminal, not comando: ^W and ^T change no panel, ^B
+    /// leaves the sidebar, ^E and ^F keep the keyboard in the terminal; the tab keys still switch tabs from there.
     @ParameterizedTest
     @ValueSource(strings = {"mac", "linux"})
     void inTheTerminalCtrlWithALetterReachesTheShellAndTheCommandsKeysStillWork(String keys) throws Exception {
@@ -398,6 +403,8 @@ class UiKeysTest {
 
     // ---- the editor's run keys
 
+    /// ⌘⏎ (Ctrl+Enter elsewhere) runs the block as one `RunText`; ⌃⏎ (Ctrl+Alt+Enter elsewhere) types the line into the
+    /// shell and runs nothing more.
     @ParameterizedTest
     @ValueSource(strings = {"mac", "linux"})
     void theRunKeyRunsTheBlockAndTheTerminalKeyTypesTheLineIntoTheShell(String keys) throws Exception {
@@ -423,6 +430,8 @@ class UiKeysTest {
 
     // ---- the shortcuts table
 
+    /// The shortcuts table lists macOS glyphs such as `⌘⏎` and `⇧⌘P` with Mac keys, and names such as `Ctrl+Enter` and
+    /// `Ctrl+Shift+P` with the other desktops' keys, never the other set.
     @ParameterizedTest
     @ValueSource(strings = {"mac", "linux"})
     void theShortcutsTableListsThisDesktopsKeys(String keys) throws Exception {
@@ -444,6 +453,8 @@ class UiKeysTest {
 
     // ---- texts naming keys
 
+    /// Texts in the window that name a key use no ⌘, ⌃ or ⌥ glyph with the other desktops' keys, and no `Ctrl+` with
+    /// macOS's.
     @ParameterizedTest
     @ValueSource(strings = {"mac", "linux"})
     void everyTextInTheWindowNamesThisDesktopsKeys(String keys) throws Exception {
@@ -466,7 +477,8 @@ class UiKeysTest {
         }
     }
 
-    /** Every tooltip is one short line: what the control does and one fact it does not show (live status aside). */
+    /// Resting on a tab shows its card instead of a tooltip, read from the panel's text `SELECT 1;`; the card stays past the
+    /// grace once the pointer goes into it and closes when the pointer leaves it.
     @Test
     void restingOnATabShowsItsCardWithTheTopicWhichClosesWhenThePointerLeavesIt() throws Exception {
         List<String> sources = new CopyOnWriteArrayList<>();
@@ -509,6 +521,9 @@ class UiKeysTest {
         assertThat(onEdt(card::isShowing)).as("off the card, it closes").isFalse();
     }
 
+    /// The theme swatch sits left of New panel with Graphite gold ticked by default; choosing Midnight blue sets the ground
+    /// and Electric blue tint, keeps them in `settings.json`, repaints the report, sidebar, editor and panels at once with
+    /// the editor's zoom kept, and the next window opens with it.
     @Test
     void theThemeIsChosenBesideNewPanelEveryPanelTakesItAndTheNextWindowKeepsIt(@TempDir Path home) throws Exception {
         windowHome = home;
@@ -713,6 +728,7 @@ class UiKeysTest {
         });
     }
 
+    /// More than 20 tooltips are found in the window, each one line of at most 80 characters with no line break.
     @Test
     void everyTooltipInTheWindowIsOneShortLine() throws Exception {
         Window w = open("mac");

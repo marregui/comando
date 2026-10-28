@@ -13,9 +13,13 @@ import javax.swing.SwingUtilities;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [LivePlots] reruns a panel's query on a period to keep its plot live.
+/// - A live plot whose query fails stops, with one notice about its panel.
+/// - A refresh period beyond a day is a day.
 class LivePlotsTest {
 
-    /** A query that failed once fails every period: the plot stops with one notice about its panel. */
+    /// A query that failed once fails every period: on a state whose run for the panel failed, the plot is removed and one
+    /// WARN notice says it stopped, with the panel as its subject.
     @Test
     void aLivePlotWhoseQueryFailsStops() throws Exception {
         RecordingSink sink = new RecordingSink();
@@ -34,6 +38,7 @@ class LivePlotsTest {
         assertThat(n.subject()).isEqualTo(Notice.panel(States.P1.value()));
     }
 
+    /// A period of 3 000 000 s is clamped to [LivePlots#MAX_SECONDS].
     @Test
     void aRefreshPeriodBeyondADayIsADay() throws Exception {
         SwingUtilities.invokeAndWait(() -> {

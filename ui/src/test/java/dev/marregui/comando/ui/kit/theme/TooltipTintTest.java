@@ -13,6 +13,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Tint] and [Ground] choices recolour comando live, and every tint reads on every ground.
+/// - A tooltip's edge is the reports' bar in the tint chosen, over a ground no tint changes.
+/// - Choosing a tint tells every listener once; a stopped listener hears no more.
+/// - Every tint reads on every ground, and attention stays treasure gold.
+/// - An unknown ground name is graphite; a ground chosen moves the ground and the table-head band and tells tint listeners.
 class TooltipTintTest {
 
     @AfterEach
@@ -20,6 +25,8 @@ class TooltipTintTest {
         Theme.tint(Tint.TREASURE);
     }
 
+    /// [TintBarBorder] insets text clear of its bar and paints the bar's top in the tint's highlight, following a change
+    /// from CHAMPAGNE to ELECTRIC_BLUE, while `ToolTip.background` stays.
     @Test
     void aTooltipsEdgeIsTheReportsBarInTheTintChosenOnTheTranscriptsGround() {
         TintBarBorder border = new TintBarBorder();
@@ -40,6 +47,7 @@ class TooltipTintTest {
         assertThat(blue.getRGB(1, 0) & 0xFFFFFF).as("a tint that is no gold").isEqualTo(Tint.ELECTRIC_BLUE.highlight.getRGB() & 0xFFFFFF);
     }
 
+    /// Choosing the same tint twice notifies once, and after the returned stop runs a further choice is not heard.
     @Test
     void choosingATintTellsEveryListenerOnceAndAStoppedOneNoMore() {
         List<String> heard = new ArrayList<>();
@@ -51,6 +59,8 @@ class TooltipTintTest {
         assertThat(heard).as("the same tint again is no change").containsExactly("YELLOW");
     }
 
+    /// Each tint's body, shade and table head pass their contrast floors on the default ground, [Theme#ATTENTION] stays
+    /// treasure's body under each tint, and the tints' labels are fixed in order.
     @Test
     void everyTintReadsOnTheTranscriptsGroundAndAttentionStaysTreasureGold() {
         for (Tint t : Tint.values()) {
@@ -64,6 +74,9 @@ class TooltipTintTest {
                 "Treasure gold", "18k yellow gold", "Champagne gold", "Silver", "Tropical forest", "Electric blue");
     }
 
+    /// On every ground the ivory text and a card stand off it and every tint passes its contrast floors, [Ground#named]
+    /// falls back to graphite, and choosing a ground moves [Theme#ground] and the table-head band and notifies tint
+    /// listeners.
     @Test
     void everyTintReadsOnEveryGroundAndAGroundChosenWithoutTheLookIsOnlyKept() {
         for (Ground g : Ground.values()) {

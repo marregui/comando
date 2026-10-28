@@ -27,6 +27,13 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [TranscriptWidget]: a session's transcript on its own ground, following the end, with the sub-agent strip.
+/// - the transcript is drawn on the viewport's ground
+/// - a transcript loaded while hidden, another transcript and a prompt sent from a panel all follow the end
+/// - a waiting approval marks its tool call and survives a reload
+/// - zoom stops at the font limits and turns back at once
+/// - the strip names running sub-agents, then background ones, and hides when none run; a chip click reveals its card
+/// - a sub-agent link asks for its transcript
 class TranscriptWidgetTest {
 
     @BeforeAll
@@ -45,6 +52,7 @@ class TranscriptWidgetTest {
         }
     }
 
+    /// The canvas is not opaque, so a corner no block reaches shows [Theme#ground].
     @Test
     void theTranscriptIsDrawnOnItsOwnGround() {
         Transcript t = new Transcript();
@@ -63,6 +71,8 @@ class TranscriptWidgetTest {
         assertThat(new Color(image.getRGB(399, 299))).as("a corner no block reaches").isEqualTo(Theme.ground());
     }
 
+    /// A transcript rendered while not showing keeps following when more blocks arrive, although an unlaid-out scroll bar
+    /// reads as at the top.
     @Test
     void aTranscriptLoadedWhileHiddenKeepsFollowingTheEnd() {
         // a restored session: the transcript is loaded while the Session tab is hidden, then a new turn arrives
@@ -77,6 +87,7 @@ class TranscriptWidgetTest {
         assertThat(widget.following()).as("an unlaid-out scroll bar reads 'at the top' and must not stop following").isTrue();
     }
 
+    /// After the user scrolled away from one transcript, rendering another starts following again.
     @Test
     void anotherTranscriptStartsFollowingAgain() {
         Transcript first = new Transcript();
@@ -91,6 +102,8 @@ class TranscriptWidgetTest {
         assertThat(widget.following()).isTrue();
     }
 
+    /// While scrolled away the latest button shows; a prompt replayed from history does not move the view, but a prompt sent
+    /// from a panel follows again and hides the button.
     @Test
     void aPromptSentFromAPanelFollowsAgainAndHidesTheLatestButton() {
         Transcript t = new Transcript();
@@ -111,6 +124,8 @@ class TranscriptWidgetTest {
         assertThat(widget.latestShown()).isFalse();
     }
 
+    /// A waiting approval changes its tool call's status to "waiting for your approval", the mark comes back after another
+    /// transcript is shown and this one rebuilt, and clearing the approvals restores "running".
     @Test
     void aWaitingApprovalMarksItsToolCallAndSurvivesAReload() {
         Transcript t = new Transcript();
@@ -132,6 +147,8 @@ class TranscriptWidgetTest {
         assertThat(widget.canvas().cardStatus("tu1")).isEqualTo("running");
     }
 
+    /// Zooming out stops where the text reaches 8 pt and one step in enlarges at once; zooming in stops at 40 pt; reset
+    /// returns to 0.
     @Test
     void zoomStopsAtTheFontLimitsAndTurnsBackAtOnce() {
         for (int i = 0; i < 100; i++) {
@@ -160,6 +177,8 @@ class TranscriptWidgetTest {
         return strip.chips().stream().map(JLabel::getText).map(t -> t.replaceAll(" · \\d+ s$", "")).toList();
     }
 
+    /// Chips list running calls in start order, clipped when long, then background sub-agents, never shell tasks; finished
+    /// calls leave, and the strip hides when nothing runs.
     @Test
     void theStripNamesRunningSubagentsThenBackgroundOnesAndHidesWhenNoneRun() {
         Transcript t = new Transcript();
@@ -188,6 +207,7 @@ class TranscriptWidgetTest {
         assertThat(strip.chips()).isEmpty();
     }
 
+    /// A background task whose id is a running card's gets no second chip.
     @Test
     void aBackgroundTaskWithARunningCardHasNoChipOfItsOwn() {
         Transcript t = new Transcript();
@@ -199,6 +219,7 @@ class TranscriptWidgetTest {
         assertThat(chipTexts(widget.strip())).containsExactly("watch the build");
     }
 
+    /// A click on a running chip reveals its card by id; a click on a background chip does nothing.
     @Test
     void aRunningChipClickRevealsItsCardAndABackgroundChipHasNoClick() {
         List<String> revealed = new ArrayList<>();
@@ -213,6 +234,7 @@ class TranscriptWidgetTest {
         assertThat(revealed).containsExactly("a1");
     }
 
+    /// In the widget, a chip click opens the card on the canvas.
     @Test
     void theChipClickOfTheWidgetsStripOpensTheCard() {
         Transcript t = new Transcript();
@@ -225,6 +247,7 @@ class TranscriptWidgetTest {
         assertThat(widget.canvas().isCardOpen("a1")).isTrue();
     }
 
+    /// A link in [TranscriptCanvas#SUBAGENT_SCHEME] sends `OpenSubagent` with the session and the call id.
     @Test
     void aSubagentLinkAsksForItsTranscript() {
         RecordingSink sink = new RecordingSink();

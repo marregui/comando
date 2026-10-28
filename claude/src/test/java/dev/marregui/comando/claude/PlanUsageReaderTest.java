@@ -12,6 +12,11 @@ import java.time.Duration;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// The plan-usage reader parses local usage output into `PlanUsage` windows.
+///
+/// - maps session, overall-week, and model-week lines
+/// - preserves parse failures as usage problems
+/// - starts the local command with isolated arguments
 class PlanUsageReaderTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -42,6 +47,8 @@ class PlanUsageReaderTest {
         return n.toString();
     }
 
+    /// Recognized session and weekly limit lines become ordered windows while surrounding prose is ignored.
+    /// The fixture includes the all-model and model-specific weekly forms.
     @Test
     void eachLimitLineBecomesAWindowAndTheRestIsIgnored() {
         PlanUsage u = PlanUsageReader.parse(answer(MAX_PLAN, false), 7L, JSON);
@@ -53,12 +60,16 @@ class PlanUsageReaderTest {
                 new PlanUsage.Window("Fable", 17, "Oct 15 at 1:59pm (Europe/Madrid)"));
     }
 
+    /// A model-only weekly line drops its `only` suffix and rounds a fractional percentage without a reset text.
+    /// The input has no session line, so the model-derived name is unambiguous.
     @Test
     void aModelOnlyWeekIsNamedAfterTheModelAndAWindowWithoutAResetKeepsItsShare() {
         PlanUsage u = PlanUsageReader.parse(answer("Current week (Sonnet only): 2.6% used\n", false), 1L, JSON);
         assertThat(u.windows()).containsExactly(new PlanUsage.Window("Sonnet", 3, ""));
     }
 
+    /// Responses with no usable limit line report their first meaningful failure text.
+    /// API-key prose, command errors, invalid JSON, and empty output cover distinct failure forms.
     @Test
     void anAnswerWithoutLimitsSaysWhy() {
         assertThat(PlanUsageReader.parse(answer("You are using an API key; plan limits do not apply\n", false), 1L, JSON).problem())
@@ -68,6 +79,8 @@ class PlanUsageReaderTest {
         assertThat(PlanUsageReader.parse("", 1L, JSON).windows()).isEmpty();
     }
 
+    /// A local usage read enables safe mode, requests JSON, and disables session persistence.
+    /// The script records each argument before returning a valid three-window reply.
     @Test
     void theReadRunsTheLocalCommandInSafeModeWithoutSavingASession() throws Exception {
         Path args = dir.resolve("args.txt");
@@ -77,6 +90,8 @@ class PlanUsageReaderTest {
         assertThat(Files.readAllLines(args)).containsExactly("--safe-mode", "-p", "/usage", "--no-session-persistence", "--output-format", "json");
     }
 
+    /// A command that remains alive without output is forcibly bounded by the supplied 300-millisecond timeout.
+    /// The duration assertion excludes waiting for the script's 30-second sleep.
     @Test
     void aReadThatHangsIsStoppedAndSaysSo() throws Exception {
         Path exe = script("hang", "exec sleep 30\n");
@@ -87,6 +102,8 @@ class PlanUsageReaderTest {
         assertThat(u.problem()).isEqualTo("'claude -p /usage' did not answer within 300 ms");
     }
 
+    /// A missing local executable becomes a failed usage result with no thrown process exception.
+    /// The temporary directory supplies a path that cannot exist.
     @Test
     void aMissingExecutableIsAProblemNotAnException() {
         PlanUsage u = PlanUsageReader.read(dir.resolve("absent").toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofSeconds(1));

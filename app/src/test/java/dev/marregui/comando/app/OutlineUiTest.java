@@ -26,11 +26,9 @@ import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * A Markdown document's outline in the real window (record 113): its button in the panel's tools shows it at the
- * right, and a double click on a heading far down scrolls the rendered page there. Opens the window, so this runs in
- * {@code ./gradlew :app:uiTest}.
- */
+/// A Markdown document's outline in the real window. Opens the window, so this runs in `./gradlew :app:uiTest`.
+/// - the Outline button in the panel's tools shows the outline at the right
+/// - a double click on a heading far down scrolls the rendered page there
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class OutlineUiTest {
 
@@ -39,6 +37,8 @@ class OutlineUiTest {
     @TempDir
     Path home;
 
+    /// The Outline button shows the document's headings beside the rendered page, and a double click on a heading below the
+    /// first screen scrolls the page so that heading is in view.
     @Test
     void theOutlineButtonShowsTheHeadingsAndADoubleClickScrollsThePageToOne() throws Exception {
         Path doc = home.resolve("plan.md");

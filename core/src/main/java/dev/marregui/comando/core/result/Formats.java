@@ -46,6 +46,24 @@ public final class Formats {
         }
     }
 
+    /** Appends a size in bytes as {@code 500 B}, {@code 12 kB} or {@code 3 MB}, each unit 1024 of the one below. */
+    public static void appendBytes(StringBuilder sink, long bytes) {
+        if (bytes < 1024) {
+            sink.append(bytes).append(" B");
+        } else if (bytes < 1024 * 1024) {
+            sink.append(bytes / 1024).append(" kB");
+        } else {
+            sink.append(bytes / (1024 * 1024)).append(" MB");
+        }
+    }
+
+    /** {@link #appendBytes} as a string, for labels made once. */
+    public static String bytes(long bytes) {
+        StringBuilder sb = new StringBuilder(8);
+        appendBytes(sb, bytes);
+        return sb.toString();
+    }
+
     private static StringBuilder pad(StringBuilder sink, long value, int width) {
         if (value < 0) {
             sink.append('-');

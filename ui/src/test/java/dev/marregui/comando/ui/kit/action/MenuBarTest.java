@@ -21,6 +21,12 @@ import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/// [ActionRegistry#menuBar] builds the menu bar from [MenuEntry] trees and gives each command its menu path.
+/// - Menus hold items, separators and submenus with icons and accelerators.
+/// - Each command's group is its menu path; a command in no menu has an empty group or its area.
+/// - Only commands in no menu get a window-wide key binding.
+/// - Items and submenus carry the tooltips their providers give.
+/// - A menu naming an unknown command, or one command twice, fails at once.
 class MenuBarTest {
 
     private static final KeyStroke RUN = KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, InputEvent.META_DOWN_MASK);
@@ -44,6 +50,8 @@ class MenuBarTest {
         return out;
     }
 
+    /// A nested tree yields items, a separator and submenus in order; a submenu with an icon name carries the
+    /// icon, an item carries its command's accelerator, and each command's group is its path joined with ` ▸ `.
     @Test
     void theBarHasSubmenusSeparatorsAndEachCommandsPath() {
         ActionRegistry r = registry();
@@ -63,6 +71,8 @@ class MenuBarTest {
         assertThat(r.get("go.1").group()).as("in no menu").isEmpty();
     }
 
+    /// [ActionRegistry#bind] maps a key to a command in no menu in the window input map, and leaves a menu
+    /// item's accelerator to the menu.
     @Test
     void onlyCommandsInNoMenuGetAWindowWideKey() {
         ActionRegistry r = registry();
@@ -73,6 +83,7 @@ class MenuBarTest {
         assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(RUN)).as("the menu item's accelerator runs it").isNull();
     }
 
+    /// The item and submenu tooltip providers set the text they return; a null tip leaves no tooltip.
     @Test
     void itemsAndSubmenusCarryTheirTooltips() {
         JMenuBar bar = registry().menuBar(List.of(menu("Panel", null, "run", menu("Session", "claude", "toggle", "compact"))),
@@ -84,6 +95,9 @@ class MenuBarTest {
         assertThat(((JMenuItem) session.getMenuComponent(1)).getToolTipText()).as("no tip, no tooltip").isNull();
     }
 
+    /// [ActionRegistry#areas] names a menuless command's group by its area, keeps a menu path as it is, and
+    /// keeps the window-wide key. Areas that leave a menuless command unnamed fail with
+    /// [IllegalStateException] naming every such command.
     @Test
     void aCommandInNoMenuIsNamedByItsAreaAndKeepsItsWindowWideKey() {
         ActionRegistry r = registry();
@@ -101,6 +115,8 @@ class MenuBarTest {
                 .isInstanceOf(IllegalStateException.class).hasMessageContaining("toggle").hasMessageContaining("compact");
     }
 
+    /// An unknown command id, or one id placed in two menus, fails with [IllegalArgumentException] naming the
+    /// id or saying `placed twice`.
     @Test
     void aMenuNamingAnUnknownCommandOrOneTwiceFailsAtOnce() {
         assertThatThrownBy(() -> registry().menuBar(List.of(menu("File", null, "nope"))))

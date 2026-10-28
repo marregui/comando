@@ -17,7 +17,11 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/** The kit's version and the brain's backup against real repositories: a checkout and a bare remote on this disk. */
+/// [KitGit] reads a kit checkout's release state and backs up an independent repository to its remote.
+///
+/// - Version lookup reports the checked-out tag and newer remote tags.
+/// - Backup requires a repository root with a remote.
+/// - Backup commits changes before pushing and surfaces push failures.
 class KitGitTest {
 
     private static final LocalDate TODAY = LocalDate.of(2026, 10, 26);
@@ -63,6 +67,8 @@ class KitGitTest {
         return remote;
     }
 
+    /// [KitGit#version] reads tag `v1.0.0` and the newer remote `v1.1.0`, preserves the local version when the remote
+    /// is unreachable, and returns unknown for a plain directory.
     @Test
     void theKitsVersionAndTheNewerReleasesOfItsRemote(@TempDir Path tmp) throws Exception {
         Path root = tmp.resolve("kit");
@@ -88,6 +94,8 @@ class KitGitTest {
         assertThat(kit.version(Files.createDirectories(tmp.resolve("plain")))).as("no checkout").isEqualTo(KitVersion.UNKNOWN);
     }
 
+    /// [KitGit#backUp] commits a changed independent repository with the dated message, pushes it, and later pushes an
+    /// unchanged repository without creating a second commit.
     @Test
     void theBrainIsCommittedAndPushedOnlyWhenItIsARepositoryOfItsOwnWithARemote(@TempDir Path tmp) throws Exception {
         Path brain = tmp.resolve("root/BRAIN");
@@ -105,6 +113,8 @@ class KitGitTest {
         assertThat(git(remote, "rev-list", "--count", "HEAD")).isEqualTo("2");
     }
 
+    /// [KitGit#canBackUp] rejects a repository without a remote, a directory inside another repository, and a missing
+    /// directory, so [KitGit#backUp] cannot write through an unintended checkout.
     @Test
     void aBrainWithoutARemoteOrInsideAnotherRepositoryIsNotBackedUp(@TempDir Path tmp) throws Exception {
         Path alone = Files.createDirectories(tmp.resolve("alone"));
@@ -119,6 +129,7 @@ class KitGitTest {
         assertThat(kit.canBackUp(tmp.resolve("missing"))).isFalse();
     }
 
+    /// [KitGit#backUp] leaves the dated commit in place but reports an I/O failure when its remote push target is gone.
     @Test
     void aPushThatFailsSaysSo(@TempDir Path tmp) throws Exception {
         Path brain = tmp.resolve("BRAIN");

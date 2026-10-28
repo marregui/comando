@@ -1,16 +1,15 @@
 package dev.marregui.comando.ui.shell;
 
+import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.text.LogLines;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.CopyOption;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.Optional;
 
 /**
@@ -87,17 +86,7 @@ final class HelpFiles {
             return file;
         }
         Files.createDirectories(file.getParent());
-        Path tmp = Files.createTempFile(file.getParent(), "tutorial", ".tmp");
-        try {
-            Files.writeString(tmp, text, StandardCharsets.UTF_8);
-            try {
-                move.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-            } catch (AtomicMoveNotSupportedException e) {
-                move.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(tmp);
-        }
+        AtomicFiles.write(file, text.getBytes(StandardCharsets.UTF_8), move::move);
         return file;
     }
 

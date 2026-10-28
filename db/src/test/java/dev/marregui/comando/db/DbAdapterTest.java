@@ -30,6 +30,15 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/// [DbAdapter] runs SQL against an embedded QuestDB over the Postgres wire protocol, one lane per connection.
+/// - A query's rows are stored by column with their kinds and nulls, capped at the row limit.
+/// - DDL reports no rows; errors carry the server's message; a block of several statements says only the first result shows.
+/// - Cancel returns at once and ends a long query quickly; a queued run cancelled, or queued at quit, never runs.
+/// - Connect, test and close report their outcome, and test and open agree on the TLS mode.
+/// - The schema lists tables with their columns as a tree, falling back to the information schema past the table limit.
+/// - A schema load overtaken by a close neither reopens the connection nor keeps its tables.
+/// - The assistant's queries answer capped text rows.
+/// - Closing a connection, a failed open or the adapter itself leaves no lane behind.
 class DbAdapterTest {
 
     private static final Duration WAIT = Duration.ofSeconds(30);
@@ -64,6 +73,8 @@ class DbAdapterTest {
         db.close();
     }
 
+    /// When the connection is closed and its schema forgotten while a schema load waits on the lane, the lane ends without
+    /// opening the connection again, no view, notice or table is left, and only the user's Connect opened it.
     @Test
     void aSchemaLoadOvertakenByACloseNeitherReopensTheConnectionNorKeepsItsTables() throws Exception {
         SchemaRegistry schemas = new SchemaRegistry();
@@ -89,6 +100,7 @@ class DbAdapterTest {
         assertThat(schemas.of("local").tables()).as("nor keeps the tables").isEmpty();
     }
 
+    /// A block of two statements completes with the first one's row and a non-failing warning starting `2 statements ran`.
     @Test
     void aBlockOfSeveralStatementsSaysThatOnlyTheFirstResultIsShown() {
         db.execute(1L, spec, "SELECT 1 a; SELECT 2 b");
@@ -101,6 +113,7 @@ class DbAdapterTest {
         assertThat(warning.text()).startsWith("2 statements ran");
     }
 
+    /// A single statement completes with no notice and no warning.
     @Test
     void oneStatementRaisesNoNotice() {
         db.execute(1L, spec, "SELECT 1 a;");
@@ -110,6 +123,8 @@ class DbAdapterTest {
         assertThat(sink.of(Intent.SqlWarning.class)).isEmpty();
     }
 
+    /// A three-row query opens the connection once, starts once, and stores long, double, boolean, text and timestamp columns
+    /// with their kinds and values, a timestamp formatted to microseconds.
     @Test
     void runsAQueryAndStoresRowsByColumn() {
         db.execute(1L, spec, "SELECT x, x * 1.5 d, x % 2 = 0 even, cast(x AS STRING) s, "
@@ -135,6 +150,7 @@ class DbAdapterTest {
         assertThat(r.getText(1, 4)).isEqualTo("2024-01-01T00:00:01.000000Z");
     }
 
+    /// A null is recorded per cell, so a null and a value in the same column or row read back separately.
     @Test
     void nullsAreKeptPerCell() {
         db.execute(2L, spec, "SELECT CASE WHEN x = 2 THEN NULL ELSE x END n, CASE WHEN x = 1 THEN NULL ELSE 'v' END s FROM long_sequence(2)");
@@ -146,6 +162,7 @@ class DbAdapterTest {
         assertThat(r.getText(1, 1)).isEqualTo("v");
     }
 
+    /// A query past the row cap stops at 1 000 rows, marks the result truncated, and has sent rows on the way.
     @Test
     void rowCapTruncates() {
         db.execute(3L, spec, "SELECT x FROM long_sequence(5000)");
@@ -155,6 +172,7 @@ class DbAdapterTest {
         assertThat(sink.of(Intent.SqlRows.class)).isNotEmpty();
     }
 
+    /// A DDL statement completes with zero rows and stores no result.
     @Test
     void ddlReportsNoRows() {
         db.execute(4L, spec, "CREATE TABLE IF NOT EXISTS ddl_probe (ts TIMESTAMP, v LONG) TIMESTAMP(ts) PARTITION BY DAY");
@@ -163,6 +181,7 @@ class DbAdapterTest {
         assertThat(results.get(4L)).isNull();
     }
 
+    /// A query on a missing table fails with the server's message naming the table.
     @Test
     void errorsAreReportedWithTheServerMessage() {
         db.execute(5L, spec, "SELECT * FROM no_such_table");
@@ -170,6 +189,8 @@ class DbAdapterTest {
         assertThat(failed.message()).contains("no_such_table");
     }
 
+    /// Cancel returns to its caller, the reducer thread, in under 500 ms, the long query is cancelled within 3 s, and the
+    /// connection then runs the next statement.
     @Test
     void cancelOfALongQueryReturnsQuickly() {
         db.execute(6L, spec, "SELECT sum(x) FROM long_sequence(100_000_000_000)");
@@ -190,6 +211,7 @@ class DbAdapterTest {
         sink.await(Intent.SqlCompleted.class, c -> c.requestId() == 7L, WAIT);
     }
 
+    /// A run queued behind a running one and cancelled before it starts reports cancelled and never starts.
     @Test
     void aQueuedRunCancelledBeforeItStartsNeverRuns() {
         db.execute(8L, spec, "SELECT sum(x) FROM long_sequence(100_000_000_000)");
@@ -201,6 +223,8 @@ class DbAdapterTest {
         assertThat(sink.of(Intent.SqlStarted.class)).noneMatch(s -> s.requestId() == 9L);
     }
 
+    /// With the lane held by a connect to a server that never answers, a write queued behind it is answered with a failure on
+    /// close and never reaches the real server.
     @Test
     void aStatementQueuedWhenComandoQuitsDoesNotRun() throws Exception {
         // the lane is held by a connect to a server that accepts and never answers; behind it, a write to the real one
@@ -223,6 +247,7 @@ class DbAdapterTest {
         }
     }
 
+    /// A run on an unreachable connection reports the connection failed and the run failed.
     @Test
     void connectFailureIsReported() {
         ConnectionSpec nowhere = new ConnectionSpec("nowhere", "127.0.0.1", 1, "qdb", "admin", "quest", false);
@@ -231,6 +256,8 @@ class DbAdapterTest {
         sink.await(Intent.SqlFailed.class, f -> f.requestId() == 10L, WAIT);
     }
 
+    /// The assistant's query answers its columns and at most the cap of text rows, marked truncated, and a table description
+    /// lists each column with its type.
     @Test
     void queryForClaudeReturnsCappedTextRows() throws Exception {
         var rows = db.query(spec, "SELECT x, x * 2 y FROM long_sequence(10)", 4).get();
@@ -244,6 +271,8 @@ class DbAdapterTest {
         assertThat(described.rows()).extracting(r -> r.getFirst()).containsExactly("ts", "v");
     }
 
+    /// Loading the schema lists a table's columns with names (a quoted mixed-case one included) and types, and shows a tree
+    /// whose table and column nodes insert a `SELECT … LIMIT 100` and the quoted column name.
     @Test
     void schemaListsTablesWithTheirColumnsAndShowsATree() throws Exception {
         SchemaRegistry schemas = new SchemaRegistry();
@@ -262,6 +291,7 @@ class DbAdapterTest {
         assertThat(table.children().get(1).link()).isEqualTo("comando-insert:\"Mixed Case\"");
     }
 
+    /// Past the table limit the schema comes from the information schema, which names the columns but reports no `SYMBOL` type.
     @Test
     void aQuestDbWithMoreTablesThanTheLimitReadsTheInformationSchemaInstead() throws Exception {
         SchemaRegistry schemas = new SchemaRegistry();
@@ -277,6 +307,7 @@ class DbAdapterTest {
         assertThat(probe.columns()).extracting(Schema.Column::type).doesNotContain("SYMBOL");
     }
 
+    /// Testing a reachable connection reports it ok.
     @Test
     void testerReportsReachability() {
         db.test(spec);
@@ -284,6 +315,7 @@ class DbAdapterTest {
         assertThat(ok.ok()).isTrue();
     }
 
+    /// Closing an open connection reports it closed.
     @Test
     void closeReportsClosed() {
         db.open(spec);
@@ -292,6 +324,7 @@ class DbAdapterTest {
         sink.await(Intent.ConnectionClosed.class, WAIT);
     }
 
+    /// The embedded server has no TLS: a connection that requires it fails both when opened and when tested.
     @Test
     void testAndOpenAgreeOnTheConnectionsTlsMode() {
         // the embedded server has no TLS: a connection that requires it must fail both ways
@@ -304,6 +337,8 @@ class DbAdapterTest {
         assertThat(tested.ok()).as("the test must fail where open fails: " + failed.error()).isFalse();
     }
 
+    /// Closing an open connection ends its lane thread and leaves no lane, and opening the same name again gives a working
+    /// connection that answers a query.
     @Test
     void closingAConnectionStopsItsLaneAndTheNameOpensAgain() throws Exception {
         ConnectionSpec released = new ConnectionSpec("released", "127.0.0.1", questDb.pgPort(), "qdb", "admin", "quest", false);
@@ -322,6 +357,8 @@ class DbAdapterTest {
         assertThat(db.query(released, "SELECT 1 x", 1).get().rows()).containsExactly(List.of("1"));
     }
 
+    /// After the adapter is closed, open, execute and test make no lane and send no intent, and query and describe answer
+    /// completed exceptionally.
     @Test
     void aClosedAdapterMakesNoLaneAndRunsNothing() {
         db.close();
@@ -335,6 +372,8 @@ class DbAdapterTest {
         assertThat(sink.intents()).isEmpty();
     }
 
+    /// A connection to a port nothing listens on reports its failure, its lane thread ends and no lane is kept, and a later
+    /// close still reports it closed.
     @Test
     void aConnectionThatFailsToOpenKeepsNoLaneAndStillReportsItsClose() throws Exception {
         ConnectionSpec nowhere = new ConnectionSpec("unreachable", "127.0.0.1", 1, "qdb", "admin", "quest", false);

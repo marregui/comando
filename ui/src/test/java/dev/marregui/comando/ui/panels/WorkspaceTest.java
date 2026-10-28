@@ -65,6 +65,16 @@ import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Workspace]: the panel tabs, their files kept in step with the disk, their status marks, menus and hover cards.
+/// - an outside change reloads a panel unless it has unsaved edits; a growing log posts no notice
+/// - a file deleted outside removes its panel, except a session's own panel or one edited since the report
+/// - a tab follows its session's status, marks an outcome until looked at, and asks for attention once per need
+/// - returned background work marks the tab finished only when no reading turn follows within the grace
+/// - a tab's menu closes others or one side, keeping tabs that wait for the user or run a program
+/// - a tab's or row's card shows the facts, the summary read on demand, linked tickets, sub-task links and closes when left
+/// - a connection's card shows its facts without a summary and follows its state
+/// - a dragged tab moves its panel; a link to another document's heading opens or scrolls it there
+/// - a log opened for an entry scrolls to its line, or waits for it to be written
 class WorkspaceTest {
 
     private static final PanelId P = new PanelId("p");
@@ -100,6 +110,7 @@ class WorkspaceTest {
         }
     }
 
+    /// A log panel reloaded from outside takes the new text without posting a notice.
     @Test
     void aLogFollowingItsGrowthPostsNoNotice() throws Exception {
         Texts texts = new Texts();
@@ -115,6 +126,8 @@ class WorkspaceTest {
         assertThat(intents).noneMatch(Intent.Notify.class::isInstance);
     }
 
+    /// An outside change is refused while the panel has unsaved edits and taken otherwise, without counting as an edit to
+    /// save, with one "Reloaded" notice.
     @Test
     void aFileChangedOutsideShowsInItsPanelUnlessThePanelHasUnsavedEdits() throws Exception {
         Texts texts = new Texts();
@@ -136,6 +149,8 @@ class WorkspaceTest {
                 .containsExactly("Reloaded spec.md: it changed outside comando");
     }
 
+    /// A document deleted outside removes its panel once, with a notice, leaving nothing for ⌘⇧T to reopen; a closed
+    /// panel's file deleted outside removes that panel too.
     @Test
     void aDeletedFileRemovesItsPanelWithNothingToReopen() throws Exception {
         PanelId doc = new PanelId("d");
@@ -166,6 +181,8 @@ class WorkspaceTest {
         assertThat(intents).as("a closed panel's file deleted outside removes it too").contains(new Intent.RemovePanel(shut));
     }
 
+    /// A session's own panel whose file is deleted is not removed, since that would stop the session; its text is written
+    /// again and a notice says why.
     @Test
     void aSessionsOwnPanelWhoseFileWasDeletedKeepsItsSessionAndWritesItsTextAgain() throws Exception {
         Texts texts = new Texts();
@@ -186,6 +203,8 @@ class WorkspaceTest {
                 .containsExactly("work.md was deleted outside comando; it is session work's own panel, so its text is written again");
     }
 
+    /// A deletion reported after the user typed in the panel keeps the panel, and the notice says the unsaved edits write
+    /// the file again.
     @Test
     void aDeletedFileWhosePanelGotEditsSinceTheReportKeepsThePanel() throws Exception {
         Texts texts = new Texts();
@@ -204,6 +223,10 @@ class WorkspaceTest {
                 .containsExactly("spec.md was deleted outside comando; the panel's unsaved edits write it again");
     }
 
+    /// A background tab shows the spinner icon and wants it turned while its turn runs, its timer waiting until the
+    /// window shows, with its title unchanged; it gets a `●` mark and one attention request when
+    /// the session asks, keeps the mark when the turn ends unseen, clears it once focused, and a failed turn asks for
+    /// attention again until a new turn supersedes it.
     @Test
     void aTabFollowsItsSessionAndMarksAnOutcomeUntilLookedAt() throws Exception {
         PanelId other = new PanelId("o");
@@ -228,7 +251,8 @@ class WorkspaceTest {
         SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(session.withTurns(1, 1L))));
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.WORKING);
         assertThat(tabs.getIconAt(0)).isInstanceOf(SpinnerIcon.class);
-        assertThat(w[0].spinning()).isTrue();
+        assertThat(w[0].spinWanted()).as("a working tab wants the spinner").isTrue();
+        assertThat(w[0].spinning()).as("never shown: the spinner's timer waits for the window").isFalse();
         assertThat(tabs.getTitleAt(0)).isEqualTo("work");
 
         // the session asks: the tab needs the user, and the desktop is asked for attention once
@@ -245,7 +269,7 @@ class WorkspaceTest {
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.DONE);
         assertThat(tabs.getTitleAt(0)).isEqualTo("● work");
         assertThat(tabs.getIconAt(0)).isNotInstanceOf(SpinnerIcon.class);
-        assertThat(w[0].spinning()).isFalse();
+        assertThat(w[0].spinWanted()).isFalse();
         assertThat(attention).hasValue(1);
 
         // looking at it clears the mark
@@ -264,6 +288,8 @@ class WorkspaceTest {
         assertThat(tabs.getTitleAt(0)).isEqualTo("work");
     }
 
+    /// Returned background work is not marked done before its reading turn; with no reading turn within
+    /// [TabStatus#REPORT_GRACE_MILLIS], the tick marks it done without a state change.
     @Test
     void returnedBackgroundWorkMarksTheTabFinishedOnlyWhenNoReadingTurnFollows() throws Exception {
         PanelId other = new PanelId("o");
@@ -293,6 +319,7 @@ class WorkspaceTest {
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.DONE);
     }
 
+    /// A background tab whose hand-off turn failed shows `ERROR` while its background task still runs.
     @Test
     void aHandOffTurnThatFailsShowsItsErrorWhileItsWorkRunsOn() throws Exception {
         PanelId other = new PanelId("o");
@@ -312,6 +339,9 @@ class WorkspaceTest {
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.ERROR);
     }
 
+    /// "Close others" focuses the tab and closes the rest except those waiting for the user or running a program, with one
+    /// notice once they are gone; a menu opened before tabs change closes from its tab's new position, and "Close" is the
+    /// tab's own close.
     @Test
     void aTabsMenuClosesTheOthersOrThoseToOneSideAndKeepsTabsWaitingForTheUserOrRunningAProgram() throws Exception {
         PanelId a = new PanelId("a");
@@ -387,6 +417,8 @@ class WorkspaceTest {
         }
     }
 
+    /// A row's card lists the session's top-level sub-tasks with their state and tool count at any depth, including one
+    /// running in the background until it ends; a double click on one sends `OpenSubagent`, a single click nothing.
     @Test
     void aSessionsCardOutlinesItsSubagentsAndADoubleClickOpensOnesTab() throws Exception {
         TranscriptRegistry transcripts = new TranscriptRegistry();
@@ -439,6 +471,9 @@ class WorkspaceTest {
         assertThat(card.agentLinks()).extracting(JLabel::getText).contains("✓ Watch CI · done");
     }
 
+    /// A session's row shows its panel's card, with each session fact once and no new read, placed beside the rows when
+    /// there is room and under the row otherwise; a session without a panel gets its own card read urgently from the end of
+    /// its conversation; the card closes on ✕, on leaving, after the grace, and when the session is removed.
     @Test
     void aSessionRowShowsItsPanelsCardWithTheSessionsDetailsAndAHeadlessSessionACardOfItsOwn() throws Exception {
         TranscriptRegistry transcripts = new TranscriptRegistry();
@@ -545,6 +580,8 @@ class WorkspaceTest {
         assertThat(card.detailsText()).doesNotContain("Model", "Folder", "State");
     }
 
+    /// A connection's card lists its state, database, user, TLS and panels, has no summary, reads nothing, is narrower than
+    /// a summary card, follows the connection's state and closes when the connection is removed.
     @Test
     void aConnectionsRowShowsACardOfItsFactsWithoutASummaryThatFollowsItsState() throws Exception {
         Asks asks = new Asks();
@@ -589,6 +626,8 @@ class WorkspaceTest {
         assertThat(card.shown()).isNull();
     }
 
+    /// A spec change in the same conversation keeps the card's topic; a new conversation id drops it and the next show
+    /// reads it again.
     @Test
     void aNewConversationDropsTheTopicOfItsSessionsPanelsAndTheNextShowReadsItAgain() throws Exception {
         TranscriptRegistry transcripts = new TranscriptRegistry();
@@ -620,6 +659,10 @@ class WorkspaceTest {
         assertThat(asks.asks).as("read again at the next show, from the same text").hasSize(2);
     }
 
+    /// A tab's card sits in the popup layer instead of a tooltip and reads its summary from the panel's text, urgently; it
+    /// is read again only when the session answered, the text changed or ↻ is pressed, never by a timer; a failed read says
+    /// why, a long summary grows the card up to [TabCard#MAX_WIDTH], and the card closes when left, after the grace, on a
+    /// press or on ✕.
     @Test
     void aTabShowsACardWithItsTopicReadOnceAndAgainOnlyOnAskOrWhenThePanelsTextChangedAndItClosesWhenLeft() throws Exception {
         TranscriptRegistry transcripts = new TranscriptRegistry();
@@ -757,6 +800,9 @@ class WorkspaceTest {
         assertThat(w[0].cardShown()).isNull();
     }
 
+    /// The card links at most [Workspace#MAX_TICKETS] ticket ids of known teams from the panel's text: the last
+    /// paragraph's in the order written, then earlier ones from the newest back, so `ENG-7` is cut and `UTF-8` is no team;
+    /// a team prefix is learnt from a ticket URL in the conversation; a double click opens the ticket and keeps the card.
     @Test
     void aCardLinksTheLinearTicketsThePanelNamesNewestFirstLearningTheirAddressFromLinearsLinks() throws Exception {
         TranscriptRegistry transcripts = new TranscriptRegistry();
@@ -796,6 +842,8 @@ class WorkspaceTest {
         assertThat(card.ticketLinks()).isEmpty();
     }
 
+    /// A press on a tab cancels the pending hover card, the close button's tooltip shows no card, a card follows its tab when
+    /// an earlier tab closes, and a summary that looks like HTML is shown as plain text.
     @Test
     void aPressOrTheCloseButtonShowsNoCardAndACardFollowsItsTabAndShowsHtmlAsText() throws Exception {
         PanelId a = new PanelId("a");
@@ -848,7 +896,7 @@ class WorkspaceTest {
         assertThat(w[0].card().component().getX()).isLessThan(before).isLessThanOrEqualTo(Math.max(8, first.x));
         assertThat(second.x).isGreaterThan(first.x);
 
-        // Haiku's line is text, never HTML
+        // the summary's line is text, never HTML
         asks.asks.getLast().done().accept(new Topic("<html><img src='http://example.com/x.png'>", 1L, ""));
         SwingUtilities.invokeAndWait(() -> { });
         // a text area, which never renders HTML: the summary shows as typed
@@ -856,6 +904,7 @@ class WorkspaceTest {
         assertThat(w[0].card().topicArea().getDocument()).isInstanceOf(PlainDocument.class);
     }
 
+    /// A URL in the summary opens at a double click and keeps the card; a press elsewhere on the summary closes it.
     @Test
     void aLinkInTheCardsSummaryOpensAtADoubleClickAndKeepsTheCard() throws Exception {
         PanelId a = new PanelId("a");
@@ -907,6 +956,8 @@ class WorkspaceTest {
         }
     }
 
+    /// A tab without a session asks for a topic from the start of its text; showing another tab's card replaces the first,
+    /// and closing a tab closes its card, also when a late summary arrives.
     @Test
     void aTabWithoutASessionTakesItsTopicFromItsTextAndAClosedTabTakesItsCardWithIt() throws Exception {
         PanelId other = new PanelId("o");
@@ -945,6 +996,8 @@ class WorkspaceTest {
         throw new AssertionError("no item " + text);
     }
 
+    /// Dragging the first tab past the last sends `MovePanel` to index 2; the tabs then follow the state's order and the
+    /// moved panel stays in front.
     @Test
     void aTabDraggedAlongTheRowMovesItsPanelAndTheTabsFollowTheStatesOrder() throws Exception {
         PanelId b = new PanelId("b");
@@ -1014,6 +1067,8 @@ class WorkspaceTest {
         }
     }
 
+    /// A link to a heading in another document opens that file and, once its panel arrives, scrolls the preview to the
+    /// heading; with the panel already open and scrolled away, the link scrolls it back.
     @Test
     void aLinkToAHeadingOfAnotherDocumentOpensItThereOrScrollsItsOpenPanelThere() throws Exception {
         PanelId setupId = new PanelId("setup");
@@ -1063,6 +1118,8 @@ class WorkspaceTest {
         assertThat(top(setupPanel)).as("its open panel scrolled to the heading").isEqualTo(install);
     }
 
+    /// A log opened for a time a few milliseconds before an entry puts the caret at that entry, in the upper part of the
+    /// view; for an open log the entry not yet written is reached on the reload that brings it, instead of the end.
     @Test
     void aLogOpenedForAnEntryScrollsToItsLineAndAnOpenOneWaitsForTheEntryToBeWritten() throws Exception {
         Path file = Path.of("/home/.comando/logs/comando-0.log");

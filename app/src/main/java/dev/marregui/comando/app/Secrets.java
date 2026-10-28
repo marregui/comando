@@ -1,20 +1,16 @@
 package dev.marregui.comando.app;
 
-import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 
 /**
  * Where connection passwords live. On macOS that is the login keychain, through the {@code security}
@@ -124,26 +120,13 @@ interface Secrets {
          */
         private static Result run(List<String> cmd) {
             try {
-                // -g writes the password line to standard error; the other commands write nothing needed there
-                Process p = new ProcessBuilder(cmd).redirectErrorStream(true).start();
-                p.getOutputStream().close();
-                CompletableFuture<byte[]> out = new CompletableFuture<>();
-                Threads.fork("keychain-output", () -> {
-                    try (InputStream in = p.getInputStream()) {
-                        out.complete(in.readAllBytes());
-                    } catch (IOException e) {
-                        out.complete(new byte[0]);
-                    }
-                });
-                if (!p.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
-                    p.destroyForcibly();
+                Processes.Result r = Processes.run(cmd, Duration.ofSeconds(TIMEOUT_SECONDS), MAX_OUT);
+                if (r.timedOut()) {
                     LOG.log(System.Logger.Level.WARNING, "the keychain did not answer within " + TIMEOUT_SECONDS + " s [command=" + cmd.get(1) + ']');
                     return new Result(-1, "");
                 }
-                byte[] bytes = out.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
-                return new Result(p.exitValue(), new String(bytes, StandardCharsets.UTF_8));
-            } catch (ExecutionException | TimeoutException e) {
-                return new Result(-1, "");
+                // -g writes the password line to standard error; the other commands write nothing needed there
+                return new Result(r.exitCode(), r.out() + r.stderr());
             } catch (IOException e) {
                 return new Result(-1, "");
             } catch (InterruptedException e) {
@@ -151,6 +134,9 @@ interface Secrets {
                 return new Result(-1, "");
             }
         }
+
+        /** The most of the tool's output read: a password and a few lines about the item. */
+        private static final int MAX_OUT = 64 * 1024;
 
         /**
          * The password from {@code -g} output: {@code password: "text"} for printable ASCII, or

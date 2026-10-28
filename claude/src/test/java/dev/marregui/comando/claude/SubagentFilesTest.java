@@ -19,6 +19,13 @@ import java.util.Random;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [SubagentFiles] finds a sub-agent's stored conversation by its Agent call and renders it as Markdown.
+/// - `find` matches the call id among the meta files, and finds nothing for an unknown call, conversation or root
+/// - a meta file larger than `META_BYTES` is skipped; the meta file says when the sub-agent finished
+/// - the render quotes the task, keeps the texts, gives one line per tool with its result clipped at `RESULT_CHARS`
+/// - a file over the limit keeps its task, then only its tail, and says so; an empty file and a partial line render safely
+/// - a long run keeps its last `LAST_TOOLS` tool calls and counts all of them
+/// - reading as the file grows renders as one whole read, parsing only new lines and restarting on a shorter file
 class SubagentFilesTest {
 
     private final ObjectMapper json = new ObjectMapper();
@@ -41,6 +48,8 @@ class SubagentFilesTest {
         }
     }
 
+    /// `find` returns the transcript, meta file and description "Find the gauges" of the sub-agent whose meta names the
+    /// call id, and the other sub-agent by its own call id.
     @Test
     void findsTheSubagentByItsAgentCallAmongTheMetaFiles() {
         SubagentFiles.Found found = SubagentFiles.find(projects, "conv-1", "toolu_A2", json).orElseThrow();
@@ -52,6 +61,7 @@ class SubagentFilesTest {
                 .isEqualTo(subagents.resolve("agent-a1.jsonl"));
     }
 
+    /// An unknown call id, another conversation id and a missing projects root each find nothing.
     @Test
     void anUnknownCallOrConversationFindsNothing() {
         assertThat(SubagentFiles.find(projects, "conv-1", "toolu_nope", json)).isEmpty();
@@ -59,6 +69,7 @@ class SubagentFilesTest {
         assertThat(SubagentFiles.find(tmp.resolve("missing"), "conv-1", "toolu_A1", json)).isEmpty();
     }
 
+    /// A meta file padded past [SubagentFiles#META_BYTES] is not read, so its call id finds nothing.
     @Test
     void aFileTooLargeToBeAMetaFileIsSkipped() throws IOException {
         Files.writeString(subagents.resolve("agent-big.meta.json"),
@@ -66,12 +77,15 @@ class SubagentFilesTest {
         assertThat(SubagentFiles.find(projects, "conv-1", "toolu_BIG", json)).isEmpty();
     }
 
+    /// [SubagentFiles#finished] is true for a meta file that says so and false for one that does not.
     @Test
     void theMetaFileSaysWhenTheSubagentFinished() {
         assertThat(SubagentFiles.finished(subagents.resolve("agent-a3.meta.json"), json)).isTrue();
         assertThat(SubagentFiles.finished(subagents.resolve("agent-a1.meta.json"), json)).isFalse();
     }
 
+    /// The render starts with the task quoted line by line, keeps the assistant texts, and writes exactly two tool lines of
+    /// the form ``- `Bash` ls demo → result``.
     @Test
     void rendersThePromptTheTextsAndOneLinePerTool() throws IOException {
         String md = SubagentFiles.render(subagents.resolve("agent-a1.jsonl"), SubagentFiles.SCAN_BYTES, json);
@@ -84,6 +98,7 @@ class SubagentFilesTest {
         assertThat(md).doesNotContain("private musing", "ignored", "is longer than");
     }
 
+    /// A tool result longer than [SubagentFiles#RESULT_CHARS] keeps that many characters followed by ` …`.
     @Test
     void aLongToolResultIsClipped() throws IOException {
         Path f = subagents.resolve("agent-long.jsonl");
@@ -96,6 +111,8 @@ class SubagentFilesTest {
         assertThat(md).doesNotContain("y".repeat(SubagentFiles.RESULT_CHARS + 1));
     }
 
+    /// A file over 3 MB rendered with a 2 MB limit starts with its first prompt and the notice "longer than 2.0 MB: only its
+    /// last 2.0 MB are read", keeps its last word, and stays under the limit plus 1 000 characters.
     @Test
     void aFileOverTheLimitShowsItsTaskThenOnlyItsTailAndSaysSo() throws IOException {
         Path f = subagents.resolve("agent-huge.jsonl");
@@ -118,12 +135,14 @@ class SubagentFilesTest {
         assertThat(md.length()).isLessThan((int) limit + 1000);
     }
 
+    /// An empty transcript renders as "_The sub-agent has written nothing yet._".
     @Test
     void aFileNotWrittenYetRendersAsEmpty() throws IOException {
         assertThat(SubagentFiles.render(subagents.resolve("agent-a2.jsonl"), SubagentFiles.SCAN_BYTES, json))
                 .isEqualTo("_The sub-agent has written nothing yet._\n");
     }
 
+    /// A final line without its newline, still being written, is left out of the render.
     @Test
     void aLineStillBeingWrittenIsSkipped() throws IOException {
         Path f = subagents.resolve("agent-partial.jsonl");
@@ -134,6 +153,8 @@ class SubagentFilesTest {
 
     // ---- the conversation read as it grows
 
+    /// Of 250 tool calls, the render keeps the task, a notice that earlier steps are hidden, calls 151 to 250, and ends with
+    /// "_100 of 250 tool calls shown._".
     @Test
     void aLongSubagentKeepsItsTaskAndItsLastHundredToolCallsAndSaysHowManyOfAll() throws IOException {
         Path f = subagents.resolve("agent-many.jsonl");
@@ -152,7 +173,8 @@ class SubagentFilesTest {
         assertThat(md.strip()).endsWith("_100 of 250 tool calls shown._");
     }
 
-    /** The same file read in one go, and read as it grew in pieces cut anywhere, mid-line too, renders the same. */
+    /// A file read in pieces cut anywhere, mid-line too, renders exactly as the whole file read once and counts its 130 tool
+    /// calls.
     @Test
     void aConversationReadAsItGrowsRendersAsTheWholeFileReadOnce() throws IOException {
         StringBuilder sb = new StringBuilder(userText("THE TASK")).append('\n');
@@ -180,7 +202,7 @@ class SubagentFilesTest {
         assertThat(c.tools()).isEqualTo(130);
     }
 
-    /** A read parses only what the file gained: bytes already read and changed in place are not read again. */
+    /// Bytes already read and then changed in place are not read again: a later read adds only the new lines.
     @Test
     void aReadAfterGrowthParsesOnlyTheNewLines() throws IOException {
         Path f = subagents.resolve("agent-inc.jsonl");
@@ -199,6 +221,7 @@ class SubagentFilesTest {
         assertThat(c.render("")).isEqualTo("EARLY\n\nLATE\n");
     }
 
+    /// A file replaced by a shorter one is read again from its start, showing only the new content.
     @Test
     void aFileReplacedByAShorterOneIsReadAgainFromItsStart() throws IOException {
         Path f = subagents.resolve("agent-replaced.jsonl");
@@ -212,6 +235,7 @@ class SubagentFilesTest {
         assertThat(c.render("")).isEqualTo("NEW\n");
     }
 
+    /// A footer passed to the render is appended after the last text, separated by a blank line.
     @Test
     void aFooterEndsTheView() throws IOException {
         SubagentFiles.Conversation c = new SubagentFiles.Conversation(subagents.resolve("agent-a1.jsonl"), json, SubagentFiles.SCAN_BYTES);

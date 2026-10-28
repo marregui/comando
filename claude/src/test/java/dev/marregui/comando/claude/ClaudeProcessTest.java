@@ -13,8 +13,15 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ClaudeProcess] streams process output, queues input, and reports exit after bounded output draining.
+///
+/// - Delivers complete stdout before reporting the exit status.
+/// - Bounds exit reporting when a child retains stdout.
+/// - Retains the final forty stderr lines without leaving a temporary file.
+/// - Uses one platform reader thread per session process.
 class ClaudeProcessTest {
 
+    /// A process that prints `a` and `b` then exits `3` delivers both lines before the exit callback observes code `3`.
     @Test
     void theExitIsReportedAfterTheLastLine(@TempDir Path dir) throws Exception {
         List<String> lines = new CopyOnWriteArrayList<>();
@@ -29,7 +36,8 @@ class ClaudeProcessTest {
         assertThat(code.get()).isEqualTo(3);
     }
 
-    /** A child that outlives the process and keeps its output open does not keep the exit from being reported. */
+    /// A background `sleep` retaining stdout cannot delay its parent's exit callback past `DRAIN_MILLIS`; its pid is
+    /// collected afterward so the fixture leaves no child process running.
     @Test
     void theExitIsReportedWhileAChildStillHoldsTheOutputOpen(@TempDir Path dir) throws Exception {
         List<String> lines = new CopyOnWriteArrayList<>();
@@ -44,7 +52,8 @@ class ClaudeProcessTest {
         }
     }
 
-    /** stderr goes to a file, not a thread: its last lines are kept at the exit and the file is deleted. */
+    /// One hundred stderr lines leave exactly `err 60` through `err 99` after exit, and the private stderr file is
+    /// deleted once that tail has been captured.
     @Test
     void stderrsLastLinesAreKeptAtTheExitAndItsFileIsDeleted(@TempDir Path dir) throws Exception {
         CountDownLatch exited = new CountDownLatch(1);
@@ -58,6 +67,8 @@ class ClaudeProcessTest {
         assertThat(process.get().stderrFile()).as("the stderr file is deleted").doesNotExist();
     }
 
+    /// A blocked session process creates only `claude-out-budget` as a platform thread; stdin and exit waits do not add
+    /// platform threads before the test releases the process.
     @Test
     void aSessionsOnlyPlatformThreadIsItsStdoutReader(@TempDir Path dir) throws Exception {
         CountDownLatch exited = new CountDownLatch(1);

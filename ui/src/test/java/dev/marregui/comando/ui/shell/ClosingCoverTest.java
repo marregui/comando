@@ -8,8 +8,13 @@ import java.awt.image.BufferedImage;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ClosingCover] veils the window while it closes and swallows all input.
+/// - The cover paints a translucent veil.
+/// - It is focusable, listens to mouse, motion and wheel, and consumes every key event.
 class ClosingCoverTest {
 
+    /// The painted centre is neither transparent nor opaque, mouse listeners are installed, and pressed, typed and released
+    /// keys are each consumed.
     @Test
     void theCoverGreysTheWindowAndTakesEveryKeyAndClick() {
         ClosingCover cover = new ClosingCover();

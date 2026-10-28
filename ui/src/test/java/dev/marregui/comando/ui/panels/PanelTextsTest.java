@@ -17,11 +17,21 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The words the panels show for runs, turns and notices. */
+/// The words the panels show for runs, turns and notices ([ResultsView], [EditorPanel], [SessionRow], [SessionBar],
+/// [StatusBar]).
+/// - a DDL run reads "Done."; a DML run counts the rows it changed
+/// - a running statement shows its elapsed time; a block's note ends the status line
+/// - the error position is read from the driver's text
+/// - a running session row states its uptime and start time
+/// - the checkpoint icon and tooltip change when a checkpoint is due or a summary waits
+/// - a busy or waiting session says what it works or waits on and since when
+/// - a notice in the history carries its time and is cut at 160 characters; its tooltip is whole and wraps when long
 class PanelTextsTest {
 
     private static final PanelId P = States.P1;
 
+    /// A DDL run's done text is "Done." with no row count in the status line; an INSERT of 100,000 rows reads
+    /// "100,000 rows changed" in both the done text and the status line.
     @Test
     void aDdlStatementIsDoneAndADmlCountsItsRowsInBothPlaces() {
         SqlRun ddl = SqlRun.queued(1, P, "local", "CREATE TABLE t (x INT)").started(1).completed(0, 0, false, 1, 0, 1);
@@ -33,6 +43,8 @@ class PanelTextsTest {
         assertThat(ResultsView.statusLine(insert)).contains("100,000 rows changed").doesNotContain("· 0 rows");
     }
 
+    /// A run started at 10 s shows "Running on local · 12 s" at 22 s, and a run carrying a block note ends its status line
+    /// with that note.
     @Test
     void aRunningStatementShowsItsElapsedTimeAndABlockItsNote() {
         SqlRun run = SqlRun.queued(1, P, "local", "SELECT 1").started(10_000);
@@ -41,6 +53,7 @@ class PanelTextsTest {
         assertThat(ResultsView.statusLine(noted)).endsWith("statement 2 of the block failed: boom");
     }
 
+    /// [EditorPanel#errorPosition] reads the number after `Position:`, and returns 0 for text without one and for null.
     @Test
     void theErrorPositionIsReadFromTheDriversText() {
         assertThat(EditorPanel.errorPosition("ERROR: table does not exist [table=nope]\n  Position: 38")).isEqualTo(38);
@@ -48,6 +61,8 @@ class PanelTextsTest {
         assertThat(EditorPanel.errorPosition(null)).isZero();
     }
 
+    /// A running session's details give its uptime in minutes, hours or days with the start time (and date past a day),
+    /// "under a minute" below one minute, and no uptime once it is stopped.
     @Test
     void aRunningSessionRowSaysForHowLongAndItsDetailsWhenItStarted() {
         ZoneId utc = ZoneOffset.UTC;
@@ -59,6 +74,8 @@ class PanelTextsTest {
         assertThat(SessionRow.details(running.withStatus(Status.CLOSED, ""), started + 60_000, utc, "")).as("stopped").doesNotContain("Uptime");
     }
 
+    /// The checkpoint icon is `checkpoint-due` only past 60% context; its tooltip names what a checkpoint sends and says
+    /// when a carried summary still waits for the next prompt.
     @Test
     void theCheckpointButtonIsPurpleOnlyWhenDue() {
         SessionState x = SessionState.closed(States.WORK);
@@ -73,6 +90,7 @@ class PanelTextsTest {
                 .isEqualTo("Checkpoint: sends /reflect; the last checkpoint's summary still waits for the next prompt");
     }
 
+    /// A session with two turns pending shows "working · …" ending with "1 queued"; an idle session shows nothing.
     @Test
     void aBusySessionShowsHowLongItWorksAndWhatIsQueued() {
         SessionState x = SessionState.closed(States.WORK).withTurns(2, System.currentTimeMillis() - 5_000);
@@ -80,6 +98,8 @@ class PanelTextsTest {
         assertThat(SessionBar.busyText(SessionState.closed(States.WORK))).isEmpty();
     }
 
+    /// A session waiting on one background task names it with its elapsed seconds; on two it counts them; the chip keeps
+    /// the session's name, and the tick counts a waiting session as it does a working one.
     @Test
     void aSessionWaitingOnBackgroundWorkSaysOnWhatAndSinceWhen() {
         long started = System.currentTimeMillis() - 5_000;
@@ -93,6 +113,8 @@ class PanelTextsTest {
         assertThat(SessionBar.counting(SessionState.closed(States.WORK))).isFalse();
     }
 
+    /// A history line prefixes the notice's time when it has one, cuts a 400-character text to 160, and the full line
+    /// keeps all 400.
     @Test
     void aNoticeInTheHistoryCarriesItsTime() {
         assertThat(StatusBar.historyLine(new Notice(Notice.Level.INFO, "Saved one", 0L))).isEqualTo("Saved one");
@@ -102,7 +124,8 @@ class PanelTextsTest {
         assertThat(StatusBar.fullLine(new Notice(Notice.Level.ERROR, long400, 0L))).as("the tooltip has the whole text").hasSize(400);
     }
 
-    /** A short notice keeps a tooltip as wide as its text; a long one wraps, and a word longer than a line breaks. */
+    /// A short notice keeps a tooltip as wide as its text, with HTML escaped and newlines as breaks; long prose wraps at a
+    /// fixed width, and a word longer than a line breaks every 70 characters.
     @Test
     void theTooltipWrapsOnlyALongNotice() {
         assertThat(StatusBar.wrapped("Query finished")).isEqualTo("<html>Query finished</html>");

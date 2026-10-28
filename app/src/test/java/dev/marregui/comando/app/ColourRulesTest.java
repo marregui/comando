@@ -13,10 +13,10 @@ import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo
 import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
-/**
- * Every colour of the window comes from the theme (record 100): no class outside {@code ui.kit.theme} makes a
- * {@link Color} or names one of Java's, so a theme changes the whole window and nothing keeps a colour of its own.
- */
+/// The theme color boundary permits color construction and constants only in `ui.kit.theme`.
+///
+/// - rejects direct `Color` construction outside the theme
+/// - rejects references to predefined `Color` fields outside the theme
 class ColourRulesTest {
 
     private static JavaClasses comando;
@@ -26,6 +26,8 @@ class ColourRulesTest {
         comando = new ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS).importPackages("dev.marregui.comando");
     }
 
+    /// Production classes outside the theme package neither construct `Color` nor access its fields.
+    /// The imported production packages exclude test-only palette fixtures.
     @Test
     void onlyTheThemeMakesOrNamesAColour() {
         noClasses().that().resideOutsideOfPackage("dev.marregui.comando.ui.kit.theme..")

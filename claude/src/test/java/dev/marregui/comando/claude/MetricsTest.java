@@ -17,7 +17,12 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The metrics a session's stream leaves (record 110): a turn's, a sub-agent's, and none from a replayed conversation. */
+/// [MetricsLog] persists live turn and delegated-task measurements while ignoring replayed history.
+///
+/// - Writes completed turn and delegated-task fields to JSON lines.
+/// - Measures background work through its completion notification.
+/// - Counts each stored message once when deriving delegated-task usage.
+/// - Leaves storage untouched when metrics are disabled.
 class MetricsTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -39,6 +44,8 @@ class MetricsTest {
         return out;
     }
 
+    /// A live stream writes a delegated-task event and then a turn event with timing, model, usage, nested call count,
+    /// and error state; replaying equivalent history adds no current-time measurements.
     @Test
     void aTurnAndASubagentLeaveTheirEventsAndAReplayNone() throws IOException {
         MetricsLog log = new MetricsLog(dir, JSON, now::get);
@@ -101,6 +108,8 @@ class MetricsTest {
         assertThat(lines()).hasSize(2);
     }
 
+    /// Background task `b1` remains unwritten at launch and receives its 600-second duration only at the later
+    /// completion notification, which marks it done.
     @Test
     void aBackgroundSubagentEndsAtItsTaskNotificationNotItsLaunch() throws IOException {
         MetricsLog log = new MetricsLog(dir, JSON, now::get);
@@ -122,6 +131,8 @@ class MetricsTest {
         });
     }
 
+    /// Repeated stored message `m1` contributes its usage once, while distinct `m2` adds its own tokens and model to
+    /// the derived spending summary despite a malformed trailing line.
     @Test
     void aSubagentsSpendIsReadFromItsFileEachMessageOnce() throws IOException {
         Path file = dir.resolve("agent-x.jsonl");
@@ -138,6 +149,7 @@ class MetricsTest {
         assertThat(spend.path("models")).extracting(JsonNode::asText).containsExactly("claude-sonnet-5-5");
     }
 
+    /// The disabled metrics sink accepts a turn event without creating any file in the supplied temporary directory.
     @Test
     void withoutADataRootNothingIsWritten() {
         MetricsLog.NONE.write(MetricsLog.NONE.event("turn"));

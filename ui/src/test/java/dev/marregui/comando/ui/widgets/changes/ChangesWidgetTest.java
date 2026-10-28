@@ -25,6 +25,13 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ChangesWidget]: the uncommitted files of each repository as a tree, grouped by kind and folder.
+/// - a repository lists changed, untracked and removed files by folder, with single-folder chains in one row
+/// - repositories of one name are told apart by path; an unreadable one says why
+/// - one path deleted from the index and untracked is two rows
+/// - everything comes open; selecting a file follows its comparison and activating it opens it
+/// - a new read keeps what the user closed and selected, sends nothing, and an unmounted widget follows no more
+/// - the selection's menu rolls back or removes every file in it after one question
 @ExtendWith(OnEdt.class)
 class ChangesWidgetTest {
 
@@ -46,6 +53,8 @@ class ChangesWidgetTest {
         return new ChangesWidget(new WidgetContext(sent::add, new ActionRegistry()), changes, opened::add);
     }
 
+    /// [ChangesWidget#build] names the repository with its branch and count, groups files as changed, untracked and
+    /// removed, joins a chain of single folders into one row, and makes one target per file.
     @Test
     void aRepositoryListsWhatChangedWhatIsUntrackedAndWhatWentByFolder() {
         Map<String, ChangesWidget.Target> targets = new HashMap<>();
@@ -67,6 +76,7 @@ class ChangesWidgetTest {
         assertThat(targets).hasSize(4);
     }
 
+    /// Two repositories with the same folder name are labelled by full path, and a clean one says so.
     @Test
     void twoRepositoriesOfOneNameAreToldApartByPath() {
         RepoStatus other = new RepoStatus("/z/edge", "main", List.of(), false, "");
@@ -75,6 +85,7 @@ class ChangesWidgetTest {
         assertThat(root.children().get(1).detail()).isEqualTo("main · " + ChangesWidget.CLEAN);
     }
 
+    /// A path both deleted and untracked yields two targets, one per kind.
     @Test
     void onePathDeletedFromTheIndexAndUntrackedIsTwoRowsEachOpeningItsOwnComparison() {
         Map<String, ChangesWidget.Target> targets = new HashMap<>();
@@ -84,6 +95,8 @@ class ChangesWidgetTest {
                 .containsExactlyInAnyOrder(RepoStatus.Kind.DELETED, RepoStatus.Kind.UNTRACKED);
     }
 
+    /// When a new file splits a folder chain, the folder the user closed stays closed, a new folder comes open, and the
+    /// selection stays.
     @Test
     void aClosedFolderStaysClosedAndTheSelectionStaysWhenItsChainSplits() {
         ChangesWidget w = widget();
@@ -110,6 +123,7 @@ class ChangesWidgetTest {
         }
     }
 
+    /// A failed read shows its reason under the repository; no repositories shows the empty-state row.
     @Test
     void aRepositoryThatCannotBeReadSaysWhy() {
         ViewSpec.TreeNode root = ChangesWidget.build(List.of(RepoStatus.failed("/w/edge", "not a git repository")), new HashMap<>());
@@ -117,6 +131,8 @@ class ChangesWidgetTest {
         assertThat(ChangesWidget.build(List.of(), new HashMap<>()).children().getFirst().label()).isEqualTo(ChangesWidget.NO_REPOS);
     }
 
+    /// All ten rows come open; selecting a file sends `OpenChange` to follow it, and activating it sends `OpenChange` to
+    /// open it.
     @Test
     void everythingComesOpenAndAFileOpensItsComparison() {
         ChangesWidget w = widget();
@@ -131,6 +147,8 @@ class ChangesWidgetTest {
         assertThat(sent).containsExactly(new Intent.OpenChange("/w/edge", REPO.changes().getFirst(), ChangeAsk.OPEN));
     }
 
+    /// A new read keeps a closed group closed and the selection selected without sending an intent; after unmount, reads
+    /// no longer change the tree.
     @Test
     void aNewReadKeepsWhatTheUserClosedAndSelectedAndSendsNothing() {
         ChangesWidget w = widget();
@@ -151,6 +169,8 @@ class ChangesWidgetTest {
         assertThat(tree.getRowCount()).as("unmounted: no longer follows").isGreaterThan(1);
     }
 
+    /// A selected group stands for every file under it; the menu's roll back asks once and sends all files, cancel sends
+    /// nothing, and remove sends all; a single deleted file's menu offers compare and roll back but not remove.
     @Test
     void theSelectionsMenuRollsBackOrRemovesEveryFileInItAfterOneQuestion() {
         List<String> calls = new ArrayList<>();

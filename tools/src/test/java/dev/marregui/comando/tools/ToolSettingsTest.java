@@ -10,8 +10,15 @@ import java.nio.file.attribute.PosixFilePermissions;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ToolSettings] finds the executable Gradle queue wrapper on a supplied path and exposes the running JDK home.
+///
+/// - The first executable wrapper in path order is selected.
+/// - Missing, empty, and null paths select the checkout wrapper fallback.
+/// - Child processes inherit the current Java home.
 class ToolSettingsTest {
 
+    /// [ToolSettings#of] skips empty and non-executable path entries, selects the first executable `gradle-serial`,
+    /// and returns no wrapper when the path is missing or null.
     @Test
     void gradleRunsThroughTheWrapperOnThePathWhenItIsThereElseGradlew(@TempDir Path dir) throws Exception {
         Path first = Files.createDirectories(dir.resolve("first"));
@@ -28,6 +35,7 @@ class ToolSettingsTest {
         assertThat(ToolSettings.of(null).gradleSerial()).isEmpty();
     }
 
+    /// [ToolSettings#of] records the JVM's `java.home` for child processes even when no path entry is supplied.
     @Test
     void childProcessesGetTheJdkThatRunsComando() {
         assertThat(ToolSettings.of("").javaHome()).isEqualTo(System.getProperty("java.home"));

@@ -19,12 +19,19 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [TerminalTabs] keeps one terminal per panel, started in the bound session's directory.
+/// - a terminal not started follows its panel's directory on every render, shown or not
+/// - an exited shell restarts where its panel is bound now
+/// - a session directory that does not exist falls back to home
+/// - terminals without shells run no jobs; a job is named with its panel
 class TerminalTabsTest {
 
     private static final PanelId P1 = new PanelId("p1");
     private static final PanelId P2 = new PanelId("p2");
     private static final Path HOME = Path.of(System.getProperty("user.home"));
 
+    /// A terminal without a shell starts at home, then follows its panel's binding on each render, also when another panel
+    /// is focused.
     @Test
     void aTerminalNotStartedTakesItsPanelsCurrentDirectoryOnEveryRender(@TempDir Path root) throws Exception {
         Path edge = Files.createDirectory(root.resolve("edge"));
@@ -51,10 +58,8 @@ class TerminalTabsTest {
         assertThat(tabs.focused()).isSameAs(tabs.terminal(P2));
     }
 
-    /**
-     * The panel is rebound while its shell runs, so the render leaves that terminal alone; the shell then exits
-     * with nothing rendered since. The exit bar and Restart take the directory the panel is bound to now.
-     */
+    /// A running shell keeps its directory when the panel is rebound; once it exits, with nothing rendered since, the exit
+    /// bar and Restart use the directory the panel is bound to now.
     @Test
     void anExitedShellRestartsWhereItsPanelIsBoundNow(@TempDir Path root) throws Exception {
         Path edge = Files.createDirectory(root.resolve("edge"));
@@ -102,6 +107,7 @@ class TerminalTabsTest {
         }
     }
 
+    /// A panel bound to a session whose directory is missing gets the user's home.
     @Test
     void aSessionDirectoryThatDoesNotExistFallsBackToHome() {
         AppState s = AppState.initial(List.of(new PanelState(P1, "one", "", "gone")), List.of(),
@@ -109,6 +115,7 @@ class TerminalTabsTest {
         assertThat(TerminalTabs.directory(s)).isEqualTo(HOME);
     }
 
+    /// Terminals that never started a shell report no running job, also for a panel without a terminal.
     @Test
     void terminalsWithoutShellsRunNoJobs() {
         TerminalTabs tabs = new TerminalTabs();
@@ -119,6 +126,7 @@ class TerminalTabsTest {
         assertThat(tabs.runningJobs()).isEmpty();
     }
 
+    /// [TerminalTabs#jobLine] names the job with the panel's possessive, an apostrophe alone after a trailing `s`.
     @Test
     void aJobIsNamedWithThePanelWhoseTerminalTabRunsIt() {
         assertThat(TerminalTabs.jobLine("man cat", "comando developer")).isEqualTo("man cat in comando developer's Terminal tab");

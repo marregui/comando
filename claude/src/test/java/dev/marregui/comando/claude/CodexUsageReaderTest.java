@@ -12,6 +12,11 @@ import java.time.ZoneId;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// The usage reader turns account rate-limit replies into `PlanUsage` windows.
+///
+/// - reads the session and weekly shares
+/// - rejects unrelated server messages
+/// - reports process failures and timeouts
 class CodexUsageReaderTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -34,6 +39,8 @@ class CodexUsageReaderTest {
     @TempDir
     Path dir;
 
+    /// Account primary and secondary windows use rounded shares and Madrid reset times.
+    /// The fixed October timestamps distinguish the five-hour session from the weekly window.
     @Test
     void theSessionWindowAndTheWeekBecomeWindowsWordedAsClaudeCodeWordsItsResets() {
         PlanUsage u = CodexUsageReader.answer(answer(4, FIVE_HOURS_ON, 3.4), NOW, JSON, MADRID);
@@ -45,12 +52,16 @@ class CodexUsageReaderTest {
                 new PlanUsage.Window("Week", 3, "Nov 2 at 8:00"));
     }
 
+    /// A window reset before the read has zero usage while an unexpired companion window keeps its share.
+    /// The two resets straddle `NOW` to exercise both branches in one reply.
     @Test
     void aWindowWhoseResetHasPassedIsEmpty() {
         PlanUsage u = CodexUsageReader.answer(answer(100, NOW / 1000 - 1, 50), NOW, JSON, MADRID);
         assertThat(u.windows()).extracting(PlanUsage.Window::percent).containsExactly(0, 50);
     }
 
+    /// Only response id 2 supplies usage; malformed, notification, and other response lines are ignored.
+    /// Error and empty-limit responses instead retain their diagnostic text.
     @Test
     void otherLinesAreNotTheAnswerAndAnErrorAnswerSaysWhy() {
         assertThat(CodexUsageReader.answer("{\"id\":1,\"result\":{}}", NOW, JSON, MADRID)).isNull();
@@ -62,6 +73,8 @@ class CodexUsageReaderTest {
                 .isEqualTo("no rate limits in Codex's answer");
     }
 
+    /// A read accepts the rate-limit response when initialization replies and a notification share one pipe chunk.
+    /// The captured requests also establish that the rate-limit request follows initialization.
     @Test
     void theReadFindsTheAnswerAmongLinesThatArriveTogether() throws Exception {
         Path requests = dir.resolve("requests.txt");
@@ -81,6 +94,8 @@ class CodexUsageReaderTest {
         assertThat(Files.readAllLines(requests)).hasSize(3).last().asString().contains("account/rateLimits/read");
     }
 
+    /// A model-specific top-level bucket falls back to the account bucket for session and weekly limits.
+    /// The top-level bucket has no primary or secondary windows, making the fallback necessary.
     @Test
     void anAnswerInAModelBucketFallsBackToTheAccountBucket() {
         String account = answer(80, FIVE_HOURS_ON, 3);
@@ -90,6 +105,8 @@ class CodexUsageReaderTest {
         assertThat(CodexUsageReader.answer(line, NOW, JSON, MADRID).windows()).extracting(PlanUsage.Window::percent).containsExactly(80, 3);
     }
 
+    /// A server that exits before answering reports its exit code rather than waiting for the timeout.
+    /// The script exits with code 7 without reading stdin.
     @Test
     void aServerThatExitsAtOnceSaysSoNotATimeout() throws Exception {
         // review F4, 2026-10-27: an exit was reported as "did not answer within 10000 ms"
@@ -97,6 +114,8 @@ class CodexUsageReaderTest {
         assertThat(u.problem()).isEqualTo("'codex app-server' exited with code 7 without answering");
     }
 
+    /// A live server that produces no output is stopped at the supplied 300-millisecond deadline.
+    /// The elapsed-time bound proves the read does not wait for the sleeping child.
     @Test
     void aReadThatHangsIsStoppedAndSaysSo() throws Exception {
         Path exe = script("hang", "exec sleep 30\n");
@@ -107,6 +126,8 @@ class CodexUsageReaderTest {
         assertThat(u.problem()).isEqualTo("'codex app-server' did not answer within 300 ms");
     }
 
+    /// A nonexistent executable produces a failed usage value instead of exposing process-start I/O.
+    /// The absent path is rooted in the temporary test directory.
     @Test
     void aMissingExecutableIsAProblemNotAnException() {
         PlanUsage u = CodexUsageReader.read(dir.resolve("absent").toString(), JSON, Duration.ofSeconds(1), MADRID);

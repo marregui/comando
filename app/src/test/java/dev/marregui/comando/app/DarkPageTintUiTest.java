@@ -18,13 +18,15 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * A rendered Markdown page in a window takes another tint at once, as the transcript does: it listens only while it is
- * in a window, which needs a display, so this runs in {@code ./gradlew :app:uiTest}.
- */
+/// A rendered Markdown page in a window takes another tint at once, as the transcript does. It listens only while it is
+/// in a window, which needs a display, so this runs in `./gradlew :app:uiTest`.
+/// - a page shown in a window is drawn again in a newly chosen tint
+/// - a page taken out of its window no longer follows the tint
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class DarkPageTintUiTest {
 
+    /// Choosing another tint redraws a page shown in a window in that tint; once the page is removed from the window, a
+    /// further tint change leaves it as it was.
     @Test
     void aShownPageIsDrawnAgainInTheTintChosenAndOneTakenOutOfItsWindowNoMore() throws Exception {
         AtomicReference<JFrame> frame = new AtomicReference<>();

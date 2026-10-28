@@ -15,10 +15,10 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * A Markdown view replaced by another document starts at its top; the same document refreshed keeps its place. Runs off the EDT and steps the
- * EDT with invokeAndWait, so the widget's invokeLater runs between the steps as it does in the application.
- */
+/// [MarkdownWidget] replaced by another document starts at its top; the same document refreshed keeps its place. Runs
+/// off the EDT and steps it with `invokeAndWait`, so the widget's `invokeLater` runs between steps as in the application.
+/// - another document in the same view starts at its top
+/// - the same document grown keeps the reader's place
 class SubagentViewRefreshTest {
 
     @BeforeAll
@@ -43,6 +43,7 @@ class SubagentViewRefreshTest {
         return sb.toString();
     }
 
+    /// A different document rendered into the widget while the reader is at y 2000 scrolls to y 0.
     @Test
     void anotherDocumentInTheSameViewStartsAtItsTop() throws Exception {
         AtomicReference<MarkdownWidget> w = new AtomicReference<>();
@@ -75,6 +76,7 @@ class SubagentViewRefreshTest {
         assertThat(y.get()).as("another document is read from its start").isZero();
     }
 
+    /// The same document with a line appended keeps the reader at y 2000.
     @Test
     void theSameDocumentGrownKeepsTheReadersPlace() throws Exception {
         AtomicReference<MarkdownWidget> w = new AtomicReference<>();

@@ -7,8 +7,14 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [McpTools] formats query rows as bounded tab-separated text for a protocol response.
+///
+/// - An oversized cell consumes the result budget and reports truncation.
+/// - Rows that fit the budget retain their header and every value.
 class McpToolsFormatTest {
 
+    /// [McpTools#format] cuts a 10-megabyte cell at 64 kB, retains the first row only, and states that later rows
+    /// remain, so one pathological cell cannot exceed the response budget.
     @Test
     void oneHugeCellIsCutToTheBudgetNotPassedWhole() {
         String huge = "x".repeat(10 * 1024 * 1024);
@@ -17,6 +23,7 @@ class McpToolsFormatTest {
         assertThat(text).endsWith("(1 row, the last cut at 64 kB, more rows exist; refine the query or raise max_rows)");
     }
 
+    /// [McpTools#format] writes the header and both short rows unchanged when their combined text is below 64 kB.
     @Test
     void rowsWithinTheBudgetArePassedWhole() {
         String text = McpTools.format(new QueryPort.Rows(List.of("n"), List.of(List.of("1"), List.of("2")), -1L, false));

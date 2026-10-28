@@ -24,6 +24,12 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ClaudeAdapter] owns each session process, its transcript, and its temporary MCP configuration.
+///
+/// - Starts, sends to, and stops a session with one configuration file.
+/// - Surfaces startup and process failures in the session transcript.
+/// - Restores stored conversations without launching a process.
+/// - Closes unfinished tool calls when a stream or history ends.
 class ClaudeAdapterTest {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
@@ -80,6 +86,8 @@ class ClaudeAdapterTest {
         return out;
     }
 
+    /// A started `work` session writes a private bearer-token configuration, maps two replies in order, and removes
+    /// that configuration and registration after a clean exit; two prompts distinguish persistent process state.
     @Test
     void startSendAnswerStop() throws Exception {
         ClaudeAdapter a = adapter("fake-claude.sh");
@@ -114,6 +122,8 @@ class ClaudeAdapterTest {
         assertThat(registered).containsExactly("+work", "-work");
     }
 
+    /// Clearing a live session keeps only the checkpoint note, carried summary, and prior turn boundary before the
+    /// next prompt; the preface is transport context rather than a displayed user prompt.
     @Test
     void aCheckpointsClearEmptiesTheTranscriptToItsSummaryAndThePrefaceIsNotShown() throws Exception {
         ClaudeAdapter a = adapter("fake-claude.sh");
@@ -140,6 +150,8 @@ class ClaudeAdapterTest {
         sink.await(Intent.SessionExited.class, WAIT);
     }
 
+    /// Closing removes stale and active configuration files, unregisters the running session, and rejects a session
+    /// requested after close without recreating a token file.
     @Test
     void closeStopsRunningSessionsAndLeavesNoTokenFiles() throws Exception {
         Files.createDirectories(runDir);
@@ -165,6 +177,7 @@ class ClaudeAdapterTest {
         }
     }
 
+    /// A process that exits with code `3` reports its stderr text and appends an error note to the affected transcript.
     @Test
     void aProcessThatDiesReportsItsStderr() throws Exception {
         ClaudeAdapter a = adapter("fake-claude-crash.sh");
@@ -176,6 +189,8 @@ class ClaudeAdapterTest {
                 .extracting(n -> ((Block.Note) n).kind()).isEqualTo(Block.NoteKind.ERROR));
     }
 
+    /// A working-directory string containing a NUL cannot become a path, so startup ends with code `-1` and names that
+    /// path conversion failure instead of attempting a process launch.
     @Test
     void aWorkingDirectoryThatIsNoPathFailsTheStart() throws Exception {
         ClaudeAdapter a = adapter("fake-claude.sh");
@@ -185,6 +200,8 @@ class ClaudeAdapterTest {
         assertThat(exit.error()).startsWith("working directory is not a path");
     }
 
+    /// A nonexistent working directory ends startup with code `-1` and never registers an MCP ticket, because no
+    /// process can be started there.
     @Test
     void aMissingWorkingDirectoryFailsTheStart() throws Exception {
         ClaudeAdapter a = adapter("fake-claude.sh");
@@ -195,6 +212,7 @@ class ClaudeAdapterTest {
         assertThat(registered).noneMatch(r -> r.startsWith("+"));
     }
 
+    /// Sending to an unseen, stopped session finishes the turn as an error rather than silently dropping the prompt.
     @Test
     void sendingToAStoppedSessionEndsTheTurnWithAnError() throws Exception {
         ClaudeAdapter a = adapter("fake-claude.sh");
@@ -203,6 +221,8 @@ class ClaudeAdapterTest {
         assertThat(end.error()).isTrue();
     }
 
+    /// Loading `abc.jsonl` replays its user and assistant blocks into the imported session without emitting a start
+    /// intent, because stored history needs no running process.
     @Test
     void storedConversationLoadsWithoutStartingAProcess() throws Exception {
         ClaudeAdapter a = adapter("fake-claude.sh");
@@ -231,6 +251,8 @@ class ClaudeAdapterTest {
                 .filter(n -> n.kind() == Block.NoteKind.ERROR).toList();
     }
 
+    /// A prompt queued after an executable-not-found startup failure gets the single `session could not start` turn
+    /// error and an informational transcript note, without adding another error note.
     @Test
     void aPromptAfterAFailedStartAddsNoSecondError() {
         ClaudeAdapter a = adapterAt(tmp.resolve("no-such-claude").toString(), runDir);
@@ -249,6 +271,8 @@ class ClaudeAdapterTest {
                 n -> assertThat(n.text()).startsWith("Not sent: the session could not start"));
     }
 
+    /// A run path occupied by a regular file reports MCP-configuration failure before executable advice, preserving the
+    /// earlier filesystem cause even when the executable is also absent.
     @Test
     void aRunDirectoryThatCannotBeWrittenFailsWithoutTheExecutableAdvice() throws Exception {
         Path notADirectory = Files.writeString(tmp.resolve("run-file"), "x");
@@ -261,6 +285,8 @@ class ClaudeAdapterTest {
         assertThat(registered).containsExactly("+work", "-work");
     }
 
+    /// When a process exits after opening tool call `t1`, the unfinished call is sealed as `ERROR` with `NO_RESULT` so
+    /// the transcript does not leave an indefinitely running tool.
     @Test
     void aToolCallLeftRunningWhenTheProcessEndsGetsAnErrorResult() throws Exception {
         Path exe = tmp.resolve("fake-claude-dies-mid-tool.sh");
@@ -290,6 +316,8 @@ class ClaudeAdapterTest {
                 });
     }
 
+    /// Replaying stored history that ends immediately after tool call `t1` seals that call as `ERROR`, because no
+    /// matching result exists in the saved stream.
     @Test
     void aStoredConversationThatStopsMidToolEndsTheCall() throws Exception {
         ClaudeAdapter a = adapter("fake-claude.sh");

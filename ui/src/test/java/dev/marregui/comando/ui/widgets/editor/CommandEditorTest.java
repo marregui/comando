@@ -10,11 +10,19 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The editor never lets a run or a session's write take the user's text or caret. */
+/// [CommandEditor] never lets a run or a session's write take the user's text or caret.
+/// - runs tint the block that ran and select nothing; an error position underlines its token until an edit
+/// - a session's append or insert keeps the caret and selection, forward or backward, and leaves the user's line alone
+/// - an insert lands as a block after the block that ran, or appends when nothing ran
+/// - a session's write, a replace, a clear and a reload are each one undo step
+/// - completion opens in SQL being typed with a database open, not in prose
+/// - a source file is coloured as its language and marks no run targets
+/// - zoom stays between 8 and 40 points
 class CommandEditorTest {
 
     private static final String TEXT = "SELECT 1;\n\nExplain the query above.\n";
 
+    /// Zooming far in stops at 40 pt and far out at 8 pt.
     @Test
     void zoomStaysBetween8And40Points() {
         onEdt(() -> {
@@ -27,6 +35,8 @@ class CommandEditorTest {
         });
     }
 
+    /// Running with the caret inside a block returns that block, selects nothing and tints it from its start; the next edit
+    /// clears the tint.
     @Test
     void runningABlockTintsItAndLeavesNothingSelected() {
         onEdt(() -> {
@@ -42,6 +52,7 @@ class CommandEditorTest {
         });
     }
 
+    /// A quiet append keeps the selection and adds the text after the existing text, followed by a blank line.
     @Test
     void aSessionsAppendKeepsTheCaretAndTheSelection() {
         onEdt(() -> {
@@ -56,6 +67,7 @@ class CommandEditorTest {
         });
     }
 
+    /// With nothing run and a selection, an insert appends after the text instead of replacing the selection, which stays.
     @Test
     void anInsertReplacesNothingAndLeavesTheSelectionAlone() {
         onEdt(() -> {
@@ -70,6 +82,7 @@ class CommandEditorTest {
         });
     }
 
+    /// Replacing the whole text is undone by one undo.
     @Test
     void replacingTheWholeTextIsOneUndo() {
         onEdt(() -> {
@@ -83,6 +96,8 @@ class CommandEditorTest {
         });
     }
 
+    /// A 1-based error position inside the block that ran underlines the token at that place; an edit clears it, and a
+    /// position for text changed since the run is refused.
     @Test
     void anErrorPositionUnderlinesTheTokenInTheBlockThatRan() {
         onEdt(() -> {
@@ -101,7 +116,7 @@ class CommandEditorTest {
         });
     }
 
-    /** The caret on the line under the prompt that ran: that line stays the user's, the inserted block goes after it. */
+    /// With the caret on the line under a prompt that ran, an insert goes after that line, which stays the user's to type on.
     @Test
     void anInsertLeavesTheLineUnderTheRanBlockToTheUser() {
         onEdt(() -> {
@@ -116,7 +131,7 @@ class CommandEditorTest {
         });
     }
 
-    /** In an empty editor the caret's line stays empty for the user; the session's block goes after it. */
+    /// An append to an empty editor leaves the first line empty for the user and puts the block after it.
     @Test
     void anAppendToAnEmptyEditorLeavesTheFirstLineToTheUser() {
         onEdt(() -> {
@@ -135,7 +150,7 @@ class CommandEditorTest {
         }
     }
 
-    /** The user typed above other text, ran it, the session appended; one ⌘Z takes back the session's block only. */
+    /// One undo removes only the session's append; the user's typing before it is a separate step.
     @Test
     void oneUndoTakesBackOnlyTheSessionsAppend() {
         onEdt(() -> {
@@ -154,7 +169,7 @@ class CommandEditorTest {
         });
     }
 
-    /** An insert and a replace are their own undo steps too. */
+    /// One undo removes only the session's insert, leaving the user's later typing.
     @Test
     void oneUndoTakesBackOnlyTheSessionsInsert() {
         onEdt(() -> {
@@ -173,7 +188,8 @@ class CommandEditorTest {
         });
     }
 
-    /** With the caret at the end on a fresh line, the session's block goes after it and typing stays the user's. */
+    /// With the caret at the end, on a fresh line or at the end of the last line, an append goes after it and typing stays on
+    /// the user's line.
     @Test
     void aSessionsAppendAtTheCaretLeavesTheUsersLineToTheUser() {
         onEdt(() -> {
@@ -196,10 +212,8 @@ class CommandEditorTest {
         });
     }
 
-    /**
-     * An insert is a block of its own after the block that ran, wherever that block is now, and the
-     * user's selection stays exactly the user's.
-     */
+    /// After the user edits above the block that ran, an insert lands as a block right after that block, a second insert
+    /// after the first, and a forward selection keeps its mark and dot.
     @Test
     void anInsertLandsAsABlockAfterTheBlockThatRanAndKeepsTheSelection() {
         onEdt(() -> {
@@ -224,7 +238,8 @@ class CommandEditorTest {
         });
     }
 
-    /** With the caret at the end of the block that ran, the insert is not glued to it. */
+    /// An insert after a block that ends the text is separated by a blank line, leaves the caret at the block's end, and a
+    /// second insert follows the first.
     @Test
     void anInsertAfterTheLastBlockIsABlockOfItsOwn() {
         onEdt(() -> {
@@ -241,7 +256,7 @@ class CommandEditorTest {
         });
     }
 
-    /** With nothing run from the editor, an insert appends. */
+    /// With nothing run, an insert appends as a block of its own and the selection stays.
     @Test
     void anInsertWithNothingRunAppends() {
         onEdt(() -> {
@@ -256,7 +271,7 @@ class CommandEditorTest {
         });
     }
 
-    /** A backward selection keeps its anchor and its direction when the session writes. */
+    /// A backward selection keeps its mark and dot when the session appends.
     @Test
     void aSessionsWriteKeepsABackwardSelection() {
         onEdt(() -> {
@@ -271,7 +286,7 @@ class CommandEditorTest {
         });
     }
 
-    /** In a block of several statements the position counts from the one that failed; nothing is underlined. */
+    /// A position reported for a block of several statements counts from the failed statement, so nothing is underlined.
     @Test
     void anErrorInABlockOfSeveralStatementsIsNotUnderlined() {
         onEdt(() -> {
@@ -286,7 +301,8 @@ class CommandEditorTest {
         });
     }
 
-    /** Completion opens on its own in SQL being typed, not on the first word of a prompt, nor with no database open. */
+    /// [CommandEditor#caretInSql] is true at the end of a SQL statement being typed only while a database is open, and false
+    /// after prose, including words that are also SQL keywords.
     @Test
     void completionOpensInSqlBeingTypedNotInProse() {
         onEdt(() -> {
@@ -300,6 +316,7 @@ class CommandEditorTest {
         });
     }
 
+    /// Clear empties the text, reports the empty text to be saved, and one undo brings it back.
     @Test
     void clearEmptiesTheTextInOneStepThatUndoBringsBack() {
         onEdt(() -> {
@@ -326,6 +343,8 @@ class CommandEditorTest {
         return in;
     }
 
+    /// A reload keeps the caret, clamped to the new length, reports no change, and one undo restores the previous text and
+    /// is reported as the user's edit.
     @Test
     void aReloadFromTheFileKeepsTheCaretReportsNoChangeAndUndoesInOneStep() {
         onEdt(() -> {
@@ -347,6 +366,8 @@ class CommandEditorTest {
         });
     }
 
+    /// The panel style marks each block with where it runs; a Java style marks none and opens no SQL completion; the panel
+    /// style marks them again.
     @Test
     void aSourceFileIsColouredAsItsLanguageAndMarksNoTargets() {
         onEdt(() -> {

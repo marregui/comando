@@ -19,7 +19,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** A Markdown document's outline at the right of its panel (record 113). */
+/// The outline pane of [EditorPanel]: a Markdown document's headings at the right of its panel.
+/// - lists the headings with the ids the rendered page gives them, skipping fenced code and front matter
+/// - re-reads the headings after typing pauses
+/// - the Outline button toggles the pane and reports the choice for the next panel
+/// - a double click on a heading puts its line at the top; a single click does nothing
+/// - the pane uses the sidebar's colours
+/// - text that does not render as a page has no outline
 class EditorPanelOutlineTest {
 
     private static final String DOC = """
@@ -71,6 +77,9 @@ class EditorPanelOutlineTest {
         return null;
     }
 
+    /// The outline of a document with front matter, a fenced `#` line and a repeated heading lists four sections whose ids
+    /// (`scope`, `scope-1`) match those [MarkdownHtml#render] writes; typing a heading adds it, and each click on the button
+    /// toggles the pane and reports the new choice.
     @Test
     void theOutlineListsTheHeadingsWithTheRenderedPagesIdsAndItsButtonRemembersTheChoice() throws Exception {
         List<Boolean> kept = new CopyOnWriteArrayList<>();
@@ -101,6 +110,8 @@ class EditorPanelOutlineTest {
         assertThat(kept).containsExactly(true, false);
     }
 
+    /// A double click on the last heading of a long document moves the caret to that heading's line; a single click
+    /// leaves the caret at line 0.
     @Test
     void aDoubleClickOnAHeadingPutsItsLineAtTheTopOfTheText() throws Exception {
         EditorPanel p = panel("plan.md", Path.of("/d/plan.md"), DOC + "\nfiller\n".repeat(200) + "## Far\n");
@@ -129,6 +140,7 @@ class EditorPanelOutlineTest {
         assertThat(p.editor().area().getCaretLineNumber()).isEqualTo(line);
     }
 
+    /// [OutlinePane]'s list and pane use the theme ground, the sidebar text colour and the tint's selection colours.
     @Test
     void theOutlineIsInTheSidebarsLook() throws Exception {
         SwingUtilities.invokeAndWait(() -> {
@@ -142,6 +154,7 @@ class EditorPanelOutlineTest {
         });
     }
 
+    /// A `.sql` file hides the Outline button and shows no outline even when the outline is wanted.
     @Test
     void textThatDoesNotRenderAsAPageHasNoOutline() throws Exception {
         EditorPanel p = panel("query.sql", Path.of("/d/query.sql"), "select 1;\n");

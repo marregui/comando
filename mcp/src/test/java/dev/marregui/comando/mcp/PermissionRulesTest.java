@@ -17,6 +17,14 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [PermissionRules] derives the permission rule an approval scope saves, in the form the CLI saves it, and
+/// [McpTools#permissionResult] sends it to its destination.
+/// - A Bash command keeps two words for a command with subcommands, three for a subcommand that runs a program, else one.
+/// - A nested, unclear or program-running command gets its exact text, never a prefix.
+/// - A compound command gets one rule per subcommand, deduplicated; the wrappers the CLI strips come off first.
+/// - An edit or read allows its file's directory by absolute or relative path; a tool without a path allows the tool.
+/// - Only Bash and WebFetch rules may be saved; Always on anything else stays in the session.
+/// - A plan approved with edits switches the session to accept edits.
 class PermissionRulesTest {
 
     private final ObjectMapper json = new ObjectMapper();
@@ -29,6 +37,7 @@ class PermissionRulesTest {
         return rule("Bash", Map.of("command", command));
     }
 
+    /// `git commit`, `./gradlew test`, `npm install` and `python -m pytest` keep their command and subcommand as the prefix.
     @Test
     void aCommandWithSubcommandsKeepsTwoWords() {
         assertThat(bash("git commit -m x")).isEqualTo("Bash(git commit:*)");
@@ -37,6 +46,7 @@ class PermissionRulesTest {
         assertThat(bash("python -m pytest -q")).isEqualTo("Bash(python -m pytest:*)");
     }
 
+    /// `ls -la`, a padded `cat a.txt` and a bare `make` keep their first word only.
     @Test
     void anyOtherCommandKeepsItsFirstWord() {
         assertThat(bash("ls -la")).isEqualTo("Bash(ls:*)");
@@ -44,6 +54,9 @@ class PermissionRulesTest {
         assertThat(bash("make")).isEqualTo("Bash(make:*)");
     }
 
+    /// Backticks, `$(…)`, process substitution, heredocs, an assignment prefix, `git -C` and a quoted program get their exact
+    /// text; a newline or `&` splits into rules as the CLI splits them; an absolute path to git or npm keeps its subcommand
+    /// prefix; a here-string is one word of data.
     @Test
     void aNestedOrUnclearCommandGetsTheExactCommand() {
         assertThat(bash("echo `id`")).isEqualTo("Bash(echo `id`)");
@@ -65,6 +78,8 @@ class PermissionRulesTest {
         assertThat(bash("\"my tool\" run")).isEqualTo("Bash(\"my tool\" run)");
     }
 
+    /// `&&`, `||`, `;`, pipes, newlines and `&` give one rule per subcommand in order, a dangerous `rm` keeping its exact
+    /// text, redirections dropped, a repeated prefix once, and separators inside quotes or escaped left alone.
     @Test
     void aCompoundCommandGetsOneRulePerSubcommandAsTheCliSavesThem() {
         // changed: a compound command used to get its exact text, which Claude Code never matches
@@ -83,6 +98,8 @@ class PermissionRulesTest {
         assertThat(bash("npm run dev &")).isEqualTo("Bash(npm run dev:*)");
     }
 
+    /// `timeout` (with signal and duration), `time`, `nice`, `nohup`, `stdbuf`, `command`, `builtin` and `noglob` are removed
+    /// before the prefix is taken; a wrapped `sudo` still gets its exact text, and `timeout` without a duration is no wrapper.
     @Test
     void theWrappersTheCliStripsComeOffBeforeTheRule() {
         assertThat(bash("timeout 30 npm test")).isEqualTo("Bash(npm test:*)");
@@ -98,6 +115,9 @@ class PermissionRulesTest {
         assertThat(bash("timeout npm test")).isEqualTo("Bash(timeout npm test)");
     }
 
+    /// `sudo`, `find -delete/-exec`, `docker compose exec`, `source`, `.`, interpreters with a script or `-e`, `watch`,
+    /// `env`, `npx`, `rm`, `docker exec/run` and `kubectl exec` get their exact text, while a harmless `find` or
+    /// `docker compose up` keeps a prefix.
     @Test
     void aCommandThatRunsOtherCommandsNeverGetsAPrefix() {
         assertThat(bash("sudo systemctl restart nginx")).isEqualTo("Bash(sudo systemctl restart nginx)");
@@ -131,6 +151,8 @@ class PermissionRulesTest {
         assertThat(bash("kubectl exec pod -- ls")).isEqualTo("Bash(kubectl exec pod -- ls)");
     }
 
+    /// `npm run test:unit`, `uv run pytest`, `pnpm dlx` and `npm exec tsc` keep three words; a runner given an interpreter,
+    /// `--`, or nothing to run gets its exact text.
     @Test
     void aSubcommandThatRunsAProgramKeepsThreeWords() {
         assertThat(bash("npm run test:unit")).isEqualTo("Bash(npm run test:unit:*)");
@@ -143,6 +165,8 @@ class PermissionRulesTest {
         assertThat(bash("npm run")).isEqualTo("Bash(npm run)");
     }
 
+    /// Edit, Write, MultiEdit and NotebookEdit allow `//<dir>/**` for an absolute path, normalised, `//**` for a file at the
+    /// root, `./<dir>/**` for a relative path, and the file itself when it has no folder.
     @Test
     void anEditAllowsTheFilesDirectoryByAbsolutePath() {
         assertThat(rule("Edit", Map.of("file_path", "/a/b/c.java"))).isEqualTo("Edit(//a/b/**)");
@@ -153,6 +177,8 @@ class PermissionRulesTest {
         assertThat(rule("Edit", Map.of("file_path", "a.java"))).isEqualTo("Edit(./a.java)");
     }
 
+    /// Read allows its file's directory, Glob and Grep the given path (absolute or relative) with `/**`, and Grep without a
+    /// path allows the whole tool.
     @Test
     void aReadAllowsTheDirectoryItReadsAndAToolWithoutAPathTheTool() {
         assertThat(rule("Read", Map.of("file_path", "/etc/hosts"))).isEqualTo("Read(//etc/**)");
@@ -161,6 +187,8 @@ class PermissionRulesTest {
         assertThat(rule("Grep", Map.of("pattern", "x"))).isEqualTo("Grep");
     }
 
+    /// Rules for a non-blank Bash command and an `http(s)` WebFetch URL are persistable; a URL without a scheme, a `file` URL,
+    /// an empty URL, a blank command, and every edit, read, MCP and Task tool are not.
     @Test
     void onlyBashAndFetchRulesMayBeSaved() {
         assertThat(PermissionRules.rules("Bash", k -> k.equals("command") ? "ls" : "").persistable()).isTrue();
@@ -176,6 +204,8 @@ class PermissionRulesTest {
         }
     }
 
+    /// Session scope on an Edit adds `//a/b/**` to the session; Always on an MCP tool or an edit also stays in the session;
+    /// Always on a compound Bash command saves its two rules to the local settings; Allow once sends no update.
     @Test
     void theScopeButtonsSendTheDerivedRuleToItsDestination() throws Exception {
         McpTools tools = new McpTools(i -> { }, States::twoPanels, new TranscriptRegistry(), null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
@@ -208,6 +238,8 @@ class PermissionRulesTest {
         assertThat(once.has("updatedPermissions")).isFalse();
     }
 
+    /// Approving `ExitPlanMode` for the session allows it with the plan unchanged and one update setting the session's mode to
+    /// `acceptEdits`.
     @Test
     void aPlanApprovedWithEditsSwitchesTheSessionToAcceptEdits() throws Exception {
         McpTools tools = new McpTools(i -> { }, States::twoPanels, new TranscriptRegistry(), null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));

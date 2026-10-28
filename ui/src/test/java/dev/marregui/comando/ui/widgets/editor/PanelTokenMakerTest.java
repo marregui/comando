@@ -15,6 +15,12 @@ import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// The panel style of [CommandEditor]: SQL and prompts in one text, each block coloured by what it is.
+/// - SQL is coloured as SQL only while the database is open; a prompt never is
+/// - a slash command and an `@` marker are marked, and the marker makes its block a prompt
+/// - an edit below recolours the block's first line
+/// - a comment runs across the lines of a block, not across a blank line
+/// - a file keeps its own language
 class PanelTokenMakerTest {
 
     private static final String TEXT = """
@@ -28,6 +34,7 @@ class PanelTokenMakerTest {
             select the rows that matter
             """;
 
+    /// A statement has no reserved-word tokens until the database is live; a prose line never has them.
     @Test
     void sqlIsColouredAsSqlOnlyWhileTheDatabaseIsOpen() {
         withEditor(TEXT, e -> {
@@ -39,6 +46,8 @@ class PanelTokenMakerTest {
         });
     }
 
+    /// A `/reflect` command is a preprocessor token, a `-- @claude` line a comment, and the block after the marker has no
+    /// reserved words.
     @Test
     void aSlashCommandAndAMarkerAreMarked() {
         withEditor(TEXT, e -> {
@@ -49,6 +58,7 @@ class PanelTokenMakerTest {
         });
     }
 
+    /// Typing prose on a block's second line turns the first line from SQL into prompt text.
     @Test
     void anEditBelowRecoloursTheBlocksFirstLine() {
         withEditor("select price\nfrom trades\n", e -> {
@@ -59,6 +69,7 @@ class PanelTokenMakerTest {
         });
     }
 
+    /// A block comment continues onto the block's next line, but a blank line ends the block and an unclosed comment with it.
     @Test
     void aCommentRunsAcrossLinesOfABlockButNotAcrossABlankLine() {
         withEditor("select 1 /* one\ntwo */ from t\n\n/* three\n\nfour */\n", e -> {
@@ -68,6 +79,7 @@ class PanelTokenMakerTest {
         });
     }
 
+    /// A Java syntax style colours Java keywords, and the panel style can be set back.
     @Test
     void aFileKeepsItsOwnLanguage() {
         withEditor("class A {}\n", e -> {

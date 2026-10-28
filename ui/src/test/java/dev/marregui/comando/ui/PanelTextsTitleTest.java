@@ -7,15 +7,20 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The title a file gives the panel opened on it. */
+/// [PanelTexts] gives the title of a panel opened on a file.
+/// - A file of the panels' folder is titled without its extension, if Markdown.
+/// - A file elsewhere keeps its extension and takes its folder only when its name is taken.
 class PanelTextsTitleTest {
 
+    /// [PanelTexts#titleOf] drops `.md` from a panel file's name and keeps `.txt`.
     @Test
     void aFileOfThePanelsFolderIsTitledWithoutItsExtension() {
         assertThat(PanelTexts.titleOf(Path.of("/home/u/.comando/panels/Ravenna plan.md"))).isEqualTo("Ravenna plan");
         assertThat(PanelTexts.titleOf(Path.of("/home/u/.comando/panels/notes.txt"))).isEqualTo("notes.txt");
     }
 
+    /// [PanelTexts#documentTitle] keeps a file's name with its extension when only the bare name is a taken title, adds
+    /// ` · docs` to a README whose name is taken in any case, and names `/` as the folder of a file at the root.
     @Test
     void aFileElsewhereKeepsItsExtensionAndTakesItsFolderOnlyWhenItsNameIsTaken() {
         Set<String> taken = Set.of("reviewer", "readme.md");

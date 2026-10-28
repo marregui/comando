@@ -16,6 +16,8 @@ import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.action.ToolButton;
+import dev.marregui.comando.ui.kit.async.Debouncer;
+import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
@@ -43,7 +45,6 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 import javax.swing.TransferHandler;
 import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
@@ -219,7 +220,7 @@ public final class SessionsSidebar {
      * the card toward the names lands on a row, never on a gap between the two.
      */
     static final int OVERLAP = 4;
-    private final Timer cardWait = new Timer(FOLLOW_MILLIS, e -> showCard());
+    private final Debouncer cardWait = new Debouncer(FOLLOW_MILLIS, this::showCard);
     private final TabStrip tabs = new TabStrip("Sidebar");
     /** Adds the window's own commands to a tab's menu, before Hide the sidebar. */
     private BiConsumer<Integer, JPopupMenu> moreForTab = (tab, menu) -> {
@@ -253,7 +254,6 @@ public final class SessionsSidebar {
         this.toggle = toggle;
         this.texts = texts;
         this.loosePanels = new PanelsWithoutSession(intents, texts, dialogs::newSession, questions);
-        cardWait.setRepeats(false);
         sessions.getAccessibleContext().setAccessibleName("Sessions");
         connections.getAccessibleContext().setAccessibleName("Connections");
         sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -670,19 +670,14 @@ public final class SessionsSidebar {
 
     /** The working sessions' icon, one for every row, turned while any session works. */
     private final SpinnerIcon spinner = new SpinnerIcon(16);
-    private final Timer spin = new Timer(SpinnerIcon.STEP_MILLIS, e -> {
+    private final ShownTimer spin = new ShownTimer(sessions, SpinnerIcon.STEP_MILLIS, () -> {
         spinner.advance();
         sessions.repaint();
     });
 
     /** Turns the working icon while a session works, and stops it when none does. */
     private void spinWhileWorking() {
-        boolean working = state != null && state.sessions().stream().anyMatch(SessionState::isBusy);
-        if (working && !spin.isRunning()) {
-            spin.start();
-        } else if (!working && spin.isRunning()) {
-            spin.stop();
-        }
+        spin.want(state != null && state.sessions().stream().anyMatch(SessionState::isBusy));
     }
 
     /** The row at {@code index}, filled as it was painted, so its controls sit where they were drawn. */
@@ -888,7 +883,7 @@ public final class SessionsSidebar {
         }
         cardRow = row;
         if (row != null && following) {
-            cardWait.restart();
+            cardWait.request();
         } else {
             cardWait.stop();
         }

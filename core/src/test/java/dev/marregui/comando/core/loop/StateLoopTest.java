@@ -16,8 +16,15 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [StateLoop] serializes intents, effects, and state notifications while reporting slow or hung application.
+///
+/// - effects precede listeners for each changed state
+/// - queued work completes before close returns
+/// - handler failures do not halt later intents
+/// - stalls identify their slowest part
 class StateLoopTest {
 
+    /// Two SQL intents are reduced in queue order, with each transition's effects delivered before its state listener.
     @Test
     void appliesIntentsInOrderPublishesStateAndHandsEffectsOutBeforeListeners() throws Exception {
         List<String> order = new CopyOnWriteArrayList<>();
@@ -40,6 +47,7 @@ class StateLoopTest {
         }
     }
 
+    /// An exception from `OpenDb` is contained, allowing the following SQL intent to reach its listener.
     @Test
     void aFailingEffectHandlerDoesNotStopTheLoop() throws Exception {
         CountDownLatch done = new CountDownLatch(2);
@@ -57,6 +65,7 @@ class StateLoopTest {
         }
     }
 
+    /// Closing after one thousand queued focus changes drains them through the final focus before the loop stops.
     @Test
     void closeAppliesTheIntentsQueuedBeforeIt() {
         StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), e -> {
@@ -68,6 +77,7 @@ class StateLoopTest {
         assertThat(loop.state().focused()).isEqualTo(States.P2);
     }
 
+    /// Repeated closing is harmless, and an intent dispatched afterward leaves the published state object unchanged.
     @Test
     void closeIsIdempotentAndDropsLaterIntents() {
         StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), e -> {
@@ -79,6 +89,7 @@ class StateLoopTest {
         assertThat(loop.state()).isSameAs(before);
     }
 
+    /// An `ExecuteSql` handler lasting 120 ms exceeds the 60 ms stall limit and reports that effect once after it ends.
     @Test
     void anIntentPastTheStallLimitIsToldOnceItEndsWithItsSlowestPart() {
         List<StateLoop.Stall> stalls = new CopyOnWriteArrayList<>();
@@ -101,6 +112,7 @@ class StateLoopTest {
         }
     }
 
+    /// An `ExecuteSql` handler held for 700 ms reports one 300 ms hang with its stack, then one ended stall sharing the start time.
     @Test
     void anIntentHeldPastTheHangLimitIsToldOnceWhileHeldWithTheLoopsStackThenWhenItEnds() throws Exception {
         List<StateLoop.Stall> stalls = new CopyOnWriteArrayList<>();
@@ -134,6 +146,7 @@ class StateLoopTest {
         }
     }
 
+    /// A 700 ms hung SQL effect creates a log-linked notice whose timestamp is captured near the 300 ms hang threshold.
     @Test
     void aHangsNoticeNamesTheLogEntryWithItsStack() throws Exception {
         CountDownLatch noticed = new CountDownLatch(1);

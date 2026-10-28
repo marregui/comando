@@ -12,12 +12,20 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [SqlCompletion] offers SQL words from the bound connection's schema in the panel editor.
+/// - offers keywords, tables and each column once, naming every table that has it
+/// - a schema name like HTML is listed as text
+/// - another schema replaces the words
+/// - a disposed editor leaves no global listener
+/// - completion opens on a statement being typed, not on a prompt
 class SqlCompletionTest {
 
     private static final Schema SCHEMA = new Schema(List.of(
             new Schema.Table("trades", List.of(new Schema.Column("ts", "TIMESTAMP"), new Schema.Column("price", "DOUBLE"))),
             new Schema.Table("quotes", List.of(new Schema.Column("ts", "TIMESTAMP"), new Schema.Column("bid", "DOUBLE")))));
 
+    /// A table, a column shared by two tables and a keyword each give one completion; the column's description names its
+    /// type and both tables.
     @Test
     void offersKeywordsTablesAndEachColumnOnce() {
         SqlCompletion c = new SqlCompletion();
@@ -28,6 +36,7 @@ class SqlCompletionTest {
         assertThat(SqlCompletion.columns(SCHEMA)).containsEntry("ts", "TIMESTAMP in trades, quotes").containsEntry("bid", "DOUBLE in quotes");
     }
 
+    /// A table and a column named with HTML tags are shown escaped in the completion list.
     @Test
     void aTableNamedLikeHtmlIsListedAsText() throws Exception {
         SqlCompletion c = new SqlCompletion();
@@ -46,6 +55,7 @@ class SqlCompletionTest {
         return ((JLabel) c).getText();
     }
 
+    /// Setting an empty schema removes the previous tables and keeps the keywords.
     @Test
     void anotherSchemaReplacesTheWords() {
         SqlCompletion c = new SqlCompletion();
@@ -55,6 +65,7 @@ class SqlCompletionTest {
         assertThat(c.provider().getCompletionByInputText("FROM")).hasSize(1);
     }
 
+    /// A [CommandEditor] adds a `UIManager` listener and removes it on dispose.
     @Test
     void aDisposedEditorLeavesNoGlobalListener() {
         int before = UIManager.getPropertyChangeListeners().length;
@@ -64,6 +75,9 @@ class SqlCompletionTest {
         assertThat(UIManager.getPropertyChangeListeners().length).isEqualTo(before);
     }
 
+    /// [SqlCompletion#startsAStatement] accepts a leading SQL keyword, or a prefix of it of three letters or more, written
+    /// all in lower or all in upper case and followed by at most one word, the word its grammar requires, or a mark of SQL;
+    /// a mixed-case word such as `Show` and prose that starts with a SQL verb are rejected.
     @Test
     void completionOpensOnAStatementBeingTypedNotOnAPrompt() {
         assertThat(SqlCompletion.startsAStatement("update tr")).isTrue();

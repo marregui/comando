@@ -12,8 +12,17 @@ import java.util.function.BooleanSupplier;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [EdtWatchdog] probes the event dispatch thread and reports a stall with its kind, length, place and stack.
+/// - A hang past its limit is reported once, with its stack, and its end with the whole length.
+/// - A stall below its limit is told only when it ends, with its kind and where it was.
+/// - A wait below the 200 ms threshold is not reported.
+/// - A stall before the first probe answers is startup.
+/// - A stall in the JDK's drawing has a longer limit of its own and is marked as drawing.
+/// - [EdtWatchdog#drawingOnly] and [EdtWatchdog#where] classify and place a stack.
 class EdtWatchdogTest {
 
+    /// A hold past the 400 ms hang limit is reported exactly once, marked reported, with a length of at least the limit,
+    /// kind [EdtWatchdog.Kind#COMANDO] and the holding method in its stack; its end is reported too.
     @Test
     void aHangIsReportedOnceAtItsLimitWithItsStack() throws Exception {
         List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
@@ -36,7 +45,8 @@ class EdtWatchdogTest {
         });
     }
 
-    /** A stall below its limit leaves no stack: one line when it ends, saying what held the EDT and where. */
+    /// A stall below its limit leaves no stack: one line when it ends, saying what held the EDT and where. The hold lasts
+    /// until the probe has waited 600 ms, three times the threshold, so late watchdog checks still see it.
     @Test
     void aShortStallIsToldOnlyWhenItEndsWithItsKindAndWhere() throws Exception {
         List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
@@ -62,7 +72,8 @@ class EdtWatchdogTest {
         });
     }
 
-    /** The stall notice needs the whole length: the threshold report comes at about 200 ms, the end one after it. */
+    /// The stall notice needs the whole length: the threshold report comes at about 200 ms, the end one after it with at
+    /// least the 1 s the EDT was held.
     @Test
     void theEndOfAReportedStallCarriesItsWholeLength() throws Exception {
         List<Long> ended = new CopyOnWriteArrayList<>();
@@ -77,6 +88,8 @@ class EdtWatchdogTest {
         assertThat(ended).singleElement().satisfies(m -> assertThat(m).isGreaterThanOrEqualTo(1_000L));
     }
 
+    /// An EDT busy for 130 ms when the first probe is posted answers between the 100 ms and 200 ms checks, so nothing is
+    /// reported; five rounds guard against a lucky schedule.
     @Test
     void aWaitBelowTheThresholdIsNotReported() throws Exception {
         // the EDT is busy for 130 ms when the first probe is posted: it answers between the watchdog's
@@ -95,6 +108,8 @@ class EdtWatchdogTest {
         assertThat(stacks).isEmpty();
     }
 
+    /// An EDT held by the window's build before the first probe answers ends as kind [EdtWatchdog.Kind#STARTUP] with no
+    /// place.
     @Test
     void aStallBeforeTheFirstProbeIsStartup() throws Exception {
         List<EdtWatchdog.Stall> ended = new CopyOnWriteArrayList<>();
@@ -119,7 +134,8 @@ class EdtWatchdogTest {
         });
     }
 
-    /** Drawing has a limit of its own, past the hang limit: Java2D waiting on macOS's GPU flush is not comando's. */
+    /// Drawing has a limit of its own, past the hang limit: Java2D waiting on macOS's GPU flush is not comando's. A drawing
+    /// stall past the 400 ms hang limit but below the 2 s drawing limit is only told at its end, marked as drawing.
     @Test
     void aStallInTheJdksDrawingIsReportedOnlyWhenItEndsMarkedAsDrawing() throws Exception {
         List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
@@ -143,6 +159,7 @@ class EdtWatchdogTest {
         });
     }
 
+    /// A drawing stall past its own 500 ms limit is reported with its stack, marked as drawing and reported.
     @Test
     void aDrawingStallPastItsLimitIsReportedLikeAHang() throws Exception {
         List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
@@ -163,6 +180,8 @@ class EdtWatchdogTest {
         });
     }
 
+    /// A stack waiting on Java2D's render queue or a flush is drawing even when comando's paint called it, Java2D alone is
+    /// drawing, while Java2D working for comando, the AWT lock without Java2D, or Swing alone is not.
     @Test
     void waitingOnJava2dsRenderQueueIsDrawingWhoeverPaints() {
         assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{PARK, LOCK, QUEUE, REPAINT})).isTrue();
@@ -177,6 +196,8 @@ class EdtWatchdogTest {
         assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{CREATE, REPAINT})).as("Swing alone").isFalse();
     }
 
+    /// [EdtWatchdog#where] gives `in=` the first frame outside `java.base` and `comando=` the first comando frame with its
+    /// line, or `-` when there is none.
     @Test
     void whereNamesTheFirstFrameOutsideJavaBaseAndTheFirstComandoFrame() {
         assertThat(EdtWatchdog.where(new StackTraceElement[]{PARK, LOCK, QUEUE, FILL, OURS, REPAINT}))

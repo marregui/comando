@@ -12,6 +12,10 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+/// [HtmlPane#styles] gives a rendered page the transcript's dark look in the chosen tint.
+/// - Headings, table heads, body, code and quotes take the tint, the palette and the ivory text.
+/// - Headings use the serif on the transcript's heading scale and follow a tint change.
+/// - A heading character the serif lacks is set in the sans serif, and nothing else is.
 class DarkPageTest {
 
     @AfterEach
@@ -19,6 +23,8 @@ class DarkPageTest {
         Theme.tint(Tint.TREASURE);
     }
 
+    /// `h2` is the tint's body and `th` its highlight, the body and quotes are the transcript text, code is the
+    /// palette's code colour, `h1`–`h3` are serif sized by [Theme#HEADING_SCALE], and a tint change recolours `h2`.
     @Test
     void aPageReadsAsAnAnswerInTheTintChosen() {
         StyleSheet dark = HtmlPane.styles();
@@ -38,6 +44,9 @@ class DarkPageTest {
         assertThat(HtmlPane.styles().getForeground(HtmlPane.styles().getRule("h2"))).isEqualTo(Tint.TROPICAL_FOREST.body);
     }
 
+    /// [HtmlPane#fallBackInHeadings] wraps a run of private-use characters the serif cannot draw in a `Dialog` span
+    /// inside a heading, but not inside its `code` or outside headings; a heading the serif draws whole is unchanged.
+    /// Skipped when the serif draws every private-use character.
     @Test
     void aHeadingsCharacterTheSerifLacksIsSetInTheSansSerifAndNothingElseIs() {
         Font serif = new Font(Font.SERIF, Font.BOLD, 1).deriveFont(16f);

@@ -10,8 +10,12 @@ import java.awt.Font;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [EditorThemes] applies comando's dark editor theme to an [RSyntaxTextArea].
+/// - Zooming one editor leaves the other editors' token fonts alone.
 class EditorThemesTest {
 
+    /// The theme gives documentation comments a font of their own, and changing one editor's font size leaves that
+    /// style's font in another themed editor unchanged, so the schemes are not shared.
     @Test
     void zoomingOneEditorLeavesTheOthersFontsAlone() throws Exception {
         SwingUtilities.invokeAndWait(() -> {

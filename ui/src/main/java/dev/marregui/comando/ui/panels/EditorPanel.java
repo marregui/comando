@@ -12,6 +12,7 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.PanelTexts;
+import dev.marregui.comando.ui.kit.async.Debouncer;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Browser;
@@ -21,12 +22,12 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.overlay.Flash;
 import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
+import dev.marregui.comando.ui.kit.text.LogLines;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
+import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.text.RenderedMarkdown;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.text.TextLinks;
-import dev.marregui.comando.ui.kit.text.LogLines;
-import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.editor.CommandEditor;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
@@ -40,7 +41,6 @@ import javax.swing.JScrollPane;
 import javax.swing.JSplitPane;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
-import javax.swing.Timer;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
@@ -106,7 +106,7 @@ public final class EditorPanel extends JPanel {
     /** Hears the user show or hide the outline, so the next panel opens the same way. */
     private Consumer<Boolean> outlineKept = on -> { };
     /** Reads the headings again once typing pauses. */
-    private final Timer outlineWait = new Timer(OUTLINE_WAIT_MILLIS, e -> readOutline());
+    private final Debouncer outlineWait = new Debouncer(OUTLINE_WAIT_MILLIS, this::readOutline);
     /** The text read for the outline last, so a read already under way for older text is not shown. */
     private String outlineText;
     static final int OUTLINE_WAIT_MILLIS = 250;
@@ -175,7 +175,6 @@ public final class EditorPanel extends JPanel {
             layOutBody();
         });
         outline.onOpen(this::goTo);
-        outlineWait.setRepeats(false);
         split.setBorder(null);
         split.setContinuousLayout(true);
         // the outline at the right, beside the tools' button that shows it; a wider panel widens the text
@@ -412,7 +411,7 @@ public final class EditorPanel extends JPanel {
     /** The text changed: the outline reads its headings again once typing pauses, while it shows. */
     private void outlineSoon() {
         if (outlineShows()) {
-            outlineWait.restart();
+            outlineWait.request();
         }
     }
 

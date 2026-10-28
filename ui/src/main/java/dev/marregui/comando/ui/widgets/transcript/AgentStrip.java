@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.widgets.transcript;
 
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
@@ -12,14 +13,12 @@ import javax.swing.BorderFactory;
 import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
-import javax.swing.Timer;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Insets;
 import java.awt.RenderingHints;
-import java.awt.event.HierarchyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.ArrayList;
@@ -45,7 +44,7 @@ final class AgentStrip extends JPanel {
     private final Consumer<String> reveal;
     private final LongSupplier clock;
     private final SpinnerIcon spinner = new SpinnerIcon(12);
-    private final Timer timer = new Timer(SpinnerIcon.STEP_MILLIS, e -> tick());
+    private final ShownTimer timer = new ShownTimer(this, SpinnerIcon.STEP_MILLIS, this::tick);
     private final List<Chip> chips = new ArrayList<>();
     private final JLabel more = new JLabel();
     private List<RunningAgent> agents = List.of();
@@ -58,11 +57,6 @@ final class AgentStrip extends JPanel {
         this.clock = clock;
         setOpaque(false);
         setVisible(false);
-        addHierarchyListener(e -> {
-            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0) {
-                updateTimer();
-            }
-        });
     }
 
     /**
@@ -195,21 +189,15 @@ final class AgentStrip extends JPanel {
 
     /** For tests: whether the timer runs. */
     boolean ticking() {
-        return timer.isRunning();
+        return timer.running();
     }
 
     private void updateTimer() {
-        boolean want = isVisible() && isShowing() && !chips.isEmpty();
-        if (want && !timer.isRunning()) {
-            timer.start();
-        } else if (!want && timer.isRunning()) {
-            timer.stop();
-        }
+        timer.want(isVisible() && !chips.isEmpty());
     }
 
     private void tick() {
-        if (!isShowing() || chips.isEmpty()) {
-            timer.stop();
+        if (chips.isEmpty()) {
             return;
         }
         if (!agents.isEmpty()) {

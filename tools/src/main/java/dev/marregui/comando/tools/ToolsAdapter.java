@@ -5,6 +5,7 @@ import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.FolderRoot;
@@ -21,7 +22,6 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -789,9 +789,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             try {
                 ListingLines.Result r = ListingLines.without(Files.readString(e.getKey(), StandardCharsets.UTF_8), e.getValue());
                 if (r.removed() > 0) {
-                    Path tmp = e.getKey().resolveSibling("." + e.getKey().getFileName() + ".comando-tmp");
-                    Files.writeString(tmp, r.text(), StandardCharsets.UTF_8);
-                    Files.move(tmp, e.getKey(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                    AtomicFiles.writeString(e.getKey(), r.text());
                     text.append("; ").append(r.removed()).append(r.removed() == 1 ? " line" : " lines").append(" out of ").append(where);
                 }
                 if (!r.mentions().isEmpty()) {

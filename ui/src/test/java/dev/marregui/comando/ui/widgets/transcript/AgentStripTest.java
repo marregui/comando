@@ -17,7 +17,8 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The strip names every running sub-agent, on one line, and showing it keeps the transcript's end in view. */
+/// [AgentStrip] names every running sub-agent on one line; showing it keeps the transcript's end in view.
+/// - chips that do not fit on the line are counted in a last chip
 @ExtendWith(OnEdt.class)
 class AgentStripTest {
 
@@ -40,6 +41,8 @@ class AgentStripTest {
                 Block.ToolStatus.RUNNING, "");
     }
 
+    /// Four running calls and two background tasks make six chips; at 1 200 px three to five fit on one line and the rest
+    /// are counted as `+N`; at 2 400 px all fit and the count is empty.
     @Test
     void chipsThatDoNotFitOnTheLineAreCountedInALastChip() {
         TranscriptWidget widget = new TranscriptWidget(new WidgetContext(intent -> { }, new ActionRegistry()));

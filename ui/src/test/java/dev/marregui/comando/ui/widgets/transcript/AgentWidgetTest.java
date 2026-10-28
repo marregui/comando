@@ -18,9 +18,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** A sub-agent's tab (record 109): its transcript, followed as it grows, and what it says of its following. */
+/// [AgentWidget]: a sub-agent's tab, showing its transcript as it grows and whether it is followed.
+/// - shows the sub-agent's transcript as it grows, and its state line
+/// - stops listening once unmounted
+/// - a session's sub-agent transcripts are forgotten with it
 class AgentWidgetTest {
 
+    /// The tab shows the state line it is given and each block appended to the sub-agent's own transcript, not the
+    /// session's; once unmounted it ignores further blocks.
     @Test
     void showsTheSubagentsTranscriptAsItGrowsAndSaysWhetherItIsFollowed() throws Exception {
         TranscriptRegistry transcripts = new TranscriptRegistry();
@@ -54,6 +59,8 @@ class AgentWidgetTest {
         assertThat(onEdt(() -> widget.transcript().canvas().itemCount())).as("closed: it listens no more").isEqualTo(2);
     }
 
+    /// [TranscriptRegistry#forget] drops the session's sub-agent transcripts and keeps those of a session whose name only
+    /// starts the same.
     @Test
     void aSessionsSubagentsGoWithIt() {
         TranscriptRegistry transcripts = new TranscriptRegistry();

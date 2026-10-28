@@ -5,8 +5,14 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [SqlPolicy] admits lexically read-only SQL and refuses statements that can write, lock, or cannot be scanned safely.
+///
+/// - Select-like statements tolerate comments, quoted keywords, and one trailing semicolon.
+/// - Writes, locking clauses, compound statements, and ambiguous quote syntax require approval.
 class SqlPolicyTest {
 
+    /// [SqlPolicy#isReadOnly] accepts `SELECT`, `WITH`, `SHOW`, and safe `EXPLAIN` forms but rejects writes, locks,
+    /// multiple statements, dollar quoting, and backslash-escaped or unclosed literals across representative inputs.
     @ParameterizedTest(name = "{0} -> {1}")
     @CsvSource(delimiter = '|', quoteCharacter = '`', textBlock = """
             SELECT * FROM t                                   | true

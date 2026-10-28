@@ -187,6 +187,9 @@ public final class Editors {
 
     private static RSyntaxTextArea base(String style) {
         RSyntaxTextArea a = new RSyntaxTextArea();
+        // the caret blinks on a Swing timer from construction; hidden until the first focus, which shows it again, an
+        // area that is never focused (a viewer, a replaced view) leaves no timer running and holding it
+        a.getCaret().setVisible(false);
         a.setSyntaxEditingStyle(style);
         a.setCodeFoldingEnabled(false);
         a.setAntiAliasingEnabled(true);

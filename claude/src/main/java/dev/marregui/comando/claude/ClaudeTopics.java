@@ -2,13 +2,13 @@ package dev.marregui.comando.claude;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.Topic;
 import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.view.Clip;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -118,47 +118,28 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
 
     /** Runs one read; blocks up to {@code timeout}. */
     static Topic read(String executable, RootLaunch launch, Path workDir, ObjectMapper json, String source, Duration timeout) {
-        Path out = null;
-        Process p = null;
         try {
-            out = Files.createTempFile("comando-topic", ".json");
-            ProcessBuilder pb = new ProcessBuilder(launch.argv(List.of(executable, "--safe-mode", "-p", "--model", MODEL, "--effort", "low",
-                    "--tools", "", "--system-prompt", SYSTEM, "--no-session-persistence", "--output-format", "json")))
-                    .redirectOutput(out.toFile())
-                    .redirectError(ProcessBuilder.Redirect.DISCARD);
-            launch.environment(pb.environment());
-            pb.environment().put("MAX_THINKING_TOKENS", "0");
-            if (workDir != null && Files.isDirectory(workDir)) {
-                pb.directory(workDir.toFile());
-            }
-            p = pb.start();
-            try (OutputStream in = p.getOutputStream()) {
-                in.write(source.getBytes(StandardCharsets.UTF_8));
-            }
-            if (!p.waitFor(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+            Processes.Result r = Processes.run(launch.argv(List.of(executable, "--safe-mode", "-p", "--model", MODEL, "--effort", "low",
+                    "--tools", "", "--system-prompt", SYSTEM, "--no-session-persistence", "--output-format", "json")), env -> {
+                launch.environment(env);
+                env.put("MAX_THINKING_TOKENS", "0");
+            }, workDir != null && Files.isDirectory(workDir) ? workDir : null, source.getBytes(StandardCharsets.UTF_8), timeout, MAX_OUT);
+            if (r.timedOut()) {
                 long ms = timeout.toMillis();
                 return Topic.failed("Haiku did not answer within " + (ms % 1_000 == 0 ? ms / 1_000 + " s" : ms + " ms"),
                         System.currentTimeMillis());
             }
-            return parse(Files.readString(out, StandardCharsets.UTF_8), System.currentTimeMillis(), json);
+            return parse(r.out(), System.currentTimeMillis(), json);
         } catch (IOException e) {
             return Topic.failed("cannot run '" + executable + "': " + e.getMessage(), System.currentTimeMillis());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             return Topic.failed("interrupted", System.currentTimeMillis());
-        } finally {
-            if (p != null && p.isAlive()) {
-                p.destroyForcibly();
-            }
-            if (out != null) {
-                try {
-                    Files.deleteIfExists(out);
-                } catch (IOException e) {
-                    // a temporary file left behind; the system cleans its temporary folder
-                }
-            }
         }
     }
+
+    /** The most of the command's answer kept: its JSON is a few kilobytes. */
+    static final int MAX_OUT = 1 << 20;
 
     /** The line of the command's JSON result, or why there is none. */
     static Topic parse(String output, long readAtMillis, ObjectMapper json) {

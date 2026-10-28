@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.kit.vcs;
 
+import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 
 import java.io.IOException;
@@ -7,12 +8,12 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
+import java.util.stream.Collectors;
 
 /**
  * The files the user opened in comando, by absolute path: a new file opened once is no longer marked new in the Files
@@ -101,9 +102,7 @@ public final class OpenedFiles {
     private void write(List<String> lines) {
         try {
             Files.createDirectories(file.getParent());
-            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-            Files.write(tmp, lines, StandardCharsets.UTF_8);
-            Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            AtomicFiles.writeString(file, lines.stream().map(l -> l + System.lineSeparator()).collect(Collectors.joining()));
         } catch (IOException | RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write the opened files " + file + ": " + e.getMessage());
         }

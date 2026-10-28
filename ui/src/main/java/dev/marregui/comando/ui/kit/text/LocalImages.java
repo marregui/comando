@@ -7,6 +7,7 @@ import com.github.weisj.jsvg.parser.SVGLoader;
 import com.github.weisj.jsvg.parser.resources.ResourcePolicy;
 import com.github.weisj.jsvg.view.FloatSize;
 import com.github.weisj.jsvg.view.ViewBox;
+import dev.marregui.comando.core.model.AtomicFiles;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -15,14 +16,13 @@ import java.awt.Component;
 import java.awt.Graphics2D;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -239,17 +239,9 @@ public final class LocalImages {
                 g.dispose();
             }
             Files.createDirectories(cache);
-            Path tmp = Files.createTempFile(cache, ".image", ".png");
-            try {
-                ImageIO.write(image, "png", tmp.toFile());
-                try {
-                    Files.move(tmp, png, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                } catch (AtomicMoveNotSupportedException e) {
-                    Files.move(tmp, png, StandardCopyOption.REPLACE_EXISTING);
-                }
-            } finally {
-                Files.deleteIfExists(tmp);
-            }
+            ByteArrayOutputStream bytes = new ByteArrayOutputStream();
+            ImageIO.write(image, "png", bytes);
+            AtomicFiles.write(png, bytes.toByteArray());
         }
         return new Picture.Ready(png, width, height);
     }

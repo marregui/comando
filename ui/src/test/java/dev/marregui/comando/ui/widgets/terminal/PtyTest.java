@@ -11,8 +11,14 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Pty] runs a process on a pseudo-terminal.
+/// - the process runs in the given directory on a tty with `TERM=xterm-256color` and sees resizes
+/// - reading output records when the shell last wrote
+/// - the login shell is an executable run with `-l`
 class PtyTest {
 
+    /// The child prints the real path of its directory, finds stdout a tty, sees `xterm-256color`, and reports the resized
+    /// 50 rows by 132 columns.
     @Test
     void runsInTheDirectoryOnATerminalAndResizes(@TempDir Path dir) throws Exception {
         Pty pty = Pty.start(List.of("/bin/sh", "-c", "pwd; [ -t 1 ] && echo tty; echo $TERM; sleep 1; stty size"), dir, 100, 40);
@@ -40,6 +46,8 @@ class PtyTest {
         assertThat(text).contains(dir.toRealPath().toString()).contains("tty").contains("xterm-256color").contains("50 132");
     }
 
+    /// Before any read the last output time is [InputGate#NO_OUTPUT]; a read that returns bytes sets it to no earlier
+    /// than the read began.
     @Test
     void readingOutputRecordsWhenTheShellLastWrote(@TempDir Path dir) throws Exception {
         Pty pty = Pty.start(List.of("/bin/sh", "-c", "echo ready; sleep 1"), dir, 80, 24);
@@ -55,6 +63,7 @@ class PtyTest {
         }
     }
 
+    /// [Pty#loginShell] is an executable path followed by `-l`.
     @Test
     void loginShellIsExecutable() {
         assertThat(Pty.loginShell()).hasSize(2).last().isEqualTo("-l");

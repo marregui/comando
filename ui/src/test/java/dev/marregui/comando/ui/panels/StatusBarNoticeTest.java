@@ -12,8 +12,14 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [StatusBar]'s notice label and the [Notice] target it goes to.
+/// - a notice with a target goes there on click, and its tooltip says so
+/// - a notice without a target opens the recent notices on click
+/// - a notice's kind and key come from its target, and the key may hold a colon
 class StatusBarNoticeTest {
 
+    /// A notice with a log target runs the resolved action on click and its tooltip says "click to go there"; a notice
+    /// without a target says only "click for recent notices".
     @Test
     void aClickOnANoticeGoesWhereItIsAboutAndItsTooltipSaysSo() throws Exception {
         List<String> went = new CopyOnWriteArrayList<>();
@@ -34,6 +40,8 @@ class StatusBarNoticeTest {
                 .contains("click for recent notices").doesNotContain("go there");
     }
 
+    /// [Notice#log] gives kind `log` and the offset as key, [Notice#panel] keeps a colon in its key, and [Notice#NONE] has
+    /// an empty kind and key.
     @Test
     void aNoticeNamesItsKindAndKey() {
         Notice n = new Notice(Notice.Level.WARN, "x", 1L, Notice.log(42L));

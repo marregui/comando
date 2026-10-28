@@ -9,6 +9,9 @@ import javax.swing.JLabel;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Overlay] shows content, a loading bar, an empty note or an error over one component.
+/// - The loading bar animates only while loading is shown.
+/// - The error text is kept.
 @ExtendWith(OnEdt.class)
 class OverlayTest {
 
@@ -17,6 +20,8 @@ class OverlayTest {
         System.setProperty("java.awt.headless", "true");
     }
 
+    /// An indeterminate bar runs its 15 ms timer even when hidden, so it is indeterminate only while shown: it animates
+    /// after [Overlay#showLoading] and stops on content, empty and error, which keeps its text.
     @Test
     void theLoadingBarAnimatesOnlyWhileLoading() {
         // an indeterminate bar runs its 15 ms animation timer even when hidden, so it is indeterminate only while shown

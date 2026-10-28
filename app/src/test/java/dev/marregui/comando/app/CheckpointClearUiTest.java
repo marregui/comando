@@ -30,12 +30,11 @@ import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * The Checkpoint button in the real window, against a stand-in for {@code claude -p}: once the checkpoint's turn has
- * finished, the conversation is cleared, the Session tab shows only the summary, the panel's text stays, and the next
- * prompt takes the summary with it without showing it again. Opens the window, so this runs in
- * {@code ./gradlew :app:uiTest}.
- */
+/// The Checkpoint button in the real window, against a stand-in for `claude -p`. Opens the window, so this runs in
+/// `./gradlew :app:uiTest`.
+/// - once the checkpoint's turn has finished, the conversation is cleared
+/// - the Session tab then shows only the summary, and the panel's text stays
+/// - the next prompt carries the summary with it without showing it again
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class CheckpointClearUiTest {
 
@@ -46,6 +45,9 @@ class CheckpointClearUiTest {
     @TempDir
     Path home;
 
+    /// After the checkpoint's turn the session has no pending turn, a new conversation id (`fake-2`) and the summary
+    /// carried; the Session tab shows the summary but neither the old turns nor `/reflect` and `/clear`; the panel keeps
+    /// its text; the next prompt goes out with "Context carried over" and the summary in front, which the tab never shows.
     @Test
     void theCheckpointButtonClearsTheConversationAndTheSessionTabToItsSummaryWhichGoesWithTheNextPrompt() throws Exception {
         Path stdin = home.resolve("stdin.jsonl");

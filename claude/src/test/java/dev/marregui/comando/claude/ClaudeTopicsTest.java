@@ -18,6 +18,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ClaudeTopics] reads concise tab topics serially and normalizes each model response for display.
+///
+/// - Cleans successful answers into a single capped line.
+/// - Explains malformed, empty, timed-out, and unavailable reads.
+/// - Queues one latest request per panel and prioritizes urgent requests.
+/// - Stops pending and active work on close.
 class ClaudeTopicsTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -33,6 +39,8 @@ class ClaudeTopicsTest {
         return n.toString();
     }
 
+    /// Successful JSON results collapse whitespace, remove an added heading or matched wrapper quotes, and cap a long
+    /// answer at `MAX_TEXT`, so a card receives one readable line.
     @Test
     void theWholeAnswerIsTheSummaryOnOneParagraphWithoutTheQuotesOrHeadingAModelAdds() {
         assertThat(ClaudeTopics.parse(answer("\n\"In comando, fixing the flaky key test.\nUiKeysTest reads the focus owner.\"\n", false), 7L, JSON))
@@ -42,6 +50,8 @@ class ClaudeTopicsTest {
         assertThat(ClaudeTopics.parse(answer("x".repeat(600), false), 1L, JSON).line()).hasSize(ClaudeTopics.MAX_TEXT);
     }
 
+    /// Error JSON, blank success text, and non-JSON output each become a specific problem instead of a displayable
+    /// topic line.
     @Test
     void anAnswerWithoutALineSaysWhy() {
         assertThat(ClaudeTopics.parse(answer("Not logged in", true), 1L, JSON).problem()).isEqualTo("Not logged in");
@@ -49,6 +59,8 @@ class ClaudeTopicsTest {
         assertThat(ClaudeTopics.parse("<html>proxy error</html>", 1L, JSON).problem()).isEqualTo("unreadable answer from Haiku");
     }
 
+    /// A real read invokes the safe, low-effort Haiku command without tools or persisted session, sends the source on
+    /// stdin, and sets `MAX_THINKING_TOKENS` to zero.
     @Test
     void theReadAsksHaikuWithoutToolsThinkingOrASavedSessionAndSendsTheSourceOnItsInput() throws Exception {
         Path args = dir.resolve("args.txt");
@@ -66,6 +78,8 @@ class ClaudeTopicsTest {
         assertThat(Files.readString(env)).isEqualTo("0");
     }
 
+    /// A process exceeding a 300 ms or one-second deadline is killed with a duration-specific problem, while a missing
+    /// executable reports that it cannot run.
     @Test
     void aReadThatHangsIsStoppedAndAMissingExecutableIsAProblem() throws Exception {
         Path exe = script("hang", "exec sleep 30\n");
@@ -77,6 +91,8 @@ class ClaudeTopicsTest {
         assertThat(ClaudeTopics.read(dir.resolve("absent").toString(), RootLaunch.INHERIT, dir, JSON, "x", Duration.ofSeconds(1)).problem()).startsWith("cannot run '");
     }
 
+    /// While `a0` is reading, newer requests for `a` coalesce to `a3`, urgent `c0` moves ahead of waiting `b0`, and
+    /// the single worker never runs two reads concurrently.
     @Test
     void asksAreReadOneAtATimeAndANewerAskForAWaitingKeyReplacesIt() throws Exception {
         CountDownLatch release = new CountDownLatch(1);
@@ -129,6 +145,8 @@ class ClaudeTopicsTest {
         }
     }
 
+    /// Closing during read `a` interrupts it, drops queued `b`, and ignores later `c`, so no callback runs and only one
+    /// reader invocation occurs.
     @Test
     void closeDropsTheWaitingAsksAndStopsTheReadUnderWay() throws Exception {
         CountDownLatch started = new CountDownLatch(1);

@@ -246,7 +246,7 @@ code outside the kinds below starts a thread or an executor.
 | K2 | Watchdog | must run while what it watches is held | one `watchdog` (platform) for the EDT and the reducer, from `Watchdog.shared()`; started with the first look, ended after the last |
 | K3 | Session reader | reads a pipe live: a pipe read holds its operating-system thread even on a virtual thread (measured on JDK 25: 100 blocked readers, 101 carriers) | `claude-out-<session>` (platform), one per running session |
 | K4 | Strand | sequential work on one resource; its waits hold no operating-system thread | one virtual thread each, from `Threads.strand` or, with timers, `Threads.timedStrand` (the JDK's one delay thread keeps the timers) |
-| K5 | Errand | one blocking call started by a gesture or an event, then gone | a virtual thread from its owner's `Errands` (`App`, `ToolsAdapter`, `EmbeddedQuestDb`, the window's `UiErrands`), interrupted and waited for at the owner's close |
+| K5 | Errand | one blocking call started by a gesture or an event, then gone | a virtual thread from its owner's `Errands` (`App`, `ToolsAdapter`, `EmbeddedQuestDb`, `DbAdapter`'s connection tests, the window's `UiErrands`), interrupted and waited for at the owner's close |
 | K6 | Fork | a thread its caller collects in the same call, with a bound | a virtual thread from `Threads.fork` |
 
 The rest of a running process is not comando's: the JVM's (GC, compiler, VM), AWT's and Java2D's, the virtual threads'
@@ -255,6 +255,18 @@ why a session's reader is a platform thread), the JDK's `process reaper` (one pe
 dispatcher and the libraries' (JNA, a `java.util.Timer`). Measured with five sessions: about 45 threads in all, 7 of
 them comando's own platform threads. The GC threads were measured too: halving them to two lengthened the G1 pause p99
 from 5–6 ms to 30–48 ms on `:ui:transcriptGate`, so the JVM keeps its default.
+
+Swing timers are not threads, so neither test above sees them, yet one left running keeps AWT, and a JVM that does
+not call `System.exit`, alive. A delay after the last of a burst is a `Debouncer`; a timer that repeats while
+something holds is a `ShownTimer`, which runs only while its owner wants it and the owner component is showing; a
+component built and never shown starts none (an editor's caret stays hidden, its blink stopped, until the first
+focus).
+
+A program run to its end with a bound (`ps`, `git`, `claude --version`, the keychain tool) goes through `Processes`
+(the streamed tool runs, Mermaid's renderer and fire-and-forget launches keep their own handling):
+its output is drained by two K6 forks while it runs, each stream kept to a bound, and at the bound or an interrupt
+the program's descendants are killed, then the program. A file written whole goes through `AtomicFiles`: a temporary
+file of a unique name beside the target, moved over it atomically where the file system can.
 
 | Thread | Kind | Does |
 |---|---|---|

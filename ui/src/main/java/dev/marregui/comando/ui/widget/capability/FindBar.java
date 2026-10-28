@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widget.capability;
 
+import dev.marregui.comando.ui.kit.async.Debouncer;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -11,7 +12,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
-import javax.swing.Timer;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.FlowLayout;
@@ -24,7 +24,7 @@ public final class FindBar extends JPanel {
     private final JTextField text = new JTextField(24);
     private final JLabel count = new JLabel();
     private Searchable target;
-    private final Timer typing = new Timer(250, e -> {
+    private final Debouncer typing = new Debouncer(250, () -> {
         if (target != null) {
             // a longer search text starts where the current match begins, so the match under the cursor is not skipped
             target.rewindFind();
@@ -46,16 +46,15 @@ public final class FindBar extends JPanel {
             find(true);
         });
         // find as you type, once typing pauses; ⏎ and ⇧⏎ then step through the matches
-        typing.setRepeats(false);
         text.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
-                typing.restart();
+                typing.request();
             }
 
             @Override
             public void removeUpdate(DocumentEvent e) {
-                typing.restart();
+                typing.request();
             }
 
             @Override

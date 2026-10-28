@@ -7,10 +7,16 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [PlotCanvas] prepares series for drawing and places time ticks.
+/// - preparing sorts each series by x and bounds only the finite points
+/// - a single point gets room around it
+/// - time ticks fall on clock steps, and sub-second ranges get distinct labels
 class PlotCanvasTest {
 
     private static final double T0 = 1_791_800_000_000d; // 2026-10-12, a whole hour in UTC
 
+    /// Each series is sorted by x with a NaN x last, a series sharing the x array sorts the same way, and a point without a
+    /// finite x counts for no bound; one time point gets ±30 s and ±1 around it.
     @Test
     void preparingSortsEachSeriesByXAndFindsTheBoundsOfFinitePoints() {
         double[] x = {3, 1, 2, Double.NaN};
@@ -27,6 +33,7 @@ class PlotCanvasTest {
                 .containsExactly(T0 - 30_000, T0 + 30_000, 4.0, 6.0);
     }
 
+    /// Ticks over an hour starting off a step are ten minutes apart and each a whole multiple of the step.
     @Test
     void timeTicksFallOnClockSteps() {
         double[] t = PlotCanvas.timeTicks(T0 + 1_234, T0 + 3_600_000, 8);
@@ -38,6 +45,7 @@ class PlotCanvasTest {
         }
     }
 
+    /// An 800 ms range gets 100 ms ticks whose labels differ and carry milliseconds.
     @Test
     void subSecondRangesGetDistinctLabels() {
         double[] t = PlotCanvas.timeTicks(T0, T0 + 800, 8);

@@ -18,6 +18,7 @@ import dev.marregui.comando.core.transcript.TopicSource;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.icon.Icons;
@@ -117,7 +118,7 @@ public final class Workspace {
     private final JPanel trailing = new JPanel(new GridBagLayout());
     /** One wheel for every spinning tab; the timer turns it and repaints only the spinning tabs' bounds. */
     private final SpinnerIcon spinner = new SpinnerIcon(16);
-    private final Timer spin = new Timer(SpinnerIcon.STEP_MILLIS, e -> spinTabs());
+    private final ShownTimer spin = new ShownTimer(tabs, SpinnerIcon.STEP_MILLIS, this::spinTabs);
     private Runnable attention = () -> {
     };
     private Consumer<PanelId> closer;
@@ -895,7 +896,12 @@ public final class Workspace {
     }
 
     boolean spinning() {
-        return spin.isRunning();
+        return spin.running();
+    }
+
+    /** For tests: whether a working tab wants the spinner turned, shown or not. */
+    boolean spinWanted() {
+        return spin.wanted();
     }
 
     /**
@@ -1131,12 +1137,7 @@ public final class Workspace {
     }
 
     private void spinWhileWorking() {
-        boolean working = statuses.containsValue(TabStatus.WORKING);
-        if (working && !spin.isRunning()) {
-            spin.start();
-        } else if (!working && spin.isRunning()) {
-            spin.stop();
-        }
+        spin.want(statuses.containsValue(TabStatus.WORKING));
     }
 
     /**

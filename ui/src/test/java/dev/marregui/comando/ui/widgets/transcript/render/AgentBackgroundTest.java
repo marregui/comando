@@ -13,7 +13,10 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The background state of a sub-agent card across rebuilds, quoted launches and many calls. */
+/// [TranscriptCanvas]'s status of a sub-agent card in the background, across rebuilds, quoted launches and many calls.
+/// - switching sessions away and back does not end a background run's time
+/// - a foreground report that quotes a launch line is done
+/// - a running call's elapsed time survives a rebuild, also after many tool calls
 @ExtendWith(OnEdt.class)
 class AgentBackgroundTest {
 
@@ -38,6 +41,8 @@ class AgentBackgroundTest {
         return Arrays.stream(ids).map(id -> new BackgroundTask(id, "local_agent", "task " + id, 1L)).toList();
     }
 
+    /// A background launch whose task is briefly replaced by another session's tasks during a switch away and back keeps
+    /// running from its launch, and reads "done · 5 min 00 s" when its task ends.
     @Test
     void aSessionSwitchBackDoesNotEndTheBackgroundAgentsTime() {
         // session B launches a background sub-agent, seen live
@@ -67,6 +72,7 @@ class AgentBackgroundTest {
         assertThat(canvas.cardStatus("a1")).as("it ran 5 minutes, from launch to the task's end").startsWith("done · 5 min 00 s");
     }
 
+    /// A foreground call whose report text contains `agentId:` is done, not taken for a background launch.
     @Test
     void aForegroundReportThatMentionsALaunchedAgentIsDone() {
         Block.ToolCall a = new Block.ToolCall("a1", "Agent", "{\"description\":\"review\",\"prompt\":\"Do it.\"}", "",
@@ -79,6 +85,8 @@ class AgentBackgroundTest {
         assertThat(canvas.cardStatus("a1")).as("the call returned its report: the sub-agent is done").startsWith("done");
     }
 
+    /// A running call with 2 048 nested tool calls reads "running · 5 min" after five minutes, and still does after the
+    /// canvas is rebuilt, as on a session switch or "Show earlier".
     @Test
     void aLongRunningSubagentsTimeSurvivesARebuildAfterManyToolCalls() {
         Block.ToolCall a = new Block.ToolCall("a1", "Agent", "{\"description\":\"survey\",\"prompt\":\"Do it.\"}", "",
@@ -88,6 +96,7 @@ class AgentBackgroundTest {
             canvas.append(i, new Block.ToolCall("r" + i, "Read", "{\"file_path\":\"/w/f" + i + "\"}", "", Block.ToolStatus.RUNNING, "a1"));
         }
         now.addAndGet(300_000);
+        assertThat(canvas.cardStatus("a1")).startsWith("running · 5 min");
 
         canvas.clear();
         canvas.append(0, a);

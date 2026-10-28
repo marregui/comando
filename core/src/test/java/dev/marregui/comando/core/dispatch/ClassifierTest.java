@@ -6,8 +6,15 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Classifier] routes an editor block to SQL or a prompt after applying markers, syntax shape, and prose safeguards.
+///
+/// - recognized statement shapes select SQL
+/// - prose, commands, and ambiguous punctuation select a prompt
+/// - marker lines override classification and are removed
+/// - comment-only blocks produce empty SQL
 class ClassifierTest {
 
+    /// SQL-shaped statements, including comments and quoted prose, select SQL; English requests, slash commands, and question-ended text select a prompt.
     @ParameterizedTest(name = "{0} -> {1}")
     @CsvSource(delimiter = '|', textBlock = """
             SELECT * FROM trades                                         | SQL
@@ -50,6 +57,7 @@ class ClassifierTest {
         assertThat(Classifier.classify(text.replace("\\n", "\n")).target()).isEqualTo(expected);
     }
 
+    /// A first-line `-- @sql` or `-- @claude` overrides inferred routing and is absent from the dispatched text.
     @Test
     void markerLineWinsAndIsRemoved() {
         Classifier.Classification sql = Classifier.classify("-- @sql\ntrades WHERE price > 10");
@@ -61,12 +69,14 @@ class ClassifierTest {
         assertThat(prompt.text()).isEqualTo("SELECT * FROM t");
     }
 
+    /// Removing no marker strips only surrounding whitespace, while removing a marker also removes its full first line.
     @Test
     void stripMarkerKeepsUnmarkedText() {
         assertThat(Classifier.stripMarker("  SELECT 1  ")).isEqualTo("SELECT 1");
         assertThat(Classifier.stripMarker("-- @sql\nSELECT 1")).isEqualTo("SELECT 1");
     }
 
+    /// Prose words inside string literals and comments do not make a SQL statement a prompt, but unquoted prose does.
     @Test
     void proseWordsInsideQuotesDoNotCount() {
         assertThat(Classifier.hasProseWord("SELECT * FROM t WHERE note = 'the best'")).isFalse();
@@ -74,6 +84,7 @@ class ClassifierTest {
         assertThat(Classifier.hasProseWord("SELECT the best")).isTrue();
     }
 
+    /// Blank and comment-only blocks classify as empty SQL, whereas a comment followed by a statement remains runnable.
     @Test
     void aBlockOfCommentsHasNothingToRunAndIsNoPrompt() {
         assertThat(Classifier.isCommentOnly("-- one\n/* two */\n-- three")).isTrue();
@@ -81,6 +92,7 @@ class ClassifierTest {
         assertThat(Classifier.classify("-- Welcome to comando.\n-- A block is a run of lines.").target()).isEqualTo(Target.SQL);
     }
 
+    /// CREATE, ALTER, DROP, and TRUNCATE after comments are schema changes, while row writes and identifier prefixes are not.
     @Test
     void ddlIsTheStatementsThatChangeTheSchema() {
         assertThat(Classifier.isDdl("-- make it\ncreate table t (x int)")).isTrue();

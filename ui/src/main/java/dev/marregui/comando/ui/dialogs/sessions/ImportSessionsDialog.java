@@ -4,6 +4,7 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.result.Formats;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.async.Edt;
@@ -252,7 +253,7 @@ public final class ImportSessionsDialog {
                 case 2 -> x.branch();
                 case 3 -> x.lastPrompt();
                 case 4 -> new Sortable(x.modifiedMillis(), Labels.ago(x.modifiedMillis(), System.currentTimeMillis()));
-                default -> new Sortable(x.sizeBytes(), x.sizeBytes() < 1024 * 1024 ? x.sizeBytes() / 1024 + " KB" : x.sizeBytes() / (1024 * 1024) + " MB");
+                default -> new Sortable(x.sizeBytes(), Formats.bytes(x.sizeBytes()));
             };
         }
 

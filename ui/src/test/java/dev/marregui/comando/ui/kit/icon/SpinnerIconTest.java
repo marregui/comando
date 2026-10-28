@@ -15,8 +15,15 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [SpinnerIcon] draws an eight-bar busy wheel in the theme's tint.
+/// - Each step turns the wheel one bar clockwise, and eight steps come round.
+/// - Every step paints inside the icon's square and differs from the last.
+/// - The head is the tint's body and the tail fades toward the ground in every named theme.
+/// - The hourglass SVG uses the gold the tint replaces.
 class SpinnerIconTest {
 
+    /// [SpinnerIcon#advance] turns the head one bar clockwise (its bar index one lower), and eight advances return it to
+    /// the start.
     @Test
     void theWheelTurnsOneBarPerStepAndComesRound() {
         SpinnerIcon icon = new SpinnerIcon(16);
@@ -29,6 +36,8 @@ class SpinnerIconTest {
         assertThat(icon.head()).as("eight steps make one revolution").isEqualTo(start);
     }
 
+    /// A 16 px icon painted at offset 4 in a 24 px image changes between steps and leaves every pixel outside its
+    /// square transparent.
     @Test
     void everyStepPaintsInsideTheIconAndDiffersFromTheLast() {
         SpinnerIcon icon = new SpinnerIcon(16);
@@ -49,6 +58,8 @@ class SpinnerIconTest {
         }
     }
 
+    /// For each [NamedTheme], bar 0 is the tint's body and is painted, bar 7 is nearer the ground colour than bar 0,
+    /// and no bar is the old saturated blue.
     @Test
     void theHeadIsTheTintChosenAndTheTailFadesIntoTheGroundInEveryTheme() throws Exception {
         try {
@@ -74,6 +85,7 @@ class SpinnerIconTest {
         }
     }
 
+    /// `hourglass.svg` holds [Icons#SVG_GOLD] and not the old blue, so [Icons#gilded] repaints it in the tint.
     @Test
     void theHourglassIsDrawnInTheSvgsGoldSoItPaintsInTheTint() throws Exception {
         String svg = Files.readString(Path.of("src/main/resources/icons/hourglass.svg"));

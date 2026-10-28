@@ -42,11 +42,9 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Replays recorded intent logs against the real Swing shell, with every adapter replaced by a recording
- * fake, and checks that the window shows what the final state says. Needs a display: run with
- * {@code ./gradlew :app:uiTest} (on Linux under {@code xvfb-run}).
- */
+/// Replays recorded intent logs against the real Swing shell, with every adapter replaced by a recording fake. Needs a
+/// display: run with `./gradlew :app:uiTest` (on Linux under `xvfb-run`).
+/// - the window shows what the replayed log's final state says
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class UiReplayTest {
 
@@ -69,6 +67,9 @@ class UiReplayTest {
         }
     }
 
+    /// After the replay the window title names the focused panel, the workspace tabs are the state's panels with the
+    /// focused one selected, the lower tabs hold Session, Approvals, Terminal, Results and the lower views with the
+    /// state's lower tab selected, and the side pane shows exactly the side views, wider than a fifth of the window.
     @Test
     void snapshotSessionRendersItsFinalState() throws Exception {
         IntentLog.Replay replay = IntentLog.read(Path.of(getClass().getResource("/replay/snapshot.jsonl").toURI()));

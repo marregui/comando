@@ -10,8 +10,14 @@ import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [MarkdownSheet] is the help sheet on Markdown, and what it says matches what the preview and the editor do.
+/// - The sheet renders its tables and shows its fence and table examples as typed.
+/// - Each feature the sheet says the preview draws, or does not, is drawn so.
+/// - What the sheet says about prompts is what the classifier does.
 class MarkdownSheetTest {
 
+    /// Rendered, the sheet has its headings with ids and real tables with no `|---|` left as text, while its fence and
+    /// alignment examples keep their backticks and pipes.
     @Test
     void theSheetRendersItsTablesAndShowsItsFencesAsTyped() {
         String html = MarkdownHtml.render(MarkdownSheet.markdown());
@@ -21,7 +27,9 @@ class MarkdownSheetTest {
         assertThat(html).as("the table example shows its pipes").contains("|:-----|------:|");
     }
 
-    /** What the sheet says comando draws, and what it does not, as the renderer does it. */
+    /// What the sheet says comando draws, and what it does not, as the renderer does it: line breaks, nesting, lists,
+    /// autolinks, note links, front matter, local pictures but not web ones, heading ids, literal strike-through and task
+    /// boxes, escaped HTML, aligned tables and backslash escapes.
     @Test
     void whatTheSheetSaysIsWhatThePreviewDoes() {
         assertThat(MarkdownHtml.render("line one\nline two")).as("a line break is a new line").contains("line one<br>line two");
@@ -45,6 +53,8 @@ class MarkdownSheetTest {
         assertThat(MarkdownHtml.render("\\*x\\*")).contains("*x*").doesNotContain("<em>");
     }
 
+    /// [Classifier#classify] sends SQL to SQL, an English sentence starting with `select` to the assistant, and a block
+    /// marked `-- @claude` to the assistant.
     @Test
     void whatTheSheetSaysAboutPromptsIsWhatTheEditorDoes() {
         assertThat(Classifier.classify("SELECT * FROM trades LIMIT 10;").target()).isEqualTo(Target.SQL);

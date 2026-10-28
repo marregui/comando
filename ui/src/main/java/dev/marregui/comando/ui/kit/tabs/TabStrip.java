@@ -17,7 +17,6 @@ import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiConsumer;
-import java.util.function.IntConsumer;
 
 /**
  * Tabs in one row that never moves: a header per tab, drawn as a tab with its icon alone (the selected one underlined),
@@ -33,8 +32,6 @@ public final class TabStrip {
     private final JPanel row = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
     private final JPanel strip = new JPanel(new BorderLayout());
     private final JPanel root = new JPanel(new BorderLayout());
-    private IntConsumer listener = i -> {
-    };
     private BiConsumer<Integer, MouseEvent> menu = (i, e) -> {
     };
     private int selected = -1;
@@ -108,26 +105,13 @@ public final class TabStrip {
         return selected;
     }
 
-    public int tabCount() {
-        return headers.size();
-    }
-
     public void select(int index) {
         if (index < 0 || index >= headers.size()) {
             return;
         }
-        boolean changed = index != selected;
         selected = index;
         headers.get(index).setSelected(true);
         cards.show(content, Integer.toString(index));
-        if (changed) {
-            listener.accept(index);
-        }
-    }
-
-    /** Hears the index of each newly selected tab. */
-    public void onSelect(IntConsumer listener) {
-        this.listener = listener;
     }
 
     /** Asked, with the tab's index and the mouse event, when a header is right-clicked; the tab is selected first. */

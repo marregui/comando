@@ -11,8 +11,13 @@ import java.text.AttributedCharacterIterator;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+/// [Rich] draws a character its font lacks in the theme's fallback font.
+/// - a lacked character is drawn in the fallback, in one run for adjacent ones, keeping its colour
+/// - text the font draws whole adds no run
 class RichFallbackTest {
 
+    /// Two adjacent private-use characters the font cannot display form one [Theme#fallback] run with the text's colour; the
+    /// text around them stays in the font. Skipped where the font draws every private-use character.
     @Test
     void aCharacterTheFontLacksIsDrawnInTheFallbackAndTheRestInTheFont() {
         Font font = new Font(Font.SERIF, Font.BOLD, 1).deriveFont(20f);
@@ -33,6 +38,7 @@ class RichFallbackTest {
         assertThat(it.getAttribute(TextAttribute.FOREGROUND)).as("the colour stays").isEqualTo(Color.YELLOW);
     }
 
+    /// Text the font displays whole is a single font run.
     @Test
     void textTheFontDrawsWholeAddsNoRun() {
         Font font = new Font(Font.SERIF, Font.PLAIN, 1).deriveFont(14f);

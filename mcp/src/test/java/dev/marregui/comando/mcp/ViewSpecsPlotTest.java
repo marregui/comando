@@ -8,6 +8,11 @@ import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/// [ViewSpecs] validates plot JSON into numeric series for [ViewSpec.Plot].
+///
+/// - Array-form series retain their names and ordinate values.
+/// - Top-level x and y create one title-named series, including JSON-text arrays.
+/// - Missing or nonnumeric series data explains the invalid field.
 class ViewSpecsPlotTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
@@ -16,6 +21,8 @@ class ViewSpecsPlotTest {
         return JSON.readTree(text);
     }
 
+    /// [ViewSpecs#plot] reads an array-form series with its supplied name and y values, preserving the established
+    /// `series` representation.
     @Test
     void seriesAreReadAsBefore() throws Exception {
         ViewSpec.Plot p = ViewSpecs.plot(json("{\"title\": \"t\", \"series\": [{\"name\": \"a\", \"x\": [1, 2], \"y\": [3, 4]}]}"));
@@ -25,9 +32,11 @@ class ViewSpecsPlotTest {
         });
     }
 
+    /// [ViewSpecs#plot] accepts top-level x and y arrays, including arrays encoded as JSON text, and uses the title as
+    /// the implied series name for a single-series plot.
     @Test
     void oneSeriesMayBeGivenAsXAndYBesideTheTitleEvenAsJsonText() throws Exception {
-        // what a model sent on 2026-10-28: x and y beside the title, each an array written as text
+        // x and y may be supplied beside the title as JSON text arrays
         ViewSpec.Plot p = ViewSpecs.plot(json("{\"title\": \"price\", \"placement\": \"side\", \"x\": \"[1,2,3]\", \"y\": \"[101.5,102,99.25]\"}"));
         assertThat(p.series()).singleElement().satisfies(s -> {
             assertThat(s.name()).as("named after the title").isEqualTo("price");
@@ -37,6 +46,8 @@ class ViewSpecsPlotTest {
         assertThat(ViewSpecs.plot(json("{\"title\": \"p\", \"x\": [1], \"y\": [2]}")).series()).hasSize(1);
     }
 
+    /// [ViewSpecs#plot] names a missing series, invalid JSON-text array, and nonnumeric array member in its exception
+    /// message so the caller can correct the field.
     @Test
     void whatIsWrongIsNamed() {
         assertThatThrownBy(() -> ViewSpecs.plot(json("{\"title\": \"p\"}"))).hasMessage(

@@ -15,6 +15,14 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [TabStatus] derives a panel tab's mark from its bound session, its requests and whether the tab was looked at.
+/// - no session is none; an open, quiet one is idle
+/// - a running turn is working; its end, unseen, is done
+/// - background work handed off by a turn is waiting, and its return is not an outcome until the reading turn ends
+/// - a later turn that ends, or a hand-off turn that fails, is an outcome while older work runs on
+/// - a failed turn or a dead session, unseen, is an error
+/// - a waiting request of this session outranks everything, seen or not
+/// - which marks show and which ask for attention
 class TabStatusTest {
 
     private static final PanelId P = new PanelId("p");
@@ -29,6 +37,8 @@ class TabStatusTest {
         return SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
     }
 
+    /// An unbound panel and a panel bound to a session that no longer exists are `NONE`; one bound to an open, quiet session
+    /// is `IDLE`.
     @Test
     void noSessionIsNoneAndAQuietSessionIsIdle() {
         assertThat(TabStatus.of(UNBOUND, state(UNBOUND, null), false)).isEqualTo(TabStatus.NONE);
@@ -36,6 +46,8 @@ class TabStatusTest {
         assertThat(TabStatus.of(BOUND, state(BOUND, null), false)).as("a binding to a session that is gone").isEqualTo(TabStatus.NONE);
     }
 
+    /// A running turn is `WORKING` and describes its tool and elapsed seconds; once it ends it is `DONE` if unseen and
+    /// `IDLE` once looked at.
     @Test
     void aRunningTurnWorksAndItsEndUnseenIsDone() {
         SessionState busy = open().withTurns(1, 1_000L).withActivity("Bash", 1_000L);
@@ -50,6 +62,9 @@ class TabStatusTest {
         return new BackgroundTask(id, "local_agent", description, 0L);
     }
 
+    /// After a turn hands work off, the tab is `WAITING` with the task and its time, and stays active; a running turn
+    /// outranks waiting. When the work returns, the tab stays active for [TabStatus#REPORT_GRACE_MILLIS] or until the turn
+    /// that reads it ends.
     @Test
     void backgroundWorkAfterTheTurnWaitsAndItsReturnIsNotYetAnOutcome() {
         SessionState waiting = open().withTurns(1, 1_000L).withTasks(List.of(task("a1", "review agent")), 1_000L).withTurns(0, 2_000L);
@@ -59,7 +74,7 @@ class TabStatusTest {
         assertThat(TabStatus.of(BOUND, state(BOUND, waiting.withTurns(1, 3_000L)), false)).as("a running turn outranks waiting")
                 .isEqualTo(TabStatus.WORKING);
 
-        // the work returns; Claude Code starts a turn to read it, which takes a moment
+        // the work returns; the CLI starts a turn to read it, which takes a moment
         SessionState returned = waiting.withTasks(List.of(), 10_000L);
         assertThat(TabStatus.active(BOUND, state(BOUND, returned), 11_000L)).as("returned, its reading turn not started yet").isTrue();
         assertThat(TabStatus.active(BOUND, state(BOUND, returned), 10_000L + TabStatus.REPORT_GRACE_MILLIS))
@@ -70,6 +85,8 @@ class TabStatusTest {
         assertThat(TabStatus.active(BOUND, state(BOUND, reading.withTurns(0, 20_000L)), 20_000L)).isFalse();
     }
 
+    /// A turn that answers a later question while handed-off work still runs is an outcome: `DONE` unseen, `WAITING` once
+    /// looked at.
     @Test
     void aLaterTurnThatEndsWhileOlderWorkRunsOnIsAnOutcome() {
         SessionState handedOff = open().withTurns(1, 1_000L).withTasks(List.of(task("b1", "build")), 1_500L).withTurns(0, 2_000L);
@@ -79,6 +96,7 @@ class TabStatusTest {
         assertThat(TabStatus.of(BOUND, state(BOUND, answered), false)).as("looked at: the build still runs").isEqualTo(TabStatus.WAITING);
     }
 
+    /// A hand-off turn that fails is an outcome: `ERROR` unseen, `WAITING` once looked at while its work runs on.
     @Test
     void aHandOffTurnThatFailsIsAnOutcomeWhileItsWorkRunsOn() {
         SessionState failed = open().withTurns(1, 1_000L).withTasks(List.of(task("a1", "review agent")), 1_500L).withTurns(0, 2_000L)
@@ -88,6 +106,8 @@ class TabStatusTest {
         assertThat(TabStatus.of(BOUND, state(BOUND, failed), false)).as("looked at: the work still runs").isEqualTo(TabStatus.WAITING);
     }
 
+    /// A failed turn unseen is `ERROR` described with its error, and `IDLE` once looked at; a session that died is `ERROR`
+    /// described with its exit.
     @Test
     void aFailedTurnOrADeadSessionUnseenIsAnError() {
         SessionState failed = open().withTurns(1, 1L).withTurns(0, 2L).withLastTurnError("rate limited");
@@ -99,6 +119,8 @@ class TabStatusTest {
         assertThat(TabStatus.describe(BOUND, state(BOUND, dead), TabStatus.ERROR, 0L)).isEqualTo(" · failed: exit 1");
     }
 
+    /// Requests of this tab's session make it `NEEDS_YOU`, seen or not, counted in the description; another session's
+    /// request leaves it `WORKING`.
     @Test
     void aWaitingRequestOutranksEverythingWhetherOrNotTheTabWasLookedAt() {
         SessionState busy = open().withTurns(1, 1L);
@@ -112,6 +134,7 @@ class TabStatusTest {
         assertThat(TabStatus.of(BOUND, other, false)).as("another session's request is not this tab's").isEqualTo(TabStatus.WORKING);
     }
 
+    /// `NEEDS_YOU`, `ERROR` and `DONE` are marked and `WORKING` is not; only `NEEDS_YOU` and `ERROR` ask for attention.
     @Test
     void marksAndAttention() {
         assertThat(TabStatus.NEEDS_YOU.marked()).isTrue();

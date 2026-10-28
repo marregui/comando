@@ -28,13 +28,14 @@ import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Closing what a double click opened gives the keyboard back to what opened it (record 112), in the real window:
- * A opens B, B opens C; closing C brings B forward with the keyboard where it was in B, closing B brings A back. A
- * file opened while the keyboard was in the sidebar's session list gives it back there. Opens the window, so this
- * runs in {@code ./gradlew :app:uiTest}; the window is off screen and never focused, so the keyboard is read as the
- * window's most recent focus owner.
- */
+/// Closing what a double click opened gives the keyboard back to what opened it, in the real window. Opens the window,
+/// so this runs in `./gradlew :app:uiTest`; the window is off screen and never focused, so the keyboard is read as the
+/// window's most recent focus owner.
+/// - A opens B, B opens C: closing C brings B forward with the keyboard where it was, closing B brings A back
+/// - a file opened from the sidebar's session list gives the keyboard back there
+/// - a file already open goes back to the panel that opened it last; a keyboard left behind counts as the front panel
+/// - a file opened from the Session tab goes back to that session's panel with its Session tab in front
+/// - closing returns to where the user came from last, and a close in the background moves nothing
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class FocusBackUiTest {
 
@@ -43,6 +44,8 @@ class FocusBackUiTest {
     @TempDir
     Path home;
 
+    /// Closing the third panel of a chain of openings puts the keyboard back at its place in the second, closing the second
+    /// brings the first back, and a file opened with the keyboard in the sidebar's session list returns it to that list.
     @Test
     void closingWhatWasOpenedGivesTheKeyboardBackToWhatOpenedItAndOpeningsChain() throws Exception {
         Path work = Files.createDirectories(home.resolve("work"));
@@ -84,6 +87,8 @@ class FocusBackUiTest {
         }
     }
 
+    /// A file opened again from a second panel comes forward and, closed, returns to that second panel; with the review
+    /// panel in front and the keyboard left behind in main, the opening counts as the review panel's.
     @Test
     void aFileAlreadyOpenFromAnotherPanelGoesBackToTheOneThatOpenedItLastAndAKeyboardLeftBehindCountsAsTheFront() throws Exception {
         Path work = Files.createDirectories(home.resolve("work"));
@@ -124,6 +129,8 @@ class FocusBackUiTest {
         }
     }
 
+    /// A document double-clicked in a session's Session tab, closed, brings that session's own panel forward with the
+    /// Session tab selected in the lower panel.
     @Test
     void aFileOpenedFromTheSessionTabGoesBackToThatSessionsPanelWithItsSessionTabInFront() throws Exception {
         Path work = Files.createDirectories(home.resolve("work"));
@@ -163,6 +170,8 @@ class FocusBackUiTest {
         }
     }
 
+    /// Closing returns to the panel the user came from last, and closing a file opened from main while the user is in
+    /// another panel changes neither the front panel nor the keyboard.
     @Test
     void closingReturnsToWhereTheUserCameFromLastAndABackgroundCloseMovesNothing() throws Exception {
         Path work = Files.createDirectories(home.resolve("work"));

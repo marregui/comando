@@ -38,6 +38,14 @@ import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ApprovalInbox]: a session's waiting requests as cards answered by keyboard or click, never by a stray key.
+/// - the inbox comes forward at its top unless the keyboard is in a card
+/// - a note with text denies with it; an empty note gives the primary answer; Escape returns to the card
+/// - a card's letters work from its viewer; arrows move between cards; a press on its text focuses it
+/// - after a card leaves, focus goes to the card in its place, or nowhere a key answers when the card was withdrawn
+/// - Always shows its rule and needs a second press within the window; a rule that may not be saved offers the session only
+/// - a question starts with no choice and shows descriptions as text; the other answer is multi-line and sent by button
+/// - a plan can be approved with edits accepted; the age ticks while cards wait; a statement card names its connection
 class ApprovalInboxTest {
 
     private static final long T0 = 1_000_000_000L;
@@ -83,6 +91,7 @@ class ApprovalInboxTest {
         return new Approval(id, "work", ApprovalKind.PLAN, "ExitPlanMode", "{\"plan\":\"1. do it\"}", "plan", T0);
     }
 
+    /// Shown again, the inbox scrolls to the oldest request at the top, unless the focus is in a card, when nothing moves.
     @Test
     void theInboxComesForwardAtItsTopUnlessTheKeyboardIsInACard() throws Exception {
         List<Approval> many = new ArrayList<>();
@@ -168,7 +177,7 @@ class ApprovalInboxTest {
 
     // ---- keys from anywhere in the card
 
-    /** A typed note is an objection: Enter sends it with a denial, never with a call that runs. */
+    /// Letters typed in the note type and answer nothing; Enter then denies with the note, never allowing the call.
     @Test
     void enterInANoteWithTextDeniesWithItAndALetterThereTypes() {
         inbox.render(List.of(bash(1, "rm -rf build")));
@@ -186,6 +195,7 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(new ApprovalDecision.Deny("no, keep build/"));
     }
 
+    /// Enter in a note holding only blanks allows once.
     @Test
     void enterInAnEmptyNoteGivesThePrimaryAnswer() {
         inbox.render(List.of(bash(1, "ls -la")));
@@ -195,6 +205,7 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(ApprovalDecision.allowOnce());
     }
 
+    /// The platform menu key with Enter in the note denies with the note.
     @Test
     void theMenuKeyWithEnterInTheNoteDeniesWithTheNote() {
         inbox.render(List.of(bash(1, "ls -la")));
@@ -205,6 +216,7 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(new ApprovalDecision.Deny("not now"));
     }
 
+    /// Escape in the note sends nothing and moves the focus to the card.
     @Test
     void escapeInTheNoteReturnsToTheCardWithoutAnswering() {
         inbox.render(List.of(bash(1, "ls -la")));
@@ -214,6 +226,7 @@ class ApprovalInboxTest {
         assertThat(focus.requested).containsExactly(card);
     }
 
+    /// A MultiEdit request shows a unified diff of every edit, not the raw JSON fields.
     @Test
     void aMultiEditShowsItsDiff() {
         inbox.render(List.of(new Approval(1, "work", ApprovalKind.TOOL, "MultiEdit", """
@@ -224,6 +237,7 @@ class ApprovalInboxTest {
                 .contains("-int b = 1;").contains("+long b = 1;").doesNotContain("old_string");
     }
 
+    /// Enter in the card's read-only viewer allows once.
     @Test
     void theCardsLettersWorkFromItsViewer() {
         inbox.render(List.of(bash(1, "ls -la")));
@@ -232,6 +246,7 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(ApprovalDecision.allowOnce());
     }
 
+    /// D in the viewer denies with the text typed in the note.
     @Test
     void deniesFromTheViewerWithTheTypedNote() {
         inbox.render(List.of(bash(1, "ls -la")));
@@ -241,6 +256,7 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(new ApprovalDecision.Deny("why"));
     }
 
+    /// Down moves to the next card and Up, also from a note, to the previous; Down on the last card goes nowhere.
     @Test
     void upAndDownMoveBetweenCards() {
         inbox.render(List.of(bash(1, "ls"), bash(2, "pwd"), bash(3, "id")));
@@ -251,6 +267,7 @@ class ApprovalInboxTest {
         assertThat(focus.requested).containsExactly(cards.get(2), cards.get(0));
     }
 
+    /// A mouse press on a card's label focuses the card.
     @Test
     void aPressOnTheCardsTextFocusesTheCard() {
         inbox.render(List.of(bash(1, "ls")));
@@ -262,6 +279,8 @@ class ApprovalInboxTest {
 
     // ---- focus after a card leaves
 
+    /// After an answered card leaves, the focus goes to the card that took its place, or the one above when it was last;
+    /// the last card leaving takes no focus.
     @Test
     void theFocusMovesToTheCardThatTookThePlaceOfTheAnsweredOne() {
         inbox.render(List.of(bash(1, "ls"), bash(2, "pwd"), bash(3, "id")));
@@ -283,10 +302,8 @@ class ApprovalInboxTest {
         assertThat(sent).hasSize(3);
     }
 
-    /**
-     * Claude Code withdraws the call while the user types an objection into its note: the rest of the typing
-     * must not answer the card that moved up, which the user never looked at.
-     */
+    /// When the CLI withdraws a call while the user types in its note, the focus goes to the inbox itself, where the rest of
+    /// the typing, Enter included, answers no other card.
     @Test
     void aCardWithdrawnWhileTheUserTypesInItsNoteLeavesTheKeyboardWhereNoKeyAnswers() {
         inbox.render(List.of(bash(1, "ls"), bash(2, "rm -rf build")));
@@ -309,6 +326,7 @@ class ApprovalInboxTest {
         assertThat(sent).as("no answer from the keys typed after the withdrawal").isEmpty();
     }
 
+    /// A card leaving while the focus is outside the inbox requests no focus.
     @Test
     void aCardLeavingWhileTheFocusIsElsewhereTakesNoFocus() {
         inbox.render(List.of(bash(1, "ls"), bash(2, "pwd")));
@@ -319,6 +337,8 @@ class ApprovalInboxTest {
 
     // ---- always: the rule shown, and a second press
 
+    /// The card shows the rule Always would save; the first L asks for confirmation, and a second L within
+    /// [ApprovalInbox#CONFIRM_MILLIS] allows always.
     @Test
     void alwaysShowsItsRuleAndNeedsASecondPress() {
         inbox.render(List.of(bash(1, "git commit -m x")));
@@ -335,6 +355,7 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS));
     }
 
+    /// A second L after the confirmation window asks again instead of answering; a third L then allows always.
     @Test
     void aSecondPressAfterTheWindowAsksAgain() {
         inbox.render(List.of(bash(1, "ls -la")));
@@ -347,6 +368,7 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS));
     }
 
+    /// Clicking Always shows the confirmation in the card; its confirm button allows always.
     @Test
     void clickingAlwaysAsksInTheCardFirst() {
         inbox.render(List.of(bash(1, "ls -la")));
@@ -358,6 +380,7 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS));
     }
 
+    /// Escape first cancels a pending Always and hides it; a second Escape denies.
     @Test
     void escapeCancelsAPendingAlwaysBeforeItDenies() {
         inbox.render(List.of(bash(1, "ls -la")));
@@ -370,6 +393,7 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(new ApprovalDecision.Deny(""));
     }
 
+    /// When the rule may not be saved, the card has no Always button, offers the session only, and L does nothing.
     @Test
     void aRuleThatMayNotBeSavedOffersTheSessionOnlyAndLDoesNothing() {
         ApprovalInbox sessionOnly = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus,
@@ -391,6 +415,7 @@ class ApprovalInboxTest {
         }
     }
 
+    /// A compound command's rules are shown joined, in the rule line and in the confirmation, and allowed together.
     @Test
     void severalRulesShowJoined() {
         ApprovalInbox compound = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus,
@@ -411,6 +436,8 @@ class ApprovalInboxTest {
 
     // ---- questions and plans
 
+    /// A question's options start unselected, descriptions that look like HTML show as text, Enter without a choice asks for
+    /// one, and with a choice sends the answer.
     @Test
     void aQuestionStartsWithNoChoiceAndShowsEachDescriptionAsText() {
         inbox.render(List.of(question(1)));
@@ -435,6 +462,7 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(new ApprovalDecision.Answer(Map.of("Which approach?", "Safe")));
     }
 
+    /// In the free answer letters type, Enter starts a line and no key sends; only the Answer button sends the text.
     @Test
     void theOtherAnswerTakesParagraphsAndOnlyTheAnswerButtonSendsIt() throws Exception {
         inbox.render(List.of(question(1)));
@@ -454,6 +482,8 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(new ApprovalDecision.Answer(Map.of("Which approach?", "a\nb")));
     }
 
+    /// The free answer is 120 characters wide and at least five lines high in [Theme#mono], never wider, and binds undo, redo,
+    /// copy, paste, cut and select all.
     @Test
     void theOtherAnswerIs120CharactersWideInTheEditorsFontWithUndoRedoAndSelectAll() throws Exception {
         inbox.render(List.of(question(1)));
@@ -482,6 +512,7 @@ class ApprovalInboxTest {
         assertThat(free.getText()).as("redone").isEqualTo("x");
     }
 
+    /// Approving a plan with auto-accepted edits allows for the session.
     @Test
     void aPlanCanBeApprovedWithEditsAccepted() {
         inbox.render(List.of(plan(1)));
@@ -492,19 +523,22 @@ class ApprovalInboxTest {
 
     // ---- age
 
+    /// A card's age reads "now", then "2 min ago" after 130 s; ticks are wanted only while cards wait, and the timer
+    /// itself waits until the inbox shows.
     @Test
     void theAgeTicksWhileCardsWait() {
         inbox.render(List.of(bash(1, "ls")));
         JLabel age = (JLabel) named(cards().getFirst(), "age");
         assertThat(age.getText()).isEqualTo("now");
-        assertThat(inbox.ticking()).isTrue();
+        assertThat(inbox.ageWanted()).as("waiting cards want their ages ticked").isTrue();
+        assertThat(inbox.ticking()).as("never shown: the timer waits for the window").isFalse();
 
         now.addAndGet(130_000);
         inbox.tick();
         assertThat(age.getText()).isEqualTo("2 min ago");
 
         inbox.render(List.of());
-        assertThat(inbox.ticking()).isFalse();
+        assertThat(inbox.ageWanted()).isFalse();
     }
 
     private static <T> void collect(Component root, Class<T> type, List<T> out) {
@@ -518,7 +552,7 @@ class ApprovalInboxTest {
         }
     }
 
-    /** A statement card names the connection it would change; the status-bar notice is gone after the next one. */
+    /// A SQL write request's title names the connection it would change.
     @Test
     void aStatementCardNamesItsConnection() {
         Approval sql = new Approval(9, "work", ApprovalKind.SQL_WRITE, "db_run_sql",

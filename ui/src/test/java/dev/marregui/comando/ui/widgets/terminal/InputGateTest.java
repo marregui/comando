@@ -10,6 +10,11 @@ import static dev.marregui.comando.ui.widgets.terminal.InputGate.NO_OUTPUT;
 import static dev.marregui.comando.ui.widgets.terminal.InputGate.SETTLE_NANOS;
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [InputGate] holds text sent to a starting shell until it has drawn its prompt.
+/// - text sent before the shell is ready is written after it, in order, once output settles
+/// - cleared text is never written to the next shell
+/// - a silent shell, or one that keeps writing, gets the text after the limit
+/// - a gate never started writes at once
 class InputGateTest {
 
     private static final long MS = 1_000_000L;
@@ -17,6 +22,8 @@ class InputGateTest {
     private final List<String> written = new ArrayList<>();
     private final InputGate gate = new InputGate(written::add);
 
+    /// Text queued before any output stays queued while output arrives and until [InputGate#SETTLE_NANOS] after the last
+    /// output, then is written in order; text sent to a ready shell is written at once.
     @Test
     void textSentBeforeTheShellIsReadyIsWrittenAfterItInOrder() {
         long t0 = 1_000 * MS;
@@ -41,6 +48,7 @@ class InputGateTest {
         assertThat(written).as("a ready shell takes text at once").containsExactly("select 1\n", "ls\n", "pwd\n");
     }
 
+    /// Clearing drops the queue, so a restarted shell reaching the limit gets nothing.
     @Test
     void clearedTextIsNeverWrittenToTheNextShell() {
         gate.started(0);
@@ -54,6 +62,7 @@ class InputGateTest {
         assertThat(written).isEmpty();
     }
 
+    /// A shell with no output gets the text at [InputGate#LIMIT_NANOS], not a millisecond earlier.
     @Test
     void aSilentShellGetsTheTextAfterTheLimit() {
         gate.started(0);
@@ -64,6 +73,7 @@ class InputGateTest {
         assertThat(written).containsExactly("echo hi\n");
     }
 
+    /// A shell whose output never settles still gets the text at [InputGate#LIMIT_NANOS].
     @Test
     void aShellThatKeepsWritingGetsTheTextAfterTheLimit() {
         gate.started(0);
@@ -73,6 +83,7 @@ class InputGateTest {
         assertThat(written).containsExactly("x\n");
     }
 
+    /// Text sent to a gate that never saw a start is written immediately.
     @Test
     void aGateNeverStartedWritesAtOnce() {
         assertThat(gate.send("a", 0, NO_OUTPUT)).isFalse();

@@ -11,6 +11,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [TextWidget]'s zoom.
+/// - zoom stays between 8 and 40 points and resets to the theme's mono size
 class TextWidgetTest {
 
     private static RSyntaxTextArea area(Component c) {
@@ -28,6 +30,7 @@ class TextWidgetTest {
         return null;
     }
 
+    /// Sixty steps in stop at 40 pt, a large step out stops at 8 pt, and reset returns to [Theme#mono]'s size.
     @Test
     void zoomStaysBetween8And40PointsAndResets() throws Exception {
         AtomicReference<Float> largest = new AtomicReference<>();

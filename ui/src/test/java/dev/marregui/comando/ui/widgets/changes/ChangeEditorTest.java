@@ -24,6 +24,13 @@ import java.util.function.Predicate;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
+/// [ChangeEditor]: one changed file compared with HEAD, its working-tree side editable, saved, rolled back or removed.
+/// - an edit is compared again, saved within a second, and undone and redone
+/// - a read while edited is not shown; a read of the saved text keeps the undo history
+/// - rolling back a changed file is one undoable edit; a file HEAD lacks goes to the Trash after a question
+/// - removing asks, then moves the file to the Trash; a removed file stays removed while its text is empty
+/// - Markdown offers both sides rendered; a file not compared is not editable
+/// - a failed write says so and is tried again
 class ChangeEditorTest {
 
     @TempDir
@@ -83,6 +90,8 @@ class ChangeEditorTest {
         return on(e, x -> x.diff().right().getText());
     }
 
+    /// An edit marks the file edited and is compared again once typing pauses; saving writes the text and marks it saved,
+    /// and undo and redo move between the two texts.
     @Test
     void anEditIsComparedAgainSavedAndUndoneAndRedone() throws Exception {
         ChangeEditor e = editor();
@@ -108,6 +117,8 @@ class ChangeEditorTest {
         assertThat(right(e)).isEqualTo("xa\nB\nc\n");
     }
 
+    /// A fresh read arriving while the side has unsaved edits leaves the edits on screen; after saving, a read of the saved
+    /// text keeps the undo history.
     @Test
     void aReadWhileEditedIsLeftUnshownAndAReadOfTheSavedTextKeepsTheUndoHistory() throws Exception {
         ChangeEditor e = editor();
@@ -123,6 +134,8 @@ class ChangeEditorTest {
         assertThat(is(e, x -> x.diff().right().canUndo())).as("the read of what was saved keeps the history").isTrue();
     }
 
+    /// Rolling back a modified file writes HEAD's text without asking, sends `Unstage`, and a single undo brings back the
+    /// working-tree text.
     @Test
     void rollingBackAChangedFileTakesHeadsTextAsOneEditThatUndoTakesBack() throws Exception {
         ChangeEditor e = editor();
@@ -137,6 +150,8 @@ class ChangeEditorTest {
         assertThat(right(e)).as("one undo").isEqualTo("one\n2\nthree\n");
     }
 
+    /// Rolling back an untracked file asks first, sends nothing when cancelled, and when confirmed sends `RollBack` and
+    /// leaves the window.
     @Test
     void aFileHeadDoesNotHaveRollsBackThroughGitAfterAQuestionAndLeavesTheWindow() throws Exception {
         ChangeEditor e = editor();
@@ -151,6 +166,7 @@ class ChangeEditorTest {
         assertThat(gone).hasValue(1);
     }
 
+    /// Remove asks, sends `RemoveFiles` and leaves the window; a deleted file does not offer remove.
     @Test
     void removingAsksThenSendsTheFileToTheTrashAndLeavesTheWindow() throws Exception {
         ChangeEditor e = editor();
@@ -165,6 +181,8 @@ class ChangeEditorTest {
         assertThat(is(e, x -> x.offered("remove"))).as("a removed file is not removed again").isFalse();
     }
 
+    /// A deleted file whose side is edited back to empty writes nothing on save; rolling it back writes HEAD's text and
+    /// sends `Unstage`.
     @Test
     void aRemovedFileStaysRemovedWhileItsTextIsEmpty() throws Exception {
         ChangeEditor e = editor();
@@ -178,6 +196,8 @@ class ChangeEditorTest {
         assertThat(sent).containsExactly(new Intent.Unstage(root.toString(), List.of("gone.txt")));
     }
 
+    /// Only Markdown offers the rendered view, whose sides shade the removed text red and the added green; another file
+    /// shown next is edited as text.
     @Test
     void markdownOffersBothSidesRenderedAndOtherTextNot() throws Exception {
         ChangeEditor e = editor();
@@ -202,6 +222,7 @@ class ChangeEditorTest {
         assertThat(str(e, ChangeEditor::status)).as("the choice holds for Markdown only: other text is edited as ever").isEqualTo("● edited");
     }
 
+    /// A binary file shown as a note is not editable and offers no rendered view, but offers remove.
     @Test
     void aFileNotComparedIsNotEdited() throws Exception {
         ChangeEditor e = editor();
@@ -212,6 +233,8 @@ class ChangeEditorTest {
         assertThat(is(e, x -> x.offered("remove"))).isTrue();
     }
 
+    /// An edit is written without asking within a second, the status goes from edited to saved, and the modified callback
+    /// reports true then false.
     @Test
     void editsAreWrittenWithinASecondAndTheWorkingTreesSideSaysSo() throws Exception {
         ChangeEditor e = editor();
@@ -227,6 +250,8 @@ class ChangeEditorTest {
         assertThat(is(e, ChangeEditor::edited)).isFalse();
     }
 
+    /// A failed write shows "not saved", posts an error notice whose subject opens the log, keeps the file edited and
+    /// retries until the write succeeds.
     @Test
     void aWriteThatFailsSaysSoAndIsTriedAgain() throws Exception {
         ChangeEditor e = editor();

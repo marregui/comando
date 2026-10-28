@@ -10,8 +10,13 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Attachments] turns a result or an error into prompt text that, with the question under it, stays one block.
+/// - Attached rows and the question under them stay one block, newlines in cells shown as ⏎ and empty rows named.
+/// - An error with blank lines, or with no text, stays one block.
 class AttachmentsTest {
 
+    /// [Attachments#rows] flattens the query onto one line, shows a cell's newline as ⏎ and an all-empty row as
+    /// `(empty row)`, and with the question appended [Blocks#all] sees one block.
     @Test
     void attachedRowsAndTheQuestionUnderThemStayOneBlock() {
         FakeResult r = new FakeResult(1L, List.of("a", "b"), List.of(ColumnKind.TEXT, ColumnKind.TEXT),
@@ -21,6 +26,7 @@ class AttachmentsTest {
         assertThat(text).contains("x\tline1⏎line2", "(empty row)", "Result of `SELECT a,  b FROM t` (first 2 of 2 rows)");
     }
 
+    /// [Attachments#error] drops the blank line inside the message, so the error and the question stay one block.
     @Test
     void anErrorWithBlankLinesStaysOneBlock() {
         String text = Attachments.error("SELECT 1", "ERROR: boom\n\n  Hint: none\n") + "what went wrong?";
@@ -28,6 +34,7 @@ class AttachmentsTest {
         assertThat(text).contains("ERROR: boom\n  Hint: none");
     }
 
+    /// A blank error message becomes `(no message)` in its fence, still one block with the question.
     @Test
     void anErrorWithoutTextStaysOneBlock() {
         String text = Attachments.error("SELECT 1", "  \n") + "what went wrong?";

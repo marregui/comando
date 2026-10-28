@@ -29,7 +29,14 @@ import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** A sub-agent's stored conversation shown as a lower view, and followed while it grows and its session runs. */
+/// [ClaudeAdapter#showSubagent]: a sub-agent's stored conversation shown as a lower view, and followed while it grows
+/// and its session runs.
+/// - the view opens in the lower panel titled by the description and reads on as the file grows
+/// - a finished sub-agent, a stopped session's and a forgotten session's are shown once and not followed
+/// - a missing file or a failing open posts a warning and shows nothing
+/// - at most [ClaudeAdapter#TAILS] follow at once, the oldest stopping first and saying so once
+/// - sub-agents sharing a description get distinct titles and tabs; the same one opened twice is followed once
+/// - `close()` returns quickly with opens queued, and nothing is shown or noticed after it
 class SubagentViewTest {
 
     private static final Duration WAIT = Duration.ofSeconds(15);
@@ -117,6 +124,8 @@ class SubagentViewTest {
         }
     }
 
+    /// The view opens in the lower placement titled "agent · Count the widgets" as `FOLLOWING`, holds the first step, is
+    /// followed, and after the file grows holds both steps, read on from where it was.
     @Test
     void showsTheSubagentAsALowerViewAndFollowsItsFileWhileItGrows() throws Exception {
         live();
@@ -138,6 +147,7 @@ class SubagentViewTest {
         assertThat(said("toolu_a1")).as("read on from where it was").containsExactly("first step", "second step");
     }
 
+    /// A sub-agent whose meta file says it finished is shown and not followed.
     @Test
     void aFinishedSubagentIsShownOnceAndNotFollowed() throws Exception {
         live();
@@ -149,6 +159,7 @@ class SubagentViewTest {
         assertThat(adapter.followedSubagents()).isZero();
     }
 
+    /// A sub-agent of a session that is not running is shown and not followed, as its sub-agents write no more.
     @Test
     void aStoppedSessionsSubagentIsShownOnceAndNotFollowed() throws Exception {
         agent("s1", "Late", false, "first");
@@ -160,6 +171,7 @@ class SubagentViewTest {
         assertThat(adapter.followedSubagents()).as("its sub-agents write no more").isZero();
     }
 
+    /// After its session is forgotten, a sub-agent shown for it is not followed.
     @Test
     void aForgottenSessionsSubagentIsNotFollowed() throws Exception {
         live();
@@ -172,6 +184,7 @@ class SubagentViewTest {
         assertThat(adapter.followedSubagents()).isZero();
     }
 
+    /// A `forget` issued right after a `showSubagent`, before its open completes, leaves no sub-agent followed.
     @Test
     void aForgetQueuedBehindAPendingOpenStopsItsTail() throws Exception {
         live();
@@ -183,6 +196,8 @@ class SubagentViewTest {
         assertThat(adapter.followedSubagents()).isZero();
     }
 
+    /// An id with no transcript file posts the warning "Session work: transcript not found for this sub-agent" and shows no
+    /// view.
     @Test
     void noFileForTheCallSaysSo() {
         adapter.showSubagent("work", "conv-1", "toolu_missing");
@@ -193,6 +208,8 @@ class SubagentViewTest {
         assertThat(sink.of(Intent.ShowView.class)).isEmpty();
     }
 
+    /// A conversation id with a NUL character, which no path can hold, posts the warning "Session work: cannot open the
+    /// sub-agent's transcript".
     @Test
     void anOpenThatFailsSaysSo() {
         adapter.showSubagent("work", "conv\0bad", "toolu_any");
@@ -202,6 +219,8 @@ class SubagentViewTest {
         assertThat(n.text()).isEqualTo("Session work: cannot open the sub-agent's transcript");
     }
 
+    /// Opening one more than [ClaudeAdapter#TAILS] sub-agents keeps that many followed: the first is refreshed once as
+    /// `STOPPED_TOO_MANY`, its later growth is not read, and the newest one's growth is.
     @Test
     void atMostFourFollowAndTheOldestStopsFirst() throws Exception {
         live();
@@ -222,6 +241,8 @@ class SubagentViewTest {
         assertThat(sink.of(Intent.RefreshView.class)).filteredOn(r -> r.title().equals("agent · agent 1")).hasSize(1);
     }
 
+    /// Two sub-agents described "Review the diff" get "agent · Review the diff" and "… (2)", each with its own transcript
+    /// and growth; the first opened again keeps its title and is read again whole.
     @Test
     void twoSubagentsWithOneDescriptionGetTwoViews() throws Exception {
         live();
@@ -251,6 +272,7 @@ class SubagentViewTest {
         assertThat(said("toolu_x1")).containsExactly("A-first", "A-more");
     }
 
+    /// Showing the same sub-agent twice leaves one follower, whose transcript reads each step once.
     @Test
     void theSameSubagentOpenedTwiceIsFollowedOnce() throws Exception {
         live();
@@ -266,6 +288,7 @@ class SubagentViewTest {
         assertThat(said("toolu_d1")).as("read once, by one follower").containsExactly("first", "second");
     }
 
+    /// With six opens queued, `close()` returns in under 5 s, and a show afterwards posts no view and no notice within 1 s.
     @Test
     void closeWithOpensQueuedReturnsAndALaterShowDoesNothing() throws Exception {
         live();

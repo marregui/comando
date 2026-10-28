@@ -10,8 +10,14 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [TableSource] reads a table view's cells; [GridTable] selects and exports them in the shown order.
+/// - numeric columns are detected from the values, with `null` as a null cell
+/// - selection and export follow the sort order
+/// - CSV quotes a field only when it holds a comma or a quote
 class TableSourceTest {
 
+    /// A column of numbers and `null` is numeric with the `null` cell null; a column of words is not; values parse as
+    /// doubles.
     @Test
     void numericColumnsAreDetectedFromTheValues() {
         TableSource s = TableSource.of(new ViewSpec.Table(List.of("n", "name"), List.of(List.of("1", "a"), List.of("null", "b"), List.of("2.5", "c"))));
@@ -21,6 +27,8 @@ class TableSourceTest {
         assertThat(s.numeric(2, 0)).isEqualTo(2.5);
     }
 
+    /// After sorting by a column, the selected view rows map to their source rows and the export writes the rows in the
+    /// sorted order.
     @Test
     void selectionAndExportFollowTheSortOrder(@TempDir Path dir) throws Exception {
         GridTable grid = new GridTable();
@@ -35,6 +43,7 @@ class TableSourceTest {
         assertThat(Files.readString(file)).isEqualTo("id,v\nb,1\nc,2\na,3\n");
     }
 
+    /// [GridTable#csv] leaves a plain field as is, quotes one with a comma, and doubles embedded quotes.
     @Test
     void csvQuotesOnlyWhenNeeded() {
         assertThat(GridTable.csv("plain")).isEqualTo("plain");

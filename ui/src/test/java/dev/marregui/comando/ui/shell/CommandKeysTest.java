@@ -13,10 +13,16 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Keys] forwards edit keys to the focused component and lists the commands' keys as a Markdown table.
+/// - An edit key runs the focused component's own binding, and passes when it has none.
+/// - The key table lists every command with a key, escaped, under its place.
+/// - The table groups commands by place in the order each place first appears.
 class CommandKeysTest {
 
     private static final int CMD = InputEvent.META_DOWN_MASK;
 
+    /// [Keys#forward] runs a text field's select-all binding for ⌘A, typed or pressed; a component that reads keys itself, as
+    /// the terminal does, and no component both return false.
     @Test
     void anEditKeyRunsTheFocusedComponentsOwnBindingAndPassesWhenThereIsNone() {
         JTextField field = new JTextField("hello");
@@ -30,6 +36,7 @@ class CommandKeysTest {
         assertThat(Keys.forward(null, selectAll, false)).isFalse();
     }
 
+    /// [Keys#markdown] writes a `Where | Command | Keys` table, escapes a `|` in a title, and leaves out a command with no key.
     @Test
     void theKeyTableListsEveryCommandWithAKeyByMenu() {
         String md = Keys.markdown(List.of(
@@ -38,6 +45,7 @@ class CommandKeysTest {
         assertThat(md).contains("| Where | Command | Keys |", "| Run | Run \\| block |").doesNotContain("No key");
     }
 
+    /// Commands of interleaved places come out grouped, the first place first, keeping their order within each place.
     @Test
     void theKeyTableGroupsCommandsWhereTheyBelongInTheOrderEachPlaceFirstAppears() {
         KeyStroke k = KeyStroke.getKeyStroke(KeyEvent.VK_1, CMD);

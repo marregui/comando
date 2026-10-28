@@ -15,6 +15,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [KeyPriority] runs a registered command's key before the focused component gets it.
+/// - The editor binds the run key itself, which is why the priority exists.
+/// - A command key in a priority component runs the command and consumes the press.
+/// - The character typed by a claimed press is swallowed once, and only that one.
+/// - Other keys, other windows and disabled commands are left to the component.
+/// - A key the focused component keeps for itself is left to it.
 class KeyPriorityTest {
 
     /** The shortcut modifier the editor binds its keys with: ⌘ on macOS, Ctrl elsewhere, as comando's own keys. */
@@ -30,6 +36,8 @@ class KeyPriorityTest {
         registry.register(new Command("run", "Run", null, RUN, "Run", runs::incrementAndGet, enabled::get));
     }
 
+    /// [RSyntaxTextArea] binds the run key in its own focused input map chain, so without the priority the
+    /// editor would take it.
     @Test
     void theEditorBindsTheRunKeyItself() {
         Object bound = null;
@@ -39,6 +47,8 @@ class KeyPriorityTest {
         assertThat(bound).as("why the priority exists").isNotNull();
     }
 
+    /// A press of an enabled command's key in a priority component runs the command once, returns true and
+    /// consumes the event.
     @Test
     void aCommandKeyRunsTheCommandBeforeTheFocusedEditor() {
         KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
@@ -49,6 +59,8 @@ class KeyPriorityTest {
         assertThat(runs).hasValue(1);
     }
 
+    /// After a claimed press, the next typed character is swallowed; the release and any later typed character
+    /// pass through.
     @Test
     void theCharacterTypedByAClaimedPressIsSwallowedOnce() {
         KeyPriority p = KeyPriority.detached(registry, c -> c == editor, (c, k) -> false);
@@ -59,6 +71,8 @@ class KeyPriorityTest {
         assertThat(p.dispatchKeyEvent(typed(editor, 'x'))).isFalse();
     }
 
+    /// A key no command owns, a command key in a component outside the priority set, and a plain typed character
+    /// all pass through without running anything.
     @Test
     void otherKeysAndOtherWindowsAreLeftAlone() {
         JPanel elsewhere = new JPanel();
@@ -70,6 +84,7 @@ class KeyPriorityTest {
         assertThat(runs).hasValue(0);
     }
 
+    /// A command whose enabled supplier says false does not claim its key.
     @Test
     void aDisabledCommandLeavesTheKeyToTheComponent() {
         enabled.set(false);
@@ -79,7 +94,9 @@ class KeyPriorityTest {
         assertThat(runs).hasValue(0);
     }
 
-    /** The terminal keeps Ctrl with a letter for its shell: on desktops other than macOS that is ⌘'s key. */
+    /// The terminal keeps Ctrl with a letter for its shell; on desktops other than macOS that is ⌘'s key. A key
+    /// the keep predicate claims for the focused component passes to it, and the same key elsewhere runs the
+    /// command.
     @Test
     void aKeyTheFocusedComponentKeepsIsLeftToIt() {
         KeyStroke close = KeyStroke.getKeyStroke(KeyEvent.VK_W, InputEvent.CTRL_DOWN_MASK);

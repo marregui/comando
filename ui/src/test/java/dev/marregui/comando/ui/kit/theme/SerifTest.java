@@ -11,8 +11,14 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
+/// [Theme#pickSerif] chooses the headings' serif, and [Theme#fallback] the face for characters it lacks.
+/// - Without New York, the first installed serif asked for, else Java's logical serif in bold.
+/// - On macOS New York is loaded from its file.
+/// - The fallback is the logical sans in the same style and size.
 class SerifTest {
 
+    /// With no New York file the first installed family in preference order is used, with none installed the bold logical
+    /// serif, and a file Java cannot read falls back to the installed family.
     @Test
     void withoutNewYorkTheFirstInstalledSerifElseJavasLogicalSerif(@TempDir Path dir) throws Exception {
         Path none = dir.resolve("NewYork.ttf");
@@ -25,6 +31,8 @@ class SerifTest {
         assertThat(Theme.pickSerif(notAFont, Set.of("Georgia")).getName()).as("a file Java cannot read").isEqualTo("Georgia");
     }
 
+    /// On macOS New York loads bold from [Theme#NEW_YORK] and cannot draw `→`, which is why the fallback exists. Skipped
+    /// elsewhere.
     @Test
     void onMacOsNewYorkLoadedFromItsFile() {
         assumeTrue(Files.isRegularFile(Theme.NEW_YORK), "macOS only");
@@ -34,6 +42,7 @@ class SerifTest {
         assertThat(serif.canDisplay('→')).as("why the fallback exists").isFalse();
     }
 
+    /// The fallback of a bold 19.5 pt serif is bold 19.5 pt `Dialog`.
     @Test
     void theFallbackIsTheLogicalSansInTheSameStyleAndSize() {
         Font f = Theme.fallback(new Font(Font.SERIF, Font.BOLD, 1).deriveFont(19.5f));

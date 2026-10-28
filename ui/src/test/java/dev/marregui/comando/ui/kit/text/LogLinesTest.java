@@ -6,6 +6,11 @@ import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [LogLines#offsetOf] finds the log entry written at a given time in a log's text.
+/// - The entry is the first written at the time or within the slack after it.
+/// - Nothing within the slack, or only entries far older, gives -1.
+/// - A neighbour written slightly out of order does not hide the entry.
+/// - Lines that are not entries are skipped; a whole-second instant is read.
 class LogLinesTest {
 
     private static final long T = Instant.parse("2026-10-20T10:28:52.069Z").toEpochMilli();
@@ -14,6 +19,8 @@ class LogLinesTest {
         return Instant.ofEpochMilli(millis) + " " + rest + "\n";
     }
 
+    /// The entry 2 ms after the time is found for the time and for itself; a time 100 ms before the next entry finds
+    /// that one; 1.5 s with nothing after it, or a minute before everything, gives -1.
     @Test
     void theEntryIsTheFirstWrittenAtTheTimeOrWithinTheSlackAfterIt() {
         String before = line(T - 5_000, "INFO A earlier");
@@ -26,6 +33,7 @@ class LogLinesTest {
         assertThat(LogLines.offsetOf(text, T - 60_000)).as("older than every entry within reach").isEqualTo(-1);
     }
 
+    /// A line stamped 4 ms before the time after the entry does not stop the scan from returning the entry.
     @Test
     void aNeighbourWrittenSlightlyOutOfOrderDoesNotHideTheEntry() {
         String first = line(T - 9_000, "INFO A first");
@@ -33,6 +41,8 @@ class LogLinesTest {
         assertThat(LogLines.offsetOf(text, T)).isEqualTo(first.length());
     }
 
+    /// Blank, stack and non-instant lines are skipped, an instant with no millis is read, empty text gives -1, and a
+    /// last line without a newline is found.
     @Test
     void linesThatAreNotEntriesAndAWholeSecondAreRead() {
         long whole = Instant.parse("2026-10-20T10:28:52Z").toEpochMilli();

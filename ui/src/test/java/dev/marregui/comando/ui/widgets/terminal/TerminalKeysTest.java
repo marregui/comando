@@ -14,10 +14,13 @@ import java.awt.event.KeyEvent;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * A terminal keeps for its shell the control characters a shell reads, Ctrl with a letter, {@code [ \ ]} or space: on
- * macOS ⌃ sends them and no command uses it; elsewhere Ctrl is also ⌘'s key, and in a terminal the shell has it.
- */
+/// [TerminalWidget#keepsKey]: a terminal keeps for its shell the control characters a shell reads: Ctrl with a letter,
+/// `[ \ ]` or space. On macOS ⌃ sends them and no command uses it; elsewhere Ctrl is also ⌘'s key, and in a terminal the
+/// shell has it.
+/// - Ctrl with a letter, bracket, backslash or space stays with the shell
+/// - other chords stay commands
+/// - on macOS the terminal keeps ⌘K as its clear buffer
+/// - outside a terminal nothing is kept
 class TerminalKeysTest {
 
     private static final int CTRL = InputEvent.CTRL_DOWN_MASK;
@@ -29,6 +32,7 @@ class TerminalKeysTest {
         return KeyStroke.getKeyStroke(code, modifiers);
     }
 
+    /// Ctrl+A through Ctrl+Z, Ctrl+`[`, `\`, `]` and space are kept inside the terminal panel and on the widget itself.
     @Test
     void ctrlWithALetterOrABracketBackslashOrSpaceStaysWithTheShell() {
         for (int code = KeyEvent.VK_A; code <= KeyEvent.VK_Z; code++) {
@@ -40,6 +44,7 @@ class TerminalKeysTest {
         assertThat(TerminalWidget.keepsKey(term, key(KeyEvent.VK_C, CTRL))).as("the widget itself").isTrue();
     }
 
+    /// Chords with Shift or Alt, Ctrl with a digit, Enter or `=`, and ⌘W are not kept.
     @Test
     void otherChordsStayCommandsSoTheyWorkFromTheTerminal() {
         assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_P, CTRL | InputEvent.SHIFT_DOWN_MASK))).as("the palette").isFalse();
@@ -51,6 +56,7 @@ class TerminalKeysTest {
         assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_W, InputEvent.META_DOWN_MASK))).as("⌘W on macOS").isFalse();
     }
 
+    /// ⌘K is kept in the terminal only on macOS, never in a text field, and ⌘⇧K is never kept.
     @Test
     void onMacOsTheTerminalKeepsCommandKAsItsClearBufferAndTheChangesViewHasItElsewhere() {
         KeyStroke cmdK = key(KeyEvent.VK_K, InputEvent.META_DOWN_MASK);
@@ -59,6 +65,7 @@ class TerminalKeysTest {
         assertThat(TerminalWidget.keepsKey(inside, key(KeyEvent.VK_K, InputEvent.META_DOWN_MASK | InputEvent.SHIFT_DOWN_MASK))).isFalse();
     }
 
+    /// A text field, a plain panel and a null component keep no Ctrl chord.
     @Test
     void outsideATerminalNothingIsKept() {
         assertThat(TerminalWidget.keepsKey(new JTextField(), key(KeyEvent.VK_W, CTRL))).isFalse();

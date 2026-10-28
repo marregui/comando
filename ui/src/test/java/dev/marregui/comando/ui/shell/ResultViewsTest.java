@@ -21,6 +21,11 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/// [ResultViews] turns a SQL result into a plot or a table view; [LivePlots] keeps such a plot live.
+/// - A time column is the x axis and numeric columns are series, nulls as NaN.
+/// - A result with no numeric or time column, or no result, cannot be plotted.
+/// - A table keeps the formatted cells.
+/// - A live plot reruns and replots its own query until its tab closes, and stops when the user runs another.
 class ResultViewsTest {
 
     private static FakeResult result(long id) {
@@ -29,6 +34,8 @@ class ResultViewsTest {
                 List.of(Arrays.asList(1_000_000L, "a", 1.5, 3L), Arrays.asList(2_000_000L, "b", null, 4L)));
     }
 
+    /// [ResultViews#plot] uses the timestamp column as a time x axis in milliseconds, plots the double and long columns as
+    /// series, and turns a null into NaN.
     @Test
     void timeIsXAndNumericColumnsAreSeries() {
         ViewSpec.Plot p = ResultViews.plot(result(1));
@@ -39,6 +46,7 @@ class ResultViewsTest {
         assertThat(Double.isNaN(p.series().getFirst().y()[1])).isTrue();
     }
 
+    /// A text-only result fails naming `no numeric or time column`, and a null result fails naming `no rows`.
     @Test
     void textOnlyResultsCannotBePlotted() {
         FakeResult text = new FakeResult(1, List.of("s"), List.of(ColumnKind.TEXT), List.of(List.of("x")));
@@ -46,6 +54,7 @@ class ResultViewsTest {
         assertThatThrownBy(() -> ResultViews.plot(null)).hasMessageContaining("no rows");
     }
 
+    /// [ResultViews#table] keeps the column names and formats a timestamp in microseconds and a null as `null`.
     @Test
     void tableKeepsFormattedCells() {
         ViewSpec.Table t = ResultViews.table(result(1));
@@ -53,6 +62,8 @@ class ResultViewsTest {
         assertThat(t.rows().get(1)).containsExactly("1970-01-01T00:00:02.000000Z", "b", "null", "4");
     }
 
+    /// A completed run of the plot's query shows the view under its title; a run of another query while the tab is open is
+    /// not plotted, and once the tab closes the live plot stops, never running anything but SQL.
     @Test
     void livePlotRerunsAndReplotsItsQueryUntilItsTabCloses() {
         RecordingSink sink = new RecordingSink();
@@ -80,6 +91,8 @@ class ResultViewsTest {
         assertThat(sink.of(Intent.RunText.class)).noneMatch(r -> r.target() != Target.SQL);
     }
 
+    /// A tick after its own query completed sends RefreshSql for it; after the user runs another statement in the panel
+    /// the next tick sends nothing, the plot stops and a notice says another statement ran.
     @Test
     void aLivePlotRefreshesItsOwnQueryAndStopsWhenTheUserRunsAnother() {
         RecordingSink sink = new RecordingSink();

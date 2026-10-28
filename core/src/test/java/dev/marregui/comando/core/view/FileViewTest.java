@@ -11,8 +11,15 @@ import java.nio.file.Path;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/// [FileView] resolves typed paths and turns bounded UTF-8 files into Markdown or text views.
+///
+/// - Tilde, relative, and absolute paths resolve from the correct base.
+/// - Markdown and text choose their view specification from line and extension.
+/// - Binary, absent, directory, and oversized files report a path-free reason.
 class FileViewTest {
 
+    /// [FileView#resolve] expands a home-relative path, resolves a relative path under `/w`, and leaves an absolute
+    /// path unchanged.
     @Test
     void aPathAsTypedIsUnderHomeOrTheBaseFolder() {
         String home = System.getProperty("user.home");
@@ -21,6 +28,8 @@ class FileViewTest {
         assertThat(FileView.resolve("/abs/B.java", "/w")).isEqualTo(Path.of("/abs/B.java"));
     }
 
+    /// [FileView#read] renders `PLAN.md` as Markdown at line zero, but returns text with its extension and requested
+    /// line for Markdown at line three and Java source at line one.
     @Test
     void markdownRendersAtNoLineAndAnyTextFileIsTextAtItsLine(@TempDir Path dir) throws IOException {
         Path md = Files.writeString(Files.createDirectories(dir.resolve("docs")).resolve("PLAN.md"), "# plan");
@@ -33,6 +42,8 @@ class FileViewTest {
         assertThat(FileView.read(java, 1).spec()).isEqualTo(new ViewSpec.Text(java.toString(), "class A {}", "java", 1));
     }
 
+    /// [FileView#read] identifies invalid UTF-8 bytes as a binary six-byte file and rejects missing, directory, and
+    /// over-four-megabyte inputs with reasons that omit the input path.
     @Test
     void aBinaryFileIsSaidToBeOneAndEveryRefusalSaysWhyWithoutThePath(@TempDir Path dir) throws IOException {
         Path png = Files.write(dir.resolve("shot.png"), new byte[]{(byte) 0x89, 'P', 'N', 'G', 0, (byte) 0xff});

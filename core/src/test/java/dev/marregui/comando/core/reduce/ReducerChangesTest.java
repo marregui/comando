@@ -18,6 +18,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Reducer] routes folder and repository intents to effects while preserving repository-path safety and watch state.
+///
+/// - Changes visibility controls repository watching
+/// - folder saves detect concurrent replacements and duplicate names
+/// - repository actions reject paths outside their root
 class ReducerChangesTest {
 
     private final Reducer reducer = new Reducer(new FakeClock());
@@ -34,6 +39,7 @@ class ReducerChangesTest {
         return state.views().stream().filter(v -> v.spec() instanceof ViewSpec.Changes).map(ViewState::id).findFirst().orElseThrow();
     }
 
+    /// Adding folders and opening or closing the Changes view emits `WatchRepos` with the current folders and active-view flag only when either changes.
     @Test
     void everyFoldersRepositoriesAreWatchedOftenWhileTheChangesViewIsOpen() {
         FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
@@ -54,6 +60,7 @@ class ReducerChangesTest {
         assertThat(effects).containsExactly(new Effect.WatchRepos(List.of(kb, notes), false));
     }
 
+    /// Saving a distinct folder list persists it and describes a changed base, whereas duplicate names leave folders untouched with an error notice.
     @Test
     void theFoldersWindowsListReplacesTheFoldersAndIsSavedSayingWhenItReplacedAChangeMadeMeanwhile() {
         FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
@@ -74,6 +81,7 @@ class ReducerChangesTest {
         assertThat(state.notice().text()).isEqualTo("Two folders are called KB: nothing saved");
     }
 
+    /// Repository updates and change reads produce display effects without replacing the current application state.
     @Test
     void reposAndChangesPassToTheirPortsAndLeaveTheStateAsItWas() {
         AppState before = state;
@@ -91,6 +99,7 @@ class ReducerChangesTest {
         assertThat(state).isSameAs(before);
     }
 
+    /// Rollback, removal, and unstage forward valid repository-relative paths, while empty, escaping, root, and relative-root requests are refused.
     @Test
     void rollingBackRemovingAndUnstagingGoToTheToolsOnlyForPathsInsideTheRepository() {
         RepoStatus.FileChange a = new RepoStatus.FileChange("src/A.java", "", RepoStatus.Kind.MODIFIED);

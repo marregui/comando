@@ -15,8 +15,14 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Flash] draws an amber attention flash that fades out over [Flash#MILLIS].
+/// - The amber fades linearly from its start alpha to nothing, keeping its colour.
+/// - A new flash on the same component ends the one before; a flash ends on its own.
+/// - A line's flash is a text highlight over the caret's line, removed when it ends.
 class FlashTest {
 
+    /// [Flash#at] is attention at the start alpha at 0, half the alpha at half time, and transparent at and past the
+    /// end, with the RGB unchanged.
     @Test
     void theAmberFadesToNothingOverTwoSeconds() {
         assertThat(Flash.at(0)).isEqualTo(Theme.withAlpha(Theme.ATTENTION, Flash.START_ALPHA));
@@ -28,6 +34,8 @@ class FlashTest {
                 .containsExactly(Theme.ATTENTION.getRed(), Theme.ATTENTION.getGreen(), Theme.ATTENTION.getBlue());
     }
 
+    /// A flash paints at once; a second start on the same owner runs the first one's end callback at once, and the
+    /// second ends by itself within its duration and stops running.
     @Test
     void aNewFlashOnTheSameComponentEndsTheOneBefore() throws Exception {
         JPanel owner = new JPanel();
@@ -50,6 +58,8 @@ class FlashTest {
         assertThat(done).containsExactly("first", "second");
     }
 
+    /// [Flash#line] adds one highlight spanning the whole line of the offset, newline included, and a newer flash on
+    /// the area removes it.
     @Test
     void aLinesFlashIsATextHighlightOverTheCaretsLineGoneWhenItEnds() throws Exception {
         RSyntaxTextArea area = new RSyntaxTextArea("one\ntwo\nthree\n");

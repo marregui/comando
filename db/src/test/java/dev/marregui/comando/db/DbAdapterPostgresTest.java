@@ -21,7 +21,12 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The adapter against a real Postgres: types, cancel, schema and describe through the driver's metadata. */
+/// [DbAdapter] runs PostgreSQL queries, cancellation, schema discovery, and metadata lookup through the driver.
+///
+/// - PostgreSQL values map to the matching result column kinds.
+/// - Cancelling a running statement returns promptly and publishes cancellation.
+/// - Queued work can be withdrawn before execution.
+/// - Schema and column descriptions use PostgreSQL metadata.
 @Testcontainers(disabledWithoutDocker = true)
 class DbAdapterPostgresTest {
 
@@ -52,6 +57,8 @@ class DbAdapterPostgresTest {
         db.close();
     }
 
+    /// [DbAdapter#execute] maps PostgreSQL integer, float, boolean, text, timestamp, and null values to their result
+    /// kinds, retaining the timestamp's microsecond epoch value.
     @Test
     void typesMapToColumnKinds() {
         db.execute(1L, spec, "SELECT 1::int i, 2.5::float8 d, true b, 'x'::text t, TIMESTAMP '2024-01-01 00:00:01' ts, NULL::int n");
@@ -63,6 +70,8 @@ class DbAdapterPostgresTest {
         assertThat(r.isNull(0, 5)).isTrue();
     }
 
+    /// [DbAdapter#cancel] returns in under 100 milliseconds for `pg_sleep(30)` and publishes cancellation within three
+    /// seconds, so a running PostgreSQL query does not block the caller.
     @Test
     void cancelStopsASleepingQueryAtOnce() {
         db.execute(2L, spec, "SELECT pg_sleep(30)");
@@ -79,6 +88,7 @@ class DbAdapterPostgresTest {
         assertThat(Duration.ofNanos(System.nanoTime() - t0)).isLessThan(Duration.ofSeconds(3));
     }
 
+    /// [DbAdapter#query] leaves an insert unexecuted when its future is cancelled behind a one-second running query.
     @Test
     void aStatementWithdrawnWhileQueuedNeverRuns() throws Exception {
         db.query(spec, "CREATE TABLE IF NOT EXISTS withdrawn (id int)", 1).get();
@@ -91,6 +101,8 @@ class DbAdapterPostgresTest {
         assertThat(count.rows().getFirst().getFirst()).isEqualTo("0");
     }
 
+    /// [DbAdapter#loadSchema] discovers a created PostgreSQL table through `information_schema` with its columns in
+    /// declared order and the driver's `double precision` type name.
     @Test
     void schemaComesFromTheInformationSchema() throws Exception {
         db.query(spec, "CREATE TABLE IF NOT EXISTS trades (ts timestamptz, symbol text, price double precision)", 1).get();
@@ -104,6 +116,7 @@ class DbAdapterPostgresTest {
         assertThat(trades.columns().get(2).type()).isEqualTo("double precision");
     }
 
+    /// [DbAdapter#describe] returns column names from PostgreSQL driver metadata for a created table.
     @Test
     void describeFallsBackToDriverMetadata() throws Exception {
         db.query(spec, "CREATE TABLE IF NOT EXISTS described (id bigint, name text)", 1).get();

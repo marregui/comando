@@ -19,11 +19,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * The strip appearing keeps a following view at the end. Off the EDT, stepped with
- * invokeAndWait: the layout the strip asks for runs in the step that changes it (the RepaintManager's validation is
- * queued before the widget's invokeLater), the widget's scroll in the next.
- */
+/// [TranscriptWidget] keeps a following view at the end when [AgentStrip] appears. Runs off the EDT, stepped with
+/// `invokeAndWait`: the layout the strip asks for runs in the step that changes it, the widget's scroll in the next.
+/// - a view at the end stays at the end when a background chip appears
 class AgentStripFollowTest {
 
     @BeforeAll
@@ -55,6 +53,7 @@ class AgentStripFollowTest {
         return null;
     }
 
+    /// After scrolling a long transcript to its end, a background task's chip appearing leaves 0 px of the end hidden.
     @Test
     void aViewAtTheEndStaysAtTheEndWhenABackgroundSubagentsChipAppears() throws Exception {
         AtomicReference<TranscriptWidget> w = new AtomicReference<>();

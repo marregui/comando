@@ -7,8 +7,13 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [NamedTheme] pairs a ground with a tint into the six themes the window offers.
+/// - Six themes, each on its own ground with its own command, the default first.
+/// - The theme chosen is the one the ground and tint make, or none.
+/// - A ground and tint kept from before themes map to the closest theme.
 class NamedThemeTest {
 
+    /// There are six themes on six grounds with distinct command ids, and the first is graphite with treasure.
     @Test
     void sixThemesEachOnItsOwnGroundTheDefaultFirst() {
         assertThat(NamedTheme.values()).hasSize(6);
@@ -18,6 +23,8 @@ class NamedThemeTest {
         assertThat(Arrays.stream(NamedTheme.values()).map(NamedTheme::commandId).distinct()).hasSize(6);
     }
 
+    /// [NamedTheme#chosen] is the default theme at start, empty for a pair no theme makes, and the matching theme once both
+    /// fit.
     @Test
     void theThemeChosenIsTheOneTheGroundAndTintMake() {
         try {
@@ -32,6 +39,8 @@ class NamedThemeTest {
         }
     }
 
+    /// [NamedTheme#closest] returns an exact pair, else the theme of the ground chosen, else the theme of the tint alone,
+    /// when the ground has no theme or none was chosen.
     @Test
     void aGroundAndTintKeptFromBeforeThemesMapToTheClosestTheme() {
         assertThat(NamedTheme.closest(Optional.of(Ground.MIDNIGHT), Tint.ELECTRIC_BLUE)).as("a pair").isEqualTo(NamedTheme.MIDNIGHT_BLUE);

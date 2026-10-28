@@ -4,8 +4,13 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Console] retains command output up to its cap and restores the final retained tail when sealed.
+///
+/// - overflow announces held-back output before completion
+/// - sealing leaves uncapped output unchanged
 class ConsoleTest {
 
+    /// Output above `MAX_CHARS` holds back middle text, then sealing appends the last `TAIL_CHARS` so the failure and exit lines remain visible.
     @Test
     void outputPastTheCapKeepsItsEndForTheSeal() {
         Console c = new Console();
@@ -22,6 +27,7 @@ class ConsoleTest {
         assertThat(all.length()).isLessThan(Console.MAX_CHARS + Console.TAIL_CHARS + 1_000);
     }
 
+    /// Sealing an output shorter than `MAX_CHARS` neither adds a truncation marker nor changes its existing text.
     @Test
     void sealWithoutOverflowChangesNothing() {
         Console c = new Console();

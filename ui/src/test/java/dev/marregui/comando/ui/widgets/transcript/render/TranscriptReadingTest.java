@@ -19,7 +19,15 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** How the transcript reads: what opens and closes by itself, what find and copy see, and the status of running calls. */
+/// How [TranscriptCanvas] reads: what opens and closes by itself, what find and copy see, and the status of running
+/// calls.
+/// - consecutive hook notes fold into one closed line naming their events; a JSON reply reads as the context it adds
+/// - notes open and close, errors open by default, and find opens what holds a match
+/// - a card that opened while running stays open; a failed card opens; thinking opens while it streams
+/// - clearing or changing the find closes what it opened, except the current match and the user's choices
+/// - the Markdown export is a readable record, and the turn-end line is selectable
+/// - an interrupted turn reads as text, a failed one in danger
+/// - a running call shows its elapsed time and when an approval holds it up
 @ExtendWith(OnEdt.class)
 class TranscriptReadingTest {
 
@@ -65,6 +73,8 @@ class TranscriptReadingTest {
 
     // ---- hook notes
 
+    /// Three hook notes in a row become one closed group titled with their distinct events and count, a later hook after
+    /// another block starts a new group, every block keeps its item, and the hook text is selectable only once opened.
     @Test
     void consecutiveHookNotesFoldIntoOneClosedLineNamingTheirEvents() {
         add(new Block.UserPrompt("go", "main", ""));
@@ -92,6 +102,8 @@ class TranscriptReadingTest {
         assertThat(canvas.selectionText()).contains("SessionStart:startup: hook output").contains("UserPromptSubmit: watermark 61%");
     }
 
+    /// A hook reply whose JSON only adds context shows that context after the event name; a reply that says more, or plain
+    /// output, is shown whole.
     @Test
     void aHookReplyInJsonReadsAsTheContextItAdds() {
         int at = add(new Block.Note(Block.NoteKind.HOOK, "UserPromptSubmit: " + CONTEXT_JSON, ""));
@@ -102,6 +114,7 @@ class TranscriptReadingTest {
         assertThat(Items.NoteItem.additionalContext("plain output")).isNull();
     }
 
+    /// The Markdown export holds the hooks' full text, and find matches inside a closed group and opens it.
     @Test
     void findAndCopySeeTheFullHookText() {
         add(new Block.Note(Block.NoteKind.HOOK, "UserPromptSubmit: " + CONTEXT_JSON, ""));
@@ -116,6 +129,8 @@ class TranscriptReadingTest {
 
     // ---- notes
 
+    /// A long info note starts closed showing its first line, an error note starts open showing all of it, a one-line note
+    /// cannot toggle, and the export always holds the full text.
     @Test
     void notesOpenAndCloseAndErrorsOpenByDefault() {
         String tail = "Process exited [code=1]\n" + "stderr line\n".repeat(30) + "the cause is on the last line";
@@ -142,6 +157,7 @@ class TranscriptReadingTest {
         assertThat(canvas.markdown()).contains("the cause is on the last line");
     }
 
+    /// Find matches a closed note's third line and opens it.
     @Test
     void findOpensAClosedNoteHoldingTheText() {
         int info = add(new Block.Note(Block.NoteKind.INFO, "first line\nsecond line\nneedle on the third", ""));
@@ -152,6 +168,7 @@ class TranscriptReadingTest {
 
     // ---- automatic opening
 
+    /// A sub-agent card open while running stays open when it finishes; a closed tool card opens when it fails.
     @Test
     void aSubagentCardThatOpenedWhileRunningStaysOpenWhenItFinishes() {
         Block.ToolCall agent = running("a1", "Agent", "{\"description\":\"survey\",\"prompt\":\"List the classes.\"}");
@@ -171,6 +188,8 @@ class TranscriptReadingTest {
         assertThat(((Items.ToolItem) canvas.itemAt(b)).isOpen()).isTrue();
     }
 
+    /// Streaming thinking is open and closes when it ends, unless the user toggled it meanwhile; thinking from history
+    /// arrives closed.
     @Test
     void thinkingOpensWhileItStreamsAndClosesWhenItEnds() {
         int at = add(new Block.Thinking("m", 0, "Considering", 10, true, ""));
@@ -196,6 +215,8 @@ class TranscriptReadingTest {
 
     // ---- find
 
+    /// Find opens every closed card holding a match; clearing it closes them again except the card of the current match and
+    /// one the user toggled during the find.
     @Test
     void clearingTheFindClosesWhatItOpenedExceptTheCurrentMatchAndUserChoices() {
         List<Integer> bashes = new ArrayList<>();
@@ -226,6 +247,7 @@ class TranscriptReadingTest {
         assertThat(toggled.isOpen()).as("the user toggled it during the find").isTrue();
     }
 
+    /// A new query closes the cards the previous query opened that it does not match.
     @Test
     void aNewFindTextClosesWhatThePreviousOneOpened() {
         Block.ToolCall a = running("a", "Bash", "{\"command\":\"echo alpha\"}");
@@ -242,6 +264,8 @@ class TranscriptReadingTest {
 
     // ---- copy
 
+    /// The export quotes prompts, shows commands as code, clips long results with a count of the lines left out, renders
+    /// edits as diffs and other inputs as JSON, ends turns with their time, and leaves out thinking.
     @Test
     void theMarkdownExportIsAReadableRecord() {
         add(new Block.UserPrompt("Run the tests", "main", ""));
@@ -266,6 +290,7 @@ class TranscriptReadingTest {
                 .doesNotContain("private reasoning");
     }
 
+    /// Select all includes the turn end's time as the last text.
     @Test
     void theTurnEndLineIsSelectable() {
         add(new Block.AssistantText("m", 0, "Done.", false, ""));
@@ -275,6 +300,7 @@ class TranscriptReadingTest {
         assertThat(canvas.selectionText()).contains("Done.").endsWith("12.0 s");
     }
 
+    /// [Items#fence] uses one more backtick than the longest run in the body, and three with a language for a plain body.
     @Test
     void fencesOutgrowBackticksInTheBody() {
         assertThat(Items.fence("", "a ``` b")).startsWith("````\n").endsWith("\n````");
@@ -283,6 +309,7 @@ class TranscriptReadingTest {
 
     // ---- turn ends
 
+    /// An interrupted turn reads "interrupted" with its time in the transcript text colour; a failed turn is in danger.
     @Test
     void anInterruptedTurnReadsLikeAnyTextNotAsAFailure() {
         int stopped = add(new Block.TurnEnd(0.12, 12_000, 1, true, "interrupted"));
@@ -297,6 +324,8 @@ class TranscriptReadingTest {
 
     // ---- running calls
 
+    /// An approval naming a call marks that call as waiting; one naming no call marks the last running call of its tool;
+    /// clearing approvals restores "running".
     @Test
     void aCallHeldUpByAnApprovalSaysSo() {
         add(running("t1", "Bash", "{\"command\":\"rm -rf build\"}"));
@@ -318,6 +347,7 @@ class TranscriptReadingTest {
         assertThat(canvas.cardStatus("q2")).isEqualTo("running");
     }
 
+    /// An approval received before its call marks the call when it arrives; once finished, it waits for nothing.
     @Test
     void anApprovalForACallThatArrivesLaterMarksItOnArrival() {
         canvas.setWaiting(List.of(approval("Bash", "late")));
@@ -328,6 +358,8 @@ class TranscriptReadingTest {
         assertThat(canvas.cardStatus("late")).as("a finished call waits for nothing").isEmpty();
     }
 
+    /// A running call shows its elapsed seconds, then minutes and seconds, and does not tick while off screen; once finished
+    /// it has no status and no running cards remain.
     @Test
     void aRunningCallShowsHowLongItHasRun() {
         Block.ToolCall bash = running("b", "Bash", "{\"command\":\"sleep 60\"}");
@@ -345,6 +377,7 @@ class TranscriptReadingTest {
         assertThat(canvas.hasRunningCards()).isFalse();
     }
 
+    /// A synthetic session holding every item kind lays out and paints taller than 5 000 px.
     @Test
     void theSyntheticSessionStillPaintsWithEveryItemKind() {
         int n = 0;

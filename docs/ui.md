@@ -20,7 +20,7 @@ the painted transcript. For a reader changing the `ui` module; the package layer
 | `action` | `Command`, `ActionRegistry`, `MenuEntry`, `CommandPalette`, `KeyPriority`, `ToolButton` ([§2](#2-commands-and-keys)) |
 | `resource` | `ResourceActions`: a list of resources' add, from its tab's menu, and its removal question, from a row's menu; no bar of buttons ([Workbench §1.3](workbench.md#13-the-sidebar)) |
 | `overlay` | `Overlay`, `Balloon`, `Flash` ([§1.3](#13-trees-tabs-and-overlays)) |
-| `async` | `Edt`, `Coalescer`, `Debouncer`, `EdtWatchdog` ([§1.1](#11-threads)) |
+| `async` | `Edt`, `Coalescer`, `Debouncer`, `ShownTimer`, `EdtWatchdog` ([§1.1](#11-threads)) |
 | `format` | `Labels` (times, uptimes, counts, short paths), `Json`, `KeyText` (keys named as the desktop names them) |
 | `text` | editors, find, diffs, Markdown and links ([§1.2](#12-text)) |
 | `tree`, `layout`, `tabs` | `TreeView`, `ShrinkingRow`, `TabStrip`, `MovableTabs` ([§1.3](#13-trees-tabs-and-overlays)) |
@@ -34,6 +34,7 @@ the painted transcript. For a reader changing the `ui` module; the package layer
 | `Edt.run`, `Edt.runAndWait` | run on the EDT now, or posted; the bounded wait gives up, and a task given up never starts late |
 | `Coalescer` | many requests from any thread become at most one pending run on the EDT, which reads the latest data |
 | `Debouncer` | runs once requests stop for a delay (the editor's gutter: 250 ms) |
+| `ShownTimer` | repeats while its owner wants it and the owner component is showing (the working spinners, the approval ages, running cards' elapsed time) |
 | `EdtWatchdog` | posts a probe to the EDT every 100 ms. A probe waiting 200 ms is a stall, classified once as `startup`, `drawing` (in Java2D's render queue), `comando` or `jdk`, with where it was; one INFO line when it ends. A stall of 1 s, or 2 s for `drawing`, is a hang, logged with the EDT's stack |
 
 ### 1.2 Text

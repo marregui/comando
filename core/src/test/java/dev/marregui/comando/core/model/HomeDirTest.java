@@ -4,10 +4,16 @@ import org.junit.jupiter.api.Test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [HomeDir] expands a home shorthand and shortens only paths contained by the current home directory.
+///
+/// - the bare home directory maps to `~`
+/// - child paths retain their suffixes
+/// - matching name prefixes outside the directory remain literal
 class HomeDirTest {
 
     private final String home = System.getProperty("user.home");
 
+    /// `~` and `~/notes` expand from the current home, while other-user and absolute paths stay literal; shortening reverses only complete home boundaries.
     @Test
     void theHomeFolderIsExpandedAndShortenedAtAPathBoundaryOnly() {
         assertThat(HomeDir.expand("~")).isEqualTo(home);

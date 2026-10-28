@@ -23,6 +23,13 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [LocalImages] shows the pictures a document links to from this machine only, never from the network.
+/// - An image link resolves beside the document, in any folder, or by its full path; remote, data, unknown kinds and folders do not.
+/// - PNG, JPEG and GIF show as they are at their own size.
+/// - An SVG loads only files in its folder and embedded data, and fetches nothing from the network.
+/// - An SVG is drawn once into the cache at twice its size, and again when it changes.
+/// - An SVG without a size takes its view box; a huge one is drawn smaller, keeping its shape.
+/// - What cannot be shown says why.
 class LocalImagesTest {
 
     @TempDir
@@ -72,6 +79,9 @@ class LocalImagesTest {
             </svg>
             """;
 
+    /// [LocalImages#resolve] accepts relative paths with `./`, `..`, percent-encoded or literal spaces and a fragment,
+    /// absolute paths and local `file` URIs; it refuses `http`, scheme-relative, remote `file`, `data`, WebP, Markdown,
+    /// a trailing slash, the root, an empty link, and a relative link with no document folder.
     @Test
     void anImageLinkNamesAFileBesideTheDocumentInAnyFolderOrByItsFullPath() {
         Path doc = Path.of("/kb/notes");
@@ -100,6 +110,7 @@ class LocalImagesTest {
         assertThat(LocalImages.resolve(doc, "")).isEmpty();
     }
 
+    /// A PNG, a JPEG and a GIF are ready as the original file with their pixel size.
     @Test
     void aPngJpegOrGifIsShownAsItIsAtItsOwnSize() throws Exception {
         LocalImages images = images(null);
@@ -113,6 +124,8 @@ class LocalImagesTest {
         assertThat(read(images, gif)).isEqualTo(new LocalImages.Picture.Ready(gif, 8, 9));
     }
 
+    /// Where the library's own policy resolves `//host` to a remote file, [LocalImages#beside] refuses other machines,
+    /// web addresses, paths that climb out of the SVG's folder and absolute paths, and allows files under it and `data:`.
     @Test
     void anSvgLoadsOnlyFilesInItsFolderAndEmbeddedData() {
         Path svg = Path.of("/kb/notes/img/flow.svg");
@@ -130,6 +143,8 @@ class LocalImagesTest {
         assertThat(beside.resolveResourceURI(base, "data:image/png;base64,AAAA")).isNotNull();
     }
 
+    /// A 120×60 SVG is ready at that size from a 240×120 PNG in the cache, shown at once when asked again, and redrawn in
+    /// its new colour after the file changes on disk, leaving no temporary files.
     @Test
     void anSvgIsDrawnOnceIntoTheCacheTwiceAsLargeAndAgainWhenItChanges() throws Exception {
         Path cache = dir.resolve("cache");
@@ -159,6 +174,8 @@ class LocalImagesTest {
         }
     }
 
+    /// An SVG with only a view box takes the view box's size; a 40000×20000 one is capped at [LocalImages#MAX_SIDE] with
+    /// its 2:1 shape kept.
     @Test
     void anSvgWithoutASizeTakesItsViewBoxAndAHugeOneIsDrawnSmaller() throws Exception {
         LocalImages images = images(dir.resolve("cache"));
@@ -174,6 +191,8 @@ class LocalImagesTest {
         });
     }
 
+    /// A missing file, text named `.png`, a broken SVG, a file over [LocalImages#MAX_BYTES], and an SVG with no cache are
+    /// each unavailable with a reason naming the file or the limit.
     @Test
     void whatCannotBeShownSaysWhy() throws Exception {
         LocalImages images = images(dir.resolve("cache"));
@@ -193,6 +212,8 @@ class LocalImagesTest {
                 .isEqualTo(new LocalImages.Picture.Unavailable("SVG pictures are not drawn here"));
     }
 
+    /// An SVG that imports CSS and references images, uses and paints on a loopback server is still drawn, and the
+    /// server receives no request.
     @Test
     void anSvgLoadsWhatIsBesideItAndNothingFromTheNetwork() throws Exception {
         List<String> requests = new CopyOnWriteArrayList<>();

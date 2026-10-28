@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;
 
@@ -54,10 +55,9 @@ public final class ToolText {
         return "";
     }
 
-    /** The user's skills folder: Claude Code's configuration folder's {@code skills}. */
+    /** The user's skills folder: the kit root's {@code skills}, the folder the sessions run on. */
     static Path skillsRoot() {
-        String config = System.getenv("CLAUDE_CONFIG_DIR");
-        return (config == null || config.isBlank() ? Path.of(System.getProperty("user.home"), ".claude") : Path.of(config)).resolve("skills");
+        return HomeDir.claudeDir().resolve("skills");
     }
 
     /** {@code name}'s {@code SKILL.md} under {@code root}, null when it is not there or the name is a plugin's ({@code a:b}). */

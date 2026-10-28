@@ -37,18 +37,18 @@ import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * A click on a session's name in the sidebar shows the card a tab shows, with the session's facts, in the real window;
- * the card then follows the pointer onto other names until it closes. Opens the window, so this runs in {@code ./gradlew :app:uiTest}; the card is painted to
- * {@code build/snapshots/session-card.png} to be looked at. A click on a connection's name shows a card of its facts alone, painted to
- * {@code connection-card.png}.
- */
+/// A click on a name in the sidebar shows a card in the real window. Opens the window, so this runs in
+/// `./gradlew :app:uiTest`; the cards are painted to `build/snapshots/session-card.png` and `connection-card.png`.
+/// - a session's name shows the card its panel's tab shows, which follows the pointer onto other names until it closes
+/// - a connection's name shows a card of its facts alone, without a summary
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class SessionCardUiTest {
 
     @TempDir
     Path home;
 
+    /// A click on a session's name shows its panel's card with its summary, its top at the row's and over the list's last
+    /// pixels with no name under it; the name has no tooltip; the card follows onto another name and closes once left.
     @Test
     void aClickOnASessionsNameShowsTheTabsCardWhichFollowsThePointerOntoOtherNames() throws Exception {
         App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
@@ -170,6 +170,7 @@ class SessionCardUiTest {
         }
     }
 
+    /// A click on a connection's name shows a card of the connection's facts with no summary area.
     @Test
     void aClickOnAConnectionsNameShowsACardOfItsFactsWithoutASummary() throws Exception {
         App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),

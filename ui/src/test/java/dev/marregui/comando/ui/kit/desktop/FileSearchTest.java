@@ -10,7 +10,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** A relative path found where it was not read from (record 111). */
+/// [FileSearch#bySuffix] finds a relative path where it was not read from, under the session's folders.
+/// - A path written from a deeper folder is found by whole-name suffix under a root.
+/// - The first root that holds a match wins, and of several matches there the newest.
+/// - Build and Git folders are not searched; climbing and absolute paths find nothing.
 class FileSearchTest {
 
     @TempDir
@@ -23,6 +26,8 @@ class FileSearchTest {
         return f;
     }
 
+    /// A path relative to a folder five levels down is found under the root; a suffix that cuts a file or folder name
+    /// in the middle matches nothing.
     @Test
     void aPathWrittenFromADeeperFolderIsFoundUnderTheSessionsFolder() throws Exception {
         Path deep = file("session/BRAIN/SCRATCHPAD/2026-10-28/harness/07-fleet-vision.md");
@@ -31,6 +36,8 @@ class FileSearchTest {
         assertThat(FileSearch.bySuffix("ness/07-fleet-vision.md", List.of(tmp.resolve("session")))).as("whole folder names").isEmpty();
     }
 
+    /// Of two matches under the first root the newer by modification time wins over a match in the second root; a
+    /// missing first root is skipped.
     @Test
     void theFirstRootThatHoldsOneWinsAndOfSeveralThereTheNewest() throws Exception {
         Path old = file("a/x/notes/plan.md");
@@ -42,6 +49,7 @@ class FileSearchTest {
         assertThat(FileSearch.bySuffix("notes/plan.md", List.of(tmp.resolve("missing"), tmp.resolve("b")))).contains(other);
     }
 
+    /// A file under `build` or `.git` is not found, and a query with `..` or an absolute path returns nothing.
     @Test
     void buildAndGitFoldersAreNotSearchedNorPathsThatClimbOrAreAbsolute() throws Exception {
         file("r/build/out/plan.md");

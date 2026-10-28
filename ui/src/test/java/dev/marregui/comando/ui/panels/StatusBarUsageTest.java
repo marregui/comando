@@ -10,6 +10,13 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [StatusBar]'s plan-usage labels: one per CLI, each window's percentage, coloured by how near its limit.
+/// - the text lists each window and when the session window resets
+/// - a failed read keeps the last good numbers, muted, and says why in the tooltip
+/// - the second CLI's read has a label of its own after the first, and its failure leaves the first alone
+/// - a CLI that cannot run never shows its label
+/// - a read with nothing to show leaves the kit label as it was
+/// - a window near its limit turns the label to attention, then danger
 class StatusBarUsageTest {
 
     private static final PlanUsage READ = new PlanUsage(List.of(
@@ -17,6 +24,8 @@ class StatusBarUsageTest {
             new PlanUsage.Window("Week", 43, "Oct 15 at 1:59pm (Europe/Madrid)"),
             new PlanUsage.Window("Fable", 17, "Oct 15 at 1:59pm (Europe/Madrid)")), 1L, "");
 
+    /// [StatusBar#usageText] joins the windows with the session's reset time; [StatusBar#resetTime] takes the clock time
+    /// out of a dated reset and returns empty for a relative one.
     @Test
     void theBarShowsEachWindowAndWhenTheSessionResets() {
         assertThat(StatusBar.usageText(READ)).isEqualTo("Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
@@ -24,6 +33,8 @@ class StatusBarUsageTest {
         assertThat(StatusBar.resetTime("in 3 hours")).isEmpty();
     }
 
+    /// A failed first read keeps the label hidden; after a good read, a failed one keeps its text, mutes it and adds the
+    /// failure, HTML-escaped, to the tooltip.
     @Test
     void aFailedReadKeepsTheLastNumbersMutedAndSaysWhy() throws Exception {
         StatusBar bar = new StatusBar(intent -> {
@@ -43,6 +54,8 @@ class StatusBarUsageTest {
         assertThat(label.getToolTipText()).contains("failed: &lt;b&gt;timeout&lt;/b&gt;");
     }
 
+    /// The second plan's read shows in its own label after the first, prefixed with its name, in danger at 92%, with its
+    /// source in the tooltip; its later failure keeps its last text muted and adds no failure to the first label.
     @Test
     void codexHasALabelOfItsOwnAfterClaudes() throws Exception {
         StatusBar bar = new StatusBar(intent -> {
@@ -68,6 +81,7 @@ class StatusBarUsageTest {
         assertThat(bar.usageLabel().getToolTipText()).as("a Codex failure is not Claude's").doesNotContain("failed");
     }
 
+    /// A first read of the second plan that fails because its CLI cannot run leaves its label hidden.
     @Test
     void withoutCodexItsLabelNeverShows() throws Exception {
         StatusBar bar = new StatusBar(intent -> {
@@ -76,6 +90,7 @@ class StatusBarUsageTest {
         assertThat(bar.codexUsageLabel().isVisible()).isFalse();
     }
 
+    /// A failed read with nothing to show neither hides the kit label nor adds mouse listeners to it.
     @Test
     void aReadWithNothingToShowLeavesTheKitShown() throws Exception {
         StatusBar bar = new StatusBar(intent -> {
@@ -87,6 +102,7 @@ class StatusBarUsageTest {
         assertThat(bar.kitLabel().getMouseListeners()).hasSize(listeners);
     }
 
+    /// A window at 80% turns the label to [Theme#ATTENTION], one at 95% to [Theme#DANGER].
     @Test
     void aWindowNearItsLimitTurnsTheLabelToAWarningThenADanger() throws Exception {
         StatusBar bar = new StatusBar(intent -> {

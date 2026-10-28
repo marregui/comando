@@ -29,10 +29,20 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [SessionBar] shows the focused panel's session: its chip, plug, model, effort, context and checkpoint.
+/// - it follows the focus, and a panel without a session shows only a chip to bind one
+/// - what the session does changes no control's place
+/// - the model and effort are menus that send the change
+/// - the context turns purple once a checkpoint is due, and only if the session has one
+/// - the checkpoint sits beside the context; the bar neither clears nor rewrites
+/// - the chip's menu follows the focused panel's kind
+/// - a session named like HTML is shown as text
 class SessionBarTest {
 
     private static final PanelId A = new PanelId("a");
 
+    /// For a panel bound to an open session the bar shows its name with the session icon, the plug, the model, the effort
+    /// and the context share with no cost; focusing a panel without a session leaves only "no session ▾" and hides the rest.
     @Test
     void theBarShowsTheFocusedPanelsSessionAndFollowsTheFocus() throws Exception {
         SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w").withModel("opus").withEffort("high"))
@@ -63,6 +73,8 @@ class SessionBarTest {
         assertThat(label(bar[0], "Activity").isVisible()).isFalse();
     }
 
+    /// A session going from idle to three turns busy keeps every always-shown control at the same x, shows the activity
+    /// with the queue count, and greys out the new-conversation button while it runs.
     @Test
     void whatTheSessionDoesChangesNoControlsPlace() throws Exception {
         SessionState idle = SessionState.closed(SessionSpec.imported("work", "/w", "c1").withCheckpoint("/reflect"))
@@ -85,6 +97,8 @@ class SessionBarTest {
         assertThat(button(bar[0], "Start a new conversation").isEnabled()).as("greyed out while it runs").isFalse();
     }
 
+    /// For a stopped session the model button names its configured model, as the session's row does, not a model the CLI
+    /// reported earlier; its menu checks it, and picking items sends `SetSessionModel` and `SetSessionEffort`. An unset effort reads "default".
     @Test
     void theModelAndTheEffortAreMenusThatChangeThem() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();
@@ -111,6 +125,8 @@ class SessionBarTest {
         assertThat(button(bar[0], "Effort").getText()).isEqualTo("default ▾");
     }
 
+    /// The context label is muted until the reflection is due, then [Theme#THINKING] with a tooltip saying the checkpoint
+    /// is due; a session without a checkpoint command stays muted even when due.
     @Test
     void theContextTurnsPurpleOnceTheCheckpointIsDue() throws Exception {
         SessionState x = SessionState.closed(SessionSpec.fresh("work", "/w").withCheckpoint("/reflect"))
@@ -130,6 +146,8 @@ class SessionBarTest {
         assertThat(label(bar[0], "Context").getForeground()).as("no checkpoint, nothing due").isEqualTo(Theme.MUTED);
     }
 
+    /// The bar has no clear or rewrite button; the checkpoint shares the context's group, the context reads "ctx –" before
+    /// a turn reports it, and a click on the checkpoint sends `Checkpoint`.
     @Test
     void theCheckpointSitsBesideTheContextAndNeitherClearsNorRewritesFromTheBar() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();
@@ -150,6 +168,8 @@ class SessionBarTest {
         assertThat(intents).containsExactly(new Intent.Checkpoint("work"));
     }
 
+    /// The chip's menu explains a session's own panel, offers a new or existing session to a panel without one, attach to a
+    /// document and detach to an attached document; "New session" passes the panel's title, and "Open" sends `OpenSession`.
     @Test
     void theSessionChipsMenuFollowsTheFocusedPanelsKind() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();
@@ -185,6 +205,7 @@ class SessionBarTest {
                 o -> assertThat(o.session()).as("its own panel comes forward; this one is not taken").isEqualTo("work"));
     }
 
+    /// A session named `<html><b>bold</b>` shows its name literally, not rendered as HTML.
     @Test
     void aSessionNamedLikeHtmlIsShownAsText() throws Exception {
         SessionState imported = SessionState.closed(SessionSpec.fresh("<html><b>bold</b>", "/w"));

@@ -69,8 +69,11 @@ public final class Style {
 
     private final Font base;
     private final Font monoBase;
-    /** This style with every text colour {@link #outside}; made once, so layouts made with it stay valid. */
-    private Style outsideStyle;
+    /**
+     * This style with every text colour {@link #outside}; made with it, final so that the layout workers of an exact
+     * layout, which read it concurrently, all see the one instance their layouts are keyed on.
+     */
+    private final Style outsideStyle;
 
     Style(Font base, Font monoBase, int zoom) {
         this(base, monoBase, zoom, color("Label.foreground", Theme.TEXT_FALLBACK), Theme.MUTED, false, Theme.tint());
@@ -124,6 +127,7 @@ public final class Style {
         paraGap = Math.round(m.getHeight() * 0.55f);
         indent = Math.round(m.getHeight() * 1.3f);
         pad = Theme.PAD;
+        outsideStyle = answer ? this : new Style(base, monoBase, zoom, outside, outside, true, tint);
     }
 
     /** The style for the look and feel's default font and the theme's monospaced font. */
@@ -153,9 +157,6 @@ public final class Style {
      * quotes included.
      */
     Style outside() {
-        if (outsideStyle == null) {
-            outsideStyle = answer ? this : new Style(base, monoBase, zoom, outside, outside, true, tint);
-        }
         return outsideStyle;
     }
 

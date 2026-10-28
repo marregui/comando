@@ -8,10 +8,9 @@ import javax.swing.SwingUtilities;
 import java.lang.reflect.Method;
 import java.util.concurrent.atomic.AtomicReference;
 
-/**
- * Runs each test method on the event dispatch thread, as the application runs its components. A test that drives a
- * component from JUnit's thread races the component's own Swing timers, which fire on the EDT.
- */
+/// Runs each test method on the event dispatch thread, as the application runs its components. A test that drives a
+/// component from JUnit's thread races the component's own Swing timers, which fire on the EDT. A failure on the EDT is
+/// rethrown on JUnit's thread.
 public final class OnEdt implements InvocationInterceptor {
 
     @Override

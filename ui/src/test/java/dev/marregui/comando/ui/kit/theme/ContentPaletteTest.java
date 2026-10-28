@@ -7,12 +7,21 @@ import java.awt.Color;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
-/** The content palettes (record 101), on every ground in every tint: legible, apart from each other, apart from the tint. */
+/// [ContentPalette] derives the content colours (record 101) for every ground in every tint: legible, apart from each
+/// other, apart from the tint.
+/// - [Oklch] round-trips and cuts chroma, not lightness or hue, out of gamut.
+/// - The hue wheel turns at most 30° to put the tint between two category hues.
+/// - Syntax, selection, diffs, inline code and terminal colours keep their text legible on every ground.
+/// - Each category stands apart from the others, the keyword and the ink, near its customary hue and away from the tint.
+/// - The golds share one palette but for their keywords; plot series start at the tint and stay apart.
+/// - The palette in use follows the tint and ground chosen.
 class ContentPaletteTest {
 
     private static final String[] CATEGORIES = {"annotation", "number", "string", "regex", "type", "variable"};
     private static final double[] CUSTOM = {0, 60, 120, 180, 240, 300};
 
+    /// An in-gamut colour returns its lightness, chroma and hue; an out-of-gamut one keeps its lightness within 0.02 and
+    /// its hue within 6°, giving up chroma.
     @Test
     void oklchRoundTripsAndCutsChromaNotHue() {
         double[] lch = Oklch.lch(Oklch.of(0.7, 0.1, 150));
@@ -24,6 +33,8 @@ class ContentPaletteTest {
         assertThat(Oklch.hueGap(cut[2], 265)).as("hue kept out of gamut").isLessThan(6);
     }
 
+    /// [ContentPalette#turn] is the signed shift, −30° to 30°, that moves the nearest midpoint of the customary wheel
+    /// (30°, 90°, … 330°) onto the tint's hue: 2 at 92, −3 at 87, −22 at 248, 0 at 30 and −1 at 29.
     @Test
     void theWheelTurnsAtMostThirtyDegreesToPutTheTintBetweenTwoHues() {
         assertThat(ContentPalette.turn(92)).isEqualTo(2);
@@ -33,6 +44,8 @@ class ContentPaletteTest {
         assertThat(ContentPalette.turn(29)).isEqualTo(-1);
     }
 
+    /// For every tint and ground, ink, keywords, comments and categories pass their WCAG contrast floors, and each
+    /// category is apart in Oklch from the keyword, the ink and every other category.
     @Test
     void syntaxIsLegibleOnEveryGroundAndEachCategoryStandsApart() {
         for (Tint t : Tint.values()) {
@@ -59,6 +72,7 @@ class ContentPaletteTest {
         }
     }
 
+    /// On graphite each category is within 32° of its customary hue and, for a chromatic tint, at least 28° from it.
     @Test
     void everyCategoryStaysNearItsCustomaryHueAndAwayFromTheTints() {
         for (Tint t : Tint.values()) {
@@ -75,6 +89,7 @@ class ContentPaletteTest {
         }
     }
 
+    /// YELLOW and CHAMPAGNE give the same category colours as TREASURE to within 0.02.
     @Test
     void theGoldsShareOnePaletteButForTheirKeywords() {
         ContentPalette treasure = ContentPalette.of(Tint.TREASURE, Ground.GRAPHITE);
@@ -87,6 +102,8 @@ class ContentPaletteTest {
         }
     }
 
+    /// Ink stays legible on the selection and on added and removed lines and words, inline code on its ground, line numbers
+    /// are quiet but visible (2–4.5), and added and removed are apart, on every tint and ground.
     @Test
     void theEditorsSelectionDiffsAndCodeKeepTheirTextLegible() {
         for (Tint t : Tint.values()) {
@@ -105,6 +122,8 @@ class ContentPaletteTest {
         }
     }
 
+    /// The six ANSI colours and their bright forms pass their contrast floors and stay within 6° of their named hue on every
+    /// ground, white and bright black read, and a tint does not change red.
     @Test
     void theTerminalsColoursReadOnEveryGroundAndKeepTheirNames() {
         String[] names = {"red", "green", "yellow", "blue", "magenta", "cyan"};
@@ -123,6 +142,7 @@ class ContentPaletteTest {
                 .isEqualTo(ContentPalette.of(Tint.TREASURE, Ground.ONYX).ansi(1));
     }
 
+    /// Series 0 is the tint's body, the series repeat after their count, and each reads on graphite and stands apart.
     @Test
     void plotSeriesStartAtTheTintAndStayApart() {
         for (Tint t : Tint.values()) {
@@ -139,6 +159,7 @@ class ContentPaletteTest {
         }
     }
 
+    /// [Theme#content] is the cached palette of the tint and ground chosen, keywords in the tint and code ground per ground.
     @Test
     void thePaletteInUseFollowsTheTintAndTheGroundChosen() {
         try {

@@ -1,18 +1,16 @@
 package dev.marregui.comando.tools;
 
-import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.RepoStatus;
 
-import java.io.ByteArrayOutputStream;
-import java.io.File;
 import java.io.IOException;
-import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -20,7 +18,6 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 
 /**
@@ -30,7 +27,6 @@ import java.util.stream.Stream;
  */
 final class Git implements AutoCloseable {
 
-    private static final System.Logger LOG = System.getLogger(Git.class.getName());
 
     /** A run still going after this is killed. */
     static final long TIMEOUT_MILLIS = 10_000;
@@ -308,81 +304,22 @@ final class Git implements AutoCloseable {
         cmd.add("-C");
         cmd.add(dir.toString());
         cmd.addAll(args);
-        ProcessBuilder pb = new ProcessBuilder(cmd);
-        pb.environment().put("GIT_OPTIONAL_LOCKS", "0");
-        pb.environment().put("GIT_TERMINAL_PROMPT", "0");
-        pb.redirectInput(ProcessBuilder.Redirect.from(new File("/dev/null")));
-        Process p = pb.start();
-        live.add(p);
+        Process[] started = new Process[1];
         try {
-            Bounded out = new Bounded(p.getInputStream(), MAX_OUTPUT);
-            Bounded err = new Bounded(p.getErrorStream(), 4_096);
-            Thread outReader = Threads.fork("git-out", out);
-            Thread errReader = Threads.fork("git-err", err);
-            boolean ended;
-            try {
-                ended = p.waitFor(timeoutMillis, TimeUnit.MILLISECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                ended = false;
-            }
-            if (!ended) {
-                p.descendants().forEach(ProcessHandle::destroyForcibly);
-                p.destroyForcibly();
-            }
-            join(outReader);
-            join(errReader);
-            return new Run(ended ? p.exitValue() : -1, out.bytes(), new String(err.bytes(), StandardCharsets.UTF_8), out.cut);
-        } finally {
-            live.remove(p);
-        }
-    }
-
-    private static void join(Thread t) {
-        try {
-            t.join(ToolsAdapter.DRAIN_MILLIS);
+            Processes.Result r = Processes.run(cmd, env -> {
+                env.put("GIT_OPTIONAL_LOCKS", "0");
+                env.put("GIT_TERMINAL_PROMPT", "0");
+            }, null, null, Duration.ofMillis(timeoutMillis), MAX_OUTPUT, 4_096, p -> {
+                started[0] = p;
+                live.add(p);
+            });
+            return new Run(r.exitCode(), r.stdout(), r.stderr(), r.cut());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        }
-    }
-
-    /**
-     * Copies a stream up to a limit and reads the rest without keeping it, so the process never waits on a full pipe;
-     * {@link #cut} says there was more.
-     */
-    private static final class Bounded implements Runnable {
-        private final InputStream in;
-        private final int max;
-        private final ByteArrayOutputStream buf = new ByteArrayOutputStream();
-        private volatile boolean cut;
-
-        Bounded(InputStream in, int max) {
-            this.in = in;
-            this.max = max;
-        }
-
-        @Override
-        public void run() {
-            byte[] chunk = new byte[64 * 1024];
-            try (in) {
-                int n;
-                while ((n = in.read(chunk)) >= 0) {
-                    synchronized (buf) {
-                        int keep = Math.max(0, Math.min(n, max - buf.size()));
-                        buf.write(chunk, 0, keep);
-                        if (keep < n) {
-                            cut = true;
-                        }
-                    }
-                }
-            } catch (IOException e) {
-                LOG.log(System.Logger.Level.DEBUG, "git output ended [reason=" + e.getMessage() + ']');
-            }
-        }
-
-        byte[] bytes() {
-            synchronized (buf) {
-                return buf.toByteArray();
+            return new Run(-1, new byte[0], "interrupted", false);
+        } finally {
+            if (started[0] != null) {
+                live.remove(started[0]);
             }
         }
     }

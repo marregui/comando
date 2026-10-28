@@ -1,13 +1,12 @@
 package dev.marregui.comando.app;
 
+import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.ui.PanelTexts;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
@@ -270,7 +269,7 @@ final class PanelFiles {
                 LOG.log(System.Logger.Level.WARNING, "panel file changed outside comando, kept aside [file=" + f + ", aside=" + aside + "]");
                 notices.accept(f.getFileName() + " changed outside comando; that version is kept as " + aside.getFileName());
             }
-            moveInto(tmp, f);
+            AtomicFiles.move(tmp, f);
         } finally {
             Files.deleteIfExists(tmp);
         }
@@ -284,21 +283,7 @@ final class PanelFiles {
         if (!Files.isDirectory(f.getParent())) {
             Files.createDirectories(f.getParent());
         }
-        Path tmp = Files.createTempFile(f.getParent(), "." + f.getFileName(), ".tmp");
-        try {
-            Files.writeString(tmp, text, StandardCharsets.UTF_8);
-            moveInto(tmp, f);
-        } finally {
-            Files.deleteIfExists(tmp);
-        }
-    }
-
-    private static void moveInto(Path tmp, Path f) throws IOException {
-        try {
-            Files.move(tmp, f, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException e) {
-            Files.move(tmp, f, StandardCopyOption.REPLACE_EXISTING);
-        }
+        AtomicFiles.writeString(f, text);
     }
 
     /** {@code base}, else {@code base 2}, {@code base 3}…: not a file in the folder, nor the name of another open panel. */

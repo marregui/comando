@@ -15,6 +15,13 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Git] runs git for the Files tab and the Changes view: status, the two texts of a change, and the repositories of a folder.
+/// - Status lists every kind of change, the branch and the ignored folders; a missing git is a status that says so.
+/// - A change's texts are `HEAD`'s version and the working tree's; binary files and submodules are not compared.
+/// - A repository without commits, or a path missing from `HEAD`, has nothing before.
+/// - Line ends compare as git commits them, and a link as its target.
+/// - A folder's repositories are the one above it or those directly inside it.
+/// - [Git#parse] reads every record kind and keeps at most [RepoStatus#MAX_CHANGES] changes, saying so.
 class GitTest {
 
     /** Runs git in {@code dir} as a test sets a repository up, with an identity of its own and no user configuration. */
@@ -56,6 +63,8 @@ class GitTest {
         return dir;
     }
 
+    /// In a test repository with a modified, added, deleted, renamed and untracked file, status reports branch `main`, no
+    /// error, each change with its kind, and `dist` as the ignored folder.
     @Test
     void statusListsEveryKindOfChangeAndTheIgnoredFolder(@TempDir Path dir) throws Exception {
         Path root = repo(dir.toRealPath());
@@ -74,6 +83,8 @@ class GitTest {
         }
     }
 
+    /// A modified file's texts are `HEAD`'s and the working tree's; a rename keeps one text on both sides, a deletion has
+    /// nothing after, an untracked file nothing before.
     @Test
     void textsAreHeadsVersionAndTheWorkingTrees(@TempDir Path dir) throws Exception {
         Path root = repo(dir.toRealPath());
@@ -94,6 +105,7 @@ class GitTest {
         }
     }
 
+    /// A binary file's change carries a note saying it is binary and no text after.
     @Test
     void aBinaryFileIsNotCompared(@TempDir Path dir) throws Exception {
         Path root = dir.toRealPath();
@@ -106,6 +118,7 @@ class GitTest {
         }
     }
 
+    /// Before the first commit an added file lists as ADDED, and its texts are nothing before and the file after.
     @Test
     void aRepositoryWithoutCommitsHasNothingBefore(@TempDir Path dir) throws Exception {
         Path root = dir.toRealPath();
@@ -120,6 +133,7 @@ class GitTest {
         }
     }
 
+    /// With a git executable that does not exist, status answers an error text and no changes instead of failing.
     @Test
     void aMissingGitIsAStatusThatSaysSo(@TempDir Path dir) throws Exception {
         Path root = repo(dir.toRealPath());
@@ -130,6 +144,8 @@ class GitTest {
         }
     }
 
+    /// [Git#repos] of a folder deep in a repository is that repository; of a folder holding repositories, each one directly
+    /// inside it; of a folder with neither, none.
     @Test
     void reposAreTheOneAboveOrThoseDirectlyInside(@TempDir Path dir) throws Exception {
         Path root = dir.toRealPath();
@@ -143,6 +159,8 @@ class GitTest {
         assertThat(Git.repos(root.resolve("c"))).isEmpty();
     }
 
+    /// Porcelain v2 output with ordinary, renamed, unmerged, untracked and ignored records gives the branch, each change with
+    /// its kind and old path, the ignored paths, and no truncation.
     @Test
     void parseReadsEveryRecordKind() {
         Path root = Path.of("/r");
@@ -171,6 +189,7 @@ class GitTest {
         assertThat(read.status().truncated()).isFalse();
     }
 
+    /// An intent-to-add entry reads as ADDED, and a file renamed in the index then deleted reads as its old path DELETED.
     @Test
     void anIntentToAddIsAddedAndARenameThenDeletedIsTheOldPathDeleted() {
         String out = String.join("\0",
@@ -181,6 +200,8 @@ class GitTest {
                 new RepoStatus.FileChange("orig", "", RepoStatus.Kind.DELETED));
     }
 
+    /// [Git#notInHead] is true for a path missing from `HEAD` and for no `HEAD` at all, and false for a submodule's path and
+    /// for a dubious-ownership refusal, so those fail visibly.
     @Test
     void onlyAPathMissingFromHeadReadsAsNothingBefore() {
         assertThat(Git.notInHead("fatal: path 'nope' does not exist in 'HEAD'")).isTrue();
@@ -189,6 +210,7 @@ class GitTest {
         assertThat(Git.notInHead("fatal: detected dubious ownership in repository")).isFalse();
     }
 
+    /// A removed submodule lists as DELETED, and its texts carry the note `a submodule: not compared`.
     @Test
     void aSubmoduleIsNotCompared(@TempDir Path dir) throws Exception {
         Path root = dir.toRealPath();
@@ -205,6 +227,7 @@ class GitTest {
         }
     }
 
+    /// A CRLF file under an `eol` attribute compares as the LF text git commits, and a symbolic link compares as its target path.
     @Test
     void lineEndsAreComparedAsGitCommitsThemAndALinkAsItsTarget(@TempDir Path dir) throws Exception {
         Path root = dir.toRealPath();
@@ -223,6 +246,7 @@ class GitTest {
         }
     }
 
+    /// Output with more changes than [RepoStatus#MAX_CHANGES] keeps exactly that many and marks the status truncated.
     @Test
     void parseKeepsAtMostTheBoundAndSaysSo() {
         StringBuilder out = new StringBuilder();

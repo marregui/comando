@@ -13,6 +13,12 @@ import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Menus] declares the menu bar, the corner buttons, their icons, tooltips and the areas of commands in no menu.
+/// - The bar is Edit then Help, flat, the palette then the help items.
+/// - The corner holds the shell, the plots and the server only when there is one.
+/// - Every item and button has an icon that exists and a tooltip of at most 80 characters; no tooltip outlives its item.
+/// - A command is in a menu or in an area, never both.
+/// - Separators sit only between entries.
 class MenusTest {
 
     private static void walk(MenuEntry.Menu m, Consumer<MenuEntry.Menu> visit) {
@@ -41,6 +47,7 @@ class MenusTest {
         return subs;
     }
 
+    /// [Menus#bar] is exactly Edit and Help with the listed item ids in order, no submenus, and one separator in Help.
     @Test
     void editThenHelpFlatThePaletteThenTheHelp() {
         List<MenuEntry.Menu> bar = Menus.bar();
@@ -53,6 +60,7 @@ class MenusTest {
                 .as("one separator between the palette and the help").isEqualTo(1);
     }
 
+    /// [Menus#corner] groups terminal, plot and server buttons, and leaves the server group out without an embedded server.
     @Test
     void theCornerHoldsTheShellThePlotsAndTheServerOnlyWhenThereIsOne() {
         assertThat(Menus.corner(true)).containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"),
@@ -61,6 +69,8 @@ class MenusTest {
                 .containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"));
     }
 
+    /// Every placed id has an icon whose SVG is a resource and a non-blank tooltip of at most 80 characters, the bar's
+    /// titles have no icon, [Menus#TIPS] holds exactly the placed ids, and each named theme's icon is its swatch.
     @Test
     void everyItemAndButtonHasAnIconThatExistsAndATooltip() {
         List<String> placed = new ArrayList<>(ids(Menus.bar()));
@@ -77,6 +87,8 @@ class MenusTest {
         }
     }
 
+    /// No id is placed twice, [Menus#AREAS] holds no menu item, every corner command has an area, and sample commands map
+    /// to their areas.
     @Test
     void aCommandIsInAMenuOrInAnAreaNeverBoth() {
         List<String> placed = ids(Menus.bar());
@@ -88,6 +100,7 @@ class MenusTest {
                 .containsEntry("panel.9", "Panels").containsEntry("theme.slate_silver", "Theme").containsEntry("view.results.alt", "Window").doesNotContainKey("view.lastPrompt");
     }
 
+    /// Every menu and submenu is non-empty, starts and ends with an entry, and has no two separators in a row.
     @Test
     void separatorsOnlyBetweenEntries() {
         Menus.bar().forEach(top -> walk(top, m -> {

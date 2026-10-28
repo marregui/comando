@@ -48,6 +48,15 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ResourceDialog] edits one session or connection, guarding unsaved changes on every path that replaces the form.
+/// - A stored change reaches the form except in fields the user changed.
+/// - Every button is visible at the default size; the dialog edits one resource, with no list of its own.
+/// - Enter saves and ⌘⏎ saves and assigns; Escape, the close button and opening another form ask before discarding.
+/// - New and clone open their own form; reopening the resource being edited keeps the edits.
+/// - Assign and Start save an unsaved form first and say so; an invalid form says why; Test reads the unsaved form.
+/// - The message shows the latest notice about the resource after the click.
+/// - Only the model takes typed values; a new start on a stored conversation warns.
+/// - A new session's folder and the folder chooser's start follow the focused panel, the last used, or home.
 class ResourceDialogTest {
 
     private static LookAndFeel previous;
@@ -63,6 +72,8 @@ class ResourceDialogTest {
         UIManager.setLookAndFeel(previous);
     }
 
+    /// [ResourceDialog#merge] keeps a field the user edited and takes a field the store changed while the form still holds
+    /// what was filled, so a started session's new id and start mode arrive.
     @Test
     void aStartedSessionsNewIdReachesTheFormAndTheUsersEditStays() {
         Map<String, String> filled = Map.of("name", "edge", "effort", "", "sessionId", "A", "startMode", "FORK");
@@ -75,6 +86,7 @@ class ResourceDialogTest {
                 .containsEntry("startMode", "RESUME");
     }
 
+    /// When the user and the store both changed the same field, the user's value wins.
     @Test
     void aFieldTheUserChangedWinsOverTheStoredChange() {
         Map<String, String> filled = Map.of("sessionId", "A");
@@ -83,6 +95,8 @@ class ResourceDialogTest {
 
     // ---- layout
 
+    /// Under FlatLaf, a fresh session, an imported session and a connection show all their action buttons at the default
+    /// size, and the dialog has no add, clone, remove or import buttons and no resource list.
     @Test
     void everyButtonIsVisibleAtTheDefaultSize() {
         ResourceDialog<SessionSpec> sessions = sessions(new RecordingSink());
@@ -105,6 +119,7 @@ class ResourceDialogTest {
 
     // ---- keys
 
+    /// The default button is Save, and comando registers only Escape and the menu-shortcut Enter on the root pane.
     @Test
     void enterSavesAndCommandEnterSavesAndAssigns() {
         ResourceDialog<SessionSpec> d = sessions(new RecordingSink());
@@ -116,6 +131,8 @@ class ResourceDialogTest {
                         KeyStroke.getKeyStroke(KeyEvent.VK_ENTER, Platform.menuShortcutMask()));
     }
 
+    /// Escape on a clean form asks nothing; on a dirty one it shows `Discard changes to work?` with Keep editing as the
+    /// default; Keep editing keeps the edit and restores Save, Discard restores the stored values and sends no intent.
     @Test
     void escapeWithUnsavedChangesAsksInTheDialog() {
         RecordingSink sink = new RecordingSink();
@@ -151,6 +168,8 @@ class ResourceDialogTest {
                 List.of(SessionState.closed(SessionSpec.fresh("edge", "/tmp")), SessionState.closed(SessionSpec.fresh("lane2", "/var"))));
     }
 
+    /// With unsaved edits, opening another session, a new one or a copy asks first: Keep editing keeps the edits, Escape
+    /// keeps editing too, Discard opens the copy, and the question names `the new session` for an unsaved new form.
     @Test
     void openingOnAnotherResourceANewOneOrACopyAsksFirstWhenTheFormHasUnsavedChanges() {
         RecordingSink sink = new RecordingSink();
@@ -189,6 +208,8 @@ class ResourceDialogTest {
         assertThat(sink.intents()).isEmpty();
     }
 
+    /// The close button asks like Escape, Discard leaves a reopened dialog with the stored name, and a question already open
+    /// when close is clicked stays and sends nothing.
     @Test
     void theCloseButtonAsksLikeEscSoAReopenedDialogHoldsNoUnsavedEdit() {
         RecordingSink sink = new RecordingSink();
@@ -215,6 +236,8 @@ class ResourceDialogTest {
         assertThat(sink.intents()).isEmpty();
     }
 
+    /// New opens `new session` titled New session, a clone is named `… copy` with the original's folder and is new until
+    /// saved, and an empty name opens a new form, sending no intent.
     @Test
     void newAndCloneOpenTheirOwnFormNotTheSelectedResource() {
         RecordingSink sink = new RecordingSink();
@@ -238,6 +261,7 @@ class ResourceDialogTest {
         assertThat(sink.intents()).isEmpty();
     }
 
+    /// Preparing the same resource again asks nothing and keeps the edit.
     @Test
     void openingOnTheResourceBeingEditedKeepsTheEdits() {
         ResourceDialog<SessionSpec> d = sessions(new RecordingSink());
@@ -251,6 +275,8 @@ class ResourceDialogTest {
 
     // ---- save, assign, open
 
+    /// Open its panel on a new form sends SaveSession with no previous name, then BindSession to the focused panel, and
+    /// says `Saved and opened …`.
     @Test
     void assignOnANewFormSavesItFirstAndSaysSo() {
         RecordingSink sink = new RecordingSink();
@@ -268,6 +294,7 @@ class ResourceDialogTest {
         assertThat(message(d).getText()).isEqualTo("Saved and opened fresh in its own panel");
     }
 
+    /// A budget that is not a number sends nothing and shows the reason in the danger colour.
     @Test
     void assignOnAnInvalidFormSaysWhyAndDoesNothing() {
         RecordingSink sink = new RecordingSink();
@@ -280,6 +307,7 @@ class ResourceDialogTest {
         assertThat(message(d).getForeground()).isEqualTo(Theme.DANGER);
     }
 
+    /// An unchanged form sends only BindSession and says `Opened … in its own panel`.
     @Test
     void assignOnAnUnchangedFormOnlyBinds() {
         RecordingSink sink = new RecordingSink();
@@ -290,6 +318,7 @@ class ResourceDialogTest {
         assertThat(message(d).getText()).isEqualTo("Opened work in its own panel");
     }
 
+    /// Test sends TestConnection with the typed host and does not save.
     @Test
     void testReadsTheUnsavedForm() {
         RecordingSink sink = new RecordingSink();
@@ -301,6 +330,7 @@ class ResourceDialogTest {
         assertThat(sink.of(Intent.SaveConnection.class)).isEmpty();
     }
 
+    /// Start on a dirty form sends SaveSession with the edit, then StartSession, and says `Saved and starting`.
     @Test
     void startWithUnsavedChangesSavesFirst() {
         RecordingSink sink = new RecordingSink();
@@ -316,6 +346,8 @@ class ResourceDialogTest {
 
     // ---- outcome of Test, Connect, Start
 
+    /// After Connect, a notice older than the click is ignored, a later error about this connection shows in the danger
+    /// colour despite a newer notice about another, and a later info replaces it in the muted colour.
     @Test
     void theMessageShowsTheLatestNoticeAboutTheResourceAfterTheClick() {
         RecordingSink sink = new RecordingSink();
@@ -344,6 +376,8 @@ class ResourceDialogTest {
 
     // ---- choices and advice
 
+    /// Only the model combo is editable; the start mode shows only for an imported session, and choosing NEW there warns
+    /// that the stored conversation will not be continued, RESUME clearing it.
     @Test
     void onlyTheModelTakesTypedValuesAndNewOnAStoredConversationWarns() {
         AppState s = AppState.initial(List.of(new PanelState(States.P1, "one", "", "")), List.of(),
@@ -366,6 +400,8 @@ class ResourceDialogTest {
 
     // ---- new session directory
 
+    /// [ResourceDialog#defaultDirectory] prefers the focused panel's session folder, then the last used, then `user.home`,
+    /// and a saved new session's folder becomes the next new form's.
     @Test
     void aNewSessionStartsInTheFocusedPanelsSessionDirectoryElseTheLastUsedElseHome() {
         AppState bound = States.twoPanels();
@@ -525,6 +561,8 @@ class ResourceDialogTest {
         return one(d.content(), Container.class, c -> "confirm".equals(c.getName()));
     }
 
+    /// [ResourceDialog#chooserStart] takes the first non-blank entry of a path list; empty, separators only, or an invalid
+    /// path with a NUL start in `user.home`.
     @Test
     void theFolderChooserOpensOnTheFieldsFirstFolderOrHome() {
         String home = System.getProperty("user.home");

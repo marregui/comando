@@ -6,6 +6,11 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [ListingLines] removes an entry's own Markdown lines while reporting remaining whole-name references.
+///
+/// - List items remove their indented continuation lines and table rows remove as one line.
+/// - Folder paths require a trailing slash and nested paths do not own a folder row.
+/// - Fenced code, word fragments, and line endings retain their original meaning.
 class ListingLinesTest {
 
     private static final String ALPHA = """
@@ -28,6 +33,8 @@ class ListingLinesTest {
             | [notes.md](notes.md#top) | notes |
             """;
 
+    /// [ListingLines#without] removes a file's numbered item, continuation, and table row while reporting the still
+    /// retained prose mention by its new one-based line number.
     @Test
     void aFileLosesItsListItemWithTheLinesUnderItAndItsTableRowAndTheProseThatNamesItIsReported() {
         ListingLines.Result r = ListingLines.without(ALPHA, List.of("READ-01-ATLAS-OCT-18.md"));
@@ -38,6 +45,8 @@ class ListingLinesTest {
         assertThat(r.text().split("\n")[8]).startsWith("- **State:**");
     }
 
+    /// [ListingLines#without] removes a folder's own table row but keeps it unchanged when only a file below that
+    /// folder is requested, reporting the shared row as a mention instead.
     @Test
     void aFolderLosesItsRowAndAFileInsideItIsOnlyReportedFromTheSharedRow() {
         ListingLines.Result folder = ListingLines.without(ALPHA, List.of("work/"));
@@ -50,6 +59,8 @@ class ListingLinesTest {
         assertThat(nested.mentions()).containsExactly(16);
     }
 
+    /// [ListingLines#without] treats a Markdown link target as the entry name, while an absent target leaves all text
+    /// and mentions unchanged.
     @Test
     void aLinkNamesTheFileItPointsToAndNothingElseIsTouched() {
         ListingLines.Result r = ListingLines.without(ALPHA, List.of("notes.md"));
@@ -61,6 +72,8 @@ class ListingLinesTest {
         assertThat(none.mentions()).isEmpty();
     }
 
+    /// [ListingLines#without] requires `work/` to own a list item, so prose beginning with the ordinary word `work`
+    /// and its continuation are retained.
     @Test
     void aFolderIsNamedWithItsSlashSoAWordLikeItsNameStays() {
         String text = "- work in progress: the miner\n  still running\n- `work/`: scripts\n";
@@ -69,6 +82,7 @@ class ListingLinesTest {
         assertThat(r.removed()).isEqualTo(1);
     }
 
+    /// [ListingLines#without] removes the requested CRLF list line and preserves the remaining line's CRLF ending.
     @Test
     void windowsLineEndsAreReadAndKept() {
         ListingLines.Result r = ListingLines.without("1. `a.md`: x\r\n2. `b.md`: y\r\n", List.of("a.md"));
@@ -76,6 +90,8 @@ class ListingLinesTest {
         assertThat(r.text()).isEqualTo("2. `b.md`: y\r\n");
     }
 
+    /// [ListingLines#without] never treats a fenced-code line as owned and reports only whole `a.md` names, excluding
+    /// `data.md` and `a.md.bak` fragments.
     @Test
     void aCodeBlockIsNeverAnEntrysOwnLineAndAWholeNameIsAMention() {
         String text = "```\n- a.md\n```\n- see data.md and a.md.bak\n- then a.md.\n";
@@ -84,6 +100,8 @@ class ListingLinesTest {
         assertThat(r.mentions()).as("the fenced line and the sentence; not data.md, not a.md.bak").containsExactly(2, 5);
     }
 
+    /// [ListingLines#subject] extracts the first list or table element after Markdown marks, but returns empty for a
+    /// rule row, prose, and heading.
     @Test
     void theSubjectOfALineIsItsFirstElement() {
         assertThat(ListingLines.subject("- `a.md`: x")).isEqualTo("a.md");

@@ -14,12 +14,13 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Every key the ui module's code names in a string reaches the user through {@code KeyText}, so a desktop other than
- * macOS reads its own keys ("Ctrl+Shift+T", not "⌘⇧T"). A new string with a key written as macOS writes it fails here,
- * on any desktop, unless its statement passes it through {@code KeyText.of} or it is one of the constants below, each
- * read through {@code KeyText} where it is used.
- */
+/// Every key the ui module's code names in a string reaches the user through [dev.marregui.comando.ui.kit.format.KeyText],
+/// so a desktop other than macOS reads its own keys ("Ctrl+Shift+T", not "⌘⇧T"). A new string with a key written as macOS
+/// writes it fails here, on any desktop, unless its statement passes it through `KeyText.of` or it is one of the
+/// constants below, each read through `KeyText` where it is used.
+/// - Every string literal in `src/main` naming ⌘, ⌃ or ⌥ goes through `KeyText.of` or is a listed constant.
+/// - The listed constants are translated where they are read.
+/// - The scanner finds literals and text blocks and skips comments.
 class KeyTextUseTest {
 
     private static final Path SOURCES = Path.of("src/main/java/dev/marregui/comando/ui");
@@ -42,6 +43,8 @@ class KeyTextUseTest {
         }
     }
 
+    /// Scanning the ui sources, no string literal with a macOS modifier glyph sits in a statement without `KeyText.of`,
+    /// except the constants declared in the allow list.
     @Test
     void everyKeyNamedInAStringGoesThroughKeyText() throws IOException {
         List<String> untranslated = new ArrayList<>();
@@ -65,6 +68,7 @@ class KeyTextUseTest {
         assertThat(untranslated).as("strings naming macOS keys that reach the user unchanged on other desktops").isEmpty();
     }
 
+    /// With Linux keys, every [Menus#tip] and the [Keys#markdown] table carry no macOS glyph and read `Ctrl+Enter`.
     @Test
     void theConstantsTranslatedWhereReadAreTranslatedThere() {
         System.setProperty(Platform.KEYS_PROPERTY, "linux");
@@ -74,6 +78,8 @@ class KeyTextUseTest {
         assertThat(Keys.markdown(List.of())).doesNotContain("⌘", "⌃", "⌥").contains("Ctrl+Enter in the note");
     }
 
+    /// The scanner skips glyphs in line and block comments and a quote inside a char literal, finds a string, a `KeyText.of`
+    /// argument and a text block, and gives each its surrounding statement.
     @Test
     void theScannerFindsLiteralsAndSkipsComments() {
         Source s = Source.of("""

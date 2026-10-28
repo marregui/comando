@@ -10,6 +10,11 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Intent.Notify#logged] records a failure and returns a non-desktop notice linked to the log entry time.
+///
+/// - errors use the error logger level
+/// - warnings use the warning logger level
+/// - the notice subject names the recorded entry
 class NotifyLoggedTest {
 
     /** One entry: its level, message and cause. */
@@ -40,6 +45,7 @@ class NotifyLoggedTest {
         }
     }
 
+    /// Logged errors retain their cause and get a `log:` subject from the timestamp read before logging; warnings record without a cause.
     @Test
     void aLoggedFailureNamesItsLogEntryWhichHoldsTheNoticeAndItsCause() {
         Recording log = new Recording();

@@ -28,8 +28,4 @@ public record SessionInfo(String claudeSessionId, String model, String cwd, Stri
         Objects.requireNonNull(permissionMode, "permissionMode");
         capabilities = List.copyOf(capabilities);
     }
-
-    public boolean hasCapability(String capability) {
-        return capabilities.contains(capability);
-    }
 }

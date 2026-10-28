@@ -8,10 +8,16 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [WindowLayout] reads and writes the window's layout settings, including keys from older layouts.
+/// - The sidebar tab in front is kept across the older layouts' indexes, the newest key winning.
+/// - A tab that is gone reads as Sessions.
+/// - Each panel's lower divider is kept, and a save replaces the ones before.
 class WindowLayoutTest {
 
     private final Settings prefs = Settings.inMemory();
 
+    /// With only the oldest key, indexes of Sessions, Panels, Connections, Files map to the current tabs, Panels reading as
+    /// Sessions; nothing saved reads as Sessions.
     @Test
     void theTabInFrontBeforeTheOneRowStaysInFront() {
         WindowLayout layout = new WindowLayout(prefs);
@@ -25,6 +31,8 @@ class WindowLayoutTest {
         }
     }
 
+    /// The middle key, from the layout with a Panels tab (record 70), wins over the oldest and maps Panels to Sessions; the
+    /// newest key wins over both, and an index that no longer exists reads as Sessions.
     @Test
     void theTabInFrontWithAPanelsTabStaysInFront() {
         WindowLayout layout = new WindowLayout(prefs);
@@ -42,6 +50,8 @@ class WindowLayoutTest {
         assertThat(layout.sidebarTab()).as("a tab that is gone reads as Sessions").isEqualTo(SessionsSidebar.SESSIONS);
     }
 
+    /// Dividers saved per panel are read back by a new layout, a later save without a panel drops its divider, and the keys
+    /// differ from the window's own divider.
     @Test
     void eachPanelsLowerDividerIsKeptAndASaveReplacesTheOnesBefore() {
         WindowLayout layout = new WindowLayout(prefs);

@@ -14,12 +14,13 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Every size of text is a step of the type scale and every inset is on the 4-point grid (record 102), as every colour
- * comes from the theme ({@code ColourRulesTest}): the ui module's sources, outside the theme and About's own design
- * (record 60), add or multiply no size of their own and set no inset of 5, 6, 7, 9, 10 or 11 pixels. Up to 3 pixels
- * nudge a line or an icon into place and are allowed.
- */
+/// The ui module's sources keep every text size on the type scale and every inset on the 4-point grid (record 102), as
+/// every colour comes from the theme (`ColourRulesTest`): outside the theme and About's own design (record 60) they add
+/// or multiply no size of their own and set no inset of 5, 6, 7, 9, 10 or 11 pixels. Up to 3 pixels nudge a line or an
+/// icon into place and are allowed. [Theme] holds the scale and the grid.
+/// - No source line makes a font from a literal size or a size offset by a number.
+/// - No inset outside the listed exception is above 3 and off the 4-point grid.
+/// - The scale and the grid hold their steps.
 class TypeAndSpacingRulesTest {
 
     private static final Path SOURCES = Path.of("src/main/java/dev/marregui/comando/ui");
@@ -35,6 +36,7 @@ class TypeAndSpacingRulesTest {
             // a field's hint starts where the field's text does: FlatLaf's text margin is 6
             "dialogs/resource/ResourceDialog.java", "new Insets(0, 6, 2, 3)");
 
+    /// Scanning `src/main` for `deriveFont(12f)`-style literals and `getSize2D() ± n` on font-making lines finds none.
     @Test
     void everyTextSizeIsAStepOfTheScale() throws IOException {
         List<String> off = new ArrayList<>();
@@ -47,6 +49,7 @@ class TypeAndSpacingRulesTest {
         assertThat(off).as("sizes off the type scale: use Theme.font or Theme.size").isEmpty();
     }
 
+    /// Scanning empty borders and insets finds no number above 3 that is not a multiple of 4, except the aligned field hint.
     @Test
     void everyInsetIsOnTheGrid() throws IOException {
         List<String> off = new ArrayList<>();
@@ -69,6 +72,8 @@ class TypeAndSpacingRulesTest {
         assertThat(off).as("insets off the grid: use Theme.SPACE_*").isEmpty();
     }
 
+    /// [Theme#size] maps a base to its small and body steps to the half point, the title is the first heading scale of the
+    /// base size, [Theme#rowHeight] rounds up to the grid, and every spacing constant is a multiple of 4.
     @Test
     void theScaleAndTheGridHoldTheirSteps() {
         assertThat(Theme.size(13f, Theme.TextSize.SMALL)).isEqualTo(12f);

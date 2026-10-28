@@ -7,8 +7,14 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [PlanTree] turns an EXPLAIN result into a tree by indentation.
+/// - QuestDB plans nest by indentation and the root counts the lines
+/// - Postgres `->` arrows are dropped and multi-line rows split
+/// - an `explain` statement is recognised with leading blanks
 class PlanTreeTest {
 
+    /// Six QuestDB plan lines nest by their indentation, including a jump of four columns, and the root's detail reads
+    /// "6 lines".
     @Test
     void questDbPlanNestsByIndentation() {
         ViewSpec.TreeNode plan = PlanTree.parse(List.of(
@@ -26,6 +32,8 @@ class PlanTreeTest {
                 .containsExactly("Row forward scan", "Frame forward scan on: trades");
     }
 
+    /// A Postgres plan delivered as one multi-line row splits into lines, nests by indentation and loses its `->`
+    /// prefixes; [PlanTree#isExplain] accepts `explain` after leading blanks.
     @Test
     void postgresArrowsAreDropped() {
         ViewSpec.TreeNode plan = PlanTree.parse(List.of("Hash Join  (cost=1.0..2.0)\n  ->  Seq Scan on a\n  ->  Hash\n        ->  Seq Scan on b"));

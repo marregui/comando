@@ -10,6 +10,13 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
 
+/// [SplitDiff] compares two texts side by side, mapping lines between them and marking changed words.
+/// - Chunks are the differences in order; a line maps across unchanged and changed stretches by its share.
+/// - An empty text has no lines.
+/// - Changed words are marked, not whole lines, and a stretch rewritten whole has no word marks.
+/// - A rewrite too large to match in the time budget is compared as a whole; an over-long line is not compared.
+/// - Word marks are offsets into the whole text.
+/// - Next and previous step through differences one by one; showing two texts colours lines and words.
 @ExtendWith(OnEdt.class)
 class SplitDiffTest {
 
@@ -17,6 +24,7 @@ class SplitDiffTest {
     // b changed, a line added after d, f gone
     private static final List<String> AFTER = List.of("a", "B", "c", "d", "d2", "e");
 
+    /// A changed line, an inserted line and a deleted line give three chunks as half-open line ranges on each side.
     @Test
     void chunksAreTheDifferencesInOrder() {
         assertThat(SplitDiff.chunks(BEFORE, AFTER)).containsExactly(
@@ -25,6 +33,8 @@ class SplitDiffTest {
                 new SplitDiff.Chunk(5, 6, 6, 6));
     }
 
+    /// Unchanged lines keep their distance from a chunk, a fractional line inside an insertion or deletion maps to the
+    /// point it went to, and lines past every chunk shift by the net change.
     @Test
     void aLineMapsAcrossUnchangedAndChangedStretches() {
         List<SplitDiff.Chunk> chunks = SplitDiff.chunks(BEFORE, AFTER);
@@ -37,6 +47,7 @@ class SplitDiffTest {
         assertThat(SplitDiff.map(chunks, 7, true)).as("past every difference").isEqualTo(7);
     }
 
+    /// Inside a chunk of 2 lines against 4, a line maps in proportion both ways, and past it shifts by the difference.
     @Test
     void aLongerChangeMapsByItsShare() {
         List<SplitDiff.Chunk> chunks = List.of(new SplitDiff.Chunk(2, 4, 2, 6));
@@ -45,12 +56,14 @@ class SplitDiffTest {
         assertThat(SplitDiff.map(chunks, 10, false)).isEqualTo(8);
     }
 
+    /// [SplitDiff#lines] of the empty string is empty, so a one-line text against it is one insertion.
     @Test
     void anEmptyTextHasNoLines() {
         assertThat(SplitDiff.lines("")).isEmpty();
         assertThat(SplitDiff.chunks(SplitDiff.lines(""), SplitDiff.lines("x\n"))).containsExactly(new SplitDiff.Chunk(0, 0, 0, 2));
     }
 
+    /// Two lines differing in one token mark only that token on each side.
     @Test
     void theWordsThatChangedAreMarkedNotTheWholeLine() {
         List<int[]> a = new ArrayList<>();
@@ -61,6 +74,7 @@ class SplitDiffTest {
         assertThat("int count = 2;".substring(b.getFirst()[0], b.getFirst()[1])).isEqualTo("2");
     }
 
+    /// Lines sharing no words return false and mark nothing.
     @Test
     void aStretchRewrittenWholeHasNoWordMarks() {
         List<int[]> a = new ArrayList<>();
@@ -70,6 +84,8 @@ class SplitDiffTest {
         assertThat(b).isEmpty();
     }
 
+    /// Two 20 000-line texts with nothing in common under a 100 ms budget finish within 2 s as one whole chunk with a note
+    /// saying so.
     @Test
     void aRewriteTooLargeToMatchInTimeIsComparedAsAWholeWithinTheBudget() {
         StringBuilder a = new StringBuilder();
@@ -87,6 +103,8 @@ class SplitDiffTest {
         assertThat(m.chunks()).containsExactly(new SplitDiff.Chunk(0, 20_001, 0, 20_001));
     }
 
+    /// A line one past [SplitDiff#MAX_LINE_CHARS] makes the texts uncompared with a note about minified text; a line at
+    /// the bound is compared.
     @Test
     void aLineLongerThanTheBoundIsNotCompared() {
         SplitDiff.Model m = SplitDiff.compute("short\n", "x".repeat(SplitDiff.MAX_LINE_CHARS + 1), 1_000);
@@ -95,6 +113,7 @@ class SplitDiffTest {
         assertThat(SplitDiff.compute("a\n", "x".repeat(SplitDiff.MAX_LINE_CHARS) + "\n", 1_000).compared()).isTrue();
     }
 
+    /// Word marks of a model count from the start of the text, `\r\n` included, matching [SplitDiff#lineStarts].
     @Test
     void wordMarksAreOffsetsIntoTheWholeText() {
         String before = "a\r\nint count = 1;\nz\n";
@@ -106,6 +125,8 @@ class SplitDiffTest {
         assertThat(SplitDiff.lineStarts(before)).containsExactly(0, 3, 18, 20);
     }
 
+    /// With three differences, next visits 0, 1, 2 then returns false; previous goes back to 1 and 0, not the same one
+    /// again, then returns false.
     @Test
     void nextAndPreviousStepThroughTheDifferencesOneByOne() {
         StringBuilder a = new StringBuilder();
@@ -132,6 +153,7 @@ class SplitDiffTest {
         assertThat(d.previous()).isFalse();
     }
 
+    /// [SplitDiff#show] fills both editors in the file's syntax style, finds the one chunk and highlights the changed word.
     @Test
     void showingTwoTextsColoursTheirLinesAndWords() {
         SplitDiff d = new SplitDiff();

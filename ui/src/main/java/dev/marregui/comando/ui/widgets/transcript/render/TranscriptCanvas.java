@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.widgets.transcript.render;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.ui.kit.async.ShownTimer;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -24,7 +25,6 @@ import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
 import java.awt.event.ActionEvent;
-import java.awt.event.HierarchyEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -87,7 +87,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private Set<Items.ToolItem> waitingCards = Collections.newSetFromMap(new IdentityHashMap<>());
     private List<Approval> waitingFor = List.of();
     /** Repaints running cards' elapsed time once a second while one runs and the canvas is on screen. */
-    private final Timer ticker = new Timer(1000, e -> tick());
+    private final ShownTimer ticker = new ShownTimer(this, 1000, this::tick);
     private LongSupplier clock = System::currentTimeMillis;
     private final Consumer<String> links;
     private int[] tops = new int[0];
@@ -154,11 +154,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         };
         addMouseListener(mouse);
         addMouseMotionListener(mouse);
-        addHierarchyListener(e -> {
-            if ((e.getChangeFlags() & HierarchyEvent.SHOWING_CHANGED) != 0) {
-                updateTicker();
-            }
-        });
         int menu = Platform.menuShortcutMask();
         getInputMap(WHEN_FOCUSED).put(KeyStroke.getKeyStroke(KeyEvent.VK_C, menu), "copy-selection");
         getActionMap().put("copy-selection", new AbstractAction() {
@@ -543,7 +538,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     /** For tests: whether the elapsed-time repaint runs. */
     boolean ticking() {
-        return ticker.isRunning();
+        return ticker.running();
     }
 
     // ---- running cards and approvals
@@ -614,17 +609,11 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     private void updateTicker() {
-        boolean want = !running.isEmpty() && isShowing();
-        if (want && !ticker.isRunning()) {
-            ticker.start();
-        } else if (!want && ticker.isRunning()) {
-            ticker.stop();
-        }
+        ticker.want(!running.isEmpty());
     }
 
     private void tick() {
-        if (running.isEmpty() || !isShowing()) {
-            ticker.stop();
+        if (running.isEmpty()) {
             return;
         }
         if (!launched.isEmpty()) {

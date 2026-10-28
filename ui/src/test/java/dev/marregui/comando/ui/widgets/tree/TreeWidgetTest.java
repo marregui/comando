@@ -17,6 +17,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [TreeWidget] renders a tree view and keeps the user's place across renders.
+/// - a refreshed tree keeps the nodes the user opened and the one selected
 class TreeWidgetTest {
 
     private static ViewSpec.TreeNode leaf(String label) {
@@ -59,6 +61,7 @@ class TreeWidgetTest {
         return p;
     }
 
+    /// A render that adds a leaf and a sibling folder keeps the expanded table expanded and the selected column selected.
     @Test
     void aRefreshedTreeKeepsWhatTheUserOpenedAndSelected() throws Exception {
         TreeWidget widget = new TreeWidget(new WidgetContext(intent -> { }, new ActionRegistry()));

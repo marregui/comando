@@ -24,6 +24,11 @@ import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [EditorPanel]'s header: the connection control and icon-only tools; the session controls live in the session bar.
+/// - no theme switch: comando is dark throughout
+/// - the session's controls and name are not in the header; the connection toggle is
+/// - the connection toggle is one icon coloured by state, first of the tools, and its name chip binds another
+/// - every header button is an icon with a tooltip and no button shape
 class EditorPanelHeaderTest {
 
     private static final PanelId A = new PanelId("a");
@@ -48,6 +53,7 @@ class EditorPanelHeaderTest {
         }
     };
 
+    /// A panel rendered by [Workspace] has neither a "Light editors" nor a "Dark editors" button.
     @Test
     void aPanelsHeaderHasNoThemeSwitchComandoIsDarkThroughout() throws Exception {
         Workspace[] w = new Workspace[1];
@@ -59,6 +65,8 @@ class EditorPanelHeaderTest {
         assertThat(button(w[0].panel(A), "Dark editors")).isNull();
     }
 
+    /// The header bound to an open session carries none of the session controls nor the session's name; it keeps the
+    /// connection toggle, whose tooltip says how to bind one when unbound, and shows no "no connection" word chip.
     @Test
     void theHeaderHoldsTheConnectionAndTheControlsAndTheSessionBarTheSession() throws Exception {
         SessionState running = SessionState.closed(SessionSpec.fresh("work", "/w").withCheckpoint("/reflect")).withStatus(Status.OPEN, "");
@@ -82,6 +90,9 @@ class EditorPanelHeaderTest {
         assertThat(chips).as("no chip of words when there is no connection").isEmpty();
     }
 
+    /// The connection toggle shows the closed, open and failed icon of its state, sends `OpenConnection` when closed and
+    /// `CloseConnection` when open, and sits first of the tools with the name chip ("local ▾") next to it.
+    /// The failed state appends the failure reason to the tooltip.
     @Test
     void theConnectionIsOneIconInItsStatesColourFirstOfTheToolsItsNameBindsAnother() throws Exception {
         ConnectionState local = ConnectionState.closed(ConnectionSpec.questDbDefaults("local"));
@@ -114,6 +125,7 @@ class EditorPanelHeaderTest {
         assertThat(toggle.getToolTipText()).isEqualTo("local failed; click to connect; its name binds another · refused");
     }
 
+    /// Preview, Run, Stop and Clear are icon buttons with no text, a tooltip, and the `toolBarButton` type.
     @Test
     void theHeadersButtonsAreIconsWithoutWords() throws Exception {
         EditorPanel[] p = new EditorPanel[1];

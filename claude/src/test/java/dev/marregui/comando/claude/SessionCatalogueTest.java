@@ -10,8 +10,15 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [SessionCatalogue] lists stored conversations with their latest resumable details.
+///
+/// - orders transcript files by modification time
+/// - extracts the latest title, branch, and prompt
+/// - treats a missing projects directory as empty
 class SessionCatalogueTest {
 
+    /// Transcript entries are newest first and retain the latest branch, custom title, and human prompt.
+    /// Two dated JSONL files and an unrelated text file distinguish ordering, extraction, and filtering.
     @Test
     void listsConversationsNewestFirstWithTheirDirectoryTitleAndLastPrompt(@TempDir Path projects) throws Exception {
         Path project = Files.createDirectories(projects.resolve("-Users-x-edge"));
@@ -42,6 +49,8 @@ class SessionCatalogueTest {
         assertThat(entries.get(1).title()).isEqualTo("Old work");
     }
 
+    /// A nonexistent projects directory yields no entries instead of a listing failure.
+    /// The temporary root has no child with the requested name.
     @Test
     void missingDirectoryIsEmpty(@TempDir Path dir) {
         assertThat(new SessionCatalogue(dir.resolve("nope")).scan(10)).isEmpty();

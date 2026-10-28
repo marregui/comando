@@ -18,6 +18,10 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [TreeView] shows a [ViewSpec.TreeNode] tree that keeps the user's place across updates.
+/// - An update keeps what the user opened and selected, by path, and drops a selection that is gone.
+/// - A single click activates nothing; a double click activates a leaf, and opens a folder instead of activating it.
+/// - Rows are plain labels, never HTML, with a muted detail and errors in red; the tree names a node by its label.
 class TreeViewTest {
 
     private static ViewSpec.TreeNode leaf(String label) {
@@ -28,6 +32,8 @@ class TreeViewTest {
         return new ViewSpec.TreeNode(label, "", List.of(children));
     }
 
+    /// After an update that inserts nodes above and around them, an expanded folder stays open, a closed one closed and
+    /// the selected leaf stays selected at its new row; an update without it selects nothing.
     @Test
     void anUpdateKeepsWhatTheUserOpenedAndSelected() throws Exception {
         TreeView view = new TreeView();
@@ -49,6 +55,8 @@ class TreeViewTest {
         assertThat(view.selected()).as("a node that is gone leaves nothing selected").isNull();
     }
 
+    /// A single click activates nothing, a double click on a leaf activates it, a double click on a folder does not, and
+    /// the toggle click count is 2.
     @Test
     void onlyADoubleClickOpensALeafOrAFolder() throws Exception {
         TreeView view = new TreeView();
@@ -70,6 +78,8 @@ class TreeViewTest {
         assertThat(tree.getToggleClickCount()).as("a folder opens on a double click").isEqualTo(2);
     }
 
+    /// A node with a detail renders as a name label and a muted detail label, a `✗` row is red even when selected, no label
+    /// starts with `<html>`, and [JTree#convertValueToText] gives the node's label, not its record's text.
     @Test
     void aRowIsPlainLabelsNeverHtmlAndTheTreeNamesANodeByItsLabel() throws Exception {
         TreeView view = new TreeView();

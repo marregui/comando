@@ -35,18 +35,20 @@ import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * A memory file in a panel, as comando shows it (record 94): its front matter as facts, not a rule and a heading; a
- * double click on its {@code [[name]]} link opens the file whose front matter declares that name in a new panel, and on
- * a web address goes to the browser. The double click is dispatched to the rendered page in the real window, which
- * needs a display: {@code ./gradlew :app:uiTest}. The page is written to {@code build/snapshots/memory-page.png}.
- */
+/// A memory file in a panel, as comando shows it. Double clicks are dispatched to the rendered page in the real window,
+/// which needs a display: `./gradlew :app:uiTest`. The page is written to `build/snapshots/memory-page.png`.
+/// - front matter shows as facts, not a rule and a heading
+/// - a double click on a `[[name]]` link opens the file whose front matter declares that name, in a new panel
+/// - a double click on a web address goes to the browser
+/// - a file link without a line is found under the session's folder and opens in a panel, once
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class LinksUiTest {
 
     @TempDir
     Path home;
 
+    /// The page shows the front matter's `name` and `metadata.type` as facts and the note link as its name without brackets;
+    /// a double click on the note link opens the file declaring that name in a new panel, and on a URL calls the browser.
     @Test
     void aDoubleClickOnANoteLinkOpensItsFileInAPanelAndOnAnAddressTheBrowser() throws Exception {
         Path brain = home.resolve("brain");
@@ -108,11 +110,9 @@ class LinksUiTest {
         }
     }
 
-    /**
-     * A file link without a line, followed as a double click in the transcript follows it (record 111): written relative
-     * to a folder deep under the session's, it is found there and opens as the Files tab opens a file, in a panel; a
-     * second follow brings that panel forward instead of opening another.
-     */
+    /// A file link without a line, written relative to a folder deep under the session's, is found there and opens in a
+    /// panel as the Files tab opens a file, not as a side view; a second follow brings that panel forward instead of opening
+    /// another.
     @Test
     void aFileLinkWithoutALineIsFoundUnderTheSessionsFolderAndOpensInAPanelAsTheFilesTabOpensIt() throws Exception {
         Path work = Files.createDirectories(home.resolve("work"));

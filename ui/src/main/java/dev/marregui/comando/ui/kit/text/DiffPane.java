@@ -12,8 +12,6 @@ public final class DiffPane {
 
     private final RSyntaxTextArea area = Editors.viewer("");
     private final RTextScrollPane scroll = Editors.scroll(area, false);
-    private int added;
-    private int removed;
 
     public DiffPane() {
         area.setHighlightCurrentLine(false);
@@ -38,30 +36,18 @@ public final class DiffPane {
         }
         area.setText(text.toString());
         area.removeAllLineHighlights();
-        added = 0;
-        removed = 0;
         for (int i = 0; i < lines.size(); i++) {
             String l = lines.get(i);
             try {
                 if (Diffs.isAdded(i, l)) {
                     area.addLineHighlight(i, Theme.content().added);
-                    added++;
                 } else if (Diffs.isRemoved(i, l)) {
                     area.addLineHighlight(i, Theme.content().removed);
-                    removed++;
                 }
             } catch (BadLocationException e) {
                 throw new IllegalStateException(e);
             }
         }
         area.setCaretPosition(0);
-    }
-
-    public int added() {
-        return added;
-    }
-
-    public int removed() {
-        return removed;
     }
 }

@@ -36,6 +36,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [PanelsWithoutSession]: the Sessions tab's list of panels that have no session, open or closed.
+/// - lists them by title, leaving out a session's own panels and documents; a gone session counts as none
+/// - hides while every panel is a session's own
+/// - sits under the sessions in their tab
+/// - a double click reopens a closed panel and brings an open one forward
+/// - a row's menu opens, renames, makes a session and removes, and does not clone
+/// - remove asks naming the file, and closes an open panel first
 class PanelsWithoutSessionTest {
 
     private static LookAndFeel previous;
@@ -113,6 +120,8 @@ class PanelsWithoutSessionTest {
         return t[0];
     }
 
+    /// The list holds, sorted by title, the panel whose session is gone, the open panel without a session and the closed
+    /// one; a closed row names its state, connection and file.
     @Test
     void comandosOwnPanelsWithoutASessionOpenAndClosedByTitle() throws Exception {
         PanelsWithoutSession section = section(state());
@@ -129,6 +138,8 @@ class PanelsWithoutSessionTest {
         assertThat(closed[0]).contains("scratch").contains("closed").contains("local · s.md");
     }
 
+    /// With only session-owned panels and documents the list is empty and the section hidden; it shows again once a panel
+    /// has no session.
     @Test
     void theSectionHidesWhileEveryPanelIsASessionsOwn() throws Exception {
         AppState owned = AppState.initial(List.of(new PanelState(MAIN, "main", "local", "standard"), new PanelState(DOC, "PLAN", "", "", true)),
@@ -141,6 +152,8 @@ class PanelsWithoutSessionTest {
         assertThat(section.component().isVisible()).as("back once a panel has no session").isTrue();
     }
 
+    /// In [SessionsSidebar] the section sits south of the scrolled Sessions list, and its "New session" opens the sidebar's
+    /// new-session dialog with the panel's title.
     @Test
     void theSectionSitsUnderTheSessionsInTheirTab() throws Exception {
         SessionsSidebar[] s = new SessionsSidebar[1];
@@ -185,6 +198,7 @@ class PanelsWithoutSessionTest {
         assertThat(newSessions).as("the sidebar's dialog, named after the panel").containsExactly("scratch");
     }
 
+    /// A double click sends `ReopenPanel` for a closed row and `FocusPanel` for an open one.
     @Test
     void doubleClickReopensAClosedPanelAndBringsAnOpenOneForward() throws Exception {
         JList<PanelsWithoutSession.Row> list = section(state()).list();
@@ -193,6 +207,8 @@ class PanelsWithoutSessionTest {
         assertThat(intents).containsExactly(new Intent.ReopenPanel(SCRATCH), new Intent.FocusPanel(NOTES));
     }
 
+    /// A row's menu holds Open, Rename, New session and Remove and no clone; "New session" asks for the session and sends
+    /// no intent itself.
     @Test
     void aRowsMenuOpensRenamesMakesASessionAndRemovesButDoesNotClone() throws Exception {
         PanelsWithoutSession section = section(state());
@@ -206,6 +222,8 @@ class PanelsWithoutSessionTest {
         assertThat(intents).as("the dialog makes the session; saved, the panel becomes its own").isEmpty();
     }
 
+    /// The question names the panel's file and, for an open panel, says it closes first; declining sends nothing, and
+    /// confirming a closed panel sends `RemovePanel`.
     @Test
     void removeAsksNamingTheFileAndClosesAnOpenPanelFirst() throws Exception {
         PanelsWithoutSession section = section(state());

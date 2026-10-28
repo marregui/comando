@@ -7,8 +7,14 @@ import java.time.temporal.ChronoUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [Formats] writes fixed-width UTC instants and compact elapsed-time labels into a caller buffer.
+///
+/// - Epoch microseconds retain their instant across the supported range.
+/// - Millisecond ranges select milliseconds, seconds, or minutes and seconds.
 class FormatsTest {
 
+    /// [Formats#appendMicrosUtc] emits 27-character UTC timestamps for zero, negative, fractional, and far-future
+    /// epoch-microsecond values, matching `Instant` even where its textual form omits trailing zeroes.
     @Test
     void microsMatchJavaTime() {
         long[] samples = {0L, 1L, 999_999L, 1_633_046_400_123_456L, -1L, -86_400_000_001L, 253_402_300_799_999_999L, 951_782_400_000_000L};
@@ -23,6 +29,7 @@ class FormatsTest {
         }
     }
 
+    /// [Formats#appendMillis] changes units at one second and one minute, retaining a tenth of a second below a minute.
     @Test
     void durations() {
         StringBuilder sb = new StringBuilder();

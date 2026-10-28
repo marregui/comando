@@ -26,8 +26,14 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+/// [EmbeddedQuestDb]: the bundled database, started and stopped from the window, reachable from this machine only.
+/// - every listener binds to `127.0.0.1` and line-protocol UDP is off
+/// - it starts on a fresh data root, reports it, and listens on loopback only
+/// - `isRunning` answers at once while a start holds the server, and a second toggle waits with a notice
 class EmbeddedQuestDbTest {
 
+    /// Every `*_BIND_TO` setting in [EmbeddedQuestDb#LOOPBACK] starts with `127.0.0.1:` and `QDB_LINE_UDP_ENABLED` is
+    /// `false`.
     @Test
     void everyListenerStaysOnTheLoopbackInterface() {
         assertThat(EmbeddedQuestDb.LOOPBACK).containsEntry("QDB_LINE_UDP_ENABLED", "false");
@@ -36,6 +42,8 @@ class EmbeddedQuestDbTest {
                 .allSatisfy(bind -> assertThat(bind).startsWith("127.0.0.1:"));
     }
 
+    /// A start on a missing data root creates it, posts an INFO notice and runs; its Postgres port accepts a connection
+    /// on loopback and refuses one on this machine's LAN address, when it has one.
     @Test
     void startsOnAFreshDataRootAndListensOnLoopbackOnly(@TempDir Path dir) throws IOException {
         Path root = dir.resolve("questdb");
@@ -71,6 +79,8 @@ class EmbeddedQuestDbTest {
         }
     }
 
+    /// While a start on a data root that is a file holds the server, `isRunning` answers false within 2 s and a second
+    /// toggle notices "QuestDB is starting"; the start then fails with one ERROR notice and the database is not running.
     @Test
     void isRunningAnswersAtOnceWhileAStartHoldsTheServerAndASecondToggleWaits(@TempDir Path dir) throws Exception {
         // a root that is a file: the start fails quickly, once the test lets it run

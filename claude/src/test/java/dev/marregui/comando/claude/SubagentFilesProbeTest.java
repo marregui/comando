@@ -15,7 +15,12 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 
-/** {@code SubagentFiles} against generated inputs: every JSON type in every field read, line ends, the cut at the limit. */
+/// [SubagentFiles] against generated inputs: every JSON type in every field read, line ends, and the cut at the limit.
+/// - a field of any JSON type neither throws nor stops the next valid line rendering
+/// - meta fields of any JSON type never make `find` or `finished` throw; a numeric `toolUseId` matches its digits
+/// - CRLF lines render as LF lines do
+/// - a cut inside a multi-byte character leaves no replacement character; a cut at a line start keeps that line
+/// - a file at or under the limit renders whole; a last line longer than the limit leaves only the notice
 class SubagentFilesProbeTest {
 
     private final ObjectMapper json = new ObjectMapper();
@@ -28,7 +33,8 @@ class SubagentFilesProbeTest {
         return "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"SENTINEL\"}]}}";
     }
 
-    /** Every JSON type in every field the renderer reads; the next valid line still renders. */
+    /// Each of nine JSON values, from `null` to a nested object, put in every field the renderer reads, renders without an
+    /// exception, and a valid sentinel line after it still renders.
     @Test
     void everyJsonTypeInEveryFieldReadRendersWithoutThrowing() throws IOException {
         List<String> templates = List.of(
@@ -69,7 +75,8 @@ class SubagentFilesProbeTest {
         assertThat(failures).isEmpty();
     }
 
-    /** Meta fields of every JSON type: find never throws. */
+    /// Meta files whose fields hold each JSON type never make [SubagentFiles#find] or [SubagentFiles#finished] throw, also
+    /// for an id no file has.
     @Test
     void everyJsonTypeInMetaFieldsFindsWithoutThrowing() throws IOException {
         Path projects = tmp.resolve("projects");
@@ -86,7 +93,8 @@ class SubagentFilesProbeTest {
         assertThatCode(() -> SubagentFiles.finished(dir.resolve("agent-empty.meta.json"), json)).doesNotThrowAnyException();
     }
 
-    /** A number toolUseId matches a string id of the same digits: type confusion, recorded. */
+    /// A meta file with the number `7` as `toolUseId` is found for the id `"7"`, and an object `description` reads as empty;
+    /// this type confusion is recorded, not endorsed.
     @Test
     void aNumericToolUseIdMatchesItsDigits() throws IOException {
         Path projects = tmp.resolve("projects");
@@ -96,6 +104,7 @@ class SubagentFilesProbeTest {
         assertThat(f.description()).isEmpty();
     }
 
+    /// A user prompt, a text with a tool call and its result render identically with CRLF and with LF line ends.
     @Test
     void crlfLinesRenderAsLf() throws IOException {
         Path lf = tmp.resolve("lf.jsonl");
@@ -110,7 +119,8 @@ class SubagentFilesProbeTest {
                 .isEqualTo(SubagentFiles.render(lf, SubagentFiles.SCAN_BYTES, json));
     }
 
-    /** The tail cut inside a three-byte character: no replacement character, the following lines kept. */
+    /// A cut that falls inside a three-byte character keeps the following lines, `LAST` among them, with no `�` in the
+    /// output.
     @Test
     void aMultiByteCharacterSplitAtTheCutLeavesNoReplacementCharacter() throws IOException {
         long limit = 1000;
@@ -127,6 +137,8 @@ class SubagentFilesProbeTest {
         assertThat(md).contains("LAST").doesNotContain("�");
     }
 
+    /// Files of 4 095 and 4 096 bytes rendered with a 4 096-byte limit have no notice and keep `FIRST`; at 4 097 bytes the
+    /// output starts with the notice, drops `FIRST` and keeps `LAST`.
     @Test
     void aFileExactlyAtTheLimitIsReadWhole() throws IOException {
         for (int delta : new int[]{-1, 0}) {
@@ -138,7 +150,8 @@ class SubagentFilesProbeTest {
         assertThat(SubagentFiles.render(over, 4096, json)).startsWith("_The conversation is longer than").doesNotContain("FIRST").contains("LAST");
     }
 
-    /** The cut lands exactly at the start of a line: that whole line is the first whole line, and is shown. */
+    /// A cut landing exactly at the start of the second line drops the first and shows the second and third whole, under the
+    /// notice.
     @Test
     void aCutAtALineStartKeepsThatLine() throws IOException {
         Path f = tmp.resolve("boundary.jsonl");
@@ -154,7 +167,8 @@ class SubagentFilesProbeTest {
         assertThat(md).as("the whole line that starts exactly at the cut").contains("SECOND");
     }
 
-    /** One line longer than the limit at the end: the notice says the end is shown, and nothing is. Recorded. */
+    /// With a 5 000-character last line and a 4 096-byte limit, the output is the task prompt and the notice, with none of
+    /// the long line; this is recorded as the current behaviour.
     @Test
     void aLastLineLongerThanTheLimitShowsOnlyTheNotice() throws IOException {
         Path f = tmp.resolve("oneline.jsonl");

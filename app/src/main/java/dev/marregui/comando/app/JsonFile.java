@@ -4,12 +4,11 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import dev.marregui.comando.core.model.AtomicFiles;
 
 import java.io.IOException;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Instant;
 
 /**
@@ -68,16 +67,6 @@ final class JsonFile<T> {
         if (!Files.isDirectory(path.getParent())) {
             Files.createDirectories(path.getParent()); // on a folder that exists it throws and catches inside the JDK
         }
-        Path tmp = Files.createTempFile(path.getParent(), path.getFileName().toString(), ".tmp");
-        try {
-            JSON.writeValue(tmp.toFile(), value);
-            try {
-                Files.move(tmp, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException e) {
-                Files.move(tmp, path, StandardCopyOption.REPLACE_EXISTING);
-            }
-        } finally {
-            Files.deleteIfExists(tmp);
-        }
+        AtomicFiles.write(path, JSON.writeValueAsBytes(value));
     }
 }

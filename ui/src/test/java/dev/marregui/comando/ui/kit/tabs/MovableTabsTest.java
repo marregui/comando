@@ -12,8 +12,15 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// [MovableTabs] lets a tab be dragged to another place and reports the move.
+/// - A tab dropped in a gap reports its target counted after it leaves its place.
+/// - The drop line shows during a drag and goes with the release.
+/// - A tab dropped next to itself does not move.
+/// - A press that moves less than the slop is no drag.
 class MovableTabsTest {
 
+    /// The first of three tabs dropped after the last reports (0, 2), the last dropped first reports (2, 0), and the
+    /// middle dropped in the gap right after it reports nothing; the gap resets to -1 on release.
     @Test
     void aTabDraggedIntoAGapReportsWhereItLandsCountedAfterItLeavesItsPlace() throws Exception {
         List<int[]> moves = new CopyOnWriteArrayList<>();
@@ -34,6 +41,7 @@ class MovableTabsTest {
         assertThat(moves).as("a tab dropped next to itself stays").isEmpty();
     }
 
+    /// A 3 px drag after a press shows no gap and reports no move.
     @Test
     void aPressThatMovesLessThanTheSlopIsNoDrag() throws Exception {
         List<int[]> moves = new CopyOnWriteArrayList<>();
