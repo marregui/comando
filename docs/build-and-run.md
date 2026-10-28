@@ -35,7 +35,7 @@ who builds from source; installing a release is in `INSTALL.md` at the top of th
 | `./gradlew :app:appImage` | the application as a folder with its own runtime, in `app/build/app-image`: `comando.app` on macOS, `comando/` elsewhere |
 | `./gradlew test -PkeychainTest=true` | the tests, plus the one that writes and deletes one item in the login keychain |
 | `./gradlew :app:uiTest` | the tests that need a real window ([§2.1](#21-the-window-tests)); needs a display (`xvfb-run` on Linux) |
-| `./gradlew :ui:transcriptGate` | measures the transcript's frame times; fails when a 99th percentile exceeds 16 ms ([UI §4.3](ui.md#43-the-frame-time-gate)) |
+| `./gradlew :ui:transcriptGate` | measures the transcript's frame times; fails when a 99th percentile exceeds 16 ms (exit 1) or when the JVM does not end by itself within 10 s of the measurement (exit 2) ([UI §4.3](ui.md#43-the-frame-time-gate)) |
 | `./gradlew :app:snapshot -Pout=<dir>` | drives comando on a scratch data root and paints the window to PNG files. `-Plive=true` adds a real Claude session (haiku) whose approvals are allowed; `-Phistory=<conversation id>` loads a stored conversation; `-Ptools=true` adds a Gradle run in a build of its own. A relative `<dir>` is under `app/` |
 | `./gradlew :app:docImages -Pout=<dir>` | paints the pictures of the README and `docs/` at twice their size (`hero`, `approvals`, `sql`, `changes`, `diff`): a scratch data root and home, the embedded QuestDB started from the menu, one real Claude turn (haiku) that queries and plots, fixed plan usage in the status bar; `-Pout=$PWD/docs/images` replaces them |
 

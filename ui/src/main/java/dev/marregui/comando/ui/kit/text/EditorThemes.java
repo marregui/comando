@@ -72,7 +72,11 @@ final class EditorThemes {
 
     private static Theme make(ContentPalette p) {
         Color ground = dev.marregui.comando.ui.kit.theme.Theme.ground();
-        Theme t = new Theme(new RSyntaxTextArea());
+        // the theme's only constructor reads an area; this one is never shown, and its caret would otherwise keep
+        // blinking on a Swing timer that never stops, which keeps AWT, and a JVM with no window, alive
+        RSyntaxTextArea stray = new RSyntaxTextArea();
+        stray.getCaret().setBlinkRate(0);
+        Theme t = new Theme(stray);
         t.baseFont = RSyntaxTextArea.getDefaultFont();
         t.bgColor = ground;
         t.caretColor = p.caret;
