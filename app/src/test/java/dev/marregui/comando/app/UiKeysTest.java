@@ -39,6 +39,8 @@ import org.awaitility.Awaitility;
 import org.awaitility.core.ConditionTimeoutException;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
+import org.fife.ui.rtextarea.IconRowHeader;
+import org.fife.ui.rtextarea.RTextScrollPane;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -61,6 +63,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.text.BadLocationException;
 import javax.swing.JToolTip;
 import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
@@ -426,6 +429,54 @@ class UiKeysTest {
         JediTermWidget term = await("a terminal", () -> find(w.frame(), JediTermWidget.class).orElse(null), WAIT_MILLIS);
         await("the line reached the shell", () -> screen(term).contains(marker), WAIT_MILLIS);
         assertThat(w.intents().stream().filter(i -> i instanceof Intent.RunText).count()).as("no second run").isEqualTo(runs);
+    }
+
+    /// A click on a block's mark in the gutter runs as ⌘⏎ does: the selection when it lies inside that block, the whole
+    /// block when the selection is in another block; one `RunText` per click, none for a line without a mark.
+    @Test
+    void aClickOnABlocksMarkRunsTheSelectionInsideItOrTheWholeBlock() throws Exception {
+        Window w = open("mac");
+        RSyntaxTextArea editor = focusEditor(w);
+        String first = "First prompt alpha-mark.";
+        String second = "Second prompt beta-mark.";
+        SwingUtilities.invokeAndWait(() -> {
+            editor.setText(first + "\n\n" + second + "\n");
+            int at = editor.getText().indexOf("beta-mark");
+            editor.select(at, at + "beta-mark".length());
+        });
+        Component row = onEdt(() -> find(SwingUtilities.getAncestorOfClass(RTextScrollPane.class, editor), IconRowHeader.class).orElseThrow());
+        long before = runs(w);
+
+        clickMark(row, editor, 2);
+        await("the selection inside the block ran", () -> w.intents().stream().anyMatch(i -> i instanceof Intent.RunText r && r.text().equals("beta-mark")), WAIT_MILLIS);
+
+        SwingUtilities.invokeAndWait(() -> editor.select(0, 5));
+        clickMark(row, editor, 2);
+        await("the whole block ran", () -> w.intents().stream().anyMatch(i -> i instanceof Intent.RunText r && r.text().equals(second)), WAIT_MILLIS);
+
+        clickMark(row, editor, 1); // the blank line between the blocks has no mark
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(runs(w) - before).as("one run per click on a mark").isEqualTo(2);
+        assertThat(onEdt(editor::getSelectedText)).as("a selection elsewhere stays").isEqualTo("First");
+    }
+
+    private static long runs(Window w) {
+        return w.intents().stream().filter(i -> i instanceof Intent.RunText).count();
+    }
+
+    /// A left click in the gutter's icon row on {@code line}.
+    private static void clickMark(Component row, RSyntaxTextArea editor, int line) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                int y = (int) editor.modelToView2D(editor.getLineStartOffset(line)).getCenterY();
+                row.dispatchEvent(new MouseEvent(row, MouseEvent.MOUSE_PRESSED, System.currentTimeMillis(), InputEvent.BUTTON1_DOWN_MASK, 4, y, 1, false,
+                        MouseEvent.BUTTON1));
+                row.dispatchEvent(new MouseEvent(row, MouseEvent.MOUSE_RELEASED, System.currentTimeMillis(), 0, 4, y, 1, false, MouseEvent.BUTTON1));
+                row.dispatchEvent(new MouseEvent(row, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, 4, y, 1, false, MouseEvent.BUTTON1));
+            } catch (BadLocationException e) {
+                throw new IllegalStateException(e);
+            }
+        });
     }
 
     // ---- the shortcuts table

@@ -189,6 +189,8 @@ select sym, count(), avg(price) from trades;
 What ran is the **block under the caret**: the lines between two empty lines. If you select text, the selection runs
 instead. On an empty line, the nearest block above runs. The block that ran is tinted until your next edit; nothing is
 selected and the caret stays where it was, so you can keep typing. A block of `--` comments alone has nothing to run.
+A click on a block's icon in the gutter runs that block as **⌘⏎** would: the selection when it lies inside the block,
+otherwise the whole block; the caret and a selection elsewhere stay.
 
 Three keys decide where text goes:
 

@@ -156,7 +156,7 @@ Panels build the rest:
 
 | Part | Is |
 |---|---|
-| `CommandEditor` | RSyntaxTextArea with per-block gutter icons. Each block is coloured as what it is, SQL only while the panel's database is open, with SQL completion from the bound schema while it is open. A session's insert is one undo step and never moves the caret |
+| `CommandEditor` | RSyntaxTextArea with per-block gutter icons; a click on one runs the selection inside its block, or the block. Each block is coloured as what it is, SQL only while the panel's database is open, with SQL completion from the bound schema while it is open. A session's insert is one undo step and never moves the caret |
 | the Results grid | the panel's last result |
 | `TranscriptWidget` | the Session tab ([§4](#4-the-transcript)) |
 | `TerminalWidget` | JediTerm on pty4j |

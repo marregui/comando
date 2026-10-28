@@ -217,6 +217,11 @@ public final class EditorPanel extends JPanel {
         add(body, BorderLayout.CENTER);
 
         run.addActionListener(e -> runSelection(Target.AUTO));
+        // a block's gutter mark runs that block, or the selection inside it, where the mark says it goes
+        editor.onMarkClicked(line -> {
+            run(editor.runText(line), Target.AUTO);
+            editor.requestFocus();
+        });
         stop.addActionListener(e -> intents.dispatch(new Intent.CancelRun(this.panel.id())));
         clear.addActionListener(e -> {
             editor.clear();
@@ -693,7 +698,10 @@ public final class EditorPanel extends JPanel {
     }
 
     public void runSelection(Target target) {
-        String text = editor.runText();
+        run(editor.runText(), target);
+    }
+
+    private void run(String text, Target target) {
         if (!text.isBlank()) {
             intents.dispatch(new Intent.RunText(panel.id(), text, target));
         }

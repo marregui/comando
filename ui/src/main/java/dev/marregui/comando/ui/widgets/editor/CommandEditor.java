@@ -17,6 +17,8 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SquiggleUnderlineHighlightPainter;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rtextarea.Gutter;
+import org.fife.ui.rtextarea.IconRowEvent;
+import org.fife.ui.rtextarea.IconRowListener;
 import org.fife.ui.rtextarea.RTextScrollPane;
 
 import javax.swing.JComponent;
@@ -30,14 +32,16 @@ import javax.swing.text.Highlighter;
 import javax.swing.text.Position;
 import java.awt.Color;
 import java.awt.Rectangle;
+import java.awt.event.MouseEvent;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 
 /**
- * The command editor: SQL and prompts in one document. The gutter marks each block with where it goes
- * when run, a database or Claude, before it runs. A block that ran is tinted until the next edit, and the
- * caret stays where it was, so the next keystroke never replaces what ran and nothing written into the editor
- * from outside lands on it. A session's write is one undo step of its own, keeps the user's caret and selection,
- * and never joins the line the user is typing.
+ * The command editor: SQL and prompts in one document. The gutter marks each block with where it goes when run, a
+ * database or Claude, before it runs; a click on a mark runs the selection inside that block, or the whole block. A
+ * block that ran is tinted until the next edit, and the caret stays where it was, so the next keystroke never replaces
+ * what ran and nothing written into the editor from outside lands on it. A session's write is one undo step of its own,
+ * keeps the user's caret and selection, and never joins the line the user is typing.
  */
 public final class CommandEditor implements Searchable, Zoomable {
 
@@ -71,6 +75,8 @@ public final class CommandEditor implements Searchable, Zoomable {
     private Consumer<String> onChange = t -> {
     };
     private boolean silent;
+    private IntConsumer onMark = line -> {
+    };
     private final SqlCompletion completion = new SqlCompletion();
     private int marked;
 
@@ -85,6 +91,24 @@ public final class CommandEditor implements Searchable, Zoomable {
         completion.install(area, this::caretInSql);
         area.addCaretListener(e -> occurrences.request());
         scroll.setIconRowHeaderEnabled(true);
+        scroll.getGutter().addIconRowListener(new IconRowListener() {
+            @Override
+            public void bookmarkAdded(IconRowEvent e) {
+                // no bookmarks: the icon row holds the blocks' marks only
+            }
+
+            @Override
+            public void bookmarkRemoved(IconRowEvent e) {
+                // no bookmarks
+            }
+
+            @Override
+            public void mouseClicked(IconRowEvent e, MouseEvent m) {
+                if (SwingUtilities.isLeftMouseButton(m) && m.getClickCount() == 1 && markedBlock(e.getLine()) != null) {
+                    onMark.accept(e.getLine());
+                }
+            }
+        });
         area.getDocument().addDocumentListener(new DocumentListener() {
             @Override
             public void insertUpdate(DocumentEvent e) {
@@ -228,17 +252,60 @@ public final class CommandEditor implements Searchable, Zoomable {
         String selected = area.getSelectedText();
         clearErrorMark();
         if (selected != null && !selected.isBlank()) {
-            lastRunStart = area.getSelectionStart();
-            lastRunText = selected;
-            trackRanEnd(blockEnd(area.getText(), area.getSelectionEnd()));
-            scrollHome();
-            return selected;
+            return runSelected(selected);
         }
         String text = area.getText();
         Blocks.Block b = Blocks.at(text, area.getCaretPosition());
+        return b == null ? "" : runBlock(text, b);
+    }
+
+    /**
+     * What a click on the mark of the block starting at {@code line} runs: the selection when it lies inside that
+     * block, otherwise the whole block, as {@link #runText()} does for the block under the caret. The caret and a
+     * selection elsewhere stay. Empty when no marked block starts there.
+     */
+    public String runText(int line) {
+        Blocks.Block b = markedBlock(line);
         if (b == null) {
             return "";
         }
+        clearErrorMark();
+        String selected = area.getSelectedText();
+        if (selected != null && !selected.isBlank() && area.getSelectionStart() >= b.start() && area.getSelectionEnd() <= b.end()) {
+            return runSelected(selected);
+        }
+        return runBlock(area.getText(), b);
+    }
+
+    /** {@code run} gets the first line of a block whose gutter mark was clicked. */
+    public void onMarkClicked(IntConsumer run) {
+        onMark = run;
+    }
+
+    /** The block starting at {@code line} that the gutter marks with a target; null when none. */
+    private Blocks.Block markedBlock(int line) {
+        if (!sqlStyle()) {
+            return null;
+        }
+        String text = area.getText();
+        for (Blocks.Block b : Blocks.all(text)) {
+            if (b.firstLine() == line) {
+                Classifier.Classification c = Classifier.classify(b.text(text));
+                return c.target() == Target.SQL && c.text().isEmpty() ? null : b;
+            }
+        }
+        return null;
+    }
+
+    private String runSelected(String selected) {
+        lastRunStart = area.getSelectionStart();
+        lastRunText = selected;
+        trackRanEnd(blockEnd(area.getText(), area.getSelectionEnd()));
+        scrollHome();
+        return selected;
+    }
+
+    private String runBlock(String text, Blocks.Block b) {
         markRan(b.start(), b.end());
         trackRanEnd(b.end());
         lastRunStart = b.start();
@@ -509,7 +576,8 @@ public final class CommandEditor implements Searchable, Zoomable {
             Target t = c.target();
             try {
                 gutter.addLineTrackingIcon(b.firstLine(), Icons.get(t == Target.SQL ? "database" : "claude", 14),
-                        t == Target.SQL ? "Runs on the panel's connection" : "Goes to the panel's session as a prompt");
+                        t == Target.SQL ? "Runs on the panel's connection; click to run the selection in it, or the whole block"
+                                : "Goes to the panel's session as a prompt; click to send the selection in it, or the whole block");
                 marked++;
             } catch (BadLocationException e) {
                 return; // the text changed under us; the next refresh redraws

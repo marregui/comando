@@ -51,7 +51,7 @@ flowchart LR
 ```
 
 A block is a run of lines between blank lines. comando decides where a block goes and marks it in the gutter before
-it runs: ⌘⏎ lets comando decide, ⌘⇧⏎ sends it to Claude, ⌥⏎ runs it as SQL.
+it runs: ⌘⏎ or a click on the mark lets comando decide, ⌘⇧⏎ sends it to Claude, ⌥⏎ runs it as SQL.
 
 ## What it does
 

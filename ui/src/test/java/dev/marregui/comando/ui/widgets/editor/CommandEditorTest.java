@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [CommandEditor] never lets a run or a session's write take the user's text or caret.
 /// - runs tint the block that ran and select nothing; an error position underlines its token until an edit
+/// - a click on a block's gutter mark runs the selection inside that block, otherwise the whole block
 /// - a session's append or insert keeps the caret and selection, forward or backward, and leaves the user's line alone
 /// - an insert lands as a block after the block that ran, or appends when nothing ran
 /// - a session's write, a replace, a clear and a reload are each one undo step
@@ -48,6 +49,27 @@ class CommandEditorTest {
             assertThat(e.ranStart()).isEqualTo(TEXT.indexOf("Explain"));
             e.area().insert("x", 0);
             assertThat(e.ranStart()).as("the next edit clears the tint").isEqualTo(-1);
+            e.dispose();
+        });
+    }
+
+    /// A click on a block's mark runs the selection when it lies inside that block and the whole block otherwise (a
+    /// selection in another block, or none), keeping the caret; a line with no mark runs nothing.
+    @Test
+    void aMarkRunsTheSelectionInsideItsBlockOrTheWholeBlock() {
+        onEdt(() -> {
+            CommandEditor e = new CommandEditor();
+            e.load(TEXT);
+            int explain = TEXT.indexOf("Explain");
+            e.area().select(explain + 8, explain + 17);
+            assertThat(e.runText(2)).as("the selection inside the clicked block").isEqualTo("the query");
+            e.area().select(0, 6);
+            assertThat(e.runText(2)).as("a selection in another block").isEqualTo("Explain the query above.");
+            assertThat(e.area().getSelectedText()).as("that selection stays").isEqualTo("SELECT");
+            e.area().setCaretPosition(3);
+            assertThat(e.runText(0)).as("no selection: the whole block").isEqualTo("SELECT 1;");
+            assertThat(e.area().getCaretPosition()).isEqualTo(3);
+            assertThat(e.runText(1)).as("the blank line has no mark").isEmpty();
             e.dispose();
         });
     }
