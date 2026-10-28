@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.KitJobs;
 import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
@@ -49,6 +50,8 @@ import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -78,6 +81,10 @@ import java.util.function.Consumer;
  * compares it with {@code HEAD}. Every folder lies inside Claude Code's folder: the tab is no browser of code
  * repositories.
  *
+ * <p>With a kit, a Jobs row follows the kit's folders, under their header: the kit's scheduled jobs at a glance (record
+ * 117), its detail what runs next, its marks a pending change (the dot) and a failed last run (the name in red); a double
+ * click or its menu opens the window that edits them, and its menu applies a change the scheduler has not taken yet.
+ *
  * <p>The tab has no buttons, and a file's menu opens it, rendered or as text; the folders are configured in {@code
  * folders.json}, through the windows the tab's own menu opens. In a folder configured as deletable, the menu also moves the selected files and subfolders to the
  * Trash, after asking; that is the only thing the tab writes. The filter under the tree finds files and folders by name across every folder:
@@ -97,6 +104,13 @@ final class FilesTab {
     static final String CHANGED_FILE_TIP = "Differs from the last commit; right-click to compare with HEAD";
     /** Where a folder's top-level row is in a node's path: under the tree's hidden root. */
     static final int ROW = 1;
+    /** The kit's jobs' row: its name, the link that tells it from a folder's, the group it sits in, its icon. */
+    static final String JOBS = "Jobs";
+    static final String JOBS_LINK = "comando-kit-jobs:";
+    static final String JOBS_GROUP = "Kit";
+    static final String JOBS_ICON = "folder-jobs";
+    static final String CONFIGURE_JOBS = "Configure kit jobs";
+    static final String APPLY_JOBS = "Apply pending changes";
 
     /** The entry an unread folder shows until its tree arrives; it also makes the row openable. */
     static final String READING = "reading…";
@@ -155,6 +169,13 @@ final class FilesTab {
     /** True while code, not the user, expands rows: a restored row neither opens its index nor changes what is watched. */
     private boolean restoring;
     private boolean built;
+    /** The kit's jobs as last read; {@link KitJobs#NONE} hides their row. */
+    private KitJobs jobs = KitJobs.NONE;
+    /** Opens the kit jobs' window; brings the scheduler to the manifest. */
+    private Runnable configureJobs = () -> {
+    };
+    private Runnable applyJobs = () -> {
+    };
     /** Adds the window's own items to a folder row's menu: the brain's backup. */
     private BiConsumer<FolderRoot, JPopupMenu> folderMenu = (f, m) -> {
     };
@@ -179,7 +200,7 @@ final class FilesTab {
             // a repository's top folder: its own icon with git's mark on it, in git's colours
             t.nodeIcons(n -> repoAt(n).map(r -> (Icon) new OverlayIcon(icon(n.getUserObject() instanceof ViewSpec.TreeNode node
                     ? rowIcon(node).orElse("folder") : "folder"), Icons.get(Icons.GIT_BADGE))).orElse(null));
-            t.tips(n -> repoAt(n).map(FilesTab::repoTip).or(() -> rowTip(n))
+            t.tips(n -> isJobs(n) ? jobsTip(jobs) : repoAt(n).map(FilesTab::repoTip).or(() -> rowTip(n))
                     .orElse(holdsNew(n) ? NEW_TIP : isChanged(n) ? CHANGED_FILE_TIP : holdsChanged(n) ? CHANGED_TIP : null));
             t.trailing(this::marks);
             // one click opens or closes a folder; a double click on a folder's row shows its changes instead
@@ -190,7 +211,7 @@ final class FilesTab {
                 public void mouseClicked(MouseEvent e) {
                     if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
                         TreePath p = t.tree().getPathForLocation(e.getX(), e.getY());
-                        if (p != null && isRow(p.getPath())) {
+                        if (p != null && isRow(p.getPath()) && !isJobs((DefaultMutableTreeNode) p.getLastPathComponent())) {
                             t.undoClickToggle(p);
                             openChanges(t, p);
                         }
@@ -424,6 +445,9 @@ final class FilesTab {
      * arrow and the dot, not by its colour.
      */
     Color colorOf(DefaultMutableTreeNode n) {
+        if (isJobs(n)) {
+            return jobs.failed().isEmpty() && jobs.error().isEmpty() ? null : Theme.DANGER;
+        }
         if (!(n.getUserObject() instanceof ViewSpec.TreeNode node) || changes.repos().isEmpty() || !node.link().startsWith(SourceLinks.SCHEME)) {
             return null;
         }
@@ -467,7 +491,7 @@ final class FilesTab {
      * empty for a file, a placeholder or a note.
      */
     private Optional<Path> folderPath(DefaultMutableTreeNode n) {
-        if (!(n.getUserObject() instanceof ViewSpec.TreeNode node) || node.link().startsWith(SourceLinks.SCHEME)) {
+        if (!(n.getUserObject() instanceof ViewSpec.TreeNode node) || node.link().startsWith(SourceLinks.SCHEME) || isJobs(node)) {
             return Optional.empty();
         }
         TreeNode[] path = n.getPath();
@@ -528,6 +552,9 @@ final class FilesTab {
      * (record 97); the dot on the way down to a new file not opened yet; both on a node that has both.
      */
     private Icon marks(DefaultMutableTreeNode n) {
+        if (isJobs(n)) {
+            return jobs.pending() ? Icons.get(NEW_ICON) : null;
+        }
         boolean changed = repoAt(n).filter(r -> !r.changes().isEmpty()).isPresent()
                 || isRow(n) && folderPath(n).filter(changes::holdsChanges).isPresent()
                 || isChanged(n) || holdsChanged(n);
@@ -624,6 +651,15 @@ final class FilesTab {
                     : t.children().isEmpty() ? List.of(placeholder(EMPTY)) : t.children();
             rows.add(new ViewSpec.TreeNode(f.name(), rowDetail(f), children));
         }
+        if (jobs.read()) {
+            int at = rows.size();
+            for (int i = 0; i < folders.size(); i++) {
+                if (folders.get(i).group().equals(JOBS_GROUP)) {
+                    at = i + 1;
+                }
+            }
+            rows.add(at, new ViewSpec.TreeNode(JOBS, jobsDetail(jobs), JOBS_LINK, List.of()));
+        }
         ViewSpec.TreeNode root = new ViewSpec.TreeNode("Files", "",
                 rows.isEmpty() ? List.of(placeholder("No folders yet: right-click the Files tab to add some")) : rows);
         restoring = true;
@@ -650,6 +686,9 @@ final class FilesTab {
      * folder icon.
      */
     Optional<String> rowIcon(ViewSpec.TreeNode n) {
+        if (isJobs(n)) {
+            return Optional.of(JOBS_ICON);
+        }
         for (FolderRoot f : folders) {
             if (f.name().equals(n.label()) && rowDetail(f).equals(n.detail())) {
                 return Optional.of(rowIconName(f));
@@ -674,14 +713,19 @@ final class FilesTab {
         if (!isRow(n) || !(n.getUserObject() instanceof ViewSpec.TreeNode node) || !(n.getParent() instanceof DefaultMutableTreeNode root)) {
             return null;
         }
-        String group = folder(node.label()).map(FolderRoot::group).orElse("");
+        String group = groupOf(node);
         if (group.isEmpty()) {
             return null;
         }
         int i = root.getIndex(n);
         String before = i <= 0 || !(((DefaultMutableTreeNode) root.getChildAt(i - 1)).getUserObject() instanceof ViewSpec.TreeNode prev)
-                ? "" : folder(prev.label()).map(FolderRoot::group).orElse("");
+                ? "" : groupOf(prev);
         return group.equals(before) ? null : group;
+    }
+
+    /** The group a top-level row sits in: its folder's, the kit's for the jobs' row. */
+    private String groupOf(ViewSpec.TreeNode row) {
+        return isJobs(row) ? JOBS_GROUP : folder(row.label()).map(FolderRoot::group).orElse("");
     }
 
     /** {@code folder} for the plain icon, else {@code folder-<icon>}. */
@@ -724,7 +768,7 @@ final class FilesTab {
         DefaultMutableTreeNode root = (DefaultMutableTreeNode) tree.tree().getModel().getRoot();
         for (int i = 0; i < root.getChildCount(); i++) {
             DefaultMutableTreeNode c = (DefaultMutableTreeNode) root.getChildAt(i);
-            if (c.getUserObject() instanceof ViewSpec.TreeNode n && n.label().equals(name)) {
+            if (c.getUserObject() instanceof ViewSpec.TreeNode n && n.label().equals(name) && !isJobs(n)) {
                 return new TreePath(root).pathByAddingChild(c);
             }
         }
@@ -763,7 +807,9 @@ final class FilesTab {
     }
 
     private void activate(ViewSpec.TreeNode n) {
-        if (n.link().startsWith(SourceLinks.SCHEME)) {
+        if (isJobs(n)) {
+            configureJobs.run();
+        } else if (n.link().startsWith(SourceLinks.SCHEME)) {
             open.accept(Path.of(SourceLinks.path(n.link())));
         }
     }
@@ -784,7 +830,12 @@ final class FilesTab {
     JPopupMenu menuFor(ViewSpec.TreeNode n) {
         JPopupMenu menu = new JPopupMenu();
         TreePath at = shown().tree().getSelectionPath();
-        if (n.link().startsWith(SourceLinks.SCHEME)) {
+        if (isJobs(n)) {
+            menu.add(item(CONFIGURE_JOBS, "kit", configureJobs));
+            JMenuItem apply = item(APPLY_JOBS, "refresh", applyJobs);
+            apply.setEnabled(jobs.pending() && jobs.running().isEmpty());
+            menu.add(apply);
+        } else if (n.link().startsWith(SourceLinks.SCHEME)) {
             Path file = Path.of(SourceLinks.path(n.link()));
             menu.add(item("Open in a panel", "text", () -> open.accept(file)));
             menu.add(item("Edit in a panel", "edit", () -> editFile.accept(file)));
@@ -801,6 +852,82 @@ final class FilesTab {
             folderMenu.accept(f, menu);
         }
         return menu;
+    }
+
+    /**
+     * The kit's jobs as read: their row shows, follows the kit's folders, and says what runs next, what failed and what
+     * waits; {@link KitJobs#NONE} takes it away.
+     */
+    void showJobs(KitJobs now) {
+        if (now.equals(jobs)) {
+            return;
+        }
+        boolean rows = now.read() != jobs.read() || !jobsDetail(now).equals(jobsDetail(jobs));
+        jobs = now;
+        if (rows) {
+            rebuild();
+        }
+        tree.rowsChanged();
+    }
+
+    KitJobs jobs() {
+        return jobs;
+    }
+
+    /** What the jobs' row and its menu do: open the window that edits the jobs; apply what the scheduler has not taken. */
+    void onJobs(Runnable configure, Runnable apply) {
+        configureJobs = configure;
+        applyJobs = apply;
+    }
+
+    static boolean isJobs(ViewSpec.TreeNode n) {
+        return JOBS_LINK.equals(n.link());
+    }
+
+    private static boolean isJobs(DefaultMutableTreeNode n) {
+        return n.getUserObject() instanceof ViewSpec.TreeNode node && isJobs(node);
+    }
+
+    /** The jobs' row's detail: how many, then what runs now, or how many are paused and what runs next; or that they cannot be read. */
+    static String jobsDetail(KitJobs j) {
+        if (!j.error().isEmpty()) {
+            return "cannot be read";
+        }
+        String count = j.jobs().size() == 1 ? "1 job" : j.jobs().size() + " jobs";
+        if (!j.running().isEmpty()) {
+            return count + " · running " + String.join(", ", j.running());
+        }
+        String paused = j.paused().isEmpty() ? "" : " · " + j.paused().size() + " paused";
+        return j.nextUp().map(e -> count + paused + " · next " + day(e.next())).orElse(count + paused);
+    }
+
+    /** One line on the jobs' row, the most pressing first: unreadable, running, failed, pending, then what runs next. */
+    static String jobsTip(KitJobs j) {
+        String tip;
+        if (!j.error().isEmpty()) {
+            tip = "Kit jobs cannot be read: " + j.error();
+        } else if (!j.running().isEmpty()) {
+            tip = "Running now: " + String.join(", ", j.running());
+        } else if (!j.failed().isEmpty()) {
+            tip = "Last run failed: " + String.join(", ", j.failed()) + "; double-click to see the jobs";
+        } else if (j.pending()) {
+            tip = "The scheduler lags the manifest; right-click to apply pending changes";
+        } else {
+            tip = j.nextUp().map(e -> "Next: " + e.job().name() + " " + day(e.next()) + "; double-click to configure the jobs")
+                    .orElse("Double-click to configure the kit's scheduled jobs");
+        }
+        return Plain.text(Clip.keepStart(tip, 80));
+    }
+
+    /** {@code 2026-11-02T07:30+01:00} as {@code Mon 07:30}; as given when it is no such time. */
+    static String day(String iso) {
+        try {
+            OffsetDateTime t = OffsetDateTime.parse(iso);
+            String d = t.getDayOfWeek().name();
+            return d.charAt(0) + d.substring(1, 3).toLowerCase(Locale.ROOT) + String.format(Locale.ROOT, " %02d:%02d", t.getHour(), t.getMinute());
+        } catch (DateTimeParseException e) {
+            return iso;
+        }
     }
 
     /** What a folder row's menu gains from the window, after its own items. */

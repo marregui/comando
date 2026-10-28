@@ -21,8 +21,8 @@ The packages under `dev.marregui.comando.ui`, in layer order: a layer uses only 
 | `widget` | the contract: `Widget`, `WidgetContext`, `WidgetRegistry`; `capability` (`Searchable`, `Copyable`, `Exportable`, `Zoomable`, the find bar) |
 | `widgets` | one package per widget: `approval`, `changes`, `console`, `diff`, `editor`, `markdown`, `plot`, `table`, `terminal`, `text`, `transcript` (with `doc` and `render`), `tree` |
 | `panels` | the window's regions: `Workspace`, `EditorPanel`, `LowerPanel`, `SessionsSidebar` (its rows: `SessionRow`, `ConnectionRow`), `PanelsWithoutSession`, `FilesTab`, `SidePane`, `StatusBar`, `ResultsView`, `TerminalTabs`, `ViewTabs`, `TabCard` |
-| `dialogs` | `folders` (the Files tab's folders: `FoldersEditor`, `FoldersDialog`), `resource` (`ResourceDialog`, one dialog for connections and sessions), `sessions` (the import dialog, `StoredConversation`) |
-| `shell` | `ComandoUi` (the frame and the UI port), `WindowLayout`, `Menus`, `Keys`, `HelpActions`, `HelpFiles`, `KitActions`, `LivePlots`, `Notifier`, `OpenFiles`, `DiffWindow`; `ServerToggle` and `Setup`, implemented in `app` |
+| `dialogs` | `folders` (the Files tab's folders: `FoldersEditor`, `FoldersDialog`), `jobs` (the kit's scheduled jobs: `JobsEditor`, `JobsDialog`), `resource` (`ResourceDialog`, one dialog for connections and sessions), `sessions` (the import dialog, `StoredConversation`) |
+| `shell` | `ComandoUi` (the frame and the UI port), `WindowLayout`, `Menus`, `Keys`, `HelpActions`, `HelpFiles`, `KitActions`, `JobActions`, `LivePlots`, `Notifier`, `OpenFiles`, `DiffWindow`; `ServerToggle` and `Setup`, implemented in `app` |
 | (top) | `PanelTexts`: editor text between saves, implemented in `app` |
 
 `UiArchitectureTest` (ArchUnit) fails the build when a widget imports another widget, `panels`, `shell` or `dialogs`;
@@ -75,7 +75,7 @@ flowchart LR
 | `texts` | `PanelTexts`: each panel's file and text (`app`'s `Store`) |
 | `catalogue` | the stored conversations for the import dialog, as `StoredConversation` (`app` maps `claude`'s `SessionCatalogue`) |
 | `server` | `ServerToggle`: the embedded QuestDB (`app`'s `EmbeddedQuestDb`) |
-| `setup` | `Setup`: the kit root comando runs on, the kit's version and newer releases, the brain's backup (`app`'s `RootSetup`); `KitActions` shows the kit in the status bar, sends the upgrade to the session `kit` and offers to restart the sessions on the old kit once it reported; the folders' window has Use the kit's folders; a brain folder's row in the Files tab has Back up the brain |
+| `setup` | `Setup`: the kit root comando runs on, the kit's version and newer releases, the brain's backup (`app`'s `RootSetup`); `KitActions` shows the kit in the status bar, sends the upgrade to the session `kit` and offers to restart the sessions on the old kit once it reported; the folders' window has Use the kit's folders; a brain folder's row in the Files tab has Back up the brain; `JobActions` reads the kit's jobs through `Setup` at start, after each change and every minute while the Files tab shows, puts them on the Files tab's Jobs row, and opens the Kit jobs window (record 117) |
 | `version`, `home`, `logDir`, `onQuit` | for About, Help and the log; `home` also holds `opened-files`, the files opened once, which the Files tab no longer marks new; what quitting runs once the window has asked |
 
 `PanelTexts`, `ServerToggle` and `Setup` are declared here and implemented in `app`, and `StoredConversation` is a
@@ -116,9 +116,9 @@ Tests that drive components with Swing timers run on the EDT through the `OnEdt`
 | `ui` (top) | 2 | the layer rules (`UiArchitectureTest`), panel titles |
 | `kit.*` | 40 | the EDT and its watchdog, commands and keys, overlays, icons, themes, text rendering (`MarkdownHtml`, `HtmlPane`, `SplitDiff`, links), desktop integration, trees, tabs, git marks |
 | `widgets.*` | 28 | approvals, changes and the comparison, the command editor and SQL completion, plots, grids, terminals, the painted transcript and its layout |
-| `panels` | 15 | the workspace, editor panels and their headers, the sidebar and its rows, the Files tab, the status bar, the tab card |
-| `dialogs.*` | 3 | the folders window, the resource dialog, the import dialog |
-| `shell` | 14 | menus, keys, window layout, closing, help files, About, the kit's actions, live plots, notices |
+| `panels` | 19 | the workspace, editor panels and their headers, the sidebar and its rows, the Files tab and its Jobs row, the status bar, the tab card |
+| `dialogs.*` | 4 | the folders window, the kit jobs window, the resource dialog, the import dialog |
+| `shell` | 19 | menus, keys, window layout, closing, help files, About, the kit's actions and jobs, live plots, notices |
 
 The counts are those at the time of writing; `find ui/src/test/java -name '*Test.java'` lists them.
 

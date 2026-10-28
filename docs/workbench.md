@@ -172,7 +172,7 @@ underline and the selection: a band of its shade, the name in its highlight and 
 |---|---|
 | Sessions | New session…, Import stored conversations…, Sort: running first, then by name (on only after a drag ordered the rows by hand); New panel, Reopen closed panel |
 | Connections | New connection…; Start embedded QuestDB, Stop embedded QuestDB |
-| Files | Configure ~/.claude folders ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)) |
+| Files | Configure ~/.claude folders ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)); Configure kit jobs, with a kit ([§7.6](#76-scheduled-jobs)) |
 
 No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)): a row's menu edits,
 clones and removes it (`ResourceActions`). Removing something in use asks **Stop and remove**, **Disconnect and remove**
@@ -700,3 +700,22 @@ session named `kit`, working in the root and started on the user's own Claude Co
 replaces the root's files), and sends it: "Upgrade the kit at <root> to <tag>, following <root>/INSTALL.md section
 Upgrade. Report what changed." Once the session reports, comando offers to restart the sessions still running on the
 old kit.
+
+### 7.6 Scheduled jobs
+
+The kit's `comando-kit.json` lists its scheduled jobs (`jobs`); `install/kit.py` alone writes them to the platform's
+scheduler and runs them, and the kit's `INSTALL.md` §5 gives the fields and the verbs ([record
+117](adr/0117-kit-jobs-a-row-and-a-window.md)). The Files tab shows them as one **Jobs** row after the kit's folders,
+under the Kit header: its detail counts them and names what runs now or the next run (`5 jobs · 1 paused · next Thu 07:15`); the dot marks a change
+the scheduler has not taken (a job running when it was saved is left as it was), a red name a failed last run or jobs
+that cannot be read; its tooltip says the most pressing of these. comando reads them through `kit.py jobs --json` at
+start, after every change, and every minute while the Files tab shows.
+
+A double click, Enter, or **Configure kit jobs** (the row's menu, the Files tab's menu, the palette) reads the jobs again
+and opens the **Kit jobs** window on them (a list that cannot be read opens none, and a notice says why): the jobs on the left, +, −; the selected job's name, description, days of the week, time, program (a
+path inside the kit, picked with …), arguments, environment (`NAME=value` lines), log and Enabled on the right, checked
+as typed, and under them, read only, whether the scheduler holds it, its last run and its next. A job's row menu runs it
+now, through the scheduler, opens its log, or removes it. **Save** hands the whole list to `kit.py jobs set`, which checks every job,
+rewrites only the manifest's `jobs` block and brings the scheduler to it; the window closes when the list was taken and
+stays open with `kit.py`'s words when it was refused. **Apply pending changes**, in the row's menu while something is
+pending and nothing runs, reads the jobs again and hands them over. comando never writes the scheduler's files.

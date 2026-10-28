@@ -134,3 +134,4 @@ has the same shape:
 | [114](0114-help-menu-and-corner-buttons.md) | Help is the menu; the theme, the shell, the plots and the server are buttons | 2026-10-28 | Miguel and Claude | accepted |
 | [115](0115-the-lower-divider-per-panel.md) | The lower divider is each panel's | 2026-10-28 | Miguel and Claude | accepted |
 | [116](0116-one-connection-toggle.md) | A panel's connection is one toggle and its name, first of the tools | 2026-10-28 | Miguel and Claude | accepted |
+| [117](0117-kit-jobs-a-row-and-a-window.md) | The kit's scheduled jobs: a row in the Kit group and a window; the manifest is their record | 2026-10-28 | Miguel and Claude | accepted |

@@ -30,6 +30,7 @@ One package, `dev.marregui.comando.claude`.
 | `ClaudeVersion` | `claude --version` against the tested range, 2.1.296 inclusive to 2.2.0 exclusive: a warning outside it, not a refusal |
 | `GitBranch` | the working directory's branch from `.git/HEAD`, without running git |
 | `KitJson` | a kit's `comando-kit.json` (schema version 1) read into `core`'s `KitRoot.Manifest`, refused whole when it breaks the schema; `resolve()`, the root comando runs on |
+| `KitJobsCli` | the kit's scheduled jobs through the root's `install/kit.py` (record 117): `jobs --json` read into `core`'s `KitJobs`, the whole list handed to `jobs set` on standard input, `job run` for one; each call through `Processes`, at most 60 s |
 | `RootLaunch` | what every `claude` comando starts gets from the root: `CLAUDE_CONFIG_DIR=<root>` when the root is not `~/.claude`, and with a kit `--settings {"autoMemoryDirectory": "<root>/<brain>/MEMORY"}`, merged into a `--settings` already given; the session `kit` runs on the user's own `~/.claude`, so it can replace the kit |
 | `ClaudeSettings` | the executable (found in the usual install paths, since an app started from Finder has a short `PATH`), the MCP configuration folder, Claude Code's `projects` folder under the root, the appended instructions, the `RootLaunch` |
 | `UiInstructions` | the text appended to the system prompt that tells a session about comando's tools |
@@ -78,6 +79,7 @@ flowchart LR
 | `SessionCatalogue.scan(limit)` | the stored conversations, newest first | `app`, which maps each entry to `ui`'s `StoredConversation` for the import dialog |
 | `ClaudeVersion.check(executable, launch)` | a warning, or empty | `app` at start |
 | `KitJson.resolve`, `KitJson.read` | the root and its kit | `app`'s `AppConfig` |
+| `KitJobsCli` | the kit's jobs: read, save, run | `app`'s `RootSetup` |
 | `RootLaunch.on(root)` | the root's environment and settings for every `claude` | `app`'s wiring: `ClaudeSettings`, `ClaudeTopics`, `ClaudeVersion` |
 | `ClaudeSettings.findExecutable`, `UiInstructions.TEXT` | configuration | `app`'s `AppConfig` and wiring |
 
@@ -120,6 +122,7 @@ revokes its token.
 | `PlanUsageReaderTest`, `CodexUsageReaderTest`, `ClaudeTopicsTest` | reads against fake scripts written in a temporary folder; `ClaudeTopicsTest` also paces a stubbed read to check one read at a time, the replacement of a waiting ask and the close |
 | `ClaudeVersionTest` | the version parse, the half-open tested range, a missing executable |
 | `SessionCatalogueTest`, `GitBranchTest` | stored conversations newest first; the branch from any directory, a detached head |
+| `KitJobsCliTest` | a stand-in `kit.py` recording its arguments and standard input: the report read, the list handed over in the manifest's form, `job run`, and each failure read as a reason |
 | `KitJsonTest`, `RootLaunchTest` | a `comando-kit.json` as the kit's installer writes it, broken ones refused, roots resolved with it; the environment and `--settings` each `claude` gets, the upgrade session's exception, a real process's `CLAUDE_CONFIG_DIR` |
 
 ```

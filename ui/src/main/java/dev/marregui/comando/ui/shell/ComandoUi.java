@@ -190,6 +190,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private volatile TopicPort topics = TopicPort.NONE;
     private final HelpActions help;
     private final KitActions kit;
+    /** The kit's scheduled jobs: the Files tab's Jobs row and the window that edits them. */
+    private final JobActions jobs;
     private final ActionRegistry actions = new ActionRegistry();
     private final WidgetRegistry widgets = new WidgetRegistry();
     private final Coalescer render = new Coalescer(this::render);
@@ -280,6 +282,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         this.openedFiles = deps.home() == null ? OpenedFiles.inMemory() : OpenedFiles.load(deps.home().resolve("opened-files"));
         this.help = new HelpActions(deps, () -> frame, this::openFile, actions::run, () -> sidePaneHidden = false, actions::all);
         this.kit = new KitActions(deps, () -> frame);
+        this.jobs = new JobActions(deps, () -> frame, this::openFile);
     }
 
     /** Every command registered once {@link #start} has run, with its key on this desktop; the keyboard tests read them. */
@@ -433,6 +436,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         status.onKitMenu(this::kitMenu);
         kit.attach(status);
         sidebar.onFolderMenu(this::folderMenu);
+        jobs.attach(sidebar);
         findBar = new FindBar();
         top = new JPanel(new BorderLayout());
         top.add(workspace.component(), BorderLayout.CENTER);
@@ -1003,7 +1007,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         List<String> ids = switch (tab) {
             case SessionsSidebar.SESSIONS -> List.of("panel.new", "panel.reopen");
             case SessionsSidebar.CONNECTIONS -> deps.server() == null ? List.<String>of() : List.of("server.start", "server.stop");
-            case SessionsSidebar.FILES -> List.of("files.settings");
+            case SessionsSidebar.FILES -> List.of("files.settings", "files.jobs");
             default -> List.of();
         };
         for (String id : ids) {
@@ -1268,6 +1272,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // panel: tools that run in its project
         cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, shortcut | ALT), this::runGradle, () -> focusedSession().isPresent());
         cmd("files.settings", "Configure " + FoldersDialog.title(), null, this::editFolders);
+        cmd("files.jobs", "Configure kit jobs", null, jobs::configure, jobs::available);
         // the kit: its upgrade, by a session in its root, and the brain's backup; never on their own
         cmd("kit.upgrade", KitActions.UPGRADE, null, kit::upgrade, kit::canUpgrade);
         cmd("kit.backup", KitActions.BACK_UP, null, kit::backUp, kit::canBackUp);
@@ -1923,6 +1928,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 return;
             }
             teardown();
+            jobs.stop();
             if (diffWindow != null) {
                 diffWindow.dispose();
             }

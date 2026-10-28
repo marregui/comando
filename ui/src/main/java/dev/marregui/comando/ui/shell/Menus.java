@@ -54,6 +54,7 @@ final class Menus {
             // in no menu: the icon of the button or tab-menu item that does the same, shown in the palette
             Map.entry("panel.openSpec", "open-file"),
             Map.entry("files.settings", "folders"),
+            Map.entry("files.jobs", "sidebar/jobs"),
             Map.entry("kit.upgrade", "kit"),
             Map.entry("kit.backup", "export"),
             Map.entry("view.export", "export"),
@@ -148,7 +149,7 @@ final class Menus {
         put(a, "Connection", "server.start", "server.stop", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog");
         put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive", "run.plotStop");
         put(a, "Edit", "view.copy", "view.find", "view.findNext", "view.findPrevious", "edit.complete", "edit.completeAlt");
-        put(a, "Files", "files.settings");
+        put(a, "Files", "files.settings", "files.jobs");
         put(a, "Kit", "kit.upgrade", "kit.backup");
         put(a, "Window", "view.export", "view.sidebar", "view.sidePane", "view.files", "view.changes", "view.restoreLayout", "view.session", "view.approvals",
                 "view.terminal", "view.results", "view.nextTab", "view.previousTab", "view.closeLower", "view.zoomIn", "view.zoomOut",

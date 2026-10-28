@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.panels;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.KitJobs;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -504,6 +505,21 @@ public final class SessionsSidebar {
     /** What a folder row's menu in the Files tab gains from the window, after its own items. */
     public void onFolderMenu(BiConsumer<FolderRoot, JPopupMenu> extra) {
         files.onFolderMenu(extra);
+    }
+
+    /** The kit's jobs as read, on the Files tab's Jobs row; {@link KitJobs#NONE} takes the row away. */
+    public void showJobs(KitJobs jobs) {
+        files.showJobs(jobs);
+    }
+
+    /** What the Jobs row does: open the window that edits the jobs; apply what the scheduler has not taken yet. */
+    public void onJobs(Runnable configure, Runnable apply) {
+        files.onJobs(configure, apply);
+    }
+
+    /** The Files tab's body: a timer it owns ticks only while the tab shows. */
+    public JComponent filesComponent() {
+        return files.component();
     }
 
     /**

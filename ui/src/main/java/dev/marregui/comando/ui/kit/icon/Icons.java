@@ -63,6 +63,7 @@ public final class Icons {
             case "folder-skills" -> get("sidebar/skills");
             case "folder-plugin" -> get("sidebar/plugin");
             case "folder-work" -> get("sidebar/work");
+            case "folder-jobs" -> get("sidebar/jobs");
             case "folder-git" -> COMPOSED.computeIfAbsent("folder-git", k -> new OverlayIcon(get("sidebar/folder"), get(GIT_BADGE)));
             default -> get(name);
         };
