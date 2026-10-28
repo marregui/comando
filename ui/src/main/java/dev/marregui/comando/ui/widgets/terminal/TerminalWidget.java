@@ -15,6 +15,7 @@ import com.jediterm.terminal.ui.TerminalActionPresentation;
 import com.jediterm.terminal.ui.TerminalPanel;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import com.jediterm.terminal.ui.settings.SettingsProvider;
+import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Platform;
@@ -75,6 +76,9 @@ public final class TerminalWidget implements Zoomable, Searchable {
     /** Names of shells: a pty whose process carries another name has been replaced by a program ({@code exec ssh host}). */
     private static final Set<String> SHELLS = Set.of("sh", "bash", "zsh", "fish", "dash", "ksh", "mksh",
             "tcsh", "csh", "nu", "xonsh", "elvish", "pwsh", "login");
+    /** What runs a script named after it: a shell or a language's interpreter. */
+    private static final Set<String> INTERPRETERS = Set.of("sh", "bash", "zsh", "dash", "ksh", "fish", "python", "python3",
+            "perl", "ruby", "node");
 
     private final JPanel root = new JPanel(new BorderLayout());
     private final JPanel exitedBar = new JPanel(new BorderLayout(Theme.GAP, 0));
@@ -324,7 +328,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         return runningJob().isPresent();
     }
 
-    /** The foreground job's command name when the shell runs one, else empty; see {@link #hasRunningJob}. */
+    /** The foreground job as typed ("man cat") when the shell runs one, else empty; see {@link #hasRunningJob}. */
     public Optional<String> runningJob() {
         Pty p = pty;
         if (p == null || !p.process().isAlive()) {
@@ -348,7 +352,8 @@ public final class TerminalWidget implements Zoomable, Searchable {
      * <ul>
      *   <li>The pty's process no longer carries the name of a shell (the shell ran {@code exec ssh host}): that
      *       program's name.</li>
-     *   <li>The terminal's foreground process group differs from the shell's own: the job's command name.</li>
+     *   <li>The terminal's foreground process group differs from the shell's own: the job as typed, read from the
+     *       group's leader ({@link #jobName}); another process of the group when the leader is gone.</li>
      *   <li>Otherwise the shell is in front: empty.</li>
      * </ul>
      * With job control off ({@code set +m}, or a shell started without it) a job runs in the shell's own process
@@ -379,13 +384,34 @@ public final class TerminalWidget implements Zoomable, Searchable {
         if (pids.isEmpty()) {
             return Optional.of("a program");
         }
-        for (String line : ps.apply(List.of("-o", "pgid=,comm=", "-p", pids))) {
-            String[] parts = line.strip().split("\\s+", 2);
-            if (parts.length == 2 && parts[0].equals(foreground)) {
-                return Optional.of(programName(parts[1]));
+        String member = null;
+        for (String line : ps.apply(List.of("-o", "pid=,pgid=,args=", "-p", pids))) {
+            String[] parts = line.strip().split("\\s+", 3);
+            if (parts.length == 3 && parts[1].equals(foreground)) {
+                if (parts[0].equals(foreground)) {
+                    return Optional.of(jobName(parts[2]));
+                }
+                member = member == null ? parts[2] : member;
             }
         }
-        return Optional.of("a program");
+        return Optional.of(member == null ? "a program" : jobName(member));
+    }
+
+    /** Longest job description kept, so a question that names it stays one line. */
+    static final int JOB_CHARS = 60;
+
+    /**
+     * A job as the user typed it, from its process's arguments: the program's name and what follows. A script run by
+     * its interpreter is named by the script, as typed: {@code /bin/sh /usr/bin/man cat} gives {@code man cat}.
+     */
+    static String jobName(String args) {
+        String[] words = args.strip().split("\\s+");
+        int from = words.length > 1 && INTERPRETERS.contains(programName(words[0])) && !words[1].startsWith("-") ? 1 : 0;
+        StringBuilder sb = new StringBuilder(programName(words[from]));
+        for (int i = from + 1; i < words.length; i++) {
+            sb.append(' ').append(words[i]);
+        }
+        return Clip.keepStart(sb.toString(), JOB_CHARS);
     }
 
     /** {@code /bin/zsh}, {@code -zsh} (a login shell) and {@code zsh} all name {@code zsh}. */

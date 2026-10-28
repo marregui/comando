@@ -138,15 +138,16 @@ public final class TerminalTabs {
         return t == null ? Optional.empty() : t.runningJob();
     }
 
-    /** How many panels' shells run a program. */
-    public int runningJobs() {
-        int n = 0;
-        for (TerminalWidget t : terminals.values()) {
-            if (t.hasRunningJob()) {
-                n++;
-            }
-        }
-        return n;
+    /** The job each panel's shell runs in front, by panel; panels whose shell runs none are left out. */
+    public Map<PanelId, String> runningJobs() {
+        Map<PanelId, String> jobs = new HashMap<>();
+        terminals.forEach((id, t) -> t.runningJob().ifPresent(job -> jobs.put(id, job)));
+        return jobs;
+    }
+
+    /** "man cat in notes' Terminal tab": a job a question names, with where it runs, comando's own terminal. */
+    public static String jobLine(String job, String panelTitle) {
+        return job + " in " + panelTitle + (panelTitle.endsWith("s") ? "'" : "'s") + " Terminal tab";
     }
 
     /** Ends the shell of a closed panel. */

@@ -140,6 +140,7 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.prefs.Preferences;
+import java.util.stream.Collectors;
 
 /**
  * The Swing shell and the UI port. Renders the state on the EDT, at most once per pending change; builds
@@ -1417,8 +1418,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (job.isPresent() && deps.state().get().panels().size() > 1) {
             String title = deps.state().get().panel(id).map(x -> x.title()).orElse("the panel");
             String why = job.get().equals(TerminalWidget.UNCHECKED_JOB)
-                    ? "comando cannot tell whether its shell is running a program; closing the panel ends anything it runs."
-                    : "Its shell is running " + job.get() + "; closing the panel ends it.";
+                    ? "comando cannot tell whether the shell in its Terminal tab is running a program; closing the panel ends anything it runs."
+                    : "The shell in its Terminal tab is running " + job.get() + "; closing the panel ends it.";
             if (!confirm("Close " + title + "?", why, "Close panel")) {
                 return;
             }
@@ -1760,6 +1761,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         Toolkit.getDefaultToolkit().removeAWTEventListener(keyClock);
     }
 
+    /** "Quitting stops main's turn.", or what it stops one per line when several things run. */
+    static String quitQuestion(List<String> work) {
+        return work.size() == 1 ? "Quitting stops " + work.getFirst() + "."
+                : "Quitting stops:\n" + work.stream().map(w -> "• " + w).collect(Collectors.joining("\n"));
+    }
+
     /** What quitting would stop: running queries, sessions in a turn, shells running a job; empty when nothing. */
     private List<String> runningWork() {
         AppState s = deps.state().get();
@@ -1776,9 +1783,13 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (!waiting.isEmpty()) {
             work.add(String.join(", ", waiting) + (waiting.size() == 1 ? "'s background work" : "' background work"));
         }
-        int jobs = lower.terminals().runningJobs();
-        if (jobs > 0) {
-            work.add(jobs + (jobs == 1 ? " shell job" : " shell jobs"));
+        // each job named with the panel whose Terminal tab runs it, in the panels' order
+        Map<PanelId, String> jobs = lower.terminals().runningJobs();
+        for (PanelState p : s.panels()) {
+            String job = jobs.get(p.id());
+            if (job != null) {
+                work.add(TerminalTabs.jobLine(job, p.title()));
+            }
         }
         // Gradle runs show as console views until they finish
         s.views().stream().filter(v -> v.spec() instanceof ViewSpec.Console c && c.state() == ViewSpec.RunState.RUNNING)
@@ -1809,7 +1820,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (!work.isEmpty()) {
             confirmingQuit = true;
             try {
-                if (!confirm("Quit comando?", "Quitting stops " + String.join(", ", work) + ".", "Quit")) {
+                if (!confirm("Quit comando?", quitQuestion(work), "Quit")) {
                     pendingQuits.forEach(QuitResponse::cancelQuit);
                     pendingQuits.clear();
                     return false;

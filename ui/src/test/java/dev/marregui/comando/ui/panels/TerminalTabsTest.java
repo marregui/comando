@@ -116,6 +116,12 @@ class TerminalTabsTest {
         tabs.render(s, false);
         assertThat(tabs.hasRunningJob(P1)).isFalse();
         assertThat(tabs.hasRunningJob(P2)).isFalse();
-        assertThat(tabs.runningJobs()).isZero();
+        assertThat(tabs.runningJobs()).isEmpty();
+    }
+
+    @Test
+    void aJobIsNamedWithThePanelWhoseTerminalTabRunsIt() {
+        assertThat(TerminalTabs.jobLine("man cat", "comando developer")).isEqualTo("man cat in comando developer's Terminal tab");
+        assertThat(TerminalTabs.jobLine("vim x", "notes")).isEqualTo("vim x in notes' Terminal tab");
     }
 }

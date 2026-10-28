@@ -112,6 +112,37 @@ class TerminalWidgetTest {
     }
 
     @Test
+    void aJobIsNamedAsTypedAScriptByItsOwnNameNotItsInterpreters() {
+        assertThat(TerminalWidget.jobName("/bin/sh /usr/bin/man cat")).isEqualTo("man cat");
+        assertThat(TerminalWidget.jobName("/usr/bin/python3 /opt/tools/serve.py --port 8080")).isEqualTo("serve.py --port 8080");
+        assertThat(TerminalWidget.jobName("/bin/bash -c make")).as("an option to the shell keeps the shell").isEqualTo("bash -c make");
+        assertThat(TerminalWidget.jobName("/usr/bin/less -s")).isEqualTo("less -s");
+        assertThat(TerminalWidget.jobName("vim")).isEqualTo("vim");
+        assertThat(TerminalWidget.jobName("java " + "-D".repeat(60))).hasSize(TerminalWidget.JOB_CHARS).endsWith("…");
+    }
+
+    @Test
+    void theJobInFrontIsReadFromItsGroupsLeader() throws Exception {
+        // the test's own process, given a child, stands for a shell with a job; ps is told what that job is
+        Process child = new ProcessBuilder("sleep", "30").start();
+        try {
+            long self = ProcessHandle.current().pid();
+            List<List<String>> calls = new ArrayList<>();
+            assertThat(TerminalWidget.foregroundJob(self, "/bin/zsh", args -> {
+                calls.add(args);
+                return calls.size() == 1 ? List.of("80 76 zsh")
+                        : List.of("82 80 /usr/bin/less -s", "80 80 /bin/sh /usr/bin/man cat", "81 80 /bin/sh /usr/bin/man cat");
+            })).as("man is a script: the leader names it, not sh or less").contains("man cat");
+            assertThat(TerminalWidget.foregroundJob(self, "/bin/zsh", args -> {
+                calls.add(args);
+                return calls.size() % 2 == 1 ? List.of("80 76 zsh") : List.of("82 80 /usr/bin/less -s");
+            })).as("the leader gone: another of its group").contains("less -s");
+        } finally {
+            child.destroyForcibly();
+        }
+    }
+
+    @Test
     void aJobInFrontWhoseNameCannotBeReadIsStillAJob() {
         long self = ProcessHandle.current().pid();
         List<List<String>> calls = new ArrayList<>();
@@ -306,7 +337,7 @@ class TerminalWidgetTest {
             while (TerminalWidget.foregroundJob(shell, "/bin/sh").isEmpty() && System.nanoTime() < deadline) {
                 Thread.sleep(20);
             }
-            assertThat(TerminalWidget.foregroundJob(shell, "/bin/sh")).contains("sleep");
+            assertThat(TerminalWidget.foregroundJob(shell, "/bin/sh")).contains("sleep 31");
         } finally {
             ProcessHandle.of(pty.process().pid()).ifPresent(h -> h.descendants().forEach(ProcessHandle::destroyForcibly));
             pty.process().destroyForcibly();
