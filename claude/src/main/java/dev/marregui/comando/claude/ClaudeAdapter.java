@@ -183,6 +183,14 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             this.mapper = new StreamMapper(name, transcript, sink, json);
             // the CLI's own settings, beside its projects folder: the base effort the stream does not report
             this.mapper.effortFrom(model -> BaseEffort.base(settings.projectsDir().resolveSibling("settings.json"), model, json));
+            // what each message ran at, from the transcript the CLI writes a little after the stream's event
+            this.mapper.ranFrom(new RunSettings(settings.projectsDir(), json)::of, retry -> {
+                try {
+                    timer.schedule(() -> run(retry), StreamMapper.RAN_RETRY_MILLIS, TimeUnit.MILLISECONDS);
+                } catch (RejectedExecutionException e) {
+                    // closing: what the message ran at no longer matters
+                }
+            });
             this.mapper.metrics(metrics, ClaudeAdapter.this::agentSpend);
             this.strand = Threads.strand("claude-strand-" + name);
         }

@@ -16,8 +16,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -68,8 +70,26 @@ final class StreamMapper {
      * the clear's note and its turn's end are not shown. Cleared by the clear's {@code result}.
      */
     private boolean quietClear;
+    /** How long a message's model and effort wait between reads of the transcript, and how long in all. */
+    static final long RAN_RETRY_MILLIS = 100;
+    static final long RAN_GIVE_UP_MILLIS = 2_000;
     /** The base effort Claude Code's settings give a model id; read at each {@code system/init}. */
     private Function<String, String> effortOf = model -> "";
+    /** What a message of a conversation ran at, from its transcript; none until {@link #ranFrom} names a reader. */
+    private BiFunction<String, String, Optional<RunSettings.Ran>> ranOf = (conversationId, messageId) -> Optional.empty();
+    /** Runs a read again on the mapper's thread {@link #RAN_RETRY_MILLIS} ms later; none until {@link #ranFrom}. */
+    private Consumer<Runnable> ranLater = retry -> { };
+    private boolean ranRetryArmed;
+    /** The running turn's latest top-level message whose model and effort are still to be read, null when none is. */
+    private String ranPending;
+    private String ranModel = "";
+    private boolean ranFirst;
+    private long ranPendingSince;
+    private long ranTriedAt;
+    /** The latest top-level message whose model and effort were asked for, so a message's later blocks ask no more. */
+    private String ranLast = "";
+    /** Whether the running turn has had a top-level message: its first runs at the session's own setting. */
+    private boolean turnHadMessage;
 
     StreamMapper(String session, Transcript transcript, IntentSink sink, ObjectMapper json) {
         this.session = session;
@@ -85,6 +105,9 @@ final class StreamMapper {
             return "";
         }
         String type = e.path("type").asText();
+        if (ranPending != null) {
+            readRan(false);
+        }
         switch (type) {
             case "system" -> system(e);
             case "stream_event" -> streamEvent(e);
@@ -182,6 +205,17 @@ final class StreamMapper {
         note(Block.NoteKind.INFO, "Conversation cleared after the checkpoint; its summary below goes in front of the next prompt");
         transcript.append(new Block.AssistantText(CARRIED_ID, 0, summary, false, ""));
         transcript.append(Block.TurnEnd.stored());
+    }
+
+    /**
+     * Where the model and effort a message ran at are read from: the conversation's transcript ({@link RunSettings}),
+     * which Claude Code writes a message's line to some 25 to 150 ms after the stream's event (measured on 2.1.310);
+     * {@code later} runs a read again on this mapper's thread {@link #RAN_RETRY_MILLIS} ms on, so a message is read in
+     * time even when the stream falls silent while a tool runs.
+     */
+    void ranFrom(BiFunction<String, String, Optional<RunSettings.Ran>> reader, Consumer<Runnable> later) {
+        ranOf = reader;
+        ranLater = later;
     }
 
     /** Where the base effort of the model a {@code system/init} names is read from. */
@@ -381,6 +415,15 @@ final class StreamMapper {
         JsonNode message = e.path("message");
         String messageId = message.path("id").asText("");
         String parent = parent(e);
+        if (!replaying && parent.isEmpty() && !messageId.isEmpty() && !messageId.equals(ranLast)) {
+            ranLast = messageId;
+            ranPending = messageId;
+            ranModel = message.path("model").asText("");
+            ranFirst = !turnHadMessage;
+            turnHadMessage = true;
+            ranPendingSince = ranTriedAt = 0L;
+            readRan(false);
+        }
         JsonNode usage = message.path("usage");
         if (!usage.isMissingNode() && parent.isEmpty()) {
             long tokens = usage.path("input_tokens").asLong() + usage.path("cache_creation_input_tokens").asLong()
@@ -565,9 +608,54 @@ final class StreamMapper {
         return endedAgents.contains(toolUseId);
     }
 
+    /**
+     * Reads what the pending message ran at and tells the window: at once when its line is in the transcript; else
+     * again {@value #RAN_RETRY_MILLIS} ms later, or on a later line of the stream, and for the last time at the turn's
+     * end or {@value #RAN_GIVE_UP_MILLIS} ms after the message, with the stream's model alone.
+     */
+    private void readRan(boolean last) {
+        long now = System.nanoTime();
+        if (ranPendingSince == 0L) {
+            ranPendingSince = now;
+        } else if (!last && now - ranTriedAt < RAN_RETRY_MILLIS * 1_000_000L) {
+            armRanRetry();
+            return;
+        }
+        ranTriedAt = now;
+        Optional<RunSettings.Ran> ran = ranOf.apply(conversation, ranPending);
+        boolean giveUp = last || now - ranPendingSince >= RAN_GIVE_UP_MILLIS * 1_000_000L;
+        if (ran.isEmpty() && !giveUp) {
+            armRanRetry();
+            return;
+        }
+        String model = ran.map(RunSettings.Ran::model).filter(m -> !m.isEmpty()).orElse(ranModel);
+        String effort = ran.map(RunSettings.Ran::effort).orElse("");
+        ranPending = null;
+        sink.dispatch(new Intent.SessionRanAt(session, model, effort, ranFirst));
+    }
+
+    /** One read again later while a message waits for its line; a read the turn's end made first finds nothing pending. */
+    private void armRanRetry() {
+        if (ranRetryArmed) {
+            return;
+        }
+        ranRetryArmed = true;
+        ranLater.accept(() -> {
+            ranRetryArmed = false;
+            if (ranPending != null) {
+                ranTriedAt = 0L; // the retry's own delay was the wait
+                readRan(false);
+            }
+        });
+    }
+
     // ---- result
 
     private void result(JsonNode e) {
+        if (ranPending != null) {
+            readRan(true); // before the turn's end, which clears what the turn ran at
+        }
+        turnHadMessage = false;
         boolean error = e.path("is_error").asBoolean(false);
         String subtype = e.path("subtype").asText("");
         String message = error ? errorText(e) : "";

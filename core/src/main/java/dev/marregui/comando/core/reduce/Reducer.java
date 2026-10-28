@@ -174,6 +174,9 @@ public final class Reducer {
             case Intent.SetSessionEffort i -> sessionSetting(s, i.name(), i.effort(), false);
             case Intent.SessionStarted i -> sessionStarted(s, i.name());
             case Intent.SessionInit i -> sessionInit(s, i);
+            case Intent.SessionRanAt i -> s.session(i.name())
+                    .map(x -> Transition.of(s.withSession(x.withInfo(x.info().ranAt(i.model(), i.effort(), i.firstOfTurn())))))
+                    .orElse(Transition.of(s));
             case Intent.SessionActivity i -> Transition.of(s.withSession(i.name(), x -> x.withActivity(i.activity(), clock.millis())));
             case Intent.SessionTasksChanged i -> Transition.of(s.withSession(i.name(), x -> x.withTasks(i.open(), clock.millis())));
             case Intent.SessionTurnRunning i -> Transition.of(s.withSession(i.name(),
@@ -1270,6 +1273,9 @@ public final class Reducer {
         if (found.isEmpty()) {
             return Transition.of(s);
         }
+        // what the turn ran at no longer holds: the next turn starts at the session's own model and effort
+        found = Optional.of(found.get().withInfo(found.get().info().turnEnded()));
+        s = s.withSession(found.get());
         long now = clock.millis();
         // a result while no turn ran made no model call (Claude Code sends one after a background agent's report): it
         // finished nothing

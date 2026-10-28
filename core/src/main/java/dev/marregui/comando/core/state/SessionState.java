@@ -167,6 +167,11 @@ public record SessionState(
                 lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, clears);
     }
 
+    /** {@code newInfo} in place of the info, the last activity's time left as it was: the info only changed in detail. */
+    public SessionState withInfo(SessionInfo newInfo) {
+        return newInfo.equals(info) ? this : withInfo(newInfo, lastActivityMillis);
+    }
+
     public SessionState withInfo(SessionInfo newInfo, long at) {
         return new SessionState(spec, status, error, newInfo, pendingTurns, costUsd, contextTokens, contextWindow, at, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
     }

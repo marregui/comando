@@ -64,11 +64,11 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
 | `system/background_tasks_changed` | `SessionTasksChanged`: the open background tasks, the whole set ([record 43](adr/0043-a-session-waiting-on-background-work-shows-it.md)) |
 | `stream_event` `message_start` with no parent tool call | `SessionTurnRunning`, also for a turn Claude Code started itself after background work |
 | `stream_event` block start and deltas | a streaming text, thinking or tool-call block, updated in place |
-| `assistant` | the final form of each block |
+| `assistant` | the final form of each block; for a message with no parent tool call, `SessionRanAt` with the model and effort it ran at, read from its line in the conversation's transcript (`RunSettings`), the turn's first marked so ([Workbench](workbench.md)) |
 | `user` with `tool_result` | the result on its tool card; the card turns done or failed |
 | `user` with text | the compaction summary, local command output or the interrupt marker, as notes |
 | `system/compact_boundary`, `hook_response`, `api_retry`, `permission_denied` | a note of that kind |
-| `result` | a turn end (its duration, after the error text when it failed or was interrupted; no cost shown); `SessionTurnEnded` with the queued turn count, cost, context size and context window. The context size is the input of the turn's last main-thread call; after `compact_boundary`, the compacted size; after `conversation_reset`, 0 |
+| `result` | the pending `SessionRanAt` first; a turn end (its duration, after the error text when it failed or was interrupted; no cost shown); `SessionTurnEnded` with the queued turn count, cost, context size and context window. The context size is the input of the turn's last main-thread call; after `compact_boundary`, the compacted size; after `conversation_reset`, 0 |
 | `rate_limit_event` | a note when its status is not `allowed` |
 | `conversation_reset` | a note "Conversation cleared"; the context size becomes 0 until a call reports the new one |
 

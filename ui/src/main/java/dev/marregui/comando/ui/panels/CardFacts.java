@@ -35,8 +35,9 @@ record CardFacts(String title, List<Fact> facts) {
         String state = session.map(s -> sessionState(s, what, panel.isEmpty(), nowMillis)).orElse(what);
         add(facts, "State", state);
         session.ifPresent(s -> {
-            boolean reported = s.status().isUsable() && !s.info().model().isBlank();
-            add(facts, "Model", (reported ? s.info().model() : SessionRow.modelName(s)) + " · effort " + SessionRow.effortName(s));
+            String turn = s.status().isUsable() ? s.info().turnModel() : "";
+            String reported = !turn.isBlank() ? turn : s.status().isUsable() ? s.info().model() : "";
+            add(facts, "Model", (!reported.isBlank() ? reported : SessionRow.modelName(s)) + " · effort " + SessionRow.effortName(s));
             String context = SessionRow.contextText(s);
             if (!context.isEmpty()) {
                 add(facts, "Context", context + " · " + Labels.tokens(s.contextTokens()) + " of " + Labels.tokens(s.contextWindow())

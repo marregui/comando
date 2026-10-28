@@ -425,6 +425,33 @@ class ReducerTest {
     }
 
     /// The init event records the conversation id with start mode RESUME, opens the session and saves sessions once; the same
+    /// A turn's first message gives the session's own model and effort (a `/model` or `/effort` typed in the prompt shows);
+    /// its later messages give what the turn runs at (a skill's `effort` lasts the rest of the turn), which the turn's end
+    /// drops, leaving the session's own; the last activity's time is left as it was.
+    @Test
+    void whatATurnRunsAtShowsUntilItEndsAndItsFirstMessageGivesTheSessionsOwn() {
+        apply(new Intent.StartSession("work"));
+        apply(new Intent.SessionInit("work", new SessionInfo("abc", "claude-opus-5-5", "/tmp", "2.1.310", "default", List.of(), "medium")));
+        long activity = state.session("work").orElseThrow().lastActivityMillis();
+        clock.advance(5_000);
+
+        apply(new Intent.SessionRanAt("work", "claude-sonnet-5-5", "low", true));
+        SessionInfo first = state.session("work").orElseThrow().info();
+        assertThat(List.of(first.model(), first.reportedEffort(), first.turnModel(), first.turnEffort()))
+                .containsExactly("claude-sonnet-5-5", "low", "claude-sonnet-5-5", "low");
+        assertThat(first.effort()).as("the settings' base stays").isEqualTo("medium");
+        assertThat(state.session("work").orElseThrow().lastActivityMillis()).isEqualTo(activity);
+
+        apply(new Intent.SessionRanAt("work", "claude-sonnet-5-5", "high", false));
+        SessionInfo raised = state.session("work").orElseThrow().info();
+        assertThat(List.of(raised.reportedEffort(), raised.turnEffort())).as("raised for the turn only").containsExactly("low", "high");
+
+        apply(new Intent.SessionTurnEnded("work", 0, 0.12, 40_000L, 200_000L, false, ""));
+        SessionInfo ended = state.session("work").orElseThrow().info();
+        assertThat(List.of(ended.model(), ended.reportedEffort(), ended.turnModel(), ended.turnEffort()))
+                .containsExactly("claude-sonnet-5-5", "low", "", "");
+    }
+
     /// init again saves nothing.
     @Test
     void initRecordsTheConversationIdSoTheNextStartResumes() {

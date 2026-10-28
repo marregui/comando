@@ -10,7 +10,10 @@ import dev.marregui.comando.testkit.RecordingSink;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -305,5 +308,57 @@ class StreamMapperTest {
         assertThat(calls.get(0).resultText()).isEqualTo(StreamMapper.NO_RESULT);
         assertThat(calls.get(1).status()).isEqualTo(Block.ToolStatus.DONE);
         assertThat(mapper.endRunningTools()).isZero();
+    }
+
+    /// Each top-level message of a turn sends what it ran at, as its transcript line gives it: the first with
+    /// `firstOfTurn`, so the session's own setting shows; a message's later blocks ask no more; a sub-agent's message
+    /// asks nothing; a message whose line is not yet written arms one read later (and is read again on the retry once its
+    /// line is there), else for the last time at the turn's end, before the turn's end is sent, with the stream's model
+    /// alone when the line never came.
+    @Test
+    void eachTopLevelMessageSendsTheModelAndEffortItsTranscriptLineGives() {
+        List<String> asked = new ArrayList<>();
+        Map<String, RunSettings.Ran> written = new HashMap<>();
+        List<Runnable> retries = new ArrayList<>();
+        mapper.ranFrom((conversation, message) -> {
+            asked.add(conversation + "/" + message);
+            return Optional.ofNullable(written.get(message));
+        }, retries::add);
+        mapper.accept("""
+                {"type":"system","subtype":"init","session_id":"conv-1","model":"claude-opus-5-5","cwd":"/w","claude_code_version":"2.1.310","permissionMode":"default"}""");
+        written.put("m1", new RunSettings.Ran("claude-opus-5-5", "medium"));
+        written.put("m2", new RunSettings.Ran("claude-opus-5-5", "high"));
+        mapper.accept("""
+                {"type":"assistant","parent_tool_use_id":null,"message":{"id":"m1","model":"claude-opus-5-5","content":[{"type":"tool_use","id":"t1","name":"Skill","input":{"skill":"deep"}}]}}""");
+        mapper.accept("""
+                {"type":"assistant","parent_tool_use_id":null,"message":{"id":"m1","model":"claude-opus-5-5","content":[{"type":"text","text":"again"}]}}""");
+        mapper.accept("""
+                {"type":"assistant","parent_tool_use_id":"t9","message":{"id":"s1","model":"claude-haiku-5-5","content":[{"type":"text","text":"inside"}]}}""");
+        mapper.accept("""
+                {"type":"assistant","parent_tool_use_id":null,"message":{"id":"m2","model":"claude-opus-5-5","content":[{"type":"text","text":"deep"}]}}""");
+        mapper.accept("""
+                {"type":"assistant","parent_tool_use_id":null,"message":{"id":"m3","model":"claude-sonnet-5-5","content":[{"type":"text","text":"not written yet"}]}}""");
+        assertThat(retries).as("m3 not written: one read later is armed").hasSize(1);
+        mapper.accept("""
+                {"type":"result","subtype":"success","is_error":false,"result":"","total_cost_usd":0,"duration_ms":3,"num_turns":3}""");
+        retries.getFirst().run();
+
+        assertThat(sink.of(Intent.SessionRanAt.class)).containsExactly(
+                new Intent.SessionRanAt("work", "claude-opus-5-5", "medium", true),
+                new Intent.SessionRanAt("work", "claude-opus-5-5", "high", false),
+                new Intent.SessionRanAt("work", "claude-sonnet-5-5", "", false));
+        assertThat(asked).as("one read per message, m3's last at the turn's end, none on the retry after it").containsExactly(
+                "conv-1/m1", "conv-1/m2", "conv-1/m3", "conv-1/m3");
+        List<Intent> all = sink.intents();
+        assertThat(all.indexOf(new Intent.SessionRanAt("work", "claude-sonnet-5-5", "", false)))
+                .isLessThan(all.indexOf(sink.of(Intent.SessionTurnEnded.class).getFirst()));
+
+        mapper.accept("""
+                {"type":"assistant","parent_tool_use_id":null,"message":{"id":"m4","model":"claude-opus-5-5","content":[{"type":"text","text":"next turn"}]}}""");
+        assertThat(retries).as("m4 not written yet").hasSize(2);
+        written.put("m4", new RunSettings.Ran("claude-opus-5-5", "low"));
+        retries.getLast().run();
+        assertThat(sink.of(Intent.SessionRanAt.class)).last().as("the next turn's first message, read on the retry").isEqualTo(
+                new Intent.SessionRanAt("work", "claude-opus-5-5", "low", true));
     }
 }

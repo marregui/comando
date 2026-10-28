@@ -251,6 +251,13 @@ public sealed interface Intent {
     record SessionStarted(String name) implements Intent {
     }
 
+    /**
+     * A message of the session's running turn ran at {@code model} and {@code effort}, as the session's transcript records
+     * it; {@code firstOfTurn} for the turn's first message, which runs at the session's own setting.
+     */
+    record SessionRanAt(String name, String model, String effort, boolean firstOfTurn) implements Intent {
+    }
+
     record SessionInit(String name, SessionInfo info) implements Intent {
     }
 

@@ -180,12 +180,15 @@ final class SessionRow extends IconRow {
     }
 
     /**
-     * The model the session runs, by family: the one its {@code system/init} reported while it runs, else the one it
+     * The model the session runs, by family: while it runs, the one its latest message ran at (a skill's {@code model}
+     * shows for the rest of its turn), else the one its first message or {@code system/init} reported; else the one it
      * is set to start with, else "default" (Claude Code's).
      */
     static String modelName(SessionState s) {
-        String m = s.status().isUsable() && !s.info().model().isBlank() ? s.info().model()
-                : !s.spec().model().isBlank() ? s.spec().model() : "";
+        String m = reportedModel(s);
+        if (m.isBlank()) {
+            m = s.spec().model();
+        }
         if (m.isBlank()) {
             return "default";
         }
@@ -198,27 +201,55 @@ final class SessionRow extends IconRow {
         return m;
     }
 
+    /** The model the running session reported, its running turn's first; empty when it has reported none. */
+    private static String reportedModel(SessionState s) {
+        if (!s.status().isUsable()) {
+            return "";
+        }
+        return !s.info().turnModel().isBlank() ? s.info().turnModel() : s.info().model();
+    }
+
     static String modelTip(SessionState s) {
-        boolean reported = s.status().isUsable() && !s.info().model().isBlank();
-        return "Model: " + (reported ? s.info().model() + ", as the session reported it" : modelName(s)
+        String reported = reportedModel(s);
+        String turn = s.status().isUsable() ? s.info().turnModel() : "";
+        if (!turn.isBlank() && !turn.equals(s.info().model())) {
+            return "Model: " + turn + " for the rest of this turn, the session's own " + s.info().model() + " after it; click to change";
+        }
+        return "Model: " + (!reported.isBlank() ? reported + ", as the session reported it" : modelName(s)
                 + (s.spec().model().isBlank() ? ", Claude Code's" : ", set for the next start")) + "; click to change";
     }
 
     /**
-     * The effort the session starts each turn at: the one it is set to, else, while it runs, the one Claude Code's settings
-     * give its model, else "default".
+     * The effort the session runs at: while a turn runs, the one its latest message ran at (a skill's {@code effort},
+     * as the {@code deep} skill's {@code high}, lasts the rest of its turn); else the one its latest turn started at,
+     * the session's own (so a {@code /effort} typed in the prompt shows); else the one it is set to; else, while it
+     * runs, the one Claude Code's settings give its model; else "default".
      */
     static String effortName(SessionState s) {
+        boolean usable = s.status().isUsable();
+        if (usable && !s.info().turnEffort().isBlank()) {
+            return s.info().turnEffort();
+        }
+        if (usable && !s.info().reportedEffort().isBlank()) {
+            return s.info().reportedEffort();
+        }
         if (!s.spec().effort().isBlank()) {
             return s.spec().effort();
         }
-        return s.status().isUsable() && !s.info().effort().isBlank() ? s.info().effort() : "default";
+        return usable && !s.info().effort().isBlank() ? s.info().effort() : "default";
     }
 
     static String effortTip(SessionState s) {
-        String from = !s.spec().effort().isBlank() ? "set for this session"
-                : s.status().isUsable() && !s.info().effort().isBlank() ? "Claude Code's setting for this model" : "Claude Code's";
-        return "Effort: " + effortName(s) + ", " + from + "; the base each turn starts at, which a turn may raise; click to change";
+        boolean usable = s.status().isUsable();
+        String turn = usable ? s.info().turnEffort() : "";
+        String own = usable && !s.info().reportedEffort().isBlank() ? s.info().reportedEffort() : "";
+        if (!turn.isBlank() && !own.isBlank() && !turn.equals(own)) {
+            return "Effort: " + turn + " for the rest of this turn, raised from the session's own " + own + "; click to change";
+        }
+        String from = !turn.isBlank() || !own.isBlank() ? "as the session runs it"
+                : !s.spec().effort().isBlank() ? "set for this session"
+                : usable && !s.info().effort().isBlank() ? "Claude Code's setting for this model" : "Claude Code's";
+        return "Effort: " + effortName(s) + ", " + from + "; a turn may raise it; click to change";
     }
 
     /** What the state icon says and does. */

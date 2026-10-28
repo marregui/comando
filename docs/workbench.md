@@ -217,11 +217,17 @@ Everything else is in the row's menu:
 | Copy details | always | as ⌘C on the row: name, path, branch, full conversation id, status, uptime and start, context with tokens, model and effort, Claude Code version |
 | Edit…, Clone…, Remove… | always | the session dialog; a copy; removal with its own panel |
 
-The model shown is, while the session runs, the one it reported at its start, by family (`opus`, not `default`); while
-stopped, the one set for the next start, else "default". The effort shown is the one set for the session; else, while
-it runs, the one Claude Code's `settings.json` gives its model (`modelSettings.<model>.effortLevel`, else
-`effortLevel`), read at its start; else "default". That effort is the base each turn starts at, which a turn may raise;
-the stream does not report it ([record 89](adr/0089-a-session-row-is-one-line.md)).
+The model and effort shown are what the session runs at, the same in the row, its card and menus, and the session bar.
+While a turn runs, they are its latest message's: a skill's `model` or `effort` (the `deep` skill's `high`) lasts the
+rest of its turn, and the tooltip names what the session returns to. Between turns, they are the latest turn's first
+message's, the session's own setting, so a `/model` or `/effort` typed in the prompt shows. The stream reports a
+message's model but not its effort: each top-level message's line in the conversation's transcript gives both
+(`perTurnEffort`, else `effort`), read from the file's last 256 KB, again 100 ms later while the line is not yet
+written (Claude Code writes it some 25 to 150 ms after the stream's event), for at most 2 s or until the turn ends
+(`RunSettings`). Before the first message, the model is the one the session reported at its start, by family (`opus`,
+not `default`), and the effort the one set for the session, else the one Claude Code's `settings.json` gives its model
+(`modelSettings.<model>.effortLevel`, else `effortLevel`); while stopped, the ones set for the next start, else
+"default" ([record 89](adr/0089-a-session-row-is-one-line.md)).
 
 The rows are listed running first, then by name, until a row is dragged. While the pointer is on the list, a session
 that starts or stops keeps its row, and the order applies when the pointer leaves, so a second click lands on the same

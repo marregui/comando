@@ -871,13 +871,32 @@ class SessionsSidebarTest {
         assertThat(List.of(SessionRow.modelName(running), SessionRow.effortName(running))).as("as reported, and from Claude Code's settings")
                 .containsExactly("opus", "high");
         assertThat(SessionRow.modelTip(running)).startsWith("Model: claude-opus-5-5, as the session reported it");
-        assertThat(SessionRow.effortTip(running)).isEqualTo("Effort: high, Claude Code's setting for this model; the base each turn starts at,"
-                + " which a turn may raise; click to change");
+        assertThat(SessionRow.effortTip(running)).isEqualTo("Effort: high, Claude Code's setting for this model; a turn may raise it; click to change");
         SessionState set = running.withSpec(running.spec().withEffort("low").withModel("haiku"));
         assertThat(SessionRow.effortName(set)).as("the session's own setting first").isEqualTo("low");
         assertThat(SessionRow.modelName(set)).as("the model it runs until it starts again").isEqualTo("opus");
         assertThat(SessionRow.modelName(set.withStatus(Status.CLOSED, ""))).isEqualTo("haiku");
     }
+    /// What the session's messages ran at wins: while a turn runs, its latest message's model and effort (a skill raised
+    /// `low` to `high`, and its tips say so); after the turn, the effort its first message ran at (a `/effort` typed in the
+    /// prompt), over the one set for the session; a stopped session shows its own setting again.
+    @Test
+    void theChipsFollowWhatTheSessionsMessagesRanAt() {
+        SessionState running = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").withEffort("medium")).withStatus(Status.OPEN, "")
+                .withInfo(new SessionInfo("id", "claude-opus-5-5", "/w", "2.1", "default", List.of(), "medium"), 0L);
+        SessionState raised = running.withInfo(running.info().ranAt("claude-opus-5-5", "low", true).ranAt("claude-sonnet-5-5", "high", false));
+        assertThat(List.of(SessionRow.modelName(raised), SessionRow.effortName(raised))).containsExactly("sonnet", "high");
+        assertThat(SessionRow.effortTip(raised)).isEqualTo("Effort: high for the rest of this turn, raised from the session's own low; click to change");
+        assertThat(SessionRow.modelTip(raised)).isEqualTo("Model: claude-sonnet-5-5 for the rest of this turn, the session's own claude-opus-5-5 after it;"
+                + " click to change");
+
+        SessionState after = raised.withInfo(raised.info().turnEnded());
+        assertThat(List.of(SessionRow.modelName(after), SessionRow.effortName(after))).as("the session's own, as its turn started")
+                .containsExactly("opus", "low");
+        assertThat(SessionRow.effortTip(after)).isEqualTo("Effort: low, as the session runs it; a turn may raise it; click to change");
+        assertThat(SessionRow.effortName(after.withStatus(Status.CLOSED, ""))).as("stopped: its own setting").isEqualTo("medium");
+    }
+
 
     /// A running session on an older CLI than another session gets an amber `↑` and a details line saying so; a stopped one
     /// gets none; [SessionRow#compareVersions] compares numerically and treats empty as oldest.
