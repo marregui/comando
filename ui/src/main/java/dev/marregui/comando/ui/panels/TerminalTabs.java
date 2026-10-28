@@ -5,6 +5,7 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 
 import javax.swing.JComponent;
@@ -12,9 +13,13 @@ import javax.swing.JPanel;
 import java.awt.CardLayout;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -160,11 +165,36 @@ public final class TerminalTabs {
         return t == null ? Optional.empty() : t.runningJob();
     }
 
-    /** The job each panel's shell runs in front, by panel; panels whose shell runs none are left out. */
-    public Map<PanelId, String> runningJobs() {
-        Map<PanelId, String> jobs = new HashMap<>();
-        terminals.forEach((id, t) -> t.runningJob().ifPresent(job -> jobs.put(id, job)));
-        return jobs;
+    /** How long the job checks of a quit or a panel close may take together, whatever the number of shells. */
+    static final long CHECK_MILLIS = 2_000;
+
+    /**
+     * Finds, off the EDT, the job each listed panel's shell runs in front, and gives {@code answer} on the EDT the
+     * panels whose shell runs one, by panel; at once when no listed panel has a running shell. The checks run together,
+     * {@link #CHECK_MILLIS} in all; a shell not answered by then counts as running
+     * {@link TerminalWidget#UNCHECKED_JOB}, so the question asks.
+     */
+    public void checkJobs(Collection<PanelId> panels, Consumer<Map<PanelId, String>> answer) {
+        Map<PanelId, TerminalWidget.Shell> shells = new LinkedHashMap<>();
+        for (PanelId id : panels) {
+            TerminalWidget t = terminals.get(id);
+            if (t != null) {
+                t.shell().ifPresent(shell -> shells.put(id, shell));
+            }
+        }
+        if (shells.isEmpty()) {
+            answer.accept(Map.of());
+            return;
+        }
+        UiErrands.start("terminal-jobs", () -> {
+            Map<PanelId, String> jobs = TerminalWidget.foregroundJobs(shells, CHECK_MILLIS);
+            Edt.later(() -> answer.accept(jobs));
+        });
+    }
+
+    /** {@link #checkJobs} for every panel's shell. */
+    public void checkAllJobs(Consumer<Map<PanelId, String>> answer) {
+        checkJobs(List.copyOf(terminals.keySet()), answer);
     }
 
     /** "man cat in notes' Terminal tab": a job a question names, with where it runs, comando's own terminal. */

@@ -52,6 +52,8 @@ final class Lane implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger(Lane.class.getName());
     /** The bound on a table description, as long as Claude waits for one. */
     private static final int DESCRIBE_SECONDS = 60;
+    /** How long a close waits for the lane thread to end its task and close the connection. */
+    static final long CLOSE_WAIT_NANOS = TimeUnit.SECONDS.toNanos(3);
 
     /** The statement the lane runs now. */
     private record Running(long requestId, Statement statement, Connection connection) {
@@ -536,6 +538,16 @@ final class Lane implements AutoCloseable {
     /** Cancels the running statement, closes the connection on the lane, stops the thread. Idempotent. */
     @Override
     public void close() {
+        beginClose();
+        finishClose(System.nanoTime() + CLOSE_WAIT_NANOS);
+    }
+
+    /**
+     * The first half of {@link #close}, which returns at once: cancels the running statement, arming its abort, and
+     * queues the connection's close behind the queued tasks. Idempotent. Closing many lanes, each begins first, so that
+     * their statements are cancelled together and the waits of {@link #finishClose} overlap.
+     */
+    void beginClose() {
         if (closed) {
             return;
         }
@@ -552,8 +564,19 @@ final class Lane implements AutoCloseable {
             }
         });
         thread.shutdown();
+    }
+
+    /**
+     * The second half of {@link #close}: waits for the lane thread until {@code deadlineNanos} ({@link System#nanoTime});
+     * past it, the tasks still queued are run on the caller as closed. Begins the close first when nobody has.
+     */
+    void finishClose(long deadlineNanos) {
+        beginClose();
+        if (drained) {
+            return;
+        }
         try {
-            if (!thread.awaitTermination(3, TimeUnit.SECONDS)) {
+            if (!thread.awaitTermination(Math.max(0, deadlineNanos - System.nanoTime()), TimeUnit.NANOSECONDS)) {
                 // the tasks still queued are run here as closed: each answers its caller, none runs its statement
                 drained = true;
                 thread.shutdownNow().forEach(Runnable::run);

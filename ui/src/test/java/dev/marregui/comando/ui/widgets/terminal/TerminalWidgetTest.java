@@ -18,7 +18,9 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -379,6 +381,51 @@ class TerminalWidgetTest {
                     InputEvent.META_DOWN_MASK));
         } else {
             assertThat(keys).as("Ctrl+A stays the shell's start of line").isEmpty();
+        }
+    }
+
+    /// The jobs of several shells come back by key for the shells that run one, a shell in front left out; a shell
+    /// whose process id is unknown counts as running [TerminalWidget#UNCHECKED_JOB].
+    @Test
+    void severalShellsAnswerByKeyAndAnUnknownProcessIsUnchecked() {
+        Map<String, TerminalWidget.Shell> shells = new LinkedHashMap<>();
+        shells.put("ssh", new TerminalWidget.Shell(4242, "/bin/zsh"));
+        shells.put("idle", new TerminalWidget.Shell(4343, "/bin/zsh"));
+        shells.put("unknown", new TerminalWidget.Shell(-1, "/bin/zsh"));
+        Map<String, String> jobs = TerminalWidget.foregroundJobs(shells, 2_000,
+                args -> args.contains("4242") ? List.of("4242 4242 ssh") : List.of("4343 4343 -zsh"));
+        assertThat(jobs).containsExactly(Map.entry("ssh", "ssh"), Map.entry("unknown", TerminalWidget.UNCHECKED_JOB));
+    }
+
+    /// Two checks of 600 ms each answer in well under their sum, since they run together; a check still running at
+    /// the 1 s bound answers [TerminalWidget#UNCHECKED_JOB], and the call returns at the bound, not when `ps` would.
+    @Test
+    void theChecksRunTogetherAndAShellNotAnsweredByTheBoundIsUnchecked() {
+        Map<String, TerminalWidget.Shell> shells = new LinkedHashMap<>();
+        shells.put("a", new TerminalWidget.Shell(1, "/bin/zsh"));
+        shells.put("b", new TerminalWidget.Shell(2, "/bin/zsh"));
+        long start = System.nanoTime();
+        Map<String, String> jobs = TerminalWidget.foregroundJobs(shells, 2_000, args -> {
+            sleep(600);
+            return List.of(args.getLast() + " " + args.getLast() + " ssh");
+        });
+        assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)).as("together, not one after the other").isLessThan(1_100);
+        assertThat(jobs).containsOnlyKeys("a", "b");
+
+        start = System.nanoTime();
+        jobs = TerminalWidget.foregroundJobs(Map.of("slow", new TerminalWidget.Shell(3, "/bin/zsh")), 1_000, args -> {
+            sleep(5_000);
+            return List.of("3 3 ssh");
+        });
+        assertThat(TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start)).as("returns at the bound").isBetween(900L, 2_000L);
+        assertThat(jobs).containsExactly(Map.entry("slow", TerminalWidget.UNCHECKED_JOB));
+    }
+
+    private static void sleep(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
     }
 }

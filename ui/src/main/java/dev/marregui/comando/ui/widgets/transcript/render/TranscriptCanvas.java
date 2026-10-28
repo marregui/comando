@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.transcript.Block;
@@ -40,6 +41,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
@@ -64,6 +68,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private static final int[] NONE = {0, 0};
     /** The number of items an exact layout spreads over the cores; fewer are laid out on the EDT alone. */
     private static final int PARALLEL_FROM = 64;
+    /** Items enough to be worth a fork of their own in an exact layout. */
+    private static final int ITEMS_PER_FORK = 16;
 
     private final List<Item> items = new ArrayList<>();
     private final Map<Integer, Item> byIndex = new HashMap<>();
@@ -751,7 +757,10 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     /**
      * Lays out the items an exact layout still has to, on every core when there are many: a find or a select-all over a
      * long stored conversation lays out each block once. An item lays out only its own subtree, with its own boxes and
-     * the shared immutable style, so items are independent; the caller waits, and reads the heights after.
+     * the shared immutable style, so items are independent. The caller and up to one fork per other core take items in
+     * turn from one counter; once the caller finds none left, every item is taken, so its wait for the forks is bounded
+     * by the one item each may still be laying out. The latch orders the forks' layouts before the caller reads the
+     * heights; the first failure is thrown on the caller once all have stopped.
      */
     private void layOutInParallel(int inner, Style s) {
         List<Item> stale = new ArrayList<>();
@@ -760,8 +769,46 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
                 stale.add(item);
             }
         }
-        if (stale.size() >= PARALLEL_FROM) {
-            stale.parallelStream().forEach(item -> item.layout(inner, s));
+        if (stale.size() < PARALLEL_FROM) {
+            return;
+        }
+        int forks = Math.min(Runtime.getRuntime().availableProcessors() - 1, stale.size() / ITEMS_PER_FORK);
+        AtomicInteger next = new AtomicInteger();
+        AtomicReference<RuntimeException> failure = new AtomicReference<>();
+        Runnable work = () -> {
+            for (int i; failure.get() == null && (i = next.getAndIncrement()) < stale.size(); ) {
+                try {
+                    stale.get(i).layout(inner, s);
+                } catch (RuntimeException e) {
+                    failure.compareAndSet(null, e);
+                }
+            }
+        };
+        CountDownLatch done = new CountDownLatch(forks);
+        for (int f = 0; f < forks; f++) {
+            Threads.fork("transcript-layout-" + f, () -> {
+                try {
+                    work.run();
+                } finally {
+                    done.countDown();
+                }
+            });
+        }
+        work.run();
+        boolean interrupted = false;
+        while (true) {
+            try {
+                done.await();
+                break;
+            } catch (InterruptedException e) {
+                interrupted = true; // the forks touch the items still: the caller may not read them before they stop
+            }
+        }
+        if (interrupted) {
+            Thread.currentThread().interrupt();
+        }
+        if (failure.get() != null) {
+            throw failure.get();
         }
     }
 

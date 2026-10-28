@@ -13,6 +13,7 @@ import javax.swing.SwingUtilities;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -115,7 +116,8 @@ class TerminalTabsTest {
         assertThat(TerminalTabs.directory(s)).isEqualTo(HOME);
     }
 
-    /// Terminals that never started a shell report no running job, also for a panel without a terminal.
+    /// Terminals that never started a shell report no running job, also for a panel without a terminal; the asynchronous
+    /// check answers at once, empty, when there is no shell to ask.
     @Test
     void terminalsWithoutShellsRunNoJobs() {
         TerminalTabs tabs = new TerminalTabs();
@@ -123,7 +125,9 @@ class TerminalTabsTest {
         tabs.render(s, false);
         assertThat(tabs.hasRunningJob(P1)).isFalse();
         assertThat(tabs.hasRunningJob(P2)).isFalse();
-        assertThat(tabs.runningJobs()).isEmpty();
+        AtomicReference<Map<PanelId, String>> answered = new AtomicReference<>();
+        tabs.checkAllJobs(answered::set);
+        assertThat(answered.get()).as("answered at once, with no shell to ask").isEmpty();
     }
 
     /// [TerminalTabs#jobLine] names the job with the panel's possessive, an apostrophe alone after a trailing `s`.

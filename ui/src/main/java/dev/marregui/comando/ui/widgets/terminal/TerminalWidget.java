@@ -16,6 +16,7 @@ import com.jediterm.terminal.ui.TerminalPanel;
 import com.jediterm.terminal.ui.settings.DefaultSettingsProvider;
 import com.jediterm.terminal.ui.settings.SettingsProvider;
 import dev.marregui.comando.core.loop.Processes;
+import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
@@ -29,7 +30,6 @@ import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
 
-import java.time.Duration;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JComponent;
@@ -50,10 +50,14 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.DoubleSupplier;
 import java.util.function.Function;
@@ -342,6 +346,52 @@ public final class TerminalWidget implements Zoomable, Searchable {
         } catch (UnsupportedOperationException e) {
             return Optional.of(UNCHECKED_JOB);
         }
+    }
+
+    /** A running shell as a job check needs it, read on the EDT so the check can run on another thread. */
+    public record Shell(long pid, String command) {
+    }
+
+    /** The shell this terminal runs, while it runs; empty before a start and after the shell ended. */
+    public Optional<Shell> shell() {
+        Pty p = pty;
+        if (p == null || !p.process().isAlive()) {
+            return Optional.empty();
+        }
+        try {
+            return Optional.of(new Shell(p.process().pid(), command.getFirst()));
+        } catch (UnsupportedOperationException e) {
+            return Optional.of(new Shell(-1, command.getFirst()));
+        }
+    }
+
+    /**
+     * The job each shell runs in front, by key, for the shells that run one: the checks run together on forks, at most
+     * {@code boundMillis} in all, and a shell not answered by then, or whose process id is unknown, counts as running
+     * {@link #UNCHECKED_JOB}, so a question asks rather than ending a program unseen. Not on the EDT: each check runs
+     * {@code ps}.
+     */
+    public static <K> Map<K, String> foregroundJobs(Map<K, Shell> shells, long boundMillis) {
+        return foregroundJobs(shells, boundMillis, TerminalWidget::ps);
+    }
+
+    /** {@link #foregroundJobs(Map, long)} with {@code ps} as {@link #foregroundJob(long, String, Function)} takes it. */
+    static <K> Map<K, String> foregroundJobs(Map<K, Shell> shells, long boundMillis, Function<List<String>, List<String>> ps) {
+        Map<K, Optional<String>> answered = new ConcurrentHashMap<>();
+        Map<K, Thread> forks = new LinkedHashMap<>();
+        shells.forEach((key, shell) -> forks.put(key, Threads.fork("terminal-job", () ->
+                answered.put(key, shell.pid() < 0 ? Optional.of(UNCHECKED_JOB) : foregroundJob(shell.pid(), shell.command(), ps)))));
+        long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(boundMillis);
+        Map<K, String> jobs = new LinkedHashMap<>();
+        for (Map.Entry<K, Thread> f : forks.entrySet()) {
+            try {
+                f.getValue().join(Duration.ofNanos(Math.max(1, deadline - System.nanoTime())));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            answered.getOrDefault(f.getKey(), Optional.of(UNCHECKED_JOB)).ifPresent(job -> jobs.put(f.getKey(), job));
+        }
+        return jobs;
     }
 
     /** {@link #foregroundJob(long, String, Function)} with the system's {@code ps}. */

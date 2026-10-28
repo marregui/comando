@@ -343,7 +343,7 @@ closes what was built and rethrows. A part that takes 100 ms or more to close is
 | 5 | `App`'s errands | 10 | interrupts the start-up check and waits for it |
 | 6 | `IntentLog` (when recording) | 9 | closes the log after the loop, so the shutdown's intents are recorded |
 | 7 | `StateLoop` | 8 | stops the reducer after the queued intents, then its look on the watchdog |
-| 8 | `DbAdapter` | 7 | cancels running statements, closes the lanes, stops the timer |
+| 8 | `DbAdapter` | 7 | cancels every lane's running statement at once, then waits for the lanes on one 3 s bound, stops the timer |
 | 9 | `MermaidDiagrams` | 6 | stops `mmdc` and its children |
 | 10 | `LocalImages` | 5 | stops reading pictures and drawing SVGs |
 | 11 | `McpServer` | 4 | denies every waiting approval, stops the server |
@@ -351,10 +351,12 @@ closes what was built and rethrows. A part that takes 100 ms or more to close is
 | 13 | `ToolsAdapter` | 2 | SIGTERM to every run's process tree, SIGKILL 2 s later; stops the folder poll and git; its errands last |
 | 14 | `ClaudeTopics` | 1 | drops the waiting asks, stops a read under way |
 | 15 | `EmbeddedQuestDb` | 15 | closes after the lanes |
-| 16 | `ComandoUi` | 16 | closes last: terminals, live plots, the EDT's watchdog look, the window, the window's errands |
+| 16 | `ComandoUi` | 16 | closes last: terminals (a shell still alive 2 s after the hangup is killed), live plots, the EDT's watchdog look, the window, the window's errands |
 
 Quit (window, Dock, menu) first asks when work would stop: a running query, a turn, a session's background work, a shell
-job in the foreground, a Gradle run; Cancel is the default. It then saves the layout, ends terminals and live plots,
+job in the foreground, a Gradle run; Cancel is the default. The shells' jobs are looked up off the EDT, every shell
+at once, 2 s in all (a shell not answered by then is asked about as a program comando could not check); the question
+opens, or the quit goes on, once they answer; closing a panel looks up its shell's job the same way. Quit then saves the layout, ends terminals and live plots,
 greys the window, and runs `onQuit`, which starts the `exit` thread: `App.close()`, then `System.exit(0)`. A shutdown
 hook calls `App.close()` too; the second call does nothing.
 

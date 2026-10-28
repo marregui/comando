@@ -353,10 +353,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             Desktop.getDesktop().setQuitHandler((event, response) -> Edt.later(() -> {
                 // a trigger that arrives while the question is open is answered with it
                 pendingQuits.add(response);
-                if (!confirmingQuit && !quit()) {
-                    pendingQuits.forEach(QuitResponse::cancelQuit);
-                    pendingQuits.clear();
-                }
+                quit();
             }));
         }
         notifier = new Notifier(frame);
@@ -1591,15 +1588,38 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
     }
 
-    /** Closes a panel; asks first when its shell runs a job in front, which closing would end. */
+    /**
+     * Closes a panel; asks first when its shell runs a job in front, which closing would end. The job is looked up off
+     * the EDT, so the close happens, or the question opens, once the check answers.
+     */
     private void closePanel(PanelId id) {
-        Optional<String> job = lower.terminals().runningJob(id);
         // the last panel is never closed: the reducer says so, with nothing asked first
-        if (job.isPresent() && deps.state().get().panels().size() > 1) {
+        if (deps.state().get().panels().size() <= 1) {
+            deps.intents().dispatch(new Intent.ClosePanel(id));
+            return;
+        }
+        if (!closingPanels.add(id)) {
+            return; // a second close while its check runs or its question is open: that one answers it
+        }
+        lower.terminals().checkJobs(List.of(id), jobs -> {
+            try {
+                answerClose(id, jobs.get(id));
+            } finally {
+                closingPanels.remove(id);
+            }
+        });
+    }
+
+    /** The panels whose close is being checked or asked about. */
+    private final Set<PanelId> closingPanels = new HashSet<>();
+
+    /** Asks, when the panel's shell runs {@code job}, then closes; a panel gone meanwhile is closed without a question. */
+    private void answerClose(PanelId id, String job) {
+        if (job != null && deps.state().get().panel(id).isPresent()) {
             String title = deps.state().get().panel(id).map(x -> x.title()).orElse("the panel");
-            String why = job.get().equals(TerminalWidget.UNCHECKED_JOB)
+            String why = job.equals(TerminalWidget.UNCHECKED_JOB)
                     ? "comando cannot tell whether the shell in its Terminal tab is running a program; closing the panel ends anything it runs."
-                    : "The shell in its Terminal tab is running " + job.get() + "; closing the panel ends it.";
+                    : "The shell in its Terminal tab is running " + job + "; closing the panel ends it.";
             if (!confirm("Close " + title + "?", why, "Close panel")) {
                 return;
             }
@@ -1970,8 +1990,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 : "Quitting stops:\n" + work.stream().map(w -> "• " + w).collect(Collectors.joining("\n"));
     }
 
-    /** What quitting would stop: running queries, sessions in a turn, shells running a job; empty when nothing. */
-    private List<String> runningWork() {
+    /**
+     * What quitting would stop: running queries, sessions in a turn, shells running a job ({@code jobs}, by panel);
+     * empty when nothing.
+     */
+    private List<String> runningWork(Map<PanelId, String> jobs) {
         AppState s = deps.state().get();
         List<String> work = new ArrayList<>();
         long queries = s.runs().stream().filter(r -> r.status().isActive()).count();
@@ -1987,7 +2010,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             work.add(String.join(", ", waiting) + (waiting.size() == 1 ? "'s background work" : "' background work"));
         }
         // each job named with the panel whose Terminal tab runs it, in the panels' order
-        Map<PanelId, String> jobs = lower.terminals().runningJobs();
         for (PanelState p : s.panels()) {
             String job = jobs.get(p.id());
             if (job != null) {
@@ -2011,26 +2033,28 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** The macOS quit requests waiting for the answer to the open question. */
     private final List<QuitResponse> pendingQuits = new ArrayList<>();
 
-    /** Quits, asking first when work would stop; false when the user kept comando open. */
-    private boolean quit() {
-        if (quitting) {
-            return true;
+    /**
+     * Quits, asking first when work would stop. In two steps, so the EDT never waits on a shell: the terminals' jobs
+     * are looked up off the EDT ({@link TerminalTabs#checkAllJobs}), then {@link #quitWith} asks or quits. A trigger
+     * while either step is under way is answered with it; when the user keeps comando open, the macOS quit requests
+     * waiting are cancelled.
+     */
+    private void quit() {
+        if (quitting || confirmingQuit) {
+            return;
         }
-        if (confirmingQuit) {
-            return true; // a second trigger while the question is open: the open question answers both
-        }
-        List<String> work = runningWork();
-        if (!work.isEmpty()) {
-            confirmingQuit = true;
-            try {
-                if (!confirm("Quit comando?", quitQuestion(work), "Quit")) {
-                    pendingQuits.forEach(QuitResponse::cancelQuit);
-                    pendingQuits.clear();
-                    return false;
-                }
-            } finally {
-                confirmingQuit = false;
-            }
+        confirmingQuit = true;
+        lower.terminals().checkAllJobs(this::quitWith);
+    }
+
+    private void quitWith(Map<PanelId, String> jobs) {
+        List<String> work = runningWork(jobs);
+        boolean keep = !work.isEmpty() && !confirm("Quit comando?", quitQuestion(work), "Quit");
+        confirmingQuit = false;
+        if (keep) {
+            pendingQuits.forEach(QuitResponse::cancelQuit);
+            pendingQuits.clear();
+            return;
         }
         quitting = true;
         long start = System.nanoTime();
@@ -2052,6 +2076,5 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         }
         deps.onQuit().run();
-        return true;
     }
 }

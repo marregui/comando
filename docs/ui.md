@@ -279,7 +279,7 @@ one 16-character delta per frame, laying out and painting a 1200 × 800 viewport
 9 000-character open thinking block. It fails when either 99th percentile exceeds 16 ms. It also prints, without
 failing on them, the frames of a 1 500-line code fence whose last 100 lines stream (a growing block keeps the layouts
 of its whole lines), and the time of a find over 2 000 loaded blocks, for a word in most of them and for a word in a
-few. An exact layout of many blocks, which a find needs for exact positions, spreads them over the cores. The gate
+few. An exact layout of many blocks, which a find needs for exact positions, spreads them over the cores on forks from `Threads` (2026-10-28: 553 ms and 474 ms, as on the shared pool before). The gate
 has no `System.exit` on its happy path: AWT ends the JVM once nothing posts to it, so a Swing timer or a displayable
 component left behind by the code under measurement would hang it; a daemon watch reports the non-daemon threads and
 exits 2 when the JVM is still alive 10 s after the measurement (2026-10-28: a never-shown `RSyntaxTextArea`, built only

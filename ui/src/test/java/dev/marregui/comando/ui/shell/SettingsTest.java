@@ -1,14 +1,12 @@
 package dev.marregui.comando.ui.shell;
 
+import dev.marregui.comando.testkit.MemoryPreferences;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.UUID;
-import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -19,14 +17,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - An unreadable file is kept aside and the settings start empty.
 class SettingsTest {
 
-    private final Preferences legacy = Preferences.userRoot().node("comando-test-" + UUID.randomUUID());
+    /// The earlier preferences, in memory: the test never touches the user's preferences store.
+    private final Preferences legacy = new MemoryPreferences();
 
-    @AfterEach
-    void removeNode() throws BackingStoreException {
-        legacy.removeNode();
-    }
-
-    /// Strings, negative integers and booleans from a private preferences node arrive typed, are written as JSON numbers
+    /// Strings, negative integers and booleans from the earlier preferences arrive typed, are written as JSON numbers
     /// and booleans in key order, the node is left unchanged, and a later change to it is not read again.
     @Test
     void theFirstOpenCopiesTheEarlierPreferencesTypedAndLeavesThemAsTheyWere(@TempDir Path home) throws Exception {

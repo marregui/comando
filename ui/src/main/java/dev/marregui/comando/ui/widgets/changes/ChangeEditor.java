@@ -22,7 +22,6 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
-import java.util.function.Consumer;
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.BoundedRangeModel;
@@ -52,6 +51,7 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Consumer;
 
 /**
  * A changed file beside its {@code HEAD} version, the comparison window's body: the two texts side by side with their

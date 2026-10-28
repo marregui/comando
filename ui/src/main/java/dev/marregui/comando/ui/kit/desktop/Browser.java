@@ -19,8 +19,11 @@ public final class Browser {
     private Browser() {
     }
 
-    /** True for an {@code http} or {@code https} link, in any letter case. */
+    /** True for an {@code http} or {@code https} link, in any letter case; false for null. */
     public static boolean isWebLink(String href) {
+        if (href == null) {
+            return false;
+        }
         String h = href.toLowerCase(Locale.ROOT);
         return h.startsWith("http://") || h.startsWith("https://");
     }

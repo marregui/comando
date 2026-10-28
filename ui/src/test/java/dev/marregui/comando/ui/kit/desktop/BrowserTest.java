@@ -14,8 +14,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - A link that is not a web link, or not a valid URI, is not opened.
 class BrowserTest {
 
-    /// [Browser#isWebLink] accepts `http` and `https` in any case and refuses `comando-file`, `file` and a scheme that
-    /// only starts with `http`.
+    /// [Browser#isWebLink] accepts `http` and `https` in any case and refuses `comando-file`, `file`, a scheme that
+    /// only starts with `http`, and no link at all (null), as the other link helpers do.
     @Test
     void webLinksAreHttpAndHttpsInAnyLetterCase() {
         assertThat(Browser.isWebLink("https://example.com")).isTrue();
@@ -24,6 +24,7 @@ class BrowserTest {
         assertThat(Browser.isWebLink("comando-file:/tmp/x#1")).isFalse();
         assertThat(Browser.isWebLink("file:///etc/passwd")).isFalse();
         assertThat(Browser.isWebLink("httpx://example.com")).isFalse();
+        assertThat(Browser.isWebLink(null)).isFalse();
     }
 
     /// [Browser#open] hands the parsed URI to the opener on a thread named `open-link`.

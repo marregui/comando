@@ -329,15 +329,24 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
         }
     }
 
-    /** Closes every lane and stops the timer. Idempotent. */
+    /**
+     * Closes every lane and stops the timer. Idempotent. Every lane begins its close before any is waited for, so the
+     * statements are cancelled together and the whole close waits one lane's bound, not one per lane.
+     */
     @Override
     public void close() {
         if (closed) {
             return;
         }
         closed = true;
-        for (Lane lane : lanes.values()) {
-            lane.close();
+        // one snapshot for both passes: a lane made meanwhile sees closed and closes itself (onLane)
+        List<Lane> closing = List.copyOf(lanes.values());
+        for (Lane lane : closing) {
+            lane.beginClose();
+        }
+        long deadline = System.nanoTime() + Lane.CLOSE_WAIT_NANOS;
+        for (Lane lane : closing) {
+            lane.finishClose(deadline);
         }
         lanes.clear();
         timer.shutdownNow();
