@@ -11,14 +11,16 @@ import java.awt.Frame;
 import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.prefs.Preferences;
 
 /**
- * The window's layout across restarts, in the user's preferences: its bounds and whether it was maximized, the
- * dividers, the sidebar's state and tab, the side pane, the editors' theme, the theme (its ground and tint) and Linear's site. The one place each key is named.
+ * What the window keeps across restarts, in comando's {@link Settings} ({@code settings.json} in the data root, record
+ * 106): its bounds and whether it was maximized, the dividers, the sidebar's state and tab, the side pane, the theme (its
+ * ground and tint), Linear's site, the folder of the last export and the last Gradle tasks. The one place each key is
+ * named; a method that changes a setting writes the file.
  */
 final class WindowLayout {
 
@@ -33,10 +35,10 @@ final class WindowLayout {
      */
     static final String OFF_SCREEN_PROPERTY = "comando.offScreen";
 
-    private final Preferences prefs;
+    private final Settings prefs;
     private final boolean offScreen;
 
-    WindowLayout(Preferences prefs) {
+    WindowLayout(Settings prefs) {
         this.prefs = prefs;
         this.offScreen = Boolean.getBoolean(OFF_SCREEN_PROPERTY);
     }
@@ -134,6 +136,27 @@ final class WindowLayout {
     void linearSite(LinearTickets.Site site) {
         prefs.put("linear.workspace", site.workspace());
         prefs.put("linear.teams", String.join(",", new TreeSet<>(site.teams())));
+        prefs.flush();
+    }
+
+    /** The folder the last export went to, else the user's home. */
+    Path exportDir() {
+        return Path.of(prefs.get("export.dir", System.getProperty("user.home")));
+    }
+
+    void exportDir(Path dir) {
+        prefs.put("export.dir", dir.toString());
+        prefs.flush();
+    }
+
+    /** The Gradle tasks run last, "build" before any. */
+    String gradleTasks() {
+        return prefs.get("tools.gradle", "build");
+    }
+
+    void gradleTasks(String tasks) {
+        prefs.put("tools.gradle", tasks);
+        prefs.flush();
     }
 
     /**
@@ -150,6 +173,7 @@ final class WindowLayout {
         prefs.put("theme.ground", theme.ground.name());
         prefs.put("theme.tint", theme.tint.name());
         prefs.remove("theme.gold");
+        prefs.flush();
     }
 
     boolean sidebarShown() {
@@ -162,6 +186,7 @@ final class WindowLayout {
 
     void sidebarDivider(int at) {
         prefs.putInt("divider.sidebar", at);
+        prefs.flush();
     }
 
     /** Where the lower panel's divider was, else a little under the middle of a window {@code height} high. */
@@ -202,5 +227,6 @@ final class WindowLayout {
         if (s.sideDivider() >= 0) {
             prefs.putInt("divider.side", s.sideDivider());
         }
+        prefs.flush();
     }
 }

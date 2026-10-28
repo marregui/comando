@@ -1,23 +1,13 @@
 package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.ui.panels.SessionsSidebar;
-import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-
-import java.util.UUID;
-import java.util.prefs.BackingStoreException;
-import java.util.prefs.Preferences;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 class WindowLayoutTest {
 
-    private final Preferences prefs = Preferences.userRoot().node("comando-test-" + UUID.randomUUID());
-
-    @AfterEach
-    void removeNode() throws BackingStoreException {
-        prefs.removeNode();
-    }
+    private final Settings prefs = Settings.inMemory();
 
     @Test
     void theTabInFrontBeforeTheOneRowStaysInFront() {

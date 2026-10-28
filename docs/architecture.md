@@ -387,7 +387,7 @@ Where new code goes:
 5. Nothing blocks the EDT: process runs, network, reads of unknown size and keychain calls go to other threads; Swing
    only on the EDT.
 6. Text from Claude, a database or a file reaches Swing as text, never as HTML (`Plain`, `MarkdownHtml`).
-7. Tests never touch the user's data root, keychain or window preferences unless a flag says so.
+7. Tests never touch the user's data root, keychain or Java preferences unless a flag says so.
 8. Code and comments name no tool, agent or review finding.
 9. Compiler warnings are errors (`-Xlint:all -Werror`, except `serial`, `processing`, `this-escape`).
 10. Types are imported, never fully qualified, except to tell apart two types with one simple name. Imports: project,

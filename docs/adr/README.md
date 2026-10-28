@@ -123,3 +123,4 @@ has the same shape:
 | [103](0103-curated-themes-in-actions.md) | Six curated themes, chosen in Actions ▸ Theme or beside Clear; surfaces follow the ground | 2026-10-27 | Miguel and Claude | accepted; the swatch's place replaced by [record 104](0104-the-theme-beside-new-panel.md) |
 | [104](0104-the-theme-beside-new-panel.md) | The theme beside New panel; Clear from the palette | 2026-10-27 | Miguel and Claude | accepted |
 | [105](0105-a-session-bar-under-the-lower-panel.md) | A session bar under the lower panel; the window's status bar holds the window's status | 2026-10-28 | Miguel and Claude | accepted |
+| [106](0106-settings-in-the-data-root.md) | comando's settings in the data root, as settings.json | 2026-10-28 | Miguel | accepted |

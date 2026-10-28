@@ -1,6 +1,8 @@
 package dev.marregui.comando.app;
 
 import com.jediterm.terminal.ui.JediTermWidget;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.effect.EffectRouter;
@@ -38,6 +40,7 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -74,6 +77,7 @@ import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
@@ -172,6 +176,8 @@ class UiKeysTest {
     private final List<AutoCloseable> open = new ArrayList<>();
     private final String keys = System.getProperty(Platform.KEYS_PROPERTY);
     private final String prefs = System.getProperty("comando.prefsNode");
+    /** The data root the windows opened next get, where they keep {@code settings.json}; none by default. */
+    private Path windowHome;
 
     @AfterEach
     void tearDown() throws Exception {
@@ -182,6 +188,12 @@ class UiKeysTest {
         restore("comando.prefsNode", prefs);
         Preferences.userRoot().node(PREFS).removeNode();
         Theme.tint(Tint.TREASURE);
+    }
+
+    /** A key's value in a window's {@code settings.json}, as text; null when it has none. */
+    private static String setting(Path settings, String key) throws IOException {
+        JsonNode v = new ObjectMapper().readTree(settings.toFile()).get(key);
+        return v == null ? null : v.asText();
     }
 
     private static void restore(String property, String value) {
@@ -216,7 +228,7 @@ class UiKeysTest {
         };
         TranscriptRegistry transcripts = new TranscriptRegistry();
         ComandoUi ui = new ComandoUi(new ComandoUi.Dependencies(recording, loop::state, loop, transcripts, new ResultRegistry(),
-                new ConsoleRegistry(), new SchemaRegistry(), new Texts(), List::of, server, Setup.NONE, "keys", null, null, () -> { }));
+                new ConsoleRegistry(), new SchemaRegistry(), new Texts(), List::of, server, Setup.NONE, "keys", windowHome, null, () -> { }));
         effects.target = new EffectRouter(ports, ports, ports, ui, ports, ports);
         open.add(() -> {
             ui.close();
@@ -496,8 +508,9 @@ class UiKeysTest {
     }
 
     @Test
-    void theThemeIsChosenInActionsOrBesideNewPanelEveryPanelTakesItAndTheNextWindowKeepsIt() throws Exception {
-        Preferences prefs = Preferences.userRoot().node(PREFS);
+    void theThemeIsChosenInActionsOrBesideNewPanelEveryPanelTakesItAndTheNextWindowKeepsIt(@TempDir Path home) throws Exception {
+        windowHome = home;
+        Path settings = home.resolve("settings.json");
         try {
             Window w = open("mac");
             settle(w);
@@ -566,8 +579,8 @@ class UiKeysTest {
             assertThat(Theme.groundChosen()).isEqualTo(Ground.MIDNIGHT);
             assertThat(Theme.tint()).isEqualTo(Tint.ELECTRIC_BLUE);
             assertThat(onEdt(() -> swatch.getToolTipText())).as("the tooltip follows").startsWith("Theme: " + NamedTheme.MIDNIGHT_BLUE.label + ";");
-            assertThat(prefs.get("theme.ground", null)).as("kept").isEqualTo("MIDNIGHT");
-            assertThat(prefs.get("theme.tint", null)).as("kept").isEqualTo("ELECTRIC_BLUE");
+            assertThat(setting(settings, "theme.ground")).as("kept in settings.json (record 106)").isEqualTo("MIDNIGHT");
+            assertThat(setting(settings, "theme.tint")).as("kept").isEqualTo("ELECTRIC_BLUE");
             assertThat(tintPixels(canvas, Tint.ELECTRIC_BLUE)).as("the answer laid out again in the tint, at once").isPositive();
             assertThat(tintPixels(canvas, Tint.TREASURE)).isZero();
             Color ground = Ground.MIDNIGHT.color;
@@ -603,8 +616,8 @@ class UiKeysTest {
                 return null;
             });
             assertThat(NamedTheme.chosen()).contains(NamedTheme.SLATE_SILVER);
-            assertThat(prefs.get("theme.ground", null)).isEqualTo("SLATE");
-            assertThat(prefs.get("theme.tint", null)).isEqualTo("SILVER");
+            assertThat(setting(settings, "theme.ground")).isEqualTo("SLATE");
+            assertThat(setting(settings, "theme.tint")).isEqualTo("SILVER");
             assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
                     .as("Actions ▸ Theme ticks it too").containsExactly(NamedTheme.SLATE_SILVER.label);
             assertThat(tintPixels(canvas, Tint.SILVER)).as("the answer laid out again in it, at once").isPositive();
@@ -632,15 +645,11 @@ class UiKeysTest {
             assertThat(NamedTheme.chosen()).as("a new window in the theme kept").contains(NamedTheme.SLATE_SILVER);
 
             // the gold kept before tints, under its old key and with no ground, opens in the theme of that gold
-            prefs.remove("theme.ground");
-            prefs.remove("theme.tint");
-            prefs.put("theme.gold", "CHAMPAGNE");
+            Files.writeString(settings, "{\"theme.gold\": \"CHAMPAGNE\"}");
             open("mac");
             assertThat(NamedTheme.chosen()).as("the gold kept before themes").contains(NamedTheme.ESPRESSO_CHAMPAGNE);
         } finally {
-            prefs.remove("theme.ground");
-            prefs.remove("theme.tint");
-            prefs.remove("theme.gold");
+            windowHome = null;
             SwingUtilities.invokeAndWait(() -> {
                 Theme.ground(Ground.GRAPHITE);
                 Theme.tint(Tint.TREASURE);

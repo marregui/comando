@@ -190,9 +190,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private final WidgetRegistry widgets = new WidgetRegistry();
     private final Coalescer render = new Coalescer(this::render);
     private final Coalescer transcriptRender = new Coalescer(this::renderTranscript);
-    /** Window layout; tests point {@code comando.prefsNode} elsewhere so they never read or change the user's. */
-    private final Preferences prefs = Preferences.userRoot().node(System.getProperty("comando.prefsNode", "dev/marregui/comando"));
-    private final WindowLayout windowLayout = new WindowLayout(prefs);
+    /**
+     * What the window keeps, in {@code settings.json} in the data root; read once from the Java preferences node that kept
+     * it before, which tests point elsewhere with {@code comando.prefsNode}.
+     */
+    private final WindowLayout windowLayout;
     private JFrame frame;
     private Workspace workspace;
     private LowerPanel lower;
@@ -258,6 +260,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     public ComandoUi(Dependencies deps) {
         this.deps = deps;
+        this.windowLayout = new WindowLayout(deps.home() == null ? Settings.inMemory() : Settings.open(deps.home().resolve("settings.json"),
+                Preferences.userRoot().node(System.getProperty("comando.prefsNode", "dev/marregui/comando"))));
         this.openedFiles = deps.home() == null ? OpenedFiles.inMemory() : OpenedFiles.load(deps.home().resolve("opened-files"));
         this.help = new HelpActions(deps, () -> frame, this::openFile, actions::run, () -> sidePaneHidden = false, actions::all);
         this.kit = new KitActions(deps, () -> frame);
@@ -1439,10 +1443,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         if (e == null) {
             return;
         }
-        Path dir = Path.of(prefs.get("export.dir", System.getProperty("user.home")));
+        Path dir = windowLayout.exportDir();
         Capabilities.export(frame, e, dir, (file, error) -> {
             if (error == null) {
-                prefs.put("export.dir", file.toAbsolutePath().getParent().toString());
+                windowLayout.exportDir(file.toAbsolutePath().getParent());
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "Exported to " + file, false));
             } else {
                 deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot export to " + file + ": " + error, null));
@@ -1462,9 +1466,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private void runGradle() {
         String dir = focusedSession().map(x -> Labels.shortPath(x.spec().workDir())).orElse("the session's directory");
         String tasks = (String) JOptionPane.showInputDialog(frame, Plain.text("Tasks and options, run in " + dir + ":"),
-                "Run Gradle", JOptionPane.PLAIN_MESSAGE, null, null, prefs.get("tools.gradle", "build"));
+                "Run Gradle", JOptionPane.PLAIN_MESSAGE, null, null, windowLayout.gradleTasks());
         if (tasks != null && !tasks.isBlank()) {
-            prefs.put("tools.gradle", tasks.strip());
+            windowLayout.gradleTasks(tasks.strip());
             deps.intents().dispatch(new Intent.RunGradle(focusedId(), tasks.strip()));
         }
     }

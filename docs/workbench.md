@@ -538,6 +538,7 @@ replacing what the view showed.
 | `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Actions ▸ Show the log opens it read-only, a click on a notice that names an entry opens it at that entry |
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
+| `settings.json` | the window's kept state: the theme, the window's bounds and dividers, the sidebar's state and tab, the side pane, the sessions' manual order, Linear's site, the last export's folder, the last Gradle tasks ([record 106](adr/0106-settings-in-the-data-root.md)) |
 | `opened-files` | the files opened in comando, one path per line, at most 20 000: a new (untracked) file listed here is no longer marked in the Files tab ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)) |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |
 | `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |
@@ -545,8 +546,9 @@ replacing what the view showed.
 | `questdb/` | the embedded QuestDB's data |
 
 Outside it: connection passwords in the macOS keychain for the default data root (elsewhere, or off macOS, they stay
-in `connections.json`; [Claude §3.3](claude.md#33-secrets)); window layout, the chosen tint and recent inputs in Java
-preferences (node `dev/marregui/comando`; tests use `comando.prefsNode`).
+in `connections.json`; [Claude §3.3](claude.md#33-secrets)). The Java preferences that held the window's state before
+`settings.json` (node `dev/marregui/comando`; tests use `comando.prefsNode`) are read once, when the file does not
+exist yet, and left as they were.
 
 In the root ([§7.1](#71-the-root)) comando reads Claude Code's conversations in `projects/` and the effort levels in
 `settings.json`, and never writes either. It writes into the root only on the user's action: a file edited in a panel

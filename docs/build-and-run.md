@@ -49,7 +49,8 @@ copy once it is two minutes old and no live process names it on its command line
 place, as no build rewrites them; `clean` leaves `.gradle/` alone.
 
 Tests run headless, with the data root in each module's `build/test-home`, so they never read or change the user's
-data; the window tests keep their window preferences under a node of their own. The modules test side by side
+data; a window test without a data root keeps its settings in memory, and the earlier preferences it might read are
+under a node of its own. The modules test side by side
 (`gradle.properties`), each in up to three JVMs; `:app:uiTest` runs one JVM per test class, one at a time, as its
 windows share one desktop.
 
@@ -90,7 +91,7 @@ the ui jar carries. The PostgreSQL adapter test runs on Ubuntu only: macOS runne
 | `CLAUDE_CONFIG_DIR` | environment | unset | the root comando's sessions run on, in place of `~/.claude` or `~/.claude/comando-kit` ([Workbench §7.1](workbench.md#71-the-root)) |
 | `comando.keychain` | system property | `true` for `~/.comando`, else `false` | keep connection passwords in the login keychain (macOS); elsewhere they stay in `connections.json` |
 | `comando.recordIntents` | system property | `false` | write the intent log to `logs/` in the data root |
-| `comando.prefsNode` | system property | `dev/marregui/comando` | the Java preferences node for the window layout |
+| `comando.prefsNode` | system property | `dev/marregui/comando` | the Java preferences node read once into `settings.json` when that file does not exist yet |
 | `comando.offScreen` | system property | `false` | `true` opens the window undecorated, left of every screen, never taking the focus; set by `:app:uiTest`, `:app:snapshot` and `:app:docImages` |
 | `comando.keys` | system property | the desktop's | `mac` or `linux` chooses macOS's keys or the other desktops' on any desktop; for tests |
 
