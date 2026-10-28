@@ -9,6 +9,7 @@ import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
@@ -1025,10 +1026,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         FoldersDialog.show(frame, deps.state().get().folders(), repoChanges, deps.intents(), deps.setup().root().folders());
     }
 
-    /** The kit's menu under its label in the status bar: its upgrade and the brain's backup, enabled as each can run. */
+    /** The kit's menu under its label in the status bar: its upgrade and the backups, enabled as each can run. */
     private void kitMenu(JComponent under) {
         JPopupMenu menu = new JPopupMenu();
-        for (String id : List.of("kit.upgrade", "kit.backup")) {
+        for (String id : List.of("kit.upgrade", "kit.backup", "kit.backupKit")) {
             Command c = actions.get(id);
             if (c != null) {
                 JMenuItem item = new JMenuItem(ActionRegistry.action(c));
@@ -1039,11 +1040,17 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         menu.show(under, 0, -menu.getPreferredSize().height);
     }
 
-    /** A Files tab folder row's menu: a folder of the kit's brain gains the brain's backup. */
+    /**
+     * A Files tab top row's menu (record 118): the brain's row, or a folder inside the brain, gains the brain's backup;
+     * the kit's root's row gains the kit's.
+     */
     private void folderMenu(FolderRoot folder, JPopupMenu menu) {
-        Optional<Path> brain = deps.setup().root().brain();
-        Command c = actions.get("kit.backup");
-        if (brain.isEmpty() || c == null || !inside(Path.of(folder.path()), brain.get())) {
+        KitRoot root = deps.setup().root();
+        Path p = Path.of(folder.path());
+        String id = root.brain().filter(b -> inside(p, b)).isPresent() ? "kit.backup"
+                : root.kit().isPresent() && inside(p, root.dir()) && inside(root.dir(), p) ? "kit.backupKit" : "";
+        Command c = actions.get(id);
+        if (c == null) {
             return;
         }
         menu.addSeparator();
@@ -1276,6 +1283,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // the kit: its upgrade, by a session in its root, and the brain's backup; never on their own
         cmd("kit.upgrade", KitActions.UPGRADE, null, kit::upgrade, kit::canUpgrade);
         cmd("kit.backup", KitActions.BACK_UP, null, kit::backUp, kit::canBackUp);
+        cmd("kit.backupKit", KitActions.BACK_UP_KIT, null, kit::backUpKit, kit::canBackUpKit);
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
         cmd("terminal.start", "Start the shell", null, () -> lower.terminals().startFocused(deps.state().get()),
                 () -> !lower.terminals().focusedRunning());

@@ -125,6 +125,23 @@ class ReducerTest {
         assertThat(state).isSameAs(before);
     }
 
+    /// A group of folders under one parent reads as a folder of its own, its group's name in capitals (record 118): watched
+    /// and browsed by that name, its tree shown; it is no configured folder, so the state is unchanged.
+    @Test
+    void aGroupsRowIsReadAsAFolderOfItsOwn() {
+        FolderRoot memory = new FolderRoot("Memory", "/b/MEMORY", "", List.of(), "memory", false, "", "Brain");
+        FolderRoot kb = new FolderRoot("KB", "/b/KB", "", List.of(), "knowledge", false, "", "Brain");
+        state = state.withFolders(List.of(memory, kb));
+        FolderRoot brain = new FolderRoot("BRAIN", "/b", "", List.of("MEMORY", "KB"), "folder", false, "", "Brain");
+        AppState before = state;
+        apply(new Intent.WatchFolders(List.of("BRAIN", "Memory")));
+        assertThat(effects).containsExactly(new Effect.WatchFolders(List.of(memory, brain)));
+        ViewSpec.TreeNode tree = new ViewSpec.TreeNode("BRAIN", "/b", List.of());
+        apply(new Intent.FolderLoaded(brain, tree));
+        assertThat(effects).containsExactly(new Effect.ShowFolder(brain, tree));
+        assertThat(state).isSameAs(before);
+    }
+
     /// A new folder goes after the others and is saved and watched; one whose name is taken is refused with an error notice
     /// and nothing saved.
     @Test

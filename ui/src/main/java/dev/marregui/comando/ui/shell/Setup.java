@@ -11,18 +11,23 @@ import java.util.List;
 /**
  * The kit comando runs its sessions on, as the window reaches it: the root and its {@code comando-kit.json}, the kit's version
  * and newer releases, the brain's backup, and the kit's scheduled jobs through its {@code install/kit.py} (record 117).
- * {@link #status}, {@link #backUpBrain} and the jobs' calls block (git, a remote, Python): call them off the EDT.
+ * {@link #status}, {@link #backUpBrain}, {@link #backUpKit} and the jobs' calls block (git, a remote, Python): call them off the EDT.
  */
 public interface Setup {
 
     /** The root comando starts its sessions on. */
     KitRoot root();
 
-    /** The kit's version, its newer releases, and whether the brain can be backed up; nothing without a kit. */
+    /** The kit's version, its newer releases, and whether the brain and the kit can be backed up; nothing without a kit. */
     Status status();
 
     /** Commits everything in the brain and pushes it; what was done, for the notice. */
     String backUpBrain() throws IOException;
+
+    /** Commits everything in the kit's root and pushes it; what was done, for the notice. */
+    default String backUpKit() throws IOException {
+        throw new IOException("no kit in this window");
+    }
 
     /** The kit's scheduled jobs as {@code kit.py} reports them; {@link KitJobs#NONE} without a kit. */
     default KitJobs jobs() {
@@ -55,10 +60,16 @@ public interface Setup {
      * The kit as git sees it now.
      *
      * @param version   the kit's version and the newer releases of its remote
-     * @param canBackUp whether the brain is a git repository of its own with a remote
+     * @param canBackUp    whether the brain is a git repository of its own with a remote
+     * @param canBackUpKit whether the kit's root is a git repository with a remote
      */
-    record Status(KitVersion version, boolean canBackUp) {
-        public static final Status NONE = new Status(KitVersion.UNKNOWN, false);
+    record Status(KitVersion version, boolean canBackUp, boolean canBackUpKit) {
+        public static final Status NONE = new Status(KitVersion.UNKNOWN, false, false);
+
+        /** The brain's backup alone, as before the kit had one. */
+        public Status(KitVersion version, boolean canBackUp) {
+            this(version, canBackUp, false);
+        }
     }
 
     /** For a window without a kit (the replay tests): the root comando would use, no version, no backup. */

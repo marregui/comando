@@ -36,7 +36,7 @@ comando is built with and runs on JDK 25.
 | `db` | JDBC lanes (one strand per connection), cancel, columnar results, schema reading, queries for Claude | `core`, PostgreSQL JDBC driver |
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, subagents' conversations, the plans' usage, the tabs' topics, `comando-kit.json` (`KitJson`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log | `core`, Jackson |
-| `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's backup (the `git` command line) | `core` |
+| `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's and the kit's backups (the `git` command line) | `core` |
 | `ui` | the Swing shell, panels, dialogs, widgets and the kit they share | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
 | `app` | wiring, the store files, the keychain, the intent log, the embedded QuestDB, `main` | every module, Jackson, QuestDB |
 

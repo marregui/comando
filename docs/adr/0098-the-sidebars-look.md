@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-27 | accepted | Miguel and Claude |
+| 2026-10-27 | accepted; the folder groups' headers replaced by rows by [record 118](0118-brain-and-kit-are-rows-each-one-unit.md) | Miguel and Claude |
 
 ## 1. Context
 

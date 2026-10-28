@@ -164,7 +164,7 @@ restarts ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md)
 [record 91](adr/0091-the-panels-tab-folds-into-the-sessions-tab.md)). A right click on a tab selects it and opens its
 menu: the tab's own actions, then the window's commands for it with their keys. Every panel of the window, the sidebar
 included, lies on one ground set once (`Theme.ground()`, the theme's); names are in the transcript's ivory; the folders' icons are
-outlines in one grey ink, told apart by their shape; the tint chosen draws the group headers, the tab in front's
+outlines in one grey ink, told apart by their shape; the tint chosen draws the hairline between groups, the tab in front's
 underline and the selection: a band of its shade, the name in its highlight and the report's bar at the left edge
 ([record 98](adr/0098-the-sidebars-look.md), [record 100](adr/0100-a-theme-is-four-tiers-of-tokens.md)).
 
@@ -420,8 +420,9 @@ edited and saved like any other; a `.log` stays read-only.
 - **Folders** are resources ([§1.1](#11-one-model-for-connections-sessions-and-folders)): a unique name, a full path,
   an optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge, skills,
   plugin), whether its entries go to the Trash (`deletable`), the file name that lists them (`listedIn`) and a group
-  (`group`): the tab shows a group's name as a header above the first of a run of its folders, nothing nested (the
-  kit's Brain over Scratchpad, KB and Memory, [record 98](adr/0098-the-sidebars-look.md)); a
+  (`group`): a group is one top-level row named in capitals, the folder itself for a group of one (KIT), else the
+  folder holding the group's folders (BRAIN), with them inside it, then its other folders, no file and nothing hidden; a
+  hairline parts one group's row from the next ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)); a
   `repository` key, written by older versions, is ignored. With a kit, its folders come first, as its `comando-kit.json` lists them
   ([§7](#7-the-kit)). Without a kit and without `folders.json` there is one folder, Claude Code's (`~/.claude`),
   opening `CLAUDE.md` and leaving out Claude Code's transcripts, caches and per-session state; an emptied list stays
@@ -448,16 +449,17 @@ edited and saved like any other; a `.log` stays read-only.
 - **Bounds.** 12 levels; at most 80 000 names listed and 20 000 entries kept per folder tree; past a bound the folder
   ends with `…`. An unreadable subfolder says why and the rest stands.
 - **Clicks.** A click on a folder opens or closes it; on a file it selects. A double click opens a file in a panel
-  (Enter opens a file). On a folder's row a double click shows the row's
+  (Enter opens a file). On a top-level row (BRAIN, KIT, a folder in no group) a double click shows the row's
   changes instead and leaves the row open or closed as it was; on a subfolder it does nothing more than its first
   click ([record 78](adr/0078-a-rows-marks-and-double-click-show-its-changes.md)). A text file of at most 2 MB opens in
   a panel bound to it; a larger one (to 4 MB) or a binary one shows in the side pane. Opening a folder opens no file;
   the first time, its newest date-named folder opens too.
 - **Menus.** A file's: Open in a panel, Edit in a panel (its text rather than rendered), and Compare with HEAD when it
-  changed. A folder row's: Open ‹index file›. A folder row's and a subfolder's: Show changes in it (off, as No changes
-  in it, when it holds none): the Changes view of the repository holding it (`~/.claude`'s, the brain's), inside it alone,
-  its row named after the folder's row and the subfolders leading to it. A row of a folder inside the brain also
-  offers Back up the brain ([§7.4](#74-back-up-the-brain)).
+  changed. A folder row's: Open ‹index file›. A top-level row's only: Show changes in it (off, as No changes in it, when
+  it holds none): the Changes view of the repository holding it (`~/.claude`'s, the brain's), inside it alone; BRAIN's
+  also offers Back up the brain, KIT's Back up the kit ([§7.4](#74-back-up-the-brain-and-the-kit)). A group's folder
+  inside its row and a subfolder offer neither: the brain and the kit are each one unit
+  ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)).
 - **Trash.** In a deletable folder, a file's or subfolder's menu moves the selection (⌘- or ⇧-click for several) to the
   desktop's Trash after one question naming it; the folder's row never goes, and a selection reaching another folder
   offers nothing. Without a Trash nothing moves; nothing is deleted for good. With `listedIn` set, each entry moved
@@ -585,7 +587,7 @@ exist yet, and left as they were.
 In the root ([§7.1](#71-the-root)) comando reads Claude Code's conversations in `projects/` and the effort levels in
 `settings.json`, and never writes either. It writes into the root only on the user's action: a file edited in a panel
 or the comparison window, an index file the folders window creates, a listing file's lines for an entry moved to the
-Trash, and the brain's backup, which commits in the brain's own repository ([§7.4](#74-back-up-the-brain)).
+Trash, and the backups of the brain and the kit, which commit in their own repositories ([§7.4](#74-back-up-the-brain-and-the-kit)).
 
 ### 6.2 Store files
 
@@ -682,12 +684,16 @@ an entry already takes is not added (`KitFolders`). An entry that names the same
 followed, letter case ignored) counts as that folder, so an entry through a link is not added twice. **Use the kit's
 folders** in the Files tab's folders window adds the missing ones again.
 
-### 7.4 Back up the brain
+### 7.4 Back up the brain and the kit
 
-**Back up the brain** (the palette, the status bar's kit menu, and the Files tab's menu on a folder inside the brain)
-runs in `<root>/<brain>`, off the EDT: `git add -A`, `git commit -m "Brain backup <ISO date>"` when anything changed
-(nothing to commit is not an error), `git push`. A notice names the commit or the step that failed. The action is off
-while the brain is not the top folder of a git repository with a remote, and it never runs by itself.
+**Back up the brain** (the palette, the status bar's kit menu, and the menu of the Files tab's BRAIN row) runs in
+`<root>/<brain>`, off the EDT: `git add -A`, a commit when anything changed (nothing to commit is not an error), `git
+push`. The commit's first line says what it adds, `Brain backup 2026-10-28: MEMORY 2 changed; SCRATCHPAD 3 added, 1
+changed` (each top folder, or a file at the top, with its counts; past 120 characters the rest are counted), and its
+body lists the files, one a line (`added MEMORY/x.md`, `renamed a -> b`; at most 200). **Back up the kit** (the same
+places, the KIT row) does the same in the root, its message `Kit backup …`. A notice names the commit or the step that
+failed. Each action is off while its folder is not the top folder of a git repository with a remote, and neither runs
+by itself ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)).
 
 ### 7.5 Version and upgrade
 
@@ -705,8 +711,8 @@ old kit.
 
 The kit's `comando-kit.json` lists its scheduled jobs (`jobs`); `install/kit.py` alone writes them to the platform's
 scheduler and runs them, and the kit's `INSTALL.md` §5 gives the fields and the verbs ([record
-117](adr/0117-kit-jobs-a-row-and-a-window.md)). The Files tab shows them as one **Jobs** row after the kit's folders,
-under the Kit header: its detail counts them and names what runs now or the next run (`5 jobs · 1 paused · next Thu 07:15`); the dot marks a change
+117](adr/0117-kit-jobs-a-row-and-a-window.md)). The Files tab shows them as one **Jobs** row, the first inside the KIT
+row ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)): its detail counts them and names what runs now or the next run (`5 jobs · 1 paused · next Thu 07:15`); the dot marks a change
 the scheduler has not taken (a job running when it was saved is left as it was), a red name a failed last run or jobs
 that cannot be read; its tooltip says the most pressing of these. comando reads them through `kit.py jobs --json` at
 start, after every change, and every minute while the Files tab shows.

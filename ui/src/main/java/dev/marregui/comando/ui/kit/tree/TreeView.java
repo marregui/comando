@@ -19,6 +19,7 @@ import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.ToolTipManager;
+import javax.swing.border.AbstractBorder;
 import javax.swing.event.TreeExpansionEvent;
 import javax.swing.event.TreeExpansionListener;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -260,7 +261,7 @@ public final class TreeView {
     /**
      * The sidebar's marks over the painted rows: the report's bar down the left edge of each selected row, then each
      * header in its space above its row, on the ground the selection's band does not reach: the header's words in spaced
-     * capitals in the tint's body, and a hairline of the tint's shade on to the edge.
+     * capitals in the tint's body, and a hairline of the tint's shade on to the edge; an empty header, the hairline alone.
      */
     private void paintSidebar(Graphics g0) {
         Graphics2D g = (Graphics2D) g0.create();
@@ -290,16 +291,36 @@ public final class TreeView {
                     int baseline = r.y + HEADER - 7;
                     g.setColor(Theme.tint().body);
                     g.drawString(text, 8, baseline);
-                    int from = 8 + m.stringWidth(text) + 8;
+                    // an empty header is the hairline alone, a separator (record 118)
+                    int from = text.isEmpty() ? 8 : 8 + m.stringWidth(text) + 8;
                     if (from < tree.getWidth() - 8) {
                         g.setColor(Tint.over(Theme.ground(), Theme.tint().shade, 0.45f));
-                        g.fillRect(from, baseline - m.getAscent() / 2 + 1, tree.getWidth() - 8 - from, 1);
+                        g.fillRect(from, r.y + hairline(m), tree.getWidth() - 8 - from, 1);
                     }
                 }
             }
         } finally {
             g.dispose();
         }
+    }
+
+    /** How far below the top of a header's space its hairline runs, in the header's font {@code m}. */
+    static int hairline(FontMetrics m) {
+        return HEADER - 7 - m.getAscent() / 2 + 1;
+    }
+
+    /**
+     * Space above the first row as far as a separator's hairline runs below the row before it, the hairline left out
+     * (record 118): the first row sits as far from the top as from the hairline under it. Follows the font.
+     */
+    public void spaceAbove() {
+        tree.setBorder(new AbstractBorder() {
+            @Override
+            public Insets getBorderInsets(Component c, Insets insets) {
+                insets.set(hairline(c.getFontMetrics(headerFont())), 0, 0, 0);
+                return insets;
+            }
+        });
     }
 
     private Font headerFont() {
@@ -309,7 +330,8 @@ public final class TreeView {
     /**
      * Gives the tree the sidebar's look (record 98): the transcript's ground, names in its ivory, the selection a band of
      * the tint's shade with the name in its highlight and the report's bar at the left edge, and {@code headers}' text
-     * above the nodes it names one for, in spaced capitals in the tint, over a hairline; rows then take their own heights.
+     * above the nodes it names one for, in spaced capitals in the tint, over a hairline (the hairline alone for an empty
+     * text); rows then take their own heights.
      */
     public void sidebar(Function<DefaultMutableTreeNode, String> headers) {
         this.sidebar = true;

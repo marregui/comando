@@ -116,7 +116,7 @@ A kit is a Claude Code setup in a git repository of its own, versioned by tags: 
 plugin and a `comando-kit.json` that comando reads. comando runs every session on the kit's folder when it finds one
 (`~/.claude` with a `comando-kit.json`, or a clone in `~/.claude/comando-kit`), and on `~/.claude` without a kit
 otherwise. With a kit, the Files tab opens on its folders, the status bar shows its version, **Upgrade the kit…** moves
-it to a newer tag, and **Back up the brain** commits and pushes the folder where the sessions keep what they learn.
+it to a newer tag, and **Back up the brain** and **Back up the kit** commit and push each, the commit saying what it adds.
 The author's kit is private. [Workbench §7](docs/workbench.md#7-the-kit) has the rules.
 
 ## Build from source

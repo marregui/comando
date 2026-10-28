@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import javax.swing.JTree;
+import javax.swing.SwingUtilities;
 import javax.swing.tree.DefaultMutableTreeNode;
 import java.awt.Color;
 import java.awt.Component;
@@ -28,8 +29,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [FilesTab] in the sidebar's look, painted headless in three tints, so without the look and feel. The window's own
 /// picture is `TreeClicksUiTest`'s, `app/build/snapshots/sidebar.png`.
-/// - a group has one header over its first folder and none over the others
-/// - the ground, the selected row's bar and the headers follow the tint chosen
+/// - a group is one row in capitals holding its folders; a hairline, no words, parts one group's row from the next
+/// - the ground, the selected row's bar and the hairline follow the tint chosen
 @ExtendWith(OnEdt.class)
 class SidebarLookTest {
 
@@ -78,16 +79,17 @@ class SidebarLookTest {
         throw new AssertionError("no row " + label);
     }
 
-    /// Only the first folder of each group carries the group's header, with extra height above its row; in each of three
-    /// tints the ground is the theme's, the selected row's bar is in the tint and the headers are painted in its body colour.
+    /// The Brain group is one BRAIN row holding its three folders; the KIT and Notes rows each start after a separator, a
+    /// header with no words that takes extra height above the row; in each of three tints the ground is the theme's, the
+    /// selected row's bar is in the tint and the hairline is painted in its shade over the ground.
     @Test
-    void aGroupHasOneHeaderOverItsFirstFolderAndTheTabPaintsInTheTintChosen() {
+    void aGroupIsOneRowAndAHairlinePartsTheGroupsInTheTintChosen() {
         FilesTab tab = tab();
         JTree tree = tab.tree().tree();
-        assertThat(List.of("Scratchpad", "2026-10-27", "INDEX.md", "KB", "Memory", "Kit", "Notes"))
+        assertThat(List.of("BRAIN", "Scratchpad", "KB", "Memory", "KIT", "Notes"))
                 .extracting(l -> tab.header((DefaultMutableTreeNode) tree.getPathForRow(row(tree, l)).getLastPathComponent()))
-                .containsExactly("Brain", null, null, null, null, "Kit", null);
-        assertThat(tree.getRowBounds(row(tree, "Scratchpad")).height).as("a header's space above its row")
+                .containsExactly(null, null, null, null, "", "");
+        assertThat(tree.getRowBounds(row(tree, "KIT")).height).as("the separator's space above its row")
                 .isGreaterThan(tree.getRowBounds(row(tree, "KB")).height);
 
         Tint[] tints = {Tint.TREASURE, Tint.SILVER, Tint.ELECTRIC_BLUE};
@@ -97,8 +99,28 @@ class SidebarLookTest {
             assertThat(img.getRGB(WIDTH - 2, HEIGHT - 2) & 0xFFFFFF).as("the ground").isEqualTo(Theme.ground().getRGB() & 0xFFFFFF);
             int kb = tree.getRowBounds(row(tree, "KB")).y + 4;
             assertThat(near(new Color(img.getRGB(1, kb)), tints[i].at(0.3f), 60)).as("the selected row's bar in " + tints[i]).isTrue();
-            assertThat(count(img, tints[i].body, 24)).as("the headers in " + tints[i]).isPositive();
+            assertThat(count(img, Tint.over(Theme.ground(), tints[i].shade, 0.45f), 6)).as("the hairline in " + tints[i]).isGreaterThan(WIDTH);
         }
+    }
+
+    /// The first row sits as far below the top as a row sits above the hairline under it: a separator's space, unseen.
+    @Test
+    void theFirstRowIsAsFarFromTheTopAsFromTheHairlineUnderIt() {
+        FilesTab tab = tab();
+        JTree tree = tab.tree().tree();
+        BufferedImage img = paint(tab.component());
+        int x = WIDTH / 2;
+        int top = SwingUtilities.convertPoint(tree, 0, 0, tab.component()).y;
+        int line = -1;
+        for (int y = top; y < HEIGHT; y++) {
+            if (near(new Color(img.getRGB(x, y)), Tint.over(Theme.ground(), Theme.tint().shade, 0.45f), 6)) {
+                line = y - top;
+                break;
+            }
+        }
+        assertThat(line).as("a hairline").isPositive();
+        int above = line - tree.getRowBounds(row(tree, "KIT")).y; // from the bottom of the row above it
+        assertThat(tree.getRowBounds(0).y).as("the first row's space above").isEqualTo(above).isPositive();
     }
 
     private static BufferedImage paint(Component c) {

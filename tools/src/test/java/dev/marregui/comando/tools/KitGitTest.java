@@ -102,15 +102,53 @@ class KitGitTest {
         Path remote = checkout(brain, tmp.resolve("brain.git"));
         assertThat(kit.canBackUp(brain)).isTrue();
 
-        Files.writeString(brain.resolve("MEMORY.md"), "remembered\n");
+        Files.createDirectories(brain.resolve("MEMORY"));
+        Files.writeString(brain.resolve("MEMORY/lane.md"), "remembered\n");
+        Files.writeString(brain.resolve("README.md"), "second\n");
         String said = kit.backUp(brain, TODAY);
         String head = git(brain, "rev-parse", "--short", "HEAD");
-        assertThat(said).isEqualTo("committed " + head + " \"Brain backup 2026-10-26\" and pushed it");
-        assertThat(git(remote, "log", "-1", "--format=%s")).isEqualTo("Brain backup 2026-10-26");
+        String subject = "Brain backup 2026-10-26: MEMORY 1 added; README.md 1 changed";
+        assertThat(said).isEqualTo("committed " + head + " \"" + subject + "\" and pushed it");
+        assertThat(git(remote, "log", "-1", "--format=%s")).isEqualTo(subject);
+        assertThat(git(remote, "log", "-1", "--format=%b")).as("one line a file").isEqualTo("added MEMORY/lane.md\nchanged README.md");
         assertThat(git(brain, "status", "--porcelain")).isEmpty();
 
         assertThat(kit.backUp(brain, TODAY)).as("nothing to commit is no failure").isEqualTo("nothing to commit; pushed " + head);
         assertThat(git(remote, "rev-list", "--count", "HEAD")).isEqualTo("2");
+    }
+
+    /// The kit backs up as the brain does, its message naming it; renames and removals are said as such.
+    @Test
+    void theKitIsBackedUpUnderItsOwnNameWithRenamesAndRemovals(@TempDir Path tmp) throws Exception {
+        Path root = tmp.resolve("root");
+        Path remote = checkout(root, tmp.resolve("root.git"));
+        Files.createDirectories(root.resolve("bin"));
+        Files.writeString(root.resolve("bin/tool"), "a\nb\nc\nd\n");
+        Files.writeString(root.resolve("old.md"), "x\n");
+        git(root, "add", "-A");
+        git(root, "commit", "-q", "-m", "setup");
+        Files.move(root.resolve("bin/tool"), root.resolve("bin/tool2"));
+        Files.delete(root.resolve("old.md"));
+
+        kit.backUp(root, "Kit", TODAY);
+        assertThat(git(remote, "log", "-1", "--format=%s")).isEqualTo("Kit backup 2026-10-26: bin 1 renamed; old.md 1 removed");
+        assertThat(git(remote, "log", "-1", "--format=%b")).isEqualTo("renamed bin/tool -> bin/tool2\nremoved old.md");
+    }
+
+    /// The first line stops naming areas once it is long and counts the rest; the body lists at most [KitGit#LISTED] files.
+    @Test
+    void aLongBackupCountsWhatItCannotName() {
+        List<KitGit.Change> many = new ArrayList<>();
+        for (int i = 0; i < KitGit.LISTED + 5; i++) {
+            many.add(new KitGit.Change("added", "area-number-" + i + "/f.md", ""));
+        }
+        String subject = KitGit.subject("Brain", TODAY, many);
+        assertThat(subject.length()).isLessThanOrEqualTo(KitGit.SUBJECT + 20);
+        assertThat(subject).startsWith("Brain backup 2026-10-26: area-number-0 1 added; ").endsWith(" more areas");
+        String body = KitGit.body(many);
+        assertThat(body.lines().count()).isEqualTo(KitGit.LISTED + 1);
+        assertThat(body).endsWith("and 5 more");
+        assertThat(KitGit.changes("M\ta b.md\nR087\tx\ty\nD\tz\n")).extracting(KitGit.Change::verb).containsExactly("changed", "renamed", "removed");
     }
 
     /// [KitGit#canBackUp] rejects a repository without a remote, a directory inside another repository, and a missing
@@ -138,6 +176,6 @@ class KitGitTest {
         Files.writeString(brain.resolve("x.md"), "x\n");
 
         assertThatThrownBy(() -> kit.backUp(brain, TODAY)).isInstanceOf(IOException.class).hasMessageStartingWith("git push failed: ");
-        assertThat(git(brain, "log", "-1", "--format=%s")).as("committed before the push").isEqualTo("Brain backup 2026-10-26");
+        assertThat(git(brain, "log", "-1", "--format=%s")).as("committed before the push").isEqualTo("Brain backup 2026-10-26: x.md 1 added");
     }
 }

@@ -20,13 +20,14 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
 
 /**
  * The kit in the window: its name and version in the status bar, its upgrade, which a session in the root does when the
- * user says so, and the brain's backup, only on the user's click. The version is read at start and every six hours by
+ * user says so, and the backups of the brain and of the kit, only on the user's click. The version is read at start and every six hours by
  * the application; git runs off the EDT. EDT only, but for {@link #show}.
  */
 final class KitActions {
@@ -34,6 +35,7 @@ final class KitActions {
     private static final System.Logger LOG = System.getLogger(KitActions.class.getName());
     static final String UPGRADE = "Upgrade the kit…";
     static final String BACK_UP = "Back up the brain";
+    static final String BACK_UP_KIT = "Back up the kit";
 
     private final ComandoUi.Dependencies deps;
     private final Supplier<JFrame> frame;
@@ -123,6 +125,11 @@ final class KitActions {
     /** Whether the brain is a git repository of its own with a remote. */
     boolean canBackUp() {
         return deps.setup().root().brain().isPresent() && shown.canBackUp();
+    }
+
+    /** Whether the kit's root is a git repository with a remote. */
+    boolean canBackUpKit() {
+        return deps.setup().root().kit().isPresent() && shown.canBackUpKit();
     }
 
     /** The prompt the kit's session is sent. */
@@ -235,18 +242,31 @@ final class KitActions {
 
     /** Commits and pushes the brain, off the EDT; the notice names the commit, or why it failed. Never on its own. */
     void backUp() {
-        Optional<Path> brain = deps.setup().root().brain();
-        if (brain.isEmpty()) {
-            return;
+        deps.setup().root().brain().ifPresent(brain -> backUp("Brain", brain, "brain-backup", () -> deps.setup().backUpBrain()));
+    }
+
+    /** Commits and pushes the kit's root, off the EDT, as {@link #backUp()} does the brain. */
+    void backUpKit() {
+        KitRoot root = deps.setup().root();
+        if (root.kit().isPresent()) {
+            backUp("Kit", root.dir(), "kit-backup", () -> deps.setup().backUpKit());
         }
-        String where = HomeDir.shorten(brain.get().toString());
-        UiErrands.start("brain-backup", () -> {
+    }
+
+    /** What a backup does: {@code IOException} when a step of git fails. */
+    private interface Backup {
+        String run() throws IOException;
+    }
+
+    private void backUp(String what, Path dir, String thread, Backup backup) {
+        String where = HomeDir.shorten(dir.toString());
+        UiErrands.start(thread, () -> {
             try {
-                String done = deps.setup().backUpBrain();
-                deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, "Brain at " + where + ": " + done, false));
+                String done = backup.run();
+                deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, what + " at " + where + ": " + done, false));
             } catch (IOException | RuntimeException e) {
-                deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "The brain at " + where + " was not backed up: "
-                        + e.getMessage(), e));
+                deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "The " + what.toLowerCase(Locale.ROOT) + " at " + where
+                        + " was not backed up: " + e.getMessage(), e));
             }
         });
     }

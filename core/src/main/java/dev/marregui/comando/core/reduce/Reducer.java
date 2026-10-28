@@ -212,7 +212,7 @@ public final class Reducer {
             case Intent.WatchFolders i -> new Transition(s, List.of(new Effect.WatchFolders(folders(s, i.names()))));
             case Intent.DeleteFiles i -> deleteFiles(s, i);
             // a tree read with settings since edited, or of a folder since removed, is dropped: the tab shows only current folders
-            case Intent.FolderLoaded i -> s.folders().contains(i.folder())
+            case Intent.FolderLoaded i -> FolderRoot.withGroupRoots(s.folders()).contains(i.folder())
                     ? new Transition(s, List.of(new Effect.ShowFolder(i.folder(), i.tree()))) : Transition.of(s);
             case Intent.ReposLoaded i -> new Transition(s, List.of(new Effect.ShowRepos(i.repos())));
             case Intent.OpenChange i -> new Transition(s, List.of(new Effect.ReadChange(i.root(), i.change(), i.ask())));
@@ -841,7 +841,8 @@ public final class Reducer {
 
     /** The configured folders named, in the configuration's order; a name no folder has is skipped. */
     private static List<FolderRoot> folders(AppState s, List<String> names) {
-        return s.folders().stream().filter(f -> names.contains(f.name())).toList();
+        // a group's row reads as a folder of its own (record 118)
+        return FolderRoot.withGroupRoots(s.folders()).stream().filter(f -> names.contains(f.name())).toList();
     }
 
     /**

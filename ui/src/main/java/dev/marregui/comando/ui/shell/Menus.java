@@ -57,6 +57,7 @@ final class Menus {
             Map.entry("files.jobs", "sidebar/jobs"),
             Map.entry("kit.upgrade", "kit"),
             Map.entry("kit.backup", "export"),
+            Map.entry("kit.backupKit", "export"),
             Map.entry("view.export", "export"),
             Map.entry("run", "play"),
             Map.entry("run.stop", "stop"),
@@ -150,7 +151,7 @@ final class Menus {
         put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive", "run.plotStop");
         put(a, "Edit", "view.copy", "view.find", "view.findNext", "view.findPrevious", "edit.complete", "edit.completeAlt");
         put(a, "Files", "files.settings", "files.jobs");
-        put(a, "Kit", "kit.upgrade", "kit.backup");
+        put(a, "Kit", "kit.upgrade", "kit.backup", "kit.backupKit");
         put(a, "Window", "view.export", "view.sidebar", "view.sidePane", "view.files", "view.changes", "view.restoreLayout", "view.session", "view.approvals",
                 "view.terminal", "view.results", "view.nextTab", "view.previousTab", "view.closeLower", "view.zoomIn", "view.zoomOut",
                 "view.zoomReset", "view.notices", "view.session.alt", "view.approvals.alt", "view.terminal.alt", "view.results.alt");

@@ -63,10 +63,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
- * The sidebar's Files tab: the folders the user configured ({@link FolderRoot}), one top-level row each, as a navigator
- * of their folders and files. A click selects; a double click (or Enter) opens a file in a panel, and a double click
+ * The sidebar's Files tab: the folders the user configured ({@link FolderRoot}) as a navigator of their folders and
+ * files. A folder in no group is a top-level row; a group is one top-level row, its name in capitals (record 118): the
+ * folder itself for a group of one, such as KIT, else the folder holding the group's folders, such as BRAIN, with them
+ * inside it beside its other folders (no files, nothing hidden). A hairline parts one group's row from the next. A click selects; a double click (or Enter) opens a file in a panel, and a double click
  * opens or closes a folder; nothing opens a panel but a file asked for. Each kind of file has its icon, and a folder's
  * index file leads it, offered by name in its row's menu. Only the folders whose rows are open are read and kept in sync
  * ({@link Intent.WatchFolders}), so a closed folder costs nothing; the tree follows them as the tools adapter reads
@@ -75,13 +78,13 @@ import java.util.function.Consumer;
  * one colour, red only for a file in conflict, and how a file differs from {@code HEAD} is said by the marks after the
  * names leading down to it: the rising arrow for a change, the dot for a new file (record 98). A repository's top
  * folder has git's mark on its icon and, while the repository has changes, a rising arrow after its name; hovering it says its
- * branch and what it holds uncommitted. A double click on a folder's row opens the Changes view of what the repository
- * holding it changed inside it, or says there is nothing to see, and opens or closes nothing; a folder's or a
- * subfolder's menu shows the changes of the repository holding it inside that folder alone, and a changed file's
- * compares it with {@code HEAD}. Every folder lies inside Claude Code's folder: the tab is no browser of code
+ * branch and what it holds uncommitted. A double click on a top-level row opens the Changes view of what the repository
+ * holding it changed inside it, or says there is nothing to see, and opens or closes nothing; a top-level row's menu
+ * shows those changes and, from the window, backs the brain or the kit up, as the unit they are: the folders inside
+ * offer neither (record 118). A changed file's menu compares it with {@code HEAD}. Every folder lies inside Claude Code's folder: the tab is no browser of code
  * repositories.
  *
- * <p>With a kit, a Jobs row follows the kit's folders, under their header: the kit's scheduled jobs at a glance (record
+ * <p>With a kit, a Jobs row is the first inside the kit's row (record 118): the kit's scheduled jobs at a glance (record
  * 117), its detail what runs next, its marks a pending change (the dot) and a failed last run (the name in red); a double
  * click or its menu opens the window that edits them, and its menu applies a change the scheduler has not taken yet.
  *
@@ -102,9 +105,9 @@ final class FilesTab {
     /** On a folder on the way down to a changed file, and on the file: the trail of the rising arrow (record 97). */
     static final String CHANGED_TIP = "Open to reach the files inside that differ from the last commit";
     static final String CHANGED_FILE_TIP = "Differs from the last commit; right-click to compare with HEAD";
-    /** Where a folder's top-level row is in a node's path: under the tree's hidden root. */
+    /** Where a top-level row is in a node's path: under the tree's hidden root. A group's folders are one deeper. */
     static final int ROW = 1;
-    /** The kit's jobs' row: its name, the link that tells it from a folder's, the group it sits in, its icon. */
+    /** The kit's jobs' row: its name, the link that tells it from a folder's, the group whose row it leads, its icon. */
     static final String JOBS = "Jobs";
     static final String JOBS_LINK = "comando-kit-jobs:";
     static final String JOBS_GROUP = "Kit";
@@ -154,6 +157,8 @@ final class FilesTab {
     private Icon changedAndNew;
 
     private List<FolderRoot> folders = List.of();
+    /** The folders and the rows of their groups ({@link FolderRoot#groupRoots}): every folder read. */
+    private List<FolderRoot> all = List.of();
     /** The folders' index file names, lower case, as each cell's icon asks: made when the folders change. */
     private Set<String> indexNames = Set.of();
     /** The latest tree read of each folder, by name. */
@@ -203,7 +208,7 @@ final class FilesTab {
             t.tips(n -> isJobs(n) ? jobsTip(jobs) : repoAt(n).map(FilesTab::repoTip).or(() -> rowTip(n))
                     .orElse(holdsNew(n) ? NEW_TIP : isChanged(n) ? CHANGED_FILE_TIP : holdsChanged(n) ? CHANGED_TIP : null));
             t.trailing(this::marks);
-            // one click opens or closes a folder; a double click on a folder's row shows its changes instead
+            // one click opens or closes a folder; a double click on a top-level row shows its changes instead
             t.toggleOnClick(true);
             t.sidebar(t == tree ? this::header : n -> null);
             t.tree().addMouseListener(new MouseAdapter() {
@@ -211,7 +216,7 @@ final class FilesTab {
                 public void mouseClicked(MouseEvent e) {
                     if (e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e)) {
                         TreePath p = t.tree().getPathForLocation(e.getX(), e.getY());
-                        if (p != null && isRow(p.getPath()) && !isJobs((DefaultMutableTreeNode) p.getLastPathComponent())) {
+                        if (p != null && isTop(p.getPath()) && !isJobs((DefaultMutableTreeNode) p.getLastPathComponent())) {
                             t.undoClickToggle(p);
                             openChanges(t, p);
                         }
@@ -225,22 +230,22 @@ final class FilesTab {
                 sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
             }
         }
+        // the first row as far from the top as a row is from the separator under it (record 118)
+        tree.spaceAbove();
         tree.tree().getAccessibleContext().setAccessibleName("Files");
         found.tree().getAccessibleContext().setAccessibleName("Files found");
         tree.tree().addTreeExpansionListener(new TreeExpansionListener() {
             @Override
             public void treeExpanded(TreeExpansionEvent e) {
-                if (!restoring && isRow(e.getPath().getPath())) {
+                if (!restoring && isFolderRow(e.getPath())) {
                     folderOf(e.getPath()).ifPresent(x -> openNewestDay(x.name()));
-                }
-                if (!restoring && isRow(e.getPath().getPath())) {
                     watchOpen(false);
                 }
             }
 
             @Override
             public void treeCollapsed(TreeExpansionEvent e) {
-                if (!restoring && isRow(e.getPath().getPath())) {
+                if (!restoring && isFolderRow(e.getPath())) {
                     watchOpen(false);
                 }
             }
@@ -324,10 +329,12 @@ final class FilesTab {
                 }
             });
         }
+        List<FolderRoot> allBefore = all;
         folders = s.folders();
+        all = FolderRoot.withGroupRoots(folders);
         indexNames = indexNames(folders);
         Set<String> keep = new HashSet<>(renamed);
-        folders.stream().filter(before::contains).forEach(f -> keep.add(f.name()));
+        all.stream().filter(allBefore::contains).forEach(f -> keep.add(f.name()));
         read.keySet().retainAll(keep);
         dayOpened.retainAll(keep);
         requested.retainAll(keep);
@@ -369,7 +376,7 @@ final class FilesTab {
      * the folder's, or of a folder no longer configured, is ignored.
      */
     void show(FolderRoot folder, ViewSpec.TreeNode folderTree) {
-        if (!folders.contains(folder)) {
+        if (!all.contains(folder)) {
             return;
         }
         String name = folder.name();
@@ -487,25 +494,21 @@ final class FilesTab {
     }
 
     /**
-     * The path of a folder node: a folder row's configured path, a subfolder's from its row and the names leading to it;
-     * empty for a file, a placeholder or a note.
+     * The path of a folder node: a folder row's configured path, a subfolder's from the nearest folder row above it and
+     * the names leading to it; empty for a file, a placeholder or a note.
      */
     private Optional<Path> folderPath(DefaultMutableTreeNode n) {
         if (!(n.getUserObject() instanceof ViewSpec.TreeNode node) || node.link().startsWith(SourceLinks.SCHEME) || isJobs(node)) {
             return Optional.empty();
         }
         TreeNode[] path = n.getPath();
-        if (path.length < ROW + 1 || node.label().equals(ViewSpec.TreeNode.MORE) || node.label().startsWith("✗ ")
-                || node.children().isEmpty() && node.detail().isEmpty()
-                || !(((DefaultMutableTreeNode) path[ROW]).getUserObject() instanceof ViewSpec.TreeNode row)) {
+        int at = folderIndex(path);
+        if (at < 0 || node.label().equals(ViewSpec.TreeNode.MORE) || node.label().startsWith("✗ ")
+                || node.children().isEmpty() && node.detail().isEmpty()) {
             return Optional.empty();
         }
-        Optional<FolderRoot> folder = folder(row.label());
-        if (folder.isEmpty()) {
-            return Optional.empty();
-        }
-        Path p = Path.of(folder.get().path());
-        for (int i = ROW + 1; i < path.length; i++) {
+        Path p = Path.of(rowFolder(path[at]).orElseThrow().path());
+        for (int i = at + 1; i < path.length; i++) {
             if (((DefaultMutableTreeNode) path[i]).getUserObject() instanceof ViewSpec.TreeNode c) {
                 p = p.resolve(c.label());
             }
@@ -541,9 +544,47 @@ final class FilesTab {
         return Path.of(repo.root()).toAbsolutePath().normalize().relativize(folder).toString().replace('\\', '/');
     }
 
-    /** Whether {@code n} is a folder's top-level row. */
-    private static boolean isRow(DefaultMutableTreeNode n) {
-        return isRow(n.getPath());
+    /** Whether {@code n} is a top-level row. */
+    private static boolean isTop(DefaultMutableTreeNode n) {
+        return isTop(n.getPath());
+    }
+
+    /** Whether {@code n} is a folder's row: a top-level one or a group's folder inside its row. */
+    private boolean isFolderRow(DefaultMutableTreeNode n) {
+        return rowFolder(n).isPresent();
+    }
+
+    private boolean isFolderRow(TreePath p) {
+        return isFolderRow((DefaultMutableTreeNode) p.getLastPathComponent());
+    }
+
+    /** The folder whose row {@code o}, a tree node, is; empty for any other node. */
+    private Optional<FolderRoot> rowFolder(Object o) {
+        return o instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof ViewSpec.TreeNode node && !isJobs(node)
+                && n.getLevel() >= ROW && n.getLevel() <= ROW + 1 ? rowFolder(node) : Optional.empty();
+    }
+
+    /** The folder whose row has {@code n}'s name and detail; a row's detail is its path, which no entry inside has. */
+    private Optional<FolderRoot> rowFolder(ViewSpec.TreeNode n) {
+        return all.stream().filter(f -> label(f).equals(n.label()) && rowDetail(f).equals(n.detail())).findFirst();
+    }
+
+    /** Where in {@code path} the nearest folder row is, counting from the top; -1 when none. */
+    private int folderIndex(Object[] path) {
+        for (int i = Math.min(path.length - 1, ROW + 1); i >= ROW; i--) {
+            if (rowFolder(path[i]).isPresent()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** A folder's row's name: its group's in capitals for the only folder of a group, else its own. */
+    private String label(FolderRoot f) {
+        if (f.group().isEmpty() || folders.stream().filter(x -> x.group().equals(f.group())).count() != 1 || !folders.contains(f)) {
+            return f.name();
+        }
+        return f.group().toUpperCase(Locale.ROOT);
     }
 
     /**
@@ -556,7 +597,7 @@ final class FilesTab {
             return jobs.pending() ? Icons.get(NEW_ICON) : null;
         }
         boolean changed = repoAt(n).filter(r -> !r.changes().isEmpty()).isPresent()
-                || isRow(n) && folderPath(n).filter(changes::holdsChanges).isPresent()
+                || isFolderRow(n) && folderPath(n).filter(changes::holdsChanges).isPresent()
                 || isChanged(n) || holdsChanged(n);
         boolean fresh = isNew(n) || holdsNew(n);
         if (changed && fresh) {
@@ -568,9 +609,9 @@ final class FilesTab {
         return changed ? Icons.get(CHANGES_ICON) : fresh ? Icons.get(NEW_ICON) : null;
     }
 
-    /** What a folder's row inside a repository says on hover: the branch, and what it holds that the last commit does not. */
+    /** What a top-level row inside a repository says on hover: the branch, and what it holds that the last commit does not. */
     private Optional<String> rowTip(DefaultMutableTreeNode n) {
-        if (!isRow(n)) {
+        if (!isTop(n) || isJobs(n)) {
             return Optional.empty();
         }
         Optional<Path> folder = folderPath(n).map(p -> p.toAbsolutePath().normalize());
@@ -597,8 +638,8 @@ final class FilesTab {
         return out.toString();
     }
 
-    /** Whether {@code path} ends at a folder's top-level row. */
-    private static boolean isRow(Object[] path) {
+    /** Whether {@code path} ends at a top-level row. */
+    private static boolean isTop(Object[] path) {
         return path.length == ROW + 1;
     }
 
@@ -629,10 +670,6 @@ final class FilesTab {
         return r == null ? new Point(0, 0) : new Point(r.x + 16, r.y + r.height);
     }
 
-    private Optional<FolderRoot> folder(String name) {
-        return folders.stream().filter(f -> f.name().equals(name)).findFirst();
-    }
-
     private static Set<String> indexNames(List<FolderRoot> folders) {
         Set<String> names = new HashSet<>();
         for (FolderRoot f : folders) {
@@ -644,21 +681,12 @@ final class FilesTab {
     }
 
     private void rebuild() {
-        List<ViewSpec.TreeNode> rows = new ArrayList<>(folders.size());
-        for (FolderRoot f : folders) {
+        List<ViewSpec.TreeNode> rows = rows(f -> {
             ViewSpec.TreeNode t = read.get(f.name());
-            List<ViewSpec.TreeNode> children = t == null ? List.of(placeholder(READING))
-                    : t.children().isEmpty() ? List.of(placeholder(EMPTY)) : t.children();
-            rows.add(new ViewSpec.TreeNode(f.name(), rowDetail(f), children));
-        }
-        if (jobs.read()) {
-            int at = rows.size();
-            for (int i = 0; i < folders.size(); i++) {
-                if (folders.get(i).group().equals(JOBS_GROUP)) {
-                    at = i + 1;
-                }
-            }
-            rows.add(at, new ViewSpec.TreeNode(JOBS, jobsDetail(jobs), JOBS_LINK, List.of()));
+            return t == null ? List.of(placeholder(READING)) : t.children().isEmpty() ? List.of(placeholder(EMPTY)) : t.children();
+        }, true);
+        if (jobs.read() && rows.stream().noneMatch(r -> r.children().stream().anyMatch(FilesTab::isJobs))) {
+            rows.add(jobsRow()); // no kit's folder to lead: last, in a row of its own
         }
         ViewSpec.TreeNode root = new ViewSpec.TreeNode("Files", "",
                 rows.isEmpty() ? List.of(placeholder("No folders yet: right-click the Files tab to add some")) : rows);
@@ -675,6 +703,64 @@ final class FilesTab {
         }
     }
 
+    /**
+     * The top-level rows (record 118): a folder in no group as its own row; a group's folders under one row, the group's
+     * name in capitals: the folder itself for a group of one, which leads with the Jobs row for the kit's group, else the
+     * folder holding them ({@link FolderRoot#groupRoots}), with them first, then its other folders, neither its files nor
+     * anything hidden. A group whose folders share no parent shows them as rows of their own. {@code kids} gives a
+     * folder's entries; with {@code keepEmpty} false, a row with none is left out, as the filter's tree wants.
+     */
+    private List<ViewSpec.TreeNode> rows(Function<FolderRoot, List<ViewSpec.TreeNode>> kids, boolean keepEmpty) {
+        List<FolderRoot> roots = FolderRoot.groupRoots(folders);
+        List<ViewSpec.TreeNode> rows = new ArrayList<>();
+        Set<String> done = new HashSet<>();
+        for (FolderRoot f : folders) {
+            if (!f.group().isEmpty() && !done.add(f.group())) {
+                continue;
+            }
+            List<FolderRoot> members = f.group().isEmpty() ? List.of(f) : folders.stream().filter(x -> x.group().equals(f.group())).toList();
+            Optional<FolderRoot> groupRoot = roots.stream().filter(r -> r.group().equals(f.group())).findFirst();
+            if (groupRoot.isPresent()) {
+                List<ViewSpec.TreeNode> inside = new ArrayList<>();
+                for (FolderRoot m : members) {
+                    add(inside, m, kids.apply(m), keepEmpty);
+                }
+                FolderRoot r = groupRoot.get();
+                kids.apply(r).stream().filter(n -> isFolderEntry(n) && !n.label().startsWith(".")).forEach(inside::add);
+                add(rows, r, inside, keepEmpty);
+            } else if (members.size() == 1) {
+                List<ViewSpec.TreeNode> inside = new ArrayList<>();
+                if (keepEmpty && jobs.read() && f.group().equals(JOBS_GROUP)) {
+                    inside.add(jobsRow());
+                }
+                inside.addAll(kids.apply(f));
+                add(rows, f, inside, keepEmpty);
+            } else {
+                for (FolderRoot m : members) {
+                    add(rows, m, kids.apply(m), keepEmpty);
+                }
+            }
+        }
+        return rows;
+    }
+
+    /** Adds {@code f}'s row holding {@code inside} to {@code rows}, unless it holds nothing and empty rows are left out. */
+    private void add(List<ViewSpec.TreeNode> rows, FolderRoot f, List<ViewSpec.TreeNode> inside, boolean keepEmpty) {
+        if (keepEmpty || !inside.isEmpty()) {
+            rows.add(new ViewSpec.TreeNode(label(f), rowDetail(f), inside));
+        }
+    }
+
+    /** Whether {@code n}, an entry of a folder as read, is a folder rather than a file, a placeholder or a note. */
+    private static boolean isFolderEntry(ViewSpec.TreeNode n) {
+        return !n.link().startsWith(SourceLinks.SCHEME) && !n.label().equals(ViewSpec.TreeNode.MORE) && !n.label().startsWith("✗ ")
+                && (!n.children().isEmpty() || !n.detail().isEmpty());
+    }
+
+    private ViewSpec.TreeNode jobsRow() {
+        return new ViewSpec.TreeNode(JOBS, jobsDetail(jobs), JOBS_LINK, List.of());
+    }
+
     /** A folder's row's detail: its path. */
     private static String rowDetail(FolderRoot f) {
         return Labels.shortPath(f.path());
@@ -689,12 +775,7 @@ final class FilesTab {
         if (isJobs(n)) {
             return Optional.of(JOBS_ICON);
         }
-        for (FolderRoot f : folders) {
-            if (f.name().equals(n.label()) && rowDetail(f).equals(n.detail())) {
-                return Optional.of(rowIconName(f));
-            }
-        }
-        return Optional.empty();
+        return rowFolder(n).map(FilesTab::rowIconName);
     }
 
     /**
@@ -706,26 +787,23 @@ final class FilesTab {
     }
 
     /**
-     * The header above a folder's row: its group, on the first row of a run of rows in that group (record 98); null for
-     * any other node and for a folder in no group.
+     * The separator above a top-level row (record 118): the hairline alone, an empty header, where a row of another group
+     * than the row above it begins; null for the first row, any other row and every node inside one.
      */
     String header(DefaultMutableTreeNode n) {
-        if (!isRow(n) || !(n.getUserObject() instanceof ViewSpec.TreeNode node) || !(n.getParent() instanceof DefaultMutableTreeNode root)) {
-            return null;
-        }
-        String group = groupOf(node);
-        if (group.isEmpty()) {
+        if (!isTop(n) || !(n.getUserObject() instanceof ViewSpec.TreeNode node) || !(n.getParent() instanceof DefaultMutableTreeNode root)) {
             return null;
         }
         int i = root.getIndex(n);
-        String before = i <= 0 || !(((DefaultMutableTreeNode) root.getChildAt(i - 1)).getUserObject() instanceof ViewSpec.TreeNode prev)
-                ? "" : groupOf(prev);
-        return group.equals(before) ? null : group;
+        if (i <= 0 || !(((DefaultMutableTreeNode) root.getChildAt(i - 1)).getUserObject() instanceof ViewSpec.TreeNode prev)) {
+            return null;
+        }
+        return groupOf(node).equals(groupOf(prev)) ? null : "";
     }
 
-    /** The group a top-level row sits in: its folder's, the kit's for the jobs' row. */
+    /** The group a top-level row is: its folder's, the kit's for a jobs' row of its own; empty for none. */
     private String groupOf(ViewSpec.TreeNode row) {
-        return isJobs(row) ? JOBS_GROUP : folder(row.label()).map(FolderRoot::group).orElse("");
+        return isJobs(row) ? JOBS_GROUP : rowFolder(row).map(FolderRoot::group).orElse("");
     }
 
     /** {@code folder} for the plain icon, else {@code folder-<icon>}. */
@@ -764,12 +842,20 @@ final class FilesTab {
         }
     }
 
+    /** The row of the folder called {@code name}, a top-level one or a group's folder inside its row; null when none. */
     private TreePath folderRow(String name) {
         DefaultMutableTreeNode root = (DefaultMutableTreeNode) tree.tree().getModel().getRoot();
         for (int i = 0; i < root.getChildCount(); i++) {
             DefaultMutableTreeNode c = (DefaultMutableTreeNode) root.getChildAt(i);
-            if (c.getUserObject() instanceof ViewSpec.TreeNode n && n.label().equals(name) && !isJobs(n)) {
-                return new TreePath(root).pathByAddingChild(c);
+            TreePath top = new TreePath(root).pathByAddingChild(c);
+            if (rowFolder(c).filter(f -> f.name().equals(name)).isPresent()) {
+                return top;
+            }
+            for (int j = 0; j < c.getChildCount(); j++) {
+                DefaultMutableTreeNode m = (DefaultMutableTreeNode) c.getChildAt(j);
+                if (rowFolder(m).filter(f -> f.name().equals(name)).isPresent()) {
+                    return top.pathByAddingChild(m);
+                }
             }
         }
         return null;
@@ -778,7 +864,7 @@ final class FilesTab {
     /** The open folders, in their order; sent when they changed, or when {@code force} and any is open. */
     private void watchOpen(boolean force) {
         List<String> open = new ArrayList<>();
-        for (FolderRoot f : folders) {
+        for (FolderRoot f : all) {
             TreePath row = folderRow(f.name());
             if (row != null && tree.tree().isExpanded(row)) {
                 open.add(f.name());
@@ -790,9 +876,10 @@ final class FilesTab {
         }
     }
 
+    /** The folder of the nearest folder row on {@code path}, the node's own when it is one. */
     private Optional<FolderRoot> folderOf(TreePath path) {
-        return path.getPathCount() < ROW + 1 || !(((DefaultMutableTreeNode) path.getPathComponent(ROW)).getUserObject() instanceof ViewSpec.TreeNode n)
-                ? Optional.empty() : folder(n.label());
+        int at = folderIndex(path.getPath());
+        return at < 0 ? Optional.empty() : rowFolder(path.getPathComponent(at));
     }
 
     /** The tree in front: the filter's while it has text, else the folders'. */
@@ -800,10 +887,10 @@ final class FilesTab {
         return searching() ? found : tree;
     }
 
-    /** The folder whose top-level row is selected in the tree in front, or null. */
+    /** The folder whose row is selected in the tree in front, or null. */
     private FolderRoot selectedFolder() {
         TreePath p = shown().tree().getSelectionPath();
-        return p == null || !isRow(p.getPath()) ? null : folderOf(p).orElse(null);
+        return p == null ? null : rowFolder(p.getLastPathComponent()).orElse(null);
     }
 
     private void activate(ViewSpec.TreeNode n) {
@@ -823,8 +910,8 @@ final class FilesTab {
 
     /**
      * The context menu of {@code n}, selected in the tree in front: a file's opens it rendered or as its text and, when
-     * it changed, compares it with {@code HEAD}; a folder row's opens its index file; a folder row's and a subfolder's
-     * show the changes inside it, and a folder row's gains the window's items for it; any other node has none. In a
+     * it changed, compares it with {@code HEAD}; a folder row's opens its index file; a top-level row's shows the
+     * changes inside it and gains the window's items for it, the backup (record 118); any other node has none. In a
      * deletable folder, a file's or a subfolder's menu also moves the selection to the Trash.
      */
     JPopupMenu menuFor(ViewSpec.TreeNode n) {
@@ -842,14 +929,15 @@ final class FilesTab {
             addCompare(menu, file);
             addTrash(menu);
         } else if (entry(n)) {
-            addChanges(menu, at);
             addTrash(menu);
-        } else if (selectedFolder() != null && selectedFolder().name().equals(n.label())) {
+        } else if (selectedFolder() != null && at != null && rowFolder(n).equals(Optional.of(selectedFolder()))) {
             FolderRoot f = selectedFolder();
             // asked for by name: a missing index says so in the status bar, as any file that cannot be opened
             f.indexFile().ifPresent(index -> menu.add(item("Open " + f.index(), "index", () -> open.accept(index))));
-            addChanges(menu, at);
-            folderMenu.accept(f, menu);
+            if (isTop(at.getPath())) {
+                addChanges(menu, at);
+                folderMenu.accept(f, menu);
+            }
         }
         return menu;
     }
@@ -930,7 +1018,7 @@ final class FilesTab {
         }
     }
 
-    /** What a folder row's menu gains from the window, after its own items. */
+    /** What a top-level row's menu gains from the window, after its own items. */
     void onFolderMenu(BiConsumer<FolderRoot, JPopupMenu> extra) {
         folderMenu = extra;
     }
@@ -967,7 +1055,7 @@ final class FilesTab {
     /** Whether {@code n} is a file or a subfolder, not a folder's row, a placeholder or a note such as "more…". */
     private boolean entry(ViewSpec.TreeNode n) {
         TreePath p = shown().tree().getSelectionPath();
-        return p != null && p.getPathCount() > ROW + 1 && !n.label().equals(ViewSpec.TreeNode.MORE) && !n.label().startsWith("✗ ")
+        return p != null && p.getPathCount() > ROW + 1 && !isFolderRow(p) && !isJobs(n) && !n.label().equals(ViewSpec.TreeNode.MORE) && !n.label().startsWith("✗ ")
                 && (n.link().startsWith(SourceLinks.SCHEME) || !n.children().isEmpty() || !n.detail().isEmpty());
     }
 
@@ -986,23 +1074,23 @@ final class FilesTab {
             Optional<FolderRoot> f = folderOf(p);
             if (f.isEmpty() || !f.get().deletable() || folder != null && !folder.equals(f.get())
                     || !(((DefaultMutableTreeNode) p.getLastPathComponent()).getUserObject() instanceof ViewSpec.TreeNode n)
-                    || p.getPathCount() <= ROW + 1 || n.label().equals(ViewSpec.TreeNode.MORE) || n.label().startsWith("✗ ")
+                    || p.getPathCount() <= ROW + 1 || isFolderRow(p) || n.label().equals(ViewSpec.TreeNode.MORE) || n.label().startsWith("✗ ")
                     || !(n.link().startsWith(SourceLinks.SCHEME) || !n.children().isEmpty() || !n.detail().isEmpty())) {
                 return Optional.empty();
             }
             folder = f.get();
-            paths.add(pathOf(folder, p, n));
+            paths.add(pathOf(folder, p, folderIndex(p.getPath()), n));
         }
         return Optional.of(Map.entry(folder, List.copyOf(paths)));
     }
 
-    /** A file's path from its link; a subfolder's from its folder and the names leading to it. */
-    private static Path pathOf(FolderRoot folder, TreePath p, ViewSpec.TreeNode n) {
+    /** A file's path from its link; a subfolder's from its folder, whose row is at {@code at}, and the names leading to it. */
+    private static Path pathOf(FolderRoot folder, TreePath p, int at, ViewSpec.TreeNode n) {
         if (n.link().startsWith(SourceLinks.SCHEME)) {
             return Path.of(SourceLinks.path(n.link()));
         }
         Path out = Path.of(folder.path());
-        for (int i = ROW + 1; i < p.getPathCount(); i++) {
+        for (int i = at + 1; i < p.getPathCount(); i++) {
             if (((DefaultMutableTreeNode) p.getPathComponent(i)).getUserObject() instanceof ViewSpec.TreeNode c) {
                 out = out.resolve(c.label());
             }
@@ -1057,7 +1145,7 @@ final class FilesTab {
 
     /** Reads, once, the folders never read, so the filter searches the closed ones too. */
     private void readUnread() {
-        List<String> unread = folders.stream().map(FolderRoot::name)
+        List<String> unread = all.stream().map(FolderRoot::name)
                 .filter(name -> !read.containsKey(name) && requested.add(name)).toList();
         if (!unread.isEmpty()) {
             intents.dispatch(new Intent.BrowseFolders(unread));
@@ -1071,16 +1159,10 @@ final class FilesTab {
      */
     private void refilter(boolean reset) {
         String q = filter.getText().strip().toLowerCase(Locale.ROOT);
-        List<ViewSpec.TreeNode> rows = new ArrayList<>();
-        for (FolderRoot f : folders) {
+        List<ViewSpec.TreeNode> rows = rows(f -> {
             ViewSpec.TreeNode t = read.get(f.name());
-            if (t != null) {
-                List<ViewSpec.TreeNode> kids = matches(t.children(), q);
-                if (!kids.isEmpty()) {
-                    rows.add(new ViewSpec.TreeNode(f.name(), rowDetail(f), kids));
-                }
-            }
-        }
+            return t == null ? List.of() : matches(t.children(), q);
+        }, false);
         Set<String> opening = new HashSet<>(rows.stream().map(ViewSpec.TreeNode::label).toList());
         ViewSpec.TreeNode root = new ViewSpec.TreeNode("Found", "", rows.isEmpty() ? List.of(placeholder(NO_MATCH)) : rows);
         if (reset) {
@@ -1096,7 +1178,7 @@ final class FilesTab {
             if (p.getPathCount() >= ROW + 1 && ((DefaultMutableTreeNode) p.getPathComponent(ROW)).getUserObject() instanceof ViewSpec.TreeNode row
                     && opening.contains(row.label())
                     && ((DefaultMutableTreeNode) p.getLastPathComponent()).getUserObject() instanceof ViewSpec.TreeNode n
-                    && !n.children().isEmpty() && (p.getPathCount() == ROW + 1 || !matches(n.label(), q))) {
+                    && !n.children().isEmpty() && (isFolderRow(p) || !matches(n.label(), q))) {
                 found.tree().expandRow(i);
             }
         }

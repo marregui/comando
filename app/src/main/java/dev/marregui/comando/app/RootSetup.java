@@ -37,7 +37,7 @@ final class RootSetup implements Setup {
             return Status.NONE;
         }
         Optional<Path> brain = root.brain();
-        return new Status(git.version(root.dir()), brain.isPresent() && git.canBackUp(brain.get()));
+        return new Status(git.version(root.dir()), brain.isPresent() && git.canBackUp(brain.get()), git.canBackUp(root.dir()));
     }
 
     @Override
@@ -46,7 +46,15 @@ final class RootSetup implements Setup {
         if (brain.isEmpty()) {
             throw new IOException("the root " + root.dir() + " has no kit, so no brain");
         }
-        return git.backUp(brain.get(), LocalDate.now());
+        return git.backUp(brain.get(), "Brain", LocalDate.now());
+    }
+
+    @Override
+    public String backUpKit() throws IOException {
+        if (root.kit().isEmpty()) {
+            throw new IOException("the root " + root.dir() + " has no kit");
+        }
+        return git.backUp(root.dir(), "Kit", LocalDate.now());
     }
 
     @Override

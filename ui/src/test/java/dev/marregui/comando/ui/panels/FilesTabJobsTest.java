@@ -24,8 +24,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [FilesTab]'s Jobs row: the kit's scheduled jobs at a glance, after the kit's folders (record 117).
-/// - the row follows the last folder of the Kit group, under its header, and is gone without a kit
+/// [FilesTab]'s Jobs row: the kit's scheduled jobs at a glance (record 117), first inside the kit's row (record 118).
+/// - the row leads the KIT row, is a row of its own after a separator without a kit's folder, and is gone without a kit
 /// - its detail says how many and what runs next; its tip, one line, the most pressing first
 /// - a failed last run reds its name, a pending change marks it, nothing else does
 /// - its menu configures the jobs and applies a pending change, only while nothing runs; a double click opens the window
@@ -72,6 +72,7 @@ class FilesTabJobsTest {
     }
 
     private static DefaultMutableTreeNode node(JTree tree, String label) {
+        tree.expandRow(rows(tree).indexOf("KIT")); // the Jobs row is inside the kit's
         for (int i = 0; i < tree.getRowCount(); i++) {
             DefaultMutableTreeNode n = (DefaultMutableTreeNode) tree.getPathForRow(i).getLastPathComponent();
             if (((ViewSpec.TreeNode) n.getUserObject()).label().equals(label)) {
@@ -81,23 +82,26 @@ class FilesTabJobsTest {
         throw new AssertionError("no row " + label);
     }
 
-    /// The Jobs row sits after the Kit group's last folder and before a folder in no group, takes the group's header
-    /// only when no Kit folder precedes it, has the clock icon, and goes when the jobs are [KitJobs#NONE].
+    /// The Jobs row is the first inside the KIT row, which is the Kit group's one folder named in capitals; with no Kit
+    /// folder it is a top-level row of its own, last, after a separator; it has the clock icon and goes when the jobs are
+    /// [KitJobs#NONE].
     @Test
-    void theRowFollowsTheKitsFoldersAndGoesWithoutAKit() {
+    void theRowLeadsTheKitsRowAndGoesWithoutAKit() {
         FilesTab tab = tab();
         JTree tree = tab.tree().tree();
-        assertThat(rows(tree)).containsExactly("Memory", "Kit", "Notes");
+        assertThat(rows(tree)).containsExactly("BRAIN", "KIT", "Notes");
         tab.showJobs(FINE);
-        assertThat(rows(tree)).containsExactly("Memory", "Kit", FilesTab.JOBS, "Notes");
-        assertThat(tab.header(node(tree, "Kit"))).isEqualTo("Kit");
-        assertThat(tab.header(node(tree, FilesTab.JOBS))).as("under the Kit folder's header").isNull();
-        assertThat(tab.rowIcon((ViewSpec.TreeNode) node(tree, FilesTab.JOBS).getUserObject())).contains(FilesTab.JOBS_ICON);
+        assertThat(rows(tree)).as("inside the kit's row, not beside it").containsExactly("BRAIN", "KIT", "Notes");
+        DefaultMutableTreeNode jobs = node(tree, FilesTab.JOBS);
+        assertThat(((ViewSpec.TreeNode) ((DefaultMutableTreeNode) jobs.getParent()).getUserObject()).label()).isEqualTo("KIT");
+        assertThat(jobs.getParent().getIndex(jobs)).as("first inside it").isZero();
+        assertThat(tab.header(jobs)).isNull();
+        assertThat(tab.rowIcon((ViewSpec.TreeNode) jobs.getUserObject())).contains(FilesTab.JOBS_ICON);
 
         tab.render(AppState.initial(List.of(new PanelState(new PanelId("p"), "scratch", "", "")), List.of(), List.of(),
                 List.of(new FolderRoot("Notes", "/n", "", List.of()))));
-        assertThat(rows(tree)).as("no Kit folder: last, with the header").containsExactly("Notes", FilesTab.JOBS);
-        assertThat(tab.header(node(tree, FilesTab.JOBS))).isEqualTo("Kit");
+        assertThat(rows(tree)).as("no Kit folder: last, a row of its own").containsExactly("Notes", FilesTab.JOBS);
+        assertThat(tab.header((DefaultMutableTreeNode) tree.getPathForRow(1).getLastPathComponent())).as("after a separator").isEmpty();
 
         tab.showJobs(KitJobs.NONE);
         assertThat(rows(tree)).containsExactly("Notes");

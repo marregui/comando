@@ -1,7 +1,10 @@
 package dev.marregui.comando.core.model;
 
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
@@ -23,8 +26,8 @@ import java.util.Set;
  * @param deletable whether the Files tab moves the folder's files and subfolders to the Trash; never the folder itself
  * @param listedIn  a file name, such as {@code INDEX.md}, that lists the entries beside it: an entry moved to the Trash
  *                  leaves the nearest such file above it, without its own lines; empty when none
- * @param group     the header the Files tab shows above the first of the folders that share it, such as {@code Brain};
- *                  folders stay where they are, none nests (record 98); empty when none
+ * @param group     the row the Files tab shows the folders that share it under, such as {@code Brain}: its name in
+ *                  capitals, and the folders inside that row when the group has more than one (record 118); empty when none
  */
 public record FolderRoot(String name, String path, String index, List<String> excludes, String icon, boolean deletable, String listedIn,
                          String group) {
@@ -90,6 +93,36 @@ public record FolderRoot(String name, String path, String index, List<String> ex
     /** Whether {@code file}, a full path, is in this folder. */
     public boolean contains(Path file) {
         return !path.isEmpty() && file.normalize().startsWith(Path.of(path).normalize());
+    }
+
+    /**
+     * The row of each group of two or more folders that share a parent folder (record 118): that folder, named by the
+     * group in capitals, its own entries read with the group's folders left out, as the Files tab shows only its other
+     * folders beside them. None for a group of one folder, which is its folder's row, nor when the name is a configured
+     * folder's.
+     */
+    public static List<FolderRoot> groupRoots(List<FolderRoot> folders) {
+        Map<String, List<FolderRoot>> groups = new LinkedHashMap<>();
+        folders.stream().filter(f -> !f.group().isEmpty() && !f.path().isEmpty()).forEach(f -> groups.computeIfAbsent(f.group(), g -> new ArrayList<>()).add(f));
+        List<FolderRoot> out = new ArrayList<>();
+        groups.forEach((group, members) -> {
+            String name = group.toUpperCase(Locale.ROOT);
+            Path parent = members.size() < 2 ? null : Path.of(members.getFirst().path()).normalize().getParent();
+            if (parent == null || folders.stream().anyMatch(f -> f.name().equals(name))
+                    || !members.stream().allMatch(m -> parent.equals(Path.of(m.path()).normalize().getParent()))) {
+                return;
+            }
+            List<String> inside = members.stream().map(m -> Path.of(m.path()).normalize().getFileName().toString()).toList();
+            out.add(new FolderRoot(name, parent.toString(), "", inside, FOLDER, false, "", group));
+        });
+        return out;
+    }
+
+    /** {@code folders} and their {@link #groupRoots}: every folder the Files tab reads. */
+    public static List<FolderRoot> withGroupRoots(List<FolderRoot> folders) {
+        List<FolderRoot> out = new ArrayList<>(folders);
+        out.addAll(groupRoots(folders));
+        return List.copyOf(out);
     }
 
     public FolderRoot withName(String newName) {

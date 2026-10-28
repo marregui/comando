@@ -9,12 +9,15 @@ import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.state.Notice;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -30,6 +33,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - The status bar's tip says where the kit and its brain are and what is unknown.
 /// - A brain folder shown through a link is inside the brain.
 class KitActionsTest {
+
+    /// Each backup says, off the EDT, where it ran and what git did: the brain's what it pushed, the kit's why it failed.
+    @Test
+    void theBrainAndTheKitAreBackedUpEachSayingWhatHappened(@TempDir Path tmp) {
+        KitActions kit = actions(new KitRoot(tmp.resolve("kit"), Optional.of(KIT), tmp));
+        kit.backUp();
+        kit.backUpKit();
+        Awaitility.await().atMost(Duration.ofSeconds(10)).until(() -> sent.size() == 2);
+        assertThat(sent).extracting(i -> ((Intent.Notify) i).text()).anyMatch(t -> t.startsWith("Brain at ") && t.endsWith(": nothing to commit; pushed abc1234"))
+                .anyMatch(t -> t.startsWith("The kit at ") && t.endsWith(" was not backed up: git push failed: rejected"));
+        assertThat(sent).extracting(i -> ((Intent.Notify) i).level()).containsExactlyInAnyOrder(Notice.Level.INFO, Notice.Level.ERROR);
+    }
 
     private static final PanelId P = new PanelId("p");
     private static final KitRoot.Manifest KIT = new KitRoot.Manifest("marregui", "BRAIN", List.of(), List.of(), List.of(), List.of());
@@ -52,6 +67,11 @@ class KitActionsTest {
             @Override
             public String backUpBrain() throws IOException {
                 return "nothing to commit; pushed abc1234";
+            }
+
+            @Override
+            public String backUpKit() throws IOException {
+                throw new IOException("git push failed: rejected");
             }
         };
         return new KitActions(new ComandoUi.Dependencies(sent::add, state::get, null, null, null, null, null, null, List::of, null, setup,

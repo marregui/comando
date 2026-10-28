@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted | Miguel and Claude |
+| 2026-10-28 | accepted; the Jobs row moved inside KIT by [record 118](0118-brain-and-kit-are-rows-each-one-unit.md) | Miguel and Claude |
 
 ## 1. Context
 

@@ -25,7 +25,7 @@ One package, `dev.marregui.comando.tools`.
 | `FolderTree` | a folder as a tree, ordered and bounded (12 levels; 80 000 names listed, 20 000 entries kept), without hidden entries, excluded names and the entries a caller skips |
 | `ListingLines` | the lines a listing file (an index file that names the entries beside it) gives an entry, taken out once the entry went to the Trash; other lines naming it stay and are reported |
 | `ToolSettings` | where the tools are, by convention: a `gradle-serial` executable on comando's `PATH` when there is one, and the JDK for child processes |
-| `KitGit` | the kit's root and brain as git checkouts: `git describe --tags --always` and the newer `vX.Y.Z` tags of `git ls-remote --tags origin` (`core`'s `KitVersion`); the brain's backup (`git add -A`, a commit `Brain backup <date>` when anything changed, `git push`) only when the brain is a repository of its own with a remote; remote runs bounded at 120 s, the commit at 60 s |
+| `KitGit` | the kit's root and brain as git checkouts: `git describe --tags --always` and the newer `vX.Y.Z` tags of `git ls-remote --tags origin` (`core`'s `KitVersion`); the backup of the brain or the kit's root (`git add -A`, a commit when anything changed whose message says what it adds, `Brain backup <date>: <top folders and counts>` then one line a file, `git push`) only when the folder is a repository's top with a remote; remote runs bounded at 120 s, the commit at 60 s |
 
 **A Gradle run.** The process runs on an errand that copies its output into the run's `Console` and sends
 `CommandFinished` with the exit code, the test tree and the failures. Past 4 Mi characters the rest of the output is
@@ -69,7 +69,7 @@ flowchart LR
 | `ToolPort` | `runGradle(runId, workDir, tasks)`, `cancelRun`, `forgetRun`, `readFolders`, `watchFolders`, `deleteFiles(folder, paths)`, `watchRepos(folders, changesShown)`, `readChange(root, change, ask)`, `rollBack(root, changes)`, `removeFiles(root, paths)`, `unstage(root, paths)` | the reducer's effects, through `EffectRouter` |
 | `ToolsAdapter.pollFolders(every)` | starts the folder poll | `app` at start (every 5 s) |
 | `ToolsAdapter.Trash` | `moveToTrash(file)`; `Trash.NONE` for tests and desktops without one | implemented in `ui` (`DesktopTrash`), passed in by `app` |
-| `KitGit` | `version(root)`, `canBackUp(brain)`, `backUp(brain, today)` | `app`'s `RootSetup`, off the EDT: the kit's version at start and every 6 hours, the brain's backup when the user asks for it |
+| `KitGit` | `version(root)`, `canBackUp(brain)`, `backUp(brain, today)`, `backUp(repo, what, today)` | `app`'s `RootSetup`, off the EDT: the kit's version at start and every 6 hours, the brain's and the kit's backups when the user asks for them |
 
 **Needs.** The `IntentSink`, the `ConsoleRegistry` it writes, a `Supplier<ToolSettings>` (`app` passes
 `ToolSettings::now`), and a `Trash`.
@@ -101,7 +101,7 @@ process tree and SIGKILL 2 s later, and closes the errands last.
 |---|---|
 | `ToolsAdapterTest` | Gradle runs against a fake `gradlew` (a shell script that prints its arguments and writes one failing JUnit report); folder reads in temporary directories |
 | `GitTest`, `ToolsAdapterReposTest` | a repository built with the real `git` in a temporary directory: a change of each kind, an ignored folder |
-| `KitGitTest` | the kit's version and the brain's backup against a checkout and a bare remote on disk |
+| `KitGitTest` | the kit's version and the brain's and the kit's backups, their messages, against a checkout and a bare remote on disk |
 | `ListingLinesTest`, `ToolSettingsTest` | unit tests |
 
 ```

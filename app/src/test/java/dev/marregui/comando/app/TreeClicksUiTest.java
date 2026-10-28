@@ -86,8 +86,8 @@ class TreeClicksUiTest {
     }
 
     /// comando started on a temporary folder named as `CLAUDE_CONFIG_DIR` would name it puts the kit's Memory, KB and Skills
-    /// folders, with the kit's groups, before the user's own, saves them, and the status bar reads "kit test-kit"; no
-    /// `claude` runs.
+    /// folders, with the kit's groups, before the user's own, saves them, shows the Brain group as one BRAIN row (record
+    /// 118), and the status bar reads "kit test-kit"; no `claude` runs.
     @Test
     void theKitsFoldersOpenTheFilesTabOfAWindowStartedOnItsRoot(@TempDir Path home) throws Exception {
         Path root = home.resolve("comando-kit");
@@ -117,8 +117,9 @@ class TreeClicksUiTest {
             assertThat(loop.state().folders()).extracting(FolderRoot::name).as("the kit's first, the user's kept")
                     .containsExactly("Memory", "KB", "Skills", "Notes");
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> front("Files"));
-            Awaitility.await("the Files tab's rows").atMost(Duration.ofSeconds(10)).until(() -> rows().size() >= 4);
-            assertThat(rows()).as("in the Files tab").startsWith("Memory", "KB", "Skills").contains("Notes");
+            Awaitility.await("the Files tab's rows").atMost(Duration.ofSeconds(10)).until(() -> rows().size() >= 3);
+            assertThat(rows()).as("in the Files tab: the Brain group one row; then, no Kit folder here, the jobs' row of its own")
+                    .startsWith("BRAIN", "Skills", "Notes").doesNotContain("Memory", "KB");
             assertThat(loop.state().folders()).extracting(FolderRoot::group).as("the kit's groups (record 98)")
                     .containsExactly("Brain", "Brain", "", "");
             paintSidebar();
@@ -135,7 +136,7 @@ class TreeClicksUiTest {
 
     /**
      * The sidebar as it shows, the Files tab in front with its second row selected, painted in three tints side by side to
-     * {@code build/snapshots/sidebar.png} (record 98): one header over the kit's Brain folders, the selection in the tint.
+     * {@code build/snapshots/sidebar.png} (records 98, 118): the BRAIN row, hairlines between groups, the selection in the tint.
      */
     private static void paintSidebar() throws Exception {
         Tint[] tints = {Tint.TREASURE, Tint.SILVER, Tint.ELECTRIC_BLUE};
