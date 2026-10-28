@@ -157,7 +157,7 @@ of text and shown to 400 lines.
 |---|---|---|
 | `approve` | `tool_name`, `input`, `tool_use_id` | Claude Code's permission prompt: a card, and a wait for the answer ([§3](#3-approvals-and-safety)) |
 | `ui_show_table` | `title`, `columns`, `rows`, `placement` | a table view |
-| `ui_plot` | `title`, `x_label`, `y_label`, `time_x`, `series` (`name`, `x`, `y`), `placement` | a plot; with `time_x`, x is epoch milliseconds |
+| `ui_plot` | `title`, `x_label`, `y_label`, `time_x`, `series` (`name`, `x`, `y`), or `x` and `y` for one series named after the title, `placement` | a plot; with `time_x`, x is epoch milliseconds; an array sent as JSON text reads as the array |
 | `ui_show_view` | `type`, `title`, `data`, `placement` | a `markdown`, `diff`, `text`, `tree`, `table` or `plot` view |
 | `ui_set_editor` | `text`, `panel`, `force` | replaces a panel's text, one step the user's ⌘Z undoes |
 | `ui_insert` | `text`, `panel`, `mode`, `force` | adds text as its own block: at the end (`append`), or after the block that ran last (`insert`); the user's caret and selection stay put |

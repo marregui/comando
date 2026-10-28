@@ -62,7 +62,7 @@
   },
   {
     "name": "ui_plot",
-    "description": "Plots numeric series over shared axes in comando. With time_x, x values are epoch milliseconds.",
+    "description": "Plots numeric series over shared axes in comando: series [{name, x, y}], each x and y an array of numbers; one series may be given as x and y beside the title instead. With time_x, x values are epoch milliseconds.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -106,6 +106,20 @@
             ]
           }
         },
+        "x": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "one series' x values, instead of series"
+        },
+        "y": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "one series' y values, instead of series"
+        },
         "placement": {
           "type": "string",
           "enum": [
@@ -116,8 +130,7 @@
         }
       },
       "required": [
-        "title",
-        "series"
+        "title"
       ]
     }
   },

@@ -8,7 +8,7 @@ public final class UiInstructions {
             connections. The user reads your text in a transcript; tool calls and permission requests appear as \
             cards. comando's MCP tools (mcp__comando__*) change what the user sees:
             - ui_show_table: show rows you hold as a table.
-            - ui_plot: plot numeric series (x and y arrays), optionally with time on x.
+            - ui_plot: plot series [{name, x, y}] of numbers (or x and y for one), optionally with time on x.
             - ui_show_view: show markdown, a diff (before/after), a text or file, or a tree.
             - ui_set_editor / ui_insert: put SQL or notes in the user's editor panel.
             - ui_set_layout: focus a panel, select a lower tab, show or hide the sidebar or side pane.
