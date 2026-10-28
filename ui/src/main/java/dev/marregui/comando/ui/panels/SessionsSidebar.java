@@ -28,6 +28,8 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 
 import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
 import javax.swing.DefaultListModel;
 import javax.swing.JButton;
 import javax.swing.JCheckBoxMenuItem;
@@ -79,7 +81,8 @@ import java.util.function.Consumer;
  * disconnects (a connection), the name, a card over the
  * name (a connection's has no summary) and everything else in the row's menu. Sessions are
  * listed running first, then by name, until the user drags one: from then on in the order the user left them, until
- * the tab menu's Sort. Hidden, the column collapses to a rail whose button shows it again.
+ * the tab menu's Sort. Hidden, the column collapses to a rail: its first button shows it again at its width, and one
+ * button per tab, in the tabs' icons, shows it at that tab.
  */
 public final class SessionsSidebar {
 
@@ -432,7 +435,21 @@ public final class SessionsSidebar {
         rail = new JPanel(new BorderLayout());
         rail.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(4, 1, 0, 1)));
-        rail.add(ToolButton.of("more", KeyText.of("Show the sidebar (⌘B)"), toggle), BorderLayout.NORTH);
+        // under the button that shows the sidebar, one per tab: a click shows the sidebar at that tab
+        JPanel railButtons = new JPanel();
+        railButtons.setLayout(new BoxLayout(railButtons, BoxLayout.Y_AXIS));
+        railButtons.setOpaque(false);
+        railButtons.add(ToolButton.of("more", KeyText.of("Show the sidebar (⌘B)"), toggle));
+        String[][] railTabs = {{"Sessions", "session"}, {"Connections", "database"}, {"Files", "files"}};
+        for (int i = 0; i < railTabs.length; i++) {
+            int tab = i;
+            railButtons.add(Box.createVerticalStrut(Theme.SPACE_XS));
+            railButtons.add(ToolButton.of(railTabs[i][1], "Show the sidebar at " + railTabs[i][0], () -> {
+                selectTab(tab);
+                toggle.run();
+            }));
+        }
+        rail.add(railButtons, BorderLayout.NORTH);
         rail.setVisible(false);
         root.add(tabs.component(), BorderLayout.CENTER);
         root.add(rail, BorderLayout.WEST);

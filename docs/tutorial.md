@@ -48,7 +48,7 @@ the sessions run on the kit, the Files tab opens on its folders and the status b
 |---|---|
 | **Menu bar** | **Edit**, and **Help**: the palette; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
 | **Tab row's right end** | start or stop the shell, stop refreshing plots, start or stop the embedded QuestDB, the theme's swatch, **+** |
-| **Sidebar**, left | three tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back |
+| **Sidebar**, left | three tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back at its width, and its tab icons bring it back at that tab |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it |
 | **Panel header** | at the right, first the panel's **connection**: a database icon in its state's colour (grey closed, blue open, amber on its way, red failed) whose click connects or disconnects, and its name, whose click binds another; then **Preview** (Markdown), **Run**, **Stop**, **Clear**; rest the pointer on one for what a click does |
 | **Editor** | where you write SQL and prompts, mixed in one text |

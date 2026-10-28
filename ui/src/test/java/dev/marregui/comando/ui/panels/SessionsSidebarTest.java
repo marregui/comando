@@ -138,6 +138,15 @@ class SessionsSidebarTest {
 
         show.doClick();
         assertThat(toggles).hasValue(2);
+        // a tab's button on the rail shows the sidebar at that tab
+        for (String t : List.of("Sessions", "Connections", "Files")) {
+            assertThat(shows(button(sidebar.component(), "Show the sidebar at " + t), sidebar.component())).as(t + " on the rail").isTrue();
+        }
+        AbstractButton files = button(sidebar.component(), "Show the sidebar at Files");
+        assertThat(files.getIcon()).as("in the tab's icon").isSameAs(header(sidebar, "Files").getIcon());
+        SwingUtilities.invokeAndWait(files::doClick);
+        assertThat(sidebar.selectedTab()).isEqualTo(SessionsSidebar.FILES);
+        assertThat(toggles).as("and shows the sidebar").hasValue(3);
 
         SwingUtilities.invokeAndWait(() -> sidebar.show(true));
         assertThat(shows(hide, sidebar.component())).isTrue();

@@ -177,7 +177,8 @@ underline and the selection: a band of its shade, the name in its highlight and 
 No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)): a row's menu edits,
 clones and removes it (`ResourceActions`). Removing something in use asks **Stop and remove**, **Disconnect and remove**
 or **Close and remove**, or **Leave it** ([record 37](adr/0037-session-actions-act-on-the-selected-row.md)). ⌘B or the
-`⋯` button hides the sidebar to a rail on the left edge.
+`⋯` button hides the sidebar to a rail on the left edge: its `⋯` shows the sidebar again at the width it had, and an
+icon per tab under it shows the sidebar at that tab.
 
 **A session row** is one line: the state icon and the name
 ([record 90](adr/0090-a-session-row-is-its-icon-and-name.md)). The icon, which a click starts or stops, is
