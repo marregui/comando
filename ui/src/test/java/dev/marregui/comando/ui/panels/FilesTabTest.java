@@ -12,6 +12,7 @@ import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.RowIcon;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.tree.TreeView;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -22,6 +23,7 @@ import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollBar;
+import javax.swing.JScrollPane;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -171,6 +173,31 @@ class FilesTabTest {
         assertThat(f.tab.tree().component().isVisible()).isTrue();
         assertThat(f.tab.found().component().isVisible()).isFalse();
         assertThat(f.labels()).containsExactly("Scratchpad", "2026-10-16", "LANE-PLAN.md", "notes.md", "KB");
+    }
+
+    @Test
+    void aNameWiderThanTheTabScrollsSidewaysInTheTreeAndInTheFiltersTree() throws Exception {
+        String wide = "a-name-much-wider-than-a-narrow-tab-so-its-end-is-only-seen-by-scrolling.md";
+        Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of()));
+        f.edt(() -> f.tree().expandRow(0));
+        f.edt(() -> f.show("Scratchpad", folder("Scratchpad", file(wide))));
+        f.edt(() -> f.tab.filter().setText("narrow"));
+        assertThat(f.foundLabels()).containsExactly("Scratchpad", wide);
+
+        for (TreeView t : List.of(f.tab.tree(), f.tab.found())) {
+            boolean[] bar = new boolean[2];
+            f.edt(() -> {
+                JScrollPane sp = (JScrollPane) t.component();
+                sp.setSize(160, 400);
+                sp.doLayout();
+                bar[0] = sp.getHorizontalScrollBar().isVisible();
+                sp.setSize(2000, 400);
+                sp.doLayout();
+                bar[1] = sp.getHorizontalScrollBar().isVisible();
+            });
+            assertThat(bar[0]).as("a narrow tab scrolls to the name's end").isTrue();
+            assertThat(bar[1]).as("a tab wide enough for every name has no bar").isFalse();
+        }
     }
 
     @Test

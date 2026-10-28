@@ -200,8 +200,8 @@ final class FilesTab {
             t.onActivate(this::activate);
             t.onMenu(this::menu);
             if (t.component() instanceof JScrollPane sp) {
-                // as the sidebar's lists: a long path is cut at the edge rather than scrolled to
-                sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+                // unlike the sidebar's lists: a name wider than the tab scrolls into view rather than being cut at the edge
+                sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
             }
         }
         tree.tree().getAccessibleContext().setAccessibleName("Files");

@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-16 | accepted; bar, sync interval and order amended by [record 51](0051-folder-buttons-together-read-only-folders-icons.md); the click and the index replaced by [record 52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md); bar, folder dialog and configuration row removed by [record 55](0055-the-files-tab-only-shows-folders-json-configures-it.md); the bound raised by [record 68](0068-git-changes-and-a-side-by-side-diff.md) | Miguel and Claude |
+| 2026-10-16 | accepted; bar, sync interval and order amended by [record 51](0051-folder-buttons-together-read-only-folders-icons.md); the click and the index replaced by [record 52](0052-files-open-on-a-double-click-the-bar-follows-the-selection.md); amended 2026-10-28 (see Amendments); bar, folder dialog and configuration row removed by [record 55](0055-the-files-tab-only-shows-folders-json-configures-it.md); the bound raised by [record 68](0068-git-changes-and-a-side-by-side-diff.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -51,3 +51,10 @@ configured folder's index file name rather than `ALPHA.md`.
 |---|---|
 | a tab per folder | crowds the sidebar |
 | the fixed `~/.claude/SCRATCHPAD`, read at all times | one user's layout, and a read every 2 s while the tab is hidden |
+
+## Amendments
+
+2026-10-28: a name wider than the tab scrolls sideways: the tree and the filter's tree show a horizontal scroll bar
+while a row is wider than the tab, and none when every row fits. Before, a long name was cut at the edge, and its end
+was seen only by widening the sidebar. The sidebar's lists keep no horizontal scroll bar. Miguel asked; tested in
+`FilesTabTest`.
