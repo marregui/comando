@@ -93,13 +93,13 @@ record's own text as its name, a row cost 63 µs: HTML in a renderer is parsed a
 Every user action is a `Command`: id, label, icon, key, menu path or area, action, enablement. Key bindings and the
 palette (⌘⇧P) come from the `ActionRegistry`.
 
-The menu bar is built from `Menus`. After the application menu macOS draws come Edit and Actions. Actions holds four
-groups split by separators: the palette and three submenus, each item with its swatch and the one chosen ticked:
-Theme, the six curated themes ([record 103](adr/0103-curated-themes-in-actions.md)); the shell and the plots; the embedded QuestDB, when comando
-has one; help. The bar holds only what has no key or control in the window, and what macOS expects in a menu
+The menu bar is built from `Menus`. After the application menu macOS draws come Edit and Help. Help holds the palette,
+a separator, then the help. The theme, the shell, the refreshing plots and the embedded QuestDB (when comando has one)
+are buttons at the tab row's right end, left of New panel (`Menus.corner`, `CommandButton`: each shows the first of
+its commands that can run now) ([record 114](adr/0114-help-menu-and-corner-buttons.md)). The bar holds only what has no key or control in the window, and what macOS expects in a menu
 ([record 75](adr/0075-the-menu-bar-is-edit-and-actions-flat.md)). Every item has an icon and a tooltip saying what it
 does. A command in no menu is named by its area in the palette and in the keyboard shortcuts: Panels, Run, Session,
-Session ▸ Model, Session ▸ Effort, Connection, Results, Edit, Files, Kit, Window, comando. The registry refuses a
+Session ▸ Model, Session ▸ Effort, Connection, Results, Edit, Files, Kit, Window, Theme, comando. The registry refuses a
 command with neither.
 
 About comando, in the application menu and the palette, opens `About`'s card: drawn by hand (warm charcoal, a tinted
@@ -210,7 +210,7 @@ serif, which covers most of Unicode on every desktop.
 | What | Colour |
 |---|---|
 | text outside the prompt bubble and the tool cards: Claude's text, thinking, notes, hook lines, the turn's time | a warm ivory, low in saturation (`Theme.TRANSCRIPT_TEXT`, `#E2DCCD`) |
-| Claude's headings, list marks, a quote's bar, a table's head | the theme's tint, chosen in Actions ▸ Theme or from the swatch left of New panel (`Theme.tint()`, Treasure gold by default) ([record 83](adr/0083-one-gold-chosen-beside-clear.md), [record 96](adr/0096-a-tint-chosen-in-actions.md)) |
+| Claude's headings, list marks, a quote's bar, a table's head | the theme's tint, chosen from the swatch left of New panel (`Theme.tint()`, Treasure gold by default) ([record 83](adr/0083-one-gold-chosen-beside-clear.md), [record 96](adr/0096-a-tint-chosen-in-actions.md)) |
 | headings, first three levels | a serif: New York on macOS, else Georgia or another installed serif, else Java's logical serif. The first two levels run along the tint's ramp from highlight to shade, with a rule under them. Sizes ×1.45, ×1.25, ×1.1 of the text's (`Theme.HEADING_SCALE`), in rendered pages too |
 | bold | a brighter ivory |
 | inline code | a quiet teal of the content palette, on a ground a step above the panels' ([record 101](adr/0101-content-colours-derived-from-the-theme.md)) |

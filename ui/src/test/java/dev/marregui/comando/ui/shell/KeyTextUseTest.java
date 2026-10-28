@@ -25,7 +25,7 @@ class KeyTextUseTest {
     private static final Path SOURCES = Path.of("src/main/java/dev/marregui/comando/ui");
     /** Constants holding keys, by file and the name they are declared under; each is translated where it is read. */
     private static final Map<String, List<String>> TRANSLATED_WHERE_READ = Map.of(
-            "shell/Menus.java", List.of("TIPS =", "MENU_TIPS ="), // Menus.tip and the menu bar's tooltips
+            "shell/Menus.java", List.of("TIPS ="), // Menus.tip and the menu bar's tooltips
             "shell/Keys.java", List.of("PLACES ="), // Keys.markdown
             "widgets/transcript/render/Items.java", List.of("WAITING ="), // the tool card's status
             "kit/format/KeyText.java", List.of("MODIFIERS =")); // the translator's own glyphs

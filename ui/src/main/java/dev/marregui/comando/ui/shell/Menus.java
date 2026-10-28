@@ -4,12 +4,10 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.ui.kit.action.MenuEntry;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.GroundIcon;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -21,10 +19,10 @@ import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
 /**
  * The menu bar, the icons and tooltips of its entries, and where every other command belongs. The bar holds only what
  * has no key and no control in the window, and what macOS expects in a menu: after the application menu macOS draws,
- * Edit (the clipboard and undo) and Actions, its groups split by separators, the themes its one submenu, help the last.
- * Every other command
- * keeps its key, its control and the palette, and is listed by its area ("Session", "Results") in the palette and the
- * keyboard shortcuts.
+ * Edit (the clipboard and undo) and Help, the palette and the help, flat. The theme, the shell, the refreshing plots and
+ * the embedded server are buttons at the tab row's right end instead ({@link #corner}). Every other command keeps its
+ * key, its control and the palette, and is listed by its area ("Session", "Results") in the palette and the keyboard
+ * shortcuts.
  * <p>
  * Every item has an icon and a one-line tooltip: what it does, and one fact its label does not say; macOS shows both
  * in its menu bar.
@@ -40,17 +38,19 @@ final class Menus {
             Map.entry("edit.copy", "copy"),
             Map.entry("edit.paste", "paste"),
             Map.entry("edit.selectAll", "select-all"),
-            // Actions
+            // Help
             Map.entry("view.palette", "palette"),
-            Map.entry("terminal.restart", "terminal-restart"),
-            Map.entry("run.plotStop", "chart-stop"),
-            Map.entry("server.start", "play"),
-            Map.entry("server.stop", "stop"),
             Map.entry("help.tutorial", "tutorial"),
             Map.entry("help.keys", "keyboard"),
             Map.entry("help.markdown", "markdown"),
             Map.entry("help.log", "log"),
             Map.entry("help.dataRoot", "comando-folder"),
+            // the corner's buttons
+            Map.entry("terminal.start", "terminal-start"),
+            Map.entry("terminal.stop", "terminal-stop"),
+            Map.entry("run.plotStop", "chart-stop"),
+            Map.entry("server.start", "database-start"),
+            Map.entry("server.stop", "database-stop"),
             // in no menu: the icon of the button or tab-menu item that does the same, shown in the palette
             Map.entry("panel.openSpec", "open-file"),
             Map.entry("files.settings", "folders"),
@@ -63,9 +63,10 @@ final class Menus {
             Map.entry("file.close", "close"),
             Map.entry("session.toggle", "plug"),
             Map.entry("view.changes", "diff"),
-            Map.entry("connection.toggle", "plug"));
+            Map.entry("connection.toggle", "plug"),
+            Map.entry("terminal.restart", "terminal-restart"));
 
-    /** What each item of the bar does, as its tooltip: one line. */
+    /** What each item of the bar and each button of the corner does, as its tooltip: one line. */
     static final Map<String, String> TIPS = Map.ofEntries(
             Map.entry("edit.undo", "Undo the last change in the focused text"),
             Map.entry("edit.redo", "Redo what Undo undid in the focused text"),
@@ -74,7 +75,8 @@ final class Menus {
             Map.entry("edit.paste", "Paste the clipboard's text at the caret"),
             Map.entry("edit.selectAll", "Select all of the focused text, table or transcript"),
             Map.entry("view.palette", "Run any command by typing part of its name"),
-            Map.entry("terminal.restart", "Start a new shell in the focused panel; what runs in it stops"),
+            Map.entry("terminal.start", "Start the focused panel's shell, in its session's folder"),
+            Map.entry("terminal.stop", "Stop the focused panel's shell; what runs in it stops"),
             Map.entry("run.plotStop", "Stop every refreshing plot; the plots stay as they are"),
             Map.entry("server.start", "Start QuestDB on this machine: PostgreSQL wire 8812, console 9000"),
             Map.entry("server.stop", "Stop the embedded QuestDB; its data stays"),
@@ -84,19 +86,11 @@ final class Menus {
             Map.entry("help.log", "comando's log, read-only, following its end"),
             Map.entry("help.dataRoot", "Show comando's data root: panels, sessions, settings, logs"));
 
-    /** The tooltips of the submenus, by title: only Theme; the bar is otherwise flat (Miguel, 2026-10-19). */
-    static final Map<String, String> MENU_TIPS = Map.of(
-            "Theme", "The ground of every panel and its tint, in every window");
-
-    /** The theme submenu's icon: a swatch of the ground and the tint chosen. */
-    static final String THEME_ICON = "theme";
-
     /** Where each command in no menu belongs, named in the palette and the keyboard shortcuts. */
     static final Map<String, String> AREAS = areas();
 
     static {
-        // the themes' swatches, painted, named as their commands are; the submenu's is the theme chosen
-        Icons.put(THEME_ICON, new GroundIcon((Ground) null));
+        // the themes' swatches, painted, named as their commands are
         for (NamedTheme t : NamedTheme.values()) {
             Icons.put(t.commandId(), new GroundIcon(t));
         }
@@ -120,21 +114,23 @@ final class Menus {
         return KeyText.of(TIPS.get(id));
     }
 
-    /**
-     * The menu bar after the application menu macOS draws: Edit, then Actions, its groups split by separators: the
-     * palette and the themes (record 103); the shell and the plots; the embedded server, only when comando has one; help.
-     */
-    static List<MenuEntry.Menu> bar(boolean server) {
-        Object[] themes = Arrays.stream(NamedTheme.values()).map(NamedTheme::commandId).toArray();
-        List<Object> actions = new ArrayList<>(List.of("view.palette", menu("Theme", THEME_ICON, themes), SEPARATOR,
-                "terminal.restart", "run.plotStop"));
-        if (server) {
-            actions.addAll(List.of(SEPARATOR, "server.start", "server.stop"));
-        }
-        actions.addAll(List.of(SEPARATOR, "help.tutorial", "help.keys", "help.markdown", "help.log", "help.dataRoot"));
+    /** The menu bar after the application menu macOS draws: Edit, then Help: the palette, then the help. */
+    static List<MenuEntry.Menu> bar() {
         return List.of(
                 menu("Edit", null, "edit.undo", "edit.redo", SEPARATOR, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll"),
-                menu("Actions", null, actions.toArray()));
+                menu("Help", null, "view.palette", SEPARATOR, "help.tutorial", "help.keys", "help.markdown", "help.log", "help.dataRoot"));
+    }
+
+    /**
+     * The buttons left of the theme's swatch, each its commands, shown by the first that can run: the shell, the
+     * refreshing plots, and the embedded server only when comando has one.
+     */
+    static List<List<String>> corner(boolean server) {
+        List<List<String>> buttons = new ArrayList<>(List.of(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop")));
+        if (server) {
+            buttons.add(List.of("server.start", "server.stop"));
+        }
+        return List.copyOf(buttons);
     }
 
     private static Map<String, String> areas() {
@@ -144,13 +140,13 @@ final class Menus {
         for (int i = 1; i <= 9; i++) {
             a.put("panel." + i, "Panels");
         }
-        put(a, "Run", "run", "run.claude", "run.sql", "terminal.run", "run.stop", "tools.gradle");
+        put(a, "Run", "run", "run.claude", "run.sql", "terminal.run", "run.stop", "tools.gradle", "terminal.start", "terminal.stop", "terminal.restart");
         put(a, "Session", "session.toggle", "session.interrupt", "session.compact", "transcript.clear", "panel.bindSession", "session.dialog",
                 "session.import");
         SessionSpec.MODELS.forEach(m -> a.put("session.model." + m, "Session ▸ Model"));
         SessionSpec.EFFORTS.forEach(e -> a.put("session.effort." + e, "Session ▸ Effort"));
-        put(a, "Connection", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog");
-        put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive");
+        put(a, "Connection", "server.start", "server.stop", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog");
+        put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive", "run.plotStop");
         put(a, "Edit", "view.copy", "view.find", "view.findNext", "view.findPrevious", "edit.complete", "edit.completeAlt");
         put(a, "Files", "files.settings");
         put(a, "Kit", "kit.upgrade", "kit.backup");
@@ -158,6 +154,9 @@ final class Menus {
                 "view.terminal", "view.results", "view.nextTab", "view.previousTab", "view.closeLower", "view.zoomIn", "view.zoomOut",
                 "view.zoomReset", "view.notices", "view.session.alt", "view.approvals.alt", "view.terminal.alt", "view.results.alt");
         put(a, "comando", "app.about", "app.quit");
+        for (NamedTheme t : NamedTheme.values()) {
+            a.put(t.commandId(), "Theme");
+        }
         return Map.copyOf(a);
     }
 

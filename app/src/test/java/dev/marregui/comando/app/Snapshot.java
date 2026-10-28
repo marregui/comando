@@ -270,7 +270,7 @@ public final class Snapshot {
         // the same window in every curated theme, half size, three a row (record 103)
         themes(out.resolve("02f2-themes.png"));
         // Help's tutorial and log open as documents from their files: the tutorial rendered, the log read-only at its end
-        menuItem("Actions", "Tutorial");
+        menuItem("Help", "Tutorial");
         showing(loop, "tutorial.md");
         shoot(out.resolve("02g-help-tutorial.png"));
         // the snapshot logs to the console only: a log file as comando writes one
@@ -282,13 +282,13 @@ public final class Snapshot {
                 "2026-10-16 08:40:02.003 INFO  [edt-watchdog] dev.marregui.comando.ui.shell.ComandoUi the EDT was busy for 310 ms [drawing] in=SunToolkit.awtLock comando=Items.fillRound:77",
                 "2026-10-16 08:40:05.871 INFO  [claude-comando] dev.marregui.comando.claude.ClaudeAdapter claude started [session=comando, pid=4242, mode=RESUME]",
                 ""));
-        menuItem("Actions", "Show the log");
+        menuItem("Help", "Show the log");
         showing(loop, "comando-0.log");
         shoot(out.resolve("02h-help-log.png"));
         // Help's two sheets, each in the side pane: the keys, then Markdown
         for (String[] sheet : new String[][]{{"Keyboard shortcuts", "Keyboard shortcuts", "02i-help-keys.png"},
                 {"Markdown sheet", "Markdown", "02j-help-markdown.png"}}) {
-            menuItem("Actions", sheet[0]);
+            menuItem("Help", sheet[0]);
             await(loop, st -> st.views().stream().anyMatch(v -> v.title().equals(sheet[1])), 5_000);
             // the view is drawn on the event thread after the state that holds it: done once the queue is through
             SwingUtilities.invokeAndWait(() -> { });
@@ -900,7 +900,23 @@ public final class Snapshot {
         });
     }
 
-    /** Clicks the item at {@code path} in the window's menu bar ("Actions", "Tutorial"), as a user would. */
+    /** Clicks the button named {@code name} in the visible window, as a user would. */
+    static void button(String name) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            for (Frame f : Frame.getFrames()) {
+                if (f.isVisible()) {
+                    AbstractButton b = find(f, AbstractButton.class, x -> x.isShowing() && name.equals(x.getAccessibleContext().getAccessibleName()));
+                    if (b != null) {
+                        b.doClick();
+                        return;
+                    }
+                }
+            }
+            throw new IllegalStateException("no button " + name);
+        });
+    }
+
+    /** Clicks the item at {@code path} in the window's menu bar ("Help", "Tutorial"), as a user would. */
     static void menuItem(String... path) throws Exception {
         SwingUtilities.invokeAndWait(() -> {
             for (Frame f : Frame.getFrames()) {

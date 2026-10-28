@@ -56,14 +56,22 @@ Any number of document panels may be attached to a session
   name, gets a number.
 - **Renaming** a panel: double-click its tab, Rename… on its row under the sessions (a panel without a session), or
   "Rename panel…" in the palette.
+- **The lower divider is each panel's**: moved while a panel is in front, it goes back there when that panel comes to
+  the front again, from a session tab or a file tab; a panel never in front keeps it as it is; kept across restarts for
+  the panels open or reopenable ([record 115](adr/0115-the-lower-divider-per-panel.md)).
 - **Restore layout** (palette) puts the sidebar, side pane and lower divider back as they were before a session
   arranged them; it is greyed out while nothing was arranged.
 - **Moving** a tab: drag it along the row; a line marks where it lands. The order is saved and kept across restarts.
-- **Closing gives the keyboard back.** A panel or view remembers where the keyboard was when it opened: a panel, a
-  view, the Files tab, the transcript. When the one the keyboard is in, or the panel in front, closes, that opener
-  comes forward (its panel, its lower tab) and takes the keyboard back, so openings chain: A opens B, B opens C;
-  closing C returns to B, closing B to A. An opener closed meanwhile hands on to its own opener
-  ([record 112](adr/0112-closing-gives-the-keyboard-back.md)).
+- **Closing returns to where you came from.** Each panel and view remembers where you were just before you last
+  arrived at it, an opening included (a panel, a view, the Files tab, a lower tab of the panel in front). Closing the
+  one you are at returns there: its panel, the lower tab, the component with the keyboard. Openings chain (A opens B,
+  B opens C; closing C returns to B, closing B to A); going from B to main and back to B returns to main when B closes;
+  closing a tab you are not at moves nothing ([record 112](adr/0112-closing-gives-the-keyboard-back.md)).
+- **The outline.** A Markdown document, and a panel's own text, have an outline button in the panel's tools: it shows
+  the headings at the panel's right, one a line, indented by level, the first level in bold, read again as typing
+  pauses. A double click on one goes to it: the rendered page scrolls its heading to the top, the text puts its line at
+  the top with the caret on it. Whether panels open with it is the last choice made, kept in `settings.json`
+  ([record 113](adr/0113-a-documents-outline-at-the-panels-right.md)).
 - **HTML files** open as text, to edit; the Browser button opens the page in the desktop's browser
   ([record 56](adr/0056-html-opens-in-the-browser-not-in-comando.md)).
 - **Links**, wherever text shows (a rendered page, a panel's text, the transcript, every card in it: a command, a skill's
@@ -96,8 +104,10 @@ Any number of document panels may be attached to a session
   the chip, "no session ▾".
 - **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the kit,
   the plans' usage and the work running in every session and query on the right.
-- **The header** shows the connection as a chip with a status dot and a plug (green when connected) that connects or
-  disconnects. On the right, icons without a button's shape: Browser (HTML: the page in the browser), Preview or Edit (Markdown),
+- **The header** holds icons without a button's shape, at the right. First the connection: a database icon in its
+  state's colour (grey closed, blue open, amber opening or closing, red failed) whose click connects or disconnects, and
+  without a connection binds one; beside it the connection's name, whose click binds another or unbinds; each tooltip
+  says what a click does ([record 116](adr/0116-one-connection-toggle.md)). Then Browser (HTML: the page in the browser), Preview or Edit (Markdown),
   Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A production connection frames the panel in
   red ([record 57](adr/0057-a-light-editor-and-a-header-of-icons.md)).
 - **The theme** is dark throughout: the window is FlatLaf's dark look (`FlatMacDarkLaf` on macOS, `FlatDarkLaf`
@@ -124,9 +134,11 @@ Any number of document panels may be attached to a session
   the Session tab once the turn has ended, while the conversation goes on
   ([record 104](adr/0104-the-theme-beside-new-panel.md)).
 - **The theme's swatch**, the theme's ground with a bar of its tint, sits at the top right, left of New panel; its
-  tooltip names the theme, and a click opens the six, as Actions ▸ Theme does
-  ([record 104](adr/0104-the-theme-beside-new-panel.md)).
-- **Actions ▸ Theme** chooses a ground and the tint made for it together: Graphite and gold (the default), Espresso
+  tooltip names the theme, and a click opens the six; the palette has them too
+  ([record 104](adr/0104-the-theme-beside-new-panel.md), [record 114](adr/0114-help-menu-and-corner-buttons.md)).
+- **The corner's buttons**, left of the swatch: start or stop the focused panel's shell, stop refreshing plots, and
+  start or stop the embedded QuestDB; each shows what it would do now and is disabled when it cannot run ([record 114](adr/0114-help-menu-and-corner-buttons.md)).
+- **A theme** chooses a ground and the tint made for it together: Graphite and gold (the default), Espresso
   and champagne, Aubergine and yellow gold, Midnight and electric blue, Evergreen and tropical forest, Slate and silver;
   kept across restarts. Cards, borders and the prompt's bubble are laid over the ground and follow it
   ([record 103](adr/0103-curated-themes-in-actions.md)). Text sizes are steps of one scale and spacing a 4-point grid
@@ -338,7 +350,7 @@ only, formatting cells into one reused buffer.
 | Key | Does |
 |---|---|
 | ⌘J | plots the last result: x is the first time column, else the first numeric one; up to eight more numeric columns as series; at most 2 000 000 rows |
-| ⌘⇧J | the same, re-running the query each period (default 5 s) while it is not running; another run in the panel or a failed query or connection stops it with a notice; closing its tab stops it quietly; Actions ▸ Stop refreshing plots stops them all, the plots staying as they are |
+| ⌘⇧J | the same, re-running the query each period (default 5 s) while it is not running; another run in the panel or a failed query or connection stops it with a notice; closing its tab stops it quietly; the corner's Stop refreshing plots stops them all, the plots staying as they are |
 | ⌘⇧R | keeps the result in a tab of its own (at most 100 000 rows) |
 | ⌘⇧I | attaches the result to the editor ([§2.4](#24-where-things-land)) |
 | ⌘⇧S | exports the grid as CSV in the order shown, written off the EDT |
@@ -355,7 +367,7 @@ of the bound connection) and the explorer (⌘⇧E): a tree in the side pane, wh
 
 ### 3.4 Embedded QuestDB
 
-**Actions ▸ Start embedded QuestDB** (also in the Connections tab's menu) starts a QuestDB server in `questdb/` of the
+**Start embedded QuestDB**, the database button at the tab row's right end (also in the Connections tab's menu) starts a QuestDB server in `questdb/` of the
 data root, on QuestDB's default ports (PG wire 8812, console 9000, ILP 9009). Every listener binds `127.0.0.1` and ILP
 over UDP is off, through `QDB_` environment overrides, because QuestDB binds all interfaces by default and its default
 login is public. It stops at exit, after the lanes.
@@ -369,8 +381,8 @@ Runs go through `ToolPort` (`tools` module); the terminal lives in the UI becaus
 JediTerm on a pseudo-terminal from pty4j, one per panel, started the first time it is shown, as `$SHELL -l` (else
 `/bin/zsh`, else `/bin/sh`) in the session's directory, else home; `TERM=xterm-256color`, `TERM_PROGRAM=comando`. ⌃3
 shows it. ⌃⏎ in the editor types the selection or line into it and presses Enter, waiting until a starting shell has
-written and then been quiet for 200 ms (at most 3 s). An exited shell offers a restart bar; Actions ▸ Restart the shell
-ends the focused panel's shell and starts a new one in the session's directory.
+written and then been quiet for 200 ms (at most 3 s). An exited shell offers a restart bar; the corner's shell button stops the focused panel's shell or starts it in the
+session's directory, and the palette's Restart the shell does both.
 
 ### 4.2 Gradle runs
 
@@ -547,11 +559,11 @@ replacing what the view showed.
 | `comando.lock` | held while comando runs; a second start on the same root refuses |
 | `run/` | MCP configurations of running sessions (`0600`) |
 | `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision |
-| `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Actions ▸ Show the log opens it read-only, a click on a notice that names an entry opens it at that entry |
+| `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Help ▸ Show the log opens it read-only, a click on a notice that names an entry opens it at that entry |
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
 | `metrics/` | a file a day of the sessions' turns, sub-agents and plan usage, for the kit's calibration ([record 110](adr/0110-metrics-for-calibration.md)) |
-| `settings.json` | the window's kept state: the theme, the window's bounds and dividers, the sidebar's state and tab, the side pane, the sessions' manual order, Linear's site, the last export's folder, the last Gradle tasks ([record 106](adr/0106-settings-in-the-data-root.md)) |
+| `settings.json` | the window's kept state: the theme, the window's bounds and dividers (the lower one per panel), the sidebar's state and tab, the side pane, the sessions' manual order, Linear's site, the last export's folder, the last Gradle tasks ([record 106](adr/0106-settings-in-the-data-root.md)) |
 | `opened-files` | the files opened in comando, one path per line, at most 20 000: a new (untracked) file listed here is no longer marked in the Files tab ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)) |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |
 | `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |

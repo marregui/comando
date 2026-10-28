@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.shell;
 import dev.marregui.comando.ui.kit.action.MenuEntry;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.GroundIcon;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -41,56 +42,55 @@ class MenusTest {
     }
 
     @Test
-    void editThenActionsInGroupsTheThemesItsOneSubmenuHelpAmongThem() {
-        List<MenuEntry.Menu> bar = Menus.bar(true);
-        assertThat(bar).extracting(MenuEntry.Menu::title).as("after macOS's application menu").containsExactly("Edit", "Actions");
+    void editThenHelpFlatThePaletteThenTheHelp() {
+        List<MenuEntry.Menu> bar = Menus.bar();
+        assertThat(bar).extracting(MenuEntry.Menu::title).as("after macOS's application menu").containsExactly("Edit", "Help");
         assertThat(ids(bar)).containsExactly(
                 "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
-                "view.palette", "terminal.restart", "run.plotStop", "server.start", "server.stop",
-                "help.tutorial", "help.keys", "help.markdown", "help.log", "help.dataRoot",
-                "theme.graphite_gold", "theme.espresso_champagne", "theme.aubergine_gold", "theme.midnight_blue",
-                "theme.evergreen_forest", "theme.slate_silver");
-        assertThat(submenus(bar)).extracting(MenuEntry.Menu::title).as("flat but for the themes").containsExactly("Theme");
-        assertThat(bar.get(1).entries().get(1)).as("the themes after the palette").isInstanceOf(MenuEntry.Menu.class);
+                "view.palette", "help.tutorial", "help.keys", "help.markdown", "help.log", "help.dataRoot");
+        assertThat(submenus(bar)).as("flat: the themes are the swatch's").isEmpty();
         assertThat(bar.get(1).entries().stream().filter(MenuEntry.Separator.class::isInstance).count())
-                .as("separators between the palette and themes, the shell and plots, the server, help").isEqualTo(3);
-        assertThat(ids(Menus.bar(false))).as("no embedded server, no items for it").doesNotContain("server.start", "server.stop");
+                .as("one separator between the palette and the help").isEqualTo(1);
     }
 
     @Test
-    void everyItemAndSubmenuHasAnIconThatExistsAndATooltip() {
-        List<MenuEntry.Menu> bar = Menus.bar(true);
-        for (String id : ids(bar)) {
+    void theCornerHoldsTheShellThePlotsAndTheServerOnlyWhenThereIsOne() {
+        assertThat(Menus.corner(true)).containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"),
+                List.of("server.start", "server.stop"));
+        assertThat(Menus.corner(false)).as("no embedded server, no button for it")
+                .containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"));
+    }
+
+    @Test
+    void everyItemAndButtonHasAnIconThatExistsAndATooltip() {
+        List<String> placed = new ArrayList<>(ids(Menus.bar()));
+        Menus.corner(true).forEach(placed::addAll);
+        for (String id : placed) {
             assertThat(Menus.icon(id)).as(id + " has an icon").isNotNull();
-            if (id.startsWith("theme.")) {
-                assertThat(Icons.get(Menus.icon(id))).as(id + "'s icon is its swatch").isInstanceOf(GroundIcon.class);
-            } else {
-                assertThat(MenusTest.class.getResource("/icons/" + Menus.icon(id) + ".svg")).as(id + "'s icon is a resource").isNotNull();
-            }
+            assertThat(MenusTest.class.getResource("/icons/" + Menus.icon(id) + ".svg")).as(id + "'s icon is a resource").isNotNull();
             assertThat(Menus.tip(id)).as(id + " has a tooltip").isNotBlank().hasSizeLessThanOrEqualTo(80);
         }
-        for (MenuEntry.Menu sub : submenus(bar)) {
-            assertThat(sub.icon()).as(sub.title() + " has an icon").isNotNull();
-            assertThat(Icons.get(sub.icon())).as("the chosen one's swatch").isInstanceOf(GroundIcon.class);
-            assertThat(Menus.MENU_TIPS.get(sub.title())).as(sub.title() + " has a tooltip").isNotBlank();
+        assertThat(Menus.bar()).as("the bar's own titles are words, as macOS draws them").allMatch(m -> m.icon() == null);
+        assertThat(Menus.TIPS.keySet()).as("no tooltip for an item or button that is gone").isEqualTo(new HashSet<>(placed));
+        for (NamedTheme t : NamedTheme.values()) {
+            assertThat(Icons.get(Menus.icon(t.commandId()))).as(t + "'s icon in the palette is its swatch").isInstanceOf(GroundIcon.class);
         }
-        assertThat(bar).as("the bar's own titles are words, as macOS draws them").allMatch(m -> m.icon() == null);
-        assertThat(Menus.TIPS.keySet()).as("no tooltip for an item that is gone")
-                .isEqualTo(new HashSet<>(ids(bar).stream().filter(id -> !id.startsWith("theme.")).toList()));
     }
 
     @Test
     void aCommandIsInAMenuOrInAnAreaNeverBoth() {
-        List<String> placed = ids(Menus.bar(true));
+        List<String> placed = ids(Menus.bar());
         assertThat(new HashSet<>(placed)).hasSameSizeAs(placed);
         assertThat(Menus.AREAS.keySet()).doesNotContainAnyElementsOf(placed);
+        assertThat(Menus.AREAS).as("the corner's commands are in no menu: each has its area")
+                .containsKeys(Menus.corner(true).stream().flatMap(List::stream).toArray(String[]::new));
         assertThat(Menus.AREAS).containsEntry("run", "Run").containsEntry("session.model.opus", "Session ▸ Model")
-                .containsEntry("panel.9", "Panels").containsEntry("view.results.alt", "Window").doesNotContainKey("view.lastPrompt");
+                .containsEntry("panel.9", "Panels").containsEntry("theme.slate_silver", "Theme").containsEntry("view.results.alt", "Window").doesNotContainKey("view.lastPrompt");
     }
 
     @Test
     void separatorsOnlyBetweenEntries() {
-        Menus.bar(true).forEach(top -> walk(top, m -> {
+        Menus.bar().forEach(top -> walk(top, m -> {
             List<MenuEntry> e = m.entries();
             assertThat(e).as(m.title()).isNotEmpty();
             assertThat(e.getFirst()).as(m.title() + " starts with an entry").isNotInstanceOf(MenuEntry.Separator.class);

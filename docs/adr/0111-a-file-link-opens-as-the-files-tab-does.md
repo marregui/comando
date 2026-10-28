@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted | Miguel and Claude |
+| 2026-10-28 | accepted; the search amended the same day (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -27,6 +27,15 @@ bounds, and that `path:line` keeps the side pane.
 
 `FileSearch` is added; `ComandoUi.showFile` resolves through it and hands a line-less text file to `openFile`. Every
 `Intent.OpenFile` without a line takes this route: the transcript's, the editor's, a tree view's file nodes.
+
+## Amendments
+
+2026-10-28 (Miguel: "sometimes the link is given relative to the context and when I double click, the file is not
+found"; the log: `Cannot open docs/workbench.md`, a path in `~/workspace/comando`, which is neither under the session's
+folder nor a Files tab folder). Between the session's folder and the Files tab's folders, the search reads the folders
+the session worked in: the repository of each file its own tool calls named by full path (`file_path`, `notebook_path`,
+`path`), or that file's folder outside a repository, the latest first, at most 8, from its last 4 000 blocks
+(`WorkedIn`). Tested in `WorkedInTest`.
 
 Tested in `FileSearchTest` (a deeper folder, the first root and the newest, skipped folders, climbing and absolute
 paths) and off screen in `LinksUiTest` (`:app:uiTest`: the link followed as a double click follows it opens one panel,

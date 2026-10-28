@@ -8,11 +8,12 @@ import javax.swing.ButtonGroup;
 import javax.swing.JButton;
 import javax.swing.JPopupMenu;
 import javax.swing.JRadioButtonMenuItem;
+import java.awt.event.MouseEvent;
 import java.util.function.Consumer;
 
 /**
  * The swatch of the theme chosen, its ground with its tint's bar, at the top right beside New panel (record 104): its
- * tooltip names the theme, read when it shows; a click opens the six themes, as Actions ▸ Theme does.
+ * tooltip names the theme, read when it shows; a click opens the six themes, also in the palette.
  */
 public final class ThemeButton extends JButton {
 
@@ -23,14 +24,16 @@ public final class ThemeButton extends JButton {
         putClientProperty("JButton.buttonType", "toolBarButton");
         setFocusable(false);
         getAccessibleContext().setAccessibleName("Choose the theme");
-        // any text registers the button with the tooltip manager; the text shown is the theme's, at each show
+        // any text registers the button with the tooltip manager; the text shown is the theme's, read at each show by
+        // getToolTipText(MouseEvent): overriding getToolTipText() instead hides the text set here, and the button never
+        // registers (setToolTipText registers only when the text before was null)
         setToolTipText("Theme");
         addActionListener(e -> menu().show(this, 0, getHeight()));
     }
 
     @Override
-    public String getToolTipText() {
-        return "Theme: " + NamedTheme.chosen().map(t -> t.label).orElse("none") + "; click for another, also in Actions";
+    public String getToolTipText(MouseEvent event) {
+        return "Theme: " + NamedTheme.chosen().map(t -> t.label).orElse("none") + "; click for another";
     }
 
     /** {@code chosen} hears the theme picked from the menu. */
@@ -38,7 +41,7 @@ public final class ThemeButton extends JButton {
         this.chosen = chosen;
     }
 
-    /** One entry per theme, each with its swatch, in Actions ▸ Theme's order; the theme chosen is ticked. */
+    /** One entry per theme, each with its swatch, in the themes' order; the theme chosen is ticked. */
     JPopupMenu menu() {
         JPopupMenu menu = new JPopupMenu();
         ButtonGroup group = new ButtonGroup();

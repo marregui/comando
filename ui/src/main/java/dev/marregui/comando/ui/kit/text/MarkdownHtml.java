@@ -157,6 +157,35 @@ public final class MarkdownHtml {
     }
 
     /**
+     * A heading of a Markdown text, as an outline lists it (record 113): its level (1 to 6), its text as the rendered page
+     * shows it, the id the rendered page gives it, and its line in the text, from 0.
+     */
+    public record Section(int level, String text, String id, int line) {
+    }
+
+    /**
+     * The headings of {@code markdown}, in order, with the ids {@link #render} gives them: front matter is no heading,
+     * nor is a {@code #} in a code block.
+     */
+    public static List<Section> sections(String markdown) {
+        Node document = SPANNING.parse(FrontMatter.split(markdown).body());
+        linkText(document);
+        HeadingIds ids = new HeadingIds();
+        List<Section> out = new ArrayList<>();
+        document.accept(new AbstractVisitor() {
+            @Override
+            public void visit(Heading heading) {
+                StringBuilder text = new StringBuilder();
+                HeadingIds.headingText(heading, text);
+                List<SourceSpan> spans = heading.getSourceSpans();
+                int line = spans.isEmpty() ? 0 : spans.getFirst().getLineIndex();
+                out.add(new Section(heading.getLevel(), text.toString().strip(), ids.unique(slug(text.toString())), line));
+            }
+        });
+        return out;
+    }
+
+    /**
      * The id GitHub gives a heading: its text in lower case, without punctuation or symbols, each space a hyphen; a
      * heading whose id is taken already gets {@code -1}, {@code -2}, and so on. One per rendering, as ids count from
      * the top of the document.

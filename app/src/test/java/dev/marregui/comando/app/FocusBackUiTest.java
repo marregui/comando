@@ -3,8 +3,12 @@ package dev.marregui.comando.app;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.PanelState;
+import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.ui.panels.EditorPanel;
+import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -78,6 +82,142 @@ class FocusBackUiTest {
         } finally {
             app.close();
         }
+    }
+
+    @Test
+    void aFileAlreadyOpenFromAnotherPanelGoesBackToTheOneThatOpenedItLastAndAKeyboardLeftBehindCountsAsTheFront() throws Exception {
+        Path work = Files.createDirectories(home.resolve("work"));
+        for (String n : new String[]{"main.txt", "review.txt", "report.txt", "other.txt"}) {
+            Files.writeString(work.resolve(n), n + "\n");
+        }
+        App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+                "focus", () -> {
+        });
+        try {
+            app.start();
+            StateLoop loop = app.loop();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            PanelId main = open(loop, work.resolve("main.txt"));
+            keyboardTo(editorOf(main));
+            PanelId report = open(loop, work.resolve("report.txt")); // first opened from main
+            PanelId review = open(loop, work.resolve("review.txt"));
+            keyboardTo(editorOf(review));
+
+            // opened again from the review panel: it is already open, and comes forward
+            loop.dispatch(new Intent.OpenFile("", work.resolve("report.txt").toString(), 0));
+            Awaitility.await("the report in front").atMost(WAIT).until(() -> loop.state().focused().equals(report));
+            loop.dispatch(new Intent.ClosePanel(report));
+            Awaitility.await("back to the review panel, not main").atMost(WAIT)
+                    .until(() -> loop.state().focused().equals(review) && keyboardIn(review));
+
+            // the review panel in front, the keyboard left behind in main: the opening counts as the review panel's
+            keyboardTo(editorOf(review));
+            loop.dispatch(new Intent.FocusPanel(main));
+            Awaitility.await("main in front").atMost(WAIT).until(() -> loop.state().focused().equals(main));
+            loop.dispatch(new Intent.FocusPanel(review));
+            Awaitility.await("review in front").atMost(WAIT).until(() -> loop.state().focused().equals(review));
+            PanelId other = open(loop, work.resolve("other.txt"));
+            loop.dispatch(new Intent.ClosePanel(other));
+            Awaitility.await("back to the review panel").atMost(WAIT).until(() -> loop.state().focused().equals(review));
+        } finally {
+            app.close();
+        }
+    }
+
+    @Test
+    void aFileOpenedFromTheSessionTabGoesBackToThatSessionsPanelWithItsSessionTabInFront() throws Exception {
+        Path work = Files.createDirectories(home.resolve("work"));
+        Files.writeString(work.resolve("report.md"), "# Report\n");
+        App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+                "focus", () -> {
+        });
+        try {
+            app.start();
+            StateLoop loop = app.loop();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            // a session comes with its own panel (record 88): reviews, then main at its right
+            loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("reviews", work.toString())));
+            loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("main", work.toString())));
+            Awaitility.await("both panels").atMost(WAIT).until(() -> panelOf(loop, "reviews") != null && panelOf(loop, "main") != null);
+            PanelId reviews = panelOf(loop, "reviews");
+            app.transcripts().of("reviews").append(new Block.AssistantText("m1", 0, "See report.md for the findings.", false, ""));
+            app.transcripts().of("reviews").changed();
+
+            loop.dispatch(new Intent.FocusPanel(reviews));
+            loop.dispatch(new Intent.SelectLowerTab(LowerTab.SESSION));
+            Awaitility.await("reviews in front").atMost(WAIT).until(() -> loop.state().focused().equals(reviews));
+            Component canvas = await(TranscriptCanvas.class);
+            keyboardTo(canvas);
+
+            // the double click on the document in the Session tab
+            loop.dispatch(new Intent.OpenFile("reviews", "report.md", 0));
+            Awaitility.await("the report in front").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("report.md"));
+            PanelId report = loop.state().focused();
+            loop.dispatch(new Intent.ClosePanel(report));
+
+            Awaitility.await("the reviews panel in front, its Session tab with the keyboard").atMost(WAIT)
+                    .until(() -> loop.state().focused().equals(reviews) && loop.state().lowerTab().equals(LowerTab.SESSION)
+                            && onEdt(() -> frame().getMostRecentFocusOwner()) == canvas);
+        } finally {
+            app.close();
+        }
+    }
+
+    @Test
+    void closingReturnsToWhereTheUserCameFromLastAndABackgroundCloseMovesNothing() throws Exception {
+        Path work = Files.createDirectories(home.resolve("work"));
+        for (String n : new String[]{"review.txt", "main.txt", "f.txt", "g.txt"}) {
+            Files.writeString(work.resolve(n), n + "\n");
+        }
+        App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+                "focus", () -> {
+        });
+        try {
+            app.start();
+            StateLoop loop = app.loop();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            PanelId review = open(loop, work.resolve("review.txt"));
+            PanelId main = open(loop, work.resolve("main.txt"));
+            loop.dispatch(new Intent.FocusPanel(review));
+            Awaitility.await("review in front").atMost(WAIT).until(() -> loop.state().focused().equals(review));
+            keyboardTo(editorOf(review));
+
+            PanelId f = open(loop, work.resolve("f.txt")); // opened from review
+            loop.dispatch(new Intent.FocusPanel(main)); // a click on main
+            Awaitility.await("main in front").atMost(WAIT).until(() -> loop.state().focused().equals(main));
+            keyboardTo(editorOf(main));
+            loop.dispatch(new Intent.FocusPanel(f)); // and back to F
+            Awaitility.await("F in front").atMost(WAIT).until(() -> loop.state().focused().equals(f));
+            keyboardTo(editorOf(f));
+            loop.dispatch(new Intent.ClosePanel(f));
+            Awaitility.await("back to main, where the user came from").atMost(WAIT)
+                    .until(() -> loop.state().focused().equals(main) && keyboardIn(main));
+
+            // G opened from main, then the user goes to review; closing G behind them moves nothing
+            PanelId g = open(loop, work.resolve("g.txt"));
+            loop.dispatch(new Intent.FocusPanel(review));
+            Awaitility.await("review in front").atMost(WAIT).until(() -> loop.state().focused().equals(review));
+            keyboardTo(editorOf(review));
+            loop.dispatch(new Intent.ClosePanel(g));
+            Awaitility.await("G gone").atMost(WAIT).until(() -> loop.state().panel(g).isEmpty());
+            Awaitility.await("still at review").during(Duration.ofMillis(800)).atMost(Duration.ofSeconds(3))
+                    .until(() -> loop.state().focused().equals(review) && keyboardIn(review));
+        } finally {
+            app.close();
+        }
+    }
+
+    private static PanelId panelOf(StateLoop loop, String session) {
+        return loop.state().panels().stream().filter(p -> p.session().equals(session)).map(PanelState::id).findFirst().orElse(null);
+    }
+
+    private static <T extends Component> T await(Class<T> type) {
+        AtomicReference<T> out = new AtomicReference<>();
+        Awaitility.await(type.getSimpleName()).atMost(WAIT).until(() -> {
+            out.set(onEdt(() -> find(frame(), type, c -> true)));
+            return out.get() != null;
+        });
+        return out.get();
     }
 
     /** Opens {@code file} as a file link without a line opens it, and waits for its panel in front. */

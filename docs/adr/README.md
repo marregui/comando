@@ -130,3 +130,7 @@ has the same shape:
 | [110](0110-metrics-for-calibration.md) | Metrics of turns, sub-agents and plan usage, kept for calibration | 2026-10-28 | Claude, on Miguel's ask | proposed |
 | [111](0111-a-file-link-opens-as-the-files-tab-does.md) | A file link opens as the Files tab opens a file, and is found where it was written from | 2026-10-28 | Miguel and Claude | accepted |
 | [112](0112-closing-gives-the-keyboard-back.md) | Closing a panel or view gives the keyboard back to what opened it | 2026-10-28 | Miguel and Claude | accepted |
+| [113](0113-a-documents-outline-at-the-panels-right.md) | A document's outline at the panel's right, from a button in its tools | 2026-10-28 | Miguel and Claude | accepted |
+| [114](0114-help-menu-and-corner-buttons.md) | Help is the menu; the theme, the shell, the plots and the server are buttons | 2026-10-28 | Miguel and Claude | accepted |
+| [115](0115-the-lower-divider-per-panel.md) | The lower divider is each panel's | 2026-10-28 | Miguel and Claude | accepted |
+| [116](0116-one-connection-toggle.md) | A panel's connection is one toggle and its name, first of the tools | 2026-10-28 | Miguel and Claude | accepted |

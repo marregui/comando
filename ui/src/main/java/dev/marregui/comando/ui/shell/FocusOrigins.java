@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.shell;
 import dev.marregui.comando.core.state.LowerTab;
 
 import java.awt.Component;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -10,69 +11,91 @@ import java.util.Set;
 import java.util.function.Predicate;
 
 /**
- * Where the keyboard was when each panel or view opened, so that closing it gives the keyboard back there (record 112):
- * a document opened from another by a double click, closed, hands the keyboard back to the one that opened it, and
- * opened from that one again to the next, so openings chain. A panel is keyed {@code panel:<id>}, a view
- * {@code view:<id>}; the component outside both (the Files tab, the Session tab's transcript) has no key. Kept for the
- * window's life, the latest {@link #KEPT}. EDT only.
+ * The return path (record 112): each panel and view remembers where the keyboard was just before the user last
+ * arrived at it, so that closing it returns there, as an IDE's editor tabs do. Opening a document from another is one
+ * arrival among others: A opens B, B opens C; closing C returns to B, closing B to A. A user who went from B to main
+ * and back to B returns to main when B closes. Closing a tab the user is not at moves nothing. The place the user is
+ * at is a view the keyboard is in, else the panel in front (its lower tabs included). A panel is keyed
+ * {@code panel:<id>}, a view {@code view:<id>}. Kept for the window's life, the latest {@link #KEPT}. EDT only.
  */
 final class FocusOrigins {
 
-    /** The openings remembered, the latest. */
+    /** The arrivals remembered, the latest. */
     static final int KEPT = 256;
 
     /**
-     * Where the keyboard was when a panel or view opened: the component, the panel or view that held it ({@code null}
-     * outside both), and the lower tab in front then.
+     * Where the keyboard was: the component, the panel or view that held it ({@code null} outside both), the lower tab
+     * in front then, and the panel in front then, whose session the lower tabs showed.
      */
-    record Origin(Component owner, String ownerKey, LowerTab lowerTab) {
+    record Origin(Component owner, String ownerKey, LowerTab lowerTab, String front) {
     }
 
-    private final Map<String, Origin> origins = new LinkedHashMap<>(16, 0.75f, false) {
+    private final Map<String, Origin> cameFrom = new LinkedHashMap<>(16, 0.75f, false) {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Origin> eldest) {
             return size() > KEPT;
         }
     };
+    /** Where an arrival the shell is about to make comes from, read at its request; taken by that arrival. */
+    private final Map<String, Origin> pending = new HashMap<>();
     /** The panels and views open at the last render; null before the first. */
     private Set<String> open;
+    /** The place the user was at, at the last render. */
+    private String at;
 
     /**
-     * A render starts: {@code nowOpen} are the panels and views it shows, {@code owner} holds the keyboard, inside
-     * {@code ownerKey}, with {@code lowerTab} in front, and {@code front} is the panel in front before this render.
-     * What opened since the last render remembers this origin; when what held the keyboard, or the panel in front,
-     * closed, the answer is where the keyboard goes back: its origin, or, when that is gone too, the origin's own, and
-     * so on, the first that {@code alive} accepts. Null when nothing goes back.
+     * The shell is about to bring {@code key} to the user, from {@code origin}, read at the request (a file opened, a
+     * panel brought forward or back for it): that is where its arrival comes from, more exactly than the render that
+     * shows it can tell. Nothing when {@code origin} is null.
      */
-    Origin onRender(Set<String> nowOpen, Component owner, String ownerKey, LowerTab lowerTab, String front, Predicate<Origin> alive) {
-        Set<String> before = open;
+    void opened(String key, Origin origin) {
+        if (origin != null && !key.equals(origin.ownerKey())) {
+            pending.put(key, origin);
+        }
+    }
+
+    /**
+     * A render starts: {@code nowOpen} are the panels and views it shows, {@code before} is where the keyboard was
+     * before this render's change, and {@code now} is the place the user is at with it. Arriving at a new place
+     * remembers {@code before} (or the origin told for it) as where it came from; when the place the user was at
+     * closed, the answer is where it came from, or, when that is gone too, where that came from, and so on, the first
+     * that {@code alive} accepts. Null when nothing goes back.
+     */
+    Origin onRender(Set<String> nowOpen, Origin before, String now, Predicate<Origin> alive) {
+        Set<String> wasOpen = open;
+        String was = at;
         open = Set.copyOf(nowOpen);
-        if (before == null) {
+        at = now;
+        if (wasOpen == null) {
+            pending.clear();
             return null;
         }
-        for (String k : nowOpen) {
-            if (!before.contains(k) && owner != null && !k.equals(ownerKey)) {
-                origins.put(k, new Origin(owner, ownerKey, lowerTab));
+        boolean closed = was != null && !nowOpen.contains(was);
+        if (now != null && !now.equals(was)) {
+            Origin told = pending.remove(now);
+            // a place reached because the one the user was at closed keeps its own way back
+            Origin from = told != null ? told : closed ? null : before;
+            if (from != null && !now.equals(from.ownerKey()) && !now.equals(from.front())) {
+                cameFrom.put(now, from);
             }
         }
-        String closed = ownerKey != null && before.contains(ownerKey) && !nowOpen.contains(ownerKey) ? ownerKey
-                : front != null && before.contains(front) && !nowOpen.contains(front) ? front : null;
-        if (closed == null) {
+        if (!closed) {
             return null;
         }
         Set<String> seen = new HashSet<>();
-        Origin o = origins.get(closed);
+        Origin o = cameFrom.get(was);
         while (o != null && !alive.test(o)) {
-            if (o.ownerKey() == null || !seen.add(o.ownerKey())) {
+            String up = o.ownerKey() != null ? o.ownerKey() : o.front();
+            if (up == null || !seen.add(up)) {
                 return null;
             }
-            o = origins.get(o.ownerKey());
+            o = cameFrom.get(up);
         }
         return o;
     }
 
-    /** The origin remembered for {@code key}; for tests. */
+    /** Where {@code key} was last arrived at from; for tests. */
     Origin of(String key) {
-        return origins.get(key);
+        return cameFrom.get(key);
     }
 }

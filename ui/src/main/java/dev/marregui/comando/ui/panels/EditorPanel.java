@@ -12,14 +12,16 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.RunStatus;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.PanelTexts;
+import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
-import dev.marregui.comando.ui.kit.layout.ShrinkingRow;
 import dev.marregui.comando.ui.kit.overlay.Flash;
 import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
+import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.RenderedMarkdown;
 import dev.marregui.comando.ui.kit.text.SourceLinks;
 import dev.marregui.comando.ui.kit.text.TextLinks;
@@ -35,8 +37,10 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.JSplitPane;
 import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import javax.swing.text.BadLocationException;
@@ -45,7 +49,9 @@ import javax.swing.text.Document;
 import java.awt.BorderLayout;
 import java.awt.CardLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.FlowLayout;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
@@ -57,8 +63,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -76,6 +82,10 @@ public final class EditorPanel extends JPanel {
     private final CommandEditor editor = new CommandEditor();
     private final JButton connection = chip();
     private final JButton connectionToggle = iconButton();
+    /** The most characters of a connection's name shown beside its icon; the tooltip has it whole. */
+    static final int NAME_CHARS = 24;
+    /** A tooltip is one short line (`UiKeysTest`). */
+    static final int TIP_CHARS = 80;
     private final JButton run = iconButton();
     private final JButton stop = iconButton();
     /** Empties the panel's own text in one step ⌘Z takes back; a document, a file of its own, is never emptied from here. */
@@ -84,6 +94,23 @@ public final class EditorPanel extends JPanel {
     private final JButton mode = iconButton();
     /** Opens an HTML document in the browser, which renders it; shown for HTML only. */
     private final JButton browser = iconButton();
+    /** Shows or hides the document's outline at the right (record 113); shown where the text renders as a page. */
+    private final JButton outlineButton = iconButton();
+    private final OutlinePane outline = new OutlinePane();
+    /** The text or the preview at the left, the outline at the right, while the outline shows. */
+    private final JSplitPane split = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
+    /** What the panel's body holds: the text or the preview, alone or beside the outline. */
+    private final JPanel body = new JPanel(new BorderLayout());
+    /** Whether the user wants the outline in this panel; it shows only where the text renders as a page. */
+    private boolean outlineWanted;
+    /** Hears the user show or hide the outline, so the next panel opens the same way. */
+    private Consumer<Boolean> outlineKept = on -> { };
+    /** Reads the headings again once typing pauses. */
+    private final Timer outlineWait = new Timer(OUTLINE_WAIT_MILLIS, e -> readOutline());
+    /** The text read for the outline last, so a read already under way for older text is not shown. */
+    private String outlineText;
+    static final int OUTLINE_WAIT_MILLIS = 250;
+    static final int OUTLINE_WIDTH = 220;
     private boolean previewing;
     /** The rendered Markdown, as the comparison window renders it too. */
     private final RenderedMarkdown preview = new RenderedMarkdown();
@@ -120,12 +147,11 @@ public final class EditorPanel extends JPanel {
         connectionToggle.getAccessibleContext().setAccessibleName("Connect or disconnect");
         JPanel header = new JPanel(new BorderLayout());
         header.setBorder(BorderFactory.createEmptyBorder(4, Theme.GAP, 4, Theme.GAP));
-        // on a narrow panel the chip's name gives way, ending in "…"; the plug and the buttons stay whole
-        JPanel left = new JPanel(new ShrinkingRow(2, 64, Set.of(connection)));
-        left.add(connection);
-        left.add(connectionToggle);
-        // icons close together, as the connection's at the left
+        // the tools at the right, the connection first: its icon connects or disconnects and shows the state, its name
+        // binds another; icons close together
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, 2, 0));
+        right.add(connectionToggle);
+        right.add(connection);
         run.setToolTipText(KeyText.of("Run the selection or block (⌘⏎); to Claude ⌘⇧⏎, as SQL ⌥⏎"));
         stop.setToolTipText(KeyText.of("Stop the running SQL or interrupt the session (⌘.)"));
         clear.setToolTipText(KeyText.of("Clear the text (⌘Z brings it back)"));
@@ -140,13 +166,26 @@ public final class EditorPanel extends JPanel {
         });
         showMode();
         mode.addActionListener(e -> showPreview(!previewing));
+        outlineButton.setIcon(Icons.get("outline"));
+        outlineButton.getAccessibleContext().setAccessibleName("Outline");
+        showOutlineButton();
+        outlineButton.addActionListener(e -> {
+            outlineWanted = !outlineWanted;
+            outlineKept.accept(outlineWanted);
+            layOutBody();
+        });
+        outline.onOpen(this::goTo);
+        outlineWait.setRepeats(false);
+        split.setBorder(null);
+        split.setContinuousLayout(true);
+        // the outline at the right, beside the tools' button that shows it; a wider panel widens the text
+        split.setResizeWeight(1);
         right.add(browser);
+        right.add(outlineButton);
         right.add(mode);
         right.add(run);
         right.add(stop);
         right.add(clear);
-        // the chips take what the buttons leave, never drawn under them
-        header.add(left, BorderLayout.CENTER);
         header.add(right, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
         rendered.setLinkHandler(href -> Links.open(href, linkFolder(), (f, heading) -> opener.accept(f, heading)));
@@ -175,7 +214,8 @@ public final class EditorPanel extends JPanel {
         });
         center.add(editor.component(), EDIT);
         center.add(renderedScroll, PREVIEW);
-        add(center, BorderLayout.CENTER);
+        body.add(center, BorderLayout.CENTER);
+        add(body, BorderLayout.CENTER);
 
         run.addActionListener(e -> runSelection(Target.AUTO));
         stop.addActionListener(e -> intents.dispatch(new Intent.CancelRun(this.panel.id())));
@@ -187,11 +227,13 @@ public final class EditorPanel extends JPanel {
             @Override
             public void insertUpdate(DocumentEvent e) {
                 showClear();
+                outlineSoon();
             }
 
             @Override
             public void removeUpdate(DocumentEvent e) {
                 showClear();
+                outlineSoon();
             }
 
             @Override
@@ -274,6 +316,10 @@ public final class EditorPanel extends JPanel {
         showClear();
         boolean renders = rendersAsPage();
         mode.setVisible(renders);
+        outlineButton.setVisible(renders);
+        if (opened || renders != outlineShows()) {
+            layOutBody();
+        }
         browser.setVisible(document && isHtml());
         if (!renders && previewing()) {
             showPreview(false);
@@ -294,6 +340,119 @@ public final class EditorPanel extends JPanel {
 
     private void followEnd() {
         editor.area().setCaretPosition(editor.area().getDocument().getLength());
+    }
+
+    /**
+     * The outline as the user wants it in panels opened from now: shown or not, and {@code keep} hears each change of
+     * it in this panel (record 113).
+     */
+    public void outline(boolean wanted, Consumer<Boolean> keep) {
+        outlineWanted = wanted;
+        outlineKept = keep;
+        layOutBody();
+    }
+
+    /** What takes the keyboard when the panel gets it back: the rendered page while it shows, else the text. */
+    public Component focusTarget() {
+        return previewing ? rendered : editor.area();
+    }
+
+    /** Whether the outline shows: wanted, and the text renders as a page. */
+    boolean outlineShows() {
+        return body.getComponentCount() > 0 && body.getComponent(0) == split;
+    }
+
+    /** The outline; for tests. */
+    OutlinePane outlinePane() {
+        return outline;
+    }
+
+    /** Puts the outline beside the text or the preview when it is wanted and the text renders as a page, else takes it away. */
+    private void layOutBody() {
+        boolean on = outlineWanted && rendersAsPage();
+        showOutlineButton();
+        if (on == outlineShows()) {
+            return;
+        }
+        body.removeAll();
+        if (on) {
+            split.setLeftComponent(center);
+            split.setRightComponent(outline.component());
+            body.add(split, BorderLayout.CENTER);
+            placeDivider();
+            readOutline();
+        } else {
+            body.add(center, BorderLayout.CENTER);
+        }
+        body.revalidate();
+        body.repaint();
+    }
+
+    /** The outline {@link #OUTLINE_WIDTH} wide at the split's right, once the split has a width. */
+    private void placeDivider() {
+        if (split.getWidth() > 0) {
+            split.setDividerLocation(Math.max(0, split.getWidth() - OUTLINE_WIDTH - split.getDividerSize()));
+            return;
+        }
+        split.addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent e) {
+                if (split.getWidth() > 0) {
+                    split.removeComponentListener(this);
+                    placeDivider();
+                }
+            }
+        });
+    }
+
+    private void showOutlineButton() {
+        outlineButton.setToolTipText(outlineWanted ? "Hide the outline" : "Show the document's outline: a double click on a heading goes to it");
+    }
+
+    /** The text changed: the outline reads its headings again once typing pauses, while it shows. */
+    private void outlineSoon() {
+        if (outlineShows()) {
+            outlineWait.restart();
+        }
+    }
+
+    /** Reads the headings off the EDT and lists them, unless the text changed again meanwhile. */
+    private void readOutline() {
+        String text = editor.text();
+        outlineText = text;
+        UiErrands.start("outline", () -> {
+            List<MarkdownHtml.Section> sections = MarkdownHtml.sections(text);
+            Edt.later(() -> {
+                if (text.equals(outlineText)) {
+                    outline.show(sections);
+                }
+            });
+        });
+    }
+
+    /**
+     * Goes to {@code section}: the preview scrolls its heading to the top, the text puts its line at the top with the
+     * caret at its start; the keyboard goes there.
+     */
+    void goTo(MarkdownHtml.Section section) {
+        if (previewing) {
+            showHeading(section.id());
+            rendered.requestFocusInWindow();
+            return;
+        }
+        RSyntaxTextArea area = editor.area();
+        try {
+            int at = area.getLineStartOffset(Math.min(section.line(), Math.max(0, area.getLineCount() - 1)));
+            area.setCaretPosition(at);
+            Rectangle2D r = area.modelToView2D(at);
+            if (r != null && SwingUtilities.getAncestorOfClass(JViewport.class, area) instanceof JViewport port) {
+                int max = Math.max(0, area.getHeight() - port.getExtentSize().height);
+                port.setViewPosition(new Point(port.getViewPosition().x, Math.min(max, (int) r.getY())));
+            }
+        } catch (BadLocationException e) {
+            return;
+        }
+        area.requestFocusInWindow();
     }
 
     /** A panel's own text and a Markdown file show rendered, and switch to the text to edit. */
@@ -546,22 +705,21 @@ public final class EditorPanel extends JPanel {
         state = s;
         Optional<ConnectionState> c = p.connection().isEmpty() ? Optional.empty() : s.connection(p.connection());
         Optional<SessionState> x = p.session().isEmpty() ? Optional.empty() : s.session(p.session());
-        // connection chip
+        // the connection: one icon in the state's colour, a click connects or disconnects; the name beside it binds another
         if (c.isPresent()) {
             ConnectionState cs = c.get();
-            connection.setIcon(Icons.get("database"));
-            connection.setText(cs.name() + "  " + dot(cs.status()));
-            connection.setToolTipText(cs.spec().label() + " · " + cs.status() + (cs.error().isEmpty() ? "" : " · " + cs.error()));
-            connectionToggle.setVisible(true);
-            // the plug shows the state, as on the sidebar's session rows: green while connected, grey while not
-            connectionToggle.setIcon(Icons.get(cs.status().isUsable() ? "plug" : "unplug"));
-            connectionToggle.setToolTipText(cs.status().isUsable() ? "Connected; click to disconnect" : "Disconnected; click to connect");
+            connectionToggle.setIcon(Icons.get(connectionIcon(cs.status())));
+            String name = cut(cs.name(), NAME_CHARS);
+            connectionToggle.setToolTipText(cut(name + " " + statusWord(cs.status()) + "; click to " + (cs.status().isUsable() ? "disconnect" : "connect")
+                    + "; its name binds another" + (cs.error().isEmpty() ? "" : " · " + cs.error()), TIP_CHARS));
+            connection.setVisible(true);
+            connection.setText(name + " ▾");
+            connection.setToolTipText(cut(cs.spec().label() + "; click to bind another connection or unbind", TIP_CHARS));
             setBorder(cs.spec().prod() ? BorderFactory.createLineBorder(Theme.DANGER, 2) : BorderFactory.createEmptyBorder(2, 2, 2, 2));
         } else {
-            connection.setIcon(Icons.get("database"));
-            connection.setText("no connection ▾");
-            connection.setToolTipText("Bind a connection");
-            connectionToggle.setVisible(false);
+            connectionToggle.setIcon(Icons.get("database-off"));
+            connectionToggle.setToolTipText("No connection; click to bind one");
+            connection.setVisible(false);
             setBorder(BorderFactory.createEmptyBorder(2, 2, 2, 2));
         }
         editor.setSchema(p.connection().isEmpty() ? Schema.EMPTY : schemas.of(p.connection()));
@@ -593,9 +751,39 @@ public final class EditorPanel extends JPanel {
         }
     }
 
+    /** Connects or disconnects the panel's connection; without one, opens the menu that binds one. */
     private void toggleConnection() {
-        state.connection(panel.connection()).ifPresent(c -> intents.dispatch(c.status().isUsable()
-                ? new Intent.CloseConnection(c.name()) : new Intent.OpenConnection(c.name())));
+        Optional<ConnectionState> c = panel.connection().isEmpty() ? Optional.empty() : state.connection(panel.connection());
+        if (c.isEmpty()) {
+            connectionMenu().show(connectionToggle, 0, connectionToggle.getHeight());
+            return;
+        }
+        intents.dispatch(c.get().status().isUsable() ? new Intent.CloseConnection(c.get().name()) : new Intent.OpenConnection(c.get().name()));
+    }
+
+    /** {@code text}, ending in "…" when it is longer than {@code most} characters. */
+    static String cut(String text, int most) {
+        return text.length() <= most ? text : text.substring(0, most - 1) + "…";
+    }
+
+    /** The database icon in the colour of {@code s}: blue open, amber on its way, red failed, grey closed. */
+    static String connectionIcon(Status s) {
+        return switch (s) {
+            case OPEN -> "database";
+            case OPENING, CLOSING -> "database-starting";
+            case FAILED -> "database-failed";
+            case CLOSED -> "database-off";
+        };
+    }
+
+    static String statusWord(Status s) {
+        return switch (s) {
+            case OPEN -> "connected";
+            case OPENING -> "connecting";
+            case CLOSING -> "disconnecting";
+            case FAILED -> "failed";
+            case CLOSED -> "disconnected";
+        };
     }
 
     private JPopupMenu connectionMenu() {
@@ -615,15 +803,6 @@ public final class EditorPanel extends JPanel {
             m.add(new JMenuItem("No connections; New connection… in the Connections tab's menu adds one")).setEnabled(false);
         }
         return m;
-    }
-
-    static String dot(Status s) {
-        return switch (s) {
-            case OPEN -> "●";
-            case OPENING, CLOSING -> "◐";
-            case FAILED -> "✕";
-            case CLOSED -> "○";
-        };
     }
 
     static Color color(Status s) {

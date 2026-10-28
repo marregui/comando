@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.core.model.LinearTickets;
+import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Tint;
@@ -12,13 +13,16 @@ import java.awt.GraphicsDevice;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
 /**
  * What the window keeps across restarts, in comando's {@link Settings} ({@code settings.json} in the data root, record
- * 106): its bounds and whether it was maximized, the dividers, the sidebar's state and tab, the side pane, the theme (its
+ * 106): its bounds and whether it was maximized, the dividers (the lower one per panel), the sidebar's state and tab, the side pane, the theme (its
  * ground and tint), Linear's site, the folder of the last export and the last Gradle tasks. The one place each key is
  * named; a method that changes a setting writes the file.
  */
@@ -34,6 +38,8 @@ final class WindowLayout {
      * the desktop is in use: {@code ./gradlew :app:uiTest} sets it.
      */
     static final String OFF_SCREEN_PROPERTY = "comando.offScreen";
+    /** A panel's lower divider is kept under this prefix and the panel's id. */
+    static final String PANEL_DIVIDER = "divider.lower.panel.";
 
     private final Settings prefs;
     private final boolean offScreen;
@@ -194,8 +200,35 @@ final class WindowLayout {
         return prefs.getInt("divider.lower", (int) (height * 0.45));
     }
 
+    /** Each panel's lower divider as last set while it was in front, by panel id; empty before any. */
+    Map<PanelId, Integer> panelDividers() {
+        Map<PanelId, Integer> out = new HashMap<>();
+        prefs.values().forEach((k, v) -> {
+            if (k.startsWith(PANEL_DIVIDER) && v instanceof Number n) {
+                out.put(new PanelId(k.substring(PANEL_DIVIDER.length())), n.intValue());
+            }
+        });
+        return out;
+    }
+
+    /** Keeps {@code dividers} as each panel's lower divider, in place of every one kept before. */
+    void panelDividers(Map<PanelId, Integer> dividers) {
+        List.copyOf(prefs.values().keySet()).stream().filter(k -> k.startsWith(PANEL_DIVIDER)).forEach(prefs::remove);
+        dividers.forEach((id, at) -> prefs.putInt(PANEL_DIVIDER + id.value(), at));
+        prefs.flush();
+    }
+
     boolean sidePaneHidden() {
         return prefs.getBoolean("sidePane.hidden", false);
+    }
+
+    /** Whether panels open with their document's outline: the user's last choice (record 113). */
+    boolean outlineShown() {
+        return prefs.getBoolean("editor.outline", false);
+    }
+
+    void outlineShown(boolean shown) {
+        prefs.putBoolean("editor.outline", shown);
     }
 
     /** Where the side pane's divider was; -1 when it never showed. */

@@ -65,6 +65,7 @@ import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
+import dev.marregui.comando.ui.panels.CommandButton;
 import dev.marregui.comando.ui.panels.EditorPanel;
 import dev.marregui.comando.ui.panels.LowerPanel;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
@@ -210,6 +211,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private JSplitPane outer;
     private int outerDividerSize;
     private JSplitPane vertical;
+    /** Each panel's lower divider, as last set while it was in front; brought back when it comes to the front. EDT only. */
+    private final Map<PanelId, Integer> panelDividers = new HashMap<>();
+    /** The panel whose divider the window shows; null before the first render. */
+    private PanelId dividerPanel;
     private JSplitPane editorAndSide;
     private JPanel top;
     private Notifier notifier;
@@ -368,6 +373,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.onAttention(notifier::attention);
         workspace.onClose(this::closePanel);
         workspace.onOpenFile(this::openFile);
+        workspace.outline(windowLayout.outlineShown(), windowLayout::outlineShown);
         // a link double-clicked anywhere opens its file as a link in a panel's page does: a panel, at its heading (record 94)
         Links.install((file, heading) -> {
             if (heading != null) {
@@ -439,6 +445,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         vertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, lower.component());
         vertical.setResizeWeight(0.45);
         vertical.setBorder(null);
+        // a move of the divider, by the user, an arrangement or the window's resize, is the panel in front's
+        vertical.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
+            if (dividerPanel != null && vertical.getDividerLocation() > 0) {
+                panelDividers.put(dividerPanel, vertical.getDividerLocation());
+            }
+        });
         // the session bar closes the column of the panels and the lower panel; the window's status bar runs under all
         JPanel column = new JPanel(new BorderLayout());
         column.add(vertical, BorderLayout.CENTER);
@@ -474,6 +486,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
         registerCommands();
         frame.setJMenuBar(menuBar());
+        workspace.corner(cornerButtons());
         actions.bind(frame.getRootPane());
         actions.areas(Menus.AREAS);
         keyPriority = KeyPriority.install(actions, frame, TerminalWidget::keepsKey);
@@ -606,9 +619,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // before the panes change: what just opened remembers where the keyboard was, what just closed gives it back
         Component keyboard = focusOwnerInFrame();
         Set<String> openNow = openKeys(s);
-        FocusOrigins.Origin back = focusOrigins.onRender(openNow, keyboard, keyOf(keyboard), renderedLowerTab, renderedFront,
-                o -> o.owner().isDisplayable() && (o.ownerKey() == null || openNow.contains(o.ownerKey())));
+        FocusOrigins.Origin back = focusOrigins.onRender(openNow, originAt(keyboard, renderedFront), placeOf(s, keyboard),
+                o -> o.owner().isDisplayable() && (o.ownerKey() == null ? !inLower(o.owner()) || o.front() == null || openNow.contains(o.front())
+                        : openNow.contains(o.ownerKey())));
         renderedFront = "panel:" + s.focused().value();
+        lowerDividerOf(s.focused());
         livePlots.onState(s);
         sidebar.render(s);
         workspace.render(s);
@@ -676,6 +691,41 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
     }
 
+    /**
+     * Where an opening made now is opened from (record 112): where the keyboard is; but a keyboard left in a panel that
+     * is not in front, or nowhere, counts as the panel in front, whose text or page takes it back.
+     */
+    private FocusOrigins.Origin originNow() {
+        return originAt(focusOwnerInFrame(), deps.state().get() == null ? null : "panel:" + deps.state().get().focused().value());
+    }
+
+    /**
+     * Where the keyboard at {@code c} is, with {@code front} the panel in front: a keyboard left in a panel that is not
+     * in front, or nowhere, counts as that panel, whose text or page takes it back.
+     */
+    private FocusOrigins.Origin originAt(Component c, String front) {
+        String key = keyOf(c);
+        if (c == null || key != null && key.startsWith("panel:") && !key.equals(front)) {
+            EditorPanel p = front == null || workspace == null ? null : workspace.panel(new PanelId(front.substring("panel:".length())));
+            if (p == null) {
+                return null;
+            }
+            c = p.focusTarget();
+            key = front;
+        }
+        return new FocusOrigins.Origin(c, key, renderedLowerTab, front);
+    }
+
+    /** The place the user is at (record 112): a view the keyboard is in, else the panel in front. */
+    private String placeOf(AppState s, Component keyboard) {
+        String key = keyOf(keyboard);
+        return key != null && key.startsWith("view:") ? key : "panel:" + s.focused().value();
+    }
+
+    private boolean inLower(Component c) {
+        return SwingUtilities.isDescendingFrom(c, lower.component());
+    }
+
     /** The panels and views open, as {@link FocusOrigins} keys them. */
     private static Set<String> openKeys(AppState s) {
         Set<String> keys = new HashSet<>();
@@ -700,17 +750,20 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /**
-     * Gives the keyboard back to where it was when the panel or view that held it opened (record 112): that panel comes
-     * forward, or that lower tab, and the component takes the keyboard once it shows.
+     * Gives the keyboard back to where it was when the panel or view that held it opened (record 112): the panel the
+     * keyboard was in, else the panel in front then, whose session the lower tabs (Session, Approvals, Terminal,
+     * Results) showed, comes forward; then that lower tab or view; and the component takes the keyboard once it shows.
      */
     private void giveKeyboardBack(FocusOrigins.Origin back, AppState s) {
         String key = back.ownerKey();
-        if (key != null && key.startsWith("panel:")) {
-            PanelId id = new PanelId(key.substring("panel:".length()));
-            if (!s.focused().equals(id)) {
+        String panel = key != null && key.startsWith("panel:") ? key : back.front();
+        if (panel != null && panel.startsWith("panel:")) {
+            PanelId id = new PanelId(panel.substring("panel:".length()));
+            if (!s.focused().equals(id) && s.panel(id).isPresent()) {
                 deps.intents().dispatch(new Intent.FocusPanel(id));
             }
-        } else if (key != null && key.startsWith("view:")) {
+        }
+        if (key != null && key.startsWith("view:")) {
             long id = Long.parseLong(key.substring("view:".length()));
             boolean lowerView = s.views().stream().anyMatch(v -> v.id() == id && v.placement() == Placement.LOWER);
             if (lowerView && !s.lowerTab().equals(LowerTab.view(id))) {
@@ -827,7 +880,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     public void showFile(String session, String path, String baseDir, int line) {
         UiErrands.start("show-file", () -> {
             try {
-                Path p = located(path, baseDir);
+                Path p = located(session, path, baseDir);
                 // a file named without a line opens as the Files tab opens it: in a panel, or its panel comes forward;
                 // a binary or large one, and one at a line, show in the side pane (record 111)
                 if (line <= 0 && Files.isRegularFile(p) && OpenFiles.isText(p)) {
@@ -853,9 +906,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     /**
      * The file {@code path} names, read from {@code baseDir}; a relative one that is not there is looked for under that
-     * folder's tree, then under the Files tab's folders (record 111). Off the EDT.
+     * folder's tree, then under the repositories of the files {@code session}'s own tool calls named, the latest first,
+     * then under the Files tab's folders (record 111). Off the EDT.
      */
-    private Path located(String path, String baseDir) {
+    private Path located(String session, String path, String baseDir) {
         Path p = FileView.resolve(path, baseDir);
         if (Files.exists(p) || Path.of(HomeDir.expand(path)).isAbsolute()) {
             return p;
@@ -863,6 +917,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         List<Path> roots = new ArrayList<>();
         if (baseDir != null && !baseDir.isBlank()) {
             roots.add(Path.of(baseDir));
+        }
+        if (session != null && !session.isEmpty()) {
+            roots.addAll(WorkedIn.roots(deps.transcripts().of(session), WorkedIn.MAX_ROOTS));
         }
         for (FolderRoot f : deps.state().get().folders()) {
             roots.add(Path.of(HomeDir.expand(f.path())));
@@ -922,7 +979,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /**
-     * A theme was chosen, from Actions ▸ Theme or the swatch beside New panel: kept, and every window takes its ground and
+     * A theme was chosen, from the swatch beside New panel or the palette: kept, and every window takes its ground and
      * its tint at once (record 103).
      */
     private void themeChosen(NamedTheme theme) {
@@ -1218,6 +1275,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("kit.upgrade", KitActions.UPGRADE, null, kit::upgrade, kit::canUpgrade);
         cmd("kit.backup", KitActions.BACK_UP, null, kit::backUp, kit::canBackUp);
         cmd("terminal.restart", "Restart the shell", null, () -> lower.terminals().restartFocused(deps.state().get()));
+        cmd("terminal.start", "Start the shell", null, () -> lower.terminals().startFocused(deps.state().get()),
+                () -> !lower.terminals().focusedRunning());
+        cmd("terminal.stop", "Stop the shell", null, () -> lower.terminals().stopFocused(), () -> lower.terminals().focusedRunning());
         // view
         cmd("view.palette", "Command palette", key(KeyEvent.VK_P, shortcut | SHIFT), () -> new CommandPalette(actions).show(frame));
         cmd("focus.editor", "Focus the editor", key(KeyEvent.VK_E, shortcut), () -> {
@@ -1282,7 +1342,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("help.markdown", "Markdown sheet", null, help::showMarkdownSheet);
         cmd("help.log", "Show the log", null, help::showLog, () -> deps.logDir() != null);
         cmd("help.dataRoot", "Reveal comando folder", null, () -> help.reveal(deps.home()), () -> deps.home() != null);
-        // the themes, Actions ▸ Theme: a ground and its tint chosen together, each with its swatch (Menus), the one chosen
+        // the themes, from the swatch beside New panel: a ground and its tint chosen together, each with its swatch (Menus), the one chosen
         // ticked (record 103)
         for (NamedTheme t : NamedTheme.values()) {
             cmd(t.commandId(), t.label, null, () -> themeChosen(t));
@@ -1320,8 +1380,18 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return KeyStroke.getKeyStroke(code, modifiers);
     }
 
+    /** The buttons left of the theme's swatch: the shell, the refreshing plots, the embedded server when there is one. */
+    private List<CommandButton> cornerButtons() {
+        List<CommandButton> buttons = new ArrayList<>();
+        for (List<String> ids : Menus.corner(deps.server() != null)) {
+            List<Command> commands = ids.stream().map(actions::get).toList();
+            buttons.add(new CommandButton(commands, Menus::tip));
+        }
+        return buttons;
+    }
+
     private JMenuBar menuBar() {
-        return actions.menuBar(Menus.bar(deps.server() != null), Menus::tip, id -> KeyText.of(Menus.MENU_TIPS.get(id)));
+        return actions.menuBar(Menus.bar(), Menus::tip, id -> null);
     }
 
     // ---- focus
@@ -1463,8 +1533,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     public void openFile(Path chosen) {
         Path file = chosen.toAbsolutePath().normalize();
         openedFiles.add(file);
+        // what the file opens from, read now, at the request: closing it gives the keyboard back there (record 112)
+        FocusOrigins.Origin from = originNow();
         for (PanelState p : deps.state().get().panels()) {
             if (deps.texts().file(p.id()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
+                focusOrigins.opened("panel:" + p.id().value(), from);
                 deps.intents().dispatch(new Intent.FocusPanel(p.id()));
                 return;
             }
@@ -1472,6 +1545,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // the file of a closed panel: the panel comes back, with its bindings
         for (PanelState p : deps.state().get().closed()) {
             if (deps.texts().file(p.id()).map(f -> PanelTexts.samePath(f, file)).orElse(false)) {
+                focusOrigins.opened("panel:" + p.id().value(), from);
                 deps.intents().dispatch(new Intent.ReopenPanel(p.id()));
                 return;
             }
@@ -1486,6 +1560,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 return;
             }
             PanelId id = PanelId.random();
+            Edt.run(() -> focusOrigins.opened("panel:" + id.value(), from));
             deps.texts().open(id, file).thenAccept(opened -> {
                 switch (opened.kind()) {
                     case BOUND -> {
@@ -1779,10 +1854,33 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.linear(windowLayout.linearSite(), windowLayout::linearSite);
         showSidebar(windowLayout.sidebarShown());
         vertical.setDividerLocation(windowLayout.lowerDivider(h));
+        panelDividers.putAll(windowLayout.panelDividers());
         sidePaneHidden = windowLayout.sidePaneHidden();
     }
 
+    /**
+     * The panel {@code front} came to the front: the lower divider goes where it was when that panel was last in front;
+     * a panel never in front keeps the divider as it is.
+     */
+    private void lowerDividerOf(PanelId front) {
+        if (front.equals(dividerPanel)) {
+            return;
+        }
+        dividerPanel = front;
+        Integer at = panelDividers.get(front);
+        if (at != null && at != vertical.getDividerLocation()) {
+            vertical.setDividerLocation(at);
+        } else if (vertical.getDividerLocation() > 0) {
+            panelDividers.put(front, vertical.getDividerLocation());
+        }
+    }
+
     private void saveLayout() {
+        // the dividers of panels that are open or can be reopened; a panel gone for good takes its own with it
+        AppState s = deps.state().get();
+        Map<PanelId, Integer> kept = new HashMap<>(panelDividers);
+        kept.keySet().removeIf(id -> s.panel(id).isEmpty() && s.closedPanel(id).isEmpty());
+        windowLayout.panelDividers(kept);
         windowLayout.save(frame, new WindowLayout.Saved(sidebar.isShown(), sidebar.isShown() ? outer.getDividerLocation() : -1,
                 sidebar.selectedTab(), sidebar.manualOrder(), sidePaneHidden, vertical.getDividerLocation(),
                 sidePaneShown ? editorAndSide.getDividerLocation() : -1));

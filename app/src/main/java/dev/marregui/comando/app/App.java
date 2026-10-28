@@ -69,6 +69,7 @@ public final class App implements AutoCloseable {
     /** How often the kit's version and its remote's releases are read; never blocking anything. */
     static final Duration KIT_EVERY = Duration.ofHours(6);
     private final StateLoop loop;
+    private final TranscriptRegistry transcripts;
     private final ClaudeAdapter claude;
     private final Errands errands;
     private final ComandoUi ui;
@@ -102,7 +103,7 @@ public final class App implements AutoCloseable {
                     loaded.sessions().stream().map(SessionState::closed).toList(),
                     store.withKitFolders(store.loadFolders(root.dir()), root)).withClosed(loaded.closed());
 
-            TranscriptRegistry transcripts = new TranscriptRegistry();
+            transcripts = new TranscriptRegistry();
             ResultRegistry results = new ResultRegistry();
             ConsoleRegistry consoles = new ConsoleRegistry();
             SchemaRegistry schemas = new SchemaRegistry();
@@ -199,6 +200,11 @@ public final class App implements AutoCloseable {
 
     public StateLoop loop() {
         return loop;
+    }
+
+    /** The sessions' transcripts; for tests. */
+    TranscriptRegistry transcripts() {
+        return transcripts;
     }
 
     /** The window; the snapshot tool drives it as a user would. */

@@ -94,7 +94,7 @@ Install comando from https://github.com/marregui/comando/releases/latest
 ```
 
 Claude Code follows [INSTALL.md](INSTALL.md): it downloads the file for this system with `gh`, installs it, checks that
-it starts, and asks whether to install a kit. Then **Actions ▸ Tutorial** opens *comando in ten minutes*: from an empty
+it starts, and asks whether to install a kit. Then **Help ▸ Tutorial** opens *comando in ten minutes*: from an empty
 window to a database, a Claude session, approvals and plots.
 
 | System | Release file | Tested |
@@ -136,7 +136,7 @@ JDK 25 and the Claude Code CLI.
 | Document | Contents |
 |---|---|
 | [Install](INSTALL.md) | the recipe Claude Code follows to install, upgrade and uninstall comando, and to offer a kit |
-| [Tutorial](docs/tutorial.md) | comando in ten minutes, step by step (also Actions ▸ Tutorial) |
+| [Tutorial](docs/tutorial.md) | comando in ten minutes, step by step (also Help ▸ Tutorial) |
 | [Build and run](docs/build-and-run.md) | prerequisites, Gradle tasks, CI, settings |
 | [Workbench](docs/workbench.md) | panels and bindings, running text, the database, the tools, the Files tab and git changes, what is kept on disk, the kit |
 | [Claude](docs/claude.md) | the `claude -p` bridge, the MCP tools, approvals and safety |

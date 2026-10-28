@@ -113,6 +113,28 @@ public final class TerminalTabs {
         t.start();
     }
 
+    /** Whether the focused panel's shell runs; false before its terminal was first rendered. */
+    public boolean focusedRunning() {
+        TerminalWidget t = focused();
+        return t != null && t.isRunning();
+    }
+
+    /** Starts the focused panel's shell, when it is not running, in the working directory of the panel's session. */
+    public void startFocused(AppState s) {
+        TerminalWidget t = show(s);
+        if (!t.isRunning()) {
+            t.start();
+        }
+    }
+
+    /** Stops the focused panel's shell and what runs in it, and frees its emulator. */
+    public void stopFocused() {
+        TerminalWidget t = focused();
+        if (t != null) {
+            t.close();
+        }
+    }
+
     /**
      * Starts the focused panel's shell when it is not running, in the current directory, and gives it the
      * keyboard. Safe right after a render: the terminal is created and shown here when the render did not.

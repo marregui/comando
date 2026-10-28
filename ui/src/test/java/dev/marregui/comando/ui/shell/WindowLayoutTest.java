@@ -1,7 +1,10 @@
 package dev.marregui.comando.ui.shell;
 
+import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,5 +40,18 @@ class WindowLayoutTest {
         assertThat(layout.sidebarTab()).as("the newest key wins").isEqualTo(SessionsSidebar.FILES);
         prefs.putInt("sidebar.selected", 7);
         assertThat(layout.sidebarTab()).as("a tab that is gone reads as Sessions").isEqualTo(SessionsSidebar.SESSIONS);
+    }
+
+    @Test
+    void eachPanelsLowerDividerIsKeptAndASaveReplacesTheOnesBefore() {
+        WindowLayout layout = new WindowLayout(prefs);
+        assertThat(layout.panelDividers()).as("nothing saved").isEmpty();
+        PanelId a = new PanelId("a");
+        PanelId b = new PanelId("b");
+        layout.panelDividers(Map.of(a, 300, b, 520));
+        assertThat(new WindowLayout(prefs).panelDividers()).containsExactlyInAnyOrderEntriesOf(Map.of(a, 300, b, 520));
+        layout.panelDividers(Map.of(b, 410));
+        assertThat(layout.panelDividers()).as("a panel gone takes its divider with it").containsExactlyEntriesOf(Map.of(b, 410));
+        assertThat(prefs.values()).as("the window's own divider is another key").doesNotContainKey("divider.lower.panel.a");
     }
 }

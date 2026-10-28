@@ -46,10 +46,11 @@ the sessions run on the kit, the Files tab opens on its folders and the status b
 
 | Part | What it is |
 |---|---|
-| **Menu bar** | **Edit**, and **Actions**: the palette; **Tint**, the colour of headings, reports and new files; restart the shell, stop refreshing plots; start or stop the embedded QuestDB; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
+| **Menu bar** | **Edit**, and **Help**: the palette; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
+| **Tab row's right end** | start or stop the shell, stop refreshing plots, start or stop the embedded QuestDB, the theme's swatch, **+** |
 | **Sidebar**, left | three tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it |
-| **Panel header** | the panel's **connection** chip, with a status dot (○ closed, ● open) and a plug button that connects it. On the right: **Preview** (Markdown), **Run**, **Stop**, **Clear**; rest the pointer on one for its name |
+| **Panel header** | at the right, first the panel's **connection**: a database icon in its state's colour (grey closed, blue open, amber on its way, red failed) whose click connects or disconnects, and its name, whose click binds another; then **Preview** (Markdown), **Run**, **Stop**, **Clear**; rest the pointer on one for what a click does |
 | **Editor** | where you write SQL and prompts, mixed in one text |
 | **Lower tabs** | **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell), **Results** (SQL output). Plots and kept results open more tabs here |
 | **Uncommitted changes**, right, ⌘K | what the Files tab's git repositories hold that their last commits do not ([§1.4](#14-uncommitted-changes)) |
@@ -61,7 +62,7 @@ the panel goes to its connection; anything else goes to its session.
 
 The command palette lists every command that can run now, with its key: press **⌘⇧P**, type a few letters, press
 **⏎**. **⌘⇧/** shows the table of keys: every command's, with its menu or area, then the keys of an approval card and
-of single places (find bar, transcript, sessions list, Files tab, dialogs). **Actions ▸ Markdown sheet** shows, beside
+of single places (find bar, transcript, sessions list, Files tab, dialogs). **Help ▸ Markdown sheet** shows, beside
 the editor, what Markdown the preview draws and how a prompt reaches Claude. Each menu item's tooltip says what it
 does; the menus grey out what cannot run now.
 
@@ -142,7 +143,7 @@ approval. Usage takes the warning colour at 75% of a window and the danger colou
 
 comando can run a QuestDB server for you, so you need nothing else installed.
 
-1. Press **⌘⇧P**, type `embedded`, and press **⏎** on **Start embedded QuestDB** (also in the Actions menu).
+1. Press **⌘⇧P**, type `embedded`, and press **⏎** on **Start embedded QuestDB** (also the database button at the tab row's right end).
    *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few
    seconds. **Stop embedded QuestDB**, in the same places, stops it. The server keeps its data in `~/.comando/questdb`
    and listens on this machine only.
@@ -152,9 +153,9 @@ comando can run a QuestDB server for you, so you need nothing else installed.
    is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves
    the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. In the dialog
    **⏎** saves, **⌘⏎** saves and assigns, and **Esc** asks before it drops unsaved changes.
-   *You should see* `tutorial ○` in the panel header, and **tutorial** in the sidebar with a grey database icon.
-3. Click the plug button next to `tutorial` in the panel header.
-   *You should see* the dot turn to `●`, the plug turn from grey to green, and the sidebar's icon turn blue. If the
+   *You should see* `tutorial ▾` beside a grey database icon in the panel header, and **tutorial** in the sidebar with a grey database icon.
+3. Click the database icon next to `tutorial` in the panel header.
+   *You should see* the icon turn from grey to blue, and the sidebar's icon turn blue. If the
    connection fails, the status bar says why in red.
 
 Any PostgreSQL-wire database works the same way: PostgreSQL itself, or a QuestDB you run yourself. A connection marked
@@ -273,7 +274,7 @@ choose.
 The **Session** tab shows the whole turn: your prompt in a bubble, every tool call as a card with its input and
 result, and everything else (Claude's text, notes, the turn's time, the "Thinking…" line while Claude thinks) in warm
 ivory on near-black, with headings, list marks and table heads in the tint, Treasure gold at first. The answer that
-ends a turn has a bar of the tint beside it. **Actions ▸ Theme**, or the swatch at the top right beside **+**, chooses another
+ends a turn has a bar of the tint beside it. The swatch at the top right beside **+** chooses another
 theme, a ground and its tint together: Graphite and gold, Espresso and champagne, Aubergine and yellow gold, Midnight
 and electric blue, Evergreen and tropical forest, Slate and silver. The editors', terminal's and diffs' colours follow.
 
@@ -349,7 +350,7 @@ your Claude Code permission settings, which comando leaves as they are; a databa
    sidebar shown or hidden as you left it. Views (plots, files, kept results) belong to one run: the side pane comes
    back empty.
 
-Your data lives in `~/.comando`; **Actions ▸ Reveal comando folder** opens it.
+Your data lives in `~/.comando`; **Help ▸ Reveal comando folder** opens it.
 
 | File or folder | Holds |
 |---|---|
@@ -397,7 +398,7 @@ The Edit menu's standard keys (⌘Z ⌘⇧Z ⌘X ⌘C ⌘V ⌘A) work as in any 
 | ⌘⇧C, ⌘⇧S | copy, export the view |
 | ⌘S | save the panel now |
 | ⌥⌘G | run Gradle tasks |
-| ⌘⇧/ | the table of every key; Actions ▸ Markdown sheet for Markdown |
+| ⌘⇧/ | the table of every key; Help ▸ Markdown sheet for Markdown |
 | ⌘/ | comment or uncomment the line, in the editor |
 | ⌘= ⌘- ⌘0 | zoom |
 | ⌘Q | quit |

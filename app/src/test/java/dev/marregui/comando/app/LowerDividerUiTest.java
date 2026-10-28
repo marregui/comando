@@ -1,0 +1,123 @@
+package dev.marregui.comando.app;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.StateLoop;
+import dev.marregui.comando.core.model.PanelId;
+import org.awaitility.Awaitility;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.io.TempDir;
+
+import javax.swing.JFrame;
+import javax.swing.JSplitPane;
+import javax.swing.SwingUtilities;
+import java.awt.Component;
+import java.awt.Container;
+import java.awt.Frame;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/**
+ * The divider between the panels and the lower panel is each panel's own: moved while one panel is in front, it goes
+ * back where it was for another when that one comes to the front, and back again. Opens the window, so this runs in
+ * {@code ./gradlew :app:uiTest}.
+ */
+@EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
+class LowerDividerUiTest {
+
+    private static final Duration WAIT = Duration.ofSeconds(10);
+
+    @TempDir
+    Path home;
+
+    @Test
+    void eachPanelBringsBackItsOwnLowerDivider() throws Exception {
+        Path one = Files.writeString(home.resolve("one.md"), "# One\n");
+        Path two = Files.writeString(home.resolve("two.md"), "# Two\n");
+        App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+                "divider", () -> {
+        });
+        try {
+            app.start();
+            StateLoop loop = app.loop();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            loop.dispatch(new Intent.OpenFile("", one.toString(), 0));
+            Awaitility.await("one's panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("one.md"));
+            PanelId first = loop.state().focused();
+            JSplitPane vertical = onEdt(() -> find(frame(), JSplitPane.class, p -> p.getOrientation() == JSplitPane.VERTICAL_SPLIT));
+            Awaitility.await("laid out").atMost(WAIT).until(() -> onEdt(vertical::getHeight) > 400);
+            onEdt(() -> {
+                vertical.setDividerLocation(150);
+                return null;
+            });
+
+            loop.dispatch(new Intent.OpenFile("", two.toString(), 0));
+            Awaitility.await("two's panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("two.md"));
+            assertThat(onEdt(vertical::getDividerLocation)).as("a panel never in front keeps the divider as it is").isEqualTo(150);
+            onEdt(() -> {
+                vertical.setDividerLocation(350);
+                return null;
+            });
+            PanelId second = loop.state().focused();
+
+            loop.dispatch(new Intent.FocusPanel(first));
+            Awaitility.await("one's divider back").atMost(WAIT).until(() -> onEdt(vertical::getDividerLocation) == 150);
+            loop.dispatch(new Intent.FocusPanel(second));
+            Awaitility.await("two's divider back").atMost(WAIT).until(() -> onEdt(vertical::getDividerLocation) == 350);
+        } finally {
+            app.close();
+        }
+    }
+
+    private static JFrame frame() {
+        for (Frame f : Frame.getFrames()) {
+            if (f instanceof JFrame j && f.isDisplayable() && f.getTitle().startsWith("comando")) {
+                return j;
+            }
+        }
+        return null;
+    }
+
+    private static <T extends Component> T find(Component c, Class<T> type, Predicate<T> which) {
+        if (c == null) {
+            return null;
+        }
+        if (type.isInstance(c) && which.test(type.cast(c))) {
+            return type.cast(c);
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                T found = find(child, type, which);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
+    }
+
+    private interface EdtCall<T> {
+        T call() throws Exception;
+    }
+
+    private static <T> T onEdt(EdtCall<T> call) throws Exception {
+        AtomicReference<T> out = new AtomicReference<>();
+        AtomicReference<Exception> err = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> {
+            try {
+                out.set(call.call());
+            } catch (Exception e) {
+                err.set(e);
+            }
+        });
+        if (err.get() != null) {
+            throw err.get();
+        }
+        return out.get();
+    }
+}

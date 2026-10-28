@@ -134,7 +134,7 @@ final class Settings {
         dirty |= !value.equals(values.put(key, value));
     }
 
-    /** The keys and values as kept; for tests. */
+    /** The keys and values as kept, a copy: for a family of keys under one prefix, and for tests. */
     Map<String, Object> values() {
         return Map.copyOf(values);
     }

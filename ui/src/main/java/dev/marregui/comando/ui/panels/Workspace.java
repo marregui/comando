@@ -28,6 +28,7 @@ import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.Icon;
+import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JMenuItem;
@@ -112,6 +113,8 @@ public final class Workspace {
     private final Map<PanelId, TabStatus> statuses = new HashMap<>();
     /** The theme chosen, beside New panel (record 104). */
     private final ThemeButton theme = new ThemeButton();
+    /** The tab row's right end: the corner's command buttons, the theme's swatch, New panel. */
+    private final JPanel trailing = new JPanel(new GridBagLayout());
     /** One wheel for every spinning tab; the timer turns it and repaints only the spinning tabs' bounds. */
     private final SpinnerIcon spinner = new SpinnerIcon(16);
     private final Timer spin = new Timer(SpinnerIcon.STEP_MILLIS, e -> spinTabs());
@@ -198,14 +201,14 @@ public final class Workspace {
         // the look stretches the trailing component over the space the tabs leave: the buttons sit at its right end,
         // centred in the tabs' height, rather than in the middle of that space; the theme's swatch left of New panel,
         // which keeps the corner (record 104)
-        JPanel trailing = new JPanel(new GridBagLayout());
         trailing.setOpaque(false);
         GridBagConstraints at = new GridBagConstraints();
         at.weightx = 1;
         at.anchor = GridBagConstraints.EAST;
+        trailing.add(Box.createHorizontalGlue(), at);
+        at.weightx = 0;
         at.insets = new Insets(0, 0, 0, Theme.SPACE_XS);
         trailing.add(theme, at);
-        at.weightx = 0;
         at.insets = new Insets(0, 0, 0, Theme.GAP);
         trailing.add(add, at);
         tabs.putClientProperty("JTabbedPane.trailingComponent", trailing);
@@ -423,6 +426,17 @@ public final class Workspace {
         intents.dispatch(new Intent.RemovePanel(deleted.panel()));
     }
 
+    /** {@code buttons} sit left of the theme's swatch, in their order: the shell, the plots, the embedded server. */
+    public void corner(List<CommandButton> buttons) {
+        GridBagConstraints at = new GridBagConstraints();
+        at.anchor = GridBagConstraints.EAST;
+        at.insets = new Insets(0, 0, 0, Theme.SPACE_XS);
+        for (int i = 0; i < buttons.size(); i++) {
+            trailing.add(buttons.get(i), at, 1 + i);
+        }
+        trailing.revalidate();
+    }
+
     /** {@code chosen} hears the theme picked from the swatch beside New panel. */
     public void onThemeChosen(Consumer<NamedTheme> chosen) {
         theme.onChosen(chosen);
@@ -441,6 +455,16 @@ public final class Workspace {
     /** How a link followed in a panel's rendered Markdown opens its file. */
     public void onOpenFile(Consumer<Path> open) {
         opener = open;
+    }
+
+    /** Whether a panel opens with its document's outline (record 113): the user's last choice. */
+    private boolean outlineWanted;
+    private Consumer<Boolean> outlineKept = on -> { };
+
+    /** Panels open with the outline when {@code wanted}; {@code keep} hears each choice the user makes in a panel. */
+    public void outline(boolean wanted, Consumer<Boolean> keep) {
+        outlineWanted = wanted;
+        outlineKept = keep;
     }
 
     /** The most recently closed panel, removed from the list; empty when none is left. */
@@ -1028,6 +1052,10 @@ public final class Workspace {
                 if (view == null) {
                     view = new EditorPanel(p, intents, schemas);
                     view.editor().load(texts.load(p.id()));
+                    view.outline(outlineWanted, on -> {
+                        outlineWanted = on;
+                        outlineKept.accept(on);
+                    });
                     PanelId id = p.id();
                     view.editor().onChange(text -> texts.changed(id, text));
                     view.onOpenFile((f, heading) -> {

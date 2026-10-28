@@ -36,6 +36,7 @@ import dev.marregui.comando.ui.shell.ServerToggle;
 import dev.marregui.comando.ui.shell.Setup;
 import dev.marregui.comando.ui.widgets.transcript.render.TranscriptCanvas;
 import org.awaitility.Awaitility;
+import org.awaitility.core.ConditionTimeoutException;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.TokenTypes;
 import org.junit.jupiter.api.AfterEach;
@@ -60,6 +61,7 @@ import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.JToolTip;
 import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
 import java.awt.Color;
@@ -508,7 +510,7 @@ class UiKeysTest {
     }
 
     @Test
-    void theThemeIsChosenInActionsOrBesideNewPanelEveryPanelTakesItAndTheNextWindowKeepsIt(@TempDir Path home) throws Exception {
+    void theThemeIsChosenBesideNewPanelEveryPanelTakesItAndTheNextWindowKeepsIt(@TempDir Path home) throws Exception {
         windowHome = home;
         Path settings = home.resolve("settings.json");
         try {
@@ -517,31 +519,32 @@ class UiKeysTest {
             AbstractButton swatch = await("the theme button", () -> find(w.frame(), AbstractButton.class,
                     b -> "Choose the theme".equals(b.getAccessibleContext().getAccessibleName())).orElse(null), WAIT_MILLIS);
             List<String> row = onEdt(() -> Stream.of(swatch.getParent().getComponents())
-                    .map(c -> ((JComponent) c).getAccessibleContext().getAccessibleName()).toList());
-            assertThat(row).as("at the top right, left of New panel (record 104)").containsExactly("Choose the theme", "New panel");
-            assertThat(onEdt(() -> swatch.getToolTipText())).as("the tooltip names the theme").startsWith("Theme: " + NamedTheme.GRAPHITE_GOLD.label + ";");
+                    .map(c -> ((JComponent) c).getAccessibleContext().getAccessibleName()).filter(Objects::nonNull).toList());
+            assertThat(row).as("at the top right, left of New panel (record 104), the shell's and the plots' buttons before it")
+                    .startsWith("Start the shell", "Stop refreshing plots").endsWith("Choose the theme", "New panel");
+            assertThat(hoverTip(swatch)).as("hovered, the tooltip shows and names the theme").startsWith("Theme: " + NamedTheme.GRAPHITE_GOLD.label + ";");
             assertThat(onEdt(() -> find(w.frame(), AbstractButton.class,
                     b -> "Clear the Session tab".equals(b.getAccessibleContext().getAccessibleName())))).as("no Clear button").isEmpty();
-            JMenu menu = onEdt(() -> {
+            List<String> help = onEdt(() -> {
                 JMenuBar bar = w.frame().getJMenuBar();
+                List<String> titles = new ArrayList<>();
                 for (int i = 0; i < bar.getMenuCount(); i++) {
-                    JMenu m = bar.getMenu(i);
-                    if ("Actions".equals(m.getText())) {
-                        for (Component c : m.getMenuComponents()) {
-                            assertThat(c instanceof JMenu sub && ("Tint".equals(sub.getText()) || "Ground".equals(sub.getText())))
-                                    .as("the tint and the ground are no longer chosen apart").isFalse();
-                        }
-                        for (Component c : m.getMenuComponents()) {
-                            if (c instanceof JMenu sub && "Theme".equals(sub.getText())) {
-                                return sub;
-                            }
-                        }
-                    }
+                    titles.add(bar.getMenu(i).getText());
                 }
+                assertThat(titles).as("Actions is Help now").containsExactly("Edit", "Help");
+                return Stream.of(bar.getMenu(1).getMenuComponents()).filter(JMenuItem.class::isInstance).map(c -> ((JMenuItem) c).getText()).toList();
+            });
+            assertThat(help).as("the palette and the help; the theme, the shell, the plots and the server are buttons")
+                    .containsExactly("Command palette", "Tutorial", "Keyboard shortcuts", "Markdown sheet", "Show the log", "Reveal comando folder");
+            onEdt(() -> {
+                swatch.doClick();
                 return null;
             });
-            assertThat(menu).as("Actions ▸ Theme").isNotNull();
-            List<JRadioButtonMenuItem> items = onEdt(() -> Stream.of(menu.getMenuComponents()).map(c -> (JRadioButtonMenuItem) c).toList());
+            // the menu shows in the frame or, heavyweight, in a window the frame owns
+            List<JRadioButtonMenuItem> items = await("the swatch's menu", () -> Stream.concat(Stream.of(w.frame()), Stream.of(w.frame().getOwnedWindows()))
+                    .map(win -> find(win, JRadioButtonMenuItem.class, i -> i.isShowing() && NamedTheme.MIDNIGHT_BLUE.label.equals(i.getText())).orElse(null))
+                    .filter(Objects::nonNull).findFirst()
+                    .map(i -> Stream.of(i.getParent().getComponents()).map(c -> (JRadioButtonMenuItem) c).toList()).orElse(null), WAIT_MILLIS);
             assertThat(onEdt(() -> items.stream().map(AbstractButton::getText).toList())).containsExactly(
                     Stream.of(NamedTheme.values()).map(t -> t.label).toArray(String[]::new));
             assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
@@ -578,7 +581,7 @@ class UiKeysTest {
             });
             assertThat(Theme.groundChosen()).isEqualTo(Ground.MIDNIGHT);
             assertThat(Theme.tint()).isEqualTo(Tint.ELECTRIC_BLUE);
-            assertThat(onEdt(() -> swatch.getToolTipText())).as("the tooltip follows").startsWith("Theme: " + NamedTheme.MIDNIGHT_BLUE.label + ";");
+            assertThat(hoverTip(swatch)).as("the tooltip follows").startsWith("Theme: " + NamedTheme.MIDNIGHT_BLUE.label + ";");
             assertThat(setting(settings, "theme.ground")).as("kept in settings.json (record 106)").isEqualTo("MIDNIGHT");
             assertThat(setting(settings, "theme.tint")).as("kept").isEqualTo("ELECTRIC_BLUE");
             assertThat(tintPixels(canvas, Tint.ELECTRIC_BLUE)).as("the answer laid out again in the tint, at once").isPositive();
@@ -598,7 +601,7 @@ class UiKeysTest {
             assertThat(onEdt(() -> editor.getSyntaxScheme().getStyle(TokenTypes.COMMENT_DOCUMENTATION).font.getSize2D()))
                     .as("its scheme at the zoomed size").isEqualTo(zoomed.getSize2D());
 
-            // the same choice from the swatch beside New panel: its menu ticks the theme chosen, and Actions ▸ Theme follows
+            // the swatch's menu again: it ticks the theme chosen
             onEdt(() -> {
                 swatch.doClick();
                 return null;
@@ -618,8 +621,6 @@ class UiKeysTest {
             assertThat(NamedTheme.chosen()).contains(NamedTheme.SLATE_SILVER);
             assertThat(setting(settings, "theme.ground")).isEqualTo("SLATE");
             assertThat(setting(settings, "theme.tint")).isEqualTo("SILVER");
-            assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
-                    .as("Actions ▸ Theme ticks it too").containsExactly(NamedTheme.SLATE_SILVER.label);
             assertThat(tintPixels(canvas, Tint.SILVER)).as("the answer laid out again in it, at once").isPositive();
 
             NamedTheme[] themes = NamedTheme.values();
@@ -890,6 +891,43 @@ class UiKeysTest {
             return SwingUtilities.isEventDispatchThread() ? s.get() : onEdt(s);
         } catch (Exception e) {
             throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * The tooltip shown when the pointer rests on {@code b}, as the tooltip manager shows it, or "" when none shows: in
+     * every window, since the off-screen window never has the desktop's focus.
+     */
+    private static String hoverTip(AbstractButton b) throws Exception {
+        Object mode = UIManager.get("ToolTipManager.enableToolTipMode");
+        int delay = ToolTipManager.sharedInstance().getInitialDelay();
+        try {
+            onEdt(() -> {
+                UIManager.put("ToolTipManager.enableToolTipMode", "allWindows");
+                ToolTipManager.sharedInstance().setInitialDelay(0);
+                long t = System.currentTimeMillis();
+                b.dispatchEvent(new MouseEvent(b, MouseEvent.MOUSE_ENTERED, t, 0, 5, 5, 0, false));
+                b.dispatchEvent(new MouseEvent(b, MouseEvent.MOUSE_MOVED, t, 0, 6, 6, 0, false));
+                return null;
+            });
+            AtomicReference<String> shown = new AtomicReference<>("");
+            try {
+                Awaitility.await("the tooltip").atMost(Duration.ofSeconds(2)).until(() -> {
+                    shown.set(onEdt(() -> Stream.of(java.awt.Window.getWindows()).map(w -> find(w, JToolTip.class, Component::isShowing))
+                            .flatMap(Optional::stream).map(JToolTip::getTipText).findFirst().orElse("")));
+                    return !shown.get().isEmpty();
+                });
+            } catch (ConditionTimeoutException e) {
+                // none shows: the caller's assertion says so
+            }
+            return shown.get();
+        } finally {
+            onEdt(() -> {
+                b.dispatchEvent(new MouseEvent(b, MouseEvent.MOUSE_EXITED, System.currentTimeMillis(), 0, -1, -1, 0, false));
+                UIManager.put("ToolTipManager.enableToolTipMode", mode);
+                ToolTipManager.sharedInstance().setInitialDelay(delay);
+                return null;
+            });
         }
     }
 }

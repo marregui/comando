@@ -6,7 +6,7 @@ claim by claim against the code. A user starts with the tutorial; a contributor 
 | To | Read |
 |---|---|
 | install it | [Install](../INSTALL.md): the recipe Claude Code follows to install, upgrade and uninstall comando, and to offer the kit |
-| use comando for the first time | [Tutorial](tutorial.md): a first session, step by step; also Actions ▸ Tutorial in the app |
+| use comando for the first time | [Tutorial](tutorial.md): a first session, step by step; also Help ▸ Tutorial in the app |
 | know what the window does | [Workbench](workbench.md): panels and bindings, running text, the database, the tools, the Files tab and git changes, what is kept on disk, the kit |
 | know what Claude Code can do in it | [Claude](claude.md): the `claude -p` bridge, the MCP tools, approvals and safety |
 | build, run and test it | [Build and run](build-and-run.md): prerequisites, Gradle tasks, CI, settings |
