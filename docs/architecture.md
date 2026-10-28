@@ -264,8 +264,9 @@ focus).
 
 A program run to its end with a bound (`ps`, `git`, `claude --version`, the keychain tool) goes through `Processes`
 (the streamed tool runs, Mermaid's renderer and fire-and-forget launches keep their own handling):
-its output is drained by two K6 forks while it runs, each stream kept to a bound, and at the bound or an interrupt
-the program's descendants are killed, then the program. A file written whole goes through `AtomicFiles`: a temporary
+its output and input go through temporary files, so no thread holds a carrier in a pipe read while it runs (a K3
+reason: `ThreadBudgetTest` counted five carriers on three cores while two readers per run did), each output kept to a
+bound when read back, and at the bound or an interrupt the program's descendants are killed, then the program. A file written whole goes through `AtomicFiles`: a temporary
 file of a unique name beside the target, moved over it atomically where the file system can.
 
 | Thread | Kind | Does |

@@ -13,6 +13,7 @@ import javax.swing.BorderFactory;
 import javax.swing.Icon;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Graphics;
@@ -42,6 +43,7 @@ final class AgentStrip extends JPanel {
     private static final int VGAP = 3;
 
     private final Consumer<String> reveal;
+    private final Consumer<String> open;
     private final LongSupplier clock;
     private final SpinnerIcon spinner = new SpinnerIcon(12);
     private final ShownTimer timer = new ShownTimer(this, SpinnerIcon.STEP_MILLIS, this::tick);
@@ -51,9 +53,14 @@ final class AgentStrip extends JPanel {
     private List<BackgroundTask> tasks = List.of();
     private long lastSecond = -1;
 
-    AgentStrip(Consumer<String> reveal, LongSupplier clock) {
+    /**
+     * @param reveal shows a running sub-agent's card in the transcript, by its call id: a chip's click
+     * @param open   opens the sub-agent's own tab in the lower panel, or brings it forward: a chip's double click
+     */
+    AgentStrip(Consumer<String> reveal, Consumer<String> open, LongSupplier clock) {
         super(null);
         this.reveal = reveal;
+        this.open = open;
         this.clock = clock;
         setOpaque(false);
         setVisible(false);
@@ -74,12 +81,21 @@ final class AgentStrip extends JPanel {
         chips.clear();
         for (RunningAgent a : this.agents) {
             Chip c = new Chip(spinner, a.description(), a.startedMillis(), a.toolUseId());
-            c.setToolTipText("Show this sub-agent's card");
+            c.setToolTipText("Show this sub-agent's card; a double click opens its tab");
             c.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            // on the press, not the click: the strip rebuilds its chips as the sub-agents change, and a click whose
+            // press and release land on two chips is no click; the double click's first press shows the card
             c.addMouseListener(new MouseAdapter() {
                 @Override
-                public void mouseClicked(MouseEvent e) {
-                    reveal.accept(a.toolUseId());
+                public void mousePressed(MouseEvent e) {
+                    if (!SwingUtilities.isLeftMouseButton(e)) {
+                        return;
+                    }
+                    if (e.getClickCount() == 2) {
+                        open.accept(a.toolUseId());
+                    } else if (e.getClickCount() == 1) {
+                        reveal.accept(a.toolUseId());
+                    }
                 }
             });
             chips.add(c);

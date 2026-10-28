@@ -251,8 +251,10 @@ folder ([record 108](adr/0108-links-in-every-card.md)).
 While a subagent runs, a strip above the transcript holds one chip per running top-level Agent card, foreground or
 background, in start order: a spinner, the description clipped to 28 characters, the elapsed time. Then comes one chip
 per background subagent of the session (`local_agent` tasks, an hourglass) that no card in the loaded window shows.
-Shell tasks stay out; they show in the session's waiting status. A click on a card's chip opens the card and scrolls it
-to the top of the view. The strip is one line: chips that do not fit are counted in a last "+N" chip, whose tooltip
+Shell tasks stay out; they show in the session's waiting status. A press on a card's chip opens the card and scrolls it
+to the top of the view; a double click opens the subagent's own tab in the lower panel, or brings it forward when it is
+open, as the card's "transcript" link does. The chip acts on the press: the strip rebuilds its chips as the subagents
+change, and a click whose press and release land on two chips would be lost. The strip is one line: chips that do not fit are counted in a last "+N" chip, whose tooltip
 names them. The strip hides when it is empty, and its timer runs only while it shows; a transcript that followed its
 end still does when the strip appears or goes. A card's counts are kept as blocks arrive, never by walking its blocks
 on a paint, and its times survive a rebuild of the tab (a session switch, "Show earlier").

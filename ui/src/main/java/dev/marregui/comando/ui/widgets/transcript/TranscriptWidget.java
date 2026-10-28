@@ -56,7 +56,8 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     private final JButton earlier = new JButton();
     private final JButton latest = new JButton("↓ Latest");
     private final JPanel root = new JPanel(new BorderLayout());
-    private final AgentStrip strip = new AgentStrip(canvas::reveal, System::currentTimeMillis);
+    private final AgentStrip strip = new AgentStrip(canvas::reveal, id -> openLink(TranscriptCanvas.SUBAGENT_SCHEME + id),
+            System::currentTimeMillis);
     private final Overlay overlay = new Overlay(root);
     private Transcript transcript;
     private String session = "";

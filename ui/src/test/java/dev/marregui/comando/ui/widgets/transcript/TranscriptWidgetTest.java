@@ -219,32 +219,56 @@ class TranscriptWidgetTest {
         assertThat(chipTexts(widget.strip())).containsExactly("watch the build");
     }
 
-    /// A click on a running chip reveals its card by id; a click on a background chip does nothing.
+    /// A press on a running chip reveals its card by id and a double press opens the sub-agent's tab, whose first press
+    /// still reveals; a background chip answers neither; a right press does nothing. The press is what counts: the
+    /// strip rebuilds its chips as the sub-agents change, so a click whose release lands on a new chip would be lost.
     @Test
-    void aRunningChipClickRevealsItsCardAndABackgroundChipHasNoClick() {
+    void aRunningChipShowsItsCardOnAPressAndOpensItsTabOnADoublePress() {
         List<String> revealed = new ArrayList<>();
-        AgentStrip strip = new AgentStrip(revealed::add, () -> 10_000L);
+        List<String> opened = new ArrayList<>();
+        AgentStrip strip = new AgentStrip(revealed::add, opened::add, () -> 10_000L);
         strip.show(List.of(new TranscriptCanvas.RunningAgent("a1", "survey", 4_000L, "")),
                 List.of(new BackgroundTask("bg1", "local_agent", "watch", 0L)));
         assertThat(strip.chips()).extracting(JLabel::getText).containsExactly("survey · 6 s", "watch");
 
         for (JLabel chip : strip.chips()) {
-            chip.dispatchEvent(new MouseEvent(chip, MouseEvent.MOUSE_CLICKED, 0L, 0, 2, 2, 1, false, MouseEvent.BUTTON1));
+            press(chip, 1, MouseEvent.BUTTON1);
         }
         assertThat(revealed).containsExactly("a1");
+        assertThat(opened).isEmpty();
+
+        for (JLabel chip : strip.chips()) {
+            press(chip, 2, MouseEvent.BUTTON1);
+        }
+        assertThat(opened).containsExactly("a1");
+        assertThat(revealed).as("the double press reveals no second time").containsExactly("a1");
+
+        press(strip.chips().getFirst(), 1, MouseEvent.BUTTON3);
+        assertThat(revealed).as("a right press").containsExactly("a1");
     }
 
-    /// In the widget, a chip click opens the card on the canvas.
+    /// In the widget, a chip's press opens the card on the canvas, and its double press sends `OpenSubagent` for the
+    /// session and the call, as the card's "transcript" link and the session card's sub-agents line do.
     @Test
-    void theChipClickOfTheWidgetsStripOpensTheCard() {
+    void theWidgetsChipOpensTheCardOnAPressAndTheSubagentsTabOnADoublePress() {
+        RecordingSink sink = new RecordingSink();
+        TranscriptWidget w = new TranscriptWidget(new WidgetContext(sink, new ActionRegistry()));
         Transcript t = new Transcript();
         t.append(agent("a1", "survey"));
-        widget.render(new TranscriptView("s", t));
-        JLabel chip = widget.strip().chips().getFirst();
+        w.render(new TranscriptView("work", t));
+        JLabel chip = w.strip().chips().getFirst();
 
-        chip.dispatchEvent(new MouseEvent(chip, MouseEvent.MOUSE_CLICKED, 0L, 0, 2, 2, 1, false, MouseEvent.BUTTON1));
+        press(chip, 1, MouseEvent.BUTTON1);
+        assertThat(w.canvas().isCardOpen("a1")).isTrue();
+        assertThat(sink.of(Intent.OpenSubagent.class)).isEmpty();
 
-        assertThat(widget.canvas().isCardOpen("a1")).isTrue();
+        press(chip, 2, MouseEvent.BUTTON1);
+        assertThat(sink.of(Intent.OpenSubagent.class)).containsExactly(new Intent.OpenSubagent("work", "a1"));
+    }
+
+    private static void press(JLabel chip, int clicks, int button) {
+        int mask = button == MouseEvent.BUTTON1 ? MouseEvent.BUTTON1_DOWN_MASK : MouseEvent.BUTTON3_DOWN_MASK;
+        chip.dispatchEvent(new MouseEvent(chip, MouseEvent.MOUSE_PRESSED, 0L, mask, 2, 2, clicks, false, button));
     }
 
     /// A link in [TranscriptCanvas#SUBAGENT_SCHEME] sends `OpenSubagent` with the session and the call id.
