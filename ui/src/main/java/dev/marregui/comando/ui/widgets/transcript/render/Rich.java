@@ -122,9 +122,15 @@ final class Rich {
         return this;
     }
 
+    /** Makes {@code [start, end)} a link to {@code href}, in {@code color} and underlined, as {@link #linked} does. */
+    Rich link(int start, int end, String href, Color color) {
+        runs.add(new Run(start, end, null, color, null, true, false));
+        return link(start, end, href);
+    }
+
     /**
      * Makes the links in the text links, in {@code color} and underlined: web addresses, {@code [[name]]} notes,
-     * Markdown links and {@code path:line} references, as written ({@link TextLinks}).
+     * Markdown links, {@code path:line} references and file paths, as written ({@link TextLinks}).
      */
     Rich linked(Color color) {
         for (TextLinks.Ref r : TextLinks.refs(text, true)) {

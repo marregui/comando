@@ -157,6 +157,14 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
         }
     }
 
+    /** What the widget says over a transcript with no blocks yet; empty for a session's own words. */
+    private String whenEmpty = "";
+
+    /** Says {@code text} over a transcript with no blocks yet, in place of a session's (a sub-agent's tab, record 109). */
+    public void whenEmpty(String text) {
+        whenEmpty = text;
+    }
+
     /** The painter, for measurement and tests. */
     public TranscriptCanvas canvas() {
         return canvas;
@@ -180,7 +188,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
             reset(Math.max(0, transcript.size() - WINDOW));
         }
         if (transcript.size() == 0) {
-            overlay.showEmpty("Session " + session + " has no conversation yet. Type a prompt below, or run text from the editor.");
+            overlay.showEmpty(whenEmpty.isEmpty() ? "Session " + session + " has no conversation yet. Type a prompt below, or run text from the editor." : whenEmpty);
             return;
         }
         overlay.showContent();

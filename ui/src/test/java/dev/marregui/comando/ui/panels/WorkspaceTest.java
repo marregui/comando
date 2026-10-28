@@ -30,6 +30,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
 import javax.swing.JMenuItem;
@@ -387,6 +388,58 @@ class WorkspaceTest {
     }
 
     @Test
+    void aSessionsCardOutlinesItsSubagentsAndADoubleClickOpensOnesTab() throws Exception {
+        TranscriptRegistry transcripts = new TranscriptRegistry();
+        Transcript t = transcripts.of("idle");
+        t.append(new Block.UserPrompt("review it", "x", ""));
+        t.append(new Block.ToolCall("a1", "Agent", "{\"description\":\"Review the diff\",\"prompt\":\"…\"}", "found 2", Block.ToolStatus.DONE, ""));
+        t.append(new Block.ToolCall("r1", "Read", "{\"file_path\":\"/w/a\"}", "ok", Block.ToolStatus.DONE, "a1"));
+        t.append(new Block.ToolCall("n1", "Agent", "{\"description\":\"nested\"}", "ok", Block.ToolStatus.DONE, "a1"));
+        t.append(new Block.ToolCall("g1", "Grep", "{\"pattern\":\"x\"}", "ok", Block.ToolStatus.DONE, "n1"));
+        t.append(new Block.ToolCall("a2", "Agent", "{\"description\":\"Run the tests\"}", "", Block.ToolStatus.RUNNING, ""));
+        t.append(new Block.ToolCall("a3", "Agent", "{\"description\":\"Watch CI\"}", "Async agent launched successfully. agentId: bg7", Block.ToolStatus.DONE, ""));
+        t.append(new Block.ToolCall("a4", "Agent", "{\"description\":\"Broken\"}", "boom", Block.ToolStatus.ERROR, ""));
+        SessionState idle = SessionState.closed(SessionSpec.fresh("idle", "/w/idle")).withStatus(Status.OPEN, "")
+                .withTasks(List.of(new BackgroundTask("bg7", "local_agent", "Watch CI", 0L)), 0L);
+        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "")), List.of(), List.of(idle));
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        Workspace[] w = new Workspace[1];
+        JRootPane root = new JRootPane();
+        JList<String> rows = new JList<>(new String[]{"idle"});
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(intents::add, new Texts(), new SchemaRegistry());
+            w[0].topics(new Asks(), transcripts::of);
+            w[0].render(s);
+            root.getContentPane().setLayout(new BorderLayout());
+            root.getContentPane().add(rows, BorderLayout.WEST);
+            root.getContentPane().add(w[0].component(), BorderLayout.CENTER);
+            layOut(root, 900, 600);
+            w[0].rowCards().show("idle", rows, rows.getCellBounds(0, 0), 200);
+        });
+        TabCard card = w[0].card();
+        List<JLabel> links = card.agentLinks();
+        assertThat(links).extracting(JLabel::getText).as("each own sub-agent, its state and the tool calls inside it at any depth")
+                .containsExactly("✓ Review the diff · done · 3 tools", "▸ Run the tests · running",
+                        "▸ Watch CI · running in background", "✗ Broken · failed");
+        JLabel first = links.getFirst();
+        SwingUtilities.invokeAndWait(() -> {
+            first.dispatchEvent(new MouseEvent(first, MouseEvent.MOUSE_CLICKED, 0, 0, 2, 2, 1, false, MouseEvent.BUTTON1));
+        });
+        assertThat(intents).as("a single click opens nothing").noneMatch(i -> i instanceof Intent.OpenSubagent);
+        SwingUtilities.invokeAndWait(() -> {
+            first.dispatchEvent(new MouseEvent(first, MouseEvent.MOUSE_CLICKED, 0, 0, 2, 2, 2, false, MouseEvent.BUTTON1));
+        });
+        assertThat(intents).contains(new Intent.OpenSubagent("idle", "a1"));
+
+        // the background one ended: done; a connection's card has no outline
+        SwingUtilities.invokeAndWait(() -> {
+            w[0].render(s.withSessions(List.of(idle.withTasks(List.of(), 0L))));
+            w[0].rowCards().show("idle", rows, rows.getCellBounds(0, 0), 200);
+        });
+        assertThat(card.agentLinks()).extracting(JLabel::getText).contains("✓ Watch CI · done");
+    }
+
+    @Test
     void aSessionRowShowsItsPanelsCardWithTheSessionsDetailsAndAHeadlessSessionACardOfItsOwn() throws Exception {
         TranscriptRegistry transcripts = new TranscriptRegistry();
         transcripts.of("idle").append(new Block.UserPrompt("tidy the imports", "x", ""));
@@ -419,6 +472,12 @@ class WorkspaceTest {
         SwingUtilities.invokeAndWait(() -> { });
         String status = card.statusText();
 
+        // the sidebar hears a row's card close, and where the pointer left it for; a tab's card is not a row's
+        List<String> closed = new CopyOnWriteArrayList<>();
+        SwingUtilities.invokeAndWait(() -> w[0].rowCards().onClose(at -> closed.add(at == null ? "closed" : "left for a point")));
+        SwingUtilities.invokeAndWait(() -> card.closeButton().doClick());
+        assertThat(closed).as("a tab's card").isEmpty();
+
         // the session's row: the same card, its panel's, with no new read
         SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("s", rows, rows.getCellBounds(0, 0)));
         assertThat(w[0].cardShown()).isEqualTo(P);
@@ -429,6 +488,17 @@ class WorkspaceTest {
         assertThat(card.component().getY()).as("under the row").isGreaterThanOrEqualTo(below);
         SwingUtilities.invokeAndWait(() -> w[0].tick());
         assertThat(card.component().getY()).as("a tick leaves it under its row, not its tab").isGreaterThanOrEqualTo(below);
+
+        // beside the rows when the window has room: its left edge where the sidebar says, its top at the row's
+        int beside = rows.getWidth() - 4;
+        SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("s", rows, rows.getCellBounds(0, 0), beside));
+        Point besideAt = SwingUtilities.convertPoint(rows, new Point(beside, rows.getCellBounds(0, 0).y), root.getLayeredPane());
+        assertThat(card.component().getX()).as("beside the rows, over their last pixels").isEqualTo(besideAt.x);
+        assertThat(card.component().getY()).as("its top at the row's, within the window's margin").isEqualTo(Math.max(8, besideAt.y));
+        // no room beside them: under the row, as before
+        SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("s", rows, rows.getCellBounds(0, 0), 880));
+        assertThat(card.component().getY()).as("under the row").isGreaterThanOrEqualTo(below);
+        assertThat(card.component().getX()).isLessThan(880);
 
         // a headless session: a card of its own, read from the end of its conversation
         SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("idle", rows, rows.getCellBounds(1, 1)));
@@ -446,9 +516,23 @@ class WorkspaceTest {
         SwingUtilities.invokeAndWait(() -> card.refreshButton().doClick());
         assertThat(asks.asks).as("↻ reads it again").hasSize(3);
 
+        // its ✕ closes it; the pointer leaving it says where for
+        SwingUtilities.invokeAndWait(() -> card.closeButton().doClick());
+        assertThat(closed).containsExactly("closed");
+        SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("idle", rows, rows.getCellBounds(1, 1)));
+        JComponent c = card.component();
+        SwingUtilities.invokeAndWait(() -> {
+            c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_ENTERED, 0, 0, 5, 5, 0, false));
+            c.dispatchEvent(new MouseEvent(c, MouseEvent.MOUSE_EXITED, 0, 0, -5, 5, 0, false));
+        });
+        assertThat(card.shown()).isNull();
+        assertThat(closed).containsExactly("closed", "left for a point");
+
         // the pointer leaves the row and does not reach the card: it closes after the grace
+        SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("idle", rows, rows.getCellBounds(1, 1)));
         SwingUtilities.invokeAndWait(() -> w[0].rowCards().left());
         Awaitility.await("the grace over").atMost(Duration.ofSeconds(3)).until(() -> card.shown() == null);
+        assertThat(closed).last().isEqualTo("closed");
 
         // a removed session's card closes
         SwingUtilities.invokeAndWait(() -> w[0].rowCards().show("idle", rows, rows.getCellBounds(1, 1)));

@@ -4,10 +4,13 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingSink;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +22,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 
@@ -36,6 +41,7 @@ class SubagentViewTest {
     @TempDir
     Path tmp;
     private final RecordingSink sink = new RecordingSink();
+    private final TranscriptRegistry transcripts = new TranscriptRegistry();
     private ClaudeAdapter adapter;
     private Path subagents;
 
@@ -48,7 +54,7 @@ class SubagentViewTest {
             Files.write(exe, in.readAllBytes());
         }
         exe.toFile().setExecutable(true);
-        adapter = new ClaudeAdapter(sink, new TranscriptRegistry(), McpGateway.NONE,
+        adapter = new ClaudeAdapter(sink, transcripts, McpGateway.NONE,
                 new ClaudeSettings(exe.toString(), tmp.resolve("run"), projects, UiInstructions.TEXT));
         adapter.tailEveryMillis = PERIOD_MILLIS;
     }
@@ -78,8 +84,29 @@ class SubagentViewTest {
         return "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"" + t + "\"}]}}";
     }
 
-    private static String md(Intent i) {
-        return ((ViewSpec.Markdown) (i instanceof Intent.ShowView v ? v.spec() : ((Intent.RefreshView) i).spec())).markdown();
+    /** What the sub-agent's tab says of its following (record 109). */
+    private static String state(Intent i) {
+        return ((ViewSpec.Agent) (i instanceof Intent.ShowView v ? v.spec() : ((Intent.RefreshView) i).spec())).state();
+    }
+
+    /** The texts of the tab's transcript: sub-agent {@code toolUseId}'s, as read so far. */
+    private List<String> said(String toolUseId) {
+        Transcript t = transcripts.of(TranscriptRegistry.subagentKey("work", toolUseId));
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i < t.size(); i++) {
+            if (t.get(i) instanceof Block.AssistantText a) {
+                out.add(a.text());
+            }
+        }
+        return out;
+    }
+
+    private void awaitSaid(String toolUseId, String text) {
+        Awaitility.await("the tab shows " + text).atMost(WAIT).until(() -> said(toolUseId).contains(text));
+    }
+
+    private boolean tabOf(Intent.ShowView v, String toolUseId) {
+        return v.spec() instanceof ViewSpec.Agent a && a.toolUseId().equals(toolUseId);
     }
 
     private <T extends Intent> Optional<T> within(Class<T> type, Predicate<T> match, Duration d) {
@@ -101,14 +128,14 @@ class SubagentViewTest {
         assertThat(shown.session()).isEmpty();
         assertThat(shown.title()).isEqualTo("agent · Count the widgets");
         assertThat(shown.placement()).isEqualTo(Placement.LOWER);
-        assertThat(md(shown)).contains("first step");
+        assertThat(shown.spec()).isEqualTo(new ViewSpec.Agent("work", "toolu_a1", "Count the widgets", ClaudeAdapter.FOLLOWING));
+        assertThat(said("toolu_a1")).containsExactly("first step");
         assertThat(adapter.followedSubagents()).isEqualTo(1);
 
         grow("a1", "second step");
 
-        Intent.RefreshView refreshed = sink.await(Intent.RefreshView.class, WAIT);
-        assertThat(refreshed.title()).isEqualTo(shown.title());
-        assertThat(md(refreshed)).contains("first step", "second step");
+        awaitSaid("toolu_a1", "second step");
+        assertThat(said("toolu_a1")).as("read on from where it was").containsExactly("first step", "second step");
     }
 
     @Test
@@ -186,10 +213,12 @@ class SubagentViewTest {
 
         // the first one no longer follows: its view says so once, and its growth refreshes nothing; the fifth's does
         Intent.RefreshView stopped = sink.await(Intent.RefreshView.class, r -> r.title().equals("agent · agent 1"), WAIT);
-        assertThat(md(stopped).strip()).endsWith(ClaudeAdapter.STOPPED_TOO_MANY);
+        assertThat(state(stopped)).isEqualTo(ClaudeAdapter.STOPPED_TOO_MANY);
         grow("b1", "more");
         grow("b5", "more");
-        sink.await(Intent.RefreshView.class, r -> r.title().equals("agent · agent 5") && md(r).contains("more"), WAIT);
+        awaitSaid("toolu_b5", "more");
+        within(Intent.RefreshView.class, r -> false, QUIET);
+        assertThat(said("toolu_b1")).as("no longer read").doesNotContain("more");
         assertThat(sink.of(Intent.RefreshView.class)).filteredOn(r -> r.title().equals("agent · agent 1")).hasSize(1);
     }
 
@@ -200,21 +229,26 @@ class SubagentViewTest {
         agent("x2", "Review the diff", false, "B-first");
 
         adapter.showSubagent("work", "conv-1", "toolu_x1");
-        Intent.ShowView a = sink.await(Intent.ShowView.class, v -> md(v).contains("A-first"), WAIT);
+        Intent.ShowView a = sink.await(Intent.ShowView.class, v -> tabOf(v, "toolu_x1"), WAIT);
         adapter.showSubagent("work", "conv-1", "toolu_x2");
-        Intent.ShowView b = sink.await(Intent.ShowView.class, v -> md(v).contains("B-first"), WAIT);
+        Intent.ShowView b = sink.await(Intent.ShowView.class, v -> tabOf(v, "toolu_x2"), WAIT);
+        assertThat(said("toolu_x1")).containsExactly("A-first");
+        assertThat(said("toolu_x2")).containsExactly("B-first");
         assertThat(a.title()).isEqualTo("agent · Review the diff");
         assertThat(b.title()).isEqualTo("agent · Review the diff (2)");
         assertThat(adapter.followedSubagents()).isEqualTo(2);
 
         grow("x1", "A-more");
 
-        Intent.RefreshView r = sink.await(Intent.RefreshView.class, x -> md(x).contains("A-more"), WAIT);
-        assertThat(r.title()).as("A's growth refreshes A's view, never B's").isEqualTo(a.title());
+        awaitSaid("toolu_x1", "A-more");
+        assertThat(said("toolu_x2")).as("A's growth goes to A's tab, never B's").containsExactly("B-first");
 
-        // the same sub-agent opened again keeps its title
+        // the same sub-agent opened again keeps its title, read again whole
+        int shownBefore = sink.of(Intent.ShowView.class).size();
         adapter.showSubagent("work", "conv-1", "toolu_x1");
-        assertThat(sink.await(Intent.ShowView.class, v -> md(v).contains("A-more"), WAIT).title()).isEqualTo(a.title());
+        assertThat(sink.await(Intent.ShowView.class, v -> tabOf(v, "toolu_x1") && sink.of(Intent.ShowView.class).size() > shownBefore, WAIT).title())
+                .isEqualTo(a.title());
+        assertThat(said("toolu_x1")).containsExactly("A-first", "A-more");
     }
 
     @Test
@@ -227,9 +261,9 @@ class SubagentViewTest {
         assertThat(adapter.followedSubagents()).isEqualTo(1);
 
         grow("d1", "second");
-        sink.await(Intent.RefreshView.class, r -> md(r).contains("second"), WAIT);
+        awaitSaid("toolu_d1", "second");
         within(Intent.RefreshView.class, r -> false, QUIET); // three more periods
-        assertThat(sink.of(Intent.RefreshView.class)).filteredOn(r -> md(r).contains("second")).hasSize(1);
+        assertThat(said("toolu_d1")).as("read once, by one follower").containsExactly("first", "second");
     }
 
     @Test

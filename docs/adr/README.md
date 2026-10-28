@@ -81,7 +81,7 @@ has the same shape:
 | [61](0061-the-kit-overrides-a-setup-of-the-users-own-with-consent.md) | The kit overrides a setup of the user's own, with the user's consent | 2026-10-18 | Miguel and Claude | replaced by [record 80](0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md); not built |
 | [62](0062-gradle-runs-by-convention.md) | Gradle runs by convention; no `tools.json` | 2026-10-18 | Miguel and Claude | accepted; the command amended by [record 80](0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md): the first `gradle-serial` on comando's `PATH`, else `./gradlew` |
 | [63](0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md) | A tab's menu closes many; a scratchpad's entries go to the Trash | 2026-10-18 | Miguel and Claude | accepted |
-| [64](0064-sub-agents-are-shown-live.md) | Subagents are shown live | 2026-10-18 | Miguel and Claude | accepted; following and large files amended on 2026-10-18 |
+| [64](0064-sub-agents-are-shown-live.md) | Subagents are shown live | 2026-10-18 | Miguel and Claude | accepted; following and large files amended on 2026-10-18; its view amended by [record 109](0109-a-sub-agent-is-a-session-tab.md) |
 | [65](0065-keys-on-desktops-other-than-macos.md) | Keys on desktops other than macOS | 2026-10-18 | Miguel and Claude | accepted |
 | [66](0066-the-reducer-is-watched-as-the-edt-is.md) | The reducer is watched as the EDT is | 2026-10-18 | Miguel and Claude | accepted; its watchdog thread shared with the EDT's by [record 82](0082-threads-by-kind-with-a-budget.md) |
 | [67](0067-reflect-measures-what-it-does-to-the-memory.md) | `/reflect` measures what it does to the memory | 2026-10-19 | Miguel and Claude | accepted; the row "cost" amended on 2026-10-25 |
@@ -104,14 +104,14 @@ has the same shape:
 | [84](0084-claude-shows-what-is-better-seen.md) | Claude shows what is better seen than read | 2026-10-21 | Miguel and Claude | proposed |
 | [85](0085-a-panel-rewritten-as-a-document.md) | A panel's text rewritten as a document, with one button | 2026-10-22 | Miguel and Claude | accepted; its place amended by [record 86](0086-a-checkpoint-clears-and-carries-its-summary.md) |
 | [86](0086-a-checkpoint-clears-and-carries-its-summary.md) | The Checkpoint button clears the conversation and carries its summary into the next prompt | 2026-10-25 | Miguel and Claude | accepted; its rule for which panel the rewrite acts on amended by [record 88](0088-a-session-and-its-panel-share-a-name.md) |
-| [87](0087-a-session-row-shows-the-tabs-card.md) | A session row shows the tab's card, with the session's details | 2026-10-25 | Miguel and Claude | accepted; its row's card panel amended by [record 88](0088-a-session-and-its-panel-share-a-name.md), its row by [record 89](0089-a-session-row-is-one-line.md), its card's status line and details by [record 90](0090-a-session-row-is-its-icon-and-name.md) |
+| [87](0087-a-session-row-shows-the-tabs-card.md) | A session row shows the tab's card, with the session's details | 2026-10-25 | Miguel and Claude | accepted; its row's card panel amended by [record 88](0088-a-session-and-its-panel-share-a-name.md), its row by [record 89](0089-a-session-row-is-one-line.md), its card's status line and details by [record 90](0090-a-session-row-is-its-icon-and-name.md), when its card shows by [record 107](0107-a-rows-card-opens-at-a-click.md) |
 | [88](0088-a-session-and-its-panel-share-a-name.md) | A session and its own panel share a name, and are one | 2026-10-25 | Miguel and Claude | accepted; its sidebar row amended by [record 89](0089-a-session-row-is-one-line.md) |
 | [89](0089-a-session-row-is-one-line.md) | A session row is one line, its state an icon | 2026-10-25 | Miguel and Claude | accepted; amended by [record 90](0090-a-session-row-is-its-icon-and-name.md) |
 | [90](0090-a-session-row-is-its-icon-and-name.md) | A session row is its icon and its name; the card says each fact once | 2026-10-25 | Miguel and Claude | accepted |
 | [91](0091-the-panels-tab-folds-into-the-sessions-tab.md) | The Panels tab folds into the Sessions tab | 2026-10-26 | Miguel and Claude | accepted |
-| [92](0092-a-connection-row-is-its-icon-and-name.md) | A connection row is its icon and its name, as a session's | 2026-10-26 | Miguel and Claude | accepted |
+| [92](0092-a-connection-row-is-its-icon-and-name.md) | A connection row is its icon and its name, as a session's | 2026-10-26 | Miguel and Claude | accepted; when its card shows amended by [record 107](0107-a-rows-card-opens-at-a-click.md) |
 | [93](0093-comando-is-dark-throughout.md) | comando is dark throughout | 2026-10-26 | Miguel and Claude | accepted |
-| [94](0094-links-in-both-styles-everywhere.md) | Links in both styles, followed everywhere at a double click | 2026-10-27 | Miguel and Claude | accepted |
+| [94](0094-links-in-both-styles-everywhere.md) | Links in both styles, followed everywhere at a double click | 2026-10-27 | Miguel and Claude | accepted; amended by [record 108](0108-links-in-every-card.md) |
 | [95](0095-the-files-tab-holds-no-code-repositories.md) | The Files tab holds no code repositories | 2026-10-27 | Miguel and Claude | accepted |
 | [96](0096-a-tint-chosen-in-actions.md) | A tint, chosen in Actions or beside Clear; the ground stays the transcript's; attention stays gold | 2026-10-27 | Miguel and Claude | accepted; the tint chosen apart replaced by [record 103](0103-curated-themes-in-actions.md) |
 | [97](0097-a-changed-files-trail-of-arrows.md) | A changed file's trail of arrows, as a new file's trail of dots | 2026-10-27 | Miguel and Claude | accepted |
@@ -124,3 +124,9 @@ has the same shape:
 | [104](0104-the-theme-beside-new-panel.md) | The theme beside New panel; Clear from the palette | 2026-10-27 | Miguel and Claude | accepted |
 | [105](0105-a-session-bar-under-the-lower-panel.md) | A session bar under the lower panel; the window's status bar holds the window's status | 2026-10-28 | Miguel and Claude | accepted |
 | [106](0106-settings-in-the-data-root.md) | comando's settings in the data root, as settings.json | 2026-10-28 | Miguel | accepted |
+| [107](0107-a-rows-card-opens-at-a-click.md) | A sidebar row's card opens at a click, beside the rows, and follows the pointer | 2026-10-28 | Miguel and Claude | accepted |
+| [108](0108-links-in-every-card.md) | Links in every card of the transcript, and file paths as links | 2026-10-28 | Miguel and Claude | accepted; where a file path opens amended by [record 111](0111-a-file-link-opens-as-the-files-tab-does.md) |
+| [109](0109-a-sub-agent-is-a-session-tab.md) | A sub-agent is a session tab, and the session card outlines its sub-agents | 2026-10-28 | Miguel and Claude | accepted |
+| [110](0110-metrics-for-calibration.md) | Metrics of turns, sub-agents and plan usage, kept for calibration | 2026-10-28 | Claude, on Miguel's ask | proposed |
+| [111](0111-a-file-link-opens-as-the-files-tab-does.md) | A file link opens as the Files tab opens a file, and is found where it was written from | 2026-10-28 | Miguel and Claude | accepted |
+| [112](0112-closing-gives-the-keyboard-back.md) | Closing a panel or view gives the keyboard back to what opened it | 2026-10-28 | Miguel and Claude | accepted |

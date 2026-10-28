@@ -8,6 +8,7 @@ import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
@@ -40,6 +41,7 @@ import java.awt.Component;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
@@ -62,6 +64,7 @@ import java.util.function.Function;
 import java.util.function.IntConsumer;
 import java.util.function.LongSupplier;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * The open panels as tabs, in state order; the selected tab is the focused panel, and a tab dragged along the row moves
@@ -496,12 +499,22 @@ public final class Workspace {
         return new SessionsSidebar.Cards() {
             @Override
             public void show(String session, JComponent over, Rectangle row) {
-                showSessionCard(session, over, row);
+                showSessionCard(session, over, row, -1);
+            }
+
+            @Override
+            public void show(String session, JComponent over, Rectangle row, int beside) {
+                showSessionCard(session, over, row, beside);
             }
 
             @Override
             public void showConnection(String connection, JComponent over, Rectangle row) {
-                showConnectionCard(connection, over, row);
+                showConnectionCard(connection, over, row, -1);
+            }
+
+            @Override
+            public void showConnection(String connection, JComponent over, Rectangle row, int beside) {
+                showConnectionCard(connection, over, row, beside);
             }
 
             @Override
@@ -510,29 +523,40 @@ public final class Workspace {
                     leave.restart();
                 }
             }
+
+            @Override
+            public void onClose(Consumer<Point> r) {
+                // a tab's card closing is not a row's
+                card.onHidden((over, at) -> {
+                    if (over != tabs) {
+                        r.accept(at);
+                    }
+                });
+            }
         };
     }
 
-    void showSessionCard(String session, JComponent over, Rectangle row) {
+    /** {@code session}'s card under {@code row}, or beside the rows from {@code beside} when it is not negative. */
+    void showSessionCard(String session, JComponent over, Rectangle row, int beside) {
         if (shown == null || shown.session(session).isEmpty()) {
             return;
         }
         leave.stop();
         Optional<EditorPanel> view = sessionPanel(session);
         String key = view.map(v -> v.panel().id().value()).orElse(SESSION_KEY + session);
-        card.show(key, over, row, factsOf(key), "", false, false);
+        card.show(key, over, row, beside, factsOf(key), "", false, false);
         card.tickets(view.map(v -> tickets(v.panel(), v)).orElse(List.of()));
         readTopic(key, false);
         updateCard(key);
     }
 
-    void showConnectionCard(String connection, JComponent over, Rectangle row) {
+    void showConnectionCard(String connection, JComponent over, Rectangle row, int beside) {
         if (shown == null || shown.connection(connection).isEmpty()) {
             return;
         }
         leave.stop();
         String key = CONNECTION_KEY + connection;
-        card.showFacts(key, over, row, factsOf(key));
+        card.showFacts(key, over, row, beside, factsOf(key));
     }
 
     /** The open panel a session's card is its card of: the focused one when it is the session's, else the first. */
@@ -752,6 +776,43 @@ public final class Workspace {
             muted = true;
         }
         card.update(factsOf(key), line, muted, reading);
+        String session = sessionOfCard(key);
+        card.agents(session.isEmpty() ? List.of() : delegation(session), id -> intents.dispatch(new Intent.OpenSubagent(session, id)));
+    }
+
+    /** The session a card is of: a headless session's, or its panel's; empty for a panel without one. */
+    private String sessionOfCard(String key) {
+        if (shown == null) {
+            return "";
+        }
+        if (key.startsWith(SESSION_KEY)) {
+            return key.substring(SESSION_KEY.length());
+        }
+        return shown.panel(new PanelId(key)).map(PanelState::session).orElse("");
+    }
+
+    /** The outline last read, of which session's transcript at which version, with which running background tasks. */
+    private String delegationOf = "";
+    private long delegationAt = -1;
+    private Set<String> delegationRunning = Set.of();
+    private List<Delegation.Line> delegation = List.of();
+
+    /** {@code session}'s sub-agents for its card (record 109), read from its transcript when it changed. */
+    private List<Delegation.Line> delegation(String session) {
+        Transcript t = transcripts.apply(session);
+        if (t == null) {
+            return List.of();
+        }
+        Set<String> running = shown.session(session).map(x -> x.tasks().stream()
+                .filter(task -> task.kind().equals("local_agent")).map(BackgroundTask::id)
+                .collect(Collectors.toSet())).orElse(Set.of());
+        if (!session.equals(delegationOf) || t.version() != delegationAt || !running.equals(delegationRunning)) {
+            delegationOf = session;
+            delegationAt = t.version();
+            delegationRunning = running;
+            delegation = Delegation.of(t, running);
+        }
+        return delegation;
     }
 
     /** The panel whose card shows, null when none, a headless session's or a connection's; for tests. */

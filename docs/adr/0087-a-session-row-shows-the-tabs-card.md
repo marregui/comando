@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-25 | accepted; its row's card panel amended by [record 88](0088-a-session-and-its-panel-share-a-name.md), its row by [record 89](0089-a-session-row-is-one-line.md), its card's status line and details by [record 90](0090-a-session-row-is-its-icon-and-name.md) | Miguel and Claude |
+| 2026-10-25 | accepted; its row's card panel amended by [record 88](0088-a-session-and-its-panel-share-a-name.md), its row by [record 89](0089-a-session-row-is-one-line.md), its card's status line and details by [record 90](0090-a-session-row-is-its-icon-and-name.md), when its card shows by [record 107](0107-a-rows-card-opens-at-a-click.md) | Miguel and Claude |
 
 ## 1. Context
 

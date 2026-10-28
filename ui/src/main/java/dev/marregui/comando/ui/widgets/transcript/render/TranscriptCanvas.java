@@ -518,6 +518,19 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         return byIndex.size();
     }
 
+    /** The link at {@code (x, y)}, in a card's header or in its text, as a double click there follows; null when none; for tests. */
+    String linkAt(int x, int y) {
+        int i = firstAt(y);
+        if (i < items.size() && y >= tops[i] && items.get(i).laidOut()) {
+            String header = items.get(i).headerLinkAt(x - PAD_X, y - tops[i]);
+            if (header != null) {
+                return header;
+            }
+        }
+        Placed p = boxAt(x, y, false);
+        return p == null || !p.contains(x, y) ? null : p.box().linkAt(x - p.x(), y - p.y());
+    }
+
     /** The item of the block at {@code index}; for tests. */
     Item itemAt(int index) {
         return byIndex.get(index);

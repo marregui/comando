@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-26 | accepted | Miguel and Claude |
+| 2026-10-26 | accepted; when its card shows amended by [record 107](0107-a-rows-card-opens-at-a-click.md) | Miguel and Claude |
 
 ## 1. Context
 

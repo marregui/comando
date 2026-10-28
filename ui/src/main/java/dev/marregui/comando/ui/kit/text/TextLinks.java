@@ -8,7 +8,7 @@ import java.util.regex.Pattern;
 
 /**
  * The links in plain text, wherever comando shows text: web addresses ({@code https://…}), wiki-style links
- * ({@code [[name]]}, {@link NoteLinks}), {@code path:line} references ({@link SourceLinks}) and, in text that is not
+ * ({@code [[name]]}, {@link NoteLinks}), {@code path:line} references and file paths ({@link SourceLinks}) and, in text that is not
  * Markdown already parsed, Markdown links ({@code [label](destination)}). One finder, so every surface sees the same
  * links.
  */

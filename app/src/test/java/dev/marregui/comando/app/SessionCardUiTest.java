@@ -5,6 +5,9 @@ import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.ConnectionState;
+import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.view.Placement;
+import dev.marregui.comando.core.view.ViewSpec;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
@@ -20,6 +23,7 @@ import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
+import java.awt.Point;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
@@ -34,9 +38,9 @@ import java.util.function.Predicate;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * The pointer resting on a session's row in the sidebar shows the card a tab shows, with the session's facts, in the
- * real window. Opens the window, so this runs in {@code ./gradlew :app:uiTest}; the card is painted to
- * {@code build/snapshots/session-card.png} to be looked at. A connection's row shows a card of its facts alone, painted to
+ * A click on a session's name in the sidebar shows the card a tab shows, with the session's facts, in the real window;
+ * the card then follows the pointer onto other names until it closes. Opens the window, so this runs in {@code ./gradlew :app:uiTest}; the card is painted to
+ * {@code build/snapshots/session-card.png} to be looked at. A click on a connection's name shows a card of its facts alone, painted to
  * {@code connection-card.png}.
  */
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
@@ -46,7 +50,7 @@ class SessionCardUiTest {
     Path home;
 
     @Test
-    void restingOnASessionRowShowsTheTabsCardWithTheSessionsDetails() throws Exception {
+    void aClickOnASessionsNameShowsTheTabsCardWhichFollowsThePointerOntoOtherNames() throws Exception {
         App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
                 "card", () -> {
         });
@@ -58,15 +62,24 @@ class SessionCardUiTest {
             Awaitility.await("the sessions").atMost(Duration.ofSeconds(5)).until(() -> sessions() != null);
             // a new session comes with its own panel (record 88)
             loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("work", home.toString())));
+            loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("other", home.toString())));
             JList<?> list = sessions();
-            Awaitility.await("the row").atMost(Duration.ofSeconds(10)).until(() -> onEdt(() -> list.getModel().getSize()) == 1);
+            Awaitility.await("the rows").atMost(Duration.ofSeconds(10)).until(() -> onEdt(() -> list.getModel().getSize()) == 2);
+            // by name: other above work
+            Point workName = onEdt(() -> name(list, rowOf(list, "work")));
+            Point otherName = onEdt(() -> name(list, rowOf(list, "other")));
 
-            SwingUtilities.invokeAndWait(() -> {
-                Rectangle row = list.getCellBounds(0, 0);
-                list.dispatchEvent(new MouseEvent(list, MouseEvent.MOUSE_MOVED, System.currentTimeMillis(), 0, row.x + 60, row.y + 6, 0, false));
-            });
+            mouse(list, MouseEvent.MOUSE_MOVED, workName, 0);
+            Awaitility.await("no card on resting").during(Duration.ofMillis(1200)).atMost(Duration.ofSeconds(3)).until(() -> card() == null);
+            mouse(list, MouseEvent.MOUSE_CLICKED, workName, 1);
             Awaitility.await("the card").atMost(Duration.ofSeconds(5)).until(() -> card() != null);
             JComponent card = card();
+            // beside the rows, its top at the row's, reaching back over the rows' last pixels: no name under it
+            Rectangle placed = onEdt(() -> SwingUtilities.convertRectangle(card.getParent(), card.getBounds(), list));
+            Rectangle workRow = onEdt(() -> list.getCellBounds(rowOf(list, "work"), rowOf(list, "work")));
+            assertThat(placed.y).as("its top at the row's").isBetween(workRow.y - 8, workRow.y);
+            assertThat(placed.x).as("over the list's last pixels, no gap").isLessThan(onEdt(() -> list.getVisibleRect().width));
+            assertThat(placed.contains(workName) || placed.contains(otherName)).as("no name under it").isFalse();
             // its title, the session's name, and its facts, each once (record 90)
             assertThat(onEdt(() -> first(JLabel.class, l -> "tab-card-title".equals(l.getName())).getText())).isEqualTo("work");
             List<String> facts = onEdt(() -> {
@@ -95,13 +108,70 @@ class SessionCardUiTest {
                 return b;
             });
             ImageIO.write(rows, "png", out.resolveSibling("session-rows.png").toFile());
+
+            // onto another name, across the state icons: its card, without a click
+            Point workIcon = onEdt(() -> new Point(workRow.x + 8, workRow.y + workRow.height / 2));
+            Point otherIcon = onEdt(() -> {
+                Rectangle r = list.getCellBounds(rowOf(list, "other"), rowOf(list, "other"));
+                return new Point(r.x + 8, r.y + r.height / 2);
+            });
+            mouse(list, MouseEvent.MOUSE_MOVED, workIcon, 0);
+            mouse(list, MouseEvent.MOUSE_MOVED, otherIcon, 0);
+            mouse(list, MouseEvent.MOUSE_MOVED, otherName, 0);
+            Awaitility.await("the card follows").atMost(Duration.ofSeconds(3)).until(() -> "other".equals(cardTitle()));
+
+            // out of the card onto another name: that name's card
+            mouse(list, MouseEvent.MOUSE_CLICKED, workName, 1);
+            Awaitility.await("work's card").atMost(Duration.ofSeconds(3)).until(() -> "work".equals(cardTitle()));
+            JComponent workCard = card();
+            leaveCard(workCard, list, otherName);
+            assertThat(card()).as("left, it closes").isNull();
+            mouse(list, MouseEvent.MOUSE_MOVED, otherName, 0);
+            Awaitility.await("and follows onto the name").atMost(Duration.ofSeconds(3)).until(() -> "other".equals(cardTitle()));
+
+            // out of its left edge, toward the scrollbar's side of the list: onto a row, so it follows
+            JComponent otherCard = card();
+            Point leftEdge = onEdt(() -> {
+                Point p = SwingUtilities.convertPoint(otherCard, new Point(-1, 5), list);
+                p.x = Math.min(p.x, list.getVisibleRect().width - 1);
+                return p;
+            });
+            leaveCard(otherCard, list, leftEdge);
+            mouse(list, MouseEvent.MOUSE_MOVED, leftEdge, 0);
+            Awaitility.await("still following").atMost(Duration.ofSeconds(3)).until(() -> cardTitle() != null);
+
+            // out of the card onto what is not a name: it closes and follows no more
+            JComponent shownCard = card();
+            SwingUtilities.invokeAndWait(() -> {
+                shownCard.dispatchEvent(new MouseEvent(shownCard, MouseEvent.MOUSE_ENTERED, 0, 0, 5, 5, 0, false));
+                shownCard.dispatchEvent(new MouseEvent(shownCard, MouseEvent.MOUSE_EXITED, 0, 0, shownCard.getWidth() + 40, 5, 0, false));
+            });
+            assertThat(card()).isNull();
+            mouse(list, MouseEvent.MOUSE_MOVED, workName, 0);
+            Awaitility.await("no card without a click").during(Duration.ofMillis(600)).atMost(Duration.ofSeconds(2)).until(() -> card() == null);
+
+            // its ✕ closes it, and it follows no more
+            mouse(list, MouseEvent.MOUSE_CLICKED, workName, 1);
+            Awaitility.await("work's card").atMost(Duration.ofSeconds(3)).until(() -> "work".equals(cardTitle()));
+            SwingUtilities.invokeAndWait(() -> first(javax.swing.JButton.class, b -> "tab-card-close".equals(b.getName()) && b.isShowing()).doClick());
+            assertThat(card()).isNull();
+            mouse(list, MouseEvent.MOUSE_MOVED, otherName, 0);
+            Awaitility.await("no card without a click").during(Duration.ofMillis(600)).atMost(Duration.ofSeconds(2)).until(() -> card() == null);
+
+            // a sub-agent's tab (record 109): in the lower panel, its own icon, its transcript and its state
+            loop.dispatch(new Intent.ShowView("", "agent · review", new ViewSpec.Agent("work", "toolu_1", "review", "Updating while the sub-agent runs."),
+                    Placement.LOWER));
+            Awaitility.await("the tab").atMost(Duration.ofSeconds(5)).until(() -> onEdt(() -> first(JLabel.class,
+                    l -> "agent-state".equals(l.getName()) && l.isShowing())) != null);
+            assertThat(onEdt(() -> first(JLabel.class, l -> "agent-state".equals(l.getName()) && l.isShowing()).getText()))
+                    .isEqualTo("Updating while the sub-agent runs.");
         } finally {
             app.close();
         }
     }
 
     @Test
-    void restingOnAConnectionRowShowsACardOfItsFactsWithoutASummary() throws Exception {
+    void aClickOnAConnectionsNameShowsACardOfItsFactsWithoutASummary() throws Exception {
         App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
                 "card", () -> {
         });
@@ -119,10 +189,7 @@ class SessionCardUiTest {
             Awaitility.await("the row").atMost(Duration.ofSeconds(10)).until(() -> onEdt(() -> rowOf(list, "live")) >= 0);
             int at = onEdt(() -> rowOf(list, "live"));
 
-            SwingUtilities.invokeAndWait(() -> {
-                Rectangle row = list.getCellBounds(at, at);
-                list.dispatchEvent(new MouseEvent(list, MouseEvent.MOUSE_MOVED, System.currentTimeMillis(), 0, row.x + 60, row.y + 6, 0, false));
-            });
+            mouse(list, MouseEvent.MOUSE_CLICKED, onEdt(() -> name(list, at)), 1);
             Awaitility.await("the card").atMost(Duration.ofSeconds(5)).until(() -> card() != null);
             JComponent card = card();
             assertThat(onEdt(() -> first(JLabel.class, l -> "tab-card-title".equals(l.getName())).getText())).isEqualTo("live");
@@ -157,14 +224,41 @@ class SessionCardUiTest {
         });
     }
 
-    /** The index of the connection named {@code name} in {@code list}, -1 while it is not there. */
+    /** The index of the connection or session named {@code name} in {@code list}, -1 while it is not there. */
     private static int rowOf(JList<?> list, String name) {
         for (int i = 0; i < list.getModel().getSize(); i++) {
-            if (list.getModel().getElementAt(i) instanceof ConnectionState c && c.name().equals(name)) {
+            Object o = list.getModel().getElementAt(i);
+            if (o instanceof ConnectionState c && c.name().equals(name) || o instanceof SessionState s && s.name().equals(name)) {
                 return i;
             }
         }
         return -1;
+    }
+
+    /** A point on the name of row {@code i}, clear of its controls. */
+    private static Point name(JList<?> list, int i) {
+        Rectangle row = list.getCellBounds(i, i);
+        return new Point(row.x + 60, row.y + 6);
+    }
+
+    /** A mouse event at {@code p} on {@code list}: a move, or a click of the first button. */
+    private static void mouse(JList<?> list, int id, Point p, int clicks) throws Exception {
+        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(new MouseEvent(list, id, System.currentTimeMillis(), 0, p.x, p.y, clicks, false,
+                clicks == 0 ? MouseEvent.NOBUTTON : MouseEvent.BUTTON1)));
+    }
+
+    /** The pointer goes into {@code card} and leaves it for {@code p} on {@code list}. */
+    private static void leaveCard(JComponent card, JList<?> list, Point p) throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            Point to = SwingUtilities.convertPoint(list, p, card);
+            card.dispatchEvent(new MouseEvent(card, MouseEvent.MOUSE_ENTERED, 0, 0, 5, 5, 0, false));
+            card.dispatchEvent(new MouseEvent(card, MouseEvent.MOUSE_EXITED, 0, 0, to.x, to.y, 0, false));
+        });
+    }
+
+    /** The title of the card shown, or null. */
+    private static String cardTitle() throws Exception {
+        return card() == null ? null : onEdt(() -> first(JLabel.class, l -> "tab-card-title".equals(l.getName()) && l.isShowing()).getText());
     }
 
     private static BufferedImage paint(JComponent c, int height) {

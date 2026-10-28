@@ -41,8 +41,8 @@ class TextLinksTest {
         String text = "read [the guide](docs/guide.md#setup) or [site](https://example.org), not ![pic](a.png)";
         assertThat(TextLinks.refs(text, true)).extracting(TextLinks.Ref::href)
                 .containsExactly("docs/guide.md#setup", "https://example.org");
-        assertThat(TextLinks.refs(text, false)).extracting(TextLinks.Ref::href).as("the address in it is still one")
-                .containsExactly("https://example.org");
+        assertThat(TextLinks.refs(text, false)).extracting(TextLinks.Ref::href).as("the address and the path in it are still ones")
+                .containsExactly(SourceLinks.SCHEME + "docs/guide.md", "https://example.org");
     }
 
     @Test

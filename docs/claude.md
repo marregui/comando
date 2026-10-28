@@ -186,6 +186,14 @@ of text and shown to 400 lines.
   folder (`docs/README.md`). A pinned view is never replaced.
 - **Audit.** Every tool call and approval decision is appended to `audit/audit-<UTC date>.jsonl` in the data root:
   time, session, event, tool, the arguments (clipped to 2 000 characters), the outcome. Never read back.
+- **Metrics.** What the sessions spend and how their work ends is appended to `metrics/metrics-<UTC date>.jsonl` in the
+  data root, one JSON object a line with `ts` and `event` ([record 110](adr/0110-metrics-for-calibration.md)): `turn`
+  at each `result` (model, base effort, duration and API time, model calls, the turn's `usage` and `modelUsage` as
+  Claude Code sends them, context and window, how it ended); `agent` at each sub-agent's end, live only (the Agent
+  call's type, description and model asked, the parent's model, background, status, start and duration, the tool calls
+  inside it at any depth, and its `spend` read from its own file: model calls, tokens by kind, models); `usage` at each
+  plan-usage read (provider, window, percent, reset). Money fields are kept as they arrive and shown nowhere. Read by
+  the kit's calibration, never by comando.
 
 ## 3. Approvals and safety
 

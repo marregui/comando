@@ -3,6 +3,7 @@ package dev.marregui.comando.claude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.BackgroundTask;
@@ -10,12 +11,14 @@ import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -41,6 +44,16 @@ final class StreamMapper {
     private final Map<String, Integer> streamIndex = new HashMap<>();
     private final Map<String, Integer> closedBlocks = new HashMap<>();
     private String lastModel = "";
+    /** The conversation's id, from its {@code system/init}: what a metric names. */
+    private String conversation = "";
+    /** Where the turns' and sub-agents' metrics go (record 110); nothing by default. */
+    private MetricsLog metrics = MetricsLog.NONE;
+    /** Hears a sub-agent's end, live: the adapter adds what its file says it spent, and keeps it. */
+    private Consumer<ObjectNode> agentEnds = e -> { };
+    /** When each live Agent call started, by its id; gone at its end. */
+    private final Map<String, Long> agentStarted = new ConcurrentHashMap<>();
+    /** While a stored conversation is read: nothing it says is a metric. */
+    private boolean replaying;
     /** The context size: input tokens of the last main-thread API call; -1 until one is seen. */
     private long contextTokens = -1;
     /** While a stored conversation is read: the message that ended its turn, until its last line is read; else null. */
@@ -98,6 +111,15 @@ final class StreamMapper {
      * {@code end_turn}), which gets a {@link Block.TurnEnd#stored()} after the message's last line.
      */
     void acceptHistory(String line) {
+        replaying = true;
+        try {
+            history(line);
+        } finally {
+            replaying = false;
+        }
+    }
+
+    private void history(String line) {
         JsonNode e = parse(line);
         if (e == null || e.path("isMeta").asBoolean(false)) {
             return;
@@ -242,6 +264,7 @@ final class StreamMapper {
                 String call = e.path("tool_use_id").asText("");
                 if (!call.isEmpty() && !e.path("status").asText("").equals("running")) {
                     endedAgents.add(call);
+                    agentEnded(call, e.path("status").asText("completed").equals("completed") ? "done" : "error", true);
                 }
                 sink.dispatch(new Intent.SessionActivity(session, "requesting"));
             }
@@ -284,6 +307,7 @@ final class StreamMapper {
             note(Block.NoteKind.INIT, "Model " + info.model() + " · Claude Code " + info.cliVersion() + " · " + info.permissionMode());
             lastModel = info.model();
         }
+        conversation = info.claudeSessionId();
         sink.dispatch(new Intent.SessionInit(session, info));
     }
 
@@ -314,6 +338,7 @@ final class StreamMapper {
                         int at = transcript.append(new Block.ToolCall(id, block.path("name").asText(), "{}", "", Block.ToolStatus.RUNNING, parent));
                         streamIndex.put(key, at);
                         toolIndex.put(id, at);
+                        agentStarts(id, block.path("name").asText());
                     }
                     default -> {
                         // server tool blocks and others appear in the final message
@@ -385,6 +410,7 @@ final class StreamMapper {
                     } else {
                         toolIndex.put(id, transcript.append(new Block.ToolCall(id, block.path("name").asText(), input, "",
                                 Block.ToolStatus.RUNNING, parent)));
+                        agentStarts(id, block.path("name").asText());
                     }
                 }
                 default -> {
@@ -467,7 +493,71 @@ final class StreamMapper {
         transcript.replace(at, call.withResult(clip(text, MAX_RESULT_CHARS), block.path("is_error").asBoolean(false)));
         if (call.isSubagent() && Block.ToolCall.launchedAgent(text).isEmpty()) {
             endedAgents.add(id); // a launch is no end: the background sub-agent's task notification ends it
+            agentEnded(id, block.path("is_error").asBoolean(false) ? "error" : "done", false);
         }
+    }
+
+    /** Where the metrics go, and who hears a sub-agent's end to add its spend (record 110). */
+    void metrics(MetricsLog log, Consumer<ObjectNode> onAgentEnd) {
+        metrics = log;
+        agentEnds = onAgentEnd;
+    }
+
+    private void agentStarts(String id, String tool) {
+        if (!replaying && (tool.equals("Agent") || tool.equals("Task"))) {
+            agentStarted.putIfAbsent(id, metrics.now());
+        }
+    }
+
+    /**
+     * A sub-agent ended, live: its {@code agent} event, with what its call asked for (type, model, description,
+     * background), how long it ran, how it ended, and the tool calls inside it at any depth. The adapter adds its spend.
+     */
+    private void agentEnded(String id, String status, boolean background) {
+        Long started = agentStarted.remove(id);
+        Integer at = toolIndex.get(id);
+        if (replaying || started == null || at == null || !(transcript.get(at) instanceof Block.ToolCall call)) {
+            return;
+        }
+        JsonNode in = parse(call.inputJson());
+        ObjectNode e = metrics.event("agent");
+        e.put("session", session);
+        e.put("conversation", conversation);
+        e.put("tool_use_id", id);
+        e.put("type", in == null ? "" : in.path("subagent_type").asText(""));
+        e.put("description", in == null ? "" : in.path("description").asText(""));
+        e.put("model_asked", in == null ? "" : in.path("model").asText(""));
+        e.put("parent_model", lastModel);
+        e.put("background", background || in != null && in.path("run_in_background").asBoolean(false));
+        e.put("status", status);
+        e.put("started", Instant.ofEpochMilli(started).toString());
+        e.put("duration_ms", metrics.now() - started);
+        e.put("tools", nestedTools(id));
+        agentEnds.accept(e);
+    }
+
+    /** The tool calls in the transcript that ran inside the call {@code id}, at any depth. */
+    private int nestedTools(String id) {
+        Map<String, String> parentOf = new HashMap<>();
+        List<String> calls = new ArrayList<>();
+        for (int i = 0; i < transcript.size(); i++) {
+            if (transcript.get(i) instanceof Block.ToolCall c) {
+                parentOf.put(c.toolUseId(), c.parent());
+                calls.add(c.toolUseId());
+            }
+        }
+        int n = 0;
+        for (String c : calls) {
+            String up = parentOf.getOrDefault(c, "");
+            for (int depth = 0; !up.isEmpty() && depth < 64; depth++) {
+                if (up.equals(id)) {
+                    n++;
+                    break;
+                }
+                up = parentOf.getOrDefault(up, "");
+            }
+        }
+        return n;
     }
 
     /** True when the sub-agent the Agent call {@code toolUseId} started has ended, as the stream told; any thread. */
@@ -495,6 +585,32 @@ final class StreamMapper {
         }
         sink.dispatch(new Intent.SessionTurnEnded(session, e.path("queued_turn_count").asInt(0), e.path("total_cost_usd").asDouble(),
                 tokens, window, error, message, error ? "" : e.path("result").asText("")));
+        turnMetric(e, tokens, window, error, subtype);
+    }
+
+    /**
+     * A turn ended: its {@code turn} event (record 110): the model and its base effort, how long it ran and called the
+     * API, how many model calls, the tokens it used, by model as Claude Code sums them, the context it ended with, and
+     * how it ended. The money field is kept as it arrives.
+     */
+    private void turnMetric(JsonNode e, long context, long window, boolean error, String subtype) {
+        ObjectNode m = metrics.event("turn");
+        m.put("session", session);
+        m.put("conversation", conversation);
+        m.put("model", lastModel);
+        m.put("effort", effortOf.apply(lastModel));
+        m.put("duration_ms", e.path("duration_ms").asLong());
+        m.put("api_ms", e.path("duration_api_ms").asLong());
+        m.put("calls", e.path("num_turns").asInt());
+        m.put("context", context);
+        m.put("window", window);
+        m.put("queued", e.path("queued_turn_count").asInt(0));
+        m.put("error", error);
+        m.put("subtype", subtype);
+        m.set("usage", e.path("usage").isObject() ? e.path("usage").deepCopy() : m.objectNode());
+        m.set("models", e.path("modelUsage").isObject() ? e.path("modelUsage").deepCopy() : m.objectNode());
+        m.put("cost_usd", e.path("total_cost_usd").asDouble());
+        metrics.write(m);
     }
 
     private static String errorText(JsonNode e) {

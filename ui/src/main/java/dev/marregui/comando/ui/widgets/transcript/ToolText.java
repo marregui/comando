@@ -2,6 +2,10 @@ package dev.marregui.comando.ui.widgets.transcript;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import dev.marregui.comando.core.view.Clip;
+import dev.marregui.comando.core.view.ViewSpec;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
 
 /** Reads a tool call's JSON input for display: its one-line summary and its values. */
 public final class ToolText {
@@ -24,6 +28,46 @@ public final class ToolText {
         } else if (!node.isNull() && !node.isMissingNode()) {
             out.append(node.asText()).append('\n');
         }
+    }
+
+    /**
+     * The link a call's summary opens (record 108): the file a file tool works on, the address a fetch reads, a skill's
+     * {@code SKILL.md} in the user's skills folder when it is there; empty when the call names none.
+     */
+    public static String target(String tool, JsonNode in) {
+        String path = switch (tool) {
+            case "Read", "Edit", "MultiEdit", "Write" -> in.path("file_path").asText("");
+            case "NotebookEdit" -> in.path("notebook_path").asText("");
+            default -> "";
+        };
+        if (!path.isBlank()) {
+            return ViewSpec.TreeNode.FILE_SCHEME + path.strip();
+        }
+        if (tool.equals("WebFetch")) {
+            String url = in.path("url").asText("").strip();
+            return url.regionMatches(true, 0, "http://", 0, 7) || url.regionMatches(true, 0, "https://", 0, 8) ? url : "";
+        }
+        if (tool.equals("Skill")) {
+            Path file = skillFile(in.path("skill").asText(in.path("command").asText("")).strip(), skillsRoot());
+            return file == null ? "" : ViewSpec.TreeNode.FILE_SCHEME + file;
+        }
+        return "";
+    }
+
+    /** The user's skills folder: Claude Code's configuration folder's {@code skills}. */
+    static Path skillsRoot() {
+        String config = System.getenv("CLAUDE_CONFIG_DIR");
+        return (config == null || config.isBlank() ? Path.of(System.getProperty("user.home"), ".claude") : Path.of(config)).resolve("skills");
+    }
+
+    /** {@code name}'s {@code SKILL.md} under {@code root}, null when it is not there or the name is a plugin's ({@code a:b}). */
+    static Path skillFile(String name, Path root) {
+        String bare = name.startsWith("/") ? name.substring(1) : name;
+        if (bare.isEmpty() || bare.startsWith(".") || !bare.matches("[\\w.\\-]+")) {
+            return null;
+        }
+        Path file = root.resolve(bare).resolve("SKILL.md");
+        return Files.isRegularFile(file) ? file : null;
     }
 
     public static String displayName(String tool) {

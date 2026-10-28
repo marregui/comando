@@ -42,7 +42,6 @@ import javax.swing.JScrollPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
-import javax.swing.ToolTipManager;
 import javax.swing.TransferHandler;
 import javax.swing.event.ListDataEvent;
 import javax.swing.event.ListDataListener;
@@ -111,9 +110,9 @@ public final class SessionsSidebar {
     }
 
     /**
-     * The card a session row shows in place of a tooltip, as a tab does: the workspace's. {@code show} puts it under
-     * {@code row}, a rectangle of {@code over}; {@code left} says the pointer left the row, so the card closes unless the
-     * pointer goes on into it.
+     * The card a session row shows in place of a tooltip: the workspace's, the one a tab shows. {@code show} puts it under
+     * {@code row}, a rectangle of {@code over}, or beside the rows with its left edge at {@code beside}, in the same
+     * coordinates; {@code left} says the pointer left the row, so the card closes unless the pointer goes on into it.
      */
     public interface Cards {
         Cards NONE = new Cards() {
@@ -128,11 +127,28 @@ public final class SessionsSidebar {
 
         void show(String session, JComponent over, Rectangle row);
 
+        /** As {@link #show(String, JComponent, Rectangle)}, beside the rows from {@code beside} when there is room. */
+        default void show(String session, JComponent over, Rectangle row, int beside) {
+            show(session, over, row);
+        }
+
         /** A connection row's card, of its facts alone (record 92). */
         default void showConnection(String connection, JComponent over, Rectangle row) {
         }
 
+        /** As {@link #showConnection(String, JComponent, Rectangle)}, beside the rows from {@code beside} when there is room. */
+        default void showConnection(String connection, JComponent over, Rectangle row, int beside) {
+            showConnection(connection, over, row);
+        }
+
         void left();
+
+        /**
+         * {@code r} hears a row's card close: with the point on the screen the pointer left the card for, or null when it
+         * closed otherwise (its ✕, a click on it, the pointer off its row).
+         */
+        default void onClose(Consumer<Point> r) {
+        }
     }
 
     /** The row the pointer rests on over its text: a session's, or a connection's. */
@@ -185,7 +201,22 @@ public final class SessionsSidebar {
     private Rest cardRow;
     /** Whether the card shown is a session row's, so leaving the rows tells it. */
     private boolean cardShown;
-    private final Timer cardWait = new Timer(ToolTipManager.sharedInstance().getInitialDelay(), e -> showCard());
+    /**
+     * A click on a row's name opened its card, which has not closed since: the pointer resting on another row's name
+     * shows that row's card, without a click.
+     */
+    private boolean following;
+    /**
+     * The wait before the card follows the pointer onto another row: long enough for the pointer to cross the next row's
+     * edge on its way into the card shown, which hangs just under its row.
+     */
+    static final int FOLLOW_MILLIS = 150;
+    /**
+     * How far the card beside the rows reaches back over them: the widest row's right padding, so the pointer leaving
+     * the card toward the names lands on a row, never on a gap between the two.
+     */
+    static final int OVERLAP = 4;
+    private final Timer cardWait = new Timer(FOLLOW_MILLIS, e -> showCard());
     private final TabStrip tabs = new TabStrip("Sidebar");
     /** Adds the window's own commands to a tab's menu, before Hide the sidebar. */
     private BiConsumer<Integer, JPopupMenu> moreForTab = (tab, menu) -> {
@@ -270,7 +301,10 @@ public final class SessionsSidebar {
                     if (e.getClickCount() == 1) {
                         act(s, control.get());
                     }
+                } else if (e.getClickCount() == 1) {
+                    openCard(new Rest(false, s.name()));
                 } else if (e.getClickCount() == 2) {
+                    leaveCard();
                     intents.dispatch(new Intent.OpenSession(s.name(), state.focused(), PanelId.random()));
                 }
             }
@@ -297,7 +331,7 @@ public final class SessionsSidebar {
 
             @Override
             public void mousePressed(MouseEvent e) {
-                // a press acts on the row, as a tooltip's would: no card until the pointer rests on another row
+                // a press acts on the row: its click decides the card
                 cardWait.stop();
                 popup(e);
             }
@@ -316,7 +350,7 @@ public final class SessionsSidebar {
                 SessionState s = at(sessions, e);
                 boolean onControl = s != null && control(s, e).isPresent();
                 sessions.setCursor(onControl ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
-                // over a row's text its card, as over a tab; over a control the control's own tip
+                // over a row's text its card, once a click opened one; over a control the control's own tip
                 restOn(s == null || onControl ? null : new Rest(false, s.name()));
             }
         });
@@ -331,7 +365,10 @@ public final class SessionsSidebar {
                     if (e.getClickCount() == 1) {
                         intents.dispatch(c.status().isUsable() ? new Intent.CloseConnection(c.name()) : new Intent.OpenConnection(c.name()));
                     }
+                } else if (e.getClickCount() == 1) {
+                    openCard(new Rest(true, c.name()));
                 } else if (e.getClickCount() == 2) {
+                    leaveCard();
                     intents.dispatch(new Intent.BindConnection(state.focused(), c.name()));
                 }
             }
@@ -343,7 +380,7 @@ public final class SessionsSidebar {
 
             @Override
             public void mousePressed(MouseEvent e) {
-                // a press acts on the row: no card until the pointer rests on another row
+                // a press acts on the row: its click decides the card
                 cardWait.stop();
                 popup(e);
             }
@@ -803,26 +840,76 @@ public final class SessionsSidebar {
     /** The workspace's card, which the session rows show in place of a tooltip. */
     public void cards(Cards c) {
         cards = c;
+        c.onClose(this::cardClosed);
+    }
+
+    /** A click on {@code row}'s name: its card shows now, and follows the pointer onto other rows' names until it closes. */
+    private void openCard(Rest row) {
+        following = true;
+        cardRow = row;
+        showCardNow();
+    }
+
+    /** The row acts (a double click): its card closes, as when the pointer leaves the row, and follows no more. */
+    private void leaveCard() {
+        following = false;
+        cardWait.stop();
+        if (cardShown) {
+            cardShown = false;
+            cards.left();
+        }
     }
 
     /**
-     * The pointer rests over {@code session}'s row text, or over no row's text when null: a new row starts the wait for
-     * its card; leaving the row whose card shows tells the card, which closes unless the pointer goes on into it.
+     * The pointer rests over {@code row}'s text, or over no row's text when null. While a card follows the pointer, a new
+     * row starts the wait for its card, which takes the place of the one shown; off every row's name, the card shown is
+     * told, and closes unless the pointer goes on into it.
      */
     private void restOn(Rest row) {
         if (Objects.equals(row, cardRow)) {
             return;
         }
         cardRow = row;
-        if (row == null) {
-            cardWait.stop();
-        } else {
+        if (row != null && following) {
             cardWait.restart();
+        } else {
+            cardWait.stop();
         }
-        if (cardShown) {
+        if (row == null && cardShown) {
             cardShown = false;
             cards.left();
         }
+    }
+
+    /**
+     * The row's card closed. Left by the pointer for {@code at}, a point on the screen over another row's name, it goes
+     * on following: that row's card shows after the wait. Closed any other way, a click opens the next.
+     */
+    private void cardClosed(Point at) {
+        cardShown = false;
+        cardRow = null;
+        cardWait.stop();
+        following = at != null && (nameAt(sessions, at) != null || nameAt(connections, at) != null);
+    }
+
+    /** The row whose name is at {@code screen}, a point on the screen, in {@code list}; null off its names. */
+    private Rest nameAt(JList<?> list, Point screen) {
+        if (!list.isShowing()) {
+            return null;
+        }
+        Point p = new Point(screen);
+        SwingUtilities.convertPointFromScreen(p, list);
+        int i = list.locationToIndex(p);
+        if (i < 0 || !list.getCellBounds(i, i).contains(p)) {
+            return null;
+        }
+        Rectangle cell = list.getCellBounds(i, i);
+        if (list == sessions) {
+            SessionState s = sessionModel.get(i);
+            return layOutRow(s, i).hit(cell, p).isPresent() ? null : new Rest(false, s.name());
+        }
+        ConnectionState c = connectionModel.get(i);
+        return layOutConnection(c, i).hit(cell, p) ? null : new Rest(true, c.name());
     }
 
     /** The wait is over: the card of the row the pointer rests on shows under the row. */
@@ -834,7 +921,7 @@ public final class SessionsSidebar {
             for (int i = 0; i < connectionModel.size(); i++) {
                 if (connectionModel.get(i).name().equals(cardRow.name())) {
                     cardShown = true;
-                    cards.showConnection(cardRow.name(), connections, connections.getCellBounds(i, i));
+                    cards.showConnection(cardRow.name(), connections, connections.getCellBounds(i, i), beside(connections));
                     return;
                 }
             }
@@ -843,13 +930,29 @@ public final class SessionsSidebar {
         for (int i = 0; i < sessionModel.size(); i++) {
             if (sessionModel.get(i).name().equals(cardRow.name())) {
                 cardShown = true;
-                cards.show(cardRow.name(), sessions, sessions.getCellBounds(i, i));
+                cards.show(cardRow.name(), sessions, sessions.getCellBounds(i, i), beside(sessions));
                 return;
             }
         }
     }
 
-    /** Shows the card of the row the pointer rests on now, without the wait; for tests. */
+    /**
+     * Where a card beside {@code list}'s rows starts, in its coordinates: after the widest row's icon, name and marks,
+     * reaching {@link #OVERLAP} back over them, and within the rows shown.
+     */
+    int beside(JList<?> list) {
+        int widest = 0;
+        for (int i = 0; i < list.getModel().getSize(); i++) {
+            IconRow r = list == sessions ? layOutRow(sessionModel.get(i), i) : layOutConnection(connectionModel.get(i), i);
+            widest = Math.max(widest, r.getPreferredSize().width);
+        }
+        // the rows shown; a list laid out in no window shows its whole width
+        Rectangle shown = list.getVisibleRect();
+        int right = shown.isEmpty() ? list.getWidth() : shown.x + shown.width;
+        return Math.max(0, Math.min(widest, right) - OVERLAP);
+    }
+
+    /** Shows the card of the row the pointer rests on now, without the wait. */
     void showCardNow() {
         cardWait.stop();
         showCard();
@@ -858,6 +961,11 @@ public final class SessionsSidebar {
     /** The name of the row whose card waits or shows, a session's or a connection's; for tests. */
     String cardRow() {
         return cardRow == null ? null : cardRow.name();
+    }
+
+    /** Whether the card follows the pointer onto other rows' names; for tests. */
+    boolean following() {
+        return following;
     }
 
     private static <T> void sync(DefaultListModel<T> model, List<T> items, JList<T> list) {

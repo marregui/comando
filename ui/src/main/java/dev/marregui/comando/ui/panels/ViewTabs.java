@@ -155,6 +155,7 @@ final class ViewTabs {
             case "diff" -> "diff";
             case "markdown" -> "markdown";
             case "tree" -> "tree";
+            case "agent" -> "agent";
             default -> "file";
         };
     }

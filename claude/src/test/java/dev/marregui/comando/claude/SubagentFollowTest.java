@@ -3,9 +3,12 @@ package dev.marregui.comando.claude;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.McpGateway;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingSink;
+import org.awaitility.Awaitility;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -17,6 +20,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Optional;
 import java.util.function.Predicate;
 
@@ -39,6 +44,7 @@ class SubagentFollowTest {
     @TempDir
     Path tmp;
     private final RecordingSink sink = new RecordingSink();
+    private final TranscriptRegistry transcripts = new TranscriptRegistry();
     private ClaudeAdapter adapter;
     private Path subagents;
 
@@ -51,7 +57,7 @@ class SubagentFollowTest {
             Files.write(exe, in.readAllBytes());
         }
         exe.toFile().setExecutable(true);
-        adapter = new ClaudeAdapter(sink, new TranscriptRegistry(), McpGateway.NONE,
+        adapter = new ClaudeAdapter(sink, transcripts, McpGateway.NONE,
                 new ClaudeSettings(exe.toString(), tmp.resolve("run"), projects, UiInstructions.TEXT));
         adapter.tailEveryMillis = PERIOD_MILLIS;
         adapter.start(SessionSpec.fresh("work", tmp.toString()));
@@ -84,17 +90,35 @@ class SubagentFollowTest {
         return "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"" + t + "\"}]}}";
     }
 
-    private static String md(Intent i) {
-        return ((ViewSpec.Markdown) (i instanceof Intent.ShowView v ? v.spec() : ((Intent.RefreshView) i).spec())).markdown();
+    /** What the sub-agent's tab says of its following (record 109). */
+    private static String state(Intent i) {
+        return ((ViewSpec.Agent) (i instanceof Intent.ShowView v ? v.spec() : ((Intent.RefreshView) i).spec())).state();
+    }
+
+    /** The texts in sub-agent {@code id}'s transcript, a paragraph each. */
+    private String said(String id) {
+        Transcript t = transcripts.of(TranscriptRegistry.subagentKey("work", id));
+        List<String> out = new ArrayList<>();
+        for (int i = 0; i < t.size(); i++) {
+            if (t.get(i) instanceof Block.AssistantText a) {
+                out.add(a.text());
+            }
+        }
+        return String.join("\n\n", out);
+    }
+
+    /** Waits until sub-agent {@code id}'s transcript holds {@code text}. */
+    private void awaitSaid(String id, String text) {
+        Awaitility.await("the tab shows " + text).atMost(WAIT).until(() -> said(id).contains(text));
     }
 
     private Intent.RefreshView refreshEndingWith(String footer) {
-        return sink.await(Intent.RefreshView.class, r -> md(r).strip().endsWith(footer), WAIT);
+        return sink.await(Intent.RefreshView.class, r -> state(r).equals(footer), WAIT);
     }
 
     /** Waits out {@link #QUIET}, failing if the view says in that time that it stopped being updated. */
     private void quiet() {
-        assertThat(within(Intent.RefreshView.class, r -> !md(r).strip().endsWith(ClaudeAdapter.FOLLOWING), QUIET))
+        assertThat(within(Intent.RefreshView.class, r -> !state(r).equals(ClaudeAdapter.FOLLOWING), QUIET))
                 .as("a stop during a quiet spell").isEmpty();
     }
 
@@ -113,19 +137,20 @@ class SubagentFollowTest {
 
         adapter.showSubagent("work", "conv-1", "fg");
         Intent.ShowView shown = sink.await(Intent.ShowView.class, WAIT);
-        assertThat(md(shown).strip()).startsWith("first step").endsWith(ClaudeAdapter.FOLLOWING);
+        assertThat(state(shown)).isEqualTo(ClaudeAdapter.FOLLOWING);
+        assertThat(((ViewSpec.Agent) shown.spec()).session()).as("a tab of the session that started it").isEqualTo("work");
+        assertThat(said("fg")).as("its conversation, as a transcript").startsWith("first step");
 
         quiet(); // a tool runs: the file does not grow
         assertThat(adapter.followedSubagents()).as("followed through a quiet spell").isEqualTo(1);
         grow("fg", "after the quiet");
-        Intent.RefreshView grown = sink.await(Intent.RefreshView.class, r -> md(r).contains("after the quiet"), WAIT);
-        assertThat(md(grown).strip()).endsWith(ClaudeAdapter.FOLLOWING);
+        awaitSaid("fg", "after the quiet");
 
         grow("fg", "last word");
         stream("done:fg");
 
-        Intent.RefreshView last = refreshEndingWith(ClaudeAdapter.ENDED);
-        assertThat(md(last)).contains("first step", "after the quiet", "last word").doesNotContain(ClaudeAdapter.FOLLOWING);
+        refreshEndingWith(ClaudeAdapter.ENDED);
+        assertThat(said("fg")).contains("first step", "after the quiet", "last word");
         assertThat(adapter.followedSubagents()).isZero();
     }
 
@@ -140,11 +165,12 @@ class SubagentFollowTest {
         quiet();
         assertThat(adapter.followedSubagents()).as("a launch is no end").isEqualTo(1);
         grow("bg", "working");
-        sink.await(Intent.RefreshView.class, r -> md(r).contains("working"), WAIT);
+        awaitSaid("bg", "working");
 
         stream("notify:bg");
 
-        assertThat(md(refreshEndingWith(ClaudeAdapter.ENDED))).contains("working");
+        refreshEndingWith(ClaudeAdapter.ENDED);
+        assertThat(said("bg")).contains("working");
         assertThat(adapter.followedSubagents()).isZero();
     }
 
@@ -163,7 +189,7 @@ class SubagentFollowTest {
     }
 
     @Test
-    void aSubagentThatEndedBeforeItsViewOpenedIsShownOnceWithoutTheFollowingLine() throws Exception {
+    void aSubagentThatEndedBeforeItsViewOpenedIsShownOnceAsEnded() throws Exception {
         stream("agent:early");
         stream("done:early");
         agent("early", "all of it");
@@ -171,7 +197,8 @@ class SubagentFollowTest {
         adapter.showSubagent("work", "conv-1", "early");
 
         Intent.ShowView shown = sink.await(Intent.ShowView.class, WAIT);
-        assertThat(md(shown)).contains("all of it").doesNotContain(ClaudeAdapter.FOLLOWING);
+        assertThat(state(shown)).isEqualTo(ClaudeAdapter.ENDED);
+        assertThat(said("early")).contains("all of it");
         assertThat(adapter.followedSubagents()).isZero();
     }
 

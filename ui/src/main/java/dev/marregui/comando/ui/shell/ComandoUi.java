@@ -9,6 +9,7 @@ import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.RepoStatus;
@@ -52,6 +53,7 @@ import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.EdtWatchdog;
 import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
+import dev.marregui.comando.ui.kit.desktop.FileSearch;
 import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
@@ -87,6 +89,7 @@ import dev.marregui.comando.ui.widgets.plot.PlotWidget;
 import dev.marregui.comando.ui.widgets.table.TableViewWidget;
 import dev.marregui.comando.ui.widgets.terminal.TerminalWidget;
 import dev.marregui.comando.ui.widgets.text.TextWidget;
+import dev.marregui.comando.ui.widgets.transcript.AgentWidget;
 import dev.marregui.comando.ui.widgets.tree.TreeWidget;
 
 import javax.swing.JComponent;
@@ -251,6 +254,13 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     private FocusAfterRender focusAfterRender;
+    /** Where the keyboard was when each panel and view opened, to give it back when it closes (record 112). */
+    private final FocusOrigins focusOrigins = new FocusOrigins();
+    /** The panel in front at the last render. */
+    private String renderedFront;
+    /** The component the keyboard goes back to once it shows, and how many renders it may wait; null when none. */
+    private Component focusBack;
+    private int focusBackRenders;
     /** The lower tab the last render showed. */
     private LowerTab renderedLowerTab = LowerTab.SESSION;
     static final long TYPING_PAUSE_MILLIS = 2_000;
@@ -302,6 +312,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         widgets.register("text", ViewSpec.Text.class, c -> new TextWidget());
         widgets.register("tree", ViewSpec.Tree.class, TreeWidget::new);
         widgets.register("console", ViewSpec.Console.class, c -> new ConsoleWidget(c, deps.consoles()));
+        widgets.register("agent", ViewSpec.Agent.class, c -> new AgentWidget(c, deps.transcripts()));
         widgets.register("changes", ViewSpec.Changes.class, c -> new ChangesWidget(c, repoChanges, this::openFile, new ChangesWidget.Actions() {
             // the comparison window drops its edits to a file rolled back or removed, and closes
             @Override
@@ -592,6 +603,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     private void render() {
         AppState s = deps.state().get();
+        // before the panes change: what just opened remembers where the keyboard was, what just closed gives it back
+        Component keyboard = focusOwnerInFrame();
+        Set<String> openNow = openKeys(s);
+        FocusOrigins.Origin back = focusOrigins.onRender(openNow, keyboard, keyOf(keyboard), renderedLowerTab, renderedFront,
+                o -> o.owner().isDisplayable() && (o.ownerKey() == null || openNow.contains(o.ownerKey())));
+        renderedFront = "panel:" + s.focused().value();
         livePlots.onState(s);
         sidebar.render(s);
         workspace.render(s);
@@ -631,6 +648,18 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             focusAfterRender = new FocusAfterRender(canvas, canvas::requestFocusInWindow);
         }
         renderedLowerTab = s.lowerTab();
+        if (back != null) {
+            giveKeyboardBack(back, s);
+        }
+        if (focusBack != null) {
+            if (focusBack.isShowing()) {
+                Component c = focusBack;
+                focusBack = null;
+                Edt.later(c::requestFocusInWindow);
+            } else if (--focusBackRenders <= 0) {
+                focusBack = null; // its tab was not brought forward: the keyboard does not jump there later
+            }
+        }
         if (focusAfterRender != null && focusAfterRender.shown().isShowing()) {
             Runnable focus = focusAfterRender.focus();
             focusAfterRender = null;
@@ -645,6 +674,53 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             frame.setTitle("comando — " + s.focusedPanel().title()
                     + (s.focusedPanel().session().isEmpty() ? "" : " · " + s.focusedPanel().session()));
         }
+    }
+
+    /** The panels and views open, as {@link FocusOrigins} keys them. */
+    private static Set<String> openKeys(AppState s) {
+        Set<String> keys = new HashSet<>();
+        s.panels().forEach(p -> keys.add("panel:" + p.id().value()));
+        s.views().forEach(v -> keys.add("view:" + v.id()));
+        return keys;
+    }
+
+    /** The panel or view that holds {@code c}, as {@link FocusOrigins} keys it; null outside both. */
+    private String keyOf(Component c) {
+        if (c == null) {
+            return null;
+        }
+        if (SwingUtilities.getAncestorOfClass(EditorPanel.class, c) instanceof EditorPanel p) {
+            return "panel:" + p.panel().id().value();
+        }
+        long view = lower.viewHolding(c);
+        if (view < 0) {
+            view = side.viewHolding(c);
+        }
+        return view < 0 ? null : "view:" + view;
+    }
+
+    /**
+     * Gives the keyboard back to where it was when the panel or view that held it opened (record 112): that panel comes
+     * forward, or that lower tab, and the component takes the keyboard once it shows.
+     */
+    private void giveKeyboardBack(FocusOrigins.Origin back, AppState s) {
+        String key = back.ownerKey();
+        if (key != null && key.startsWith("panel:")) {
+            PanelId id = new PanelId(key.substring("panel:".length()));
+            if (!s.focused().equals(id)) {
+                deps.intents().dispatch(new Intent.FocusPanel(id));
+            }
+        } else if (key != null && key.startsWith("view:")) {
+            long id = Long.parseLong(key.substring("view:".length()));
+            boolean lowerView = s.views().stream().anyMatch(v -> v.id() == id && v.placement() == Placement.LOWER);
+            if (lowerView && !s.lowerTab().equals(LowerTab.view(id))) {
+                deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.view(id)));
+            }
+        } else if (SwingUtilities.isDescendingFrom(back.owner(), lower.component()) && !s.lowerTab().equals(back.lowerTab())) {
+            deps.intents().dispatch(new Intent.SelectLowerTab(back.lowerTab()));
+        }
+        focusBack = back.owner();
+        focusBackRenders = 3;
     }
 
     private void showSidePane(boolean show) {
@@ -751,7 +827,13 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     public void showFile(String session, String path, String baseDir, int line) {
         UiErrands.start("show-file", () -> {
             try {
-                Path p = FileView.resolve(path, baseDir);
+                Path p = located(path, baseDir);
+                // a file named without a line opens as the Files tab opens it: in a panel, or its panel comes forward;
+                // a binary or large one, and one at a line, show in the side pane (record 111)
+                if (line <= 0 && Files.isRegularFile(p) && OpenFiles.isText(p)) {
+                    Edt.run(() -> openFile(p));
+                    return;
+                }
                 FileView file = FileView.read(p, line);
                 // a file opens on the user's click only: it shows even in a side pane the user hid earlier, and even when
                 // it replaces the same file's view in place
@@ -767,6 +849,25 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 deps.intents().dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot open " + path + ": " + why, e));
             }
         });
+    }
+
+    /**
+     * The file {@code path} names, read from {@code baseDir}; a relative one that is not there is looked for under that
+     * folder's tree, then under the Files tab's folders (record 111). Off the EDT.
+     */
+    private Path located(String path, String baseDir) {
+        Path p = FileView.resolve(path, baseDir);
+        if (Files.exists(p) || Path.of(HomeDir.expand(path)).isAbsolute()) {
+            return p;
+        }
+        List<Path> roots = new ArrayList<>();
+        if (baseDir != null && !baseDir.isBlank()) {
+            roots.add(Path.of(baseDir));
+        }
+        for (FolderRoot f : deps.state().get().folders()) {
+            roots.add(Path.of(HomeDir.expand(f.path())));
+        }
+        return FileSearch.bySuffix(path, roots).orElse(p);
     }
 
     @Override

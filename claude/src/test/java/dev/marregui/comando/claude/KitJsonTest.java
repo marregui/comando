@@ -64,6 +64,15 @@ class KitJsonTest {
     }
 
     @Test
+    void aFolderMayBeTheKitsWholeFolderButTheBrainMayNot(@TempDir Path tmp) throws Exception {
+        KitRoot.Manifest kit = KitJson.read(write(tmp, KIT_JSON.replace("\"BRAIN/MEMORY\"", "\".\"")));
+        assertThat(kit.folders()).extracting(FolderRoot::path).containsExactly("BRAIN/SCRATCHPAD", ".");
+        assertThat(tmp.resolve(kit.folders().get(1).path()).normalize()).as("the kit's folder itself").isEqualTo(tmp);
+        assertThatThrownBy(() -> KitJson.read(write(tmp, KIT_JSON.replace("\"brain\": \"BRAIN\"", "\"brain\": \".\""))))
+                .hasMessageContaining("brain is not a folder inside the root");
+    }
+
+    @Test
     void aFileThatBreaksTheSchemaIsRefused(@TempDir Path tmp) {
         assertThatThrownBy(() -> KitJson.read(write(tmp, "{\"kit\": 1, \"name\": \"x\""))).as("cut short").isInstanceOf(IOException.class);
         assertThatThrownBy(() -> KitJson.read(write(tmp, "[]"))).hasMessage("not a JSON object");

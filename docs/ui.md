@@ -50,7 +50,7 @@ the painted transcript. For a reader changing the `ui` module; the package layer
 | `RenderedMarkdown` | an `HtmlPane` padded in a scroll pane: a panel's preview, the comparison window's rendered sides, which `MarkdownHtml.Marks` shades where a comparison found changes |
 | `MermaidDiagrams` | Mermaid blocks drawn by `mmdc` into `cache/mermaid/`, once per diagram text, one at a time. A diagram or picture not ready yet stands as an element of its own, which the picture replaces when it arrives; the rest of the page is untouched. Without `mmdc`, no diagram is drawn |
 | `SourceLinks` | `path/File.java:42` becomes a link that opens the file at the line |
-| `TextLinks` | the one finder of links in plain text: web addresses, `[[name]]` notes, `path:line` references and, outside parsed Markdown, Markdown links |
+| `TextLinks` | the one finder of links in plain text: web addresses, `[[name]]` notes, `path:line` references, file paths with a folder (`docs/a.md`, `/tmp/b.log`, `~/c.md`) and, outside parsed Markdown, Markdown links |
 | `NoteLinks` | `[[name]]`, `[[name#heading]]` and `[[name\|label]]` as `comando-note:` links. `resolve` looks in the repository that holds the document, else in its folder, hidden folders left out: a file named `name` or `name.md`, then a Markdown file whose front matter says `name: <name>`, then the name with `-` and `_` swapped; the nearest wins; off the EDT |
 | `Links` (`kit/desktop`) | follows a link from any surface: a web address to the browser; a file or a note to the opener the shell installs (a panel); a note that names no file is told as a notice. A session's links are read from its working directory ([record 94](adr/0094-links-in-both-styles-everywhere.md)) |
 | `LocalLinks` | the file on this machine a link in a document names: the one reading of a link destination as a path |
@@ -194,7 +194,7 @@ flowchart LR
 |---|---|---|
 | Store | `Transcript` (`core.transcript`) | the session's blocks; one writer (the strand); appended or replaced by index, published through a volatile version |
 | Block | `UserPrompt`, `AssistantText`, `Thinking`, `ToolCall`, `Note`, `TurnEnd` | a block with a `parent` belongs to a subagent |
-| Paragraphs | `MarkdownDoc.parse` → `Para` of `Span` runs | headings, text, lists, quotes, code, tables, rules; `path:line` becomes a link |
+| Paragraphs | `MarkdownDoc.parse` → `Para` of `Span` runs | headings, text, lists, quotes, code, tables, rules; `path:line` and a file path become links, in code spans too |
 | Layout | `TextBox` | lines broken with `LineBreakMeasurer`, kept until the width or style changes |
 
 While text streams, paragraphs equal to earlier ones keep their layout; only the growing last one is laid out again.
@@ -238,8 +238,14 @@ every tint (`Theme.ATTENTION`), a status colour as red is for errors.
 `TranscriptWidget` loads the last 2 000 blocks, with a button for the 2 000 before; later blocks are appended. It
 follows the end until the user scrolls; a "↓ Latest" button returns, and sending a prompt follows again. Selection
 runs across blocks; ⌘⇧C copies it, or the loaded blocks, as Markdown. ⌘F opens the cards that hold matches and closes
-them again afterwards. A link is followed at a double click: a `path:line` link opens the file in the side pane; a web
-address, a `[[name]]` note or a Markdown link, in the text, a prompt or a tool's result, goes to `Links`.
+them again afterwards. A link is followed at a double click: a `path:line` link opens the file in the side pane at
+the line; a file path opens as the Files tab opens a file, in a panel, or brings forward the panel that has it (a binary
+or large file in the side pane), and a relative one that is not under the session's folder is looked for in that
+folder's tree, then in the Files tab's folders ([record 111](adr/0111-a-file-link-opens-as-the-files-tab-does.md)); a web address, a `[[name]]` note or a Markdown link goes to `Links`. Every text a card
+shows has its links: the prompt, the text, thinking, hook notes, a tool's result and what the call is given (a
+command, a delegation's prompt, the JSON of any other call); a card's summary links the file a file tool works on,
+whole even when the summary is clipped, the address a fetch reads, and a skill's `SKILL.md` in the user's skills
+folder ([record 108](adr/0108-links-in-every-card.md)).
 
 While a subagent runs, a strip above the transcript holds one chip per running top-level Agent card, foreground or
 background, in start order: a spinner, the description clipped to 28 characters, the elapsed time. Then comes one chip
@@ -250,15 +256,18 @@ names them. The strip hides when it is empty, and its timer runs only while it s
 end still does when the strip appears or goes. A card's counts are kept as blocks arrive, never by walking its blocks
 on a paint, and its times survive a rebuild of the tab (a session switch, "Show earlier").
 
-The "transcript" link in a subagent card's header (`subagent:<toolUseId>`) opens the subagent's stored conversation as
-a lower view, "agent · <description>": the task quoted, then the steps from the last 100 tool calls on, each text and
-each tool call one list item with its result clipped to 200 characters. When earlier steps are left out, the view says
-so under the task and ends with "100 of 340 tool calls shown" ([record 64](adr/0064-sub-agents-are-shown-live.md)). Two
-subagents with one description get "agent · <description>" and "agent · <description> (2)".
+The "transcript" link in a subagent card's header (`subagent:<toolUseId>`), and a line of the session card's
+sub-agents outline, open the subagent's stored conversation as a tab of its own in the lower panel, "agent ·
+<description>", with the agent icon ([record 109](adr/0109-a-sub-agent-is-a-session-tab.md)): the same transcript a
+session's Session tab shows (`AgentWidget` around a `TranscriptWidget`), its cards, links and strip, read from the
+subagent's own file (`SubagentFiles.Conversation` hands each whole line to a `StreamMapper` that reads it as a stored
+conversation's and tells the window nothing). Its transcript is kept under `TranscriptRegistry.subagentKey` and goes
+with its session. A nested subagent's link opens its own tab the same way. Two subagents with one description get
+"agent · <description>" and "agent · <description> (2)"; a file over 256 MB is read from its last 256 MB, and a note
+says so.
 
-While the subagent runs, the view is rendered again every 2 s in which its file grew, keeping the reader where it was,
-or at the end when it was at the end; its last line reads "Updating while the subagent runs.". When updates stop, the
-last line says why: the subagent ended, the session stopped, nothing was written for 10 min, or four newer views
+While the subagent runs, the lines its file gains are read every 2 s into the tab's transcript, which follows its end
+as a session's does; a line over it reads "Updating while the sub-agent runs.". When updates stop, the line says why: the subagent ended, the session stopped, nothing was written for 10 min, or four newer views
 follow it (the last two say the link follows it again). Any Markdown view replaced by another document starts at its
 top.
 

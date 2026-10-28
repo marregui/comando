@@ -54,6 +54,7 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -356,10 +357,14 @@ class SessionsSidebarTest {
     }
 
     @Test
-    void aSessionRowShowsTheWorkspacesCardOverItsTextAndTellsItWhenThePointerLeaves() throws Exception {
+    @SuppressWarnings("unchecked")
+    void aClickOnASessionsNameShowsItsCardWhichFollowsThePointerOntoOtherNamesUntilItCloses() throws Exception {
         List<String> told = new CopyOnWriteArrayList<>();
+        List<Consumer<Point>> closer = new CopyOnWriteArrayList<>();
+        List<Integer> beside = new CopyOnWriteArrayList<>();
         SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w/work")).withStatus(Status.OPEN, "");
-        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(work));
+        SessionState other = SessionState.closed(SessionSpec.fresh("other", "/w/other")).withStatus(Status.OPEN, "");
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "work")), List.of(), List.of(work, other));
         SessionsSidebar[] s = new SessionsSidebar[1];
         SwingUtilities.invokeAndWait(() -> {
             s[0] = new SessionsSidebar(intent -> {
@@ -368,37 +373,82 @@ class SessionsSidebarTest {
             s[0].cards(new SessionsSidebar.Cards() {
                 @Override
                 public void show(String session, JComponent over, Rectangle row) {
+                    throw new AssertionError("a row's card is placed beside the rows");
+                }
+
+                @Override
+                public void show(String session, JComponent over, Rectangle row, int at) {
                     told.add("show " + session + " " + row.y);
+                    beside.add(at);
                 }
 
                 @Override
                 public void left() {
                     told.add("left");
                 }
+
+                @Override
+                public void onClose(Consumer<Point> r) {
+                    closer.add(r);
+                }
             });
             s[0].render(state);
         });
         SessionsSidebar sidebar = s[0];
+        assertThat(closer).as("the sidebar hears the card close").hasSize(1);
         JList<?> list = find(sidebar.component(), JList.class, l -> "Sessions".equals(l.getAccessibleContext().getAccessibleName()));
         SwingUtilities.invokeAndWait(() -> {
             list.setSize(260, 400);
             list.doLayout();
         });
-        Rectangle row = cell(list, 0);
-        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_MOVED, row.x + 60, row.y + 6, 0)));
-        assertThat(sidebar.cardRow()).as("the wait for its card starts").isEqualTo("work");
+        int iWork = on(() -> rowIndex(list, "work"));
+        int iOther = on(() -> rowIndex(list, "other"));
+        Rectangle workRow = cell(list, iWork);
+        Rectangle otherRow = cell(list, iOther);
+        Rectangle workName = new Rectangle(workRow.x + 60, workRow.y + 6, 1, 1);
+        Rectangle otherName = new Rectangle(otherRow.x + 60, otherRow.y + 6, 1, 1);
+
+        click(list, workName, 0);
+        assertThat(told).as("resting on a name shows nothing").isEmpty();
+        assertThat(sidebar.following()).isFalse();
+        click(list, workName, 1);
+        assertThat(told).as("a click on the name shows its card, at once").containsExactly("show work " + workRow.y);
+        int widest = on(() -> {
+            int most = 0;
+            for (int i = 0; i < list.getModel().getSize(); i++) {
+                Component r = ((javax.swing.ListCellRenderer<Object>) list.getCellRenderer()).getListCellRendererComponent((JList<Object>) list,
+                        list.getModel().getElementAt(i), i, false, false);
+                most = Math.max(most, r.getPreferredSize().width);
+            }
+            return most;
+        });
+        assertThat(beside).as("beside the widest row's icon, name and marks, reaching back over its padding")
+                .containsExactly(widest - SessionsSidebar.OVERLAP);
+        assertThat(widest).as("short names: the card starts within the list").isLessThan(260);
+        assertThat(sidebar.following()).isTrue();
+
+        click(list, otherName, 0);
+        assertThat(sidebar.cardRow()).as("onto another name: its card waits the short follow").isEqualTo("other");
         SwingUtilities.invokeAndWait(sidebar::showCardNow);
-        assertThat(told).containsExactly("show work " + row.y);
+        assertThat(told).as("in place of the first, which is not told to close").containsExactly("show work " + workRow.y, "show other " + otherRow.y);
 
         Rectangle power = bounds(sidebar, SessionRow.Control.POWER);
-        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(event(list, power, 0)));
-        assertThat(told).as("onto a control: its own tip, the card told").containsExactly("show work " + row.y, "left");
-        assertThat(sidebar.cardRow()).isNull();
+        click(list, power, 0);
+        assertThat(told).as("onto a control: the card is told, and closes unless the pointer goes into it").endsWith("left");
+        SwingUtilities.invokeAndWait(() -> closer.getFirst().accept(null));
+        assertThat(sidebar.following()).as("closed off the names: it follows no more").isFalse();
+        click(list, workName, 0);
+        assertThat(sidebar.cardRow()).isEqualTo("work");
+        assertThat(told).as("back on a name: nothing without a click").hasSize(3);
 
-        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_MOVED, row.x + 60, row.y + 6, 0)));
-        SwingUtilities.invokeAndWait(sidebar::showCardNow);
-        SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_EXITED, row.x + 60, row.y + 6, 0)));
-        assertThat(told).as("off the list").endsWith("show work " + row.y, "left");
+        click(list, workName, 1);
+        click(list, workName, 2);
+        assertThat(told).as("a double click opens the session: its card closes").endsWith("show work " + workRow.y, "left");
+        assertThat(sidebar.following()).isFalse();
+
+        click(list, workName, 1);
+        SwingUtilities.invokeAndWait(() -> closer.getFirst().accept(null));
+        assertThat(sidebar.following()).as("closed by its ✕ or a click on it").isFalse();
     }
 
     private static List<String> itemTexts(JPopupMenu menu) {
@@ -742,9 +792,9 @@ class SessionsSidebarTest {
         assertThat(intents).last().as("a double click on the name binds it").isEqualTo(new Intent.BindConnection(new PanelId("p"), "local"));
 
         SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_MOVED, row.x + 80, row.y + 6, 0)));
-        assertThat(sidebar.cardRow()).isEqualTo("local");
-        SwingUtilities.invokeAndWait(sidebar::showCardNow);
-        assertThat(told).containsExactly("connection local " + row.y);
+        assertThat(told).as("resting on the name shows nothing").isEmpty();
+        click(list, new Rectangle(row.x + 80, row.y + 6, 1, 1), 1);
+        assertThat(told).as("a click on the name shows its card").containsExactly("connection local " + row.y);
         SwingUtilities.invokeAndWait(() -> list.dispatchEvent(event(list, icon[0], 0)));
         assertThat(told).as("onto the icon: its tip, the card told").containsExactly("connection local " + row.y, "left");
 
@@ -806,6 +856,16 @@ class SessionsSidebarTest {
             }
         });
         return out;
+    }
+
+    /** The index of the session row named {@code name}; on the EDT. */
+    private static int rowIndex(JList<?> list, String name) {
+        for (int i = 0; i < list.getModel().getSize(); i++) {
+            if (((SessionState) list.getModel().getElementAt(i)).name().equals(name)) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     private static Rectangle cell(JList<?> list, int index) throws Exception {

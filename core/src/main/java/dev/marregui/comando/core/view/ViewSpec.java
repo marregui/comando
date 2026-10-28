@@ -223,4 +223,23 @@ public sealed interface ViewSpec {
             return "console";
         }
     }
+
+    /**
+     * A sub-agent's conversation as a session of its own (record 109): its blocks live in the transcript store under
+     * {@link dev.marregui.comando.core.transcript.TranscriptRegistry#subagentKey}; {@code session} is the session that
+     * started it, whose folder its links are read from; {@code state} says whether it is followed, or why no longer.
+     */
+    record Agent(String session, String toolUseId, String description, String state) implements ViewSpec {
+        public Agent {
+            Objects.requireNonNull(session, "session");
+            Objects.requireNonNull(toolUseId, "toolUseId");
+            description = description == null ? "" : description;
+            state = state == null ? "" : state;
+        }
+
+        @Override
+        public String type() {
+            return "agent";
+        }
+    }
 }

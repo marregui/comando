@@ -76,13 +76,43 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     static final long TAIL_IDLE_MILLIS = 10 * 60_000;
     /** The idle backstop in force; tests shorten it. */
     long tailIdleMillis = TAIL_IDLE_MILLIS;
-    static final String FOLLOWING = "_Updating while the sub-agent runs._";
-    static final String ENDED = "_The sub-agent ended._";
-    static final String STOPPED_SESSION = "_Not updated any more: the session stopped._";
-    static final String STOPPED_IDLE = "_Not updated any more: the sub-agent wrote nothing for " + TAIL_IDLE_MILLIS / 60_000
-            + " min. The transcript link on its card follows it again._";
-    static final String STOPPED_TOO_MANY = "_Not updated any more: " + TAILS
-            + " newer sub-agent views follow theirs. The transcript link on its card follows it again._";
+    /** What a sub-agent's tab says of its following (record 109): its view's {@link ViewSpec.Agent#state()}. */
+    static final String FOLLOWING = "Updating while the sub-agent runs.";
+    static final String ENDED = "The sub-agent ended.";
+    static final String STOPPED_SESSION = "Not updated any more: the session stopped.";
+    static final String STOPPED_IDLE = "Not updated any more: the sub-agent wrote nothing for " + TAIL_IDLE_MILLIS / 60_000
+            + " min. The transcript link on its card follows it again.";
+    static final String STOPPED_TOO_MANY = "Not updated any more: " + TAILS
+            + " newer sub-agent views follow theirs. The transcript link on its card follows it again.";
+    /** Where the turns', sub-agents' and plan usage's metrics go (record 110); nothing until the app says. */
+    private volatile MetricsLog metrics = MetricsLog.NONE;
+
+    /** Keeps the metrics in {@code log}; called before the first session starts. */
+    public void metrics(MetricsLog log) {
+        metrics = log;
+    }
+
+    /**
+     * A sub-agent ended: its {@code agent} event gets what its own file says it spent (the models it ran on, its model
+     * calls and tokens), read on the sub-agent thread, then is written. Without its file, it is written as it is.
+     */
+    private void agentSpend(ObjectNode event) {
+        MetricsLog log = metrics;
+        try {
+            subagents.execute(() -> {
+                try {
+                    SubagentFiles.find(settings.projectsDir(), event.path("conversation").asText(""), event.path("tool_use_id").asText(""), json)
+                            .ifPresent(f -> event.set("spend", SubagentFiles.spend(f.transcript(), json)));
+                } catch (RuntimeException e) {
+                    LOG.log(System.Logger.Level.WARNING, "cannot read a sub-agent's spend: " + e.getMessage());
+                }
+                log.write(event);
+            });
+        } catch (RejectedExecutionException e) {
+            log.write(event);
+        }
+    }
+
     /** Reads sub-agent files and follows the open ones; a thread of its own, as a read can take a while. */
     private final ScheduledExecutorService subagents =
             Threads.timedStrand("subagent-tail");
@@ -153,6 +183,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             this.mapper = new StreamMapper(name, transcript, sink, json);
             // the CLI's own settings, beside its projects folder: the base effort the stream does not report
             this.mapper.effortFrom(model -> BaseEffort.base(settings.projectsDir().resolveSibling("settings.json"), model, json));
+            this.mapper.metrics(metrics, ClaudeAdapter.this::agentSpend);
             this.strand = Threads.strand("claude-strand-" + name);
         }
 
@@ -383,21 +414,38 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
 
     // ---- sub-agents, on their own thread
 
-    /** A sub-agent view that follows its file. */
+    /**
+     * A sub-agent's view, a session of its own (record 109): its file's lines, read as it grows, are mapped into its
+     * transcript as a stored conversation's are; the mapper tells the window nothing, the sub-agent being no session.
+     */
     private static final class Tail {
         final String session;
+        final String toolUseId;
         final String title;
+        final String description;
         final SubagentFiles.Found found;
         final SubagentFiles.Conversation conversation;
+        final Transcript transcript;
+        final StreamMapper mapper;
         long size;
         long grewAt;
         ScheduledFuture<?> future;
 
-        Tail(String session, String title, SubagentFiles.Found found, SubagentFiles.Conversation conversation) {
+        Tail(String session, String toolUseId, String title, String description, SubagentFiles.Found found,
+             SubagentFiles.Conversation conversation, Transcript transcript, StreamMapper mapper) {
             this.session = session;
+            this.toolUseId = toolUseId;
             this.title = title;
+            this.description = description;
             this.found = found;
             this.conversation = conversation;
+            this.transcript = transcript;
+            this.mapper = mapper;
+            conversation.onLine(mapper::acceptHistory);
+        }
+
+        ViewSpec.Agent spec(String state) {
+            return new ViewSpec.Agent(session, toolUseId, description, state);
         }
     }
 
@@ -409,17 +457,22 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         SubagentFiles.Found f = found.get();
         String description = f.description().isEmpty() ? toolUseId : f.description();
-        Tail t = new Tail(name, title(description, toolUseId), f, new SubagentFiles.Conversation(f.transcript(), json, SubagentFiles.SCAN_BYTES));
+        // opened again, it is read again from its start, into the same transcript
+        stopTail(toolUseId, null);
+        Transcript transcript = transcripts.of(TranscriptRegistry.subagentKey(name, toolUseId));
+        transcript.clear();
+        Tail t = new Tail(name, toolUseId, title(description, toolUseId), description,
+                f, new SubagentFiles.Conversation(f.transcript(), json, SubagentFiles.SCAN_BYTES),
+                transcript, new StreamMapper(name, transcript, intent -> { }, json));
         t.size = SubagentFiles.size(f.transcript());
         Session s = sessions.get(name);
         // a stopped session's sub-agents write no more
         boolean follow = s != null && s.live && !s.mapper.agentEnded(toolUseId) && !SubagentFiles.finished(f.meta(), json);
-        String markdown = renderSubagent(t, follow ? FOLLOWING : "");
-        if (markdown == null) {
+        if (!readSubagent(t, !follow)) {
             return;
         }
-        subagentSays(new Intent.ShowView("", t.title, new ViewSpec.Markdown(markdown), Placement.LOWER));
-        stopTail(toolUseId, null);
+        String state = follow ? FOLLOWING : s == null || !s.live ? STOPPED_SESSION : ENDED;
+        subagentSays(new Intent.ShowView("", t.title, t.spec(state), Placement.LOWER));
         if (!follow) {
             return;
         }
@@ -493,25 +546,34 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         if (size != t.size) {
             t.size = size;
             t.grewAt = now;
-            String markdown = renderSubagent(t, FOLLOWING);
-            if (markdown != null) {
-                subagentSays(new Intent.RefreshView(t.title, new ViewSpec.Markdown(markdown)));
-            }
+            readSubagent(t, false);
         } else if (now - t.grewAt >= TimeUnit.MILLISECONDS.toNanos(tailIdleMillis)) {
             stopTail(toolUseId, STOPPED_IDLE);
         }
     }
 
-    /** The conversation read up to now, as Markdown ending with {@code footer}; null, after a notice, when it cannot be read. */
-    private String renderSubagent(Tail t, String footer) {
+    /**
+     * Reads the lines the sub-agent's file gained into its transcript; at the {@code end}, a tool call still running gets
+     * no result any more. False, after a notice, when the file cannot be read.
+     */
+    private boolean readSubagent(Tail t, boolean end) {
+        boolean cut = t.conversation.cut();
         try {
             t.conversation.read();
-            return t.conversation.render(footer);
         } catch (IOException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read " + t.found.transcript() + ": " + e.getMessage());
             subagentSays(new Intent.Notify(Notice.Level.WARN, "Session " + t.session + ": cannot read the sub-agent's transcript", false));
-            return null;
+            return false;
         }
+        if (!cut && t.conversation.cut()) {
+            t.mapper.note(Block.NoteKind.INFO, "The conversation is longer than " + SubagentFiles.SCAN_BYTES / (1024 * 1024)
+                    + " MB: only its last " + SubagentFiles.SCAN_BYTES / (1024 * 1024) + " MB are read");
+        }
+        if (end) {
+            t.mapper.endRunningTools();
+        }
+        t.transcript.changed();
+        return true;
     }
 
     /** Stops following {@code toolUseId}; with a {@code reason}, its view is rendered a last time ending with it. */
@@ -523,11 +585,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         if (t.future != null) {
             t.future.cancel(false);
         }
-        if (reason != null) {
-            String markdown = renderSubagent(t, reason);
-            if (markdown != null) {
-                subagentSays(new Intent.RefreshView(t.title, new ViewSpec.Markdown(markdown)));
-            }
+        if (reason != null && readSubagent(t, reason.equals(ENDED) || reason.equals(STOPPED_SESSION))) {
+            subagentSays(new Intent.RefreshView(t.title, t.spec(reason)));
         }
     }
 
@@ -775,6 +834,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 if (!closed) {
                     sink.dispatch(new Intent.PlanUsageRead(usage));
                 }
+                usageMetrics(usage);
                 PlanUsage codexUsage = CodexUsageReader.read(codex, json, CodexUsageReader.TIMEOUT, ZoneId.systemDefault());
                 // logged when it changes: without Codex installed, every read fails the same way
                 if (!codexUsage.problem().isEmpty() && !codexUsage.problem().equals(lastCodexProblem)) {
@@ -784,10 +844,27 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 if (!closed) {
                     sink.dispatch(new Intent.PlanUsageRead(codexUsage));
                 }
+                usageMetrics(codexUsage);
             } catch (RuntimeException e) {
                 LOG.log(System.Logger.Level.ERROR, "plan usage read failed", e);
             }
         }, 0, every.toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    /** A plan's usage read: a {@code usage} event per window (record 110); a read that failed says nothing. */
+    private void usageMetrics(PlanUsage usage) {
+        if (!usage.problem().isEmpty()) {
+            return;
+        }
+        MetricsLog log = metrics;
+        for (PlanUsage.Window w : usage.windows()) {
+            ObjectNode e = log.event("usage");
+            e.put("provider", usage.provider());
+            e.put("window", w.name());
+            e.put("pct", w.percent());
+            e.put("resets", w.resets());
+            log.write(e);
+        }
     }
 
     /** Stops every process (SIGTERM, then kill) and the strands. Idempotent. */

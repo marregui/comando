@@ -304,7 +304,7 @@ final class Items {
                 List<TextBox> boxes = new ArrayList<>(lines.size());
                 for (int i = 0; i < lines.size(); i++) {
                     boolean same = built == s && i < bodyLines.size() && bodyLines.get(i).equals(lines.get(i));
-                    boxes.add(same ? body.get(i) : new TextBox(new Rich(s.italic, s.outside).append(lines.get(i))));
+                    boxes.add(same ? body.get(i) : new TextBox(new Rich(s.italic, s.outside).append(lines.get(i)).linked(s.link)));
                 }
                 body = boxes;
                 bodyLines = lines;
@@ -676,7 +676,14 @@ final class Items {
                     t.append("transcript", s.small, s.link, null, true, false).link(at, t.length(), TranscriptCanvas.SUBAGENT_SCHEME + c.toolUseId());
                 }
                 if (!summary.isEmpty()) {
+                    int at = t.length() + 3;
                     t.append("   " + summary, s.body, s.muted);
+                    // the summary names what the call works on: the file or address, whole even when the summary is
+                    // clipped; a skill, its SKILL.md where it is found (record 108)
+                    String target = ToolText.target(c.name(), in);
+                    if (!target.isEmpty()) {
+                        t.link(at, t.length(), target, s.link);
+                    }
                 }
                 title = new TextBox(t).noWrap();
                 input = new TextBox(inputRich(c, in, s));
@@ -728,10 +735,11 @@ final class Items {
                 return diff(diff, s);
             }
             return switch (c.name()) {
-                case "Bash" -> new Rich(s.monoSmall, s.accent).append("$ " + in.path("command").asText(""));
-                case "Agent", "Task" -> new Rich(s.monoSmall, s.text).append(in.path("prompt").asText(""));
+                // what the call is given names files and addresses as its result does: links (record 108)
+                case "Bash" -> new Rich(s.monoSmall, s.accent).append("$ " + in.path("command").asText("")).linked(s.link);
+                case "Agent", "Task" -> new Rich(s.monoSmall, s.text).append(in.path("prompt").asText("")).linked(s.link);
                 default -> in.isObject() && !in.isEmpty()
-                        ? new Rich(s.monoSmall, s.text).append(clipLines(Json.pretty(in), MAX_INPUT_LINES))
+                        ? new Rich(s.monoSmall, s.text).append(clipLines(Json.pretty(in), MAX_INPUT_LINES)).linked(s.link)
                         : new Rich(s.monoSmall, s.text);
             };
         }
@@ -1062,8 +1070,8 @@ final class Items {
                 String t = shown();
                 int eol = t.indexOf('\n');
                 more = eol >= 0;
-                line = new TextBox(new Rich(s.small, color).append(more ? t.substring(0, eol) : t)).noWrap();
-                full = new TextBox(new Rich(s.small, color).append(clipLines(t, MAX_RESULT_LINES)));
+                line = new TextBox(new Rich(s.small, color).append(more ? t.substring(0, eol) : t).linked(s.link)).noWrap();
+                full = new TextBox(new Rich(s.small, color).append(clipLines(t, MAX_RESULT_LINES)).linked(s.link));
                 lineWidth = line.naturalWidth();
                 arrowOpen = new TextLayout("▾", s.small, Style.FRC);
                 arrowClosed = new TextLayout("▸", s.small, Style.FRC);

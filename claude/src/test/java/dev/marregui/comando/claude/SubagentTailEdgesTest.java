@@ -5,6 +5,8 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.McpGateway;
+import dev.marregui.comando.core.transcript.Block;
+import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.testkit.RecordingSink;
@@ -34,6 +36,7 @@ class SubagentTailEdgesTest {
     Path tmp;
     private final ObjectMapper json = new ObjectMapper();
     private final RecordingSink sink = new RecordingSink();
+    private final TranscriptRegistry transcripts = new TranscriptRegistry();
     private ClaudeAdapter adapter;
     private Path subagents;
 
@@ -46,7 +49,7 @@ class SubagentTailEdgesTest {
             Files.write(exe, in.readAllBytes());
         }
         exe.toFile().setExecutable(true);
-        adapter = new ClaudeAdapter(sink, new TranscriptRegistry(), McpGateway.NONE,
+        adapter = new ClaudeAdapter(sink, transcripts, McpGateway.NONE,
                 new ClaudeSettings(exe.toString(), tmp.resolve("run"), projects, UiInstructions.TEXT));
         adapter.tailEveryMillis = 100; // the app's 2 s period, shortened so the suite does not wait it out
     }
@@ -71,8 +74,19 @@ class SubagentTailEdgesTest {
         return "{\"type\":\"assistant\",\"message\":{\"role\":\"assistant\",\"content\":[{\"type\":\"text\",\"text\":\"" + t + "\"}]}}";
     }
 
+    /** The sub-agent tab shown whose transcript holds {@code marker} (record 109). */
     private Intent.ShowView shownWith(String marker) {
-        return sink.await(Intent.ShowView.class, v -> ((ViewSpec.Markdown) v.spec()).markdown().contains(marker), WAIT);
+        return sink.await(Intent.ShowView.class, v -> v.spec() instanceof ViewSpec.Agent a && says(a, marker), WAIT);
+    }
+
+    private boolean says(ViewSpec.Agent a, String marker) {
+        Transcript t = transcripts.of(TranscriptRegistry.subagentKey(a.session(), a.toolUseId()));
+        for (int i = 0; i < t.size(); i++) {
+            if (t.get(i) instanceof Block.AssistantText x && x.text().contains(marker)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     // ---- the cut, with CRLF lines

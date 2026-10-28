@@ -3,6 +3,7 @@ package dev.marregui.comando.app;
 import dev.marregui.comando.claude.ClaudeAdapter;
 import dev.marregui.comando.claude.RootLaunch;
 import dev.marregui.comando.claude.ClaudeSettings;
+import dev.marregui.comando.claude.MetricsLog;
 import dev.marregui.comando.claude.ClaudeTopics;
 import dev.marregui.comando.claude.ClaudeVersion;
 import dev.marregui.comando.claude.SessionCatalogue;
@@ -133,6 +134,7 @@ public final class App implements AutoCloseable {
             }
             claude = own(new ClaudeAdapter(loop, transcripts, mcp,
                     new ClaudeSettings(config.claudeExecutable(), config.runDir(), root.projects(), UiInstructions.TEXT, launch)));
+            claude.metrics(new MetricsLog(config.metricsDir()));
             ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
             tools = devTools;
             EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);

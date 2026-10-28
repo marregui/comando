@@ -380,6 +380,40 @@ class TranscriptCanvasTest {
     }
 
     @Test
+    void aToolCardsSummaryAndInputAreLinksADoubleClickFollows() {
+        canvas.append(0, new Block.ToolCall("r", "Read", "{\"file_path\":\"/w/docs/very/long/folder/names/that/run/past/the/summary/limit/of/one/hundred/and/forty/characters/to/be/clipped/plan.md\"}",
+                "", Block.ToolStatus.DONE, ""));
+        canvas.append(1, new Block.ToolCall("b", "Bash", "{\"command\":\"cat docs/adr/0108-links.md https://example.org/a\"}", "ok", Block.ToolStatus.DONE, ""));
+        canvas.append(2, new Block.ToolCall("a", "Agent", "{\"description\":\"review\",\"prompt\":\"Read ~/notes/brief.md first\"}", "", Block.ToolStatus.DONE, ""));
+        canvas.append(3, new Block.ToolCall("s", "Skill", "{\"skill\":\"deep\",\"args\":\"see /tmp/spec.md\"}", "", Block.ToolStatus.DONE, ""));
+        for (int i = 1; i <= 3; i++) {
+            if (!canvas.itemAt(i).fold().isOpen()) {
+                canvas.itemAt(i).toggle();
+            }
+        }
+        paint(900, 200);
+        java.util.Set<String> found = new java.util.LinkedHashSet<>();
+        int[] input = null;
+        for (int y = 0; y < canvas.contentHeight(); y += 2) {
+            for (int x = 0; x < 900; x += 3) {
+                String link = canvas.linkAt(x, y);
+                if (link != null && found.add(link) && link.equals("comando-file:docs/adr/0108-links.md")) {
+                    input = new int[]{x + 2, y};
+                }
+            }
+        }
+        assertThat(found).as("the file a call reads, whole though its summary is clipped; paths and addresses in what calls are given")
+                .contains("comando-file:/w/docs/very/long/folder/names/that/run/past/the/summary/limit/of/one/hundred/and/forty/characters/to/be/clipped/plan.md",
+                        "comando-file:docs/adr/0108-links.md", "https://example.org/a", "comando-file:~/notes/brief.md", "comando-file:/tmp/spec.md");
+        assertThat(input).isNotNull();
+        for (int clicks = 1; clicks <= 2; clicks++) {
+            canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_PRESSED, 0L, InputEvent.BUTTON1_DOWN_MASK, input[0], input[1], clicks, false, MouseEvent.BUTTON1));
+            canvas.dispatchEvent(new MouseEvent(canvas, MouseEvent.MOUSE_RELEASED, 0L, 0, input[0], input[1], clicks, false, MouseEvent.BUTTON1));
+        }
+        assertThat(opened).as("a double click on a path in a command opens it").containsExactly("comando-file:docs/adr/0108-links.md");
+    }
+
+    @Test
     void aToolsResultShowsItsLinks() {
         Rich r = new Rich(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12), Color.GRAY)
                 .append("wrote /tmp/x.md\nsee https://example.org/y, [[notes]] and [guide](docs/guide.md)").linked(Color.BLUE);

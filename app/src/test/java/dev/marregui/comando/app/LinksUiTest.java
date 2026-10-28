@@ -1,6 +1,9 @@
 package dev.marregui.comando.app;
 
+import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.desktop.Links;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
@@ -101,6 +104,46 @@ class LinksUiTest {
             assertThat(browsed).containsExactly("https://example.org/guide");
         } finally {
             Links.browseWith(Browser::open);
+            app.close();
+        }
+    }
+
+    /**
+     * A file link without a line, followed as a double click in the transcript follows it (record 111): written relative
+     * to a folder deep under the session's, it is found there and opens as the Files tab opens a file, in a panel; a
+     * second follow brings that panel forward instead of opening another.
+     */
+    @Test
+    void aFileLinkWithoutALineIsFoundUnderTheSessionsFolderAndOpensInAPanelAsTheFilesTabOpensIt() throws Exception {
+        Path work = Files.createDirectories(home.resolve("work"));
+        Path doc = work.resolve("BRAIN/SCRATCHPAD/2026-10-28/harness/07-fleet-vision.md");
+        Files.createDirectories(doc.getParent());
+        Files.writeString(doc, "# Fleet vision\n");
+        App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+                "links", () -> {
+        });
+        try {
+            app.start();
+            StateLoop loop = app.loop();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null);
+            loop.dispatch(new Intent.SaveSession("", SessionSpec.fresh("lane", work.toString())));
+            Awaitility.await("the session").atMost(Duration.ofSeconds(10)).until(() -> loop.state().session("lane").isPresent());
+            int before = loop.state().panels().size();
+
+            loop.dispatch(new Intent.OpenFile("lane", "harness/07-fleet-vision.md", 0));
+
+            Awaitility.await("a panel of the file").atMost(Duration.ofSeconds(10))
+                    .until(() -> loop.state().panels().stream().anyMatch(p -> p.title().equals("07-fleet-vision.md")));
+            PanelState panel = loop.state().panels().stream().filter(p -> p.title().equals("07-fleet-vision.md")).findFirst().orElseThrow();
+            assertThat(loop.state().views()).as("not a side view").noneMatch(v -> v.title().contains("07-fleet-vision"));
+            Awaitility.await("in front").atMost(Duration.ofSeconds(5)).until(() -> loop.state().focused().equals(panel.id()));
+
+            int after = loop.state().panels().size();
+            assertThat(after).isEqualTo(before + 1);
+            loop.dispatch(new Intent.OpenFile("lane", "harness/07-fleet-vision.md", 0));
+            Awaitility.await("followed again: the same panel").during(Duration.ofMillis(800)).atMost(Duration.ofSeconds(3))
+                    .until(() -> loop.state().panels().size() == after);
+        } finally {
             app.close();
         }
     }

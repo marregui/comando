@@ -59,10 +59,16 @@ Any number of document panels may be attached to a session
 - **Restore layout** (palette) puts the sidebar, side pane and lower divider back as they were before a session
   arranged them; it is greyed out while nothing was arranged.
 - **Moving** a tab: drag it along the row; a line marks where it lands. The order is saved and kept across restarts.
+- **Closing gives the keyboard back.** A panel or view remembers where the keyboard was when it opened: a panel, a
+  view, the Files tab, the transcript. When the one the keyboard is in, or the panel in front, closes, that opener
+  comes forward (its panel, its lower tab) and takes the keyboard back, so openings chain: A opens B, B opens C;
+  closing C returns to B, closing B to A. An opener closed meanwhile hands on to its own opener
+  ([record 112](adr/0112-closing-gives-the-keyboard-back.md)).
 - **HTML files** open as text, to edit; the Browser button opens the page in the desktop's browser
   ([record 56](adr/0056-html-opens-in-the-browser-not-in-comando.md)).
-- **Links**, wherever text shows (a rendered page, a panel's text, the transcript, a tool's result, a tab's card), are
-  followed at a double click; a single click follows nothing ([record 94](adr/0094-links-in-both-styles-everywhere.md)).
+- **Links**, wherever text shows (a rendered page, a panel's text, the transcript, every card in it: a command, a skill's
+  or a tool's input, a delegation's prompt, a tool's result, a tab's card), are followed at a double click
+  ([record 108](adr/0108-links-in-every-card.md)); a single click follows nothing ([record 94](adr/0094-links-in-both-styles-everywhere.md)).
   A web address, written as a link or bare, opens in the browser. A link to a file, beside the document or by its full
   path, opens that file in a panel, or brings forward the panel that has it. A note link, `[[name]]`, opens the file
   it names, found in the document's git repository (else its folder): a file named `name` or `name.md`, then a
@@ -170,12 +176,18 @@ has the focus. Marks follow the name: a gold ↑ when the session runs an older 
 (each start runs the CLI installed then; start it again to use the newer), the context in purple once its checkpoint
 is due, and ⚑ with the count of approvals waiting. A double click on the row opens its panel.
 
-Resting the pointer on the row's name shows the card the panel tabs show
+A click on the row's name shows the card the panel tabs show
 ([record 87](adr/0087-a-session-row-shows-the-tabs-card.md)): the card of the session's panel (the focused panel when it
 is the session's, else its own), or, for a session with no panel open, a card of its own whose summary is read from the
 end of its conversation. Its title is set in the headings' serif, in the tint; then come its facts (`CardFacts`), each once and
 only when known: State, Model · effort, Context, Folder · branch, Conversation, Claude Code, and the panel's Session,
-Connection and File where the title does not say them; then the summary.
+Connection and File where the title does not say them; then, for a session that delegated, its sub-agents, the latest
+eight, each a line with its state (running, in background, done, failed) and the tool calls inside it, which a double
+click opens as the sub-agent's own tab in the lower panel ([record 109](adr/0109-a-sub-agent-is-a-session-tab.md)); then
+the summary. The card stands beside the rows, after the
+longest name, its top at the row's, so no name is under it; with no room there, under the row. While it is open, the
+pointer on another row's name, or leaving the card onto one, shows that row's card without a click; off the names, at its ✕ or at a click
+on it, the card closes, and the next needs a click again ([record 107](adr/0107-a-rows-card-opens-at-a-click.md)).
 
 Everything else is in the row's menu:
 
@@ -215,7 +227,7 @@ session's own panel and a document are not listed: the session's row and the Fil
 **A connection row** is one line too: the state icon, which a click connects or disconnects, and the name; a red
 "prod" marks a production database, and the name takes the accent colour while the focused panel uses it
 ([record 92](adr/0092-a-connection-row-is-its-icon-and-name.md)). The icon is the database glyph at one size: blue while
-connected, grey while disconnected, faint while it connects or disconnects, red when it failed. Resting on the name
+connected, grey while disconnected, faint while it connects or disconnects, red when it failed. A click on the name
 shows a card of facts without a summary: State, Database (`<database> on <host>:<port>`), User, TLS, Production, and
 the open Panels that use it. A double click on the name binds the connection to the focused panel. Its menu: Bind to
 the focused panel, Connect or Disconnect, Test, Explore the schema, Copy details (as ⌘C; never the password), Edit…,
@@ -538,6 +550,7 @@ replacing what the view showed.
 | `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Actions ▸ Show the log opens it read-only, a click on a notice that names an entry opens it at that entry |
 | `logs/intents-<millis>.jsonl` | the intent log, when recording |
 | `help/tutorial.md` | the tutorial, rewritten from the build's copy when it differs |
+| `metrics/` | a file a day of the sessions' turns, sub-agents and plan usage, for the kit's calibration ([record 110](adr/0110-metrics-for-calibration.md)) |
 | `settings.json` | the window's kept state: the theme, the window's bounds and dividers, the sidebar's state and tab, the side pane, the sessions' manual order, Linear's site, the last export's folder, the last Gradle tasks ([record 106](adr/0106-settings-in-the-data-root.md)) |
 | `opened-files` | the files opened in comando, one path per line, at most 20 000: a new (untracked) file listed here is no longer marked in the Files tab ([record 76](adr/0076-new-files-are-gold-and-marked-from-the-top.md)) |
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |
@@ -643,7 +656,8 @@ learn and write. It is never part of the kit, whose repository ignores it; it ca
 ### 7.3 The Files tab
 
 `comando-kit.json` lists the kit's folders with the fields of a `folders.json` entry ([§5](#5-the-files-tab)), each path
-relative to the root. When `folders.json` holds none of them, comando adds them at the top, their paths made absolute
+relative to the root, without `..`; `.` is the root itself, a folder whose excludes leave out the rest (the brain must be
+a folder below the root). When `folders.json` holds none of them, comando adds them at the top, their paths made absolute
 under the root, once, and saves; the user's own entries stay, and a kit folder whose name
 an entry already takes is not added (`KitFolders`). An entry that names the same folder on disk as a kit folder (links
 followed, letter case ignored) counts as that folder, so an entry through a link is not added twice. **Use the kit's

@@ -10,6 +10,7 @@ import javax.swing.text.Position;
 import javax.swing.text.View;
 import java.awt.Shape;
 import dev.marregui.comando.core.model.LinearTickets;
+import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.ui.kit.desktop.Browser;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
@@ -49,6 +50,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
 /**
@@ -96,9 +98,13 @@ final class TabCard {
     private final TintTitle heading;
     /** The tickets, links in a row under the heading; hidden when the text names none. */
     private final JPanel tickets = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+    /** The session's delegation (record 109): a line per sub-agent, each opening its tab; hidden when there is none. */
+    private final JPanel agents = new JPanel();
     /** Whether the pointer is over the card or one of its parts. */
     private boolean pointerIn;
     private Runnable onPointerIn = () -> { };
+    /** Hears the card close: what it hung under, and the point on the screen the pointer left it for, or null. */
+    private BiConsumer<JComponent, Point> onHidden = (over, at) -> { };
     /** Opens a ticket's address: the desktop's browser; tests hear it instead. */
     private Consumer<String> browse = Browser::open;
     /** Hears the pointer on the card and every part of it: entering, and leaving the card as a whole. */
@@ -115,7 +121,7 @@ final class TabCard {
             Point at = SwingUtilities.convertPoint(e.getComponent(), e.getPoint(), card);
             if (!new Rectangle(card.getSize()).contains(at)) {
                 pointerIn = false;
-                hide();
+                hide(e.getLocationOnScreen());
             }
         }
     };
@@ -141,6 +147,11 @@ final class TabCard {
     /** Where the card's top left corner goes, in the tabs' coordinates: under the tab, at its left edge. */
     private Point anchor;
     private JComponent tabs;
+    /**
+     * A row's card: where it goes beside the rows, in the rows' coordinates, its left edge at x and its top at the row's;
+     * null for a tab's card, or under the row. It goes under the row when the window has no room beside them.
+     */
+    private Point besideAt;
 
     TabCard(Consumer<String> onRefresh) {
         card.setName("tab-card");
@@ -184,6 +195,12 @@ final class TabCard {
         }
         card.add(title);
         card.add(facts);
+        agents.setName("tab-card-agents");
+        agents.setLayout(new BoxLayout(agents, BoxLayout.Y_AXIS));
+        agents.setOpaque(false);
+        agents.setAlignmentX(Component.LEFT_ALIGNMENT);
+        agents.setVisible(false);
+        card.add(agents);
         Component aboveHeading = Box.createVerticalStrut(Theme.SPACE_M);
         Component underHeading = Box.createVerticalStrut(Theme.SPACE_XS);
         Component aboveActions = Box.createVerticalStrut(Theme.SPACE_S);
@@ -258,12 +275,77 @@ final class TabCard {
         onPointerIn = r;
     }
 
+    /**
+     * {@code r} hears the card close: the component it hung under, and the point on the screen the pointer left it for,
+     * or null when it closed otherwise.
+     */
+    void onHidden(BiConsumer<JComponent, Point> r) {
+        onHidden = r;
+    }
+
     void browseWith(Consumer<String> opener) {
         browse = opener;
     }
 
     boolean pointerIn() {
         return pointerIn;
+    }
+
+    /**
+     * The session's sub-agents to outline under the facts (record 109), each a link that a double click follows to its
+     * tab through {@code open}, given the Agent call's id; none hides the outline.
+     */
+    void agents(List<Delegation.Line> list, Consumer<String> open) {
+        List<String> now = list.stream().map(Delegation.Line::text).toList();
+        if (now.equals(agentTexts)) {
+            agentOpen = open;
+            return;
+        }
+        agentTexts = now;
+        agentOpen = open;
+        agents.removeAll();
+        Font font = topic.getFont();
+        if (!list.isEmpty()) {
+            agents.add(Box.createVerticalStrut(Theme.SPACE_S));
+            JLabel head = Plain.only(new JLabel("Sub-agents"));
+            head.setFont(font);
+            head.setForeground(Theme.MUTED);
+            agents.add(head);
+        }
+        for (Delegation.Line line : list) {
+            JLabel link = Plain.only(new JLabel(line.text()));
+            link.setName("tab-card-agent");
+            link.setFont(font.deriveFont(Map.of(TextAttribute.UNDERLINE, TextAttribute.UNDERLINE_ON)));
+            link.setForeground(line.status() == Block.ToolStatus.ERROR ? Theme.DANGER : Theme.LINK);
+            link.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+            link.setToolTipText("Double click to open the sub-agent's tab");
+            link.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() == 2) {
+                        agentOpen.accept(line.toolUseId());
+                    }
+                }
+            });
+            agents.add(link);
+        }
+        for (Component c : agents.getComponents()) {
+            c.addMouseListener(pointer);
+        }
+        agents.setVisible(!list.isEmpty());
+        if (shown != null) {
+            lastText = null;
+            place();
+        }
+    }
+
+    /** The outline's lines shown, to build it again only when they change. */
+    private List<String> agentTexts = List.of();
+    private Consumer<String> agentOpen = id -> { };
+
+    /** The outline's links; for tests. */
+    List<JLabel> agentLinks() {
+        return Arrays.stream(agents.getComponents()).filter(c -> "tab-card-agent".equals(c.getName())).map(c -> (JLabel) c).toList();
     }
 
     /** The tickets to show under the heading, the newest command's first; none hides the row. */
@@ -374,15 +456,25 @@ final class TabCard {
 
     /** Shows the card of {@code key} under {@code tab}, a rectangle of {@code over}, replacing any card shown. */
     void show(String key, JComponent over, Rectangle tab, CardFacts head, String topicText, boolean muted, boolean reading) {
+        show(key, over, tab, -1, head, topicText, muted, reading);
+    }
+
+    /**
+     * As {@link #show(String, JComponent, Rectangle, CardFacts, String, boolean, boolean)}, a row's card: beside the
+     * rows, its left edge at {@code beside} and its top at the row's, when the window has room; under the row otherwise,
+     * or when {@code beside} is negative.
+     */
+    void show(String key, JComponent over, Rectangle row, int beside, CardFacts head, String topicText, boolean muted, boolean reading) {
         summarised(true);
-        open(key, over, tab, head, topicText, muted, reading);
+        open(key, over, row, beside, head, topicText, muted, reading);
     }
 
     /** As {@link #show}, a card of its title and facts alone: a connection's. Its tickets are cleared. */
-    void showFacts(String key, JComponent over, Rectangle row, CardFacts head) {
+    void showFacts(String key, JComponent over, Rectangle row, int beside, CardFacts head) {
         summarised(false);
         tickets(List.of());
-        open(key, over, row, head, "", false, false);
+        agents(List.of(), id -> { });
+        open(key, over, row, beside, head, "", false, false);
     }
 
     private void summarised(boolean on) {
@@ -395,7 +487,7 @@ final class TabCard {
         return summarised;
     }
 
-    private void open(String key, JComponent over, Rectangle tab, CardFacts head, String topicText, boolean muted, boolean reading) {
+    private void open(String key, JComponent over, Rectangle tab, int beside, CardFacts head, String topicText, boolean muted, boolean reading) {
         JRootPane root = SwingUtilities.getRootPane(over);
         if (root == null) {
             return;
@@ -407,6 +499,7 @@ final class TabCard {
         shown = key;
         tabs = over;
         anchor = new Point(tab.x, tab.y + tab.height + 2);
+        besideAt = beside < 0 ? null : new Point(beside, tab.y);
         if (card.getParent() != layer) {
             layer.add(card, JLayeredPane.POPUP_LAYER);
         }
@@ -521,7 +614,16 @@ final class TabCard {
         card.invalidate(); // the box layout keeps its children's sizes until told: the summary's lines changed
         int h = card.getPreferredSize().height;
         int x = Math.max(MARGIN, Math.min(at.x, layer.getWidth() - w - MARGIN));
-        card.setBounds(x, at.y, w, h);
+        int y = at.y;
+        if (besideAt != null) {
+            // beside the rows when it fits there whole, its top at the row's, raised to stay in the window
+            Point b = SwingUtilities.convertPoint(tabs, besideAt, layer);
+            if (b.x + w <= layer.getWidth() - MARGIN) {
+                x = b.x;
+                y = Math.max(MARGIN, Math.min(b.y, layer.getHeight() - h - MARGIN));
+            }
+        }
+        card.setBounds(x, y, w, h);
         card.validate();
         layer.repaint();
     }
@@ -537,6 +639,11 @@ final class TabCard {
     }
 
     void hide() {
+        hide(null);
+    }
+
+    /** Closes the card; {@code at}, the point on the screen the pointer left it for, or null. */
+    private void hide(Point at) {
         if (shown == null) {
             return;
         }
@@ -547,6 +654,7 @@ final class TabCard {
             layer.remove(card);
             layer.repaint(was);
         }
+        onHidden.accept(tabs, at);
     }
 
     /** The key of the card shown: its panel's, or a headless session's; null when none shows. */

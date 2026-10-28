@@ -2,9 +2,12 @@ package dev.marregui.comando.claude;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -15,10 +18,14 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.function.Consumer;
 
 /**
  * The conversations Claude Code stores for a session's sub-agents. Not documented (2.1.302): beside the session's
@@ -99,6 +106,54 @@ final class SubagentFiles {
         }
     }
 
+    /**
+     * What a sub-agent spent, from its file's assistant records (record 110): the model calls, each message counted once
+     * (a message is stored a content block a line, each with the same usage), the tokens by kind, and the models it ran
+     * on. An unreadable file gives what was read.
+     */
+    static ObjectNode spend(Path file, ObjectMapper json) {
+        ObjectNode out = json.createObjectNode();
+        long calls = 0;
+        long input = 0;
+        long output = 0;
+        long cacheRead = 0;
+        long cacheCreate = 0;
+        Set<String> seen = new HashSet<>();
+        Set<String> models = new TreeSet<>();
+        try (BufferedReader in = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+            String line;
+            while ((line = in.readLine()) != null) {
+                JsonNode n = parse(line, json);
+                if (n == null || !n.path("type").asText("").equals("assistant")) {
+                    continue;
+                }
+                JsonNode m = n.path("message");
+                String id = m.path("id").asText("");
+                if (!id.isEmpty() && !seen.add(id)) {
+                    continue;
+                }
+                calls++;
+                if (!m.path("model").asText("").isEmpty()) {
+                    models.add(m.path("model").asText());
+                }
+                JsonNode u = m.path("usage");
+                input += u.path("input_tokens").asLong();
+                output += u.path("output_tokens").asLong();
+                cacheRead += u.path("cache_read_input_tokens").asLong();
+                cacheCreate += u.path("cache_creation_input_tokens").asLong();
+            }
+        } catch (IOException | UncheckedIOException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot read " + file + ": " + e.getMessage());
+        }
+        out.put("calls", calls);
+        out.put("input", input);
+        out.put("output", output);
+        out.put("cache_read", cacheRead);
+        out.put("cache_create", cacheCreate);
+        models.forEach(out.withArray("models")::add);
+        return out;
+    }
+
     /** True when the meta file says the sub-agent finished; a later Claude Code may not write it, then false. */
     static boolean finished(Path meta, ObjectMapper json) {
         JsonNode m = readMeta(meta, json);
@@ -166,6 +221,18 @@ final class SubagentFiles {
                 this.toolId = toolId;
                 this.text = text;
             }
+        }
+
+        /** Hears every whole line read, before it is parsed here: a sub-agent's tab maps them into its transcript. */
+        private Consumer<String> lines = line -> { };
+
+        void onLine(Consumer<String> listener) {
+            lines = listener;
+        }
+
+        /** Whether the first read started after the file's start: it was longer than the bytes scanned. */
+        boolean cut() {
+            return cut;
         }
 
         /** Every tool call read, kept or not. */
@@ -264,6 +331,9 @@ final class SubagentFiles {
         }
 
         private void accept(String line) {
+            if (!line.isBlank()) {
+                lines.accept(line);
+            }
             JsonNode n = parse(line, json);
             boolean wasFirst = first;
             first = false;

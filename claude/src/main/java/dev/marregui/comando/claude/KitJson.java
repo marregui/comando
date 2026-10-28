@@ -47,14 +47,14 @@ public final class KitJson {
         if (name.isEmpty()) {
             throw new IOException("\"name\" is missing");
         }
-        String brain = inside(text(root, "brain"), "brain");
+        String brain = inside(text(root, "brain"), "brain", false);
         List<FolderRoot> folders = new ArrayList<>();
         for (JsonNode f : root.path("folders")) {
             String folder = text(f, "name");
             if (folder.isEmpty()) {
                 throw new IOException("a folder has no name");
             }
-            folders.add(new FolderRoot(folder, inside(text(f, "path"), "folder " + folder), text(f, "index"), strings(f.path("excludes")),
+            folders.add(new FolderRoot(folder, inside(text(f, "path"), "folder " + folder, true), text(f, "index"), strings(f.path("excludes")),
                     text(f, "icon"), f.path("deletable").asBoolean(false), text(f, "listedIn"), text(f, "group")));
         }
         List<KitRoot.Requirement> requirements = list(root.path("requirements"), r -> {
@@ -88,15 +88,18 @@ public final class KitJson {
         return out;
     }
 
-    /** {@code path} when it names a place inside the root: relative, without {@code ..}. */
-    private static String inside(String path, String what) throws IOException {
+    /**
+     * {@code path} when it names a place inside the root: relative, without {@code ..}; with {@code root}, the root
+     * itself too ({@code "."}): a folder of the Files tab may be the kit's whole folder, its excludes leaving out the rest.
+     */
+    private static String inside(String path, String what, boolean root) throws IOException {
         Path p;
         try {
             p = Path.of(path).normalize();
         } catch (InvalidPathException e) {
             throw new IOException(what + ": " + e.getMessage(), e);
         }
-        if (path.isEmpty() || p.isAbsolute() || path.startsWith("~") || p.startsWith("..") || p.toString().isEmpty()) {
+        if (path.isEmpty() || p.isAbsolute() || path.startsWith("~") || p.startsWith("..") || p.toString().isEmpty() && !root) {
             throw new IOException(what + " is not a folder inside the root: \"" + path + '"');
         }
         return path;

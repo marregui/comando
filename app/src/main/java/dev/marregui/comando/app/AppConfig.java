@@ -63,6 +63,11 @@ public record AppConfig(Path home, String claudeExecutable, KitRoot root, boolea
         return home.resolve("audit");
     }
 
+    /** Where the sessions' metrics are kept, a file a day (record 110). */
+    public Path metricsDir() {
+        return home.resolve("metrics");
+    }
+
     public Path questDbRoot() {
         return home.resolve("questdb");
     }
