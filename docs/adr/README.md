@@ -101,7 +101,7 @@ has the same shape:
 | [81](0081-a-tab-shows-a-card-with-its-topic.md) | A tab shows a card with its topic | 2026-10-21 | Miguel and Claude | accepted; amended 2026-10-22 (see Amendments); amended by [record 87](0087-a-session-row-shows-the-tabs-card.md) |
 | [82](0082-threads-by-kind-with-a-budget.md) | Threads by kind, with a budget | 2026-10-21 | Miguel and Claude | accepted |
 | [83](0083-one-gold-chosen-beside-clear.md) | One gold, chosen beside Clear; serif headings; a turn's report is framed; tooltips and dark pages as answers | 2026-10-21 | Miguel and Claude | accepted; the light page it left unchanged removed by [record 93](0093-comando-is-dark-throughout.md) |
-| [84](0084-claude-shows-what-is-better-seen.md) | Claude shows what is better seen than read | 2026-10-21 | Miguel and Claude | proposed |
+| [84](0084-claude-shows-what-is-better-seen.md) | Claude shows what is better seen than read | 2026-10-21 | Miguel and Claude | accepted |
 | [85](0085-a-panel-rewritten-as-a-document.md) | A panel's text rewritten as a document, with one button | 2026-10-22 | Miguel and Claude | accepted; its place amended by [record 86](0086-a-checkpoint-clears-and-carries-its-summary.md) |
 | [86](0086-a-checkpoint-clears-and-carries-its-summary.md) | The Checkpoint button clears the conversation and carries its summary into the next prompt | 2026-10-25 | Miguel and Claude | accepted; its rule for which panel the rewrite acts on amended by [record 88](0088-a-session-and-its-panel-share-a-name.md) |
 | [87](0087-a-session-row-shows-the-tabs-card.md) | A session row shows the tab's card, with the session's details | 2026-10-25 | Miguel and Claude | accepted; its row's card panel amended by [record 88](0088-a-session-and-its-panel-share-a-name.md), its row by [record 89](0089-a-session-row-is-one-line.md), its card's status line and details by [record 90](0090-a-session-row-is-its-icon-and-name.md), when its card shows by [record 107](0107-a-rows-card-opens-at-a-click.md) |
@@ -127,7 +127,7 @@ has the same shape:
 | [107](0107-a-rows-card-opens-at-a-click.md) | A sidebar row's card opens at a click, beside the rows, and follows the pointer | 2026-10-28 | Miguel and Claude | accepted |
 | [108](0108-links-in-every-card.md) | Links in every card of the transcript, and file paths as links | 2026-10-28 | Miguel and Claude | accepted; where a file path opens amended by [record 111](0111-a-file-link-opens-as-the-files-tab-does.md) |
 | [109](0109-a-sub-agent-is-a-session-tab.md) | A sub-agent is a session tab, and the session card outlines its sub-agents | 2026-10-28 | Miguel and Claude | accepted |
-| [110](0110-metrics-for-calibration.md) | Metrics of turns, sub-agents and plan usage, kept for calibration | 2026-10-28 | Claude, on Miguel's ask | proposed |
+| [110](0110-metrics-for-calibration.md) | Metrics of turns, sub-agents and plan usage, kept for calibration | 2026-10-28 | Claude, on Miguel's ask | accepted |
 | [111](0111-a-file-link-opens-as-the-files-tab-does.md) | A file link opens as the Files tab opens a file, and is found where it was written from | 2026-10-28 | Miguel and Claude | accepted |
 | [112](0112-closing-gives-the-keyboard-back.md) | Closing a panel or view gives the keyboard back to what opened it | 2026-10-28 | Miguel and Claude | accepted |
 | [113](0113-a-documents-outline-at-the-panels-right.md) | A document's outline at the panel's right, from a button in its tools | 2026-10-28 | Miguel and Claude | accepted |

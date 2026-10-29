@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-21 | proposed | Miguel and Claude |
+| 2026-10-21 | accepted 2026-10-29 | Miguel and Claude |
 
 ## 1. Context
 
