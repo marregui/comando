@@ -81,6 +81,11 @@ public final class Peers implements AutoCloseable {
         public static Me of(String instanceName, String version) {
             return new Me(InstanceName.display(instanceName), Peers.slug(instanceName), version);
         }
+
+        /** Its MQTT client id: {@code comando-<slug>}, or the slug as it is when it already says comando ({@code comando-expert}). */
+        public String clientId() {
+            return slug.equals("comando") || slug.startsWith("comando-") ? slug : "comando-" + slug;
+        }
     }
 
     /** Another instance, as its presence says. */

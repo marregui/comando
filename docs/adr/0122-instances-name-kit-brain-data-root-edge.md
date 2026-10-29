@@ -24,7 +24,7 @@ port is written only to the log.
 | Question | Rule |
 |---|---|
 | where it comes from | `-Dcomando.name` or `COMANDO_NAME`; else the data root's folder: `~/.comando` is the main instance and has no name, `~/.comando_b` or `~/.comando-b` is `b`, any other folder is its own name (`core` `InstanceName`) |
-| where it shows | the application's name, `comando · b`, in the Dock's hover and the menu bar (`apple.awt.application.name`, set in `Main` before AWT starts); the window's title (`comando · b — foreman · foreman`); the Dock icon's badge, the name's first letter |
+| where it shows | the application's name, `comando · b`, in the Dock's hover and the menu bar (`apple.awt.application.name`, set in `Main` before AWT starts); the window's title, the name alone (`comando · b`); the Dock icon's badge, the name's first letter |
 | preferences | a named instance keeps its window layout in a preferences node of its own (`dev/marregui/comando-b`); the main instance's node is unchanged; `-Dcomando.prefsNode` still overrides |
 
 ### 2.2 A kit, a brain and a data root each

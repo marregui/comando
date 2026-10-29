@@ -110,7 +110,7 @@ class UiReplayTest {
 
     private static void check(AppState s) {
         JFrame frame = frame();
-        assertThat(frame.getTitle()).startsWith("comando — " + s.focusedPanel().title());
+        assertThat(frame.getTitle()).as("the instance's name alone").isEqualTo("comando");
         JTabbedPane workspace = tabs(frame, "workspace");
         assertThat(titles(workspace)).containsExactlyElementsOf(s.panels().stream().map(p -> p.title()).toList());
         assertThat(workspace.getTitleAt(workspace.getSelectedIndex())).isEqualTo(s.focusedPanel().title());

@@ -252,7 +252,7 @@ choose.
 
    Leave the rest as it is; the line under each field says what it does. Click **Save**, then press **Esc**.
    *You should see* a new panel, **tutor**. A session comes with its own panel, titled with its name, and the two are
-   one: renamed and removed together. `tutor` shows in the session bar, in the sidebar and in the window title.
+   one: renamed and removed together. `tutor` shows in the session bar and in the sidebar.
 2. In the **tutor** panel, type `In one sentence, what is QuestDB?` and press **⌘⇧⏎**, which sends the block to the
    panel's session. *You should see* the session start (its icon in the sidebar and on the tab turns Claude's orange),
    the lower panel switch to **Session**, and the answer stream in, with the time it took under it. While the turn runs,

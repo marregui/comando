@@ -349,7 +349,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         }, ResourceActions.Questions.MODAL));
 
-        frame = new JFrame("comando");
+        frame = new JFrame(InstanceName.display(InstanceName.current()));
         frame.setDefaultCloseOperation(WindowConstants.DO_NOTHING_ON_CLOSE);
         frame.addWindowListener(new WindowAdapter() {
             @Override
@@ -719,8 +719,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         actions.refresh();
         if (!quitting) {
             // a render already asked for when quit began must not take back the closing title
-            frame.setTitle(InstanceName.display(InstanceName.current()) + " — " + s.focusedPanel().title()
-                    + (s.focusedPanel().session().isEmpty() ? "" : " · " + s.focusedPanel().session()));
+            frame.setTitle(InstanceName.display(InstanceName.current()));
         }
     }
 

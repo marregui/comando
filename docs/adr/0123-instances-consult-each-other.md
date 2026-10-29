@@ -15,7 +15,7 @@ the comando Edge as the broker and the topic layout; this record builds the part
 
 | Question | Rule |
 |---|---|
-| connection | each instance connects to the comando Edge (`127.0.0.1:18883`, MQTT 5) whenever the registry `~/.comando-edge.json` names a live Edge, whichever instance started it; it reconnects when the Edge comes back; client id `comando-<slug>` |
+| connection | each instance connects to the comando Edge (`127.0.0.1:18883`, MQTT 5) whenever the registry `~/.comando-edge.json` names a live Edge, whichever instance started it; it reconnects when the Edge comes back; client id `comando-<slug>`, or the slug alone when it already starts with `comando-` (`comando-expert`) |
 | presence | `comando/v1/local/instance/<slug>/presence`, retained: name, slug, version, its sessions, busy, started; a last will with an empty retained payload clears it when the instance dies; cleared on close |
 | ask | MCP tool `instance_ask {instance, text, wait_seconds}`: publishes to `…/<peer>/inbox` with the MQTT 5 response topic `…/<me>/reply` and correlation data; waits up to `wait_seconds` (≤ 600) for the reply, else returns an id for `instance_reply {id, wait_seconds}` |
 | answering | the peer prompts its session `consult-<asker slug>` (created on the first ask, in its own default folder, created by `peer:<slug>`, started) through its panel, headed `[from instance <name> · session <s>]`, so its user sees the question; when that turn ends it replies with the turn's text. Busy: the prompt waits its turn, as `session_send`'s does |

@@ -201,6 +201,9 @@ class PeersTest {
         assertThat(call(main, "instance_ask", "{\"instance\":\"b\"}").text()).contains("instance and text are required");
         assertThat(Peers.slug("Comando Expert")).isEqualTo("comando-expert");
         assertThat(Peers.slug("")).isEqualTo("main");
+        assertThat(Peers.Me.of("Comando Expert", "v").clientId()).as("no doubled prefix").isEqualTo("comando-expert");
+        assertThat(Peers.Me.of("b", "v").clientId()).isEqualTo("comando-b");
+        assertThat(Peers.Me.of("", "v").clientId()).isEqualTo("comando-main");
     }
 
     // ---- the fixture

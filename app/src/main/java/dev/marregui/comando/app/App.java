@@ -163,7 +163,7 @@ public final class App implements AutoCloseable {
             // (record 123); this instance's presence is cleared, and its link closed, before the Edge stops
             if (Boolean.parseBoolean(System.getProperty(PEERS_PROPERTY, "true"))) {
                 Peers.Me me = Peers.Me.of(InstanceName.current(), version);
-                peerBroker = own(new MqttPeerBroker("comando-" + me.slug(), EmbeddedEdge.Ports.DEFAULT.mqtt(), edge::running));
+                peerBroker = own(new MqttPeerBroker(me.clientId(), EmbeddedEdge.Ports.DEFAULT.mqtt(), edge::running));
                 // a consult session is made where a new session is: the home folder
                 peers = own(new Peers(peerBroker, me, loop, loop::state, transcripts, HomeDir.home(), config.home().resolve("agents.json")));
                 mcpTools.peers(peers);
