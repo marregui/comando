@@ -487,6 +487,30 @@ public final class SessionsSidebar {
         files.show(folder, tree);
     }
 
+    /** Shows {@code file} in the Files tab, brought to the front, its folders opened and the file selected (record 119). */
+    public void revealFile(Path file) {
+        selectTab(FILES);
+        files.reveal(file);
+    }
+
+    /** Brings the Sessions tab to the front with session {@code name} selected and in view (record 119). */
+    public void revealSession(String name) {
+        selectTab(SESSIONS);
+        for (int i = 0; i < sessionModel.size(); i++) {
+            if (sessionModel.get(i).name().equals(name)) {
+                sessions.setSelectedIndex(i);
+                sessions.ensureIndexIsVisible(i);
+                sessions.requestFocusInWindow();
+                return;
+            }
+        }
+    }
+
+    /** The kit's root and its newer release, "" when none: the Files tab's KIT row says it (record 119). */
+    public void kitRelease(Path dir, String newer) {
+        files.kitRelease(dir, newer);
+    }
+
     /** The watched git repositories as read: the Files tab colours their files. */
     public void showRepos(List<RepoStatus> repos) {
         files.showRepos(repos);

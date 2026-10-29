@@ -45,8 +45,8 @@ import java.util.regex.Pattern;
 
 /**
  * The window's status: the standing notice on the left, which takes the user to what it is about when clicked and
- * opens the recent notices on a right click (or a click, when it is about nothing to go to); the kit, Claude's and
- * Codex's plan usage and the work running across every panel and session on the right. The focused panel's session is
+ * opens the recent notices on a right click (or a click, when it is about nothing to go to); Claude's and Codex's plan
+ * usage and the work running across every panel and session on the right. The kit is the Files tab's KIT row (record 119). The focused panel's session is
  * in the {@link SessionBar}, its connection in the panel's header (record 105).
  */
 public final class StatusBar {
@@ -62,11 +62,6 @@ public final class StatusBar {
     /** Claude's plan usage, then Codex's, each a label of its own. */
     private final Usage claudeUsage = new Usage(PlanUsage.CLAUDE, "Claude Code's /usage");
     private final Usage codexUsage = new Usage(PlanUsage.CODEX, "codex app-server");
-    /** The kit's name and version, and a newer release when one is out; hidden without a kit. */
-    private final JLabel kit = new JLabel();
-    /** Opens the kit's menu under its label. */
-    private Consumer<JComponent> kitMenu = c -> {
-    };
 
     /** One plan's usage label. */
     private static final class Usage {
@@ -100,20 +95,9 @@ public final class StatusBar {
         root.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Theme.CARD_BORDER),
                 BorderFactory.createEmptyBorder(3, Theme.PAD, 3, Theme.PAD)));
         JPanel right = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.PAD * 2, 0));
-        right.add(kit);
         right.add(claudeUsage.label);
         right.add(codexUsage.label);
         right.add(work);
-        kit.setVisible(false);
-        kit.setForeground(Theme.MUTED);
-        kit.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
-        kit.getAccessibleContext().setAccessibleName("Kit");
-        kit.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mousePressed(MouseEvent e) {
-                kitMenu.accept(kit);
-            }
-        });
         notice.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         notice.getAccessibleContext().setAccessibleName("Status");
         notice.addMouseListener(new MouseAdapter() {
@@ -185,27 +169,6 @@ public final class StatusBar {
                     + " failed: " + read.problem()));
         }
         u.label.setToolTipText("<html>" + tip + "</html>");
-    }
-
-    /**
-     * Shows the kit: its name and version, muted; gold, the colour that asks to be looked at, when a newer release is
-     * out, as {@code text} then says. Empty text hides it.
-     */
-    public void kit(String text, String tip, boolean newer) {
-        kit.setVisible(!text.isEmpty());
-        kit.setText(text);
-        kit.setForeground(newer ? Theme.ATTENTION : Theme.MUTED);
-        kit.setToolTipText(tip.isEmpty() ? null : wrapped(tip));
-    }
-
-    /** What a press on the kit's label opens, under it. */
-    public void onKitMenu(Consumer<JComponent> show) {
-        kitMenu = show;
-    }
-
-    /** The kit's label; for tests. */
-    JLabel kitLabel() {
-        return kit;
     }
 
     /** Claude's usage label; for tests. */

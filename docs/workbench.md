@@ -102,13 +102,17 @@ Any number of document panels may be attached to a session
   What a checkpoint does once its turn has finished is in [§1.4](#14-the-checkpoint). Compact has no button: the
   palette's "Compact the conversation", the session's menu and `/compact` do it. A panel without a session shows only
   the chip, "no session ▾".
-- **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the kit,
-  the plans' usage and the work running in every session and query on the right.
+- **The window's status bar**, under everything, holds the window's state: the standing notice on the left; the
+  plans' usage and the work running in every session and query on the right. The kit is the Files tab's KIT row
+  ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)).
 - **The header** holds icons without a button's shape, at the right. First the connection: a database icon in its
   state's colour (grey closed, blue open, amber opening or closing, red failed) whose click connects or disconnects, and
   without a connection binds one; beside it the connection's name, whose click binds another or unbinds; each tooltip
   says what a click does ([record 116](adr/0116-one-connection-toggle.md)). Then Browser (HTML: the page in the browser), Preview or Edit (Markdown),
-  Run, Stop, Clear (the panel's own text, one ⌘Z step; not on documents). A production connection frames the panel in
+  Run, Stop, Locate, Clear (the panel's own text, one ⌘Z step; not on documents). Locate shows where the panel comes
+  from in the sidebar: a document in the Files tab, every closed row and folder on its way opened and the file
+  selected; else the panel's session in the Sessions tab, selected; a panel with neither has no Locate
+  ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)). A production connection frames the panel in
   red ([record 57](adr/0057-a-light-editor-and-a-header-of-icons.md)).
 - **The theme** is dark throughout: the window is FlatLaf's dark look (`FlatMacDarkLaf` on macOS, `FlatDarkLaf`
   elsewhere) on the ground chosen. The editors' and the terminal's colours, diffs and plots are derived from the tint
@@ -423,6 +427,8 @@ edited and saved like any other; a `.log` stays read-only.
   (`group`): a group is one top-level row named in capitals, the folder itself for a group of one (KIT), else the
   folder holding the group's folders (BRAIN), with them inside it, then its other folders, no file and nothing hidden; a
   hairline parts one group's row from the next ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)); a
+  group's row has no icon, and its detail is its repository's short commit, KIT's followed by the kit's newer release
+  when one is out ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)); a
   `repository` key, written by older versions, is ignored. With a kit, its folders come first, as its `comando-kit.json` lists them
   ([§7](#7-the-kit)). Without a kit and without `folders.json` there is one folder, Claude Code's (`~/.claude`),
   opening `CLAUDE.md` and leaving out Claude Code's transcripts, caches and per-session state; an emptied list stays
@@ -457,7 +463,7 @@ edited and saved like any other; a `.log` stays read-only.
 - **Menus.** A file's: Open in a panel, Edit in a panel (its text rather than rendered), and Compare with HEAD when it
   changed. A folder row's: Open ‹index file›. A top-level row's only: Show changes in it (off, as No changes in it, when
   it holds none): the Changes view of the repository holding it (`~/.claude`'s, the brain's), inside it alone; BRAIN's
-  also offers Back up the brain, KIT's Back up the kit ([§7.4](#74-back-up-the-brain-and-the-kit)). A group's folder
+  also offers Back up the brain, KIT's Back up the kit and Upgrade the kit… ([§7.4](#74-back-up-the-brain-and-the-kit)). A group's folder
   inside its row and a subfolder offer neither: the brain and the kit are each one unit
   ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)).
 - **Trash.** In a deletable folder, a file's or subfolder's menu moves the selection (⌘- or ⇧-click for several) to the
@@ -686,7 +692,7 @@ folders** in the Files tab's folders window adds the missing ones again.
 
 ### 7.4 Back up the brain and the kit
 
-**Back up the brain** (the palette, the status bar's kit menu, and the menu of the Files tab's BRAIN row) runs in
+**Back up the brain** (the palette and the menu of the Files tab's BRAIN row) runs in
 `<root>/<brain>`, off the EDT: `git add -A`, a commit when anything changed (nothing to commit is not an error), `git
 push`. The commit's first line says what it adds, `Brain backup 2026-10-28: MEMORY 2 changed; SCRATCHPAD 3 added, 1
 changed` (each top folder, or a file at the top, with its counts; past 120 characters the rest are counted), and its
@@ -697,11 +703,11 @@ by itself ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)).
 
 ### 7.5 Version and upgrade
 
-The status bar shows the kit's name and version (`git -C <root> describe --tags --always`) and, when
-`git -C <root> ls-remote --tags origin` lists a newer `vX.Y.Z`, "kit ‹name› vA → vB available", with a notice the first
-time a newer release is seen. Both are read at start and every 6 hours, off the EDT, never holding the window.
+The Files tab's KIT row shows the kit's commit and, when `git -C <root> ls-remote --tags origin` lists a newer
+`vX.Y.Z`, "‹commit› · vB available", with a notice the first time a newer release is seen (`git -C <root> describe
+--tags --always` still gives the version the notice names). Both are read at start and every 6 hours, off the EDT, never holding the window.
 
-**Upgrade the kit…** (the palette, and the status bar's kit menu) asks for a tag, newest first, then opens or creates a
+**Upgrade the kit…** (the palette, and the KIT row's menu) asks for a tag, newest first, then opens or creates a
 session named `kit`, working in the root and started on the user's own Claude Code setup rather than the root's (it
 replaces the root's files), and sends it: "Upgrade the kit at <root> to <tag>, following <root>/INSTALL.md section
 Upgrade. Report what changed." Once the session reports, comando offers to restart the sessions still running on the

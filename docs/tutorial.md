@@ -42,7 +42,7 @@ repository:
 ```
 
 The window opens with one panel, **scratch**, holding a short welcome text. With a kit installed (`INSTALL.md` §5),
-the sessions run on the kit, the Files tab opens on its folders and the status bar names its version.
+the sessions run on the kit, and the Files tab opens on its folders, its KIT row naming the kit's commit.
 
 | Part | What it is |
 |---|---|

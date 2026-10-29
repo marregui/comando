@@ -15,9 +15,11 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import org.junit.jupiter.api.Test;
 
 import javax.swing.AbstractButton;
+import javax.swing.JButton;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
 import java.awt.Container;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -29,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the session's controls and name are not in the header; the connection toggle is
 /// - the connection toggle is one icon coloured by state, first of the tools, and its name chip binds another
 /// - every header button is an icon with a tooltip and no button shape
+/// - the Locate button, after Stop and before Clear, shows a document in Files, else the panel's session in Sessions
 class EditorPanelHeaderTest {
 
     private static final PanelId A = new PanelId("a");
@@ -166,5 +169,37 @@ class EditorPanelHeaderTest {
                 collect(child, name, out);
             }
         }
+    }
+
+    /// A document's panel locates its file; a session's panel its session; a panel with neither has no Locate button.
+    /// The button sits after Stop and before Clear.
+    @Test
+    void theLocateButtonShowsTheDocumentOrTheSessionWhereItComesFrom() throws Exception {
+        List<String> asked = new ArrayList<>();
+        EditorPanel[] p = new EditorPanel[1];
+        SwingUtilities.invokeAndWait(() -> {
+            p[0] = new EditorPanel(new PanelState(A, "notes", "", "researcher"), intent -> { }, new SchemaRegistry());
+            p[0].onLocate((file, session) -> asked.add(file + "|" + session));
+        });
+        SwingUtilities.invokeAndWait(() -> {
+            JButton b = p[0].locateButton();
+            Container tools = b.getParent();
+            List<String> names = new ArrayList<>();
+            for (Component c : tools.getComponents()) {
+                names.add(c.getAccessibleContext().getAccessibleName());
+            }
+            assertThat(names.indexOf(b.getAccessibleContext().getAccessibleName())).as("after Stop, before Clear")
+                    .isEqualTo(names.indexOf("Stop") + 1).isEqualTo(names.indexOf("Clear") - 1);
+            assertThat(b.isVisible()).as("a session's panel").isTrue();
+            b.doClick();
+            p[0].file(Path.of("/b/MEMORY/x.md"), true);
+            assertThat(b.getToolTipText()).isEqualTo("Show the file in the Files tab");
+            b.doClick();
+            p[0].render(new PanelState(A, "notes", "", ""), AppState.initial(
+                    List.of(new PanelState(A, "notes", "", "")), List.of(), List.of()));
+            p[0].file(null, false);
+            assertThat(b.isVisible()).as("neither a document nor a session").isFalse();
+        });
+        assertThat(asked).containsExactly("null|researcher", "/b/MEMORY/x.md|");
     }
 }

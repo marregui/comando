@@ -296,7 +296,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         help.showAbout();
     }
 
-    /** Shows the kit's version and newer releases in the status bar, and whether the brain can be backed up. Any thread. */
+    /** Shows the kit's newer release on the Files tab's KIT row, and whether the brain and the kit can be backed up. Any thread. */
     public void kitStatus(Setup.Status status) {
         kit.show(status);
     }
@@ -434,8 +434,18 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         status = new StatusBar(deps.intents(), this::noticeTarget);
         sessionBar = new SessionBar(deps.intents());
         sessionBar.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
-        status.onKitMenu(this::kitMenu);
-        kit.attach(status);
+        kit.attach(sidebar::kitRelease);
+        // a panel's Locate button: its document in the Files tab, else its session in the Sessions tab (record 119)
+        workspace.onLocate((file, session) -> {
+            if (!sidebar.isShown()) {
+                toggleSidebar();
+            }
+            if (file != null) {
+                sidebar.revealFile(file);
+            } else {
+                sidebar.revealSession(session);
+            }
+        });
         sidebar.onFolderMenu(this::folderMenu);
         jobs.attach(sidebar);
         findBar = new FindBar();
@@ -1026,37 +1036,29 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         FoldersDialog.show(frame, deps.state().get().folders(), repoChanges, deps.intents(), deps.setup().root().folders());
     }
 
-    /** The kit's menu under its label in the status bar: its upgrade and the backups, enabled as each can run. */
-    private void kitMenu(JComponent under) {
-        JPopupMenu menu = new JPopupMenu();
-        for (String id : List.of("kit.upgrade", "kit.backup", "kit.backupKit")) {
-            Command c = actions.get(id);
-            if (c != null) {
-                JMenuItem item = new JMenuItem(ActionRegistry.action(c));
-                item.setEnabled(c.enabled().getAsBoolean());
-                menu.add(item);
-            }
-        }
-        menu.show(under, 0, -menu.getPreferredSize().height);
-    }
-
     /**
      * A Files tab top row's menu (record 118): the brain's row, or a folder inside the brain, gains the brain's backup;
-     * the kit's root's row gains the kit's.
+     * the kit's root's row gains the kit's and the kit's upgrade (record 119), each enabled as it can run.
      */
     private void folderMenu(FolderRoot folder, JPopupMenu menu) {
         KitRoot root = deps.setup().root();
         Path p = Path.of(folder.path());
-        String id = root.brain().filter(b -> inside(p, b)).isPresent() ? "kit.backup"
-                : root.kit().isPresent() && inside(p, root.dir()) && inside(root.dir(), p) ? "kit.backupKit" : "";
-        Command c = actions.get(id);
-        if (c == null) {
-            return;
+        List<String> ids = root.brain().filter(b -> inside(p, b)).isPresent() ? List.of("kit.backup")
+                : root.kit().isPresent() && inside(p, root.dir()) && inside(root.dir(), p) ? List.of("kit.backupKit", "kit.upgrade") : List.of();
+        boolean first = true;
+        for (String id : ids) {
+            Command c = actions.get(id);
+            if (c == null) {
+                continue;
+            }
+            if (first) {
+                menu.addSeparator();
+                first = false;
+            }
+            JMenuItem item = new JMenuItem(ActionRegistry.action(c));
+            item.setEnabled(c.enabled().getAsBoolean());
+            menu.add(item);
         }
-        menu.addSeparator();
-        JMenuItem item = new JMenuItem(ActionRegistry.action(c));
-        item.setEnabled(c.enabled().getAsBoolean());
-        menu.add(item);
     }
 
     /** Whether {@code p} is {@code dir} or inside it, links followed: {@code ~/.claude/MEMORY} may be a link into the brain. */

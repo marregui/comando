@@ -87,7 +87,7 @@ class TreeClicksUiTest {
 
     /// comando started on a temporary folder named as `CLAUDE_CONFIG_DIR` would name it puts the kit's Memory, KB and Skills
     /// folders, with the kit's groups, before the user's own, saves them, shows the Brain group as one BRAIN row (record
-    /// 118), and the status bar reads "kit test-kit"; no `claude` runs.
+    /// 118), and the status bar has no kit label (record 119); no `claude` runs.
     @Test
     void theKitsFoldersOpenTheFilesTabOfAWindowStartedOnItsRoot(@TempDir Path home) throws Exception {
         Path root = home.resolve("comando-kit");
@@ -125,10 +125,8 @@ class TreeClicksUiTest {
             paintSidebar();
             Awaitility.await("folders.json saved").atMost(Duration.ofSeconds(10))
                     .until(() -> Files.readString(data.resolve("folders.json")).contains(root.resolve("BRAIN/MEMORY").toString()));
-            Awaitility.await("the kit in the status bar").atMost(Duration.ofSeconds(10))
-                    .until(() -> onEdt(() -> first(JLabel.class, l -> "Kit".equals(l.getAccessibleContext().getAccessibleName()) && l.isShowing())) != null);
-            assertThat(onEdt(() -> first(JLabel.class, l -> "Kit".equals(l.getAccessibleContext().getAccessibleName())).getText()))
-                    .as("no checkout: the kit's name alone").isEqualTo("kit test-kit");
+            assertThat(onEdt(() -> first(JLabel.class, l -> "Kit".equals(l.getAccessibleContext().getAccessibleName()))))
+                    .as("the kit is no longer in the status bar (record 119)").isNull();
         } finally {
             app.close();
         }

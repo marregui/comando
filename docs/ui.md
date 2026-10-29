@@ -227,7 +227,7 @@ every tint (`Theme.ATTENTION`), a status colour as red is for errors.
 |---|---|
 | prompt | a bubble, with the panel it came from |
 | text | paragraphs, highlighted code, tables, quotes; the turn's report framed |
-| thinking | shown only while it is the latest item of its list; collapsed with its token count once it ends |
+| thinking | shown only while it is the latest item of its list; collapsed with its token count once it ends; no mark before its line, which keeps the tools' column (record 119) |
 | tool card | running, done or failed; a one-line summary; "running · 12 s", or "waiting for your approval · ⌃2". Open: the input, the result (400 lines), a subagent's blocks. It opens by itself for edits, errors and running subagents |
 | subagent card | adds the tool calls its blocks made, at any depth, and the latest: "running · 1 min 04 s · 9 tools · Read docs/ui.md" (the latest drops first when the card is narrow), then "done · 1 min 30 s · 12 tools". An Agent call whose result says it launched its subagent into the background reads "running in background · …" while the session lists that subagent among its open tasks, and done once it leaves the list. A card with no nested blocks shows no count: a stored conversation keeps a subagent's blocks in a file of its own. The header links to the subagent's stored conversation |
 | note | an icon by kind and the first line; error notes start open |

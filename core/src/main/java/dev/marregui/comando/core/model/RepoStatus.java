@@ -12,8 +12,9 @@ import java.util.Objects;
  * @param changes   the changed and untracked files, ordered by path
  * @param truncated whether there were more changes than were kept
  * @param error     why the repository could not be read, or ""
+ * @param head      the commit checked out, its full hash; "" when unknown or before the first commit
  */
-public record RepoStatus(String root, String branch, List<FileChange> changes, boolean truncated, String error) {
+public record RepoStatus(String root, String branch, List<FileChange> changes, boolean truncated, String error, String head) {
 
     /** Changes kept per repository at most. */
     public static final int MAX_CHANGES = 2_000;
@@ -23,6 +24,17 @@ public record RepoStatus(String root, String branch, List<FileChange> changes, b
         branch = branch == null ? "" : branch;
         changes = List.copyOf(changes);
         error = error == null ? "" : error;
+        head = head == null ? "" : head;
+    }
+
+    /** A status whose commit is unknown. */
+    public RepoStatus(String root, String branch, List<FileChange> changes, boolean truncated, String error) {
+        this(root, branch, changes, truncated, error, "");
+    }
+
+    /** The commit checked out, in seven characters, as git abbreviates it; "" when unknown. */
+    public String shortHead() {
+        return head.length() > 7 ? head.substring(0, 7) : head;
     }
 
     public static RepoStatus failed(String root, String error) {

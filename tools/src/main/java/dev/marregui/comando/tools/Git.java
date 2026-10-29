@@ -110,6 +110,7 @@ final class Git implements AutoCloseable {
         String text = new String(out, StandardCharsets.UTF_8);
         String[] records = text.split("\0", -1);
         String branch = "";
+        String head = "";
         List<RepoStatus.FileChange> changes = new ArrayList<>();
         Set<Path> ignored = new HashSet<>();
         for (int i = 0; i < records.length; i++) {
@@ -121,6 +122,9 @@ final class Git implements AutoCloseable {
                 case '#' -> {
                     if (rec.startsWith("# branch.head ")) {
                         branch = rec.substring("# branch.head ".length());
+                    } else if (rec.startsWith("# branch.oid ")) {
+                        String oid = rec.substring("# branch.oid ".length());
+                        head = oid.equals("(initial)") ? "" : oid;
                     }
                 }
                 case '1' -> {
@@ -169,7 +173,7 @@ final class Git implements AutoCloseable {
         changes.sort(Comparator.comparing(RepoStatus.FileChange::path));
         boolean truncated = cut || changes.size() > RepoStatus.MAX_CHANGES;
         List<RepoStatus.FileChange> kept = changes.size() > RepoStatus.MAX_CHANGES ? changes.subList(0, RepoStatus.MAX_CHANGES) : changes;
-        return new Read(new RepoStatus(root.toString(), branch, kept, truncated, ""), ignored);
+        return new Read(new RepoStatus(root.toString(), branch, kept, truncated, "", head), ignored);
     }
 
     /**

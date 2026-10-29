@@ -11,6 +11,7 @@ import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.Icon;
+import javax.swing.ImageIcon;
 import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -123,6 +124,8 @@ public final class TreeView {
     private Function<DefaultMutableTreeNode, String> headers = n -> null;
     /** A row under a header: the space the tree paints the header in, then the row. */
     private final JPanel headed = new JPanel(new BorderLayout());
+    /** What an icon function gives for a node drawn with no icon at all, not even the look's own (record 119). */
+    public static final Icon NO_ICON = new ImageIcon();
     /** The height of a header's space above its row. */
     static final int HEADER = 24;
     /** A cell with more than a name: the look's label with the name, the mark after it if any, then the detail, muted. */
@@ -168,7 +171,9 @@ public final class TreeView {
                     if (icon == null) {
                         icon = icons.apply(node);
                     }
-                    if (icon != null) {
+                    if (icon == NO_ICON) {
+                        l.setIcon(null);
+                    } else if (icon != null) {
                         l.setIcon(icon);
                     }
                     Color color = failed ? Theme.DANGER : sel ? null : colors.apply(n);

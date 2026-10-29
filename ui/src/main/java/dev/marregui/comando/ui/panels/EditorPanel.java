@@ -90,6 +90,13 @@ public final class EditorPanel extends JPanel {
     private final JButton stop = iconButton();
     /** Empties the panel's own text in one step ⌘Z takes back; a document, a file of its own, is never emptied from here. */
     private final JButton clear = iconButton();
+    /**
+     * Shows where the panel comes from in the sidebar (record 119): a document's file in the Files tab, else the panel's
+     * session in the Sessions tab; not there for a panel with neither.
+     */
+    private final JButton locate = iconButton();
+    private BiConsumer<Path, String> locator = (file, session) -> {
+    };
     /** Shows the other view: the rendered Markdown while the text is edited, the text while it shows rendered. */
     private final JButton mode = iconButton();
     /** Opens an HTML document in the browser, which renders it; shown for HTML only. */
@@ -184,6 +191,7 @@ public final class EditorPanel extends JPanel {
         right.add(mode);
         right.add(run);
         right.add(stop);
+        right.add(locate);
         right.add(clear);
         header.add(right, BorderLayout.EAST);
         add(header, BorderLayout.NORTH);
@@ -223,6 +231,13 @@ public final class EditorPanel extends JPanel {
             editor.requestFocus();
         });
         stop.addActionListener(e -> intents.dispatch(new Intent.CancelRun(this.panel.id())));
+        locate.addActionListener(e -> {
+            if (document && file != null) {
+                locator.accept(file, "");
+            } else if (!this.panel.session().isEmpty()) {
+                locator.accept(null, this.panel.session());
+            }
+        });
         clear.addActionListener(e -> {
             editor.clear();
             editor.requestFocus();
@@ -246,6 +261,7 @@ public final class EditorPanel extends JPanel {
             }
         });
         showClear();
+        showLocate();
         connection.addActionListener(e -> connectionMenu().show(connection, 0, connection.getHeight()));
         connectionToggle.addActionListener(e -> toggleConnection());
     }
@@ -318,6 +334,7 @@ public final class EditorPanel extends JPanel {
             followEnd();
         }
         showClear();
+        showLocate();
         boolean renders = rendersAsPage();
         mode.setVisible(renders);
         outlineButton.setVisible(renders);
@@ -614,6 +631,26 @@ public final class EditorPanel extends JPanel {
         clear.setEnabled(!previewing && editor.area().getDocument().getLength() > 0);
     }
 
+    /** The Locate button: the Files tab's icon for a document, the Sessions tab's for a session's panel, else not there. */
+    private void showLocate() {
+        boolean isFile = document && file != null;
+        boolean isSession = panel != null && !panel.session().isEmpty();
+        locate.setVisible(isFile || isSession);
+        locate.setIcon(Icons.get(isFile ? "files" : "session"));
+        locate.setToolTipText(isFile ? "Show the file in the Files tab" : "Show the session in the Sessions tab");
+        locate.getAccessibleContext().setAccessibleName(isFile ? "Show in Files" : "Show in Sessions");
+    }
+
+    /** Where the Locate button shows a document's file, or the panel's session, in the sidebar. */
+    public void onLocate(BiConsumer<Path, String> locate) {
+        locator = locate;
+    }
+
+    /** For tests: the Locate button. */
+    JButton locateButton() {
+        return locate;
+    }
+
     /** For tests. */
     boolean clearOffered() {
         return clear.isVisible() && clear.isEnabled();
@@ -710,6 +747,7 @@ public final class EditorPanel extends JPanel {
     public void render(PanelState p, AppState s) {
         panel = p;
         state = s;
+        showLocate();
         Optional<ConnectionState> c = p.connection().isEmpty() ? Optional.empty() : s.connection(p.connection());
         Optional<SessionState> x = p.session().isEmpty() ? Optional.empty() : s.session(p.session());
         // the connection: one icon in the state's colour, a click connects or disconnects; the name beside it binds another

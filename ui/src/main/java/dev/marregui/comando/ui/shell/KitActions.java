@@ -3,7 +3,6 @@ package dev.marregui.comando.ui.shell;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.KitRoot;
-import dev.marregui.comando.core.model.KitVersion;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
@@ -12,7 +11,6 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.async.UiErrands;
-import dev.marregui.comando.ui.panels.StatusBar;
 
 import javax.swing.JFrame;
 import javax.swing.JOptionPane;
@@ -23,6 +21,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /**
@@ -39,7 +38,7 @@ final class KitActions {
 
     private final ComandoUi.Dependencies deps;
     private final Supplier<JFrame> frame;
-    private StatusBar status;
+    private BiConsumer<Path, String> release;
     private Setup.Status shown = Setup.Status.NONE;
     /** The newest release a notice said is out, so each is said once. */
     private String announced = "";
@@ -70,9 +69,9 @@ final class KitActions {
         this.frame = frame;
     }
 
-    /** The status bar the kit shows in, once the window is built. */
-    void attach(StatusBar bar) {
-        status = bar;
+    /** Where the kit's newer release shows, the Files tab's KIT row (record 119), once the window is built. */
+    void attach(BiConsumer<Path, String> release) {
+        this.release = release;
         paint();
     }
 
@@ -86,35 +85,17 @@ final class KitActions {
             if (root.kit().isPresent() && newest.isPresent() && !newest.get().equals(announced)) {
                 announced = newest.get();
                 deps.intents().dispatch(new Intent.Notify(Notice.Level.INFO, now.version().label(root.name())
-                        + ": " + UPGRADE + " in the status bar's kit menu or the palette", false));
+                        + ": " + UPGRADE + " in the KIT row's menu of the Files tab or the palette", false));
             }
         });
     }
 
     private void paint() {
-        if (status == null) {
+        if (release == null) {
             return;
         }
         KitRoot root = deps.setup().root();
-        if (root.kit().isEmpty()) {
-            status.kit("", "", false);
-            return;
-        }
-        KitVersion v = shown.version();
-        status.kit(v.label(root.name()), tip(root, shown), v.newest().isPresent());
-    }
-
-    /** The kit label's tooltip: where the kit and its brain are, and why its remote's releases are unknown. */
-    static String tip(KitRoot root, Setup.Status s) {
-        StringBuilder t = new StringBuilder("The kit " + root.name() + " at " + HomeDir.shorten(root.dir().toString()));
-        root.brain().ifPresent(b -> t.append(", its brain at ").append(HomeDir.shorten(b.toString())));
-        t.append(". Click for its menu.");
-        if (s.version().described().isEmpty()) {
-            t.append("\nIts version is unknown: the root is no git checkout.");
-        } else if (!s.version().problem().isEmpty()) {
-            t.append("\nIts newer releases are unknown: ").append(s.version().problem());
-        }
-        return t.toString();
+        release.accept(root.kit().isEmpty() ? null : root.dir(), root.kit().isEmpty() ? "" : shown.version().newest().orElse(""));
     }
 
     /** Whether a newer release of the kit is out. */

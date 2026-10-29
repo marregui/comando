@@ -2,7 +2,6 @@ package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.KitRoot;
-import dev.marregui.comando.core.model.KitVersion;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
@@ -30,7 +29,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - The upgrade makes the kit's session in the root and sends it the prompt; a session called `kit` elsewhere is not taken.
 /// - The upgrade has reported once the session took the prompt and finished, or stopped.
 /// - Sessions on the old kit are restarted once stopped, except the kit's own and busy ones.
-/// - The status bar's tip says where the kit and its brain are and what is unknown.
 /// - A brain folder shown through a link is inside the brain.
 class KitActionsTest {
 
@@ -153,19 +151,6 @@ class KitActionsTest {
         kit.render(with(session("a", "/w", Status.CLOSED, 0)));
         kit.render(with(session("a", "/w", Status.CLOSED, 0)));
         assertThat(sent).as("started once").containsExactly(new Intent.StopSession("a"), new Intent.StartSession("a"));
-    }
-
-    /// [KitActions#tip] names the kit and brain paths, and adds a line when newer releases are unknown with the remote's
-    /// error or the version is unknown because the root is no git checkout.
-    @Test
-    void theStatusBarsTipSaysWhereTheKitAndItsBrainAreAndWhatIsUnknown(@TempDir Path tmp) {
-        KitRoot root = new KitRoot(tmp.resolve("kit"), Optional.of(KIT), tmp);
-
-        assertThat(KitActions.tip(root, new Setup.Status(KitVersion.of("v1.0.0", ""), true)))
-                .isEqualTo("The kit marregui at " + tmp.resolve("kit") + ", its brain at " + tmp.resolve("kit/BRAIN") + ". Click for its menu.");
-        assertThat(KitActions.tip(root, new Setup.Status(KitVersion.of("v1.0.0", "").failedRemote("git ls-remote failed: offline"), true)))
-                .endsWith("\nIts newer releases are unknown: git ls-remote failed: offline");
-        assertThat(KitActions.tip(root, Setup.Status.NONE)).endsWith("\nIts version is unknown: the root is no git checkout.");
     }
 
     /// [ComandoUi#inside] resolves a symbolic link into the brain as inside it, a real folder in it too, and a sibling not.

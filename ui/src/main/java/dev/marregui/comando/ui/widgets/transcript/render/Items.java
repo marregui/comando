@@ -330,7 +330,7 @@ final class Items {
 
         @Override
         void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
-            Icons.get("thinking").paintIcon(marks.component(), g, x, y + 3);
+            // no mark before it: the line itself says Thought, in the theme's colours (record 119); kept in the tools' column
             Paras.paintBox(g, header, x + 22, y + 2, clip, marks);
             if (!shown()) {
                 return;

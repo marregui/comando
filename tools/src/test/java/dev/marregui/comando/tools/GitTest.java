@@ -159,13 +159,13 @@ class GitTest {
         assertThat(Git.repos(root.resolve("c"))).isEmpty();
     }
 
-    /// Porcelain v2 output with ordinary, renamed, unmerged, untracked and ignored records gives the branch, each change with
+    /// Porcelain v2 output with ordinary, renamed, unmerged, untracked and ignored records gives the branch, the commit, each change with
     /// its kind and old path, the ignored paths, and no truncation.
     @Test
     void parseReadsEveryRecordKind() {
         Path root = Path.of("/r");
         String out = String.join("\0",
-                "# branch.oid abc",
+                "# branch.oid c312e98f0a1b2c3d4e5f60718293a4b5c6d7e8f9",
                 "# branch.head topic",
                 "1 .M N... 100644 100644 100644 a a src/x y.java",
                 "1 A. N... 000000 100644 100644 0 a added",
@@ -178,6 +178,9 @@ class GitTest {
                 "! .idea/x.xml", "");
         Git.Read read = Git.parse(root, out.getBytes(StandardCharsets.UTF_8), false);
         assertThat(read.status().branch()).isEqualTo("topic");
+        assertThat(read.status().shortHead()).as("the commit checked out, abbreviated").isEqualTo("c312e98");
+        assertThat(Git.parse(root, "# branch.oid (initial)\0# branch.head main\0".getBytes(StandardCharsets.UTF_8), false).status().head())
+                .as("before the first commit").isEmpty();
         assertThat(read.status().changes()).containsExactly(
                 new RepoStatus.FileChange("added", "", RepoStatus.Kind.ADDED),
                 new RepoStatus.FileChange("clash", "", RepoStatus.Kind.CONFLICTED),

@@ -61,6 +61,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.IntConsumer;
@@ -451,6 +452,15 @@ public final class Workspace {
     /** Whether a panel's shell runs a program: a tab closed with others stays open while it does. */
     public void onRunsProgram(Predicate<PanelId> runs) {
         runsProgram = runs;
+    }
+
+    /** Where a panel's Locate button shows its file, or its session, in the sidebar. */
+    private BiConsumer<Path, String> locator = (f, session) -> {
+    };
+
+    /** Where a panel's Locate button shows its file, or its session, in the sidebar (record 119). */
+    public void onLocate(BiConsumer<Path, String> locate) {
+        locator = locate;
     }
 
     /** How a link followed in a panel's rendered Markdown opens its file. */
@@ -1064,6 +1074,7 @@ public final class Workspace {
                     });
                     PanelId id = p.id();
                     view.editor().onChange(text -> texts.changed(id, text));
+                    view.onLocate((f, session) -> locator.accept(f, session));
                     view.onOpenFile((f, heading) -> {
                         if (heading != null) {
                             headingWhenOpen(f, heading);

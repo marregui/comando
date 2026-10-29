@@ -53,6 +53,8 @@ import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.Arrays;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -112,6 +114,8 @@ final class FilesTab {
     static final String JOBS_LINK = "comando-kit-jobs:";
     static final String JOBS_GROUP = "Kit";
     static final String JOBS_ICON = "folder-jobs";
+    /** What tells a group's row (BRAIN, KIT) from an entry: its folder's name follows (record 119). */
+    static final String GROUP_LINK = "comando-group:";
     static final String CONFIGURE_JOBS = "Configure kit jobs";
     static final String APPLY_JOBS = "Apply pending changes";
 
@@ -159,6 +163,10 @@ final class FilesTab {
     private List<FolderRoot> folders = List.of();
     /** The folders and the rows of their groups ({@link FolderRoot#groupRoots}): every folder read. */
     private List<FolderRoot> all = List.of();
+    /** The file a panel asked to be shown, until its folders have been read and it is selected; null when none. */
+    private Path revealing;
+    /** The kit's root and its newer release, one per line; empty without a kit. */
+    private String kitRelease = "";
     /** The folders' index file names, lower case, as each cell's icon asks: made when the folders change. */
     private Set<String> indexNames = Set.of();
     /** The latest tree read of each folder, by name. */
@@ -198,14 +206,17 @@ final class FilesTab {
         for (TreeView t : List.of(tree, found)) {
             t.tree().setRootVisible(false);
             t.icons(n -> {
+                if (isGroupRow(n)) {
+                    return TreeView.NO_ICON; // BRAIN, KIT: the name alone (record 119)
+                }
                 String icon = rowIcon(n).orElseGet(() -> iconName(n, indexNames));
                 return icon.isEmpty() ? null : icon(icon);
             });
             t.colors(this::colorOf);
             // a repository's top folder: its own icon with git's mark on it, in git's colours
-            t.nodeIcons(n -> repoAt(n).map(r -> (Icon) new OverlayIcon(icon(n.getUserObject() instanceof ViewSpec.TreeNode node
+            t.nodeIcons(n -> isGroupRow(n) ? null : repoAt(n).map(r -> (Icon) new OverlayIcon(icon(n.getUserObject() instanceof ViewSpec.TreeNode node
                     ? rowIcon(node).orElse("folder") : "folder"), Icons.get(Icons.GIT_BADGE))).orElse(null));
-            t.tips(n -> isJobs(n) ? jobsTip(jobs) : repoAt(n).map(FilesTab::repoTip).or(() -> rowTip(n))
+            t.tips(n -> isJobs(n) ? jobsTip(jobs) : isGroupRow(n) ? groupTip(n) : repoAt(n).map(FilesTab::repoTip).or(() -> rowTip(n))
                     .orElse(holdsNew(n) ? NEW_TIP : isChanged(n) ? CHANGED_FILE_TIP : holdsChanged(n) ? CHANGED_TIP : null));
             t.trailing(this::marks);
             // one click opens or closes a folder; a double click on a top-level row shows its changes instead
@@ -357,6 +368,80 @@ final class FilesTab {
         }
     }
 
+    /**
+     * Shows {@code file} in the tree (record 119): the filter cleared, every row and folder on its way opened, whether
+     * the user closed them or they were never read, and the file selected and scrolled into view. A folder not read yet
+     * is read first, and the walk goes on when its tree arrives. Says beside the tree when no folder of the tab shows the
+     * file. Opens no panel.
+     */
+    void reveal(Path file) {
+        if (searching()) {
+            filter.setText("");
+        }
+        revealing = file.toAbsolutePath().normalize();
+        revealNext();
+    }
+
+    /** The next step of {@link #reveal}: as far down as the trees read allow; done once the file is selected. */
+    private void revealNext() {
+        if (revealing == null) {
+            return;
+        }
+        Path file = revealing;
+        // the folder holding it most closely: Memory rather than BRAIN, BRAIN rather than KIT
+        Optional<FolderRoot> holder = all.stream().filter(f -> f.contains(file) && !excluded(f, file))
+                .max(Comparator.comparingInt(f -> Path.of(f.path()).normalize().getNameCount()));
+        TreePath at = holder.map(f -> folderRow(f.name())).orElse(null);
+        if (at == null) {
+            revealing = null;
+            tell.tell(tree.tree(), new Point(8, 8), "Not in a folder of the Files tab: " + Labels.shortPath(file.toString()));
+            return;
+        }
+        FolderRoot f = holder.get();
+        for (int i = 1; i < at.getPathCount(); i++) {
+            tree.tree().expandPath(new TreePath(Arrays.copyOf(at.getPath(), i + 1)));
+        }
+        Path rel = Path.of(f.path()).toAbsolutePath().normalize().relativize(file);
+        for (int i = 0; i < rel.getNameCount(); i++) {
+            String name = rel.getName(i).toString();
+            DefaultMutableTreeNode node = (DefaultMutableTreeNode) at.getLastPathComponent();
+            DefaultMutableTreeNode next = null;
+            for (int c = 0; c < node.getChildCount() && next == null; c++) {
+                DefaultMutableTreeNode child = (DefaultMutableTreeNode) node.getChildAt(c);
+                if (child.getUserObject() instanceof ViewSpec.TreeNode n && n.label().equals(name) && !isGroupRow(n) && rowFolder(child).isEmpty()) {
+                    next = child;
+                }
+            }
+            if (next == null) {
+                if (!read.containsKey(f.name())) {
+                    return; // its tree is on its way: show() goes on
+                }
+                revealing = null;
+                tell.tell(tree.tree(), below(tree, at), "The Files tab does not show " + rel + " (left out, or not read)");
+                return;
+            }
+            at = at.pathByAddingChild(next);
+            if (i < rel.getNameCount() - 1) {
+                tree.tree().expandPath(at);
+            }
+        }
+        revealing = null;
+        tree.tree().setSelectionPath(at);
+        tree.tree().scrollPathToVisible(at);
+        tree.tree().requestFocusInWindow();
+    }
+
+    /** Whether {@code f} leaves {@code file} out: a name on its way that the folder excludes. */
+    private static boolean excluded(FolderRoot f, Path file) {
+        Path rel = Path.of(f.path()).toAbsolutePath().normalize().relativize(file);
+        for (Path part : rel) {
+            if (f.excludes(part.toString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** Moves what is known of folder {@code from} to its new name {@code to}. */
     private void rename(String from, String to) {
         ViewSpec.TreeNode t = read.remove(from);
@@ -384,6 +469,7 @@ final class FilesTab {
         requested.remove(name);
         rebuild();
         openNewestDay(name);
+        revealNext();
         if (searching()) {
             refilter(false);
         }
@@ -392,9 +478,25 @@ final class FilesTab {
     /** The open folders' git repositories as read: the marks of a changed file, a new one and the folders leading to them. */
     void showRepos(List<RepoStatus> repos) {
         List<RepoStatus> before = changes.repos();
+        List<String> heads = before.stream().map(RepoStatus::head).toList();
         changes.set(repos);
         if (changes.repos() != before) {
+            if (!changes.repos().stream().map(RepoStatus::head).toList().equals(heads)) {
+                rebuild(); // a group's row names its repository's commit
+            }
             remark();
+        }
+    }
+
+    /**
+     * The kit at {@code dir} and its newest release when newer than the one checked out ("" when none): the kit's row
+     * says it after its commit (record 119).
+     */
+    void kitRelease(Path dir, String newer) {
+        String now = dir == null ? "" : dir.toAbsolutePath().normalize() + "\n" + newer;
+        if (!now.equals(kitRelease)) {
+            kitRelease = now;
+            rebuild();
         }
     }
 
@@ -564,8 +666,15 @@ final class FilesTab {
                 && n.getLevel() >= ROW && n.getLevel() <= ROW + 1 ? rowFolder(node) : Optional.empty();
     }
 
-    /** The folder whose row has {@code n}'s name and detail; a row's detail is its path, which no entry inside has. */
+    /**
+     * The folder whose row {@code n} is: a group's row by its link; any other by its name and detail, a row's detail
+     * being its path, which no entry inside has.
+     */
     private Optional<FolderRoot> rowFolder(ViewSpec.TreeNode n) {
+        if (isGroupRow(n)) {
+            String name = n.link().substring(GROUP_LINK.length());
+            return all.stream().filter(f -> f.name().equals(name)).findFirst();
+        }
         return all.stream().filter(f -> label(f).equals(n.label()) && rowDetail(f).equals(n.detail())).findFirst();
     }
 
@@ -727,14 +836,16 @@ final class FilesTab {
                 }
                 FolderRoot r = groupRoot.get();
                 kids.apply(r).stream().filter(n -> isFolderEntry(n) && !n.label().startsWith(".")).forEach(inside::add);
-                add(rows, r, inside, keepEmpty);
+                addGroup(rows, r, inside, keepEmpty);
+            } else if (members.size() == 1 && f.group().isEmpty()) {
+                add(rows, f, kids.apply(f), keepEmpty);
             } else if (members.size() == 1) {
                 List<ViewSpec.TreeNode> inside = new ArrayList<>();
                 if (keepEmpty && jobs.read() && f.group().equals(JOBS_GROUP)) {
                     inside.add(jobsRow());
                 }
                 inside.addAll(kids.apply(f));
-                add(rows, f, inside, keepEmpty);
+                addGroup(rows, f, inside, keepEmpty);
             } else {
                 for (FolderRoot m : members) {
                     add(rows, m, kids.apply(m), keepEmpty);
@@ -749,6 +860,41 @@ final class FilesTab {
         if (keepEmpty || !inside.isEmpty()) {
             rows.add(new ViewSpec.TreeNode(label(f), rowDetail(f), inside));
         }
+    }
+
+    /**
+     * A group's row (record 119): its name in capitals, no icon, its repository's commit for detail (and the kit's newer
+     * release), known by its link rather than by a path it no longer shows.
+     */
+    private void addGroup(List<ViewSpec.TreeNode> rows, FolderRoot f, List<ViewSpec.TreeNode> inside, boolean keepEmpty) {
+        if (keepEmpty || !inside.isEmpty()) {
+            rows.add(new ViewSpec.TreeNode(label(f), groupDetail(f), GROUP_LINK + f.name(), inside));
+        }
+    }
+
+    /** A group's row's detail: the short commit of the repository whose top it is, and the kit's newer release. */
+    private String groupDetail(FolderRoot f) {
+        Path dir = Path.of(f.path()).toAbsolutePath().normalize();
+        String head = changes.repos().stream().filter(r -> Path.of(r.root()).toAbsolutePath().normalize().equals(dir))
+                .map(RepoStatus::shortHead).findFirst().orElse("");
+        String[] kit = kitRelease.split("\n", -1);
+        String newer = kit.length == 2 && kit[0].equals(dir.toString()) && !kit[1].isEmpty() ? kit[1] + " available" : "";
+        return head.isEmpty() ? newer : newer.isEmpty() ? head : head + " · " + newer;
+    }
+
+    /** Whether {@code n} is a group's row. */
+    static boolean isGroupRow(ViewSpec.TreeNode n) {
+        return n.link().startsWith(GROUP_LINK);
+    }
+
+    private static boolean isGroupRow(DefaultMutableTreeNode n) {
+        return n.getUserObject() instanceof ViewSpec.TreeNode node && isGroupRow(node);
+    }
+
+    /** A group's row's tooltip: where it is, then its repository's branch and changes. */
+    private String groupTip(DefaultMutableTreeNode n) {
+        String where = rowFolder(n).map(f -> Labels.shortPath(f.path())).orElse("");
+        return repoAt(n).map(r -> Plain.text(where + " · ") + repoTip(r)).orElse(where.isEmpty() ? null : Plain.text(where));
     }
 
     /** Whether {@code n}, an entry of a folder as read, is a folder rather than a file, a placeholder or a note. */

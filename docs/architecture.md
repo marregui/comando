@@ -321,7 +321,7 @@ Bounded waits:
 | A tab's topic read (Haiku) | 30 s | killed; the card says Haiku did not answer |
 | Desktop notification (`osascript`) | 10 s | killed, not shown |
 | A `git` command | 10 s | killed with its whole process tree; the read or write says git took too long |
-| A kit's remote (`git ls-remote`, `git push`); the brain's commit | 120 s; 60 s | killed; the status bar or the backup says why |
+| A kit's remote (`git ls-remote`, `git push`); the brain's commit | 120 s; 60 s | killed; the KIT row or the backup says why |
 | Keychain calls | 10 s | killed; the connection loads without its password, the item is kept |
 | Closing the window at quit | 5 s | quit anyway |
 | The EDT | 200 ms | a stall, one INFO line when it ends; past 1 s (2 s in the JDK's drawing) a hang, logged with the EDT's stack; a stall of 1 s or more a notice whose click opens the log at the stack, or at the stall's line |

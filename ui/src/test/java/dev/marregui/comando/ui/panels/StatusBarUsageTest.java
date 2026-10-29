@@ -15,7 +15,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a failed read keeps the last good numbers, muted, and says why in the tooltip
 /// - the second CLI's read has a label of its own after the first, and its failure leaves the first alone
 /// - a CLI that cannot run never shows its label
-/// - a read with nothing to show leaves the kit label as it was
 /// - a window near its limit turns the label to attention, then danger
 class StatusBarUsageTest {
 
@@ -88,18 +87,6 @@ class StatusBarUsageTest {
         });
         SwingUtilities.invokeAndWait(() -> bar.planUsage(PlanUsage.failed(PlanUsage.CODEX, "cannot run 'codex'", 2L)));
         assertThat(bar.codexUsageLabel().isVisible()).isFalse();
-    }
-
-    /// A failed read with nothing to show neither hides the kit label nor adds mouse listeners to it.
-    @Test
-    void aReadWithNothingToShowLeavesTheKitShown() throws Exception {
-        StatusBar bar = new StatusBar(intent -> {
-        });
-        SwingUtilities.invokeAndWait(() -> bar.kit("kit test-kit", "", false));
-        int listeners = bar.kitLabel().getMouseListeners().length;
-        SwingUtilities.invokeAndWait(() -> bar.planUsage(PlanUsage.failed("not logged in", 2L)));
-        assertThat(bar.kitLabel().isVisible()).isTrue();
-        assertThat(bar.kitLabel().getMouseListeners()).hasSize(listeners);
     }
 
     /// A window at 80% turns the label to [Theme#ATTENTION], one at 95% to [Theme#DANGER].

@@ -249,7 +249,7 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         for (RepoStatus r : repos) {
             if (Path.of(r.root()).toAbsolutePath().normalize().equals(top)) {
                 RepoStatus shown = scope.folder().isEmpty() ? r
-                        : new RepoStatus(r.root(), r.branch(), RepoChanges.changesIn(r, scope.folder()), r.truncated(), r.error());
+                        : new RepoStatus(r.root(), r.branch(), RepoChanges.changesIn(r, scope.folder()), r.truncated(), r.error(), r.head());
                 String label = scope.name().isEmpty() ? r.name() : scope.name();
                 return new ViewSpec.TreeNode("Changes", "", List.of(repo(shown, label, targets)));
             }

@@ -13,11 +13,14 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import javax.swing.Icon;
+import javax.swing.JLabel;
 import javax.swing.JMenuItem;
 import javax.swing.JPopupMenu;
 import javax.swing.JTree;
 import javax.swing.tree.DefaultMutableTreeNode;
 import java.awt.Component;
+import java.awt.Container;
 import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.nio.file.Path;
@@ -31,6 +34,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///   file and nothing hidden; a group of one is its folder's row, named in capitals
 /// - a group's folders inside its row keep their icons, are watched when open, and their entries resolve to their paths
 /// - only a top-level row shows its changes, on a double click or in its menu, and gains the window's items (the backup)
+/// - a group's row has no icon and names its repository's commit, the kit's newer release after it (record 119)
+/// - reveal opens every row and folder on a file's way, waits for a folder's read, selects the file; says so when no
+///   folder shows it
 @ExtendWith(OnEdt.class)
 class FilesTabGroupsTest {
 
@@ -158,5 +164,85 @@ class FilesTabGroupsTest {
         assertThat(intents).as("a folder inside BRAIN shows no changes of its own").noneMatch(i -> i instanceof Intent.ShowView);
         doubleClick(tree, row(tree, "BRAIN"));
         assertThat(intents).contains(new Intent.ShowView("", ViewSpec.Changes.TITLE, new ViewSpec.Changes("/b", "", "BRAIN"), Placement.SIDE));
+    }
+
+    /// BRAIN and KIT are drawn with no icon and say their repository's short commit; KIT adds the kit's newer release;
+    /// their tooltip says where they are. A folder inside BRAIN keeps its icon.
+    @Test
+    void aGroupsRowHasNoIconAndNamesItsCommit() {
+        FilesTab tab = tab();
+        JTree tree = tab.tree().tree();
+        tree.expandRow(0);
+        tab.showRepos(List.of(new RepoStatus("/b", "main", List.of(), false, "", "737f602aa11bb22cc33dd44ee55ff6677889900a"),
+                new RepoStatus("/k", "master", List.of(), false, "", "c312e98ff00ee11dd22cc33bb44aa5566778899b")));
+        tab.kitRelease(Path.of("/k"), "v2.19.0");
+        assertThat(detail(tree, "BRAIN")).isEqualTo("737f602");
+        assertThat(detail(tree, "KIT")).isEqualTo("c312e98 · v2.19.0 available");
+        assertThat(icon(tree, "BRAIN")).as("no icon, not even the look's").isNull();
+        assertThat(icon(tree, "KIT")).isNull();
+        assertThat(icon(tree, "Memory")).isNotNull();
+        assertThat(tree.getToolTipText(at(tree, "BRAIN"))).startsWith("/b · On main");
+        tab.kitRelease(Path.of("/k"), "");
+        assertThat(detail(tree, "KIT")).isEqualTo("c312e98");
+    }
+
+    /// Revealing a file in a closed, unread folder inside BRAIN opens BRAIN and the folder, waits for its read, then
+    /// opens the subfolder and selects the file; a file in no folder of the tab is said beside the tree.
+    @Test
+    void revealOpensTheWayAndSelectsTheFile() {
+        List<String> told = new ArrayList<>();
+        FilesTab tab = tab();
+        tab.tell((owner, at, text) -> told.add(text));
+        JTree tree = tab.tree().tree();
+        tab.reveal(Path.of("/b/MEMORY/topic/notes.md"));
+        assertThat(rows(tree)).as("opened as far as read").containsExactly("BRAIN", "Scratchpad", "KB", "Memory", FilesTab.READING, "KIT");
+        assertThat(intents).last().isEqualTo(new Intent.WatchFolders(List.of("Memory", "BRAIN")));
+        tab.show(MEMORY, folder("Memory", folder("topic", file("/b/MEMORY/topic/a.md"), file("/b/MEMORY/topic/notes.md")), file("/b/MEMORY/MEMORY.md")));
+        assertThat(tree.getSelectionPath()).isNotNull();
+        assertThat(((ViewSpec.TreeNode) ((DefaultMutableTreeNode) tree.getSelectionPath().getLastPathComponent()).getUserObject()).label())
+                .isEqualTo("notes.md");
+        assertThat(tree.isExpanded(tree.getSelectionPath().getParentPath())).isTrue();
+
+        tree.collapseRow(0);
+        tab.reveal(Path.of("/b/MEMORY/MEMORY.md"));
+        assertThat(((ViewSpec.TreeNode) ((DefaultMutableTreeNode) tree.getSelectionPath().getLastPathComponent()).getUserObject()).label())
+                .as("a row the user closed is opened again").isEqualTo("MEMORY.md");
+
+        tab.reveal(Path.of("/elsewhere/x.md"));
+        assertThat(told).containsExactly("Not in a folder of the Files tab: /elsewhere/x.md");
+    }
+
+    private static MouseEvent at(JTree tree, String label) {
+        Rectangle r = tree.getRowBounds(row(tree, label));
+        return new MouseEvent(tree, MouseEvent.MOUSE_MOVED, 0, 0, r.x + 4, r.y + r.height / 2, 0, false);
+    }
+
+    private static Component cell(JTree tree, String label) {
+        int i = row(tree, label);
+        return tree.getCellRenderer().getTreeCellRendererComponent(tree, tree.getPathForRow(i).getLastPathComponent(), false, false, false, i, false);
+    }
+
+    private static String detail(JTree tree, String label) {
+        return ((ViewSpec.TreeNode) ((DefaultMutableTreeNode) tree.getPathForRow(row(tree, label)).getLastPathComponent()).getUserObject()).detail();
+    }
+
+    /** The icon of the row's name: the first label in its cell, under a separator's space when it has one. */
+    private static Icon icon(JTree tree, String label) {
+        return firstLabel(cell(tree, label)).getIcon();
+    }
+
+    private static JLabel firstLabel(Component c) {
+        if (c instanceof JLabel l) {
+            return l;
+        }
+        for (Component child : ((Container) c).getComponents()) {
+            if (child instanceof Container k && (k instanceof JLabel || k.getComponentCount() > 0)) {
+                JLabel found = firstLabel(child);
+                if (found != null) {
+                    return found;
+                }
+            }
+        }
+        return null;
     }
 }
