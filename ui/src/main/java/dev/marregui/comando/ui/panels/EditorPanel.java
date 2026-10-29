@@ -636,7 +636,7 @@ public final class EditorPanel extends JPanel {
         boolean isFile = document && file != null;
         boolean isSession = panel != null && !panel.session().isEmpty();
         locate.setVisible(isFile || isSession);
-        locate.setIcon(Icons.get(isFile ? "files" : "session"));
+        locate.setIcon(Icons.locate(isFile ? "files" : "session"));
         locate.setToolTipText(isFile ? "Show the file in the Files tab" : "Show the session in the Sessions tab");
         locate.getAccessibleContext().setAccessibleName(isFile ? "Show in Files" : "Show in Sessions");
     }

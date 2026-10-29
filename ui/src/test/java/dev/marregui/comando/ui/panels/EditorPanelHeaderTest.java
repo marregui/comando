@@ -31,7 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the session's controls and name are not in the header; the connection toggle is
 /// - the connection toggle is one icon coloured by state, first of the tools, and its name chip binds another
 /// - every header button is an icon with a tooltip and no button shape
-/// - the Locate button, after Stop and before Clear, shows a document in Files, else the panel's session in Sessions
+/// - the Locate button, after Stop and before Clear, shows a document in Files, else the panel's session in Sessions;
+///   its icon is the tab's after a left arrow
 class EditorPanelHeaderTest {
 
     private static final PanelId A = new PanelId("a");
@@ -194,6 +195,9 @@ class EditorPanelHeaderTest {
             b.doClick();
             p[0].file(Path.of("/b/MEMORY/x.md"), true);
             assertThat(b.getToolTipText()).isEqualTo("Show the file in the Files tab");
+            assertThat(b.getIcon()).as("the Files tab's mark after an arrow, not the tab's own icon")
+                    .isSameAs(Icons.locate("files")).isNotSameAs(Icons.get("files"));
+            assertThat(b.getIcon().getIconWidth()).as("the arrow before the mark").isGreaterThan(Icons.get("files").getIconWidth());
             b.doClick();
             p[0].render(new PanelState(A, "notes", "", ""), AppState.initial(
                     List.of(new PanelState(A, "notes", "", "")), List.of(), List.of()));

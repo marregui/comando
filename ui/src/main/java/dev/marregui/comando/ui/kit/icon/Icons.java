@@ -72,6 +72,15 @@ public final class Icons {
     /** Git's mark, in git's colours, drawn over a repository's folder. */
     public static final String GIT_BADGE = "sidebar/git-badge";
 
+    /**
+     * {@code name}'s icon with a small left arrow before it: the Locate button's, which goes to that mark's tab in the
+     * sidebar, told from the tab's own icon by the arrow (record 119).
+     */
+    public static Icon locate(String name) {
+        return COMPOSED.computeIfAbsent("locate-" + name, k -> new BesideIcon(
+                CACHE.computeIfAbsent("locate-arrow", a -> new FlatSVGIcon("icons/locate-arrow.svg", 7, 16)), get(name)));
+    }
+
     /** Names {@code icon}, painted in code, so that a command can name it as it names an SVG. */
     public static void put(String name, Icon icon) {
         PAINTED.put(name, icon);
