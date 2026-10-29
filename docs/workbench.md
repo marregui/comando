@@ -94,7 +94,9 @@ Any number of document panels may be attached to a session
   session has a conversation and usable while it is stopped (a new conversation starts; the old one stays
   importable); then what the session does, "working · 12 s", last, so that nothing moves as it changes. On the right:
   the model and the effort, each a menu that changes it now and keeps it, as the session's menu in the sidebar does;
-  the context ("ctx 412k (41%)", "ctx –" until a turn reports it); and right after it the checkpoint, shown while the
+  the context ("ctx 412k (41%)"), followed after every model call of a turn and, when a stored conversation is
+  loaded, taken from its last call or the metrics its last turn left, so a restart keeps it ("ctx –" only while
+  nothing is known; [record 120](adr/0120-the-context-follows-each-model-call.md)); and right after it the checkpoint, shown while the
   session has a checkpoint command, `/reflect` by default
   ([records 45 and 46](adr/0046-clear-buttons-text-coloured-by-kind-checkpoint-due.md)). The context and the
   checkpoint turn purple together once a turn ended with the context at 60% of the window or more and the command was

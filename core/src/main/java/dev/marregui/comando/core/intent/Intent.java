@@ -310,6 +310,13 @@ public sealed interface Intent {
     record SessionBranch(String name, String branch) implements Intent {
     }
 
+    /**
+     * How full session {@code name}'s context is now: after each model call of a turn, and when its stored conversation
+     * is loaded (record 120). {@code tokens} or {@code window} at 0 or below leave the one known.
+     */
+    record SessionContext(String name, long tokens, long window) implements Intent {
+    }
+
     // ---- approvals
 
     record ApprovalRequested(Approval approval) implements Intent {

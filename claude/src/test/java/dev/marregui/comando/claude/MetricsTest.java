@@ -11,6 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -154,5 +155,21 @@ class MetricsTest {
     void withoutADataRootNothingIsWritten() {
         MetricsLog.NONE.write(MetricsLog.NONE.event("turn"));
         assertThat(dir).isEmptyDirectory();
+    }
+
+    /// [MetricsLog#lastContext] finds a conversation's last turn, newest file and line first, across days, and nothing for
+    /// an unknown conversation or a log with no folder.
+    @Test
+    void theLastContextOfAConversationIsItsNewestTurns() throws Exception {
+        Path days = Files.createDirectories(dir.resolve("days"));
+        Files.writeString(days.resolve("metrics-2026-10-28.jsonl"), String.join("\n",
+                "{\"ts\":\"2026-10-28T20:00:00Z\",\"event\":\"turn\",\"conversation\":\"c1\",\"context\":100,\"window\":200000}",
+                "{\"ts\":\"2026-10-28T21:00:00Z\",\"event\":\"turn\",\"conversation\":\"c1\",\"context\":588979,\"window\":1000000}",
+                "{\"ts\":\"2026-10-28T21:01:00Z\",\"event\":\"agent\",\"conversation\":\"c1\",\"context\":7}", ""));
+        Files.writeString(days.resolve("metrics-2026-10-29.jsonl"), "{\"ts\":\"2026-10-29T06:00:00Z\",\"event\":\"usage\"}\n");
+        MetricsLog log = new MetricsLog(days, JSON, () -> Instant.parse("2026-10-29T08:00:00Z").toEpochMilli());
+        assertThat(log.lastContext("c1")).hasValueSatisfying(c -> assertThat(c).containsExactly(588_979L, 1_000_000L));
+        assertThat(log.lastContext("c2")).isEmpty();
+        assertThat(MetricsLog.NONE.lastContext("c1")).isEmpty();
     }
 }

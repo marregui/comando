@@ -197,6 +197,15 @@ public record SessionState(
         return new SessionState(spec, status, error, info, pendingTurns, cost, tokens, window, at, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
     }
 
+    /** The context as a model call or the stored conversation reports it; a value at 0 or below keeps the one known. */
+    public SessionState withContext(long tokens, long window) {
+        long t = tokens > 0 ? tokens : contextTokens;
+        long w = window > 0 ? window : contextWindow;
+        return t == contextTokens && w == contextWindow ? this
+                : new SessionState(spec, status, error, info, pendingTurns, costUsd, t, w, lastActivityMillis, activity, branch, turnStartedMillis,
+                lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
+    }
+
     public SessionState withActivity(String newActivity, long at) {
         return new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow, at, newActivity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, checkpointClears);
     }

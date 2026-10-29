@@ -136,3 +136,5 @@ has the same shape:
 | [116](0116-one-connection-toggle.md) | A panel's connection is one toggle and its name, first of the tools | 2026-10-28 | Miguel and Claude | accepted |
 | [117](0117-kit-jobs-a-row-and-a-window.md) | The kit's scheduled jobs: a row in the Kit group and a window; the manifest is their record | 2026-10-28 | Miguel and Claude | accepted |
 | [118](0118-brain-and-kit-are-rows-each-one-unit.md) | BRAIN and KIT are rows of the Files tab, each one unit: its changes and its backup at its row alone | 2026-10-28 | Miguel and Claude | accepted |
+| [119](0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md) | Fewer marks: BRAIN and KIT without icons and with their commit, the kit off the status bar, Locate, no thinking mark | 2026-10-28 | Miguel and Claude | accepted |
+| [120](0120-the-context-follows-each-model-call.md) | The session bar's context follows each model call, and a restart keeps it | 2026-10-29 | Miguel and Claude | accepted |

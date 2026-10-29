@@ -1,5 +1,6 @@
 package dev.marregui.comando.claude;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
@@ -11,6 +12,8 @@ import java.nio.file.StandardOpenOption;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
 import java.util.function.LongSupplier;
 
 /**
@@ -52,6 +55,43 @@ public final class MetricsLog {
     /** The current time, as the events are stamped. */
     long now() {
         return clock.getAsLong();
+    }
+
+    /** Days of files {@link #lastContext} looks back through. */
+    static final int CONTEXT_DAYS = 14;
+
+    /**
+     * The context and its window the last {@code turn} of conversation {@code id} ended with, newest file first, within
+     * {@link #CONTEXT_DAYS}; empty when none is kept (record 120). Reads files: off the EDT.
+     */
+    Optional<long[]> lastContext(String id) {
+        if (dir == null || id == null || id.isEmpty() || !Files.isDirectory(dir)) {
+            return Optional.empty();
+        }
+        LocalDate day = LocalDate.ofInstant(Instant.ofEpochMilli(clock.getAsLong()), ZoneOffset.UTC);
+        String needle = "\"conversation\":\"" + id + "\"";
+        for (int i = 0; i < CONTEXT_DAYS; i++, day = day.minusDays(1)) {
+            Path file = dir.resolve("metrics-" + day + ".jsonl");
+            if (!Files.isRegularFile(file)) {
+                continue;
+            }
+            try {
+                List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+                for (int j = lines.size() - 1; j >= 0; j--) {
+                    String line = lines.get(j);
+                    if (line.contains(needle) && line.contains("\"event\":\"turn\"")) {
+                        JsonNode e = json.readTree(line);
+                        long context = e.path("context").asLong(-1);
+                        if (context > 0) {
+                            return Optional.of(new long[]{context, e.path("window").asLong(0)});
+                        }
+                    }
+                }
+            } catch (IOException | RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot read metrics [file=" + file + "]: " + e.getMessage());
+            }
+        }
+        return Optional.empty();
     }
 
     /** Appends {@code event} as one line to today's file; a failure is logged, never thrown. */

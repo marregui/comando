@@ -58,6 +58,8 @@ final class StreamMapper {
     private boolean replaying;
     /** The context size: input tokens of the last main-thread API call; -1 until one is seen. */
     private long contextTokens = -1;
+    /** The context window the last turn reported, or the one the stored conversation's last turn kept; 0 when unknown. */
+    private long contextWindow;
     /** While a stored conversation is read: the message that ended its turn, until its last line is read; else null. */
     private String turnEndingMessage;
     /**
@@ -170,6 +172,24 @@ final class StreamMapper {
             default -> {
                 // titles, snapshots, mode changes and attachments carry nothing to show
             }
+        }
+    }
+
+    /**
+     * The stored conversation's context, sent once it is loaded (record 120): the tokens its last model call read, else
+     * {@code kept}'s, the context and window the metrics log kept of its last turn; nothing when neither is known.
+     */
+    void reportContext(Optional<long[]> kept) {
+        long tokens = contextTokens;
+        if (kept.isPresent()) {
+            contextWindow = Math.max(contextWindow, kept.get()[1]);
+            if (tokens <= 0) {
+                tokens = kept.get()[0];
+                contextTokens = tokens;
+            }
+        }
+        if (tokens > 0) {
+            sink.dispatch(new Intent.SessionContext(session, tokens, contextWindow));
         }
     }
 
@@ -430,6 +450,10 @@ final class StreamMapper {
                     + usage.path("cache_read_input_tokens").asLong();
             if (tokens > 0) {
                 contextTokens = tokens;
+                if (!replaying) {
+                    // the session bar follows each model call, not only the turn's end (record 120)
+                    sink.dispatch(new Intent.SessionContext(session, tokens, contextWindow));
+                }
             }
         }
         for (JsonNode block : message.path("content")) {
@@ -670,6 +694,9 @@ final class StreamMapper {
         long window = 0;
         for (JsonNode model : e.path("modelUsage")) {
             window = Math.max(window, model.path("contextWindow").asLong());
+        }
+        if (window > 0) {
+            contextWindow = window;
         }
         sink.dispatch(new Intent.SessionTurnEnded(session, e.path("queued_turn_count").asInt(0), e.path("total_cost_usd").asDouble(),
                 tokens, window, error, message, error ? "" : e.path("result").asText("")));

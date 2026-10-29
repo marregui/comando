@@ -598,6 +598,17 @@ class ReducerTest {
         apply(new Intent.SessionTurnEnded("work", 0, -1.0, -1L, 0L, true, "session not running"));
         assertThat(state.session("work").orElseThrow().costUsd()).isEqualTo(0.55);
         assertThat(state.session("work").orElseThrow().contextTokens()).isEqualTo(31_000L);
+
+        // a model call mid-turn, or a stored conversation loaded, reports the context at once; an unknown window keeps the
+        // known one (record 120)
+        apply(new Intent.SessionContext("work", 45_000L, 0L));
+        assertThat(state.session("work").orElseThrow().contextTokens()).isEqualTo(45_000L);
+        assertThat(state.session("work").orElseThrow().contextWindow()).isEqualTo(200_000L);
+        apply(new Intent.SessionContext("work", -1L, 1_000_000L));
+        assertThat(state.session("work").orElseThrow().contextTokens()).isEqualTo(45_000L);
+        assertThat(state.session("work").orElseThrow().contextWindow()).isEqualTo(1_000_000L);
+        apply(new Intent.SessionContext("nobody", 1L, 1L));
+        assertThat(effects).isEmpty();
     }
 
     /// A fresh start of a stopped session clears its conversation id, saves the spec with mode NEW before starting, and says

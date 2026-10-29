@@ -95,6 +95,36 @@ class StreamMapperTest {
         assertThat(blocks(Block.Note.class)).filteredOn(n -> n.kind() == Block.NoteKind.INIT).hasSize(1);
     }
 
+    /// The context follows each top-level model call of a live turn, not only its end; a stored conversation's calls send
+    /// nothing as they replay, then one report when it is loaded: its last call's tokens with the window the metrics
+    /// kept, or the metrics' own tokens when the replay had none (record 120).
+    @Test
+    void theContextFollowsEachModelCallAndAStoredConversationReportsItOnce() {
+        mapper.prompt("Run the shell command: touch probe-file.txt", "one");
+        Fixtures.stream("approvals-and-question").forEach(mapper::accept);
+        List<Intent.SessionContext> live = sink.of(Intent.SessionContext.class);
+        assertThat(live).as("one a model call, before each turn's end").hasSizeGreaterThan(sink.of(Intent.SessionTurnEnded.class).size());
+        assertThat(live).allSatisfy(c -> assertThat(c.tokens()).isPositive());
+        assertThat(live.getLast().tokens()).isEqualTo(35_134L);
+
+        RecordingSink stored = new RecordingSink();
+        StreamMapper replay = new StreamMapper("old", new Transcript(), stored, new ObjectMapper());
+        replay.acceptHistory("{\"type\":\"assistant\",\"message\":{\"id\":\"m1\",\"role\":\"assistant\",\"model\":\"m\","
+                + "\"content\":[{\"type\":\"text\",\"text\":\"hi\"}],\"stop_reason\":\"end_turn\","
+                + "\"usage\":{\"input_tokens\":10,\"cache_creation_input_tokens\":100,\"cache_read_input_tokens\":400000}}}");
+        assertThat(stored.of(Intent.SessionContext.class)).as("nothing while replaying").isEmpty();
+        replay.reportContext(Optional.of(new long[]{588_979L, 1_000_000L}));
+        assertThat(stored.of(Intent.SessionContext.class)).containsExactly(new Intent.SessionContext("old", 400_110L, 1_000_000L));
+
+        RecordingSink empty = new RecordingSink();
+        StreamMapper none = new StreamMapper("new", new Transcript(), empty, new ObjectMapper());
+        none.reportContext(Optional.of(new long[]{588_979L, 1_000_000L}));
+        assertThat(empty.of(Intent.SessionContext.class)).as("the metrics' own when the replay had none")
+                .containsExactly(new Intent.SessionContext("new", 588_979L, 1_000_000L));
+        new StreamMapper("unknown", new Transcript(), empty, new ObjectMapper()).reportContext(Optional.empty());
+        assertThat(empty.of(Intent.SessionContext.class)).as("nothing known, nothing sent").hasSize(1);
+    }
+
     @Test
     void queuedPromptCompactionAndInterruptRecording() {
         Fixtures.stream("queued-compact-interrupt").forEach(mapper::accept);

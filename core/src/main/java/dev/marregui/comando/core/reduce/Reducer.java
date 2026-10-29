@@ -184,6 +184,7 @@ public final class Reducer {
             case Intent.SessionTurnEnded i -> turnEnded(s, i);
             case Intent.SessionExited i -> sessionExited(s, i);
             case Intent.SessionBranch i -> Transition.of(s.withSession(i.name(), x -> x.withBranch(i.branch())));
+            case Intent.SessionContext i -> Transition.of(s.withSession(i.name(), x -> x.withContext(i.tokens(), i.window())));
 
             case Intent.ApprovalRequested i -> approvalRequested(s, i.approval());
             case Intent.ApprovalAnswered i -> approvalAnswered(s, i);
