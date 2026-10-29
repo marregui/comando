@@ -824,7 +824,8 @@ class UiKeysTest {
         });
     }
 
-    /// More than 20 tooltips are found in the window, each one line of at most 80 characters with no line break.
+    /// More than 20 tooltips are found in the window, each one line of at most 80 characters with no line break and no
+    /// closing period (ui.md §1).
     @Test
     void everyTooltipInTheWindowIsOneShortLine() throws Exception {
         Window w = open("mac");
@@ -840,6 +841,7 @@ class UiKeysTest {
         assertThat(tips).as("tooltips found").hasSizeGreaterThan(20);
         assertThat(tips).as("one line of at most 80 characters")
                 .allSatisfy(t -> assertThat(t).doesNotContain("\n", "<br>").hasSizeLessThanOrEqualTo(80));
+        assertThat(tips).as("no closing period").noneSatisfy(t -> assertThat(t.strip()).endsWith("."));
     }
 
     private static void tips(Component c, List<String> out) {

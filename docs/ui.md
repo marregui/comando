@@ -98,7 +98,7 @@ The menu bar is built from `Menus`. After the application menu macOS draws come 
 a separator, then the help. The theme, the shell, the refreshing plots and the embedded QuestDB (when comando has one)
 are buttons at the tab row's right end, left of New panel (`Menus.corner`, `CommandButton`: each shows the first of
 its commands that can run now) ([record 114](adr/0114-help-menu-and-corner-buttons.md)). The bar holds only what has no key or control in the window, and what macOS expects in a menu
-([record 75](adr/0075-the-menu-bar-is-edit-and-actions-flat.md)). Every item has an icon and a tooltip saying what it
+([record 114](adr/0114-help-menu-and-corner-buttons.md), replacing [record 75](adr/0075-the-menu-bar-is-edit-and-actions-flat.md)). Every item has an icon and a tooltip saying what it
 does. A command in no menu is named by its area in the palette and in the keyboard shortcuts: Panels, Run, Session,
 Session ▸ Model, Session ▸ Effort, Connection, Results, Edit, Files, Kit, Window, Theme, comando. The registry refuses a
 command with neither.

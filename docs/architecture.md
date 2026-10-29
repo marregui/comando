@@ -391,8 +391,10 @@ The packages of `ui`, under `dev.marregui.comando.ui`, in layer order. The class
 
 A layer uses only those above it in this table: `kit` uses `core` and the UI libraries; `widget` adds `kit`; a widget
 package adds `widget` but no other widget package; `panels`, `dialogs` and `shell` use everything before them.
-`UiArchitectureTest` (ArchUnit) fails the build when a widget imports another widget or `panels`, `shell` or `dialogs`;
-when the kit imports `widget`, `widgets`, `panels` or `shell`; or when any UI class refers to `db`, `claude`, `mcp`,
+`UiArchitectureTest` (ArchUnit) fails the build when a class uses a layer below its own: a widget imports another
+widget, `panels`, `dialogs`, `shell` or `PanelTexts`; the kit imports `widget`, `widgets`, `panels`, `dialogs`, `shell`
+or `PanelTexts`; the contract imports `widgets`, `panels`, `dialogs`, `shell` or `PanelTexts`; a panel imports
+`dialogs` or `shell`; a dialog imports `shell`. It also fails when any UI class refers to `db`, `claude`, `mcp`,
 `tools` or `java.sql`. The Gradle module graph enforces it a second time for `db`, `claude`, `mcp` and `tools`.
 
 Where new code goes:

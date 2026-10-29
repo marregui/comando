@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted | Miguel and Claude |
+| 2026-10-29 | accepted: increment 1 built (§3); increments 2–4 proposed | Miguel and Claude |
 
 ## 1. Context
 
