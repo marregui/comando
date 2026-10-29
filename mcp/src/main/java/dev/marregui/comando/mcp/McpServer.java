@@ -1,14 +1,15 @@
 package dev.marregui.comando.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.port.ApprovalPort;
 import dev.marregui.comando.core.port.McpGateway;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -159,7 +160,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
                 return;
             }
             request = json.readTree(body);
-        } catch (IOException e) {
+        } catch (IOException | JacksonException e) {
             send(ex, 400, error(null, -32700, "parse error"));
             return;
         }
@@ -168,14 +169,14 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
             return;
         }
         if (!request.has("id")) {
-            if ("notifications/cancelled".equals(request.path("method").asText(""))) {
+            if ("notifications/cancelled".equals(request.path("method").asString(""))) {
                 tools.cancelled(callKey(session, request.path("params").path("requestId")));
             }
             send(ex, 202, null); // a notification or a response; nothing to answer
             return;
         }
         JsonNode id = request.get("id");
-        String method = request.path("method").asText("");
+        String method = request.path("method").asString("");
         JsonNode params = request.path("params");
         ObjectNode response = switch (method) {
             case "initialize" -> result(id, initialize(params));
@@ -192,7 +193,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     }
 
     private ObjectNode initialize(JsonNode params) {
-        String asked = params.path("protocolVersion").asText("");
+        String asked = params.path("protocolVersion").asString("");
         ObjectNode r = json.createObjectNode();
         r.put("protocolVersion", PROTOCOLS.contains(asked) ? asked : DEFAULT_PROTOCOL);
         r.putObject("capabilities").putObject("tools").put("listChanged", false);
@@ -209,7 +210,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     }
 
     private ObjectNode call(String session, JsonNode params, String callKey) {
-        String name = params.path("name").asText("");
+        String name = params.path("name").asString("");
         JsonNode args = params.path("arguments");
         McpTools.Outcome out = tools.call(session, name, args.isObject() ? args : json.createObjectNode(), callKey);
         ObjectNode r = json.createObjectNode();

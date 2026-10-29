@@ -1,10 +1,12 @@
 package dev.marregui.comando.ui.shell;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.model.AtomicFiles;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.SerializationFeature;
+import tools.jackson.databind.json.JsonMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -26,7 +28,7 @@ import java.util.regex.Pattern;
 final class Settings {
 
     private static final System.Logger LOG = System.getLogger(Settings.class.getName());
-    private static final ObjectMapper JSON = new ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT);
+    private static final ObjectMapper JSON = JsonMapper.builder().enable(SerializationFeature.INDENT_OUTPUT).build();
     private static final Pattern INT = Pattern.compile("-?\\d{1,9}");
 
     private final Path file;
@@ -51,7 +53,7 @@ final class Settings {
         if (Files.exists(file)) {
             try {
                 return new Settings(file, read(JSON.readTree(file.toFile())));
-            } catch (IOException e) {
+            } catch (JacksonException e) {
                 LOG.log(System.Logger.Level.WARNING, "cannot read " + file + ", kept aside: " + e.getMessage());
                 try {
                     Files.move(file, file.resolveSibling(file.getFileName() + ".unreadable"), StandardCopyOption.REPLACE_EXISTING);
@@ -77,7 +79,7 @@ final class Settings {
                 } else if (v.isIntegralNumber() && v.canConvertToInt()) {
                     out.put(e.getKey(), v.intValue());
                 } else if (v.isValueNode()) {
-                    out.put(e.getKey(), v.asText());
+                    out.put(e.getKey(), v.asString(""));
                 }
             });
         }
@@ -157,7 +159,7 @@ final class Settings {
             Files.createDirectories(file.getParent());
             AtomicFiles.write(file, JSON.writeValueAsBytes(root));
             dirty = false;
-        } catch (IOException e) {
+        } catch (IOException | JacksonException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write " + file + ": " + e.getMessage());
         }
     }

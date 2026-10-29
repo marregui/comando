@@ -1,10 +1,10 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.model.KitRoot;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -85,7 +85,7 @@ public final class RootLaunch {
                 if (read instanceof ObjectNode o) {
                     settings = o;
                 }
-            } catch (JsonProcessingException e) {
+            } catch (JacksonException e) {
                 // not JSON: the kit's settings alone
             }
         }

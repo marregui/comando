@@ -1,15 +1,15 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -106,7 +106,7 @@ final class StreamMapper {
         if (e == null) {
             return "";
         }
-        String type = e.path("type").asText();
+        String type = e.path("type").asString("");
         if (ranPending != null) {
             readRan(false);
         }
@@ -122,7 +122,7 @@ final class StreamMapper {
                 // the clear's turn makes no model call to report the new one
                 contextTokens = 0L;
                 if (!quietClear) {
-                    note(Block.NoteKind.INFO, "Conversation cleared (" + e.path("trigger").asText("clear") + "); a new one starts");
+                    note(Block.NoteKind.INFO, "Conversation cleared (" + e.path("trigger").asString("clear") + "); a new one starts");
                 }
             }
             default -> LOG.log(System.Logger.Level.DEBUG, "event ignored [session=" + session + ", type=" + type + ']');
@@ -149,8 +149,8 @@ final class StreamMapper {
         if (e == null || e.path("isMeta").asBoolean(false)) {
             return;
         }
-        String type = e.path("type").asText();
-        String messageId = e.path("message").path("id").asText("");
+        String type = e.path("type").asString("");
+        String messageId = e.path("message").path("id").asString("");
         // a message is stored a content block per line, each with its stop reason: the turn ends after its last one
         if (turnEndingMessage != null && (type.equals("user") || type.equals("assistant") && !messageId.equals(turnEndingMessage))) {
             endHistoryTurn();
@@ -159,13 +159,13 @@ final class StreamMapper {
             case "assistant" -> {
                 assistant(e);
                 if (parent(e).isEmpty() && !e.path("isSidechain").asBoolean(false)
-                        && e.path("message").path("stop_reason").asText("").equals("end_turn")) {
+                        && e.path("message").path("stop_reason").asString("").equals("end_turn")) {
                     turnEndingMessage = messageId;
                 }
             }
             case "user" -> user(e, true);
             case "system" -> {
-                if (e.path("subtype").asText().equals("compact_boundary")) {
+                if (e.path("subtype").asString("").equals("compact_boundary")) {
                     transcript.append(new Block.Note(Block.NoteKind.COMPACT, "Conversation compacted", ""));
                 }
             }
@@ -286,44 +286,44 @@ final class StreamMapper {
     // ---- system
 
     private void system(JsonNode e) {
-        String subtype = e.path("subtype").asText();
+        String subtype = e.path("subtype").asString("");
         switch (subtype) {
             case "init" -> init(e);
             case "status" -> {
-                String status = e.path("status").isNull() ? "" : e.path("status").asText("");
+                String status = e.path("status").isNull() ? "" : e.path("status").asString("");
                 sink.dispatch(new Intent.SessionActivity(session, status));
-                if (e.path("compact_result").asText().equals("success")) {
+                if (e.path("compact_result").asString("").equals("success")) {
                     note(Block.NoteKind.COMPACT, "Compaction finished");
                 }
             }
             case "compact_boundary" -> {
                 JsonNode m = e.path("compact_metadata");
-                note(Block.NoteKind.COMPACT, "Compacted " + m.path("trigger").asText("") + ": "
-                        + m.path("pre_tokens").asLong() + " → " + m.path("post_tokens").asLong() + " tokens");
+                note(Block.NoteKind.COMPACT, "Compacted " + m.path("trigger").asString("") + ": "
+                        + m.path("pre_tokens").asLong(0) + " → " + m.path("post_tokens").asLong(0) + " tokens");
                 // the context before compaction no longer applies; 0 means unknown until the next call reports it
-                contextTokens = Math.max(0L, m.path("post_tokens").asLong());
+                contextTokens = Math.max(0L, m.path("post_tokens").asLong(0));
             }
             case "hook_response" -> {
-                String out = e.path("output").asText("").strip();
+                String out = e.path("output").asString("").strip();
                 if (!out.isEmpty()) {
-                    transcript.append(new Block.Note(Block.NoteKind.HOOK, e.path("hook_name").asText() + ": " + clip(out, 2_000),
+                    transcript.append(new Block.Note(Block.NoteKind.HOOK, e.path("hook_name").asString("") + ": " + clip(out, 2_000),
                             parent(e)));
                 }
             }
-            case "api_retry" -> note(Block.NoteKind.RETRY, "API retry " + e.path("attempt").asInt() + "/" + e.path("max_retries").asInt()
-                    + " after " + e.path("error_status").asText(e.path("error").asText("error")));
-            case "task_started" -> sink.dispatch(new Intent.SessionActivity(session, e.path("description").asText("task")));
+            case "api_retry" -> note(Block.NoteKind.RETRY, "API retry " + e.path("attempt").asInt(0) + "/" + e.path("max_retries").asInt(0)
+                    + " after " + e.path("error_status").asString(e.path("error").asString("error")));
+            case "task_started" -> sink.dispatch(new Intent.SessionActivity(session, e.path("description").asString("task")));
             case "task_notification" -> {
                 // a background task's end, named by the call that started it (2.1.302: status "completed")
-                String call = e.path("tool_use_id").asText("");
-                if (!call.isEmpty() && !e.path("status").asText("").equals("running")) {
+                String call = e.path("tool_use_id").asString("");
+                if (!call.isEmpty() && !e.path("status").asString("").equals("running")) {
                     endedAgents.add(call);
-                    agentEnded(call, e.path("status").asText("completed").equals("completed") ? "done" : "error", true);
+                    agentEnded(call, e.path("status").asString("completed").equals("completed") ? "done" : "error", true);
                 }
                 sink.dispatch(new Intent.SessionActivity(session, "requesting"));
             }
             case "background_tasks_changed" -> backgroundTasks(e.path("tasks"));
-            case "permission_denied" -> note(Block.NoteKind.DENIED, "Denied: " + e.path("tool_name").asText("tool"));
+            case "permission_denied" -> note(Block.NoteKind.DENIED, "Denied: " + e.path("tool_name").asString("tool"));
             default -> LOG.log(System.Logger.Level.DEBUG, "system event ignored [session=" + session + ", subtype=" + subtype + ']');
         }
     }
@@ -336,9 +336,9 @@ final class StreamMapper {
     private void backgroundTasks(JsonNode tasks) {
         List<BackgroundTask> open = new ArrayList<>();
         for (JsonNode t : tasks) {
-            String id = t.path("task_id").asText("");
+            String id = t.path("task_id").asString("");
             if (!id.isEmpty() && !t.path("ambient").asBoolean(false)) {
-                open.add(new BackgroundTask(id, t.path("task_type").asText(""), t.path("description").asText(""), 0L));
+                open.add(new BackgroundTask(id, t.path("task_type").asString(""), t.path("description").asString(""), 0L));
             }
         }
         sink.dispatch(new Intent.SessionTasksChanged(session, open));
@@ -347,16 +347,16 @@ final class StreamMapper {
     private void init(JsonNode e) {
         List<String> caps = new ArrayList<>();
         for (JsonNode c : e.path("capabilities")) {
-            caps.add(c.asText());
+            caps.add(c.asString(""));
         }
         SessionInfo info = new SessionInfo(
-                e.path("session_id").asText(""),
-                e.path("model").asText(""),
-                e.path("cwd").asText(""),
-                e.path("claude_code_version").asText(""),
-                e.path("permissionMode").asText(""),
+                e.path("session_id").asString(""),
+                e.path("model").asString(""),
+                e.path("cwd").asString(""),
+                e.path("claude_code_version").asString(""),
+                e.path("permissionMode").asString(""),
                 caps,
-                effortOf.apply(e.path("model").asText("")));
+                effortOf.apply(e.path("model").asString("")));
         if (!info.model().equals(lastModel)) {
             note(Block.NoteKind.INIT, "Model " + info.model() + " · Claude Code " + info.cliVersion() + " · " + info.permissionMode());
             lastModel = info.model();
@@ -369,10 +369,10 @@ final class StreamMapper {
 
     private void streamEvent(JsonNode e) {
         JsonNode ev = e.path("event");
-        String messageId = e.path("api_message_id").asText(ev.path("message").path("id").asText(""));
+        String messageId = e.path("api_message_id").asString(ev.path("message").path("id").asString(""));
         int index = ev.path("index").asInt(-1);
         String key = messageId + ':' + index;
-        switch (ev.path("type").asText()) {
+        switch (ev.path("type").asString("")) {
             case "message_start" -> {
                 // the main conversation calls the model: a turn runs, also one Claude Code started itself. Claude Code
                 // 2.1.300 forwards no subagent's stream events and sends a null parent on these; one forwarded with its
@@ -384,15 +384,15 @@ final class StreamMapper {
             case "content_block_start" -> {
                 JsonNode block = ev.path("content_block");
                 String parent = parent(e);
-                switch (block.path("type").asText()) {
+                switch (block.path("type").asString("")) {
                     case "text" -> streamIndex.put(key, transcript.append(new Block.AssistantText(messageId, index, "", true, parent)));
                     case "thinking" -> streamIndex.put(key, transcript.append(new Block.Thinking(messageId, index, "", 0L, true, parent)));
                     case "tool_use" -> {
-                        String id = block.path("id").asText();
-                        int at = transcript.append(new Block.ToolCall(id, block.path("name").asText(), "{}", "", Block.ToolStatus.RUNNING, parent));
+                        String id = block.path("id").asString("");
+                        int at = transcript.append(new Block.ToolCall(id, block.path("name").asString(""), "{}", "", Block.ToolStatus.RUNNING, parent));
                         streamIndex.put(key, at);
                         toolIndex.put(id, at);
-                        agentStarts(id, block.path("name").asText());
+                        agentStarts(id, block.path("name").asString(""));
                     }
                     default -> {
                         // server tool blocks and others appear in the final message
@@ -406,15 +406,15 @@ final class StreamMapper {
                 }
                 JsonNode delta = ev.path("delta");
                 Block current = transcript.get(at);
-                switch (delta.path("type").asText()) {
+                switch (delta.path("type").asString("")) {
                     case "text_delta" -> {
                         if (current instanceof Block.AssistantText t) {
-                            transcript.replace(at, t.appended(delta.path("text").asText("")));
+                            transcript.replace(at, t.appended(delta.path("text").asString("")));
                         }
                     }
                     case "thinking_delta" -> {
                         if (current instanceof Block.Thinking t) {
-                            transcript.replace(at, new Block.Thinking(t.messageId(), t.index(), t.text() + delta.path("thinking").asText(""),
+                            transcript.replace(at, new Block.Thinking(t.messageId(), t.index(), t.text() + delta.path("thinking").asString(""),
                                     Math.max(t.tokens(), delta.path("estimated_tokens").asLong(0)), true, t.parent()));
                         }
                     }
@@ -433,12 +433,12 @@ final class StreamMapper {
 
     private void assistant(JsonNode e) {
         JsonNode message = e.path("message");
-        String messageId = message.path("id").asText("");
+        String messageId = message.path("id").asString("");
         String parent = parent(e);
         if (!replaying && parent.isEmpty() && !messageId.isEmpty() && !messageId.equals(ranLast)) {
             ranLast = messageId;
             ranPending = messageId;
-            ranModel = message.path("model").asText("");
+            ranModel = message.path("model").asString("");
             ranFirst = !turnHadMessage;
             turnHadMessage = true;
             ranPendingSince = ranTriedAt = 0L;
@@ -446,8 +446,8 @@ final class StreamMapper {
         }
         JsonNode usage = message.path("usage");
         if (!usage.isMissingNode() && parent.isEmpty()) {
-            long tokens = usage.path("input_tokens").asLong() + usage.path("cache_creation_input_tokens").asLong()
-                    + usage.path("cache_read_input_tokens").asLong();
+            long tokens = usage.path("input_tokens").asLong(0) + usage.path("cache_creation_input_tokens").asLong(0)
+                    + usage.path("cache_read_input_tokens").asLong(0);
             if (tokens > 0) {
                 contextTokens = tokens;
                 if (!replaying) {
@@ -459,25 +459,25 @@ final class StreamMapper {
         for (JsonNode block : message.path("content")) {
             int index = closedBlocks.merge(messageId, 1, Integer::sum) - 1;
             Integer at = streamIndex.remove(messageId + ':' + index);
-            switch (block.path("type").asText()) {
+            switch (block.path("type").asString("")) {
                 case "text" -> {
-                    Block.AssistantText text = new Block.AssistantText(messageId, index, block.path("text").asText(""), false, parent);
+                    Block.AssistantText text = new Block.AssistantText(messageId, index, block.path("text").asString(""), false, parent);
                     put(at, text);
                 }
                 case "thinking", "redacted_thinking" -> {
                     long tokens = at != null && transcript.get(at) instanceof Block.Thinking t ? t.tokens() : 0L;
-                    put(at, new Block.Thinking(messageId, index, block.path("thinking").asText(""), tokens, false, parent));
+                    put(at, new Block.Thinking(messageId, index, block.path("thinking").asString(""), tokens, false, parent));
                 }
                 case "tool_use", "server_tool_use" -> {
-                    String id = block.path("id").asText();
+                    String id = block.path("id").asString("");
                     String input = block.path("input").toString();
                     Integer known = toolIndex.get(id);
                     if (known != null && transcript.get(known) instanceof Block.ToolCall call) {
                         transcript.replace(known, call.withInput(input));
                     } else {
-                        toolIndex.put(id, transcript.append(new Block.ToolCall(id, block.path("name").asText(), input, "",
+                        toolIndex.put(id, transcript.append(new Block.ToolCall(id, block.path("name").asString(""), input, "",
                                 Block.ToolStatus.RUNNING, parent)));
-                        agentStarts(id, block.path("name").asText());
+                        agentStarts(id, block.path("name").asString(""));
                     }
                 }
                 default -> {
@@ -498,14 +498,14 @@ final class StreamMapper {
     private void user(JsonNode e, boolean history) {
         JsonNode content = e.path("message").path("content");
         String parent = parent(e);
-        if (content.isTextual()) {
-            userText(content.asText(), parent, history);
+        if (content.isString()) {
+            userText(content.asString(""), parent, history);
             return;
         }
         for (JsonNode block : content) {
-            switch (block.path("type").asText()) {
+            switch (block.path("type").asString("")) {
                 case "tool_result" -> toolResult(block);
-                case "text" -> userText(block.path("text").asText(""), parent, history);
+                case "text" -> userText(block.path("text").asString(""), parent, history);
                 default -> {
                     // images and documents are not shown
                 }
@@ -536,23 +536,23 @@ final class StreamMapper {
     }
 
     private void toolResult(JsonNode block) {
-        String id = block.path("tool_use_id").asText();
+        String id = block.path("tool_use_id").asString("");
         Integer at = toolIndex.get(id);
         if (at == null || !(transcript.get(at) instanceof Block.ToolCall call)) {
             return;
         }
         JsonNode content = block.path("content");
         String text;
-        if (content.isTextual()) {
-            text = content.asText();
+        if (content.isString()) {
+            text = content.asString("");
         } else {
             StringBuilder sb = new StringBuilder();
             for (JsonNode part : content) {
-                if (part.path("type").asText().equals("text")) {
+                if (part.path("type").asString("").equals("text")) {
                     if (!sb.isEmpty()) {
                         sb.append('\n');
                     }
-                    sb.append(part.path("text").asText(""));
+                    sb.append(part.path("text").asString(""));
                 }
             }
             text = sb.toString();
@@ -591,9 +591,9 @@ final class StreamMapper {
         e.put("session", session);
         e.put("conversation", conversation);
         e.put("tool_use_id", id);
-        e.put("type", in == null ? "" : in.path("subagent_type").asText(""));
-        e.put("description", in == null ? "" : in.path("description").asText(""));
-        e.put("model_asked", in == null ? "" : in.path("model").asText(""));
+        e.put("type", in == null ? "" : in.path("subagent_type").asString(""));
+        e.put("description", in == null ? "" : in.path("description").asString(""));
+        e.put("model_asked", in == null ? "" : in.path("model").asString(""));
         e.put("parent_model", lastModel);
         e.put("background", background || in != null && in.path("run_in_background").asBoolean(false));
         e.put("status", status);
@@ -681,25 +681,25 @@ final class StreamMapper {
         }
         turnHadMessage = false;
         boolean error = e.path("is_error").asBoolean(false);
-        String subtype = e.path("subtype").asText("");
+        String subtype = e.path("subtype").asString("");
         String message = error ? errorText(e) : "";
         // result.usage sums every API call of the turn; the context is the last call's input
         long tokens = contextTokens;
         boolean quiet = quietClear && !error;
         quietClear = false;
         if (!quiet) {
-            transcript.append(new Block.TurnEnd(e.path("total_cost_usd").asDouble(), e.path("duration_ms").asLong(),
-                    e.path("num_turns").asInt(), error, message.isEmpty() ? subtype : message));
+            transcript.append(new Block.TurnEnd(e.path("total_cost_usd").asDouble(0), e.path("duration_ms").asLong(0),
+                    e.path("num_turns").asInt(0), error, message.isEmpty() ? subtype : message));
         }
         long window = 0;
         for (JsonNode model : e.path("modelUsage")) {
-            window = Math.max(window, model.path("contextWindow").asLong());
+            window = Math.max(window, model.path("contextWindow").asLong(0));
         }
         if (window > 0) {
             contextWindow = window;
         }
-        sink.dispatch(new Intent.SessionTurnEnded(session, e.path("queued_turn_count").asInt(0), e.path("total_cost_usd").asDouble(),
-                tokens, window, error, message, error ? "" : e.path("result").asText("")));
+        sink.dispatch(new Intent.SessionTurnEnded(session, e.path("queued_turn_count").asInt(0), e.path("total_cost_usd").asDouble(0),
+                tokens, window, error, message, error ? "" : e.path("result").asString("")));
         turnMetric(e, tokens, window, error, subtype);
     }
 
@@ -714,9 +714,9 @@ final class StreamMapper {
         m.put("conversation", conversation);
         m.put("model", lastModel);
         m.put("effort", effortOf.apply(lastModel));
-        m.put("duration_ms", e.path("duration_ms").asLong());
-        m.put("api_ms", e.path("duration_api_ms").asLong());
-        m.put("calls", e.path("num_turns").asInt());
+        m.put("duration_ms", e.path("duration_ms").asLong(0));
+        m.put("api_ms", e.path("duration_api_ms").asLong(0));
+        m.put("calls", e.path("num_turns").asInt(0));
         m.put("context", context);
         m.put("window", window);
         m.put("queued", e.path("queued_turn_count").asInt(0));
@@ -724,30 +724,30 @@ final class StreamMapper {
         m.put("subtype", subtype);
         m.set("usage", e.path("usage").isObject() ? e.path("usage").deepCopy() : m.objectNode());
         m.set("models", e.path("modelUsage").isObject() ? e.path("modelUsage").deepCopy() : m.objectNode());
-        m.put("cost_usd", e.path("total_cost_usd").asDouble());
+        m.put("cost_usd", e.path("total_cost_usd").asDouble(0));
         metrics.write(m);
     }
 
     private static String errorText(JsonNode e) {
-        if (e.path("terminal_reason").asText().equals("aborted_tools") || e.path("subtype").asText().equals("error_during_execution")) {
+        if (e.path("terminal_reason").asString("").equals("aborted_tools") || e.path("subtype").asString("").equals("error_during_execution")) {
             return "interrupted";
         }
-        String r = e.path("result").asText("");
+        String r = e.path("result").asString("");
         if (!r.isEmpty()) {
             return clip(r, 500);
         }
-        StringBuilder sb = new StringBuilder(e.path("subtype").asText("error"));
+        StringBuilder sb = new StringBuilder(e.path("subtype").asString("error"));
         for (JsonNode x : e.path("errors")) {
-            sb.append("; ").append(x.asText());
+            sb.append("; ").append(x.asString(""));
         }
         return clip(sb.toString(), 500);
     }
 
     private void rateLimit(JsonNode e) {
         JsonNode info = e.path("rate_limit_info");
-        String status = info.path("status").asText("allowed");
+        String status = info.path("status").asString("allowed");
         if (!status.equals("allowed")) {
-            note(Block.NoteKind.INFO, "Rate limit " + status + " (" + info.path("rateLimitType").asText("") + ")");
+            note(Block.NoteKind.INFO, "Rate limit " + status + " (" + info.path("rateLimitType").asString("") + ")");
         }
     }
 
@@ -756,7 +756,7 @@ final class StreamMapper {
     private JsonNode parse(String line) {
         try {
             return json.readTree(line);
-        } catch (JsonProcessingException ex) {
+        } catch (JacksonException ex) {
             LOG.log(System.Logger.Level.WARNING, "not JSON, ignored [session=" + session + ", line=" + clip(line, 200) + ']');
             return null;
         }
@@ -764,7 +764,7 @@ final class StreamMapper {
 
     private static String parent(JsonNode e) {
         JsonNode p = e.path("parent_tool_use_id");
-        return p.isTextual() ? p.asText() : "";
+        return p.isString() ? p.asString("") : "";
     }
 
     private static String commandName(String t) {

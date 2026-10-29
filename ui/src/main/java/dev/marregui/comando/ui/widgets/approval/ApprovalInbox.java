@@ -1,6 +1,5 @@
 package dev.marregui.comando.ui.widgets.approval;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
@@ -23,6 +22,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.WidgetContext;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
+import tools.jackson.databind.JsonNode;
 
 import javax.swing.AbstractAction;
 import javax.swing.AbstractButton;
@@ -349,7 +349,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         Card(Approval a) {
             this.approval = a;
             JsonNode in = Json.parse(a.inputJson());
-            this.rules = a.kind() == ApprovalKind.TOOL ? ruleSource.apply(a.toolName(), k -> in.path(k).asText("")) : null;
+            this.rules = a.kind() == ApprovalKind.TOOL ? ruleSource.apply(a.toolName(), k -> in.path(k).asString("")) : null;
             setLayout(new BorderLayout(0, Theme.GAP));
             setBorder(border(Theme.CARD_BORDER));
             setBackground(Theme.CARD);
@@ -386,24 +386,24 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 case QUESTION -> questionsPanel(in);
                 case PLAN -> {
                     HtmlPane plan = new HtmlPane();
-                    plan.setMarkdown(in.path("plan").asText(""));
+                    plan.setMarkdown(in.path("plan").asString(""));
                     JScrollPane sp = new JScrollPane(plan);
                     sp.setPreferredSize(new Dimension(400, 260));
                     yield sp;
                 }
-                case SQL_WRITE -> code(in.path("sql").asText(""), "sql", 8);
+                case SQL_WRITE -> code(in.path("sql").asString(""), "sql", 8);
                 case TOOL -> {
                     Diffs.Edit edit = Diffs.edit(a.toolName(), in);
                     if (edit != null) {
                         yield diff(edit.path(), edit.before(), edit.after());
                     }
-                    yield a.toolName().equals("Bash") ? code(in.path("command").asText("") + describe(in), "sh", 10) : code(Json.pretty(in), "json", 12);
+                    yield a.toolName().equals("Bash") ? code(in.path("command").asString("") + describe(in), "sh", 10) : code(Json.pretty(in), "json", 12);
                 }
             };
         }
 
         private static String describe(JsonNode in) {
-            String d = in.path("description").asText("");
+            String d = in.path("description").asString("");
             return d.isEmpty() ? "" : "\n# " + d;
         }
 
@@ -412,7 +412,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             p.setOpaque(false);
             p.setLayout(new BoxLayout(p, BoxLayout.Y_AXIS));
             for (JsonNode q : in.path("questions")) {
-                String question = q.path("question").asText("");
+                String question = q.path("question").asString("");
                 JLabel label = new JLabel("<html><b>" + MarkdownHtml.escape(question) + "</b></html>");
                 label.setAlignmentX(Component.LEFT_ALIGNMENT);
                 p.add(label);
@@ -420,7 +420,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                 ButtonGroup group = new ButtonGroup();
                 List<AbstractButton> buttons = new ArrayList<>();
                 for (JsonNode o : q.path("options")) {
-                    String option = o.path("label").asText("");
+                    String option = o.path("label").asString("");
                     // option labels and descriptions come from Claude: shown as text, never as HTML
                     AbstractButton b = Plain.only(multi ? new JCheckBox() : new JRadioButton());
                     b.setText(option); // after the guard: Swing decides on HTML when the text is set
@@ -433,7 +433,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
                     }
                     buttons.add(b);
                     p.add(b);
-                    String description = o.path("description").asText("");
+                    String description = o.path("description").asString("");
                     if (!description.isBlank()) {
                         JTextArea d = muted(description);
                         d.setName("description");
@@ -831,7 +831,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             case PLAN -> "presents a plan";
             case SQL_WRITE -> {
                 // the connection the statement would change is part of the question, not only of the status bar
-                String connection = Json.parse(a.inputJson()).path("connection").asText("");
+                String connection = Json.parse(a.inputJson()).path("connection").asString("");
                 yield connection.isEmpty() ? "wants to run a statement" : "wants to run a statement on " + connection;
             }
             case TOOL -> "wants to use " + a.toolName() + ": " + a.summary();

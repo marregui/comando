@@ -1,9 +1,5 @@
 package dev.marregui.comando.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.action.Action;
 import dev.marregui.comando.core.action.Actions;
 import dev.marregui.comando.core.dispatch.Target;
@@ -22,6 +18,10 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.ViewState;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -129,8 +129,8 @@ final class ActionTools {
             case "session_interrupt" -> send(new Intent.InterruptSession(session(s, args).name()));
             case "session_checkpoint" -> send(new Intent.Checkpoint(session(s, args).name()));
             case "session_command" -> send(new Intent.SessionCommand(session(s, args).name(), command(args)));
-            case "session_model" -> send(new Intent.SetSessionModel(session(s, args).name(), args.path("model").asText("").strip()));
-            case "session_effort" -> send(new Intent.SetSessionEffort(session(s, args).name(), args.path("effort").asText("").strip()));
+            case "session_model" -> send(new Intent.SetSessionModel(session(s, args).name(), args.path("model").asString("").strip()));
+            case "session_effort" -> send(new Intent.SetSessionEffort(session(s, args).name(), args.path("effort").asString("").strip()));
             case "session_order" -> send(new Intent.OrderSessions(strings(args, "names")));
             case "session_import" -> send(new Intent.ImportSessions(List.of(SessionSpec.imported(name(args, "name"), dir(args),
                     text(args, "conversation")).withCreatedBy(caller))));
@@ -144,8 +144,8 @@ final class ActionTools {
             case "panel_rename" -> send(new Intent.RenamePanel(panel(s, args, false).id(), text(args, "title")));
             case "panel_move" -> send(new Intent.MovePanel(panel(s, args, false).id(), args.path("index").asInt(0)));
             case "panel_focus" -> send(new Intent.FocusPanel(panel(s, args, false).id()));
-            case "panel_bind_session" -> send(new Intent.BindSession(panel(s, args, false).id(), args.path("session").asText("").strip()));
-            case "panel_bind_connection" -> send(new Intent.BindConnection(panel(s, args, false).id(), args.path("connection").asText("").strip()));
+            case "panel_bind_session" -> send(new Intent.BindSession(panel(s, args, false).id(), args.path("session").asString("").strip()));
+            case "panel_bind_connection" -> send(new Intent.BindConnection(panel(s, args, false).id(), args.path("connection").asString("").strip()));
             case "panel_run" -> send(new Intent.RunText(panel(s, args, false).id(), text(args, "text"), target(args)));
             case "panel_cancel" -> send(new Intent.CancelRun(panel(s, args, false).id()));
             case "panel_refresh" -> send(new Intent.RefreshSql(panel(s, args, false).id(), text(args, "sql")));
@@ -160,7 +160,7 @@ final class ActionTools {
             case "view_close" -> viewClose(s, args);
             case "notice_dismiss" -> send(new Intent.DismissNotice());
             case "gradle_run" -> send(new Intent.RunGradle(panel(s, args, false).id(), text(args, "tasks")));
-            case "command_cancel" -> send(new Intent.CancelCommand(args.path("run_id").asLong()));
+            case "command_cancel" -> send(new Intent.CancelCommand(args.path("run_id").asLong(0)));
             case "folders_browse" -> send(new Intent.BrowseFolders(args.has("names") ? strings(args, "names")
                     : s.folders().stream().map(f -> f.name()).toList()));
             default -> throw new IllegalArgumentException(tool + " has no runner yet");
@@ -178,12 +178,12 @@ final class ActionTools {
         if (s.session(name).isPresent()) {
             throw new IllegalArgumentException("a session called " + name + " exists; sessions: " + names(s));
         }
-        SessionSpec spec = new SessionSpec(name, dir(args), args.path("model").asText("").strip(), args.path("effort").asText("").strip(),
-                args.path("permission_mode").asText("").strip(), args.has("add_dirs") ? strings(args, "add_dirs") : List.of(), 0.0, "",
-                StartMode.NEW, args.has("checkpoint") ? args.path("checkpoint").asText("") : SessionSpec.DEFAULT_CHECKPOINT, "", caller);
+        SessionSpec spec = new SessionSpec(name, dir(args), args.path("model").asString("").strip(), args.path("effort").asString("").strip(),
+                args.path("permission_mode").asString("").strip(), args.has("add_dirs") ? strings(args, "add_dirs") : List.of(), 0.0, "",
+                StartMode.NEW, args.has("checkpoint") ? args.path("checkpoint").asString("") : SessionSpec.DEFAULT_CHECKPOINT, "", caller);
         // a new session comes with its own panel (record 88); the prompt goes there, resolved when it is reduced
         sink.dispatch(new Intent.SaveSession("", spec));
-        String prompt = args.path("prompt").asText("").strip();
+        String prompt = args.path("prompt").asString("").strip();
         if (prompt.isEmpty()) {
             return "created session " + name + " in " + spec.workDir() + ", open in its panel; start it with session_start or give it a prompt "
                     + "with session_send once started";
@@ -198,11 +198,11 @@ final class ActionTools {
         String name = args.has("new_name") ? name(args, "new_name") : old.name();
         SessionSpec spec = new SessionSpec(name,
                 args.has("work_dir") ? dir(args) : old.workDir(),
-                args.has("model") ? args.path("model").asText("").strip() : old.model(),
-                args.has("effort") ? args.path("effort").asText("").strip() : old.effort(),
-                args.has("permission_mode") ? args.path("permission_mode").asText("").strip() : old.permissionMode(),
+                args.has("model") ? args.path("model").asString("").strip() : old.model(),
+                args.has("effort") ? args.path("effort").asString("").strip() : old.effort(),
+                args.has("permission_mode") ? args.path("permission_mode").asString("").strip() : old.permissionMode(),
                 args.has("add_dirs") ? strings(args, "add_dirs") : old.addDirs(), old.budgetUsd(), old.claudeSessionId(), old.startMode(),
-                args.has("checkpoint") ? args.path("checkpoint").asText("") : old.checkpoint(), old.carried(), old.createdBy());
+                args.has("checkpoint") ? args.path("checkpoint").asString("") : old.checkpoint(), old.carried(), old.createdBy());
         return send(new Intent.SaveSession(old.name(), spec));
     }
 
@@ -243,16 +243,16 @@ final class ActionTools {
             return "refused: card " + id + " was raised by " + card.session() + (card.session().equals(caller) ? ", this caller" : ", which " + caller
                     + " created") + "; someone other than the asker decides (record 121, rule 1)";
         }
-        ApprovalDecision decision = switch (args.path("decision").asText("").strip()) {
-            case "allow" -> new ApprovalDecision.Allow(switch (args.path("scope").asText("once").strip()) {
+        ApprovalDecision decision = switch (args.path("decision").asString("").strip()) {
+            case "allow" -> new ApprovalDecision.Allow(switch (args.path("scope").asString("once").strip()) {
                 case "session" -> ApprovalDecision.Scope.SESSION;
                 case "always" -> ApprovalDecision.Scope.ALWAYS;
                 default -> ApprovalDecision.Scope.ONCE;
             });
-            case "deny" -> new ApprovalDecision.Deny(args.path("message").asText("Denied by " + caller + "."));
+            case "deny" -> new ApprovalDecision.Deny(args.path("message").asString("Denied by " + caller + "."));
             case "answer" -> {
                 Map<String, String> answers = new LinkedHashMap<>();
-                args.path("answers").properties().forEach(e -> answers.put(e.getKey(), e.getValue().asText("")));
+                args.path("answers").properties().forEach(e -> answers.put(e.getKey(), e.getValue().asString("")));
                 if (answers.isEmpty()) {
                     throw new IllegalArgumentException("answer needs answers: {question text: chosen option label}");
                 }
@@ -266,19 +266,19 @@ final class ActionTools {
     // ---- connections
 
     private String connectionSave(AppState s, JsonNode args) {
-        String previous = args.path("previous_name").asText("").strip();
+        String previous = args.path("previous_name").asString("").strip();
         Optional<ConnectionState> old = previous.isEmpty() ? s.connection(name(args, "name")) : s.connection(previous);
-        String password = args.has("password") ? args.path("password").asText("") : old.map(c -> c.spec().password()).orElse("");
+        String password = args.has("password") ? args.path("password").asString("") : old.map(c -> c.spec().password()).orElse("");
         ConnectionSpec spec = new ConnectionSpec(name(args, "name"), text(args, "host"), args.path("port").asInt(ConnectionSpec.DEFAULT_PORT),
-                text(args, "database"), args.path("user").asText("").strip(), password, args.path("production").asBoolean(false),
-                args.path("ssl_mode").asText("").strip());
+                text(args, "database"), args.path("user").asString("").strip(), password, args.path("production").asBoolean(false),
+                args.path("ssl_mode").asString("").strip());
         return send(new Intent.SaveConnection(old.isPresent() ? old.get().name() : previous, spec));
     }
 
     // ---- panels and views
 
     private String panelAdd(AppState s, JsonNode args) {
-        String title = args.path("title").asText("").strip();
+        String title = args.path("title").asString("").strip();
         if (title.isEmpty()) {
             int n = 1;
             while (titled(s, "panel " + n)) {
@@ -337,7 +337,7 @@ final class ActionTools {
     }
 
     private static Target target(JsonNode args) {
-        return switch (args.path("target").asText("").strip().toLowerCase(Locale.ROOT)) {
+        return switch (args.path("target").asString("").strip().toLowerCase(Locale.ROOT)) {
             case "sql" -> Target.SQL;
             case "claude" -> Target.CLAUDE;
             default -> Target.AUTO;
@@ -366,7 +366,7 @@ final class ActionTools {
     }
 
     private static String text(JsonNode args, String field) {
-        String t = args.path(field).asText("").strip();
+        String t = args.path(field).asString("").strip();
         if (t.isEmpty()) {
             throw new IllegalArgumentException(field + " is required");
         }
@@ -379,7 +379,7 @@ final class ActionTools {
             throw new IllegalArgumentException(field + " is a list of strings");
         }
         List<String> out = new ArrayList<>();
-        a.forEach(x -> out.add(x.asText("").strip()));
+        a.forEach(x -> out.add(x.asString("").strip()));
         return out;
     }
 
@@ -396,7 +396,7 @@ final class ActionTools {
         try {
             JsonNode grants = json.readTree(Files.readString(file)).path("grants").path(caller);
             for (JsonNode g : grants) {
-                if (what.equals(g.asText())) {
+                if (what.equals(g.asString(""))) {
                     return true;
                 }
             }

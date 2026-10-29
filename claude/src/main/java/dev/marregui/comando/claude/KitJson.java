@@ -1,10 +1,11 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.KitRoot;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.file.InvalidPathException;
@@ -36,7 +37,12 @@ public final class KitJson {
 
     /** Reads {@code file}; throws when it does not read or breaks the schema. */
     public static KitRoot.Manifest read(Path file) throws IOException {
-        JsonNode root = JSON.readTree(file.toFile());
+        JsonNode root;
+        try {
+            root = JSON.readTree(file.toFile());
+        } catch (JacksonException e) {
+            throw new IOException(e.getMessage(), e);
+        }
         if (root == null || !root.isObject()) {
             throw new IOException("not a JSON object");
         }
@@ -65,7 +71,7 @@ public final class KitJson {
         List<KitRoot.Credential> credentials = list(root.path("credentials"), c -> new KitRoot.Credential(text(c, "key"), text(c, "for"), text(c, "where")));
         List<KitRoot.Job> jobs = list(root.path("jobs"), j -> {
             Map<String, String> schedule = new LinkedHashMap<>();
-            j.path("schedule").properties().forEach(e -> schedule.put(e.getKey(), e.getValue().asText("")));
+            j.path("schedule").properties().forEach(e -> schedule.put(e.getKey(), e.getValue().asString("")));
             return new KitRoot.Job(text(j, "name"), schedule, strings(j.path("command")));
         });
         return new KitRoot.Manifest(name, brain, folders, requirements, credentials, jobs);
@@ -73,12 +79,12 @@ public final class KitJson {
 
     private static String text(JsonNode node, String field) {
         JsonNode v = node.path(field);
-        return v.isValueNode() ? v.asText("").strip() : "";
+        return v.isValueNode() ? v.asString("").strip() : "";
     }
 
     private static List<String> strings(JsonNode array) {
         List<String> out = new ArrayList<>();
-        array.forEach(v -> out.add(v.asText("")));
+        array.forEach(v -> out.add(v.asString("")));
         return out;
     }
 

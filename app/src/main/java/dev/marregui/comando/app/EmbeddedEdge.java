@@ -7,6 +7,7 @@ import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.ui.shell.ServerToggle;
+import tools.jackson.core.JacksonException;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -703,7 +704,11 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
 
     /** The registry's entry, or null when there is none. */
     private Entry read() throws IOException {
-        return Files.isRegularFile(registry) ? JsonFile.JSON.readValue(registry.toFile(), Entry.class) : null;
+        try {
+            return Files.isRegularFile(registry) ? JsonFile.JSON.readValue(registry.toFile(), Entry.class) : null;
+        } catch (JacksonException e) {
+            throw new IOException(e.getMessage(), e);
+        }
     }
 
     /** The entry's process when it lives and is the one recorded, not another on its pid. */

@@ -1,7 +1,6 @@
 package dev.marregui.comando.app;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.core.type.TypeReference;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
@@ -13,9 +12,10 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.PersistencePort;
 import dev.marregui.comando.core.resource.FolderKind;
 import dev.marregui.comando.core.state.PanelState;
-import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.PanelTexts.Opened;
 import dev.marregui.comando.ui.PanelTexts.Outside;
+import dev.marregui.comando.ui.PanelTexts;
+import tools.jackson.core.type.TypeReference;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;

@@ -1,6 +1,6 @@
 package dev.marregui.comando.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 
 import java.util.Iterator;
 import java.util.Map;
@@ -15,11 +15,11 @@ final class Summaries {
 
     static String of(String tool, JsonNode input) {
         String s = switch (tool) {
-            case "Bash" -> input.path("command").asText("");
-            case "Edit", "MultiEdit", "Write", "NotebookEdit", "Read" -> tool + ' ' + input.path("file_path").asText(input.path("notebook_path").asText(""));
-            case "WebFetch" -> "Fetch " + input.path("url").asText("");
-            case "WebSearch" -> "Search " + input.path("query").asText("");
-            case "AskUserQuestion" -> input.path("questions").path(0).path("question").asText("Questions for you");
+            case "Bash" -> input.path("command").asString("");
+            case "Edit", "MultiEdit", "Write", "NotebookEdit", "Read" -> tool + ' ' + input.path("file_path").asString(input.path("notebook_path").asString(""));
+            case "WebFetch" -> "Fetch " + input.path("url").asString("");
+            case "WebSearch" -> "Search " + input.path("query").asString("");
+            case "AskUserQuestion" -> input.path("questions").path(0).path("question").asString("Questions for you");
             case "ExitPlanMode" -> "Plan ready for review";
             default -> tool + firstArgument(input);
         };
@@ -33,6 +33,6 @@ final class Summaries {
             return "";
         }
         Map.Entry<String, JsonNode> f = fields.next();
-        return " " + f.getKey() + '=' + (f.getValue().isValueNode() ? f.getValue().asText() : f.getValue().toString());
+        return " " + f.getKey() + '=' + (f.getValue().isValueNode() && !f.getValue().isNull() ? f.getValue().asString("") : f.getValue().toString());
     }
 }

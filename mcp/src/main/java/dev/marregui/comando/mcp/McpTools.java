@@ -1,10 +1,5 @@
 package dev.marregui.comando.mcp;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.EditMode;
@@ -33,6 +28,11 @@ import dev.marregui.comando.core.view.FileView;
 import dev.marregui.comando.core.view.Layout;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -120,7 +120,7 @@ public final class McpTools {
         try (var in = McpTools.class.getResourceAsStream("/mcp/tools.json")) {
             ArrayNode first = (ArrayNode) json.readTree(in);
             Set<String> names = new LinkedHashSet<>();
-            first.forEach(d -> names.add(d.path("name").asText()));
+            first.forEach(d -> names.add(d.path("name").asString("")));
             builtIn = Set.copyOf(names);
             actions = new ActionTools(sink, state);
             definitions = first.deepCopy();
@@ -176,14 +176,14 @@ public final class McpTools {
         try {
             out = switch (name) {
                 case APPROVE -> approve(session, args);
-                case "ui_show_table" -> show(session, args.path("title").asText("table"),
+                case "ui_show_table" -> show(session, args.path("title").asString("table"),
                         ViewSpecs.table(args.path("columns"), args.path("rows")), args);
-                case "ui_plot" -> show(session, args.path("title").asText("plot"), ViewSpecs.plot(args), args);
-                case "ui_show_view" -> show(session, args.path("title").asText(args.path("type").asText("view")),
-                        ViewSpecs.parse(args.path("type").asText(""), args.path("data")), args);
+                case "ui_plot" -> show(session, args.path("title").asString("plot"), ViewSpecs.plot(args), args);
+                case "ui_show_view" -> show(session, args.path("title").asString(args.path("type").asString("view")),
+                        ViewSpecs.parse(args.path("type").asString(""), args.path("data")), args);
                 case "ui_set_editor" -> edit(session, args, EditMode.REPLACE);
                 // neither lands inside the user's text: append at the end, insert after the block the user ran last
-                case "ui_insert" -> edit(session, args, "insert".equals(args.path("mode").asText("append")) ? EditMode.INSERT : EditMode.APPEND);
+                case "ui_insert" -> edit(session, args, "insert".equals(args.path("mode").asString("append")) ? EditMode.INSERT : EditMode.APPEND);
                 case "ui_open_file" -> openFile(session, args);
                 case "ui_notify" -> notify(args);
                 case "ui_get_state" -> Outcome.ok(stateJson());
@@ -214,13 +214,13 @@ public final class McpTools {
     // ---- approvals
 
     private Outcome approve(String session, JsonNode args) {
-        String tool = args.path("tool_name").asText("");
+        String tool = args.path("tool_name").asString("");
         JsonNode input = args.path("input");
         if (tool.isEmpty() || !input.isObject()) {
             return Outcome.fail("approve takes {tool_name, input}");
         }
         ApprovalKind kind = ApprovalKind.ofTool(tool);
-        ApprovalDecision decision = ask(session, kind, tool, input.toString(), Summaries.of(tool, input), args.path("tool_use_id").asText(""));
+        ApprovalDecision decision = ask(session, kind, tool, input.toString(), Summaries.of(tool, input), args.path("tool_use_id").asString(""));
         audit.record(session, "approval", tool, input.toString(), decision.toString());
         return Outcome.ok(permissionResult(tool, (ObjectNode) input, decision));
     }
@@ -329,7 +329,7 @@ public final class McpTools {
                     update.put("destination", "session");
                     break;
                 }
-                PermissionRules.Rules rules = PermissionRules.rules(tool, field -> input.path(field).asText(""));
+                PermissionRules.Rules rules = PermissionRules.rules(tool, field -> input.path(field).asString(""));
                 update.put("type", "addRules");
                 ArrayNode entries = update.putArray("rules");
                 for (PermissionRules.Rule rule : rules.rules()) {
@@ -351,17 +351,17 @@ public final class McpTools {
     // ---- UI tools
 
     private Outcome show(String session, String title, ViewSpec spec, JsonNode args) {
-        Placement placement = "side".equalsIgnoreCase(args.path("placement").asText("lower")) ? Placement.SIDE : Placement.LOWER;
+        Placement placement = "side".equalsIgnoreCase(args.path("placement").asString("lower")) ? Placement.SIDE : Placement.LOWER;
         sink.dispatch(new Intent.ShowView(session, title, spec, placement));
         return Outcome.ok("shown '" + title + "' (" + spec.type() + ") in the " + placement.name().toLowerCase(Locale.ROOT) + " panel");
     }
 
     private Outcome edit(String session, JsonNode args, EditMode mode) {
         JsonNode text = args.path("text");
-        if (!text.isTextual()) {
+        if (!text.isString()) {
             return Outcome.fail("text is required");
         }
-        PanelState panel = targetPanel(session, args.path("panel").asText(""));
+        PanelState panel = targetPanel(session, args.path("panel").asString(""));
         if (!panel.session().isEmpty() && !panel.session().equals(session) && !args.path("force").asBoolean(false)) {
             return Outcome.fail("panel '" + panel.title() + "' belongs to session " + panel.session()
                     + "; pass force: true only when the user asked you to write there");
@@ -369,7 +369,7 @@ public final class McpTools {
         if (readOnly.test(panel.id())) {
             return Outcome.fail("panel '" + panel.title() + "' shows a log, which is read-only; nothing was written");
         }
-        sink.dispatch(new Intent.EditPanel(panel.id(), text.asText(), mode, session));
+        sink.dispatch(new Intent.EditPanel(panel.id(), text.asString(""), mode, session));
         return Outcome.ok(mode.name().toLowerCase(Locale.ROOT) + " in panel '" + panel.title() + "'");
     }
 
@@ -405,7 +405,7 @@ public final class McpTools {
 
     /** Shows a file in the side pane, read as the user's click on a link reads it ({@link FileView}). */
     private Outcome openFile(String session, JsonNode args) {
-        String p = args.path("path").asText("");
+        String p = args.path("path").asString("");
         if (p.isBlank()) {
             return Outcome.fail("path is required");
         }
@@ -429,12 +429,12 @@ public final class McpTools {
      */
     private Outcome layout(String session, JsonNode args) {
         AppState s = state.get();
-        String panel = args.path("panel").asText("");
+        String panel = args.path("panel").asString("");
         PanelState target = null;
         if (!panel.isEmpty()) {
             target = panelNamed(s, panel).orElseThrow(() -> new IllegalArgumentException("no panel with id or title '" + panel + "'"));
         }
-        String tab = args.path("lower_tab").asText("");
+        String tab = args.path("lower_tab").asString("");
         LowerTab lower = null;
         if (!tab.isEmpty()) {
             lower = switch (tab.toLowerCase(Locale.ROOT)) {
@@ -450,7 +450,7 @@ public final class McpTools {
             };
         }
         Layout layout = new Layout(toggle(args.path("sidebar")), toggle(args.path("side_pane")),
-                args.path("lower_share").isNumber() ? args.path("lower_share").asDouble() : Double.NaN);
+                args.path("lower_share").isNumber() ? args.path("lower_share").asDouble(0) : Double.NaN);
         if (target == null && lower == null && layout.changesNothing()) {
             return Outcome.fail("nothing to change: pass panel, lower_tab, sidebar, side_pane or lower_share");
         }
@@ -482,10 +482,10 @@ public final class McpTools {
     /** Closes a view this session placed and the user has not pinned; the user's own views are not Claude's to close. */
     private Outcome closeView(String session, JsonNode args) {
         JsonNode id = args.path("id");
-        if (!id.canConvertToLong() && !(id.isTextual() && id.asText().matches("\\d+"))) {
+        if (!id.canConvertToLong() && !(id.isString() && id.asString("").matches("\\d+"))) {
             throw new IllegalArgumentException("id must be a view id from ui_get_state");
         }
-        long viewId = id.asLong();
+        long viewId = id.asLong(0);
         ViewState v = state.get().views().stream().filter(x -> x.id() == viewId).findFirst()
                 .orElseThrow(() -> new IllegalArgumentException("no view with id " + viewId));
         if (!v.session().equals(session)) {
@@ -499,15 +499,15 @@ public final class McpTools {
     }
 
     private static Layout.Toggle toggle(JsonNode n) {
-        return n.isBoolean() ? (n.asBoolean() ? Layout.Toggle.SHOW : Layout.Toggle.HIDE) : Layout.Toggle.KEEP;
+        return n.isBoolean() ? (n.asBoolean(false) ? Layout.Toggle.SHOW : Layout.Toggle.HIDE) : Layout.Toggle.KEEP;
     }
 
     private Outcome notify(JsonNode args) {
-        String text = args.path("text").asText("");
+        String text = args.path("text").asString("");
         if (text.isBlank()) {
             return Outcome.fail("text is required");
         }
-        Notice.Level level = switch (args.path("level").asText("info").toLowerCase(Locale.ROOT)) {
+        Notice.Level level = switch (args.path("level").asString("info").toLowerCase(Locale.ROOT)) {
             case "warn", "warning" -> Notice.Level.WARN;
             case "error" -> Notice.Level.ERROR;
             default -> Notice.Level.INFO;
@@ -586,7 +586,7 @@ public final class McpTools {
         root.put("lowerTab", s.lowerTab().kind().name().toLowerCase(Locale.ROOT));
         try {
             return json.writerWithDefaultPrettyPrinter().writeValueAsString(root);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             throw new IllegalStateException(e);
         }
     }
@@ -604,8 +604,8 @@ public final class McpTools {
      * the user sees what was sent, by whom, and what the session does with it; the audit log records it.
      */
     private Outcome sessionSend(String session, JsonNode args) {
-        String to = args.path("session").asText("").strip();
-        String text = args.path("text").asText("").strip();
+        String to = args.path("session").asString("").strip();
+        String text = args.path("text").asString("").strip();
         if (to.isEmpty() || text.isEmpty()) {
             return Outcome.fail("session and text are required");
         }
@@ -644,7 +644,7 @@ public final class McpTools {
 
     /** Another session's transcript from a cursor on, after waiting, when asked, for that session to finish its turns. */
     private Outcome sessionRead(JsonNode args) {
-        String of = args.path("session").asText("").strip();
+        String of = args.path("session").asString("").strip();
         if (of.isEmpty()) {
             return Outcome.fail("session is required");
         }
@@ -653,7 +653,7 @@ public final class McpTools {
         }
         Transcript t = transcripts.of(of);
         JsonNode cursor = args.path("after");
-        int after = cursor.canConvertToInt() ? Math.max(0, cursor.asInt()) : Math.max(0, t.size() - READ_TAIL);
+        int after = cursor.canConvertToInt() ? Math.max(0, cursor.asInt(0)) : Math.max(0, t.size() - READ_TAIL);
         int wait = Math.max(0, Math.min(args.path("wait_seconds").asInt(0), MAX_WAIT_SECONDS));
         boolean settled = wait == 0 || Turns.awaitTurnEnd(state, of, t, after, Duration.ofSeconds(wait));
         SessionState x = state.get().session(of).orElse(null);
@@ -680,11 +680,11 @@ public final class McpTools {
     // ---- database tools
 
     private Outcome runSql(String session, JsonNode args) {
-        String sql = args.path("sql").asText("").strip();
+        String sql = args.path("sql").asString("").strip();
         if (sql.isEmpty()) {
             return Outcome.fail("sql is required");
         }
-        ConnectionSpec spec = connectionFor(session, args.path("connection").asText(""));
+        ConnectionSpec spec = connectionFor(session, args.path("connection").asString(""));
         int maxRows = Math.max(1, Math.min(args.path("max_rows").asInt(MAX_SQL_ROWS), 10_000));
         if (!SqlPolicy.isReadOnly(sql)) {
             if (spec.prod()) {
@@ -700,7 +700,7 @@ public final class McpTools {
                 return Outcome.fail("The user denied the statement" + (deny.message().isBlank() ? "." : ": " + deny.message()));
             }
             // the user approved the target the card named: a connection repointed or removed meanwhile is not it
-            ConnectionSpec now = connectionFor(session, args.path("connection").asText(""));
+            ConnectionSpec now = connectionFor(session, args.path("connection").asString(""));
             if (!now.equals(spec)) {
                 return Outcome.fail("connection " + spec.name() + " changed while the card was open; nothing ran. Ask again.");
             }
@@ -732,18 +732,18 @@ public final class McpTools {
             sink.dispatch(new Intent.SchemaChanged(spec.name()));
         }
         if (args.path("show").asBoolean(false) && !rows.columns().isEmpty()) {
-            sink.dispatch(new Intent.ShowView(session, args.path("title").asText(firstLine(sql)),
+            sink.dispatch(new Intent.ShowView(session, args.path("title").asString(firstLine(sql)),
                     new ViewSpec.Table(rows.columns(), rows.rows()), Placement.LOWER));
         }
         return Outcome.ok(format(rows));
     }
 
     private Outcome describe(String session, JsonNode args) {
-        String table = args.path("table").asText("").strip();
+        String table = args.path("table").asString("").strip();
         if (table.isEmpty()) {
             return Outcome.fail("table is required");
         }
-        ConnectionSpec spec = connectionFor(session, args.path("connection").asText(""));
+        ConnectionSpec spec = connectionFor(session, args.path("connection").asString(""));
         CompletableFuture<QueryPort.Rows> result = db.describe(spec, table);
         try {
             return Outcome.ok(format(result.get(60, TimeUnit.SECONDS)));

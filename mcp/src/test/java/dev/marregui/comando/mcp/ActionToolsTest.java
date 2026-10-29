@@ -1,7 +1,5 @@
 package dev.marregui.comando.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.action.Action;
 import dev.marregui.comando.core.action.Actions;
 import dev.marregui.comando.core.intent.Intent;
@@ -20,6 +18,8 @@ import dev.marregui.comando.testkit.States;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -128,7 +128,7 @@ class ActionToolsTest {
         assertThat(call("foreman", "panel_focus", "{\"panel\":\"no such\"}").text()).contains("panels:");
         assertThat(call("foreman", "session_command", "{\"session\":\"mine\",\"command\":\"compact\"}").text()).contains("slash");
         JsonNode s = json.readTree(tools.stateJson());
-        assertThat(s.path("sessions").findValuesAsText("createdBy")).contains("foreman", "mine");
+        assertThat(s.path("sessions").findValuesAsString("createdBy")).contains("foreman", "mine");
         assertThat(s.has("approvals")).isTrue();
         assertThat(s.has("closedPanels")).isTrue();
     }
@@ -136,7 +136,7 @@ class ActionToolsTest {
     @Test
     void everyActionIsListedWithItsSchemaAndHasARunner() throws Exception {
         Set<String> listed = new HashSet<>();
-        tools.definitions().forEach(d -> listed.add(d.path("name").asText()));
+        tools.definitions().forEach(d -> listed.add(d.path("name").asString()));
         List<String> unrun = new ArrayList<>();
         for (Action a : Actions.ALL) {
             assertThat(listed).as("listed: " + a.tool()).contains(a.tool());

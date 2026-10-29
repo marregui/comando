@@ -1,9 +1,5 @@
 package dev.marregui.comando.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.Threads;
@@ -17,6 +13,10 @@ import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -239,10 +239,10 @@ public final class Peers implements AutoCloseable {
         try {
             JsonNode p = json.readTree(m.payload());
             List<Session> sessions = new ArrayList<>();
-            p.path("sessions").forEach(x -> sessions.add(new Session(x.path("name").asText(""), x.path("busy").asBoolean(false))));
-            peers.put(slug, new Peer(slug, p.path("name").asText(slug), p.path("version").asText(""), p.path("busy").asBoolean(false),
-                    p.path("started").asText(""), List.copyOf(sessions)));
-        } catch (IOException | RuntimeException e) {
+            p.path("sessions").forEach(x -> sessions.add(new Session(x.path("name").asString(""), x.path("busy").asBoolean(false))));
+            peers.put(slug, new Peer(slug, p.path("name").asString(slug), p.path("version").asString(""), p.path("busy").asBoolean(false),
+                    p.path("started").asString(""), List.copyOf(sessions)));
+        } catch (RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "unreadable presence [instance=" + slug + "]: " + e.getMessage());
         }
     }
@@ -257,19 +257,19 @@ public final class Peers implements AutoCloseable {
         JsonNode q;
         try {
             q = json.readTree(m.payload());
-        } catch (IOException | RuntimeException e) {
+        } catch (RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "unreadable question, dropped: " + e.getMessage());
             return;
         }
-        if (q.path("from").asText("").isBlank()) {
+        if (q.path("from").asString("").isBlank()) {
             LOG.log(System.Logger.Level.DEBUG, "a question that names no asker, dropped");
             return;
         }
-        String from = slug(q.path("from").asText(""));
+        String from = slug(q.path("from").asString(""));
         errands.start("peer-answer", () -> {
             Reply r;
             try {
-                r = answer(from, q.path("name").asText(from), q.path("session").asText(""), q.path("text").asText(""));
+                r = answer(from, q.path("name").asString(from), q.path("session").asString(""), q.path("text").asString(""));
             } catch (RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "a question from instance " + from + " failed: " + e.getMessage(), e);
                 r = new Reply(ERROR, me.name() + " could not answer: " + e.getMessage(), me.name(), CONSULT + from);
@@ -413,7 +413,7 @@ public final class Peers implements AutoCloseable {
         }
         try {
             for (JsonNode d : json.readTree(Files.readString(file)).path("peers").path("deny")) {
-                if (from.equals(slug(d.asText("")))) {
+                if (from.equals(slug(d.asString("")))) {
                     return Optional.of("its user listed " + from + " in agents.json peers.deny");
                 }
             }
@@ -435,9 +435,9 @@ public final class Peers implements AutoCloseable {
         }
         try {
             JsonNode r = json.readTree(m.payload());
-            a.reply().complete(new Reply(r.path("status").asText(ERROR), r.path("text").asText(""), r.path("instance").asText(a.peerName()),
-                    r.path("session").asText("")));
-        } catch (IOException | RuntimeException e) {
+            a.reply().complete(new Reply(r.path("status").asString(ERROR), r.path("text").asString(""), r.path("instance").asString(a.peerName()),
+                    r.path("session").asString("")));
+        } catch (RuntimeException e) {
             a.reply().complete(new Reply(ERROR, "an unreadable reply: " + e.getMessage(), a.peerName(), ""));
         }
     }
@@ -464,8 +464,8 @@ public final class Peers implements AutoCloseable {
 
     /** {@code instance_ask}: sends the question to the peer's inbox and waits up to {@code wait_seconds} for the reply. */
     McpTools.Outcome ask(String caller, JsonNode args) {
-        String to = args.path("instance").asText("").strip();
-        String text = args.path("text").asText("").strip();
+        String to = args.path("instance").asString("").strip();
+        String text = args.path("text").asString("").strip();
         if (to.isEmpty() || text.isEmpty()) {
             return McpTools.Outcome.fail("instance and text are required");
         }
@@ -504,7 +504,7 @@ public final class Peers implements AutoCloseable {
 
     /** {@code instance_reply}: the reply to an earlier question, waiting up to {@code wait_seconds} for it. */
     McpTools.Outcome replyOf(JsonNode args) {
-        String id = args.path("id").asText("").strip();
+        String id = args.path("id").asString("").strip();
         if (id.isEmpty()) {
             return McpTools.Outcome.fail("id is required: the one instance_ask returned");
         }

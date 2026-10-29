@@ -1,8 +1,8 @@
 package dev.marregui.comando.ui.kit.format;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 /** JSON read for display, such as a tool call's input: parsed leniently and printed indented. */
 public final class Json {
@@ -16,7 +16,7 @@ public final class Json {
     public static JsonNode parse(String json) {
         try {
             return MAPPER.readTree(json);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return MAPPER.createObjectNode();
         }
     }
@@ -25,7 +25,7 @@ public final class Json {
     public static String pretty(JsonNode node) {
         try {
             return MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(node);
-        } catch (JsonProcessingException e) {
+        } catch (JacksonException e) {
             return node.toString();
         }
     }

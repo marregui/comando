@@ -1,11 +1,11 @@
 package dev.marregui.comando.mcp;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
@@ -61,7 +61,7 @@ final class ViewSpecs {
         }
         List<String> names = new ArrayList<>(columns.size());
         for (JsonNode c : columns) {
-            names.add(c.asText());
+            names.add(c.asString(""));
         }
         List<List<String>> out = new ArrayList<>(rows.size());
         int i = 0;
@@ -71,7 +71,7 @@ final class ViewSpecs {
             }
             List<String> row = new ArrayList<>(names.size());
             for (JsonNode v : r) {
-                row.add(v.isNull() ? "null" : v.isValueNode() ? v.asText() : v.toString());
+                row.add(v.isNull() ? "null" : v.isValueNode() ? v.asString("") : v.toString());
             }
             out.add(row);
             i++;
@@ -86,7 +86,7 @@ final class ViewSpecs {
     static ViewSpec.Plot plot(JsonNode data) {
         JsonNode series = data.path("series");
         if (series.isMissingNode() && data.has("x") && data.has("y")) {
-            ObjectNode one = JSON.createObjectNode().put("name", data.path("title").asText("series 1"));
+            ObjectNode one = JSON.createObjectNode().put("name", data.path("title").asString("series 1"));
             one.set("x", data.get("x"));
             one.set("y", data.get("y"));
             series = JSON.createArrayNode().add(one);
@@ -103,18 +103,18 @@ final class ViewSpecs {
             if (points > MAX_POINTS) {
                 throw new IllegalArgumentException("at most " + MAX_POINTS + " points in total");
             }
-            out.add(new ViewSpec.Series(s.path("name").asText("series " + (out.size() + 1)), x, y));
+            out.add(new ViewSpec.Series(s.path("name").asString("series " + (out.size() + 1)), x, y));
         }
-        return new ViewSpec.Plot(data.path("x_label").asText(""), data.path("y_label").asText(""), data.path("time_x").asBoolean(false), out);
+        return new ViewSpec.Plot(data.path("x_label").asString(""), data.path("y_label").asString(""), data.path("time_x").asBoolean(false), out);
     }
 
     private static double[] numbers(JsonNode given, String what) {
         JsonNode array = given;
-        if (given.isTextual()) {
+        if (given.isString()) {
             try {
-                array = JSON.readTree(given.asText());
-            } catch (JsonProcessingException e) {
-                throw new IllegalArgumentException(what + " must be an array of numbers, not text: " + Clip.keepStart(given.asText(), 40));
+                array = JSON.readTree(given.asString(""));
+            } catch (JacksonException e) {
+                throw new IllegalArgumentException(what + " must be an array of numbers, not text: " + Clip.keepStart(given.asString(""), 40));
             }
         }
         if (!array.isArray()) {
@@ -126,7 +126,7 @@ final class ViewSpecs {
             if (!v.isNumber()) {
                 throw new IllegalArgumentException(what + "[" + i + "] is not a number: " + v);
             }
-            out[i++] = v.asDouble();
+            out[i++] = v.asDouble(0);
         }
         return out;
     }
@@ -142,7 +142,7 @@ final class ViewSpecs {
         for (JsonNode c : n.path("children")) {
             children.add(node(c, depth + 1));
         }
-        return new ViewSpec.TreeNode(n.path("label").asText(""), n.path("detail").asText(""), children);
+        return new ViewSpec.TreeNode(n.path("label").asString(""), n.path("detail").asString(""), children);
     }
 
     private static String text(JsonNode data, String field, boolean required) {
@@ -153,6 +153,6 @@ final class ViewSpecs {
             }
             return "";
         }
-        return v.asText();
+        return v.asString("");
     }
 }

@@ -1,6 +1,5 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -14,6 +13,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.InputStream;

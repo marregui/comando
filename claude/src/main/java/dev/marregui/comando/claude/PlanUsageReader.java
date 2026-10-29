@@ -1,10 +1,11 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.view.Clip;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -61,13 +62,13 @@ final class PlanUsageReader {
         JsonNode root;
         try {
             root = json.readTree(output == null ? "" : output.strip());
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             return PlanUsage.failed("unreadable answer from 'claude -p /usage'", readAtMillis);
         }
         if (root == null || !root.isObject()) {
             return PlanUsage.failed("no answer from 'claude -p /usage'", readAtMillis);
         }
-        String text = root.path("result").asText("");
+        String text = root.path("result").asString("");
         if (root.path("is_error").asBoolean(false)) {
             return PlanUsage.failed(firstLine(text, "'claude -p /usage' failed"), readAtMillis);
         }

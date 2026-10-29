@@ -1,8 +1,9 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -104,7 +105,7 @@ public final class MetricsLog {
             Files.createDirectories(dir);
             Files.writeString(file, json.writeValueAsString(event) + "\n", StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        } catch (IOException e) {
+        } catch (IOException | JacksonException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot write metrics [file=" + file + "]: " + e.getMessage());
         }
     }

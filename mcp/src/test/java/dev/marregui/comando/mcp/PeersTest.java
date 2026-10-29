@@ -1,6 +1,5 @@
 package dev.marregui.comando.mcp;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -18,6 +17,7 @@ import dev.marregui.comando.testkit.States;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

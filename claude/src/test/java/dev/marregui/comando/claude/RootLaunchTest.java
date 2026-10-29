@@ -1,9 +1,9 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.model.KitRoot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.ObjectMapper;
 
 import java.nio.file.Files;
 import java.nio.file.Path;

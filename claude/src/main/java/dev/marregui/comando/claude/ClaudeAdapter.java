@@ -1,7 +1,5 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.PlanUsage;
@@ -17,6 +15,8 @@ import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -101,7 +101,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         try {
             subagents.execute(() -> {
                 try {
-                    SubagentFiles.find(settings.projectsDir(), event.path("conversation").asText(""), event.path("tool_use_id").asText(""), json)
+                    SubagentFiles.find(settings.projectsDir(), event.path("conversation").asString(""), event.path("tool_use_id").asString(""), json)
                             .ifPresent(f -> event.set("spend", SubagentFiles.spend(f.transcript(), json)));
                 } catch (RuntimeException e) {
                     LOG.log(System.Logger.Level.WARNING, "cannot read a sub-agent's spend: " + e.getMessage());

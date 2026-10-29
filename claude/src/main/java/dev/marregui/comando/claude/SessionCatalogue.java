@@ -1,7 +1,8 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -96,8 +97,8 @@ public final class SessionCatalogue {
             for (String line : lines(raf, 0, (int) Math.min(size, HEAD_BYTES), false)) {
                 JsonNode n = parse(line);
                 if (n != null && cwd.isEmpty() && n.hasNonNull("cwd")) {
-                    cwd = n.path("cwd").asText();
-                    branch = n.path("gitBranch").asText("");
+                    cwd = n.path("cwd").asString("");
+                    branch = n.path("gitBranch").asString("");
                 }
             }
             long tailStart = Math.max(0, size - TAIL_BYTES);
@@ -106,21 +107,21 @@ public final class SessionCatalogue {
                 if (n == null) {
                     continue;
                 }
-                switch (n.path("type").asText()) {
-                    case "custom-title" -> title = n.path("customTitle").asText(title);
+                switch (n.path("type").asString("")) {
+                    case "custom-title" -> title = n.path("customTitle").asString(title);
                     case "ai-title" -> {
-                        if (title.isEmpty() || !n.path("aiTitle").asText().isEmpty()) {
-                            title = n.path("aiTitle").asText(title);
+                        if (title.isEmpty() || !n.path("aiTitle").asString("").isEmpty()) {
+                            title = n.path("aiTitle").asString(title);
                         }
                     }
                     case "user" -> {
                         JsonNode c = n.path("message").path("content");
-                        if (c.isTextual() && "human".equals(n.path("origin").path("kind").asText("human"))
-                                && !c.asText().startsWith("<")) {
-                            lastPrompt = c.asText();
+                        if (c.isString() && "human".equals(n.path("origin").path("kind").asString("human"))
+                                && !c.asString("").startsWith("<")) {
+                            lastPrompt = c.asString("");
                         }
                         if (n.hasNonNull("gitBranch")) {
-                            branch = n.path("gitBranch").asText(branch);
+                            branch = n.path("gitBranch").asString(branch);
                         }
                     }
                     default -> {
@@ -141,7 +142,7 @@ public final class SessionCatalogue {
     private JsonNode parse(String line) {
         try {
             return json.readTree(line);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             return null;
         }
     }

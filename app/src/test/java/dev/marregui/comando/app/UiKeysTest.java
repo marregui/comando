@@ -1,8 +1,6 @@
 package dev.marregui.comando.app;
 
 import com.jediterm.terminal.ui.JediTermWidget;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.console.ConsoleRegistry;
 import dev.marregui.comando.core.effect.Effect;
 import dev.marregui.comando.core.effect.EffectRouter;
@@ -29,8 +27,8 @@ import dev.marregui.comando.ui.kit.action.Command;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.theme.Ground;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
-import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.shell.ComandoUi;
 import dev.marregui.comando.ui.shell.ServerToggle;
 import dev.marregui.comando.ui.shell.Setup;
@@ -43,10 +41,12 @@ import org.fife.ui.rtextarea.IconRowHeader;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import javax.imageio.ImageIO;
 import javax.swing.AbstractButton;
@@ -198,7 +198,7 @@ class UiKeysTest {
     /** A key's value in a window's {@code settings.json}, as text; null when it has none. */
     private static String setting(Path settings, String key) throws IOException {
         JsonNode v = new ObjectMapper().readTree(settings.toFile()).get(key);
-        return v == null ? null : v.asText();
+        return v == null ? null : v.asString();
     }
 
     private static void restore(String property, String value) {

@@ -1,7 +1,5 @@
 package dev.marregui.comando.mcp;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
@@ -32,6 +30,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -128,7 +128,7 @@ class McpServerTest {
     }
 
     private static String text(JsonNode result) {
-        return result.path("content").path(0).path("text").asText();
+        return result.path("content").path(0).path("text").asString();
     }
 
     // ---- transport
@@ -162,13 +162,13 @@ class McpServerTest {
     @Test
     void initializeListAndUnknownMethods() throws Exception {
         JsonNode init = rpc("initialize", "{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{}}");
-        assertThat(init.path("result").path("protocolVersion").asText()).isEqualTo("2025-11-25");
-        assertThat(init.path("result").path("serverInfo").path("name").asText()).isEqualTo("comando");
-        assertThat(rpc("initialize", "{\"protocolVersion\":\"1999-01-01\"}").path("result").path("protocolVersion").asText())
+        assertThat(init.path("result").path("protocolVersion").asString()).isEqualTo("2025-11-25");
+        assertThat(init.path("result").path("serverInfo").path("name").asString()).isEqualTo("comando");
+        assertThat(rpc("initialize", "{\"protocolVersion\":\"1999-01-01\"}").path("result").path("protocolVersion").asString())
                 .isEqualTo(McpServer.DEFAULT_PROTOCOL);
 
         JsonNode tools = rpc("tools/list", "{}").path("result").path("tools");
-        assertThat(tools).extracting(t -> t.path("name").asText())
+        assertThat(tools).extracting(t -> t.path("name").asString())
                 .contains("approve", "ui_show_table", "ui_plot", "ui_show_view", "db_run_sql", "db_describe", "session_send", "session_read");
 
         // Claude Code 2.1.296 asks for server/discover first and falls back to initialize on this error
@@ -196,11 +196,11 @@ class McpServerTest {
 
         server.resolve(asked.approval(), new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION));
         JsonNode result = json.readTree(text(call.get()));
-        assertThat(result.path("behavior").asText()).isEqualTo("allow");
-        assertThat(result.path("updatedInput").path("command").asText()).isEqualTo("git status");
+        assertThat(result.path("behavior").asString()).isEqualTo("allow");
+        assertThat(result.path("updatedInput").path("command").asString()).isEqualTo("git status");
         JsonNode update = result.path("updatedPermissions").path(0);
-        assertThat(update.path("destination").asText()).isEqualTo("session");
-        assertThat(update.path("rules").path(0).path("ruleContent").asText()).isEqualTo("git status:*");
+        assertThat(update.path("destination").asString()).isEqualTo("session");
+        assertThat(update.path("rules").path(0).path("ruleContent").asString()).isEqualTo("git status:*");
     }
 
     /// Always allowing a WebFetch saves a WebFetch rule `domain:<host>` for that host only in the local settings.
@@ -216,9 +216,9 @@ class McpServerTest {
         Intent.ApprovalRequested asked = sink.await(Intent.ApprovalRequested.class, WAIT);
         server.resolve(asked.approval(), new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS));
         JsonNode update = json.readTree(text(call.get())).path("updatedPermissions").path(0);
-        assertThat(update.path("destination").asText()).isEqualTo("localSettings");
-        assertThat(update.path("rules").path(0).path("toolName").asText()).isEqualTo("WebFetch");
-        assertThat(update.path("rules").path(0).path("ruleContent").asText()).isEqualTo("domain:docs.example.org");
+        assertThat(update.path("destination").asString()).isEqualTo("localSettings");
+        assertThat(update.path("rules").path(0).path("toolName").asString()).isEqualTo("WebFetch");
+        assertThat(update.path("rules").path(0).path("ruleContent").asString()).isEqualTo("domain:docs.example.org");
     }
 
     /// A `notifications/cancelled` for a waiting permission call answers it deny and withdraws its approval card.
@@ -235,7 +235,7 @@ class McpServerTest {
         // the request id 7 is the one rpc() sends; Claude Code cancels it on an interrupt
         assertThat(post(ticket.token(), "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/cancelled\",\"params\":{\"requestId\":7}}", null)
                 .statusCode()).isEqualTo(202);
-        assertThat(json.readTree(text(call.get())).path("behavior").asText()).isEqualTo("deny");
+        assertThat(json.readTree(text(call.get())).path("behavior").asString()).isEqualTo("deny");
         assertThat(sink.await(Intent.ApprovalWithdrawn.class, WAIT).id()).isEqualTo(asked.approval().id());
     }
 
@@ -253,7 +253,7 @@ class McpServerTest {
         assertThat(asked.approval().kind()).isEqualTo(ApprovalKind.QUESTION);
         server.resolve(asked.approval(), new ApprovalDecision.Answer(Map.of("Colour?", "Red")));
         JsonNode result = json.readTree(text(call.get()));
-        assertThat(result.path("updatedInput").path("answers").path("Colour?").asText()).isEqualTo("Red");
+        assertThat(result.path("updatedInput").path("answers").path("Colour?").asString()).isEqualTo("Red");
         assertThat(result.path("updatedInput").path("questions").isArray()).isTrue();
     }
 
@@ -263,7 +263,7 @@ class McpServerTest {
         server.close();
         server = start(Duration.ofMillis(300));
         JsonNode result = json.readTree(text(tool("approve", "{\"tool_name\":\"Bash\",\"input\":{\"command\":\"rm -rf /\"}}")));
-        assertThat(result.path("behavior").asText()).isEqualTo("deny");
+        assertThat(result.path("behavior").asString()).isEqualTo("deny");
         sink.await(Intent.ApprovalWithdrawn.class, WAIT);
     }
 
@@ -281,7 +281,7 @@ class McpServerTest {
         server.close();
         JsonNode r = call.get();
         if (r != null) { // the response may or may not make it out before the listener stops
-            assertThat(json.readTree(text(r)).path("behavior").asText()).isEqualTo("deny");
+            assertThat(json.readTree(text(r)).path("behavior").asString()).isEqualTo("deny");
         }
     }
 
@@ -400,8 +400,8 @@ class McpServerTest {
     void stateDescribesPanelsConnectionsAndSessions() throws Exception {
         JsonNode s = json.readTree(text(tool("ui_get_state", "{}")));
         assertThat(s.path("panels")).hasSize(2);
-        assertThat(s.path("connections").path(0).path("name").asText()).isEqualTo("local");
-        assertThat(s.path("sessions").path(0).path("name").asText()).isEqualTo("work");
+        assertThat(s.path("connections").path(0).path("name").asString()).isEqualTo("local");
+        assertThat(s.path("sessions").path(0).path("name").asString()).isEqualTo("work");
     }
 
     /// `ui_set_layout` sends one SessionLayout naming the session, panel, lower tab and share; it says when focus waits for

@@ -1,6 +1,7 @@
 package dev.marregui.comando.app;
 
 import dev.marregui.comando.core.model.InstanceName;
+import tools.jackson.core.JacksonException;
 
 import javax.swing.JOptionPane;
 import java.awt.GraphicsEnvironment;
@@ -65,9 +66,9 @@ public final class Main {
             return null;
         }
         try {
-            String name = JsonFile.JSON.readTree(file.toFile()).path("name").asText("");
+            String name = JsonFile.JSON.readTree(file.toFile()).path("name").asString("");
             return name.isBlank() ? null : name;
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             return null;
         }
     }

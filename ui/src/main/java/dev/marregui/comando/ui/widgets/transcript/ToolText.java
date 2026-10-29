@@ -1,9 +1,9 @@
 package dev.marregui.comando.ui.widgets.transcript;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.core.view.ViewSpec;
+import tools.jackson.databind.JsonNode;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,10 +24,10 @@ public final class ToolText {
     }
 
     private static void values(JsonNode node, StringBuilder out) {
-        if (node.isContainerNode()) {
+        if (node.isContainer()) {
             node.forEach(child -> values(child, out));
         } else if (!node.isNull() && !node.isMissingNode()) {
-            out.append(node.asText()).append('\n');
+            out.append(node.asString("")).append('\n');
         }
     }
 
@@ -37,19 +37,19 @@ public final class ToolText {
      */
     public static String target(String tool, JsonNode in) {
         String path = switch (tool) {
-            case "Read", "Edit", "MultiEdit", "Write" -> in.path("file_path").asText("");
-            case "NotebookEdit" -> in.path("notebook_path").asText("");
+            case "Read", "Edit", "MultiEdit", "Write" -> in.path("file_path").asString("");
+            case "NotebookEdit" -> in.path("notebook_path").asString("");
             default -> "";
         };
         if (!path.isBlank()) {
             return ViewSpec.TreeNode.FILE_SCHEME + path.strip();
         }
         if (tool.equals("WebFetch")) {
-            String url = in.path("url").asText("").strip();
+            String url = in.path("url").asString("").strip();
             return url.regionMatches(true, 0, "http://", 0, 7) || url.regionMatches(true, 0, "https://", 0, 8) ? url : "";
         }
         if (tool.equals("Skill")) {
-            Path file = skillFile(in.path("skill").asText(in.path("command").asText("")).strip(), skillsRoot());
+            Path file = skillFile(in.path("skill").asString(in.path("command").asString("")).strip(), skillsRoot());
             return file == null ? "" : ViewSpec.TreeNode.FILE_SCHEME + file;
         }
         return "";
@@ -81,17 +81,17 @@ public final class ToolText {
 
     public static String summary(String tool, JsonNode in) {
         String s = switch (tool) {
-            case "Bash" -> in.path("command").asText("");
-            case "Read", "Edit", "MultiEdit", "Write" -> in.path("file_path").asText("");
-            case "NotebookEdit" -> in.path("notebook_path").asText("");
-            case "Grep" -> in.path("pattern").asText("") + (in.hasNonNull("path") ? "  in " + in.path("path").asText() : "");
-            case "Glob" -> in.path("pattern").asText("");
-            case "WebFetch" -> in.path("url").asText("");
-            case "WebSearch" -> in.path("query").asText("");
-            case "Agent", "Task" -> in.path("description").asText(in.path("subagent_type").asText(""));
-            case "Skill" -> in.path("skill").asText(in.path("command").asText(""));
+            case "Bash" -> in.path("command").asString("");
+            case "Read", "Edit", "MultiEdit", "Write" -> in.path("file_path").asString("");
+            case "NotebookEdit" -> in.path("notebook_path").asString("");
+            case "Grep" -> in.path("pattern").asString("") + (in.hasNonNull("path") ? "  in " + in.path("path").asString("") : "");
+            case "Glob" -> in.path("pattern").asString("");
+            case "WebFetch" -> in.path("url").asString("");
+            case "WebSearch" -> in.path("query").asString("");
+            case "Agent", "Task" -> in.path("description").asString(in.path("subagent_type").asString(""));
+            case "Skill" -> in.path("skill").asString(in.path("command").asString(""));
             case "TodoWrite" -> in.path("todos").size() + " todos";
-            case "AskUserQuestion" -> in.path("questions").path(0).path("question").asText("");
+            case "AskUserQuestion" -> in.path("questions").path(0).path("question").asString("");
             case "ExitPlanMode" -> "plan ready";
             default -> firstValue(in);
         };
@@ -109,6 +109,6 @@ public final class ToolText {
             return "";
         }
         var f = it.next();
-        return f.getKey() + "=" + (f.getValue().isValueNode() ? f.getValue().asText() : f.getValue().toString());
+        return f.getKey() + "=" + (f.getValue().isValueNode() && !f.getValue().isNull() ? f.getValue().asString("") : f.getValue().toString());
     }
 }

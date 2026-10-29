@@ -3,16 +3,17 @@ package dev.marregui.comando.app;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.annotation.PropertyAccessor;
-import com.fasterxml.jackson.databind.DeserializationFeature;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.view.ViewSpec;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.DeserializationFeature;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.jsontype.BasicPolymorphicTypeValidator;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -39,13 +40,13 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
     private interface Typed {
     }
 
-    static final ObjectMapper JSON = new ObjectMapper()
-            .setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE)
-            .setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY)
-            .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+    static final ObjectMapper JSON = JsonFile.filed()
+            .changeDefaultVisibility(v -> v.withVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.NONE)
+                    .withVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY))
             .addMixIn(ViewSpec.class, Typed.class)
             .addMixIn(ApprovalDecision.class, Typed.class)
-            .setPolymorphicTypeValidator(BasicPolymorphicTypeValidator.builder().allowIfSubType("dev.marregui.comando.core.").build());
+            .polymorphicTypeValidator(BasicPolymorphicTypeValidator.builder().allowIfSubType("dev.marregui.comando.core.").build())
+            .build();
 
     private final BufferedWriter out;
 
@@ -113,9 +114,13 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
             if (line.isBlank()) {
                 continue;
             }
-            JsonNode n = JSON.readTree(line);
-            if (n.path("type").asText().equals(STATE)) {
-                initial = JSON.treeToValue(n.path("state"), AppState.class);
+            JsonNode n = tree(line);
+            if (n.path("type").asString("").equals(STATE)) {
+                try {
+                    initial = JSON.treeToValue(n.path("state"), AppState.class);
+                } catch (JacksonException e) {
+                    throw new IOException(e.getMessage(), e);
+                }
             } else {
                 out.add(parse(line));
             }
@@ -127,15 +132,28 @@ final class IntentLog implements StateLoop.IntentObserver, AutoCloseable {
     }
 
     static Intent parse(String line) throws IOException {
-        JsonNode n = JSON.readTree(line);
-        String type = n.path("type").asText();
+        JsonNode n = tree(line);
+        String type = n.path("type").asString("");
         Class<?> c;
         try {
             c = Class.forName(Intent.class.getName() + "$" + type);
         } catch (ClassNotFoundException e) {
             throw new IOException("unknown intent type " + type, e);
         }
-        return (Intent) JSON.treeToValue(n.path("intent"), c);
+        try {
+            return (Intent) JSON.treeToValue(n.path("intent"), c);
+        } catch (JacksonException e) {
+            throw new IOException(e.getMessage(), e);
+        }
+    }
+
+    /** {@code line} parsed; Jackson's unchecked parse error as the {@code IOException} a reader of a log handles. */
+    private static JsonNode tree(String line) throws IOException {
+        try {
+            return JSON.readTree(line);
+        } catch (JacksonException e) {
+            throw new IOException(e.getMessage(), e);
+        }
     }
 
     @Override

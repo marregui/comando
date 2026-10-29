@@ -1,12 +1,12 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.RecordingSink;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -73,24 +73,24 @@ class MetricsTest {
                 {"type":"result","subtype":"success","is_error":false,"result":"done","duration_ms":120000,"duration_api_ms":80000,"num_turns":4,"total_cost_usd":1.25,"queued_turn_count":0,"usage":{"input_tokens":10,"output_tokens":500,"cache_read_input_tokens":9000,"cache_creation_input_tokens":300},"modelUsage":{"claude-opus-5-5":{"inputTokens":10,"outputTokens":500,"contextWindow":1000000}}}""");
 
         List<JsonNode> events = lines();
-        assertThat(events).extracting(e -> e.path("event").asText()).containsExactly("agent", "turn");
+        assertThat(events).extracting(e -> e.path("event").asString()).containsExactly("agent", "turn");
         JsonNode agent = events.get(0);
-        assertThat(agent.path("ts").asText()).isEqualTo("2026-10-28T10:01:30Z");
-        assertThat(agent.path("session").asText()).isEqualTo("work");
-        assertThat(agent.path("conversation").asText()).isEqualTo("conv-1");
-        assertThat(agent.path("tool_use_id").asText()).isEqualTo("t1");
-        assertThat(agent.path("type").asText()).isEqualTo("reviewer");
-        assertThat(agent.path("description").asText()).isEqualTo("Review the diff");
-        assertThat(agent.path("model_asked").asText()).isEqualTo("sonnet");
-        assertThat(agent.path("parent_model").asText()).isEqualTo("claude-opus-5-5");
-        assertThat(agent.path("status").asText()).isEqualTo("done");
+        assertThat(agent.path("ts").asString()).isEqualTo("2026-10-28T10:01:30Z");
+        assertThat(agent.path("session").asString()).isEqualTo("work");
+        assertThat(agent.path("conversation").asString()).isEqualTo("conv-1");
+        assertThat(agent.path("tool_use_id").asString()).isEqualTo("t1");
+        assertThat(agent.path("type").asString()).isEqualTo("reviewer");
+        assertThat(agent.path("description").asString()).isEqualTo("Review the diff");
+        assertThat(agent.path("model_asked").asString()).isEqualTo("sonnet");
+        assertThat(agent.path("parent_model").asString()).isEqualTo("claude-opus-5-5");
+        assertThat(agent.path("status").asString()).isEqualTo("done");
         assertThat(agent.path("background").asBoolean()).isFalse();
         assertThat(agent.path("duration_ms").asLong()).isEqualTo(90_000);
         assertThat(agent.path("tools").asInt()).as("the tool calls inside it at any depth").isEqualTo(2);
 
         JsonNode turn = events.get(1);
-        assertThat(turn.path("model").asText()).isEqualTo("claude-opus-5-5");
-        assertThat(turn.path("effort").asText()).isEqualTo("high");
+        assertThat(turn.path("model").asString()).isEqualTo("claude-opus-5-5");
+        assertThat(turn.path("effort").asString()).isEqualTo("high");
         assertThat(turn.path("duration_ms").asLong()).isEqualTo(120_000);
         assertThat(turn.path("api_ms").asLong()).isEqualTo(80_000);
         assertThat(turn.path("calls").asInt()).isEqualTo(4);
@@ -125,10 +125,10 @@ class MetricsTest {
         mapper.accept("""
                 {"type":"system","subtype":"task_notification","tool_use_id":"b1","status":"completed"}""");
         assertThat(lines()).singleElement().satisfies(e -> {
-            assertThat(e.path("event").asText()).isEqualTo("agent");
+            assertThat(e.path("event").asString()).isEqualTo("agent");
             assertThat(e.path("background").asBoolean()).isTrue();
             assertThat(e.path("duration_ms").asLong()).isEqualTo(600_000);
-            assertThat(e.path("status").asText()).isEqualTo("done");
+            assertThat(e.path("status").asString()).isEqualTo("done");
         });
     }
 
@@ -147,7 +147,7 @@ class MetricsTest {
         assertThat(spend.path("calls").asLong()).as("a message stored a block a line counts once").isEqualTo(2);
         assertThat(spend.path("output").asLong()).isEqualTo(50);
         assertThat(spend.path("cache_read").asLong()).isEqualTo(300);
-        assertThat(spend.path("models")).extracting(JsonNode::asText).containsExactly("claude-sonnet-5-5");
+        assertThat(spend.path("models")).extracting(JsonNode::asString).containsExactly("claude-sonnet-5-5");
     }
 
     /// The disabled metrics sink accepts a turn event without creating any file in the supplied temporary directory.

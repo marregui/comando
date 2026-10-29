@@ -1,9 +1,9 @@
 package dev.marregui.comando.ui.shell;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.ui.kit.format.Json;
+import tools.jackson.databind.JsonNode;
 
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -41,7 +41,7 @@ final class WorkedIn {
             }
             JsonNode in = Json.parse(call.inputJson());
             for (String field : FIELDS) {
-                String value = in.path(field).asText("");
+                String value = in.path(field).asString("");
                 if (!value.startsWith("/")) {
                     continue;
                 }

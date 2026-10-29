@@ -1,6 +1,5 @@
 package dev.marregui.comando.ui.widgets.transcript.render;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import dev.marregui.comando.core.result.Formats;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.view.Clip;
@@ -13,6 +12,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widgets.transcript.ToolText;
 import dev.marregui.comando.ui.widgets.transcript.doc.MarkdownDoc;
 import dev.marregui.comando.ui.widgets.transcript.doc.Para;
+import tools.jackson.databind.JsonNode;
 
 import javax.swing.Icon;
 import java.awt.Color;
@@ -736,8 +736,8 @@ final class Items {
             }
             return switch (c.name()) {
                 // what the call is given names files and addresses as its result does: links (record 108)
-                case "Bash" -> new Rich(s.monoSmall, s.accent).append("$ " + in.path("command").asText("")).linked(s.link);
-                case "Agent", "Task" -> new Rich(s.monoSmall, s.text).append(in.path("prompt").asText("")).linked(s.link);
+                case "Bash" -> new Rich(s.monoSmall, s.accent).append("$ " + in.path("command").asString("")).linked(s.link);
+                case "Agent", "Task" -> new Rich(s.monoSmall, s.text).append(in.path("prompt").asString("")).linked(s.link);
                 default -> in.isObject() && !in.isEmpty()
                         ? new Rich(s.monoSmall, s.text).append(clipLines(Json.pretty(in), MAX_INPUT_LINES)).linked(s.link)
                         : new Rich(s.monoSmall, s.text);
@@ -946,7 +946,7 @@ final class Items {
                 String more = diff.size() > MAX_INPUT_LINES ? "\n… " + (diff.size() - MAX_INPUT_LINES) + " more lines" : "";
                 sb.append("\n\n").append(fence("diff", diff.isEmpty() ? "(no changes)" : String.join("\n", shown) + more));
             } else if (c.name().equals("Bash")) {
-                sb.append("\n\n").append(fence("bash", in.path("command").asText("")));
+                sb.append("\n\n").append(fence("bash", in.path("command").asString("")));
             } else if (in.isObject() && !in.isEmpty()) {
                 sb.append("\n\n").append(fence("json", clipLines(Json.pretty(in), MAX_INPUT_LINES)));
             }
@@ -1036,7 +1036,7 @@ final class Items {
             }
             JsonNode root = Json.parse(t);
             JsonNode specific = root.path("hookSpecificOutput");
-            if (root.size() != 1 || !specific.isObject() || !specific.path("additionalContext").isTextual()) {
+            if (root.size() != 1 || !specific.isObject() || !specific.path("additionalContext").isString()) {
                 return null;
             }
             for (var field : specific.properties()) {
@@ -1044,7 +1044,7 @@ final class Items {
                     return null;
                 }
             }
-            return specific.path("additionalContext").asText();
+            return specific.path("additionalContext").asString("");
         }
 
         @Override

@@ -1,7 +1,8 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -25,10 +26,10 @@ final class BaseEffort {
                 return "";
             }
             root = json.readTree(settings.toFile());
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             return "";
         }
-        String own = model.isEmpty() ? "" : root.path("modelSettings").path(model).path("effortLevel").asText("");
-        return own.isEmpty() ? root.path("effortLevel").asText("") : own;
+        String own = model.isEmpty() ? "" : root.path("modelSettings").path(model).path("effortLevel").asString("");
+        return own.isEmpty() ? root.path("effortLevel").asString("") : own;
     }
 }

@@ -1,9 +1,10 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.view.Clip;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -161,14 +162,14 @@ final class CodexUsageReader {
         JsonNode msg;
         try {
             msg = json.readTree(line.strip());
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             return null;
         }
         if (msg == null || !msg.isObject() || msg.path("id").asInt(-1) != 2) {
             return null;
         }
         if (msg.has("error")) {
-            String why = msg.path("error").path("message").asText("");
+            String why = msg.path("error").path("message").asString("");
             return PlanUsage.failed(PlanUsage.CODEX, Clip.keepStart(why.isBlank() ? "the rate-limit read failed" : why, 200), readAtMillis);
         }
         JsonNode limits = msg.path("result").path("rateLimits");
@@ -184,7 +185,7 @@ final class CodexUsageReader {
             }
             long resetsAt = w.path("resetsAt").asLong(0);
             boolean reset = resetsAt > 0 && resetsAt * 1000 <= readAtMillis;
-            int percent = reset ? 0 : (int) Math.round(w.path("usedPercent").asDouble());
+            int percent = reset ? 0 : (int) Math.round(w.path("usedPercent").asDouble(0));
             windows.add(new PlanUsage.Window(name(w.path("windowDurationMins").asInt(0)), percent,
                     resetsAt > 0 ? RESETS.format(Instant.ofEpochSecond(resetsAt).atZone(zone)) : ""));
         }
@@ -195,7 +196,7 @@ final class CodexUsageReader {
 
     private static boolean isAccount(JsonNode limits) {
         JsonNode id = limits.path("limitId");
-        return limits.isObject() && (id.isMissingNode() || id.isNull() || id.asText().equals("codex"));
+        return limits.isObject() && (id.isMissingNode() || id.isNull() || id.asString("").equals("codex"));
     }
 
     /** "Session" for the 5-hour window, as Claude Code names its own; "Week"; "Month" on the monthly plans. */

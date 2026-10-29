@@ -1,12 +1,13 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.model.KitJob;
 import dev.marregui.comando.core.model.KitJobs;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -122,21 +123,26 @@ public final class KitJobsCli {
 
     /** {@code kit.py jobs --json} read. */
     static KitJobs parse(String json) throws IOException {
-        JsonNode doc = JSON.readTree(json);
+        JsonNode doc;
+        try {
+            doc = JSON.readTree(json);
+        } catch (JacksonException e) {
+            throw new IOException(e.getMessage(), e);
+        }
         if (doc == null || !doc.path("jobs").isArray()) {
             throw new IOException("kit.py jobs --json gave no jobs");
         }
         List<KitJobs.Entry> out = new ArrayList<>();
         for (JsonNode j : doc.path("jobs")) {
             List<String> days = strings(j.path("days"));
-            KitJob job = new KitJob(j.path("name").asText(), j.path("description").asText(""),
-                    days.isEmpty() ? KitJob.WEEKDAYS : days, j.path("time").asText(""), strings(j.path("command")),
-                    env(j.path("env")), j.path("log").asText(""), j.path("enabled").asBoolean(true));
+            KitJob job = new KitJob(j.path("name").asString(""), j.path("description").asString(""),
+                    days.isEmpty() ? KitJob.WEEKDAYS : days, j.path("time").asString(""), strings(j.path("command")),
+                    env(j.path("env")), j.path("log").asString(""), j.path("enabled").asBoolean(true));
             JsonNode last = j.path("last");
             out.add(new KitJobs.Entry(job, j.path("installed").asBoolean(false), j.path("current").asBoolean(false),
-                    j.path("loaded").isBoolean() ? j.path("loaded").asBoolean() : null, j.path("running").asBoolean(false),
-                    last.isObject() ? last.path("start").asText("") : "", last.isObject() && last.path("exit").isInt() ? last.path("exit").asInt() : null,
-                    j.path("next").isTextual() ? j.path("next").asText() : "", j.path("logPath").asText("")));
+                    j.path("loaded").isBoolean() ? j.path("loaded").asBoolean(false) : null, j.path("running").asBoolean(false),
+                    last.isObject() ? last.path("start").asString("") : "", last.isObject() && last.path("exit").isInt() ? last.path("exit").asInt(0) : null,
+                    j.path("next").isString() ? j.path("next").asString("") : "", j.path("logPath").asString("")));
         }
         return new KitJobs(true, out, "");
     }
@@ -174,13 +180,13 @@ public final class KitJobsCli {
 
     private static List<String> strings(JsonNode array) {
         List<String> out = new ArrayList<>();
-        array.forEach(n -> out.add(n.asText()));
+        array.forEach(n -> out.add(n.asString("")));
         return out;
     }
 
     private static Map<String, String> env(JsonNode object) {
         Map<String, String> out = new LinkedHashMap<>();
-        object.properties().forEach(e -> out.put(e.getKey(), e.getValue().asText()));
+        object.properties().forEach(e -> out.put(e.getKey(), e.getValue().asString("")));
         return out;
     }
 }

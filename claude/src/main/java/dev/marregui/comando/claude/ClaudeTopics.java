@@ -1,12 +1,13 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.loop.Processes;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.Topic;
 import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.view.Clip;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -146,13 +147,13 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
         JsonNode root;
         try {
             root = json.readTree(output == null ? "" : output.strip());
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             return Topic.failed("unreadable answer from Haiku", readAtMillis);
         }
         if (root == null || !root.isObject()) {
             return Topic.failed("no answer from Haiku", readAtMillis);
         }
-        String text = root.path("result").asText("");
+        String text = root.path("result").asString("");
         if (root.path("is_error").asBoolean(false)) {
             return Topic.failed(text.isBlank() ? "Haiku failed" : Clip.keepStart(firstLine(text), 200), readAtMillis);
         }

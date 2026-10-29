@@ -1,8 +1,9 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
@@ -83,10 +84,10 @@ final class SubagentFiles {
         try (var metas = Files.newDirectoryStream(dir, "agent-*" + META)) {
             for (Path meta : metas) {
                 JsonNode m = readMeta(meta, json);
-                if (m != null && toolUseId.equals(m.path("toolUseId").asText(""))) {
+                if (m != null && toolUseId.equals(m.path("toolUseId").asString(""))) {
                     String name = meta.getFileName().toString();
                     Path transcript = dir.resolve(name.substring(0, name.length() - META.length()) + ".jsonl");
-                    return Optional.of(new Found(transcript, meta, m.path("description").asText(m.path("agentType").asText(""))));
+                    return Optional.of(new Found(transcript, meta, m.path("description").asString(m.path("agentType").asString(""))));
                 }
             }
         }
@@ -100,7 +101,7 @@ final class SubagentFiles {
                 return null;
             }
             return json.readTree(Files.readAllBytes(meta));
-        } catch (IOException e) {
+        } catch (IOException | JacksonException e) {
             LOG.log(System.Logger.Level.DEBUG, "cannot read " + meta + ": " + e.getMessage());
             return null;
         }
@@ -124,23 +125,23 @@ final class SubagentFiles {
             String line;
             while ((line = in.readLine()) != null) {
                 JsonNode n = parse(line, json);
-                if (n == null || !n.path("type").asText("").equals("assistant")) {
+                if (n == null || !n.path("type").asString("").equals("assistant")) {
                     continue;
                 }
                 JsonNode m = n.path("message");
-                String id = m.path("id").asText("");
+                String id = m.path("id").asString("");
                 if (!id.isEmpty() && !seen.add(id)) {
                     continue;
                 }
                 calls++;
-                if (!m.path("model").asText("").isEmpty()) {
-                    models.add(m.path("model").asText());
+                if (!m.path("model").asString("").isEmpty()) {
+                    models.add(m.path("model").asString(""));
                 }
                 JsonNode u = m.path("usage");
-                input += u.path("input_tokens").asLong();
-                output += u.path("output_tokens").asLong();
-                cacheRead += u.path("cache_read_input_tokens").asLong();
-                cacheCreate += u.path("cache_creation_input_tokens").asLong();
+                input += u.path("input_tokens").asLong(0);
+                output += u.path("output_tokens").asLong(0);
+                cacheRead += u.path("cache_read_input_tokens").asLong(0);
+                cacheCreate += u.path("cache_creation_input_tokens").asLong(0);
             }
         } catch (IOException | UncheckedIOException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read " + file + ": " + e.getMessage());
@@ -341,7 +342,7 @@ final class SubagentFiles {
                 return;
             }
             JsonNode content = n.path("message").path("content");
-            switch (n.path("type").asText("")) {
+            switch (n.path("type").asString("")) {
                 case "user" -> user(content, wasFirst);
                 case "assistant" -> assistant(content);
                 default -> {
@@ -350,18 +351,18 @@ final class SubagentFiles {
         }
 
         private void user(JsonNode content, boolean isTask) {
-            if (content.isTextual()) {
-                text(content.asText(), isTask);
+            if (content.isString()) {
+                text(content.asString(""), isTask);
                 return;
             }
             for (JsonNode c : content) {
-                switch (c.path("type").asText("")) {
+                switch (c.path("type").asString("")) {
                     case "text" -> {
-                        text(c.path("text").asText(""), isTask);
+                        text(c.path("text").asString(""), isTask);
                         isTask = false;
                     }
                     case "tool_result" -> {
-                        Step call = waiting.remove(c.path("tool_use_id").asText(""));
+                        Step call = waiting.remove(c.path("tool_use_id").asString(""));
                         String result = oneLine(resultText(c.path("content")));
                         if (call != null && !result.isEmpty()) {
                             call.text += (c.path("is_error").asBoolean(false) ? " → failed: " : " → ") + result;
@@ -383,16 +384,16 @@ final class SubagentFiles {
 
         private void assistant(JsonNode content) {
             for (JsonNode c : content) {
-                switch (c.path("type").asText("")) {
+                switch (c.path("type").asString("")) {
                     case "text" -> {
-                        String t = c.path("text").asText("").strip();
+                        String t = c.path("text").asString("").strip();
                         if (!t.isEmpty()) {
                             add(new Step(null, t));
                         }
                     }
                     case "tool_use" -> {
                         String summary = oneLine(summary(c.path("input")));
-                        Step call = new Step(c.path("id").asText(""), "- `" + c.path("name").asText("tool") + '`'
+                        Step call = new Step(c.path("id").asString(""), "- `" + c.path("name").asString("tool") + '`'
                                 + (summary.isEmpty() ? "" : " " + summary));
                         tools++;
                         toolsKept++;
@@ -420,16 +421,16 @@ final class SubagentFiles {
         /** The task in a stored first line: its prompt when it is a user line with text, else empty. */
         private String taskOf(String line) {
             JsonNode n = parse(line, json);
-            if (n == null || !n.path("type").asText("").equals("user")) {
+            if (n == null || !n.path("type").asString("").equals("user")) {
                 return "";
             }
             JsonNode content = n.path("message").path("content");
-            if (content.isTextual()) {
-                return content.asText();
+            if (content.isString()) {
+                return content.asString("");
             }
             for (JsonNode c : content) {
-                if (c.path("type").asText("").equals("text")) {
-                    return c.path("text").asText("");
+                if (c.path("type").asString("").equals("text")) {
+                    return c.path("text").asString("");
                 }
             }
             return "";
@@ -476,7 +477,7 @@ final class SubagentFiles {
         }
         try {
             return json.readTree(line);
-        } catch (IOException e) {
+        } catch (JacksonException e) {
             return null;
         }
     }
@@ -488,28 +489,28 @@ final class SubagentFiles {
     /** What a tool call works on: the first of the inputs a call is usually known by, else its first text input. */
     private static String summary(JsonNode in) {
         for (String key : List.of("command", "file_path", "notebook_path", "pattern", "url", "query", "description", "skill")) {
-            if (in.path(key).isTextual()) {
-                return in.path(key).asText();
+            if (in.path(key).isString()) {
+                return in.path(key).asString("");
             }
         }
         var fields = in.properties().iterator();
         while (fields.hasNext()) {
             var f = fields.next();
             if (f.getValue().isValueNode()) {
-                return f.getKey() + "=" + f.getValue().asText();
+                return f.getKey() + "=" + f.getValue().asString("");
             }
         }
         return "";
     }
 
     private static String resultText(JsonNode content) {
-        if (content.isTextual()) {
-            return content.asText();
+        if (content.isString()) {
+            return content.asString("");
         }
         StringBuilder sb = new StringBuilder();
         for (JsonNode c : content) {
-            if (c.path("text").isTextual()) {
-                sb.append(c.path("text").asText()).append(' ');
+            if (c.path("text").isString()) {
+                sb.append(c.path("text").asString("")).append(' ');
             }
         }
         return sb.toString();

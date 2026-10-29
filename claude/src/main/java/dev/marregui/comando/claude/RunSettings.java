@@ -1,7 +1,8 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -59,12 +60,12 @@ final class RunSettings {
                     continue;
                 }
                 JsonNode e = json.readTree(line);
-                if (e.path("type").asText().equals("assistant") && e.path("message").path("id").asText().equals(messageId)) {
-                    String effort = e.path("perTurnEffort").asText(e.path("effort").asText(""));
-                    return Optional.of(new Ran(e.path("message").path("model").asText(""), effort));
+                if (e.path("type").asString("").equals("assistant") && e.path("message").path("id").asString("").equals(messageId)) {
+                    String effort = e.path("perTurnEffort").asString(e.path("effort").asString(""));
+                    return Optional.of(new Ran(e.path("message").path("model").asString(""), effort));
                 }
             }
-        } catch (IOException e) {
+        } catch (IOException | JacksonException e) {
             // a line cut by the tail's start, or a file being rewritten: the next message reads again
         }
         return Optional.empty();

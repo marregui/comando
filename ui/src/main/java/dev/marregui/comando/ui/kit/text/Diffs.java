@@ -1,9 +1,9 @@
 package dev.marregui.comando.ui.kit.text;
 
-import com.fasterxml.jackson.databind.JsonNode;
 import com.github.difflib.DiffUtils;
 import com.github.difflib.UnifiedDiffUtils;
 import com.github.difflib.patch.Patch;
+import tools.jackson.databind.JsonNode;
 
 import java.util.Arrays;
 import java.util.List;
@@ -23,19 +23,19 @@ public final class Diffs {
      * multi-edit's replaced texts and written texts each follow one another, an ellipsis line between them.
      */
     public static Edit edit(String tool, JsonNode in) {
-        String path = in.path("file_path").asText("");
+        String path = in.path("file_path").asString("");
         return switch (tool) {
-            case "Edit" -> new Edit(path, in.path("old_string").asText(""), in.path("new_string").asText(""));
+            case "Edit" -> new Edit(path, in.path("old_string").asString(""), in.path("new_string").asString(""));
             case "MultiEdit" -> {
                 StringBuilder before = new StringBuilder();
                 StringBuilder after = new StringBuilder();
                 for (JsonNode e : in.path("edits")) {
-                    before.append(e.path("old_string").asText("")).append("\n…\n");
-                    after.append(e.path("new_string").asText("")).append("\n…\n");
+                    before.append(e.path("old_string").asString("")).append("\n…\n");
+                    after.append(e.path("new_string").asString("")).append("\n…\n");
                 }
                 yield new Edit(path, before.toString(), after.toString());
             }
-            case "Write" -> new Edit(path, "", in.path("content").asText(""));
+            case "Write" -> new Edit(path, "", in.path("content").asString(""));
             default -> null;
         };
     }

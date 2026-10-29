@@ -1,6 +1,5 @@
 package dev.marregui.comando.claude;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.state.BackgroundTask;
 import dev.marregui.comando.core.transcript.Block;
@@ -8,6 +7,7 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.testkit.Fixtures;
 import dev.marregui.comando.testkit.RecordingSink;
 import org.junit.jupiter.api.Test;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.ArrayList;
 import java.util.HashMap;
