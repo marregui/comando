@@ -56,6 +56,9 @@ class EmbeddedQuestDbTest {
                 "QDB_PG_NET_BIND_TO", "127.0.0.1:" + pg,
                 "QDB_LINE_TCP_NET_BIND_TO", "127.0.0.1:" + freePort(),
                 "QDB_LINE_UDP_ENABLED", "false"));
+        String property = System.getProperty(EmbeddedQuestDb.LOG_CONFIG_PROPERTY);
+        // QuestDB reads its log configuration once per process: another test's start may have read it already
+        io.questdb.log.LogFactory.closeInstance();
         try {
             db.toggle();
             Intent.Notify up = sink.await(Intent.Notify.class, n -> n.text().startsWith("QuestDB") || n.text().startsWith("Cannot"), Duration.ofSeconds(60));
@@ -63,6 +66,9 @@ class EmbeddedQuestDbTest {
             assertThat(up.level()).as(up.text()).isEqualTo(Notice.Level.INFO);
             assertThat(db.isRunning()).isTrue();
             assertThat(Files.isDirectory(root)).isTrue();
+            assertThat(db.log()).as("the day's log, in the root's log folder").isRegularFile()
+                    .hasParent(root.resolve("log"));
+            assertThat(db.log().getFileName().toString()).matches("questdb-\\d{8}\\.log");
             try (Socket s = new Socket()) {
                 s.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), pg), 2_000);
             }
@@ -76,7 +82,33 @@ class EmbeddedQuestDbTest {
             }
         } finally {
             db.close();
+            io.questdb.log.LogFactory.closeInstance();
+            if (property == null) {
+                System.clearProperty(EmbeddedQuestDb.LOG_CONFIG_PROPERTY);
+            } else {
+                System.setProperty(EmbeddedQuestDb.LOG_CONFIG_PROPERTY, property);
+            }
         }
+    }
+
+    /// comando's log configuration is written unless the log is chosen already: by the property set to another file, or
+    /// by a file writer in the root's `conf/log.conf`; a property naming comando's own file from another root is
+    /// replaced.
+    @Test
+    void theLogConfigurationIsComandosUnlessOneIsChosen(@TempDir Path dir) throws IOException {
+        Path root = dir.resolve("questdb");
+        Path ours = root.resolve("conf").resolve(EmbeddedQuestDb.LOG_CONFIG_NAME);
+
+        assertThat(EmbeddedQuestDb.logConfig(root, null)).contains(ours);
+        assertThat(ours).hasContent(EmbeddedQuestDb.LOG_CONFIG);
+        assertThat(EmbeddedQuestDb.LOG_CONFIG).contains("w.file.location=${log.dir}/questdb-${date:yyyyMMdd}.log");
+        assertThat(EmbeddedQuestDb.logConfig(root, "/elsewhere/" + EmbeddedQuestDb.LOG_CONFIG_NAME)).contains(ours);
+        assertThat(EmbeddedQuestDb.logConfig(root, "/mine/log.conf")).as("the user's choice").isEmpty();
+
+        Files.writeString(root.resolve("conf").resolve("log.conf"), "writers=file\n#w.file.class=x\n");
+        assertThat(EmbeddedQuestDb.logConfig(root, null)).as("a commented file writer chooses nothing").contains(ours);
+        Files.writeString(root.resolve("conf").resolve("log.conf"), "writers=file\n w.file.class=io.questdb.log.LogFileWriter\n");
+        assertThat(EmbeddedQuestDb.logConfig(root, null)).as("a file writer of the user's").isEmpty();
     }
 
     /// While a start on a data root that is a file holds the server, `isRunning` answers false within 2 s and a second

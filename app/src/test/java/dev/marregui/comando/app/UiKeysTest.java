@@ -233,7 +233,7 @@ class UiKeysTest {
         };
         TranscriptRegistry transcripts = new TranscriptRegistry();
         ComandoUi ui = new ComandoUi(new ComandoUi.Dependencies(recording, loop::state, loop, transcripts, new ResultRegistry(),
-                new ConsoleRegistry(), new SchemaRegistry(), new Texts(), List::of, server, Setup.NONE, "keys", windowHome, null, () -> { }));
+                new ConsoleRegistry(), new SchemaRegistry(), new Texts(), List::of, server, null, Setup.NONE, "keys", windowHome, null, () -> { }));
         effects.target = new EffectRouter(ports, ports, ports, ui, ports, ports);
         open.add(() -> {
             ui.close();
@@ -247,6 +247,51 @@ class UiKeysTest {
         JFrame frame = onEdt(() -> (JFrame) Stream.of(Frame.getFrames())
                 .filter(f -> f instanceof JFrame && f.isShowing() && !before.contains(f)).findFirst().orElseThrow());
         return new Window(loop, ui, sent, frame, transcripts);
+    }
+
+    /// A document no session works in, a file opened to read, takes the whole height: the lower area and its divider
+    /// hide. A lower tab asked for while it is in front (⌃1–⌃4, or Approvals coming forward for a request) shows the lower
+    /// area for that document from then on; a session's panel shows it at the height it had; another document opened
+    /// later hides it again (2026-10-29).
+    @Test
+    void aDocumentToReadTakesTheWholeHeightUntilTheLowerAreaIsAskedFor() throws Exception {
+        Window w = open("mac");
+        settle(w);
+        javax.swing.JSplitPane split = await("the lower split", () -> find(w.frame(), javax.swing.JSplitPane.class,
+                sp -> sp.getOrientation() == javax.swing.JSplitPane.VERTICAL_SPLIT).orElse(null), WAIT_MILLIS);
+        Component lowerArea = onEdt(split::getBottomComponent);
+        PanelId first = w.loop().state().focused();
+        assertThat(onEdt(lowerArea::isVisible)).as("the session's panel shows the lower area").isTrue();
+
+        PanelId doc = new PanelId("doc-notes");
+        w.loop().dispatch(new Intent.AddPanel(doc, "notes.md", true));
+        w.loop().dispatch(new Intent.FocusPanel(doc));
+        await("the document in front, the lower area hidden", () -> doc.equals(w.loop().state().focused())
+                && !onEdtUnchecked(lowerArea::isVisible), WAIT_MILLIS);
+        assertThat(onEdt(split::getDividerSize)).as("no divider to drag").isZero();
+
+        // a request waiting brings Approvals forward, as ⌃2 does
+        w.loop().dispatch(new Intent.SelectLowerTab(LowerTab.APPROVALS));
+        await("asked for: the lower area shows", () -> onEdtUnchecked(lowerArea::isVisible), WAIT_MILLIS);
+        assertThat(onEdt(split::getDividerSize)).isPositive();
+        assertThat(onEdt(() -> split.getHeight() - split.getDividerLocation())).as("at a height that shows it").isGreaterThan(60);
+
+        w.loop().dispatch(new Intent.FocusPanel(first));
+        await("the session's panel", () -> first.equals(w.loop().state().focused()), WAIT_MILLIS);
+        settle(w);
+        assertThat(onEdt(lowerArea::isVisible)).isTrue();
+        w.loop().dispatch(new Intent.FocusPanel(doc));
+        await("the document again", () -> doc.equals(w.loop().state().focused()), WAIT_MILLIS);
+        settle(w);
+        assertThat(onEdt(lowerArea::isVisible)).as("asked for while this document was in front: it stays").isTrue();
+
+        PanelId plan = new PanelId("doc-plan");
+        w.loop().dispatch(new Intent.AddPanel(plan, "plan.md", true));
+        w.loop().dispatch(new Intent.FocusPanel(plan));
+        await("another document hides it", () -> plan.equals(w.loop().state().focused()) && !onEdtUnchecked(lowerArea::isVisible), WAIT_MILLIS);
+        w.loop().dispatch(new Intent.FocusPanel(first));
+        await("back to the session's panel: shown", () -> onEdtUnchecked(lowerArea::isVisible), WAIT_MILLIS);
+        assertThat(onEdt(() -> split.getHeight() - split.getDividerLocation())).isGreaterThan(60);
     }
 
     private static Map<String, KeyStroke> keys(Window w) {
@@ -601,7 +646,7 @@ class UiKeysTest {
                 return Stream.of(bar.getMenu(1).getMenuComponents()).filter(JMenuItem.class::isInstance).map(c -> ((JMenuItem) c).getText()).toList();
             });
             assertThat(help).as("the palette and the help; the theme, the shell, the plots and the server are buttons")
-                    .containsExactly("Command palette", "Tutorial", "Keyboard shortcuts", "Markdown sheet", "Show the log", "Reveal comando folder");
+                    .containsExactly("Command palette", "Tutorial", "Keyboard shortcuts", "Markdown sheet", "Show the log", "Show the Edge's log", "Show QuestDB's log", "Reveal comando folder");
             onEdt(() -> {
                 swatch.doClick();
                 return null;

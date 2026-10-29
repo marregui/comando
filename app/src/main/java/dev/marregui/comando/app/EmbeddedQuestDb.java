@@ -13,9 +13,15 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 
 /**
  * A QuestDB server comando starts in its data root, on QuestDB's default ports (PG wire 8812, web console 9000,
@@ -33,6 +39,30 @@ final class EmbeddedQuestDb implements ServerToggle, AutoCloseable {
             "QDB_PG_NET_BIND_TO", "127.0.0.1:8812",
             "QDB_LINE_TCP_NET_BIND_TO", "127.0.0.1:9009",
             "QDB_LINE_UDP_ENABLED", "false");
+
+    /** The system property QuestDB reads its log configuration's path from, before {@code conf/log.conf}. */
+    static final String LOG_CONFIG_PROPERTY = "out";
+    /** comando's log configuration, written in the root's {@code conf/} at each start. */
+    static final String LOG_CONFIG_NAME = "comando-log.conf";
+    /**
+     * QuestDB's shipped configuration with its file writer on: one file a day in the root's {@code log/}, ending in
+     * {@code .log} so that a panel follows it, kept a week; the console as shipped.
+     */
+    static final String LOG_CONFIG = """
+            # Written by comando at each start of its QuestDB: the console as shipped, and one file a day in log/, kept a
+            # week, for Help > Show QuestDB's log. A file writer set in conf/log.conf is used instead of this file.
+            writers=file,stdout,http.min
+            w.file.class=io.questdb.log.LogRollingFileWriter
+            w.file.location=${log.dir}/questdb-${date:yyyyMMdd}.log
+            w.file.level=INFO,ERROR,CRITICAL,ADVISORY
+            w.file.rollEvery=day
+            w.file.lifeDuration=7d
+            w.stdout.class=io.questdb.log.LogConsoleWriter
+            w.stdout.level=INFO
+            w.http.min.class=io.questdb.log.LogConsoleWriter
+            w.http.min.level=ERROR
+            w.http.min.scope=http-min-server
+            """;
 
     private final Path root;
     private final IntentSink intents;
@@ -99,10 +129,50 @@ final class EmbeddedQuestDb implements ServerToggle, AutoCloseable {
         }
     }
 
+    /**
+     * The newest daily log in the root's {@code log/}, else today's that the next start writes; null when the root's
+     * {@code conf/log.conf} chose a file of its own, which then is where to look.
+     */
+    @Override
+    public Path log() {
+        Path dir = root.resolve("log");
+        try (Stream<Path> files = Files.list(dir)) {
+            Optional<Path> newest = files.filter(f -> f.getFileName().toString().matches("questdb-\\d{8}\\.log"))
+                    .max(Comparator.comparing(f -> f.getFileName().toString()));
+            if (newest.isPresent()) {
+                return newest.get();
+            }
+        } catch (IOException | UncheckedIOException e) {
+            // no log folder yet: today's file, which says there is no log yet
+        }
+        return dir.resolve("questdb-" + DateTimeFormatter.BASIC_ISO_DATE.format(LocalDate.now(ZoneOffset.UTC)) + ".log");
+    }
+
+    /**
+     * Writes comando's log configuration into {@code root/conf} and returns it, unless the QuestDB log is chosen
+     * already: by the {@link #LOG_CONFIG_PROPERTY} property set by anyone but comando, or by a file writer in the
+     * root's {@code conf/log.conf}. QuestDB reads it once per process, at its first start.
+     */
+    static Optional<Path> logConfig(Path root, String property) throws IOException {
+        Path ours = root.resolve("conf").resolve(LOG_CONFIG_NAME);
+        if (property != null && !property.isBlank() && !Path.of(property).getFileName().toString().equals(LOG_CONFIG_NAME)) {
+            return Optional.empty();
+        }
+        Path shipped = root.resolve("conf").resolve("log.conf");
+        if (Files.isRegularFile(shipped) && Files.readAllLines(shipped).stream().map(String::strip).anyMatch(l -> l.startsWith("w.file.class="))) {
+            return Optional.empty();
+        }
+        Files.createDirectories(ours.getParent());
+        Files.writeString(ours, LOG_CONFIG);
+        return Optional.of(ours);
+    }
+
     /** Starts the server, creating its root on first use; a server that fails to start is closed again. */
     private ServerMain start() {
         try {
             Files.createDirectories(root);
+            logConfig(root, System.getProperty(LOG_CONFIG_PROPERTY))
+                    .ifPresent(c -> System.setProperty(LOG_CONFIG_PROPERTY, c.toAbsolutePath().toString()));
         } catch (IOException e) {
             throw new UncheckedIOException("cannot create " + root, e);
         }

@@ -487,6 +487,26 @@ class ReducerTest {
         assertThat(effects).isEmpty();
     }
 
+    /// A prompt to a session goes to its own panel, the one created with it, even when the user has focused another panel
+    /// (record 121: an agent's session_new with a first prompt); a session without an open panel gets an error notice.
+    @Test
+    void aPromptToASessionGoesToItsOwnPanelWhateverIsFocused() {
+        apply(new Intent.SaveSession("", SessionSpec.fresh("alpha", "/tmp").withCreatedBy("lead")));
+        PanelId own = state.homePanel("alpha").orElseThrow().id();
+        apply(new Intent.FocusPanel(P1));
+        apply(new Intent.PromptSession("alpha", "[from session lead]\nwrite it", "lead"));
+        assertThat(effects).anySatisfy(e -> assertThat(e).isInstanceOfSatisfying(Effect.EditPanelText.class,
+                t -> assertThat(t.panel()).isEqualTo(own)));
+        assertThat(effects).noneSatisfy(e -> assertThat(e).isInstanceOfSatisfying(Effect.EditPanelText.class,
+                t -> assertThat(t.panel()).isEqualTo(P1)));
+        assertThat(effects).anySatisfy(e -> assertThat(e).isInstanceOf(Effect.StartClaude.class));
+        assertThat(state.notice().level()).isNotEqualTo(Notice.Level.ERROR);
+
+        apply(new Intent.PromptSession("nobody", "hi", "lead"));
+        assertThat(state.notice().level()).isEqualTo(Notice.Level.ERROR);
+        assertThat(state.notice().text()).contains("no open panel");
+    }
+
     /// An imported conversation starts in FORK mode, and its first init records the fork's id with RESUME.
     @Test
     void anImportedConversationForksOnceThenResumesTheFork() {

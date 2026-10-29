@@ -162,6 +162,47 @@ class StoreTest {
     }
 
     @Test
+    void aFreshHomeOnAKitRootGetsTheKitsFoldersInsteadOfTheDefault() throws Exception {
+        // the default folder is the config folder, which is the kit's own root ("Kit", path "."): it must not count as
+        // the kit already shown (found by an agent on a fresh data root, 2026-10-29)
+        Path root = Files.createDirectories(home.resolve("claude/kit"));
+        Path memory = Files.createDirectories(root.resolve("BRAIN/MEMORY"));
+        KitRoot kitRoot = new KitRoot(root, Optional.of(new KitRoot.Manifest("k", "BRAIN",
+                List.of(new FolderRoot("Kit", ".", "", List.of(), "folder"),
+                        new FolderRoot("Memory", "BRAIN/MEMORY", "MEMORY.md", List.of(), "memory")),
+                List.of(), List.of(), List.of())), root);
+        FolderRoot kitDir = new FolderRoot("Kit", root.toString(), "", List.of(), "folder");
+        FolderRoot kitMemory = new FolderRoot("Memory", memory.toString(), "MEMORY.md", List.of(), "memory");
+        try (Store store = new Store(home)) {
+            assertThat(store.loadFolders(root)).as("no folders file: the default").isEqualTo(FolderRoot.defaults(root));
+            assertThat(store.withKitFolders(store.loadFolders(root), kitRoot)).containsExactly(kitDir, kitMemory);
+        }
+        try (Store store = new Store(home)) {
+            assertThat(store.loadFolders(root)).as("saved").containsExactly(kitDir, kitMemory);
+        }
+    }
+
+    @Test
+    void aHomeTheDefaultHidTheKitFromIsRepairedAtTheNextStart() throws Exception {
+        // before the fix a fresh home recorded the root in kit-folders and saved no folders file: the Files tab showed only
+        // "Claude", and no later start tried again
+        Path root = Files.createDirectories(home.resolve("claude/kit"));
+        KitRoot kitRoot = new KitRoot(root, Optional.of(new KitRoot.Manifest("k", "BRAIN",
+                List.of(new FolderRoot("Kit", ".", "", List.of(), "folder")), List.of(), List.of(), List.of())), root);
+        Files.writeString(home.resolve("kit-folders"), root + "\n");
+        try (Store store = new Store(home)) {
+            assertThat(store.withKitFolders(store.loadFolders(root), kitRoot))
+                    .containsExactly(new FolderRoot("Kit", root.toString(), "", List.of(), "folder"));
+        }
+        try (Store store = new Store(home)) {
+            store.saveFolders(List.of());
+        }
+        try (Store store = new Store(home)) {
+            assertThat(store.withKitFolders(store.loadFolders(root), kitRoot)).as("a list the user emptied stays empty").isEmpty();
+        }
+    }
+
+    @Test
     void aHandEditedFoldersFileMeetsTheDialogsRulesAndSaysWhatItLeftOut() throws Exception {
         Files.writeString(home.resolve("folders.json"), """
                 [ {"name":"KB","path":"/kb"}, {"name":"KB","path":"/other"}, {"name":"Rel","path":"../other"},

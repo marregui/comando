@@ -17,6 +17,9 @@ public final class UiInstructions {
             read-only need the user's approval, and production connections refuse writes.
             - session_send / session_read: when the user asks you to hand work to another comando session, send it a \
             prompt (it runs in that session's panel, with no card to answer) and read back what it did.
+            - instances_list / instance_ask / instance_reply: other comando instances on this machine (specialists \
+            with their own kit and brain), through the comando Edge; when the user asks you to consult one, ask it \
+            and wait for its reply; for a brainstorm, ask each in turn and pass the others' answers on.
             Use a view when a table, plot or diff shows a result better than text. Keep explanations in text.""";
 
     private UiInstructions() {

@@ -9,6 +9,7 @@ import dev.marregui.comando.core.model.ChangeAsk;
 import dev.marregui.comando.core.model.ChangeTexts;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
+import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.PanelId;
@@ -113,6 +114,7 @@ import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.Frame;
 import java.awt.KeyboardFocusManager;
+import java.awt.Taskbar;
 import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.desktop.QuitResponse;
@@ -179,6 +181,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             PanelTexts texts,
             Supplier<List<StoredConversation>> catalogue,
             ServerToggle server,
+            ServerToggle edge,
             Setup setup,
             String version,
             Path home,
@@ -218,6 +221,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private final Map<PanelId, Integer> panelDividers = new HashMap<>();
     /** The panel whose divider the window shows; null before the first render. */
     private PanelId dividerPanel;
+    /** The lower divider's width as the look and feel draws it; none while the lower area is hidden. */
+    private int verticalDividerSize;
     private JSplitPane editorAndSide;
     private JPanel top;
     private Notifier notifier;
@@ -271,6 +276,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private int focusBackRenders;
     /** The lower tab the last render showed. */
     private LowerTab renderedLowerTab = LowerTab.SESSION;
+    /** The requests waiting at the last render: one more is a reason to show the lower area. */
+    private int renderedApprovals;
+    /** The documents whose lower area the user asked for, while they were in front, in this window. */
+    private final Set<PanelId> lowerAskedFor = new HashSet<>();
+    /** The lower divider while the lower area last showed: where it comes back when a panel has none of its own. */
+    private int shownDivider = -1;
     static final long TYPING_PAUSE_MILLIS = 2_000;
 
     private record LayoutSnapshot(boolean sidebar, boolean sidePaneHidden, int lowerDivider) {
@@ -368,6 +379,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         }, deps.intents(), deps.texts()::write, ResourceActions.Questions.MODAL);
         AppIcon.install(frame);
+        // a named instance carries its name's first letter on its Dock icon, so the icons differ without hovering (record 122)
+        String instance = InstanceName.current();
+        if (!instance.isEmpty() && Taskbar.isTaskbarSupported() && Taskbar.getTaskbar().isSupported(Taskbar.Feature.ICON_BADGE_TEXT)) {
+            Taskbar.getTaskbar().setIconBadge(instance.substring(0, 1).toUpperCase(java.util.Locale.ROOT));
+        }
         livePlots = new LivePlots(deps.intents(), deps.results());
         UiErrands.start("pty-preload", TerminalWidget::preload);
         workspace = new Workspace(deps.intents(), deps.texts(), deps.schemas());
@@ -457,10 +473,13 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         vertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, lower.component());
         vertical.setResizeWeight(0.45);
         vertical.setBorder(null);
+        verticalDividerSize = vertical.getDividerSize();
         // a move of the divider, by the user, an arrangement or the window's resize, is the panel in front's
         vertical.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
-            if (dividerPanel != null && vertical.getDividerLocation() > 0) {
+            // a hidden lower area gives the panels the whole height: that is no height the user chose
+            if (dividerPanel != null && vertical.getDividerLocation() > 0 && lower.component().isVisible()) {
                 panelDividers.put(dividerPanel, vertical.getDividerLocation());
+                shownDivider = vertical.getDividerLocation();
             }
         });
         // the session bar closes the column of the panels and the lower panel; the window's status bar runs under all
@@ -635,7 +654,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 o -> o.owner().isDisplayable() && (o.ownerKey() == null ? !inLower(o.owner()) || o.front() == null || openNow.contains(o.front())
                         : openNow.contains(o.ownerKey())));
         renderedFront = "panel:" + s.focused().value();
-        lowerDividerOf(s.focused());
+        lowerFor(s, !s.lowerTab().equals(renderedLowerTab) || s.approvals().size() > renderedApprovals);
+        renderedApprovals = s.approvals().size();
         livePlots.onState(s);
         sidebar.render(s);
         workspace.render(s);
@@ -698,7 +718,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         actions.refresh();
         if (!quitting) {
             // a render already asked for when quit began must not take back the closing title
-            frame.setTitle("comando — " + s.focusedPanel().title()
+            frame.setTitle(InstanceName.display(InstanceName.current()) + " — " + s.focusedPanel().title()
                     + (s.focusedPanel().session().isEmpty() ? "" : " · " + s.focusedPanel().session()));
         }
     }
@@ -1017,7 +1037,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private void tabMenu(int tab, JPopupMenu menu) {
         List<String> ids = switch (tab) {
             case SessionsSidebar.SESSIONS -> List.of("panel.new", "panel.reopen");
-            case SessionsSidebar.CONNECTIONS -> deps.server() == null ? List.<String>of() : List.of("server.start", "server.stop");
+            case SessionsSidebar.CONNECTIONS -> Menus.toggles(deps.server() != null, deps.edge() != null);
             case SessionsSidebar.FILES -> List.of("files.settings", "files.jobs");
             default -> List.of();
         };
@@ -1268,8 +1288,13 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 name -> deps.intents().dispatch(new Intent.BindConnection(deps.state().get().focused(), name))));
         cmd("connection.dialog", "Connection settings…", key(KeyEvent.VK_O, shortcut | SHIFT), () -> openConnections(deps.state().get().focusedPanel().connection()));
         if (deps.server() != null) {
-            cmd("server.start", "Start embedded QuestDB", null, () -> deps.server().toggle(), () -> !deps.server().isRunning());
-            cmd("server.stop", "Stop embedded QuestDB", null, () -> deps.server().toggle(), () -> deps.server().isRunning());
+            cmd("server.start", "Start embedded QuestDB", null, () -> deps.server().toggle(), () -> !deps.server().isRunning() && !deps.server().busy());
+            cmd("server.stop", "Stop embedded QuestDB", null, () -> deps.server().toggle(), () -> deps.server().isRunning() && !deps.server().busy());
+        }
+        if (deps.edge() != null) {
+            // disabled while a start or stop is under way: the button greys out and its tooltip says which
+            cmd("edge.start", "Start the comando Edge", null, () -> deps.edge().toggle(), () -> !deps.edge().isRunning() && !deps.edge().busy());
+            cmd("edge.stop", "Stop the comando Edge", null, () -> deps.edge().toggle(), () -> deps.edge().isRunning() && !deps.edge().busy());
         }
         // panel: its results
         cmd("run.insertResult", "Attach to the editor", key(KeyEvent.VK_I, shortcut | SHIFT), this::insertLastResult, this::hasRun);
@@ -1318,6 +1343,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("view.approvals", "Approvals", key(KeyEvent.VK_2, lowerTabKey),
                 () -> showLowerAndFocus(LowerTab.APPROVALS, lower.inbox().component(), lower.inbox()::focusFirst));
         cmd("view.terminal", "Terminal", key(KeyEvent.VK_3, lowerTabKey), () -> {
+            lowerFor(deps.state().get(), true);
             deps.intents().dispatch(new Intent.SelectLowerTab(LowerTab.TERMINAL));
             Edt.later(() -> lower.terminals().focusShown(deps.state().get()));
         });
@@ -1353,6 +1379,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         cmd("help.keys", "Keyboard shortcuts", key(KeyEvent.VK_SLASH, shortcut | SHIFT), help::showKeys);
         cmd("help.markdown", "Markdown sheet", null, help::showMarkdownSheet);
         cmd("help.log", "Show the log", null, help::showLog, () -> deps.logDir() != null);
+        cmd("help.edgeLog", "Show the Edge's log", null, () -> help.showLog(deps.edge()), () -> deps.edge() != null);
+        cmd("help.questDbLog", "Show QuestDB's log", null, () -> help.showLog(deps.server()), () -> deps.server() != null);
         cmd("help.dataRoot", "Reveal comando folder", null, () -> help.reveal(deps.home()), () -> deps.home() != null);
         // the themes, from the swatch beside New panel: a ground and its tint chosen together, each with its swatch (Menus), the one chosen
         // ticked (record 103)
@@ -1392,12 +1420,13 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return KeyStroke.getKeyStroke(code, modifiers);
     }
 
-    /** The buttons left of the theme's swatch: the shell, the refreshing plots, the embedded server when there is one. */
+    /** The buttons left of the theme's swatch: the shell, the refreshing plots, the embedded server and the Edge when there are. */
     private List<CommandButton> cornerButtons() {
         List<CommandButton> buttons = new ArrayList<>();
-        for (List<String> ids : Menus.corner(deps.server() != null)) {
+        for (List<String> ids : Menus.corner(deps.server() != null, deps.edge() != null)) {
             List<Command> commands = ids.stream().map(actions::get).toList();
-            buttons.add(new CommandButton(commands, Menus::tip));
+            ServerToggle toggle = ids.contains("edge.start") ? deps.edge() : ids.contains("server.start") ? deps.server() : null;
+            buttons.add(new CommandButton(commands, Menus::tip, toggle == null ? () -> "" : toggle::status));
         }
         return buttons;
     }
@@ -1468,6 +1497,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
      * showing yet refuses the keyboard, so the focus waits for the render that shows the tab.
      */
     private void showLowerAndFocus(LowerTab tab, Component shown, Runnable focus) {
+        lowerFor(deps.state().get(), true);
         if (deps.state().get().lowerTab().equals(tab) && shown.isShowing()) {
             focus.run();
             return;
@@ -1889,13 +1919,43 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.linear(windowLayout.linearSite(), windowLayout::linearSite);
         showSidebar(windowLayout.sidebarShown());
         vertical.setDividerLocation(windowLayout.lowerDivider(h));
+        shownDivider = windowLayout.lowerDivider(h);
         panelDividers.putAll(windowLayout.panelDividers());
         sidePaneHidden = windowLayout.sidePaneHidden();
     }
 
     /**
+     * The lower area for the panel in front. A document no session works in, a file opened to read, takes the whole
+     * height and the lower area hides, until it is {@code asked} for while that document is in front (a lower tab
+     * chosen, ⌃1–⌃4, a request waiting in Approvals); then it shows for that document for the rest of the window's life.
+     * Any other panel shows it, at the height it had when that panel was last in front.
+     */
+    private void lowerFor(AppState s, boolean asked) {
+        PanelState front = s.focusedPanel();
+        boolean reading = front.document() && front.session().isEmpty();
+        if (reading && asked) {
+            lowerAskedFor.add(front.id());
+        }
+        boolean shown = !reading || lowerAskedFor.contains(front.id());
+        if (shown != lower.component().isVisible()) {
+            lower.component().setVisible(shown);
+            vertical.setDividerSize(shown ? verticalDividerSize : 0);
+            if (shown) {
+                // placed again below, at the panel's own height or the last one shown
+                dividerPanel = null;
+            }
+            vertical.revalidate();
+        }
+        if (shown) {
+            lowerDividerOf(front.id());
+        } else {
+            dividerPanel = front.id();
+        }
+    }
+
+    /**
      * The panel {@code front} came to the front: the lower divider goes where it was when that panel was last in front;
-     * a panel never in front keeps the divider as it is.
+     * a panel never in front keeps the divider as it is, or takes the last one shown when the lower area was hidden.
      */
     private void lowerDividerOf(PanelId front) {
         if (front.equals(dividerPanel)) {
@@ -1903,6 +1963,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         }
         dividerPanel = front;
         Integer at = panelDividers.get(front);
+        if (at == null && shownDivider > 0 && vertical.getDividerLocation() > shownDivider) {
+            at = shownDivider;
+        }
         if (at != null && at != vertical.getDividerLocation()) {
             vertical.setDividerLocation(at);
         } else if (vertical.getDividerLocation() > 0) {
@@ -2080,7 +2143,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         LOG.log(System.Logger.Level.INFO, "quitting [window teardown millis=" + millis + ']');
         // the window stays, saying so, until the application has closed (close() disposes it): a relaunch meanwhile
         // finds the lock held, and the user can see why
-        frame.setTitle("comando — closing…");
+        frame.setTitle(InstanceName.display(InstanceName.current()) + " — closing…");
         ClosingCover cover = new ClosingCover();
         frame.setGlassPane(cover);
         cover.setVisible(true);

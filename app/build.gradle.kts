@@ -18,6 +18,7 @@ dependencies {
     implementation(project(":ui"))
     implementation(libs.jackson.databind)
     implementation(libs.questdb)
+    implementation(libs.hivemq.mqtt.client)
     testImplementation(project(":testkit"))
     // the keyboard tests reach into the editor and the terminal of a real window
     testImplementation(libs.rsyntaxtextarea)
@@ -25,6 +26,11 @@ dependencies {
     testImplementation(libs.jediterm.ui)
     testImplementation(libs.awaitility)
     testImplementation(libs.archunit)
+}
+
+// no test of this module joins the comando Edge: a developer's own comando may be running one (record 123)
+tasks.withType<Test>().configureEach {
+    systemProperty("comando.peers", "false")
 }
 
 tasks.jar {
@@ -76,6 +82,7 @@ tasks.register<JavaExec>("snapshot") {
     mainClass = "dev.marregui.comando.app.Snapshot"
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
     jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-snapshot",
+        "-Dcomando.peers=false",
         // painted from its root pane, so the window opens on no screen and never takes the desktop's focus
         "-Dcomando.offScreen=true", "-Dapple.awt.UIElement=true")
     args(
@@ -94,6 +101,7 @@ tasks.register<JavaExec>("docImages") {
     mainClass = "dev.marregui.comando.app.DocImages"
     javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
     jvmArgs("--enable-native-access=ALL-UNNAMED", "--add-exports=java.base/jdk.internal.vm=ALL-UNNAMED", "-Dcomando.prefsNode=dev/marregui/comando-docs",
+        "-Dcomando.peers=false",
         // painted from its root pane, so the window opens on no screen and never takes the desktop's focus
         "-Dcomando.offScreen=true", "-Dapple.awt.UIElement=true")
     args((project.findProperty("out") ?: layout.buildDirectory.dir("doc-images").get().asFile.path).toString())
@@ -119,6 +127,7 @@ val uiTest = tasks.register<Test>("uiTest") {
         includeTestsMatching("*OutlineUiTest")
         includeTestsMatching("*LocateUiTest")
         includeTestsMatching("*LowerDividerUiTest")
+        includeTestsMatching("*OwnLogUiTest")
     }
     // one JVM per class: each class starts from a fresh AWT state, whichever window the desktop put in front last
     forkEvery = 1

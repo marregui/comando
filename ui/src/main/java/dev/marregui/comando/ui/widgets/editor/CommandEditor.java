@@ -240,6 +240,33 @@ public final class CommandEditor implements Searchable, Zoomable {
         refreshMarkers();
     }
 
+    /**
+     * Adds {@code tail} at the end without reporting a change, as a log grows: the caret and the selection stay on the
+     * text they were on, and the view where it was. Not undoable: no one typed it.
+     */
+    public void grow(String tail) {
+        // the caret stays still: moved, even back to where it was, it would scroll the view to itself
+        javax.swing.text.DefaultCaret caret = area.getCaret() instanceof javax.swing.text.DefaultCaret c ? c : null;
+        int policy = caret == null ? -1 : caret.getUpdatePolicy();
+        silent = true;
+        try {
+            if (caret != null) {
+                caret.setUpdatePolicy(javax.swing.text.DefaultCaret.NEVER_UPDATE);
+            }
+            area.getDocument().insertString(area.getDocument().getLength(), tail, null);
+            area.discardAllEdits();
+            ranEnd = null;
+        } catch (javax.swing.text.BadLocationException e) {
+            throw new IllegalStateException("the end of the text is always a place to insert at", e);
+        } finally {
+            if (caret != null) {
+                caret.setUpdatePolicy(policy);
+            }
+            silent = false;
+        }
+        refreshMarkers();
+    }
+
     public String text() {
         return area.getText();
     }

@@ -15,6 +15,8 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.Clock;
@@ -31,6 +33,7 @@ import dev.marregui.comando.db.DbSettings;
 import dev.marregui.comando.mcp.AuditLog;
 import dev.marregui.comando.mcp.McpServer;
 import dev.marregui.comando.mcp.McpTools;
+import dev.marregui.comando.mcp.Peers;
 import dev.marregui.comando.tools.KitGit;
 import dev.marregui.comando.tools.ToolSettings;
 import dev.marregui.comando.tools.ToolsAdapter;
@@ -51,10 +54,10 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
- * The ownership tree. Builds every part in dependency order and closes them in reverse, each once: the tool
- * runs, Claude's processes, the MCP server, the database lanes, the reducer, the intent log, the store (which
- * writes the panels last), the embedded QuestDB, and last the window, which stays up, greyed, until the rest has
- * closed; quitting has already ended its shells and live plots.
+ * The ownership tree. Builds every part in dependency order and closes them in reverse, each once: this instance's
+ * presence among the other instances and its link to the comando Edge, the tool runs, Claude's processes, the MCP server, the database lanes, the reducer, the intent log, the store (which
+ * writes the panels last), the Edge this instance started, the embedded QuestDB, and last the window, which stays
+ * up, greyed, until the rest has closed; quitting has already ended its shells and live plots.
  */
 public final class App implements AutoCloseable {
 
@@ -68,6 +71,8 @@ public final class App implements AutoCloseable {
     static final Duration PLAN_USAGE_EVERY = Duration.ofMinutes(5);
     /** How often the kit's version and its remote's releases are read; never blocking anything. */
     static final Duration KIT_EVERY = Duration.ofHours(6);
+    /** {@code -Dcomando.peers=false} leaves this instance off the comando Edge: the window's tests and picture tools set it. */
+    static final String PEERS_PROPERTY = "comando.peers";
     private final StateLoop loop;
     private final TranscriptRegistry transcripts;
     private final ClaudeAdapter claude;
@@ -78,6 +83,9 @@ public final class App implements AutoCloseable {
     private final KitRoot root;
     private final RootLaunch launch;
     private final RootSetup setup;
+    /** The comando Edge as the instances' broker, and this instance among them (record 123); null when left out. */
+    private final MqttPeerBroker peerBroker;
+    private final Peers peers;
     /** Reads the kit's version at start and every {@link #KIT_EVERY}. */
     private final ScheduledExecutorService kitCheck = Threads.timedStrand("kit-check");
     private volatile boolean closed;
@@ -126,10 +134,13 @@ public final class App implements AutoCloseable {
             LocalImages.install(config.home().resolve("cache").resolve("images"));
             own(LocalImages::shutdown);
             McpServer mcp;
+            McpTools mcpTools;
             try {
-                McpTools tools = new McpTools(loop, loop::state, transcripts, db, new AuditLog(config.auditDir()), Clock.SYSTEM, APPROVAL_TIMEOUT);
-                tools.readOnly(panel -> store.document(panel) && store.file(panel).map(PanelTexts::isLog).orElse(false));
-                mcp = own(McpServer.start(tools, 0, version));
+                mcpTools = new McpTools(loop, loop::state, transcripts, db, new AuditLog(config.auditDir()), Clock.SYSTEM, APPROVAL_TIMEOUT);
+                mcpTools.readOnly(panel -> store.document(panel) && store.file(panel).map(PanelTexts::isLog).orElse(false));
+                // the user's grants to agents: who may run destructive actions (record 121)
+                mcpTools.agentsFile(config.home().resolve("agents.json"));
+                mcp = own(McpServer.start(mcpTools, 0, version));
             } catch (IOException e) {
                 throw new UncheckedIOException("cannot start the MCP server", e);
             }
@@ -139,15 +150,30 @@ public final class App implements AutoCloseable {
             ToolsAdapter devTools = own(new ToolsAdapter(loop, consoles, ToolSettings::now, DesktopTrash::moveToTrash));
             tools = devTools;
             EmbeddedQuestDb questDb = new EmbeddedQuestDb(config.questDbRoot(), loop);
+            EmbeddedEdge edge = new EmbeddedEdge(config.edgeRoot(), config.home(), InstanceName.current(), loop);
             SessionCatalogue catalogue = new SessionCatalogue(root.projects());
             ui = new ComandoUi(new ComandoUi.Dependencies(
                     loop, loop::state, loop, transcripts, results, consoles, schemas, store,
                     () -> catalogue.scan(500).stream().map(e -> new StoredConversation(e.sessionId(), e.cwd(), e.branch(), e.title(),
                             e.lastPrompt(), e.modifiedMillis(), e.sizeBytes())).toList(),
-                    questDb, setup, version, config.home(), config.logDir(), onQuit));
+                    questDb, edge, setup, version, config.home(), config.logDir(), onQuit));
             // the tabs' topics: one reader, one Haiku process at a time, whatever the number of panels
             ui.topics(own(new ClaudeTopics(config.claudeExecutable(), launch, config.runDir())));
+            // the instances consult each other through the comando Edge while it runs, whichever instance started it
+            // (record 123); this instance's presence is cleared, and its link closed, before the Edge stops
+            if (Boolean.parseBoolean(System.getProperty(PEERS_PROPERTY, "true"))) {
+                Peers.Me me = Peers.Me.of(InstanceName.current(), version);
+                peerBroker = own(new MqttPeerBroker("comando-" + me.slug(), EmbeddedEdge.Ports.DEFAULT.mqtt(), edge::running));
+                // a consult session is made where a new session is: the home folder
+                peers = own(new Peers(peerBroker, me, loop, loop::state, transcripts, HomeDir.home(), config.home().resolve("agents.json")));
+                mcpTools.peers(peers);
+            } else {
+                peerBroker = null;
+                peers = null;
+            }
             effects.target = new EffectRouter(db, claude, mcp, ui, store, devTools);
+            // the Edge this instance started stops before QuestDB; one another instance started keeps running
+            owned.addLast(edge);
             // the embedded QuestDB stops last: it may still serve the connections closed above
             owned.addLast(questDb);
             // the window closes last: it stays, greyed and titled "closing…", until everything behind it has closed
@@ -185,6 +211,11 @@ public final class App implements AutoCloseable {
         });
         if (root.kit().isPresent()) {
             kitCheck.scheduleWithFixedDelay(this::checkKit, 0, KIT_EVERY.toMillis(), TimeUnit.MILLISECONDS);
+        }
+        if (peers != null) {
+            // the last will and the subscriptions are set before the first connect
+            peers.start();
+            peerBroker.start();
         }
     }
 

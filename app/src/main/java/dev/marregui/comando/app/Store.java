@@ -138,6 +138,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     };
     /** {@code folders.json} as the store last read or wrote it; null while it is missing. Writer thread, and the start. */
     private volatile Stamp foldersSeen;
+    /** Whether the last {@link #loadFolders} found no folders file and returned the default list. */
+    private volatile boolean foldersDefaulted;
     private final AtomicBoolean panelsPending = new AtomicBoolean();
     private volatile List<PanelState> panelMeta = List.of();
     private volatile List<PanelState> closedMeta = List.of();
@@ -468,6 +470,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     List<FolderRoot> loadFolders(Path claudeDir) {
         List<FolderRoot> read = folders.read();
         foldersSeen = Stamp.of(folders.path());
+        foldersDefaulted = read == null;
         if (read == null) {
             return FolderRoot.defaults(claudeDir);
         }
@@ -477,15 +480,18 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     /**
      * The folders at the first start on a kit's root: when {@code loaded} shows none of the kit's folders, the kit's go
      * first and are saved; the user's own entries stay. Once per root, so a folder the user takes out stays out; the
-     * folders' window puts them back.
+     * folders' window puts them back. With no folders file the default list is not the user's: the kit's folders replace
+     * it, since its one folder is the kit's own root and would otherwise count as the kit already shown.
      */
     List<FolderRoot> withKitFolders(List<FolderRoot> loaded, KitRoot root) {
         List<FolderRoot> kit = root.folders();
         String key = root.dir().toString();
-        if (kit.isEmpty() || kitRootsDone().contains(key)) {
+        // with no folders file the user never chose a list: the kit's folders apply even on a root recorded before, which
+        // repairs a home where the default hid them (a fresh home before record 121's fix recorded the root anyway)
+        if (kit.isEmpty() || (!foldersDefaulted && kitRootsDone().contains(key))) {
             return loaded;
         }
-        List<FolderRoot> merged = KitFolders.atStart(loaded, kit);
+        List<FolderRoot> merged = KitFolders.atStart(foldersDefaulted ? List.of() : loaded, kit);
         try {
             Files.createDirectories(kitFolders.getParent());
             Files.writeString(kitFolders, key + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);

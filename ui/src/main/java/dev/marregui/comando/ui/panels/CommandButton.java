@@ -6,24 +6,34 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import javax.swing.JButton;
 import javax.swing.Timer;
 import java.util.List;
+import java.util.Objects;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * A toolbar button beside the theme's swatch for one or two commands, such as start and stop: it shows the first of
- * them that can run now, its icon, its tooltip and its accessible name, and runs it on a click; disabled when none can. It
- * reads its commands on each refresh and once a second while shown, since a server or a plot changes on its own.
+ * them that can run now, its icon, its tooltip and its accessible name, and runs it on a click; disabled when none can,
+ * keeping the face it had, so a stop under way still shows stop. It reads its commands on each refresh and once a second
+ * while shown, since a server or a plot changes on its own; a status, when there is one, follows the tooltip.
  */
 public final class CommandButton extends JButton {
 
     private final List<Command> commands;
     private final Function<String, String> tips;
+    private final Supplier<String> status;
     private final Timer poll = new Timer(1000, e -> refresh());
     private Command shown;
 
     /** {@code tips} gives each command's tooltip by its id; its label when it gives none. */
     public CommandButton(List<Command> commands, Function<String, String> tips) {
+        this(commands, tips, () -> "");
+    }
+
+    /** As above, with {@code status} read at each refresh and added to the tooltip when not empty. */
+    public CommandButton(List<Command> commands, Function<String, String> tips, Supplier<String> status) {
         this.commands = List.copyOf(commands);
         this.tips = tips;
+        this.status = status;
         putClientProperty("JButton.buttonType", "toolBarButton");
         setFocusable(false);
         addActionListener(e -> {
@@ -36,17 +46,22 @@ public final class CommandButton extends JButton {
         refresh();
     }
 
-    /** Shows the first command that can run now, or the first one, disabled. */
+    /** Shows the first command that can run now; when none can, the one shown before (the first at the start), disabled. */
     public void refresh() {
         Command now = commands.stream().filter(c -> c.enabled().getAsBoolean()).findFirst().orElse(null);
-        Command face = now == null ? commands.getFirst() : now;
-        if (face != shown || isEnabled() != (now != null)) {
+        Command face = now != null ? now : shown != null ? shown : commands.getFirst();
+        if (face != shown) {
             shown = face;
             setIcon(face.icon() == null ? null : Icons.get(face.icon()));
-            String tip = tips.apply(face.id());
-            setToolTipText(tip == null ? face.label() : face.label() + ": " + tip);
             getAccessibleContext().setAccessibleName(face.label());
-            setEnabled(now != null);
+        }
+        setEnabled(now != null);
+        String tip = tips.apply(face.id());
+        String line = tip == null ? face.label() : face.label() + ": " + tip;
+        String more = status.get();
+        line = more == null || more.isEmpty() ? line : line + " (" + more + ")";
+        if (!Objects.equals(line, getToolTipText())) {
+            setToolTipText(line);
         }
     }
 

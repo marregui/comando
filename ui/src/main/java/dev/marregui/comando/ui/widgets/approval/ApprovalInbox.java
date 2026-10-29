@@ -333,8 +333,12 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         private final Map<String, JTextComponent> other = new LinkedHashMap<>();
         /** The rules "For session" and "Always" add; null for anything but a tool call. */
         private final PermissionRules.Rules rules;
-        private final JPanel confirm = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
-        private final JLabel confirmText = Plain.only(new JLabel());
+        /**
+         * The Always confirmation: its text wrapped on lines of its own, its buttons on a row below. One flowing row
+         * reported the height of one line while its buttons wrapped below it, out of the card (2026-10-29).
+         */
+        private final JPanel confirm = new JPanel();
+        private final JTextArea confirmText = wrapped();
         private final JLabel choose = Plain.only(new JLabel("Choose an answer"));
         private JButton primaryButton;
         /** When a first L asked for the second, or -1; a click on Always arms without a deadline. */
@@ -524,12 +528,20 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             if (a.kind() == ApprovalKind.TOOL && rules.persistable()) {
                 confirmText.setName("confirm");
                 confirm.setOpaque(false);
+                confirm.setLayout(new BoxLayout(confirm, BoxLayout.Y_AXIS));
                 confirm.setAlignmentX(Component.LEFT_ALIGNMENT);
+                confirm.setBorder(BorderFactory.createEmptyBorder(Theme.GAP, 0, 0, 0));
                 confirm.add(confirmText);
+                JPanel row = new JPanel(new FlowLayout(FlowLayout.LEFT, Theme.GAP, 0));
+                row.setOpaque(false);
+                row.setAlignmentX(Component.LEFT_ALIGNMENT);
                 JButton yes = button("Always allow", "check", () -> answer(a, new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS)), false);
                 yes.setName("confirm-always");
-                confirm.add(yes);
-                confirm.add(button("Cancel", null, this::disarm, false));
+                row.add(yes);
+                JButton cancel = button("Cancel", null, this::disarm, false);
+                cancel.setName("confirm-cancel");
+                row.add(cancel);
+                confirm.add(row);
                 p.add(confirm);
             }
             if (a.kind() == ApprovalKind.QUESTION) {
@@ -789,6 +801,13 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
     private static Border border(Color line) {
         return BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(line, 1, true),
                 BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
+    }
+
+    /** Wrapped, read-only text in the theme's text colour, for the Always confirmation. */
+    private static JTextArea wrapped() {
+        JTextArea t = muted("");
+        t.setForeground(null); // the look and feel's, which follows a theme change
+        return t;
     }
 
     /** Muted, wrapped, read-only text; a text area never renders HTML, so text from Claude stays text. */

@@ -75,7 +75,7 @@ class JobActionsTest {
                 return new JobsDone(true, "");
             }
         };
-        return new JobActions(new ComandoUi.Dependencies(sent::add, () -> null, null, null, null, null, null, null, List::of, null, setup,
+        return new JobActions(new ComandoUi.Dependencies(sent::add, () -> null, null, null, null, null, null, null, List::of, null, null, setup,
                 "test", null, null, () -> {
         }), () -> null, p -> { });
     }

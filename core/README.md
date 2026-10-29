@@ -31,6 +31,7 @@ transcripts, console output, schemas) lives in registries the state refers to by
 |---|---|
 | `state` | `AppState` and its parts: `PanelState`, `ConnectionState`, `SessionState`, `SqlRun`, `ViewState`, `Notice`, `LowerTab`, `BackgroundTask`, `Reflection`, `RunStatus`, `SessionInfo` |
 | `intent` | `Intent`, the sealed interface of every change; `EditMode` |
+| `action` | `Action` and `Actions`: every user action as an agent's tool, with its arguments and class, and every kind of intent classified (offered, event, window, not yet) ([record 121](../docs/adr/0121-an-agent-has-every-action-the-user-has.md)) |
 | `reduce` | `Reducer` (intent → `Transition`), `Transition` (the next state and its effects) |
 | `effect` | `Effect`, the sealed interface of work for adapters; `EffectRouter`, which hands each effect to its port |
 | `loop` | `StateLoop` (the queue, the reducer thread, its look on the watchdog, listeners and observers); the thread kit: `Threads`, `Errands`, `Watchdog` |

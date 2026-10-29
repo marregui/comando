@@ -35,7 +35,8 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   `CLAUDE_CONFIG_DIR=<root>` in its environment when the root is not `~/.claude`, and, when the root holds a kit,
   `--settings '{"autoMemoryDirectory": "<root>/<brain>/MEMORY"}'` (`RootLaunch`,
   [Workbench §7.1](workbench.md#71-the-root)). The session named `kit` that upgrades the kit runs on the user's own
-  `~/.claude` instead.
+  `~/.claude` instead when the root is `~/.claude` or inside it; a sibling kit such as `~/.claude_b` keeps its own root
+  ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)).
 - **MCP configuration.** One file per running process under `run/` in the data root, mode `0600` from creation, named
   after the session and a random UUID. It names comando's server, the process's bearer token, and `"timeout": 3600000`,
   which lets an approval card wait up to 55 minutes. Deleted when the process exits; files a killed comando left are
@@ -170,6 +171,49 @@ of text and shown to 400 lines.
 | `db_describe` | `table`, `connection` | a table's columns and types |
 | `session_send` | `session`, `text` | prompts another running session with an open panel, headed `[from session <sender>]`, without a card ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)); returns a cursor for `session_read` |
 | `session_read` | `session`, `after`, `wait_seconds` | another session's transcript as numbered blocks after a cursor, or the last 40; `wait_seconds` (≤ 600) waits until its turns are over |
+| `instances_list` | none | the other comando instances present on the comando Edge: name, id, version, busy, their sessions ([record 123](adr/0123-instances-consult-each-other.md)) |
+| `instance_ask` | `instance`, `text`, `wait_seconds` | asks another instance: its session `consult-<this instance>` is prompted in its panel, headed `[from instance <name> · session <s>]`; the reply is Claude's text in the turn that answers it; waits up to `wait_seconds` (default 300, ≤ 600), else returns an id |
+| `instance_reply` | `id`, `wait_seconds` | the reply to an earlier `instance_ask` by its id, read once |
+
+**Every action the user has** ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)). The tools above, but the
+three instance tools, are entries of `core`'s registry `action/Actions`; its other entries are tools too, named `<area>_<verb>`, their schemas built from the
+registry, performed by `ActionTools` with the intents the window sends for the same gesture:
+
+| Area | Tools |
+|---|---|
+| sessions | `session_new` (name, work dir, model, effort, permission mode, extra directories, checkpoint, and an optional first `prompt` that starts it), `session_edit`, `session_open`, `session_start`, `session_stop`, `session_interrupt`, `session_fresh`, `session_checkpoint`, `session_command`, `session_model`, `session_effort`, `session_order`, `session_import`, `session_subagent`, `session_clear`*, `session_remove`* |
+| panels | `panel_add`, `panel_close`, `panel_reopen`, `panel_rename`, `panel_move`, `panel_focus`, `panel_bind_session`, `panel_bind_connection`, `panel_run`, `panel_cancel`, `panel_refresh`, `panel_remove`* |
+| approvals | `approval_answer` (allow with a scope, deny with a message, or answer an AskUserQuestion card) |
+| connections | `connection_save`, `connection_test`, `connection_open`, `connection_close`, `connection_schema`, `connection_remove`* |
+| views and the window | `view_pin`, `view_close`, `notice_dismiss` |
+| commands and folders | `gradle_run`, `command_cancel`, `folders_browse` |
+
+- **Creator.** A session made by `session_new` or `session_import` records its caller in `createdBy` (`sessions.json`;
+  empty for the user); an edit keeps it.
+- **First prompt.** `session_new`'s `prompt` goes out as `PromptSession`, which the reducer sends to the session's own
+  panel, the one created with it ([record 88](adr/0088-a-session-and-its-panel-share-a-name.md)), whatever panel the user
+  has focused meanwhile.
+- **Rule 1.** `approval_answer` refuses a card raised by the caller, or by a session the caller created, directly or
+  through others.
+- **Rule 2.** A destructive tool (marked * above) runs only for a caller the user granted it in the data root's
+  `agents.json`, `{"grants": {"<caller>": ["destructive"]}}`, read at each call.
+- **Start rule.** `session_start` and `session_fresh` run only for the session's creator; stopping and interrupting are
+  open to every caller ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)'s breaker, amended).
+- **Notice.** Every act names its caller in the status bar (`foreman: session new — …`).
+- **Not yet.** The Files tab's git changes and entries (open a change, delete, roll back, remove, unstage) and the
+  folders window; `Actions.NOT_YET` names each with the reason, and `ActionParityTest` fails for any other intent the
+  window sends without an action.
+- **Other instances** ([record 123](adr/0123-instances-consult-each-other.md)). `instances_list`, `instance_ask` and
+  `instance_reply` are not in the registry: the window has no gesture for them and they send no intent of their own, so
+  `ActionParityTest` holds without them. They work while this instance is connected to the comando Edge
+  ([workbench §3.5](workbench.md#35-the-comando-edge)); otherwise each says so and how to start it. The instance asked
+  makes `consult-<asker>` on the first question (in the home folder, created by `peer:<asker>`), prompts it with
+  `PromptSession`, so its user sees the question in that session's panel, and replies when the turn ends: `ok` with the
+  text (at most 64 kB), `refused` for an asker its user denied in `agents.json` (`{"peers": {"deny": ["<id>"]}}`),
+  `timeout` when the turn has not ended within 600 s, `error` otherwise. A brainstorm has no tool of its own: a session
+  asks each instance in turn and passes the others' answers on, as `instance_ask`'s description says.
+- **What an agent sees.** `ui_get_state` adds each session's model, effort and creator, the closed panels, the pending
+  approval cards (id, session, kind, tool, summary) and the Files tab's folders.
 
 - **Scope.** Without `panel`, the editor tools write to the focused panel when it is bound to the calling session, else
   to the session's own panel, else to a document attached to it. A session with no panel open gets a tool error that

@@ -35,10 +35,10 @@ comando is built with and runs on JDK 25.
 | `testkit` | fakes for every effect port, a fake clock, recorded Claude streams, a synthetic session, a recording intent sink | `core` |
 | `db` | JDBC lanes (one strand per connection), cancel, columnar results, schema reading, queries for Claude | `core`, PostgreSQL JDBC driver |
 | `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, subagents' conversations, the plans' usage, the tabs' topics, `comando-kit.json` (`KitJson`) | `core`, Jackson |
-| `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log | `core`, Jackson |
+| `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log, the other instances (`Peers`, through the `PeerBroker` interface) | `core`, Jackson |
 | `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's and the kit's backups (the `git` command line) | `core` |
 | `ui` | the Swing shell, panels, dialogs, widgets and the kit they share | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
-| `app` | wiring, the store files, the keychain, the intent log, the embedded QuestDB, `main` | every module, Jackson, QuestDB |
+| `app` | wiring, the store files, the keychain, the intent log, the embedded QuestDB, the comando Edge and the instances' link to it (`MqttPeerBroker`), `main` | every module, Jackson, QuestDB, the HiveMQ MQTT client |
 
 `ui` depends on `core` only; `app` is the one module that sees every other.
 
@@ -246,13 +246,14 @@ code outside the kinds below starts a thread or an executor.
 | K2 | Watchdog | must run while what it watches is held | one `watchdog` (platform) for the EDT and the reducer, from `Watchdog.shared()`; started with the first look, ended after the last |
 | K3 | Session reader | reads a pipe live: a pipe read holds its operating-system thread even on a virtual thread (measured on JDK 25: 100 blocked readers, 101 carriers) | `claude-out-<session>` (platform), one per running session |
 | K4 | Strand | sequential work on one resource; its waits hold no operating-system thread | one virtual thread each, from `Threads.strand` or, with timers, `Threads.timedStrand` (the JDK's one delay thread keeps the timers) |
-| K5 | Errand | one blocking call started by a gesture or an event, then gone | a virtual thread from its owner's `Errands` (`App`, `ToolsAdapter`, `EmbeddedQuestDb`, `DbAdapter`'s connection tests, the window's `UiErrands`), interrupted and waited for at the owner's close |
+| K5 | Errand | one blocking call started by a gesture or an event, then gone | a virtual thread from its owner's `Errands` (`App`, `ToolsAdapter`, `EmbeddedQuestDb`, `Peers`, `DbAdapter`'s connection tests, the window's `UiErrands`), interrupted and waited for at the owner's close |
 | K6 | Fork | a thread its caller collects in the same call, with a bound | a virtual thread from `Threads.fork` |
 
 The rest of a running process is not comando's: the JVM's (GC, compiler, VM), AWT's and Java2D's, the virtual threads'
 scheduler (its carriers: one per core while busy, plus one for each virtual thread held in file or pipe I/O, which is
 why a session's reader is a platform thread), the JDK's `process reaper` (one per child process), the MCP server's
-dispatcher and the libraries' (JNA, a `java.util.Timer`). Measured with five sessions: about 45 threads in all, 7 of
+dispatcher and the libraries' (JNA, a `java.util.Timer`, and the MQTT client's one Netty event loop while this instance is
+connected to the comando Edge). Measured with five sessions: about 45 threads in all, 7 of
 them comando's own platform threads. The GC threads were measured too: halving them to two lengthened the G1 pause p99
 from 5–6 ms to 30–48 ms on `:ui:transcriptGate`, so the JVM keeps its default.
 
@@ -288,10 +289,13 @@ file of a unique name beside the target, moved over it atomically where the file
 | `store-secrets` | K4 | keychain calls apart, so an unlock prompt never holds back panel text |
 | `mermaid`, `local-images` | K4 | `mmdc`, one diagram at a time, 30 s bound; the pictures a Markdown view names, SVGs drawn into `cache/images/` |
 | `kit-check` | K4, timed | the kit's version and newer tags, at start and every 6 hours |
+| `peers` | K4, timed | this instance's presence on the comando Edge, sent when it changed, looked at every 2 s |
+| `peer-broker`, `peer-messages` | K4, timed; K4 | whether the registry names a live Edge, every 5 s, connecting or leaving; the MQTT client's callbacks and the messages to their handlers, in order |
 | `claude-in-`, `claude-exit-<session>` | K6 | the stdin queue; the wait for the process's exit, then the stderr tail |
 | `git-out`, `git-err`, `tool-output-<run>`, `keychain-output`, `claude-version` | K6 | one process's output while its caller waits for it, bounded |
 | `gradle-<run>`, `tool-kill-<run>`, `folder-read`, `repo-read`, `file-trash` | K5 (`ToolsAdapter`) | a run's process; SIGKILL what a stop left alive after 2 s; folder and repository reads; moving files to the Trash |
 | `claude-version`, `questdb-toggle` | K5 (`App`, `EmbeddedQuestDb`) | the start-up check; one start or stop of the embedded QuestDB |
+| `peer-answer` | K5 (`Peers`) | one question from another instance: its consult session made and prompted, the wait for the turn, the reply |
 | `open-file`, `show-file`, `log-entry`, `open-link`, `note-link`, `reveal`, `external-editor`, `notify`, `export`, `plot-prepare`, `diff-compute`, `folder-facts`, `read-conversations`, `opened-files`, `kit-status`, `brain-backup`, `write-tutorial`, `show-tutorial`, `pty-preload`, `terminal-exit` | K5 (`UiErrands`) | one blocking call each, off the EDT |
 | MCP requests; a connection test, a cancel | per-task virtual executors | JSON-RPC (an `approve` call waits for its card); `DbAdapter`'s testers and cancellers |
 | `exit`, `shutdown` | platform, at quit only | close the application after Quit, or from the shutdown hook |
@@ -313,6 +317,9 @@ Bounded waits:
 | `db_run_sql` for Claude | 90 s | a queued statement is withdrawn; the tool says so |
 | `db_describe` | 60 s | tool error |
 | `session_read` with `wait_seconds` | at most 600 s | the blocks so far, status still working |
+| `instance_ask`, `instance_reply` with `wait_seconds` | at most 600 s (default 300) | an id to read the reply with later |
+| Another instance's question: its consult turn | 600 s | the reply `timeout` |
+| Presence cleared at close; the disconnect | 2 s each | closed anyway; the last will clears the presence otherwise |
 | Statement cancel | `cancelSignalTimeout=2` | the connection is aborted after 2 s |
 | Claude process stop | SIGTERM after 3 s, SIGKILL 2 s later | the exit is reported |
 | Tool run stop | SIGKILL 2 s after SIGTERM | the run ends as stopped |
@@ -330,29 +337,33 @@ Bounded waits:
 ## 7. Ownership and exit
 
 `App` creates every long-lived part in dependency order on a stack; `close()` pops it, so parts close in reverse order,
-each once. Two are moved to the end: the embedded QuestDB, which the lanes may still use, and the window, titled
+each once. Three are moved to the end: the comando Edge, which stops after this instance has cleared its presence there and left it, the
+embedded QuestDB, which the lanes may still use, and the window, titled
 "comando — closing…" and greyed under a cover until everything behind it has closed. Every `close()` is idempotent,
 never throws (failures are logged with the part's name), and is safe on a half-built part; a failed constructor step
 closes what was built and rethrows. A part that takes 100 ms or more to close is named in the log.
 
 | Created | Part | Closed | Closing it |
 |---|---|---|---|
-| 1 | the root, named for every module (`KitRoot.use`) | 14 | restores the root that was named before |
-| 2 | `kit-check` | 13 | stops the kit's periodic read |
-| 3 | `KitGit` | 12 | kills its git runs |
-| 4 | `Store` | 11 | writes pending panel text and `panels.json`, finishes queued writes; waits up to 5 s (11 s for connections, one keychain call) |
-| 5 | `App`'s errands | 10 | interrupts the start-up check and waits for it |
-| 6 | `IntentLog` (when recording) | 9 | closes the log after the loop, so the shutdown's intents are recorded |
-| 7 | `StateLoop` | 8 | stops the reducer after the queued intents, then its look on the watchdog |
-| 8 | `DbAdapter` | 7 | cancels every lane's running statement at once, then waits for the lanes on one 3 s bound, stops the timer |
-| 9 | `MermaidDiagrams` | 6 | stops `mmdc` and its children |
-| 10 | `LocalImages` | 5 | stops reading pictures and drawing SVGs |
-| 11 | `McpServer` | 4 | denies every waiting approval, stops the server |
-| 12 | `ClaudeAdapter` | 3 | SIGTERM, SIGKILL 2 s later; deletes every MCP configuration file and revokes its token |
-| 13 | `ToolsAdapter` | 2 | SIGTERM to every run's process tree, SIGKILL 2 s later; stops the folder poll and git; its errands last |
-| 14 | `ClaudeTopics` | 1 | drops the waiting asks, stops a read under way |
-| 15 | `EmbeddedQuestDb` | 15 | closes after the lanes |
-| 16 | `ComandoUi` | 16 | closes last: terminals (a shell still alive 2 s after the hangup is killed), live plots, the EDT's watchdog look, the window, the window's errands |
+| 1 | the root, named for every module (`KitRoot.use`) | 16 | restores the root that was named before |
+| 2 | `kit-check` | 15 | stops the kit's periodic read |
+| 3 | `KitGit` | 14 | kills its git runs |
+| 4 | `Store` | 13 | writes pending panel text and `panels.json`, finishes queued writes; waits up to 5 s (11 s for connections, one keychain call) |
+| 5 | `App`'s errands | 12 | interrupts the start-up check and waits for it |
+| 6 | `IntentLog` (when recording) | 11 | closes the log after the loop, so the shutdown's intents are recorded |
+| 7 | `StateLoop` | 10 | stops the reducer after the queued intents, then its look on the watchdog |
+| 8 | `DbAdapter` | 9 | cancels every lane's running statement at once, then waits for the lanes on one 3 s bound, stops the timer |
+| 9 | `MermaidDiagrams` | 8 | stops `mmdc` and its children |
+| 10 | `LocalImages` | 7 | stops reading pictures and drawing SVGs |
+| 11 | `McpServer` | 6 | denies every waiting approval, stops the server |
+| 12 | `ClaudeAdapter` | 5 | SIGTERM, SIGKILL 2 s later; deletes every MCP configuration file and revokes its token |
+| 13 | `ToolsAdapter` | 4 | SIGTERM to every run's process tree, SIGKILL 2 s later; stops the folder poll and git; its errands last |
+| 14 | `ClaudeTopics` | 3 | drops the waiting asks, stops a read under way |
+| 15 | `MqttPeerBroker` (unless `-Dcomando.peers=false`) | 2 | stops following the Edge, disconnects (so the broker drops the last will), at most 2 s |
+| 16 | `Peers` | 1 | clears this instance's presence on the comando Edge (at most 2 s), interrupts the answers under way, which reply `error`, and fails this instance's questions still waiting |
+| 17 | `EmbeddedEdge` | 17 | stops the Edge this instance started (SIGTERM to its recorded pid, bounded wait) and clears `~/.comando-edge.json` |
+| 18 | `EmbeddedQuestDb` | 18 | closes after the lanes |
+| 19 | `ComandoUi` | 19 | closes last: terminals (a shell still alive 2 s after the hangup is killed), live plots, the EDT's watchdog look, the window, the window's errands |
 
 Quit (window, Dock, menu) first asks when work would stop: a running query, a turn, a session's background work, a shell
 job in the foreground, a Gradle run; Cancel is the default. The shells' jobs are looked up off the EDT, every shell

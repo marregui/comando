@@ -4,6 +4,7 @@ import dev.marregui.comando.core.dispatch.Classifier;
 import dev.marregui.comando.core.dispatch.Statements;
 import dev.marregui.comando.core.dispatch.Target;
 import dev.marregui.comando.core.effect.Effect;
+import dev.marregui.comando.core.intent.EditMode;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
@@ -205,6 +206,7 @@ public final class Reducer {
             case Intent.SelectLowerTab i -> Transition.of(s.withLowerTab(i.tab()));
 
             case Intent.EditPanel i -> editPanel(s, i);
+            case Intent.PromptSession i -> promptSession(s, i);
             case Intent.Arrange i -> new Transition(s, i.layout().changesNothing() ? List.of() : List.of(new Effect.Arrange(i.layout())));
             case Intent.RunGradle i -> runGradle(s, i);
             case Intent.CommandFinished i -> commandFinished(s, i);
@@ -1017,8 +1019,9 @@ public final class Reducer {
         }
         List<SessionState> sessions = new ArrayList<>(s.sessions().size());
         for (SessionState x : s.sessions()) {
-            // the form has no carried summary: the one waiting stays
-            sessions.add(x.name().equals(i.previousName()) ? x.withSpec(spec.withCarried(x.spec().carried())) : x);
+            // the form has no carried summary nor creator: the one waiting stays, and so does who created it (record 121)
+            sessions.add(x.name().equals(i.previousName())
+                    ? x.withSpec(spec.withCarried(x.spec().carried()).withCreatedBy(x.spec().createdBy())) : x);
         }
         AppState next = s.withSessions(sessions);
         List<Effect> effects = new ArrayList<>();
@@ -1610,6 +1613,21 @@ public final class Reducer {
     }
 
     // ---- editor
+
+    /** A prompt to a session in its own panel: appended there and run, as {@link Intent.EditPanel} and {@link Intent.RunText} would. */
+    private Transition promptSession(AppState s, Intent.PromptSession i) {
+        Optional<PanelState> home = s.homePanel(i.session());
+        if (home.isEmpty()) {
+            return Transition.of(notice(s, Notice.Level.ERROR, "Session " + i.session() + " has no open panel for the prompt from " + i.from(),
+                    Notice.session(i.session())));
+        }
+        PanelId panel = home.get().id();
+        Transition edited = editPanel(s, new Intent.EditPanel(panel, i.text(), EditMode.APPEND, i.from()));
+        Transition ran = runText(edited.state(), new Intent.RunText(panel, i.text(), Target.CLAUDE));
+        List<Effect> effects = new ArrayList<>(edited.effects());
+        effects.addAll(ran.effects());
+        return new Transition(ran.state(), effects);
+    }
 
     private Transition editPanel(AppState s, Intent.EditPanel i) {
         PanelId target = i.panel() != null ? i.panel() : s.focused();

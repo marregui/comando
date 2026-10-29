@@ -365,6 +365,15 @@ public sealed interface Intent {
     // ---- editor content from Claude
 
     /**
+     * A prompt to a session through its own panel, the one the window gives it (record 88): the text is appended to that
+     * panel and run there, as if typed. Resolved in the reducer, so a session created by the intent just before gets it.
+     *
+     * @param from the session or client that sent it, announced like a session's write
+     */
+    record PromptSession(String session, String text, String from) implements Intent {
+    }
+
+    /**
      * Puts text in a panel's editor; a null panel means the focused one.
      *
      * @param session the session that wrote it, empty for the user's own command; a session's write is announced

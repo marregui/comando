@@ -26,7 +26,6 @@ import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.ViewState;
-import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.core.view.Clip;
@@ -87,6 +86,11 @@ public final class McpTools {
     private final Duration approvalTimeout;
     private final ObjectMapper json = new ObjectMapper();
     private final ArrayNode definitions;
+    /** The first tools' names, from {@code tools.json}; the registry's other actions are {@link ActionTools}' (record 121). */
+    private final java.util.Set<String> builtIn;
+    private final ActionTools actions;
+    /** The other comando instances, through the comando Edge (record 123); null until the application wires them. */
+    private volatile Peers peers;
     private final AtomicLong approvalIds = new AtomicLong(1_000_000L);
     private final ConcurrentHashMap<Long, CompletableFuture<ApprovalDecision>> pending = new ConcurrentHashMap<>();
     /** The approval each in-flight JSON-RPC call waits on, by "session#request id", for {@code notifications/cancelled}. */
@@ -112,7 +116,13 @@ public final class McpTools {
         this.clock = clock;
         this.approvalTimeout = approvalTimeout;
         try (var in = McpTools.class.getResourceAsStream("/mcp/tools.json")) {
-            definitions = (ArrayNode) json.readTree(in);
+            ArrayNode first = (ArrayNode) json.readTree(in);
+            java.util.Set<String> names = new java.util.LinkedHashSet<>();
+            first.forEach(d -> names.add(d.path("name").asText()));
+            builtIn = java.util.Set.copyOf(names);
+            actions = new ActionTools(sink, state);
+            definitions = first.deepCopy();
+            definitions.addAll(actions.definitions(builtIn));
         } catch (IOException e) {
             throw new UncheckedIOException("cannot read the tool definitions", e);
         }
@@ -120,6 +130,16 @@ public final class McpTools {
 
     ArrayNode definitions() {
         return definitions;
+    }
+
+    /** The data root's {@code agents.json}, where the user grants callers destructive actions (record 121, rule 2). */
+    public void agentsFile(Path file) {
+        actions.agentsFile(file);
+    }
+
+    /** The other comando instances this one consults and answers (record 123); the application sets it once. */
+    public void peers(Peers peers) {
+        this.peers = peers;
     }
 
     /** Runs tool {@code name} for {@code session}; never throws for bad input, which becomes an error outcome. */
@@ -171,7 +191,10 @@ public final class McpTools {
                 case "db_describe" -> describe(session, args);
                 case "session_send" -> sessionSend(session, args);
                 case "session_read" -> sessionRead(args);
-                default -> Outcome.fail("unknown tool " + name);
+                case "instances_list" -> peers().list();
+                case "instance_ask" -> peers().ask(session, args);
+                case "instance_reply" -> peers().replyOf(args);
+                default -> ActionTools.handles(name, builtIn) ? actions.run(session, name, args) : Outcome.fail("unknown tool " + name);
             };
         } catch (IllegalArgumentException e) {
             out = Outcome.fail(e.getMessage());
@@ -530,7 +553,25 @@ public final class McpTools {
             if (x.isWaiting()) {
                 n.put("waitingOn", x.waitingFor());
             }
+            n.put("model", x.spec().model());
+            n.put("effort", x.spec().effort());
+            n.put("createdBy", x.spec().createdBy());
         }
+        ArrayNode closed = root.putArray("closedPanels");
+        for (PanelState p : s.closed()) {
+            closed.addObject().put("id", p.id().value()).put("title", p.title()).put("session", p.session());
+        }
+        ArrayNode approvals = root.putArray("approvals");
+        for (Approval a : s.approvals()) {
+            ObjectNode n = approvals.addObject();
+            n.put("id", a.id());
+            n.put("session", a.session());
+            n.put("kind", a.kind().name().toLowerCase(Locale.ROOT));
+            n.put("tool", a.toolName());
+            n.put("summary", clip(a.summary(), 300));
+        }
+        ArrayNode folders = root.putArray("folders");
+        s.folders().forEach(f -> folders.addObject().put("name", f.name()).put("path", f.path()));
         ArrayNode views = root.putArray("views");
         for (ViewState v : s.views()) {
             ObjectNode n = views.addObject();
@@ -612,7 +653,7 @@ public final class McpTools {
         JsonNode cursor = args.path("after");
         int after = cursor.canConvertToInt() ? Math.max(0, cursor.asInt()) : Math.max(0, t.size() - READ_TAIL);
         int wait = Math.max(0, Math.min(args.path("wait_seconds").asInt(0), MAX_WAIT_SECONDS));
-        boolean settled = wait == 0 || awaitTurnEnd(of, t, after, wait);
+        boolean settled = wait == 0 || Turns.awaitTurnEnd(state, of, t, after, Duration.ofSeconds(wait));
         SessionState x = state.get().session(of).orElse(null);
         String status = x == null ? "removed" : x.isBusy() ? "busy" : x.isWaiting() ? "waiting on background work: " + x.waitingFor()
                 : x.status().isUsable() ? "idle" : x.status().name().toLowerCase(Locale.ROOT);
@@ -622,49 +663,12 @@ public final class McpTools {
         return Outcome.ok(TranscriptText.read(of, status, t, after, MAX_RESULT_CHARS).text());
     }
 
-    /**
-     * Waits until the session has blocks after {@code after}, none of them still streaming or running, and its turns
-     * are over (a turn end last, or the session no longer running); false at the deadline. A transcript shorter than
-     * the cursor was cleared since: the read returns at once and says it restarted, rather than wait for blocks past a
-     * cursor that no longer applies.
-     */
-    private boolean awaitTurnEnd(String session, Transcript t, int after, int seconds) {
-        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(seconds);
-        while (true) {
-            Optional<SessionState> x = state.get().session(session);
-            if (x.isEmpty()) {
-                return true;
-            }
-            int size = t.size();
-            if (size < after) {
-                return true;
-            }
-            if (!x.get().isBusy() && settled(t, after, size) && (t.get(size - 1) instanceof Block.TurnEnd || !x.get().status().isUsable())) {
-                return true;
-            }
-            if (System.nanoTime() > deadline) {
-                return false;
-            }
-            try {
-                Thread.sleep(200);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
+    private Peers peers() {
+        Peers p = peers;
+        if (p == null) {
+            throw new IllegalArgumentException("this comando has no connection to other instances");
         }
-    }
-
-    private static boolean settled(Transcript t, int after, int size) {
-        if (size <= after) {
-            return false;
-        }
-        for (int i = after; i < size; i++) {
-            Block b = t.get(i);
-            if (b == null || !TranscriptText.finished(b)) {
-                return false;
-            }
-        }
-        return true;
+        return p;
     }
 
     private static String sessionNames(AppState s) {

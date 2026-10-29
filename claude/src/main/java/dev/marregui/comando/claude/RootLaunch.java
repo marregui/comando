@@ -15,8 +15,9 @@ import java.util.Optional;
 /**
  * What every {@code claude} comando starts gets from the kit root: {@code CLAUDE_CONFIG_DIR=<root>} when the root is not
  * the user's own {@code ~/.claude}, and, with a kit, {@code --settings} naming the brain's memory as {@code
- * autoMemoryDirectory}. The session that upgrades the kit is the one exception: it runs on the user's own folder, so it
- * can replace the kit.
+ * autoMemoryDirectory}. The session that upgrades a kit at or inside the user's own folder is the one exception: it runs
+ * on the user's own folder, so it can replace the kit. A root elsewhere is another instance's kit: its upgrade runs on
+ * that root, so nothing of the instance reads or writes {@code ~/.claude}.
  */
 public final class RootLaunch {
 
@@ -47,9 +48,13 @@ public final class RootLaunch {
         return new RootLaunch(root.own() ? null : root.dir(), Optional.of(root), false, root.memory());
     }
 
-    /** The session {@code name} in {@code workDir}: the root's, but for the session that upgrades the kit. */
+    /**
+     * The session {@code name} in {@code workDir}: the root's, but for the session that upgrades a kit at or inside the
+     * user's own folder.
+     */
     public RootLaunch forSession(String name, String workDir) {
-        if (root.isPresent() && name.equals(KitRoot.UPGRADE_SESSION) && root.get().isRoot(workDir)) {
+        if (root.isPresent() && name.equals(KitRoot.UPGRADE_SESSION) && root.get().isRoot(workDir)
+                && root.get().dir().startsWith(root.get().userDir())) {
             return new RootLaunch(null, root, true, Optional.empty());
         }
         return this;

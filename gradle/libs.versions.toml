@@ -18,6 +18,8 @@ jediterm = "3.76"
 pty4j = "0.14.0"
 slf4j = "2.0.20"
 testcontainers = "2.0.5"
+# MQTT 5 to the comando Edge, the instances' broker (record 123); app only
+hivemq-mqtt-client = "1.3.17"
 
 [libraries]
 flatlaf = { module = "com.formdev:flatlaf", version.ref = "flatlaf" }
@@ -44,3 +46,4 @@ pty4j = { module = "org.jetbrains.pty4j:pty4j", version.ref = "pty4j" }
 slf4j-jdk14 = { module = "org.slf4j:slf4j-jdk14", version.ref = "slf4j" }
 testcontainers-postgresql = { module = "org.testcontainers:testcontainers-postgresql", version.ref = "testcontainers" }
 testcontainers-junit = { module = "org.testcontainers:testcontainers-junit-jupiter", version.ref = "testcontainers" }
+hivemq-mqtt-client = { module = "com.hivemq:hivemq-mqtt-client", version.ref = "hivemq-mqtt-client" }

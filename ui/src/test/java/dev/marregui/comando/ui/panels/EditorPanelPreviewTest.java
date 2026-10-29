@@ -12,9 +12,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.imageio.ImageIO;
+import javax.swing.JViewport;
 import javax.swing.SwingUtilities;
 import javax.swing.event.HyperlinkEvent;
 import javax.swing.text.BadLocationException;
+import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
@@ -28,7 +31,7 @@ import java.util.function.Consumer;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// How [EditorPanel] shows a file by kind: log, Markdown, HTML, source, or the panel's own text; and how it follows links.
-/// - a log is read-only and follows its end unless the reader scrolled up
+/// - a log is read-only and a live view: it follows its end while the end is in view, and keeps the reader's place and selection
 /// - a Markdown document opens rendered, with an Edit switch, and stays editable
 /// - an HTML document opens as text with a browser button; comando does not render HTML
 /// - Clear empties the panel's own text, undoably, and never a document
@@ -68,14 +71,68 @@ class EditorPanelPreviewTest {
         assertThat(log.editor().area().getCaretPosition()).as("opens at its end").isEqualTo(8);
         SwingUtilities.invokeAndWait(() -> log.reload("one\ntwo\nthree\n"));
         assertThat(log.editor().area().getCaretPosition()).as("follows what was appended").isEqualTo(14);
-        SwingUtilities.invokeAndWait(() -> {
-            log.editor().area().setCaretPosition(0);
-            log.reload("one\ntwo\nthree\nfour\n");
-        });
-        assertThat(log.editor().area().getCaretPosition()).as("a reader scrolled up stays there").isZero();
 
         EditorPanel notes = panel("notes", p -> p.file(Path.of("/s/notes.md"), true));
         assertThat(notes.editor().area().isEditable()).isTrue();
+    }
+
+    /// A log is a live view of its file (2026-10-29): what is appended shows at once and, while the view shows the end,
+    /// keeps it there; a reader who scrolled up to read, or selected text to copy, keeps their place and selection
+    /// while the text still grows below; back at the end, the view follows again; a file rolled over replaces the text.
+    @Test
+    void aLogIsALiveViewThatKeepsTheReadersPlaceAndSelection() throws Exception {
+        StringBuilder lines = new StringBuilder();
+        for (int i = 0; i < 200; i++) {
+            lines.append("line ").append(i).append('\n');
+        }
+        String first = lines.toString();
+        EditorPanel log = panel("hivemq.log", p -> {
+            p.editor().load(first);
+            p.file(Path.of("/home/.comando/edge/log/hivemq.log"), true);
+            p.setSize(600, 300);
+            layOut(p);
+        });
+        JViewport v = (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, log.editor().area());
+        SwingUtilities.invokeAndWait(() -> log.reload(first + "line 200\n"));
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(log.followsEnd()).isTrue();
+        assertThat(atEnd(v)).as("following: the new line is in view").isTrue();
+
+        // the reader scrolls up and selects a word to copy
+        SwingUtilities.invokeAndWait(() -> {
+            v.setViewPosition(new Point(0, 0));
+            log.editor().area().select(5, 7);
+        });
+        assertThat(log.followsEnd()).as("scrolled up: no longer following").isFalse();
+        SwingUtilities.invokeAndWait(() -> log.reload(first + "line 200\nline 201\n"));
+        assertThat(log.editor().text()).endsWith("line 201\n");
+        assertThat(v.getViewPosition().y).as("the reader's place").isZero();
+        assertThat(log.editor().area().getSelectedText()).as("the reader's selection").isEqualTo("0\n");
+
+        // back to the end: following again
+        SwingUtilities.invokeAndWait(() -> v.setViewPosition(new Point(0, v.getView().getHeight() - v.getExtentSize().height)));
+        assertThat(log.followsEnd()).isTrue();
+        SwingUtilities.invokeAndWait(() -> log.reload(first + "line 200\nline 201\nline 202\n"));
+        SwingUtilities.invokeAndWait(() -> { });
+        assertThat(atEnd(v)).as("view " + v.getViewRect() + " of " + v.getView().getSize() + ", preferred " + v.getView().getPreferredSize()
+                + ", follows " + log.followsEnd()).isTrue();
+
+        SwingUtilities.invokeAndWait(() -> log.reload("rolled over\n"));
+        assertThat(log.editor().text()).as("a new file replaces the text").isEqualTo("rolled over\n");
+    }
+
+    private static boolean atEnd(JViewport v) {
+        Rectangle seen = v.getViewRect();
+        return seen.y + seen.height >= v.getView().getHeight() - 20;
+    }
+
+    private static void layOut(java.awt.Component c) {
+        c.doLayout();
+        if (c instanceof java.awt.Container k) {
+            for (java.awt.Component child : k.getComponents()) {
+                layOut(child);
+            }
+        }
     }
 
     /// A Markdown document is editable, opens rendered with the Edit switch offered, and [EditorPanel#edit] shows the

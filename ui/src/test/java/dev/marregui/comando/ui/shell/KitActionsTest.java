@@ -72,7 +72,7 @@ class KitActionsTest {
                 throw new IOException("git push failed: rejected");
             }
         };
-        return new KitActions(new ComandoUi.Dependencies(sent::add, state::get, null, null, null, null, null, null, List::of, null, setup,
+        return new KitActions(new ComandoUi.Dependencies(sent::add, state::get, null, null, null, null, null, null, List::of, null, null, setup,
                 "test", null, null, () -> {
         }), () -> null);
     }

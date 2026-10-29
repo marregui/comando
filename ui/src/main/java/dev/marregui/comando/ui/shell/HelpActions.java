@@ -133,6 +133,20 @@ final class HelpActions {
         });
     }
 
+    /**
+     * The log {@code server} writes now, in this instance's data root, in a panel as comando's own is shown; a notice
+     * naming where it would be when there is none yet.
+     */
+    void showLog(ServerToggle server) {
+        Path log = server.log();
+        if (log != null && Files.isRegularFile(log)) {
+            openFile.accept(log);
+        } else {
+            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, log == null ? server.name() + " keeps no log comando knows of"
+                    : "No " + server.name() + " log yet at " + log + "; start " + server.name() + " first", false));
+        }
+    }
+
     /** The log comando writes now, in a panel, as a document: read-only, following its end, reloaded as it grows. */
     void showLog() {
         Path log = HelpFiles.log(deps.logDir());

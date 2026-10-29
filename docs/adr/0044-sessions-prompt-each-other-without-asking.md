@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-15 | accepted | Miguel and Claude |
+| 2026-10-15 | accepted; amended by [record 121](0121-an-agent-has-every-action-the-user-has.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -30,3 +30,9 @@ other back and forth (each prompt a turn, each turn tokens). Miguel accepted tha
 stop either session, which ends the loop because the other cannot start it again. The only approval a session can
 still leave behind when a turn ends is a statement card
 ([record 43](0043-a-session-waiting-on-background-work-shows-it.md)).
+
+## Amendment (2026-10-29, record 121)
+
+Sessions now have every action the user has, `session_start` among them. The circuit breaker holds in a narrower form: a
+stopped session is started again only by the user or by a session that created it, directly or through others; stopping
+either side of a loop still ends it.

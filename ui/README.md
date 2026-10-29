@@ -53,7 +53,7 @@ flowchart LR
   ER["core EffectRouter"] -->|"UiPort"| CU
   CU -->|"user intents"| SINK["core IntentSink"]
   REG[("registries: results, transcripts, consoles, schemas")] --> CU
-  CU -->|"PanelTexts, ServerToggle, Setup"| APP["app: Store, EmbeddedQuestDb, RootSetup"]
+  CU -->|"PanelTexts, ServerToggle, Setup"| APP["app: Store, EmbeddedQuestDb, EmbeddedEdge, RootSetup"]
   CU -->|"TopicPort"| TOP["claude ClaudeTopics"]
 ```
 
@@ -75,11 +75,12 @@ flowchart LR
 | `texts` | `PanelTexts`: each panel's file and text (`app`'s `Store`) |
 | `catalogue` | the stored conversations for the import dialog, as `StoredConversation` (`app` maps `claude`'s `SessionCatalogue`) |
 | `server` | `ServerToggle`: the embedded QuestDB (`app`'s `EmbeddedQuestDb`) |
+| `edge` | `ServerToggle`: the comando Edge (`app`'s `EmbeddedEdge`), its button right of QuestDB's; null, no button |
 | `setup` | `Setup`: the kit root comando runs on, the kit's version and newer releases, the brain's and the kit's backups (`app`'s `RootSetup`); `KitActions` shows the kit in the status bar, sends the upgrade to the session `kit` and offers to restart the sessions on the old kit once it reported; the folders' window has Use the kit's folders; a brain folder's row in the Files tab has Back up the brain; `JobActions` reads the kit's jobs through `Setup` at start, after each change and every minute while the Files tab shows, puts them on the Files tab's Jobs row, and opens the Kit jobs window (record 117) |
 | `version`, `home`, `logDir`, `onQuit` | for About, Help and the log; `home` also holds `opened-files`, the files opened once, which the Files tab no longer marks new; what quitting runs once the window has asked |
 
 `PanelTexts`, `ServerToggle` and `Setup` are declared here and implemented in `app`, and `StoredConversation` is a
-record declared here that `app` fills, so the window reaches the store, QuestDB, the kit and the stored conversations
+record declared here that `app` fills, so the window reaches the store, QuestDB, the Edge, the kit and the stored conversations
 without importing them.
 
 **Sends back.** The user's intents: panels, running text, connections, sessions, approvals answered, views, editor

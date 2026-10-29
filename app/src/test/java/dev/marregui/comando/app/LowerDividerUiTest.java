@@ -1,6 +1,7 @@
 package dev.marregui.comando.app;
 
 import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.PanelId;
 import org.awaitility.Awaitility;
@@ -33,8 +34,9 @@ class LowerDividerUiTest {
     @TempDir
     Path home;
 
-    /// A panel never in front keeps the divider at its 150 px; the divider moved with one panel in front goes back to the
-    /// other panel's position when that one comes forward, and to the moved position when the first returns.
+    /// Two files opened to read hide the lower area until it is asked for (2026-10-29); asked for, a panel never in front
+    /// takes the last height shown, 150 px; the divider moved with one panel in front goes back to the other panel's
+    /// position when that one comes forward, and to the moved position when the first returns.
     @Test
     void eachPanelBringsBackItsOwnLowerDivider() throws Exception {
         Path one = Files.writeString(home.resolve("one.md"), "# One\n");
@@ -51,6 +53,9 @@ class LowerDividerUiTest {
             PanelId first = loop.state().focused();
             JSplitPane vertical = onEdt(() -> find(frame(), JSplitPane.class, p -> p.getOrientation() == JSplitPane.VERTICAL_SPLIT));
             Awaitility.await("laid out").atMost(WAIT).until(() -> onEdt(vertical::getHeight) > 400);
+            Awaitility.await("a file to read hides the lower area").atMost(WAIT).until(() -> onEdt(() -> !vertical.getBottomComponent().isVisible()));
+            loop.dispatch(new Intent.SelectLowerTab(LowerTab.RESULTS));
+            Awaitility.await("asked for, it shows").atMost(WAIT).until(() -> onEdt(() -> vertical.getBottomComponent().isVisible()));
             onEdt(() -> {
                 vertical.setDividerLocation(150);
                 return null;
@@ -58,7 +63,10 @@ class LowerDividerUiTest {
 
             loop.dispatch(new Intent.OpenFile("", two.toString(), 0));
             Awaitility.await("two's panel").atMost(WAIT).until(() -> loop.state().focusedPanel().title().equals("two.md"));
-            assertThat(onEdt(vertical::getDividerLocation)).as("a panel never in front keeps the divider as it is").isEqualTo(150);
+            Awaitility.await("hidden for two").atMost(WAIT).until(() -> onEdt(() -> !vertical.getBottomComponent().isVisible()));
+            loop.dispatch(new Intent.SelectLowerTab(LowerTab.SESSION));
+            Awaitility.await("asked for two").atMost(WAIT).until(() -> onEdt(() -> vertical.getBottomComponent().isVisible()));
+            assertThat(onEdt(vertical::getDividerLocation)).as("a panel never in front takes the last height shown").isEqualTo(150);
             onEdt(() -> {
                 vertical.setDividerLocation(350);
                 return null;

@@ -21,7 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///
 /// - names a non-default root in the environment
 /// - merges the memory directory into settings JSON
-/// - exempts the root-upgrade session from kit settings
+/// - exempts the upgrade session of a kit inside the user's folder from kit settings
+/// - keeps a root elsewhere, another instance's kit, for its upgrade session
 class RootLaunchTest {
 
     private static final KitRoot.Manifest KIT = new KitRoot.Manifest("marregui", "BRAIN", List.of(), List.of(), List.of(), List.of());
@@ -76,20 +77,39 @@ class RootLaunchTest {
                 "{\"model\":\"haiku\",\"autoMemoryDirectory\":\"" + user.resolve("kit/BRAIN/MEMORY") + "\"}"));
     }
 
-    /// The upgrade session at the root removes configuration and memory settings so it uses the user's folder.
+    /// The upgrade session of a kit inside the user's folder removes configuration and memory settings so it uses that folder.
     /// A different work directory and ordinary session retain the original launch unchanged.
     @Test
-    void theSessionThatUpgradesTheKitRunsOnTheUsersOwnFolder(@TempDir Path tmp) {
+    void theSessionThatUpgradesAKitInsideTheUsersFolderRunsOnTheUsersOwnFolder(@TempDir Path tmp) {
         Path user = tmp.resolve(".claude");
         Path root = user.resolve("kit");
         RootLaunch launch = RootLaunch.on(new KitRoot(root, Optional.of(KIT), user));
 
         RootLaunch upgrade = launch.forSession(KitRoot.UPGRADE_SESSION, root + "/");
-        assertThat(env(upgrade, Map.of("CLAUDE_CONFIG_DIR", "/set/by/the/user"))).as("taken out: ~/.claude").doesNotContainKey("CLAUDE_CONFIG_DIR");
+        assertThat(env(upgrade, Map.of("CLAUDE_CONFIG_DIR", "/set/by/the/user"))).as("taken out: the user's ~/.claude, which holds the kit").doesNotContainKey("CLAUDE_CONFIG_DIR");
         assertThat(upgrade.argv(List.of("claude", "-p"))).as("nor the kit's memory").containsExactly("claude", "-p");
         assertThat(upgrade.toString()).isEqualTo("-CLAUDE_CONFIG_DIR");
         assertThat(launch.forSession(KitRoot.UPGRADE_SESSION, tmp.toString())).as("elsewhere: a session like any").isSameAs(launch);
         assertThat(launch.forSession("work", root.toString())).isSameAs(launch);
+        assertThat(RootLaunch.on(new KitRoot(user, Optional.of(KIT), user)).forSession(KitRoot.UPGRADE_SESSION, user.toString()))
+                .as("the kit is ~/.claude itself").hasToString("-CLAUDE_CONFIG_DIR");
+    }
+
+    /// The upgrade session of a root beside the user's folder keeps that root's configuration and memory settings.
+    /// The root's name extends the user's folder name, so only a whole path component counts as inside it.
+    @Test
+    void theSessionThatUpgradesAnotherInstancesKitRunsOnThatKit(@TempDir Path tmp) {
+        Path user = tmp.resolve(".claude");
+        Path root = tmp.resolve(".claude_b");
+        RootLaunch launch = RootLaunch.on(new KitRoot(root, Optional.of(KIT), user));
+
+        RootLaunch upgrade = launch.forSession(KitRoot.UPGRADE_SESSION, root.toString());
+        assertThat(upgrade).isSameAs(launch);
+        assertThat(env(upgrade, Map.of("CLAUDE_CONFIG_DIR", "/set/by/the/user"))).as("kept: never ~/.claude")
+                .containsEntry("CLAUDE_CONFIG_DIR", root.toString());
+        assertThat(upgrade.argv(List.of("claude", "-p"))).as("with the instance's memory").containsExactly("claude", "--settings",
+                "{\"autoMemoryDirectory\":\"" + root.resolve("BRAIN/MEMORY") + "\"}", "-p");
+        assertThat(upgrade.toString()).isEqualTo("CLAUDE_CONFIG_DIR=" + root);
     }
 
     /// A started session process receives the selected root through its environment.

@@ -282,6 +282,33 @@ class PanelFilesTest {
         assertThat(Files.readString(home.resolve("panels.json"))).contains(doc.toString());
     }
 
+    /// A log opened as a document is reported each time it grows, once per version, and never written by comando.
+    @Test
+    void aGrowingLogIsReportedAsItGrows() throws Exception {
+        Path logs = Files.createDirectories(home.resolve("logs"));
+        Path log = Files.writeString(logs.resolve("x.log"), "one\n");
+        Files.writeString(home.resolve("connections.json"), "[]");
+        Files.writeString(home.resolve("sessions.json"), "[]");
+        Files.writeString(home.resolve("panels.json"), """
+                [{"id":"l","title":"x.log","connection":"","session":"","file":"%s"}]""".formatted(log));
+        List<PanelTexts.Outside> outside = new CopyOnWriteArrayList<>();
+        try (Store store = new Store(home)) {
+            store.onOutsideChange(outside::add);
+            store.load();
+            assertThat(store.load(new PanelId("l"))).isEqualTo("one\n");
+            writeOutside(log, "one\ntwo\n");
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            assertThat(outside).extracting(PanelTexts.Outside::text).containsExactly("one\ntwo\n");
+            assertThat(outside.getFirst().take().getAsBoolean()).isTrue();
+            writeOutside(log, "one\ntwo\nthree\n");
+            store.checkFilesNow().get(5, TimeUnit.SECONDS);
+            assertThat(outside).extracting(PanelTexts.Outside::text).containsExactly("one\ntwo\n", "one\ntwo\nthree\n");
+            store.saveNow().get(5, TimeUnit.SECONDS);
+        }
+        assertThat(log).hasContent("one\ntwo\nthree\n");
+    }
+
     @Test
     void anEditAfterAnOutsideChangeReportIsNotReplacedEvenOnceItIsSaved() throws Exception {
         PanelId id = new PanelId("w");

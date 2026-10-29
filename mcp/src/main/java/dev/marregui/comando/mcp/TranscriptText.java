@@ -61,6 +61,57 @@ final class TranscriptText {
         return new Read(body.isEmpty() ? head + "(no blocks)\n" : head + body, next);
     }
 
+    /**
+     * The turn that answers the prompt at {@code prompt}: whether it ended, whether it failed, and Claude's text in it,
+     * joined; tool calls and their results, thinking and sub-agents' text are left out. A prompt sent while earlier turns
+     * still ran is answered after their ends, so their text is not its answer. Without its own turn end (the session took
+     * queued prompts as one turn), the text after the prompt up to the last turn end.
+     */
+    record Turn(boolean ended, boolean failed, String text) {
+    }
+
+    static Turn answer(Transcript t, int prompt) {
+        int open = 0;
+        for (int i = 0; i < prompt; i++) {
+            Block b = t.get(i);
+            if (b instanceof Block.UserPrompt p && p.parent().isEmpty()) {
+                open++;
+            } else if (b instanceof Block.TurnEnd) {
+                open = Math.max(0, open - 1);
+            }
+        }
+        int size = t.size();
+        int start = prompt;
+        int ends = 0;
+        int lastEnd = -1;
+        for (int i = prompt + 1; i < size; i++) {
+            if (!(t.get(i) instanceof Block.TurnEnd)) {
+                continue;
+            }
+            if (ends == open) {
+                return new Turn(true, ((Block.TurnEnd) t.get(i)).error(), text(t, start, i));
+            }
+            ends++;
+            start = i;
+            lastEnd = i;
+        }
+        return lastEnd < 0 ? new Turn(false, false, text(t, prompt, size)) : new Turn(true, ((Block.TurnEnd) t.get(lastEnd)).error(), text(t, prompt, lastEnd));
+    }
+
+    /** Claude's top-level text strictly between {@code from} and {@code to}. */
+    private static String text(Transcript t, int from, int to) {
+        StringBuilder out = new StringBuilder();
+        for (int i = from + 1; i < to; i++) {
+            if (t.get(i) instanceof Block.AssistantText a && a.parent().isEmpty() && !a.text().isBlank()) {
+                if (!out.isEmpty()) {
+                    out.append("\n\n");
+                }
+                out.append(a.text().strip());
+            }
+        }
+        return out.toString();
+    }
+
     static boolean finished(Block b) {
         return switch (b) {
             case Block.AssistantText a -> !a.streaming();

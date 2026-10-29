@@ -1,0 +1,169 @@
+package dev.marregui.comando.mcp;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.marregui.comando.core.action.Action;
+import dev.marregui.comando.core.action.Actions;
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.model.Approval;
+import dev.marregui.comando.core.model.ApprovalDecision;
+import dev.marregui.comando.core.model.ApprovalKind;
+import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.port.QueryPort;
+import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.transcript.TranscriptRegistry;
+import dev.marregui.comando.testkit.FakeClock;
+import dev.marregui.comando.testkit.RecordingSink;
+import dev.marregui.comando.testkit.States;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+/** The registry's actions as MCP tools (record 121): creating and driving sessions, and the two rules. */
+class ActionToolsTest {
+
+    private final ObjectMapper json = new ObjectMapper();
+    private final RecordingSink sink = new RecordingSink();
+    private final AtomicReference<AppState> state = new AtomicReference<>(States.twoPanels());
+    private McpTools tools;
+    @TempDir
+    Path home;
+
+    @BeforeEach
+    void start() {
+        QueryPort db = null;
+        tools = new McpTools(sink, state::get, new TranscriptRegistry(), db, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
+        tools.agentsFile(home.resolve("agents.json"));
+        state.set(with(state.get(), session("foreman", ""), session("mine", "foreman"), session("grandchild", "mine"), session("users", "")));
+    }
+
+    @Test
+    void sessionNewCreatesOpensAndWithAPromptStartsASessionThatRecordsItsCreator() throws Exception {
+        McpTools.Outcome out = call("foreman", "session_new", "{\"name\":\"slug-writer\",\"work_dir\":\"" + home + "\",\"model\":\"sonnet\","
+                + "\"effort\":\"high\",\"prompt\":\"write slugify\"}");
+        assertThat(out.error()).as(out.text()).isFalse();
+        Intent.SaveSession save = sink.of(Intent.SaveSession.class).getFirst();
+        assertThat(save.previousName()).isEmpty();
+        assertThat(save.spec().name()).isEqualTo("slug-writer");
+        assertThat(save.spec().workDir()).isEqualTo(home.toAbsolutePath().normalize().toString());
+        assertThat(save.spec().model()).isEqualTo("sonnet");
+        assertThat(save.spec().createdBy()).isEqualTo("foreman");
+        Intent.PromptSession prompt = sink.of(Intent.PromptSession.class).getFirst();
+        assertThat(prompt.session()).isEqualTo("slug-writer");
+        assertThat(prompt.from()).isEqualTo("foreman");
+        assertThat(prompt.text()).isEqualTo("[from session foreman]\nwrite slugify");
+        assertThat(sink.of(Intent.EditPanel.class)).as("no write to a panel id of its own making").isEmpty();
+        assertThat(sink.of(Intent.Notify.class)).anyMatch(n -> n.text().startsWith("foreman: session new"));
+    }
+
+    @Test
+    void sessionNewRefusesATakenNameAndAMissingFolder() throws Exception {
+        assertThat(call("foreman", "session_new", "{\"name\":\"mine\",\"work_dir\":\"" + home + "\"}").text()).contains("exists");
+        assertThat(call("foreman", "session_new", "{\"name\":\"x\",\"work_dir\":\"" + home.resolve("nope") + "\"}").text()).contains("is not a folder");
+        assertThat(sink.of(Intent.SaveSession.class)).isEmpty();
+    }
+
+    @Test
+    void aStoppedSessionIsStartedOnlyByItsCreatorsRecord44() throws Exception {
+        assertThat(call("foreman", "session_start", "{\"session\":\"mine\"}").error()).isFalse();
+        assertThat(call("foreman", "session_start", "{\"session\":\"grandchild\"}").error()).as("through others").isFalse();
+        McpTools.Outcome users = call("foreman", "session_start", "{\"session\":\"users\"}");
+        assertThat(users.error()).isTrue();
+        assertThat(users.text()).contains("record 44");
+        assertThat(sink.of(Intent.StartSession.class)).extracting(Intent.StartSession::name).containsExactly("mine", "grandchild");
+        assertThat(call("foreman", "session_stop", "{\"session\":\"users\"}").error()).as("stopping is always allowed").isFalse();
+    }
+
+    @Test
+    void anApprovalIsNeverAnsweredByItsAskerNorByTheAskersCreatorsRule1() throws Exception {
+        state.set(state.get().withApprovals(List.of(card(1, "foreman"), card(2, "grandchild"), card(3, "users"))));
+        assertThat(call("foreman", "approval_answer", "{\"id\":1,\"decision\":\"allow\"}").text()).contains("rule 1");
+        assertThat(call("foreman", "approval_answer", "{\"id\":2,\"decision\":\"allow\"}").text()).as("created through mine").contains("rule 1");
+        McpTools.Outcome ok = call("foreman", "approval_answer", "{\"id\":3,\"decision\":\"deny\",\"message\":\"not now\"}");
+        assertThat(ok.error()).as(ok.text()).isFalse();
+        assertThat(call("users", "approval_answer", "{\"id\":2,\"decision\":\"allow\",\"scope\":\"session\"}").error()).isFalse();
+        assertThat(sink.of(Intent.ApprovalAnswered.class)).extracting(Intent.ApprovalAnswered::id).containsExactly(3L, 2L);
+        assertThat(sink.of(Intent.ApprovalAnswered.class).getFirst().decision()).isEqualTo(new ApprovalDecision.Deny("not now"));
+        assertThat(sink.of(Intent.ApprovalAnswered.class).get(1).decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION));
+    }
+
+    @Test
+    void aDestructiveActionRunsOnlyForACallerTheUserGrantedItRule2() throws Exception {
+        McpTools.Outcome refused = call("foreman", "session_remove", "{\"session\":\"mine\"}");
+        assertThat(refused.error()).isTrue();
+        assertThat(refused.text()).contains("agents.json");
+        Files.writeString(home.resolve("agents.json"), "{\"grants\": {\"foreman\": [\"destructive\"]}}");
+        assertThat(call("foreman", "session_remove", "{\"session\":\"mine\"}").error()).isFalse();
+        assertThat(call("users", "session_remove", "{\"session\":\"mine\"}").error()).as("another caller").isTrue();
+        assertThat(sink.of(Intent.RemoveSession.class)).extracting(Intent.RemoveSession::name).containsExactly("mine");
+    }
+
+    @Test
+    void anEditKeepsTheCreatorAndWhatItDoesNotChange() throws Exception {
+        assertThat(call("foreman", "session_edit", "{\"session\":\"mine\",\"new_name\":\"mine2\",\"effort\":\"max\"}").error()).isFalse();
+        Intent.SaveSession save = sink.of(Intent.SaveSession.class).getFirst();
+        assertThat(save.previousName()).isEqualTo("mine");
+        assertThat(save.spec().name()).isEqualTo("mine2");
+        assertThat(save.spec().effort()).isEqualTo("max");
+        assertThat(save.spec().workDir()).isEqualTo("/tmp");
+        assertThat(save.spec().createdBy()).isEqualTo("foreman");
+    }
+
+    @Test
+    void panelsAreFoundByTitleAndTheStateSaysWhatTheWindowShows() throws Exception {
+        assertThat(call("foreman", "panel_rename", "{\"panel\":\"" + state.get().panels().getFirst().title() + "\",\"title\":\"notes\"}").error()).isFalse();
+        assertThat(call("foreman", "panel_focus", "{\"panel\":\"no such\"}").text()).contains("panels:");
+        assertThat(call("foreman", "session_command", "{\"session\":\"mine\",\"command\":\"compact\"}").text()).contains("slash");
+        JsonNode s = json.readTree(tools.stateJson());
+        assertThat(s.path("sessions").findValuesAsText("createdBy")).contains("foreman", "mine");
+        assertThat(s.has("approvals")).isTrue();
+        assertThat(s.has("closedPanels")).isTrue();
+    }
+
+    @Test
+    void everyActionIsListedWithItsSchemaAndHasARunner() throws Exception {
+        Set<String> listed = new HashSet<>();
+        tools.definitions().forEach(d -> listed.add(d.path("name").asText()));
+        List<String> unrun = new ArrayList<>();
+        for (Action a : Actions.ALL) {
+            assertThat(listed).as("listed: " + a.tool()).contains(a.tool());
+            McpTools.Outcome out = call("foreman", a.tool(), "{}");
+            if (out.text().contains("unknown tool") || out.text().contains("has no runner")) {
+                unrun.add(a.tool());
+            }
+        }
+        assertThat(unrun).as("actions without a runner").isEmpty();
+        assertThat(listed).as("no tool listed twice").hasSize(tools.definitions().size());
+    }
+
+    private McpTools.Outcome call(String caller, String tool, String args) throws Exception {
+        return tools.call(caller, tool, json.readTree(args));
+    }
+
+    private static Approval card(long id, String session) {
+        return new Approval(id, session, ApprovalKind.TOOL, "Bash", "{\"command\":\"ls\"}", "ls", 0L);
+    }
+
+    private static SessionState session(String name, String createdBy) {
+        return SessionState.closed(SessionSpec.fresh(name, "/tmp").withCreatedBy(createdBy)).withStatus(Status.CLOSED, "");
+    }
+
+    private static AppState with(AppState s, SessionState... more) {
+        List<SessionState> sessions = new ArrayList<>(s.sessions());
+        sessions.addAll(List.of(more));
+        return s.withSessions(sessions);
+    }
+}

@@ -1,7 +1,8 @@
 # `app`
 
 The composition root: `main`, the configuration, the wiring of every module, the files comando keeps, the keychain, the
-intent log, logging and the embedded QuestDB. It depends on every other module and QuestDB; no module depends on it. It
+intent log, logging, the embedded QuestDB, the comando Edge and this instance's link to it. It depends on every other
+module, QuestDB and the HiveMQ MQTT client; no module depends on it. It
 also holds the Gradle tasks that run, paint, replay and package the application.
 
 1. [Architecture](#1-architecture)
@@ -17,7 +18,7 @@ One package, `dev.marregui.comando.app`.
 |---|---|
 | `Main` | sets the dark appearance before AWT starts, reads `AppConfig`, configures logging, takes the data root's lock (`comando.lock`; a second instance on the same root says so and exits), builds and starts `App`, and adds a shutdown hook that closes it |
 | `App` | builds every part in dependency order on a stack and closes them in reverse, each once; a failed constructor step closes what was built and rethrows; `App.DeferredEffects` stands in for `EffectRouter` until the adapters it needs exist |
-| `AppConfig` | the data root and its folders (`run`, `logs`, `audit`, `questdb`), the `claude` executable, the kit root (`claude`'s `KitJson.resolve`), the keychain switch |
+| `AppConfig` | the data root and its folders (`run`, `logs`, `audit`, `questdb`, `edge`), the `claude` executable, the kit root (`claude`'s `KitJson.resolve`), the keychain switch |
 | `Store` | implements `core`'s `PersistencePort` and `ui`'s `PanelTexts`: `connections.json`, `sessions.json`, `folders.json` (with a kit's folders first, once per root, recorded in `kit-folders`), `panels.json`, and the panels' text: a Markdown file in `panels/` for a panel of comando's own, the file itself for a document; writes from immutable snapshots on its own threads |
 | `PanelFiles` | each panel's text as a file: a panel of comando's own is named after its title and follows renames; a document is bound to its path and never renamed or deleted; no file is overwritten after an edit made outside comando |
 | `JsonFile` | one store file: atomic replace through a temporary file; an unreadable file is renamed aside (`.corrupt-<time>`), not overwritten |
@@ -25,28 +26,32 @@ One package, `dev.marregui.comando.app`.
 | `IntentLog` | with `-Dcomando.recordIntents=true`, every intent as a JSON line after the starting state, every `password` field blanked |
 | `Logging` | `System.Logger` to `logs/comando-<n>.log` (10 files of 1 MiB), warnings to stderr, uncaught exceptions logged |
 | `EmbeddedQuestDb` | `ui`'s `ServerToggle`: a QuestDB server in `questdb/`, every listener on `127.0.0.1` (PostgreSQL wire on 8812, the web console on 9000) |
+| `EmbeddedEdge` | `ui`'s `ServerToggle`: the one comando Edge on the machine, a child process from a distribution zip installed in `edge/`, every listener on `127.0.0.1` (MQTT 18883, WebSocket 18800, admin API 18080, JMX 18010); `~/.comando-edge.json` names its pid and the instance that started it, which alone stops it; no other process is signalled ([Workbench §3.5](../docs/workbench.md#35-the-comando-edge)) |
+| `MqttPeerBroker` | `mcp`'s `PeerBroker` on the HiveMQ MQTT client (MQTT 5, async): client `comando-<instance>` to `127.0.0.1:18883` while `~/.comando-edge.json` names a live Edge, read every 5 s; reconnects 1 s after a drop, then at most every 5 s, while the Edge runs, and stops trying once it does not; the subscriptions renewed after every connect; the last will set at connect; messages to their handlers on one strand ([record 123](../docs/adr/0123-instances-consult-each-other.md)) |
 | `RootSetup` | `ui`'s `Setup`: the kit root, its version and the brain's backup through `tools`' `KitGit`, its scheduled jobs through `claude`'s `KitJobsCli` |
 | `Welcome` | the first panel's text on a fresh data root |
 
-**Build and close order.** Every part is pushed on a stack as it is built and popped at the close; two are moved to the
+**Build and close order.** Every part is pushed on a stack as it is built and popped at the close; three are moved to the
 end. The full table, with what each close does, is in [Architecture §7](../docs/architecture.md#7-ownership-and-exit).
 
 | Part | Built | Closed |
 |---|---|---|
-| the root named for every module (`KitRoot.use`), restored at the close | 1 | 14 |
-| `kit-check`, `KitGit` | 2, 3 | 13, 12 |
-| `Store` | 4 | 11 |
-| the start-up errands (`Errands`) | 5 | 10 |
-| `IntentLog` (when recording) | 6 | 9 |
-| `StateLoop` | 7 | 8 |
-| `DbAdapter` | 8 | 7 |
-| `MermaidDiagrams`, `LocalImages` | 9, 10 | 6, 5 |
-| `McpServer` (with `McpTools`) | 11 | 4 |
-| `ClaudeAdapter` | 12 | 3 |
-| `ToolsAdapter` | 13 | 2 |
-| `ClaudeTopics` | 14 | 1 |
-| `EmbeddedQuestDb` | 15 | 15, after the lanes it may serve |
-| `ComandoUi` | 16 | 16, greyed and titled "comando — closing…" until the rest has closed |
+| the root named for every module (`KitRoot.use`), restored at the close | 1 | 16 |
+| `kit-check`, `KitGit` | 2, 3 | 15, 14 |
+| `Store` | 4 | 13 |
+| the start-up errands (`Errands`) | 5 | 12 |
+| `IntentLog` (when recording) | 6 | 11 |
+| `StateLoop` | 7 | 10 |
+| `DbAdapter` | 8 | 9 |
+| `MermaidDiagrams`, `LocalImages` | 9, 10 | 8, 7 |
+| `McpServer` (with `McpTools`) | 11 | 6 |
+| `ClaudeAdapter` | 12 | 5 |
+| `ToolsAdapter` | 13 | 4 |
+| `ClaudeTopics` | 14 | 3 |
+| `MqttPeerBroker`, `Peers` (unless `-Dcomando.peers=false`) | 15, 16 | 2, 1: the presence cleared first, then the disconnect, before the Edge stops |
+| `EmbeddedQuestDb` | 17 | 18, after the lanes it may serve |
+| `EmbeddedEdge` | 18 | 17, when this instance started the Edge; another's keeps running |
+| `ComandoUi` | 19 | 19, greyed and titled "comando — closing…" until the rest has closed |
 
 **Configuration.**
 
@@ -56,6 +61,7 @@ end. The full table, with what each close does, is in [Architecture §7](../docs
 | `COMANDO_CLAUDE` | the `claude` executable; else the usual install paths, else `claude` on `PATH` |
 | `-Dcomando.recordIntents=true` | writes the intent log to `logs/intents-<millis>.jsonl` |
 | `-Dcomando.keychain` | passwords in the keychain; on by default only for `~/.comando` |
+| `-Dcomando.peers=false` | leaves this instance off the comando Edge: no presence, no instance tools; every `Test` task of this module, `snapshot` and `docImages` set it, so no test joins a developer's running Edge |
 | `CLAUDE_CONFIG_DIR` | the kit root; else `~/.claude` when it has a `comando-kit.json`, else `~/.claude/comando-kit` when that has one, else `~/.claude` |
 
 A test or tool that points the data root elsewhere never writes the user's keychain. Tests name a temporary root through
@@ -70,13 +76,16 @@ flowchart TB
   APP["app: Main, App"] --> CORE["core: StateLoop, Reducer, EffectRouter, registries"]
   APP --> DB["db: DbAdapter"]
   APP --> CL["claude: ClaudeAdapter, ClaudeTopics, RootLaunch, KitJson, SessionCatalogue"]
-  APP --> MCP["mcp: McpServer, McpTools"]
+  APP --> MCP["mcp: McpServer, McpTools, Peers"]
   APP --> TO["tools: ToolsAdapter, KitGit"]
   APP --> UI["ui: ComandoUi"]
   ST["app Store"] -.->|"PersistencePort, PanelTexts"| CORE
   ST -.-> UI
   Q["app EmbeddedQuestDb"] -.->|"ServerToggle"| UI
+  E["app EmbeddedEdge"] -.->|"ServerToggle"| UI
   K["app RootSetup"] -.->|"Setup"| UI
+  B["app MqttPeerBroker"] -.->|"PeerBroker"| MCP
+  E -.->|"running()"| B
 ```
 
 What `app` connects, and nothing else does:
@@ -94,11 +103,13 @@ What `app` connects, and nothing else does:
 | `ui` import dialog | `claude` `SessionCatalogue` | a supplier mapping up to 500 entries to `StoredConversation` |
 | `mcp` editor tools | `Store` | `McpTools.readOnly`: panels showing a log take no text |
 | `Store` | `StateLoop` | `Notify` for a store warning, `FoldersRead` when `folders.json` changed outside |
+| `mcp` `Peers` | the comando Edge | `PeerBroker`, implemented by `MqttPeerBroker`, which follows `EmbeddedEdge.running()` |
 
 **At start** (`App.start`): the reducer starts, the window is built, every folder's git repository is watched for the
 Files tab's marks, the Files tab's open folders are read every 5 s, the plans' usage every 5 minutes, every session with
 a stored conversation loads its transcript, `claude --version` is checked, and, on a kit's root, the kit's version and
-its remote's newer releases are read now and every 6 hours for the status bar. Before that, the constructor names the
+its remote's newer releases are read now and every 6 hours for the status bar, and `Peers` sets its last will and
+subscriptions before `MqttPeerBroker` takes its first look at the Edge. Before that, the constructor names the
 root (`KitRoot.use`) and gives the Files tab the kit's folders at the first start on it.
 
 **At quit:** the window asks when work would stop, then `onQuit` starts the `exit` thread: `App.close()`, then
@@ -113,8 +124,13 @@ root (`KitRoot.use`) and gives the Files tab the kit's folders at the first star
 | `claude-version` | errand of `App` | the start-up check | the errands' close |
 | `kit-check` | timed strand of `App` | the kit's version at start and every 6 hours, through `git` | `App.close()` |
 | `questdb-toggle` | errand of `EmbeddedQuestDb` | one start or stop; a toggle meanwhile only says so | `EmbeddedQuestDb.close()` |
+| `edge-toggle`, `edge-check` | errands of `EmbeddedEdge` | one start or stop, up to 60 s for the admin API to answer; a read of the registry at most once a second for the button | `EmbeddedEdge.close()` |
+| `peer-broker` | timed strand of `MqttPeerBroker` | whether the registry names a live Edge, at start and every 5 s; connects or leaves | `MqttPeerBroker.close()` |
+| `peer-messages` | strand of `MqttPeerBroker` | the MQTT client's callbacks (its RxJava scheduler) and every message to its handlers, in order | `MqttPeerBroker.close()`, after the disconnect |
 | `keychain-output` | fork | one `security` call's output, so a keychain call that gets no answer ends after 10 s | its caller |
 | `exit`, `shutdown` | platform, at quit only | close the application after Quit, or from the shutdown hook | the JVM's exit |
+
+The MQTT client adds one Netty event loop thread, a platform thread of the library's, while a client exists.
 
 The store's threads are virtual, so daemons: `close()` waits for what is queued, at a quit and in the shutdown hook.
 
@@ -122,7 +138,8 @@ The store's threads are virtual, so daemons: `close()` waits for what is queued,
 
 | Test | Covers | Runs in |
 |---|---|---|
-| `StoreTest`, `StoreSaveNowTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `EmbeddedQuestDbTest` | the store files and panel files, the intent log, logging, the lock message, the embedded QuestDB | `./gradlew :app:test` |
+| `StoreTest`, `StoreSaveNowTest`, `PanelFilesTest`, `IntentLogTest`, `LoggingTest`, `MainTest`, `EmbeddedQuestDbTest`, `EmbeddedEdgeTest` | the store files and panel files, the intent log, logging, the lock message, the embedded QuestDB, the comando Edge on a fake distribution | `./gradlew :app:test` |
+| `MqttPeerBrokerTest` | without a broker or a port: a question's response topic and correlation data through the client's types, a message to the handlers whose filters match, no connection while no Edge runs, the reconnect delays | `./gradlew :app:test` |
 | `StoreTest`'s keychain round trip | writes and deletes one login keychain item | `./gradlew :app:test -PkeychainTest=true` |
 | `ThreadRulesTest` | ArchUnit over every module: platform threads only in `StateLoop`, `Watchdog`, `ClaudeProcess` and `Main`; virtual threads, executors other than per-task virtual ones, pools and `java.util.Timer` only in `Threads` | `./gradlew :app:test` |
 | `UiReplayTest` | intent logs replayed against the real shell with `testkit`'s `RecordingPorts` | `./gradlew :app:uiTest` |

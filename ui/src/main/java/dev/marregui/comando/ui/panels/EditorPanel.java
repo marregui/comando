@@ -137,6 +137,15 @@ public final class EditorPanel extends JPanel {
     static final long ENTRY_WAIT_MILLIS = 5_000;
     /** The time of the log entry the text scrolls to once it holds it, {@link Long#MIN_VALUE} when none waits. EDT only. */
     private long pendingEntry = Long.MIN_VALUE;
+    /**
+     * A log's view shows its end, so what is appended keeps it there: true when it opens, then as the reader leaves it,
+     * scrolled up to read, or brings it back to the end. Read and written on the EDT.
+     */
+    private boolean followsEnd = true;
+    /** The view moves because a reload moves it, not the reader: {@link #followsEnd} stays as it was. */
+    private boolean reloading;
+    /** The log's viewport, watched once the panel holds a log. */
+    private JViewport watched;
     private long pendingEntryUntil;
 
     public EditorPanel(PanelState panel, IntentSink intents, SchemaRegistry schemas) {
@@ -332,6 +341,8 @@ public final class EditorPanel extends JPanel {
         editor.area().setEditable(!isLog());
         if (opened && isLog()) {
             followEnd();
+            followsEnd = true;
+            watchView();
         }
         showClear();
         showLocate();
@@ -361,6 +372,113 @@ public final class EditorPanel extends JPanel {
 
     private void followEnd() {
         editor.area().setCaretPosition(editor.area().getDocument().getLength());
+    }
+
+    /**
+     * A log is a live view of its file: what was appended is added at the end, and the reader's caret, selection and
+     * scroll stay as they were; while the view shows the end it stays at the end. A file that did not grow from the
+     * text shown (rolled over, truncated) replaces it.
+     */
+    private void reloadLog(String text) {
+        RSyntaxTextArea area = editor.area();
+        boolean follow = followsEnd;
+        boolean selecting = area.getSelectionStart() != area.getSelectionEnd();
+        reloading = true;
+        try {
+            String shown = editor.text();
+            if (text.length() >= shown.length() && text.startsWith(shown)) {
+                if (text.length() > shown.length()) {
+                    editor.grow(text.substring(shown.length()));
+                }
+            } else {
+                editor.reload(text);
+            }
+            if (follow) {
+                if (!selecting) {
+                    followEnd();
+                }
+                showEnd();
+            }
+        } finally {
+            reloading = false;
+        }
+    }
+
+    /** Scrolls the log's view to its last line, the caret and the selection left where they are. */
+    private void showEnd() {
+        JViewport v = viewport();
+        if (v == null || v.getView() == null) {
+            return;
+        }
+        // the text grew: the view takes its new height now, laid out directly (validate waits for a window on screen)
+        v.doLayout();
+        int bottom = Math.max(0, v.getView().getHeight() - v.getExtentSize().height);
+        if (v.getViewPosition().y != bottom) {
+            v.setViewPosition(new Point(v.getViewPosition().x, bottom));
+        }
+    }
+
+    /** Whether the view shows the text's last line. */
+    private boolean viewAtEnd(JViewport v) {
+        Rectangle seen = v.getViewRect();
+        return seen.y + seen.height >= v.getView().getHeight() - editor.area().getLineHeight();
+    }
+
+    private JViewport viewport() {
+        return (JViewport) SwingUtilities.getAncestorOfClass(JViewport.class, editor.area());
+    }
+
+    /**
+     * Watches the log's view: the reader scrolling up stops the following, back to the end resumes it; a log that
+     * comes back to the front while following shows its end, as it grew while hidden.
+     */
+    private void watchView() {
+        JViewport v = viewport();
+        if (v == null || v == watched) {
+            return;
+        }
+        watched = v;
+        java.awt.Dimension[] extent = {v.getExtentSize()};
+        v.addChangeListener(e -> {
+            java.awt.Dimension now = v.getExtentSize();
+            // laid out with a size: a tab never shown has none, and nothing scrolls it
+            if (reloading || !isLog() || now.height <= 0) {
+                return;
+            }
+            if (!now.equals(extent[0])) {
+                // the view was resized or laid out, not scrolled: a log that follows its end shows it again
+                extent[0] = now;
+                if (followsEnd) {
+                    Edt.later(this::showEndFollowing);
+                }
+                return;
+            }
+            followsEnd = viewAtEnd(v);
+        });
+        editor.area().addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & java.awt.event.HierarchyEvent.SHOWING_CHANGED) != 0 && editor.area().isShowing()
+                    && isLog() && followsEnd) {
+                Edt.later(this::showEndFollowing);
+            }
+        });
+    }
+
+    /** Shows the end of a log that still follows it, without the move counting as the reader's. */
+    private void showEndFollowing() {
+        if (!followsEnd || !isLog()) {
+            return;
+        }
+        reloading = true;
+        try {
+            showEnd();
+        } finally {
+            reloading = false;
+        }
+    }
+
+    /** Whether new lines keep the log's view at its end; for tests. */
+    boolean followsEnd() {
+        return followsEnd;
     }
 
     /**
@@ -673,11 +791,12 @@ public final class EditorPanel extends JPanel {
      * caret was at its end stays at the end.
      */
     public void reload(String text) {
-        boolean atEnd = isLog() && editor.area().getCaretPosition() >= editor.area().getDocument().getLength();
-        editor.reload(text);
-        if (atEnd) {
-            followEnd();
+        if (isLog()) {
+            reloadLog(text);
+            showPendingEntry();
+            return;
         }
+        editor.reload(text);
         showPendingEntry();
         if (previewing()) {
             int at = rendered.getCaretPosition();

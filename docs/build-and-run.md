@@ -86,8 +86,10 @@ the ui jar carries. The PostgreSQL adapter test runs on Ubuntu only: macOS runne
 |---|---|---|---|
 | `comando.home` | system property | — | the data root; wins over `COMANDO_HOME`; a leading `~` is the home folder |
 | `COMANDO_HOME` | environment | `~/.comando` | the data root; a leading `~` is the home folder |
+| `comando.name`, `COMANDO_NAME` | system property, environment | the data root's `instance.json` `name` (written by the kit's `kit.py instance new`), else its folder: none for `~/.comando`, `b` for `~/.comando_b` | the instance's name: the Dock's and menu bar's `comando · b` (a name that says comando, `Comando Expert`, as it is), the window title, the Dock badge, and a window-preferences node of its own, keyed by the data root's folder so a renamed instance keeps its layout ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)) |
 | `COMANDO_CLAUDE` | environment | the search in [§1](#1-prerequisites) | the Claude Code executable |
 | `COMANDO_CODEX` | environment | the search in [§1](#1-prerequisites) | the Codex executable, read for the status bar's usage |
+| `comando.edge.zip`, `COMANDO_EDGE_ZIP` | system property, environment | the newest `hivemq-edge-full-*.zip` in `~/edge/hivemq-edge2/build/distributions/` | the Edge distribution the comando Edge is installed from; the property wins ([Workbench §3.5](workbench.md#35-the-comando-edge)) |
 | `CLAUDE_CONFIG_DIR` | environment | unset | the root comando's sessions run on, in place of `~/.claude` or `~/.claude/comando-kit` ([Workbench §7.1](workbench.md#71-the-root)) |
 | `comando.keychain` | system property | `true` for `~/.comando`, else `false` | keep connection passwords in the login keychain (macOS); elsewhere they stay in `connections.json` |
 | `comando.recordIntents` | system property | `false` | write the intent log to `logs/` in the data root |

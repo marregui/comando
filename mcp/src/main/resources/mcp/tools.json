@@ -415,5 +415,62 @@
         "session"
       ]
     }
+  },
+  {
+    "name": "instances_list",
+    "description": "Lists the other comando instances on this machine that are connected to the comando Edge: each one's name, instance id, version, whether it is busy, and its sessions; nothing is asked of the user. Needs the comando Edge running (its toggle at the top of any instance's workspace); without it, the answer says so.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "instance_ask",
+    "description": "Asks another comando instance a question; nothing is asked of either user. The text, headed [from instance <this instance> · session <this session>], is prompted in that instance's session consult-<this instance>, made on the first question, in its panel, so its user sees what was asked and by whom; a busy session takes it after its current turn. The reply is Claude's text in the turn that answers it, not its tool output. Only the text you send and the reply travel, never either instance's brain or kit files. An instance whose user denied this one in agents.json answers refused. Waits up to wait_seconds for the reply; one not ready by then is read later with instance_reply and the id the answer gives. A brainstorm between instances: ask each in turn, pass the others' answers on in your next question to each, and summarise for the user; there is no broadcast. Only when the user asked you to consult another instance.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "instance": {
+          "type": "string",
+          "description": "The instance to ask: its id or name, from instances_list."
+        },
+        "text": {
+          "type": "string",
+          "description": "The question, self-contained: the other instance sees nothing of this conversation."
+        },
+        "wait_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 600,
+          "default": 300
+        }
+      },
+      "required": [
+        "instance",
+        "text"
+      ]
+    }
+  },
+  {
+    "name": "instance_reply",
+    "description": "Reads the reply to an earlier instance_ask by the id it returned, waiting up to wait_seconds for it; a reply is read once. The peer gives up on its turn after 600 s and replies timeout.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "The id instance_ask returned."
+        },
+        "wait_seconds": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 600,
+          "default": 300
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
   }
 ]

@@ -19,10 +19,10 @@ import static dev.marregui.comando.ui.kit.action.MenuEntry.menu;
 /**
  * The menu bar, the icons and tooltips of its entries, and where every other command belongs. The bar holds only what
  * has no key and no control in the window, and what macOS expects in a menu: after the application menu macOS draws,
- * Edit (the clipboard and undo) and Help, the palette and the help, flat. The theme, the shell, the refreshing plots and
- * the embedded server are buttons at the tab row's right end instead ({@link #corner}). Every other command keeps its
- * key, its control and the palette, and is listed by its area ("Session", "Results") in the palette and the keyboard
- * shortcuts.
+ * Edit (the clipboard and undo) and Help, the palette and the help, flat. The theme, the shell, the refreshing plots,
+ * the embedded server and the Edge are buttons at the tab row's right end instead ({@link #corner}). Every other
+ * command keeps its key, its control and the palette, and is listed by its area ("Session", "Results") in the palette
+ * and the keyboard shortcuts.
  * <p>
  * Every item has an icon and a one-line tooltip: what it does, and one fact its label does not say; macOS shows both
  * in its menu bar.
@@ -44,6 +44,8 @@ final class Menus {
             Map.entry("help.keys", "keyboard"),
             Map.entry("help.markdown", "markdown"),
             Map.entry("help.log", "log"),
+            Map.entry("help.edgeLog", "log"),
+            Map.entry("help.questDbLog", "log"),
             Map.entry("help.dataRoot", "comando-folder"),
             // the corner's buttons
             Map.entry("terminal.start", "terminal-start"),
@@ -51,6 +53,8 @@ final class Menus {
             Map.entry("run.plotStop", "chart-stop"),
             Map.entry("server.start", "database-start"),
             Map.entry("server.stop", "database-stop"),
+            Map.entry("edge.start", "edge-start"),
+            Map.entry("edge.stop", "edge-stop"),
             // in no menu: the icon of the button or tab-menu item that does the same, shown in the palette
             Map.entry("panel.openSpec", "open-file"),
             Map.entry("files.settings", "folders"),
@@ -82,10 +86,14 @@ final class Menus {
             Map.entry("run.plotStop", "Stop every refreshing plot; the plots stay as they are"),
             Map.entry("server.start", "Start QuestDB on this machine: PostgreSQL wire 8812, console 9000"),
             Map.entry("server.stop", "Stop the embedded QuestDB; its data stays"),
+            Map.entry("edge.start", "Start the comando Edge, one per machine: MQTT 18883, WebSocket 18800, UI 18080"),
+            Map.entry("edge.stop", "Stop the comando Edge this comando started; its data stays"),
             Map.entry("help.tutorial", "comando in ten minutes, as a document"),
             Map.entry("help.keys", "Every key, in the side pane"),
             Map.entry("help.markdown", "What a panel's Markdown may hold and how its preview shows it"),
             Map.entry("help.log", "comando's log, read-only, following its end"),
+            Map.entry("help.edgeLog", "The comando Edge's hivemq.log in this instance's data root"),
+            Map.entry("help.questDbLog", "QuestDB's log of the day, in this instance's data root"),
             Map.entry("help.dataRoot", "Show comando's data root: panels, sessions, settings, logs"));
 
     /** Where each command in no menu belongs, named in the palette and the keyboard shortcuts. */
@@ -120,19 +128,34 @@ final class Menus {
     static List<MenuEntry.Menu> bar() {
         return List.of(
                 menu("Edit", null, "edit.undo", "edit.redo", SEPARATOR, "edit.cut", "edit.copy", "edit.paste", "edit.selectAll"),
-                menu("Help", null, "view.palette", SEPARATOR, "help.tutorial", "help.keys", "help.markdown", "help.log", "help.dataRoot"));
+                menu("Help", null, "view.palette", SEPARATOR, "help.tutorial", "help.keys", "help.markdown", "help.log", "help.edgeLog", "help.questDbLog", "help.dataRoot"));
     }
 
     /**
      * The buttons left of the theme's swatch, each its commands, shown by the first that can run: the shell, the
-     * refreshing plots, and the embedded server only when comando has one.
+     * refreshing plots, then the embedded server and the Edge, each only when comando has one.
      */
-    static List<List<String>> corner(boolean server) {
+    static List<List<String>> corner(boolean server, boolean edge) {
         List<List<String>> buttons = new ArrayList<>(List.of(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop")));
         if (server) {
             buttons.add(List.of("server.start", "server.stop"));
         }
+        if (edge) {
+            buttons.add(List.of("edge.start", "edge.stop"));
+        }
         return List.copyOf(buttons);
+    }
+
+    /** The Connections tab's menu: the embedded server's start and stop, then the Edge's, each only when comando has one. */
+    static List<String> toggles(boolean server, boolean edge) {
+        List<String> ids = new ArrayList<>();
+        if (server) {
+            ids.addAll(List.of("server.start", "server.stop"));
+        }
+        if (edge) {
+            ids.addAll(List.of("edge.start", "edge.stop"));
+        }
+        return List.copyOf(ids);
     }
 
     private static Map<String, String> areas() {
@@ -147,7 +170,7 @@ final class Menus {
                 "session.import");
         SessionSpec.MODELS.forEach(m -> a.put("session.model." + m, "Session ▸ Model"));
         SessionSpec.EFFORTS.forEach(e -> a.put("session.effort." + e, "Session ▸ Effort"));
-        put(a, "Connection", "server.start", "server.stop", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog");
+        put(a, "Connection", "server.start", "server.stop", "edge.start", "edge.stop", "connection.toggle", "connection.schema", "panel.bindConnection", "connection.dialog");
         put(a, "Results", "run.insertResult", "run.keep", "run.plot", "run.plotLive", "run.plotStop");
         put(a, "Edit", "view.copy", "view.find", "view.findNext", "view.findPrevious", "edit.complete", "edit.completeAlt");
         put(a, "Files", "files.settings", "files.jobs");

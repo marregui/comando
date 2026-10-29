@@ -58,7 +58,9 @@ Any number of document panels may be attached to a session
   "Rename panel…" in the palette.
 - **The lower divider is each panel's**: moved while a panel is in front, it goes back there when that panel comes to
   the front again, from a session tab or a file tab; a panel never in front keeps it as it is; kept across restarts for
-  the panels open or reopenable ([record 115](adr/0115-the-lower-divider-per-panel.md)).
+  the panels open or reopenable ([record 115](adr/0115-the-lower-divider-per-panel.md)). A file opened to read, a
+  document no session works in, takes the whole height: the lower area hides until ⌃1–⌃4, a lower tab or a request
+  waiting in Approvals asks for it while that file is in front, and then stays for that file.
 - **Restore layout** (palette) puts the sidebar, side pane and lower divider back as they were before a session
   arranged them; it is greyed out while nothing was arranged.
 - **Moving** a tab: drag it along the row; a line marks where it lands. The order is saved and kept across restarts.
@@ -142,8 +144,9 @@ Any number of document panels may be attached to a session
 - **The theme's swatch**, the theme's ground with a bar of its tint, sits at the top right, left of New panel; its
   tooltip names the theme, and a click opens the six; the palette has them too
   ([record 104](adr/0104-the-theme-beside-new-panel.md), [record 114](adr/0114-help-menu-and-corner-buttons.md)).
-- **The corner's buttons**, left of the swatch: start or stop the focused panel's shell, stop refreshing plots, and
-  start or stop the embedded QuestDB; each shows what it would do now and is disabled when it cannot run ([record 114](adr/0114-help-menu-and-corner-buttons.md)).
+- **The corner's buttons**, left of the swatch: start or stop the focused panel's shell, stop refreshing plots,
+  start or stop the embedded QuestDB, and start or stop the comando Edge ([§3.5](#35-the-comando-edge)); each shows what
+  it would do now and is disabled when it cannot run ([record 114](adr/0114-help-menu-and-corner-buttons.md)).
 - **A theme** chooses a ground and the tint made for it together: Graphite and gold (the default), Espresso
   and champagne, Aubergine and yellow gold, Midnight and electric blue, Evergreen and tropical forest, Slate and silver;
   kept across restarts. Cards, borders and the prompt's bubble are laid over the ground and follow it
@@ -177,7 +180,7 @@ underline and the selection: a band of its shade, the name in its highlight and 
 | Tab | Its menu |
 |---|---|
 | Sessions | New session…, Import stored conversations…, Sort: running first, then by name (on only after a drag ordered the rows by hand); New panel, Reopen closed panel |
-| Connections | New connection…; Start embedded QuestDB, Stop embedded QuestDB |
+| Connections | New connection…; Start embedded QuestDB, Stop embedded QuestDB; Start the comando Edge, Stop the comando Edge |
 | Files | Configure ~/.claude folders ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)); Configure kit jobs, with a kit ([§7.6](#76-scheduled-jobs)) |
 
 No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)): a row's menu edits,
@@ -385,6 +388,46 @@ data root, on QuestDB's default ports (PG wire 8812, console 9000, ILP 9009). Ev
 over UDP is off, through `QDB_` environment overrides, because QuestDB binds all interfaces by default and its default
 login is public. It stops at exit, after the lanes.
 
+### 3.5 The comando Edge
+
+**Start the comando Edge**, the antenna button right of QuestDB's (also in the Connections tab's menu), starts a HiveMQ
+Edge: comando's gateway to devices, the cloud and other Edges, and the one place every comando instance on the machine
+talks through ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md) §2.4).
+
+- **The distribution** is the zip named by `-Dcomando.edge.zip` or `COMANDO_EDGE_ZIP`, else the newest
+  `hivemq-edge-full-*.zip` in `~/edge/hivemq-edge2/build/distributions/`; with none, a notice says where it looked.
+- **Installed** in `edge/` of the data root: unzipped when there is no home yet or the zip is another or newer than the
+  one `edge/installed` records. Its data and logs are `edge/data` and `edge/log`, beside the home (named to the Edge
+  through `HIVEMQ_DATA_FOLDER` and `HIVEMQ_LOG_FOLDER`), so a newer zip replaces the home and keeps them.
+- **Its own ports**, none an Edge's default, every one bound to `127.0.0.1`: MQTT 18883, WebSocket 18800 (`/mqtt`), the
+  admin API and UI 18080 (admin/hivemq), JMX 18010. The configuration lives in `edge/conf`, beside the data and outside
+  the home (`HIVEMQ_CONFIG_FOLDER`): the first start writes comando's `config.xml` and copies the shipped files the folder
+  lacks; every start after that sets only its MQTT listeners and admin API to these ports and keeps the rest (adapters,
+  bridges, anything saved from the Edge's UI). `bin/run.sh`'s JMX port is set. A port taken by anything else refuses the start with a
+  notice naming it; nothing else is touched.
+- **One per machine:** `~/.comando-edge.json`, shared by every instance, names the running Edge's process, the data root
+  that started it, that instance's name and the ports; written when the Edge starts, removed when it stops. Every
+  instance's button shows it running. Only the instance that started it stops it; on another's button the tooltip
+  says whose Edge it is (its name and data root), and a click warns "Cannot stop the Edge: it was started by comando · b
+  (…), and only that comando stops it", in the log too. A click says at once what it does ("Starting the Edge…",
+  "Stopping the Edge…"); until the start or stop ends the button is disabled, keeps its face, and its tooltip says
+  which is under way. An entry whose process is gone, or whose pid is now another
+  process's, is stale and removed; only the recorded process is ever signalled, so the user's own Edges, on the
+  default ports, start and stop beside it undisturbed.
+- **Up** when the admin API answers, within 60 s (else it is stopped and the notice says so); its output goes to
+  `edge/stdout.log`. Stopping sends SIGTERM and waits up to 30 s before killing it. It stops at exit when this instance
+  started it, before QuestDB.
+- **What travels over it** ([record 123](adr/0123-instances-consult-each-other.md)): every instance connects while the
+  registry names a live Edge, whichever instance started it (a look every 5 s; MQTT 5 to `127.0.0.1:18883`, client id
+  `comando-<id>`, the id the instance's name in lowercase with dashes, `main` for the main instance), reconnects while it
+  runs, and leaves when it stops. Under `comando/v1/local/instance/<id>/`: `presence`, retained (name, id, version, when
+  it started, whether busy, its sessions), sent on connect and on a change at most every 2 s, cleared at close and by
+  the last will when the instance dies; `inbox`, the questions of `instance_ask`, with the MQTT 5 response topic
+  `…/<asker>/reply` and correlation data; `reply`, the answers. Only the text a session chose to send and the reply's
+  text travel, never a brain's or a kit's files. A question is shown and answered in the instance asked: its session
+  `consult-<asker>` ([Claude §2.2](claude.md#22-the-tools)). Not built: per-instance credentials and the Edge's access
+  rules, so on one machine any local process of the user could publish there.
+
 ## 4. Development tools
 
 Runs go through `ToolPort` (`tools` module); the terminal lives in the UI because JediTerm is a Swing component.
@@ -421,7 +464,10 @@ The folders the user chose inside `~/.claude`, one top-level row each, as a navi
 repositories: those are read in an IDE ([record 95](adr/0095-the-files-tab-holds-no-code-repositories.md)). The tab only shows and
 opens: it has no buttons, and writes nothing but the Trash of a deletable folder
 ([record 63](adr/0063-a-tabs-menu-closes-many-and-a-scratchpads-entries-go-to-the-trash.md)). The files it opens are
-edited and saved like any other; a `.log` stays read-only.
+edited and saved like any other; a `.log` stays read-only and is a live view of its file: what is appended shows
+within a second, and while the view shows the end it stays there; scrolled up to read, or with text selected to copy,
+the place and the selection stay while the log grows below; back at the end it follows again; a file rolled over or
+truncated replaces the text.
 
 - **Folders** are resources ([§1.1](#11-one-model-for-connections-sessions-and-folders)): a unique name, a full path,
   an optional index file inside it, names to leave out, the row's icon (folder, scratchpad, memory, knowledge, skills,
@@ -567,13 +613,16 @@ replacing what the view showed.
 
 ### 6.1 The data root
 
-`-Dcomando.home`, else `COMANDO_HOME`, else `~/.comando`.
+`-Dcomando.home`, else `COMANDO_HOME`, else `~/.comando`. Several instances each have their own: `~/.comando_b` is instance
+`b`, paired with the kit `~/.claude_b` and its brain `~/.claude_b/BRAIN` ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)),
+which also says what in a data root is worth backing up.
 
 | Path | Holds |
 |---|---|
 | `connections.json`, `sessions.json`, `folders.json`, `panels.json` | the specs and panel metadata (bindings, file name, closed) |
 | `panels/<title>.md` | each panel's text ([record 26](adr/0026-a-file-per-panel.md)) |
 | `comando.lock` | held while comando runs; a second start on the same root refuses |
+| `instance.json` | the instance's name, `{"name": "Comando Expert", "slug": …, "root": …}`, written by the kit's `kit.py instance new`; read at start ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)) |
 | `run/` | MCP configurations of running sessions (`0600`) |
 | `audit/audit-<UTC date>.jsonl` | every MCP tool call and approval decision |
 | `logs/comando-<n>.log` | the log, 10 files of 1 MiB; Help ▸ Show the log opens it read-only, a click on a notice that names an entry opens it at that entry |
@@ -585,10 +634,13 @@ replacing what the view showed.
 | `cache/mermaid/` | diagrams drawn by `mmdc`; safe to delete |
 | `cache/images/` | SVG pictures named in Markdown, drawn to PNG; safe to delete |
 | `kit-folders` | the roots whose kit folders the Files tab has added, one per line, so a kit folder the user took out stays out ([§7.3](#73-the-files-tab)) |
+| `agents.json` | written by the user, read at each call: the callers granted destructive actions, `{"grants": {"<caller>": ["destructive"]}}` ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)); absent, no caller is. `peers.deny`, `{"peers": {"deny": ["<id>"]}}`: the other instances whose questions are refused ([record 123](adr/0123-instances-consult-each-other.md)); absent, every instance may ask; a file that cannot be read refuses every question, saying why |
 | `questdb/` | the embedded QuestDB's data |
+| `edge/` | the comando Edge ([§3.5](#35-the-comando-edge)): its home unzipped from the distribution, `installed` (the zip and its time), `data/` and `log/`, kept across reinstalls, and `stdout.log` |
 
 Outside it: connection passwords in the macOS keychain for the default data root (elsewhere, or off macOS, they stay
-in `connections.json`; [Claude §3.3](claude.md#33-secrets)). The Java preferences that held the window's state before
+in `connections.json`; [Claude §3.3](claude.md#33-secrets)); `~/.comando-edge.json`, the registry of the one comando Edge,
+shared by every instance ([§3.5](#35-the-comando-edge)). The Java preferences that held the window's state before
 `settings.json` (node `dev/marregui/comando`; tests use `comando.prefsNode`) are read once, when the file does not
 exist yet, and left as they were.
 
@@ -711,7 +763,8 @@ The Files tab's KIT row shows the kit's commit and, when `git -C <root> ls-remot
 
 **Upgrade the kit…** (the palette, and the KIT row's menu) asks for a tag, newest first, then opens or creates a
 session named `kit`, working in the root and started on the user's own Claude Code setup rather than the root's (it
-replaces the root's files), and sends it: "Upgrade the kit at <root> to <tag>, following <root>/INSTALL.md section
+replaces the root's files) when the root is `~/.claude` or inside it, on the root itself when the root is elsewhere,
+another instance's kit ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)), and sends it: "Upgrade the kit at <root> to <tag>, following <root>/INSTALL.md section
 Upgrade. Report what changed." Once the session reports, comando offers to restart the sessions still running on the
 old kit.
 

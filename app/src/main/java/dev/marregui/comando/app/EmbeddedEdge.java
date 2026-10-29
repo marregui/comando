@@ -1,0 +1,730 @@
+package dev.marregui.comando.app;
+
+import dev.marregui.comando.core.intent.Intent;
+import dev.marregui.comando.core.loop.Errands;
+import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.core.model.InstanceName;
+import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.ui.shell.ServerToggle;
+
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.StringReader;
+import java.io.StringWriter;
+import java.io.UncheckedIOException;
+import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.URI;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermission;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+
+/**
+ * A HiveMQ Edge comando starts from a distribution zip, installed in its data root ({@code edge/}), on ports of its own
+ * (MQTT 18883, WebSocket 18800, admin API 18080, JMX 18010), every one bound to {@code 127.0.0.1}. One such Edge runs on
+ * the machine whichever comando instance started it, so that every instance talks through it: a registry file in the
+ * user's home ({@code ~/.comando-edge.json}) names its process, the data root that started it and its ports. Only that
+ * instance stops it; the others see it running. No other process is ever signalled, so the user's own Edges, on their
+ * own ports, are left alone.
+ * <p>
+ * The Edge's data and log folders sit beside its home ({@code edge/data}, {@code edge/log}), named to it through
+ * {@code HIVEMQ_DATA_FOLDER} and {@code HIVEMQ_LOG_FOLDER}: a newer zip replaces the home and keeps them.
+ */
+final class EmbeddedEdge implements ServerToggle, AutoCloseable {
+
+    private static final System.Logger LOG = System.getLogger(EmbeddedEdge.class.getName());
+
+    /** The ports of comando's Edge, none of them an Edge's default, so the user's own Edges start beside it. */
+    record Ports(int mqtt, int websocket, int api, int jmx) {
+
+        static final Ports DEFAULT = new Ports(18883, 18800, 18080, 18010);
+
+        List<Integer> all() {
+            return List.of(mqtt, websocket, api, jmx);
+        }
+    }
+
+    /** The registry's content: the Edge's process, when it started, and the instance that started it. */
+    record Entry(long pid, String owner, String name, Ports ports, String started) {
+    }
+
+    /** A distribution zip, or why there is none. */
+    record Located(Path zip, String problem) {
+
+        static Located of(Path zip) {
+            return new Located(zip, "");
+        }
+    }
+
+    /** The registry every comando instance on this machine reads. */
+    static final Path REGISTRY = Path.of(System.getProperty("user.home"), ".comando-edge.json");
+    /** Where the newest distribution is looked for when none is named: the build output of the main Edge checkout. */
+    static final Path BUILD_DIR = Path.of(System.getProperty("user.home"), "edge", "hivemq-edge2", "build", "distributions");
+    static final String ZIP_PROPERTY = "comando.edge.zip";
+    static final String ZIP_ENV = "COMANDO_EDGE_ZIP";
+    static final Duration READY_WITHIN = Duration.ofSeconds(60);
+    /** How long a stop waits for the Edge after SIGTERM before it kills it. */
+    static final Duration STOP_WAIT = Duration.ofSeconds(30);
+    /** How long {@link #isRunning} trusts its last read of the registry. */
+    private static final Duration CHECK_EVERY = Duration.ofSeconds(1);
+    /** A process whose start differs from the recorded one by more than this is another process on a reused pid. */
+    private static final Duration SAME_PROCESS = Duration.ofSeconds(2);
+    private static final InetAddress LOOPBACK = InetAddress.getLoopbackAddress();
+
+    private final Path root;
+    private final String owner;
+    private final String name;
+    private final IntentSink intents;
+    private final Path registry;
+    private final Ports ports;
+    private final Supplier<Located> distribution;
+    private final Predicate<Ports> up;
+    private final Duration readyWithin;
+    /** The starts, stops and registry reads under way, each on a virtual thread; closed with the Edge. */
+    private final Errands errands = new Errands("edge");
+    /** A start or stop is under way; a toggle meanwhile does nothing but say so. */
+    private final AtomicBoolean busy = new AtomicBoolean();
+    private final AtomicBoolean checking = new AtomicBoolean();
+    /** The registry names a live Edge, as last read; the window reads it every second without waiting. */
+    private volatile boolean running;
+    private volatile long checkedAt = System.nanoTime() - CHECK_EVERY.toNanos();
+    /** The live entry the registry named at its last read, or null: whose Edge the button stands for. */
+    private volatile Entry seen;
+    /** What a start or stop under way does ("starting", "stopping"), empty until it has read the registry. */
+    private volatile String doing = "";
+
+    /**
+     * comando's Edge in {@code root}, for the instance on data root {@code owner} named {@code name}; the shared registry,
+     * the standard ports, the distribution as {@link #locate} finds it.
+     */
+    EmbeddedEdge(Path root, Path owner, String name, IntentSink intents) {
+        this(root, owner, name, intents, REGISTRY, Ports.DEFAULT,
+                () -> locate(System.getProperty(ZIP_PROPERTY), System.getenv(ZIP_ENV), BUILD_DIR), EmbeddedEdge::answers, READY_WITHIN);
+    }
+
+    /** As above, with the registry, the ports, the distribution, the readiness check and its bound given; for tests. */
+    EmbeddedEdge(Path root, Path owner, String name, IntentSink intents, Path registry, Ports ports, Supplier<Located> distribution,
+                 Predicate<Ports> up, Duration readyWithin) {
+        this.root = root.toAbsolutePath().normalize();
+        this.owner = owner.toAbsolutePath().normalize().toString();
+        this.name = name == null ? "" : name;
+        this.intents = intents;
+        this.registry = registry;
+        this.ports = ports;
+        this.distribution = distribution;
+        this.up = up;
+        this.readyWithin = readyWithin;
+    }
+
+    @Override
+    public String name() {
+        return "Edge";
+    }
+
+    /**
+     * Whether the registry names a live Edge, whichever instance started it. Returns at once: the window asks every
+     * second, and a read older than a second is redone on a virtual thread, so the answer may be a second late.
+     */
+    @Override
+    public boolean isRunning() {
+        if (System.nanoTime() - checkedAt >= CHECK_EVERY.toNanos() && checking.compareAndSet(false, true)) {
+            Thread t = errands.start("edge-check", () -> {
+                try {
+                    running = running();
+                } finally {
+                    checkedAt = System.nanoTime();
+                    checking.set(false);
+                }
+            });
+            if (t == null) {
+                checking.set(false);
+            }
+        }
+        return running;
+    }
+
+    @Override
+    public boolean busy() {
+        return busy.get();
+    }
+
+    /** The start or stop under way, else whose Edge it is when another comando started it; as last read. */
+    @Override
+    public String status() {
+        if (busy.get()) {
+            return "the Edge is " + (doing.isEmpty() ? "busy" : doing);
+        }
+        Entry e = seen;
+        return e != null && !owner.equals(e.owner()) ? startedBy(e) + "; only that comando stops it" : "";
+    }
+
+    /** The Edge's own log, {@code edge/log/hivemq.log} in this instance's data root. */
+    @Override
+    public Path log() {
+        return root.resolve("log").resolve("hivemq.log");
+    }
+
+    private static String startedBy(Entry e) {
+        return "started by " + InstanceName.display(e.name()) + " (" + e.owner() + ")";
+    }
+
+    /** Whether the registry names a live Edge, read now; a registry it cannot read names none. */
+    boolean running() {
+        try {
+            Entry e = read();
+            boolean live = e != null && live(e).isPresent();
+            seen = live ? e : null;
+            return live;
+        } catch (IOException e) {
+            seen = null;
+            return false;
+        }
+    }
+
+    /**
+     * Starts comando's Edge when none runs, stops it when this instance started it, and says who did otherwise; on a
+     * virtual thread. While one start or stop is under way, a second toggle changes nothing and says what is happening.
+     */
+    @Override
+    public void toggle() {
+        if (!busy.compareAndSet(false, true)) {
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO, "The Edge is " + (doing.isEmpty() ? "busy" : doing) + "; wait for it", false));
+            return;
+        }
+        Thread t = errands.start("edge-toggle", () -> {
+            try {
+                flip();
+            } finally {
+                busy.set(false);
+            }
+        });
+        if (t == null) {
+            busy.set(false);
+        }
+    }
+
+    private synchronized void flip() {
+        Entry e;
+        try {
+            e = read();
+        } catch (IOException ex) {
+            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "Cannot read " + registry
+                    + "; remove it if no comando Edge runs: " + ex.getMessage(), null));
+            return;
+        }
+        if (e != null && live(e).isEmpty()) {
+            // its process is gone, or the pid is another process's now: the entry is stale
+            LOG.log(System.Logger.Level.INFO, "stale Edge registry removed [pid=" + e.pid() + ", owner=" + e.owner() + ']');
+            remove(e);
+            e = null;
+        }
+        try {
+            if (e == null) {
+                doing = "starting";
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Starting the Edge…", false));
+                start();
+            } else if (owner.equals(e.owner())) {
+                doing = "stopping";
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Stopping the Edge…", false));
+                stop(e);
+            } else {
+                // the user asked for a stop this comando may not do: say why, where the eye is, and in the log
+                intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "Cannot stop the Edge: it was " + startedBy(e)
+                        + ", and only that comando stops it", null));
+            }
+        } finally {
+            doing = "";
+        }
+        running = running();
+        checkedAt = System.nanoTime();
+    }
+
+    private void start() {
+        Located d = distribution.get();
+        if (d.zip() == null) {
+            intents.dispatch(new Intent.Notify(Notice.Level.WARN, d.problem(), false));
+            return;
+        }
+        for (int port : ports.all()) {
+            if (taken(port)) {
+                intents.dispatch(new Intent.Notify(Notice.Level.WARN, "Cannot start the Edge: port " + port + " on 127.0.0.1 is in use by another process", false));
+                return;
+            }
+        }
+        Process p;
+        Instant began;
+        try {
+            Path home = install(d.zip());
+            prepareConfig(home.resolve("conf"), root.resolve("conf"), ports);
+            patchJmxPort(home.resolve("bin").resolve("run.sh"), ports.jmx());
+            began = Instant.now();
+            p = spawn(home);
+        } catch (IOException | RuntimeException e) {
+            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot start the Edge [root=" + root + "]: " + e.getMessage(), e));
+            return;
+        }
+        ProcessHandle h = p.toHandle();
+        Entry entry = new Entry(p.pid(), owner, name, ports, h.info().startInstant().orElse(began).toString());
+        try {
+            if (!claim(entry)) {
+                terminate(h);
+                intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Another comando started an Edge meanwhile; this one stopped", false));
+                return;
+            }
+        } catch (IOException e) {
+            terminate(h);
+            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot write " + registry + ": " + e.getMessage(), e));
+            return;
+        }
+        running = true;
+        LOG.log(System.Logger.Level.INFO, "Edge starting [pid=" + p.pid() + ", zip=" + d.zip() + ", root=" + root + ']');
+        String failure = awaitReady(p);
+        if (failure.isEmpty()) {
+            LOG.log(System.Logger.Level.INFO, "Edge up [pid=" + p.pid() + ", ports=" + ports + ']');
+            intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Edge is up: MQTT 127.0.0.1:" + ports.mqtt() + ", UI http://localhost:"
+                    + ports.api() + " (admin/hivemq)", false));
+            return;
+        }
+        if (terminate(h)) {
+            remove(entry);
+        }
+        intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, failure + "; see " + stdout(), null));
+    }
+
+    /** Waits for the admin API: empty when it answers, else why the start failed. */
+    private String awaitReady(Process p) {
+        long deadline = System.nanoTime() + readyWithin.toNanos();
+        try {
+            while (System.nanoTime() < deadline) {
+                if (up.test(ports)) {
+                    return "";
+                }
+                if (!p.isAlive()) {
+                    return "The Edge exited before it was up (exit " + p.exitValue() + ")";
+                }
+                Thread.sleep(250);
+            }
+            return "The Edge was not up within " + readyWithin.toSeconds() + " s and was stopped";
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return "The Edge's start was interrupted";
+        }
+    }
+
+    private void stop(Entry e) {
+        Optional<ProcessHandle> h = live(e);
+        if (h.isPresent() && !terminate(h.get())) {
+            intents.dispatch(Intent.Notify.logged(LOG, Notice.Level.WARN, "The Edge [pid=" + e.pid() + "] has not stopped yet", null));
+            return;
+        }
+        remove(e);
+        LOG.log(System.Logger.Level.INFO, "Edge stopped [pid=" + e.pid() + ']');
+        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Edge is down", false));
+    }
+
+    /**
+     * SIGTERM to the recorded process, then up to {@link #STOP_WAIT} for it to exit, then SIGKILL; true once it is gone.
+     * Only a process this code started and recorded comes here.
+     */
+    private static boolean terminate(ProcessHandle h) {
+        h.destroy();
+        try {
+            h.onExit().get(STOP_WAIT.toMillis(), TimeUnit.MILLISECONDS);
+            return true;
+        } catch (TimeoutException e) {
+            LOG.log(System.Logger.Level.WARNING, "the Edge did not stop within " + STOP_WAIT.toSeconds() + " s; killing it [pid=" + h.pid() + ']');
+            h.destroyForcibly();
+            try {
+                h.onExit().get(5, TimeUnit.SECONDS);
+                return true;
+            } catch (TimeoutException | ExecutionException again) {
+                return !h.isAlive();
+            } catch (InterruptedException again) {
+                Thread.currentThread().interrupt();
+                return !h.isAlive();
+            }
+        } catch (ExecutionException e) {
+            return !h.isAlive();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return !h.isAlive();
+        }
+    }
+
+    // ---- the distribution
+
+    /**
+     * The distribution: the zip named by the property, else by the environment variable, else the newest {@code
+     * hivemq-edge-full-*.zip} in {@code dir}; when there is none, a problem saying where it looked and how to name one.
+     */
+    static Located locate(String property, String env, Path dir) {
+        String named = property != null && !property.isBlank() ? property : env != null && !env.isBlank() ? env : null;
+        if (named != null) {
+            Path zip = Path.of(named.strip());
+            return Files.isRegularFile(zip) ? Located.of(zip)
+                    : new Located(null, "No Edge distribution at " + zip + " (named by -D" + ZIP_PROPERTY + " or " + ZIP_ENV + ")");
+        }
+        try (Stream<Path> files = Files.list(dir)) {
+            Optional<Path> newest = files.filter(f -> f.getFileName().toString().matches("hivemq-edge-full-.*\\.zip") && Files.isRegularFile(f))
+                    .max(Comparator.comparing(EmbeddedEdge::modified));
+            if (newest.isPresent()) {
+                return Located.of(newest.get());
+            }
+        } catch (IOException | UncheckedIOException e) {
+            // no such folder: said below
+        }
+        return new Located(null, "No Edge distribution: no hivemq-edge-full-*.zip in " + dir + "; build one there, or name a zip with -D"
+                + ZIP_PROPERTY + " or " + ZIP_ENV);
+    }
+
+    private static long modified(Path f) {
+        try {
+            return Files.getLastModifiedTime(f).toMillis();
+        } catch (IOException e) {
+            throw new UncheckedIOException(e);
+        }
+    }
+
+    /**
+     * The Edge's home, unzipped from {@code zip} when there is none yet or the zip is another or newer than the one
+     * installed ({@code edge/installed}). The old home is deleted; the data and log folders, beside it, stay.
+     */
+    Path install(Path zip) throws IOException {
+        Files.createDirectories(root);
+        Path record = root.resolve("installed");
+        Properties installed = new Properties();
+        if (Files.isRegularFile(record)) {
+            installed.load(new StringReader(Files.readString(record)));
+        }
+        String zipPath = zip.toAbsolutePath().normalize().toString();
+        long mtime = Files.getLastModifiedTime(zip).toMillis();
+        String recordedHome = installed.getProperty("home", "");
+        Path old = recordedHome.isEmpty() ? null : inRoot(recordedHome);
+        if (old != null && Files.isDirectory(old) && zipPath.equals(installed.getProperty("zip"))
+                && mtime <= Long.parseLong(installed.getProperty("mtime", "0"))) {
+            return old;
+        }
+        Path unpacking = root.resolve(".unpacking");
+        deleteTree(unpacking);
+        String top = unzip(zip, unpacking);
+        if (old != null) {
+            deleteTree(old);
+        }
+        Path home = inRoot(top);
+        deleteTree(home);
+        Files.move(unpacking.resolve(top), home);
+        deleteTree(unpacking);
+        installed.setProperty("zip", zipPath);
+        installed.setProperty("mtime", Long.toString(mtime));
+        installed.setProperty("home", top);
+        StringWriter text = new StringWriter();
+        installed.store(text, "the Edge distribution installed here");
+        AtomicFiles.writeString(record, text.toString());
+        LOG.log(System.Logger.Level.INFO, "Edge installed [zip=" + zip + ", home=" + home + ']');
+        return home;
+    }
+
+    /** A folder directly in the root, never the data or log folder; anything else is refused. */
+    private Path inRoot(String folder) throws IOException {
+        Path p = root.resolve(folder).normalize();
+        if (!root.equals(p.getParent()) || p.equals(root.resolve("data")) || p.equals(root.resolve("log"))) {
+            throw new IOException("not an Edge home in " + root + ": " + folder);
+        }
+        return p;
+    }
+
+    /** Unzips {@code zip} into {@code into}; returns its one top folder. The scripts in its {@code bin} are made executable. */
+    private static String unzip(Path zip, Path into) throws IOException {
+        String top = null;
+        try (ZipFile z = new ZipFile(zip.toFile())) {
+            for (ZipEntry e : z.stream().toList()) {
+                Path target = into.resolve(e.getName()).normalize();
+                if (!target.startsWith(into) || target.equals(into)) {
+                    throw new IOException("an entry outside the distribution's folder: " + e.getName());
+                }
+                String first = into.relativize(target).getName(0).toString();
+                if (top == null) {
+                    top = first;
+                } else if (!top.equals(first)) {
+                    throw new IOException("the distribution has more than one top folder: " + top + ", " + first);
+                }
+                if (e.isDirectory()) {
+                    Files.createDirectories(target);
+                } else {
+                    Files.createDirectories(target.getParent());
+                    try (InputStream in = z.getInputStream(e)) {
+                        Files.copy(in, target, StandardCopyOption.REPLACE_EXISTING);
+                    }
+                    if (target.getParent().getFileName().toString().equals("bin") && target.toString().endsWith(".sh")) {
+                        Set<PosixFilePermission> perms = EnumSet.copyOf(Files.getPosixFilePermissions(target));
+                        perms.addAll(EnumSet.of(PosixFilePermission.OWNER_EXECUTE, PosixFilePermission.GROUP_EXECUTE));
+                        Files.setPosixFilePermissions(target, perms);
+                    }
+                }
+            }
+        }
+        if (top == null || !Files.isDirectory(into.resolve(top))) {
+            throw new IOException("the distribution has no top folder: " + zip);
+        }
+        return top;
+    }
+
+    private static void deleteTree(Path dir) throws IOException {
+        if (!Files.exists(dir)) {
+            return;
+        }
+        try (Stream<Path> all = Files.walk(dir)) {
+            for (Path p : all.sorted(Comparator.reverseOrder()).toList()) {
+                Files.delete(p);
+            }
+        }
+    }
+
+    /** The edge-smoke configuration without its simulation adapter: both MQTT listeners and the admin API, on loopback. */
+    static String config(Ports ports) {
+        return """
+                <?xml version="1.0"?>
+                <hivemq>
+                    <mqtt-listeners>
+                        <tcp-listener><port>%d</port><bind-address>127.0.0.1</bind-address></tcp-listener>
+                        <websocket-listener><port>%d</port><bind-address>127.0.0.1</bind-address><path>/mqtt</path></websocket-listener>
+                    </mqtt-listeners>
+                    <admin-api>
+                        <enabled>true</enabled>
+                        <listeners><http-listener><port>%d</port><bind-address>127.0.0.1</bind-address></http-listener></listeners>
+                    </admin-api>
+                </hivemq>
+                """.formatted(ports.mqtt(), ports.websocket(), ports.api());
+    }
+
+    /**
+     * The Edge's configuration folder in the data root: the shipped files the folder lacks are copied from the home's
+     * {@code conf/}; {@code config.xml} is comando's template the first time, after that the saved one with only its MQTT
+     * listeners and admin API set to comando's ports, which the instances need to find one another (record 122).
+     */
+    static void prepareConfig(Path shipped, Path conf, Ports ports) throws IOException {
+        Files.createDirectories(conf);
+        if (Files.isDirectory(shipped)) {
+            try (Stream<Path> files = Files.walk(shipped)) {
+                for (Path f : files.toList()) {
+                    Path target = conf.resolve(shipped.relativize(f).toString());
+                    if (Files.isDirectory(f)) {
+                        Files.createDirectories(target);
+                    } else if (!Files.exists(target) && !f.getFileName().toString().equals("config.xml")) {
+                        Files.copy(f, target);
+                    }
+                }
+            }
+        }
+        Path config = conf.resolve("config.xml");
+        Files.writeString(config, Files.isRegularFile(config) ? enforce(Files.readString(config), ports) : config(ports));
+    }
+
+    /**
+     * {@code xml} with its {@code mqtt-listeners} and {@code admin-api} replaced by comando's, in place, and everything
+     * else as it was; a file that does not parse is replaced by the template, the old one kept beside it.
+     */
+    static String enforce(String xml, Ports ports) {
+        try {
+            javax.xml.parsers.DocumentBuilderFactory f = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+            f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+            f.setExpandEntityReferences(false);
+            org.w3c.dom.Document doc = f.newDocumentBuilder().parse(new org.xml.sax.InputSource(new StringReader(xml)));
+            org.w3c.dom.Document ours = f.newDocumentBuilder().parse(new org.xml.sax.InputSource(new StringReader(config(ports))));
+            org.w3c.dom.Element top = doc.getDocumentElement();
+            for (String name : List.of("mqtt-listeners", "admin-api")) {
+                org.w3c.dom.Node replacement = doc.importNode(ours.getElementsByTagName(name).item(0), true);
+                org.w3c.dom.NodeList have = top.getElementsByTagName(name);
+                if (have.getLength() > 0 && have.item(0).getParentNode() == top) {
+                    top.replaceChild(replacement, have.item(0));
+                } else if (name.equals("mqtt-listeners")) {
+                    top.insertBefore(replacement, top.getFirstChild());
+                } else {
+                    top.appendChild(replacement);
+                }
+            }
+            javax.xml.transform.Transformer t = javax.xml.transform.TransformerFactory.newInstance().newTransformer();
+            StringWriter out = new StringWriter();
+            t.transform(new javax.xml.transform.dom.DOMSource(doc), new javax.xml.transform.stream.StreamResult(out));
+            return out.toString();
+        } catch (Exception e) {
+            LOG.log(System.Logger.Level.WARNING, "the Edge's config.xml does not parse; comando's template replaces it: " + e.getMessage());
+            return config(ports);
+        }
+    }
+
+    /** The run script's JMX port, 9010 as shipped, set to {@code port}. */
+    static void patchJmxPort(Path runScript, int port) throws IOException {
+        String s = Files.readString(runScript);
+        String patched = s.replaceAll("jmxremote\\.port=\\d+", "jmxremote.port=" + port);
+        if (!patched.equals(s)) {
+            Files.writeString(runScript, patched);
+        }
+    }
+
+    /**
+     * Runs the home's {@code bin/run.sh}, which execs Java: the process is the Edge's. Its output goes to {@code
+     * edge/stdout.log}; the data and log folders are named to it, the JMX listener held on loopback, and the user's own
+     * {@code HIVEMQ_*} settings are not passed on.
+     */
+    private Process spawn(Path home) throws IOException {
+        Files.createDirectories(root.resolve("data"));
+        Files.createDirectories(root.resolve("log"));
+        ProcessBuilder pb = new ProcessBuilder("/bin/bash", "bin/run.sh").directory(home.toFile()).redirectErrorStream(true)
+                .redirectOutput(ProcessBuilder.Redirect.appendTo(stdout().toFile()));
+        Map<String, String> env = pb.environment();
+        env.keySet().removeIf(k -> k.startsWith("HIVEMQ_"));
+        env.put("HIVEMQ_DATA_FOLDER", root.resolve("data").toString());
+        env.put("HIVEMQ_LOG_FOLDER", root.resolve("log").toString());
+        // the configuration lives beside the data, outside the home a newer zip replaces: adapters, bridges and every
+        // other setting the user or the Edge's UI saved survive a restart and a reinstall
+        env.put("HIVEMQ_CONFIG_FOLDER", root.resolve("conf").toString());
+        env.put("JAVA_OPTS", "-Dcom.sun.management.jmxremote.host=127.0.0.1 -Djava.rmi.server.hostname=127.0.0.1");
+        Process p = pb.start();
+        p.getOutputStream().close();
+        return p;
+    }
+
+    private Path stdout() {
+        return root.resolve("stdout.log");
+    }
+
+    /**
+     * Something listens on {@code port} on loopback, or the port cannot be bound there as a listener binds it, with
+     * {@code SO_REUSEADDR}: a connection the stopped Edge closed lingers in TIME_WAIT for up to a minute, and a bind
+     * without it fails on that, refusing a start the Edge itself would make (2026-10-29).
+     */
+    static boolean taken(int port) {
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress(LOOPBACK, port), 200);
+            return true;
+        } catch (IOException e) {
+            // nobody answers; whether it can be bound decides
+        }
+        try (ServerSocket s = new ServerSocket()) {
+            s.setReuseAddress(true);
+            s.bind(new InetSocketAddress(LOOPBACK, port));
+            return false;
+        } catch (IOException e) {
+            return true;
+        }
+    }
+
+    /** The admin API answers an HTTP request, whatever its status. */
+    private static boolean answers(Ports ports) {
+        try {
+            HttpURLConnection c = (HttpURLConnection) URI.create("http://127.0.0.1:" + ports.api() + "/").toURL().openConnection();
+            c.setConnectTimeout(1_000);
+            c.setReadTimeout(2_000);
+            try {
+                return c.getResponseCode() > 0;
+            } finally {
+                c.disconnect();
+            }
+        } catch (IOException e) {
+            return false;
+        }
+    }
+
+    // ---- the registry
+
+    /** The registry's entry, or null when there is none. */
+    private Entry read() throws IOException {
+        return Files.isRegularFile(registry) ? JsonFile.JSON.readValue(registry.toFile(), Entry.class) : null;
+    }
+
+    /** The entry's process when it lives and is the one recorded, not another on its pid. */
+    private static Optional<ProcessHandle> live(Entry e) {
+        Optional<ProcessHandle> h = ProcessHandle.of(e.pid()).filter(ProcessHandle::isAlive);
+        if (h.isEmpty() || e.started() == null) {
+            return h;
+        }
+        Optional<Instant> began = h.get().info().startInstant();
+        try {
+            if (began.isPresent() && Duration.between(Instant.parse(e.started()), began.get()).abs().compareTo(SAME_PROCESS) > 0) {
+                return Optional.empty();
+            }
+        } catch (RuntimeException unparsable) {
+            return Optional.empty();
+        }
+        return h;
+    }
+
+    /** Writes {@code e} unless an entry exists: a temporary file linked into place, which fails when another got there first. */
+    private boolean claim(Entry e) throws IOException {
+        Path tmp = registry.resolveSibling(registry.getFileName() + "." + ProcessHandle.current().pid() + ".tmp");
+        Files.write(tmp, JsonFile.JSON.writeValueAsBytes(e));
+        try {
+            Files.createLink(registry, tmp);
+            return true;
+        } catch (FileAlreadyExistsException taken) {
+            return false;
+        } finally {
+            Files.deleteIfExists(tmp);
+        }
+    }
+
+    /** Removes the registry when it still names {@code e}'s process. */
+    private void remove(Entry e) {
+        try {
+            Entry now = read();
+            if (now != null && now.pid() == e.pid() && Objects.equals(now.owner(), e.owner())) {
+                Files.deleteIfExists(registry);
+            }
+        } catch (IOException ex) {
+            LOG.log(System.Logger.Level.WARNING, "cannot remove " + registry + ": " + ex.getMessage());
+        }
+    }
+
+    @Override
+    public void close() {
+        // outside the monitor: a start or stop under way holds it, and the close waits for it, bounded
+        try {
+            errands.close();
+        } finally {
+            closeEdge();
+        }
+    }
+
+    /** Stops the Edge when this instance started it, as QuestDB stops with comando; another's is left running. */
+    private synchronized void closeEdge() {
+        try {
+            Entry e = read();
+            if (e == null || !owner.equals(e.owner())) {
+                return;
+            }
+            Optional<ProcessHandle> h = live(e);
+            if (h.isEmpty() || terminate(h.get())) {
+                remove(e);
+                LOG.log(System.Logger.Level.INFO, "Edge stopped with comando [pid=" + e.pid() + ']');
+            }
+        } catch (IOException ex) {
+            LOG.log(System.Logger.Level.WARNING, "cannot read " + registry + " at close: " + ex.getMessage());
+        }
+    }
+}

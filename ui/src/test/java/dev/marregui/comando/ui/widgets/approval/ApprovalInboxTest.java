@@ -128,6 +128,21 @@ class ApprovalInboxTest {
         }
     }
 
+    /** As a shown window would: every cached size dropped, then laid out from the top. */
+    private static void relayout(Component c) {
+        invalidateAll(c);
+        layout(c);
+    }
+
+    private static void invalidateAll(Component c) {
+        c.invalidate();
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                invalidateAll(child);
+            }
+        }
+    }
+
     private List<Component> cards() {
         return cardsOf(inbox);
     }
@@ -348,7 +363,7 @@ class ApprovalInboxTest {
 
         press(card, KeyEvent.VK_L, 0);
         assertThat(sent).isEmpty();
-        assertThat(((JLabel) named(card, "confirm")).getText()).isEqualTo("Press L again to always allow Bash(git commit:*)");
+        assertThat(((JTextComponent) named(card, "confirm")).getText()).isEqualTo("Press L again to always allow Bash(git commit:*)");
 
         now.addAndGet(ApprovalInbox.CONFIRM_MILLIS - 1);
         press(card, KeyEvent.VK_L, 0);
@@ -378,6 +393,43 @@ class ApprovalInboxTest {
         assertThat(named(card, "confirm").getParent().isVisible()).isTrue();
         ((AbstractButton) named(card, "confirm-always")).doClick();
         assertThat(decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS));
+    }
+
+    /// A rule longer than the card is wide: the confirmation wraps, and its buttons lie inside the card, whole, with the
+    /// card grown to hold them (2026-10-29: the buttons wrapped below a one-row confirmation and were clipped).
+    @Test
+    void aLongRulesConfirmationKeepsItsButtonsInsideTheCard() throws Exception {
+        String command = "CLAUDE_CONFIG_DIR=/tmp/k python3 install/kit.py instance new Expert --slug expert --root /tmp/k "
+                + "--data-root /tmp/d --seed /tmp/s/expert-seed.lst --seed-from /tmp/b 2>&1";
+        ApprovalInbox wide = new ApprovalInbox(new WidgetContext(sent::add, new ActionRegistry()), now::get, focus,
+                (tool, field) -> new PermissionRules.Rules(List.of(new PermissionRules.Rule("Bash", "cd:*"),
+                        new PermissionRules.Rule("Bash", command), new PermissionRules.Rule("Bash", "head:*")), true));
+        try {
+            SwingUtilities.invokeAndWait(() -> {
+                wide.render(List.of(bash(1, "cd /tmp && " + command + " | head -60")));
+                wide.component().setSize(700, 900);
+                layout(wide.component());
+            });
+            Component card = cardsOf(wide).getFirst();
+            int before = card.getHeight();
+            SwingUtilities.invokeAndWait(() -> {
+                ((AbstractButton) named(card, "always")).doClick();
+                relayout(wide.component());
+                relayout(wide.component());
+            });
+            assertThat(card.getHeight()).as("the card grows to hold the confirmation").isGreaterThan(before);
+            for (String name : List.of("confirm-always", "confirm-cancel")) {
+                Component b = named(card, name);
+                java.awt.Rectangle r = SwingUtilities.convertRectangle(b.getParent(), b.getBounds(), card);
+                assertThat(r.height).as(name + " has its height").isEqualTo(b.getPreferredSize().height);
+                assertThat(r.y + r.height).as(name + " lies inside the card").isLessThanOrEqualTo(card.getHeight());
+                assertThat(r.x + r.width).as(name + " lies inside the card's width").isLessThanOrEqualTo(card.getWidth());
+            }
+            Component text = named(card, "confirm");
+            assertThat(text.getWidth()).as("the confirmation wraps within the card").isLessThanOrEqualTo(card.getWidth());
+        } finally {
+            wide.unmount();
+        }
     }
 
     /// Escape first cancels a pending Always and hides it; a second Escape denies.
@@ -426,7 +478,7 @@ class ApprovalInboxTest {
             Component card = cardsOf(compound).getFirst();
             assertThat(((JTextComponent) named(card, "rule")).getText()).isEqualTo("Always: Bash(git status), Bash(npm test:*)");
             press(card, KeyEvent.VK_L, 0);
-            assertThat(((JLabel) named(card, "confirm")).getText()).isEqualTo("Press L again to always allow Bash(git status), Bash(npm test:*)");
+            assertThat(((JTextComponent) named(card, "confirm")).getText()).isEqualTo("Press L again to always allow Bash(git status), Bash(npm test:*)");
             press(card, KeyEvent.VK_L, 0);
             assertThat(decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS));
         } finally {

@@ -15,7 +15,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [Menus] declares the menu bar, the corner buttons, their icons, tooltips and the areas of commands in no menu.
 /// - The bar is Edit then Help, flat, the palette then the help items.
-/// - The corner holds the shell, the plots and the server only when there is one.
+/// - The corner holds the shell, the plots, and the server and the Edge only when there are.
 /// - Every item and button has an icon that exists and a tooltip of at most 80 characters; no tooltip outlives its item.
 /// - A command is in a menu or in an area, never both.
 /// - Separators sit only between entries.
@@ -54,19 +54,27 @@ class MenusTest {
         assertThat(bar).extracting(MenuEntry.Menu::title).as("after macOS's application menu").containsExactly("Edit", "Help");
         assertThat(ids(bar)).containsExactly(
                 "edit.undo", "edit.redo", "edit.cut", "edit.copy", "edit.paste", "edit.selectAll",
-                "view.palette", "help.tutorial", "help.keys", "help.markdown", "help.log", "help.dataRoot");
+                "view.palette", "help.tutorial", "help.keys", "help.markdown", "help.log", "help.edgeLog", "help.questDbLog", "help.dataRoot");
         assertThat(submenus(bar)).as("flat: the themes are the swatch's").isEmpty();
         assertThat(bar.get(1).entries().stream().filter(MenuEntry.Separator.class::isInstance).count())
                 .as("one separator between the palette and the help").isEqualTo(1);
     }
 
-    /// [Menus#corner] groups terminal, plot and server buttons, and leaves the server group out without an embedded server.
+    /// [Menus#corner] groups terminal, plot, server and Edge buttons, the Edge's after the server's, and leaves the server
+    /// or the Edge group out when comando has none; [Menus#toggles] lists the same pairs for the Connections tab's menu.
     @Test
-    void theCornerHoldsTheShellThePlotsAndTheServerOnlyWhenThereIsOne() {
-        assertThat(Menus.corner(true)).containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"),
-                List.of("server.start", "server.stop"));
-        assertThat(Menus.corner(false)).as("no embedded server, no button for it")
+    void theCornerHoldsTheShellThePlotsTheServerAndTheEdgeOnlyWhenThereAreSome() {
+        assertThat(Menus.corner(true, true)).containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"),
+                List.of("server.start", "server.stop"), List.of("edge.start", "edge.stop"));
+        assertThat(Menus.corner(false, false)).as("no embedded server or Edge, no button for them")
                 .containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"));
+        assertThat(Menus.corner(true, false)).as("no Edge, no button for it")
+                .containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"), List.of("server.start", "server.stop"));
+        assertThat(Menus.corner(false, true)).as("no embedded server, the Edge's button alone")
+                .containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"), List.of("edge.start", "edge.stop"));
+        assertThat(Menus.toggles(true, true)).containsExactly("server.start", "server.stop", "edge.start", "edge.stop");
+        assertThat(Menus.toggles(false, false)).isEmpty();
+        assertThat(Menus.AREAS).containsEntry("edge.start", "Connection").containsEntry("edge.stop", "Connection");
     }
 
     /// Every placed id has an icon whose SVG is a resource and a non-blank tooltip of at most 80 characters, the bar's
@@ -74,7 +82,7 @@ class MenusTest {
     @Test
     void everyItemAndButtonHasAnIconThatExistsAndATooltip() {
         List<String> placed = new ArrayList<>(ids(Menus.bar()));
-        Menus.corner(true).forEach(placed::addAll);
+        Menus.corner(true, true).forEach(placed::addAll);
         for (String id : placed) {
             assertThat(Menus.icon(id)).as(id + " has an icon").isNotNull();
             assertThat(MenusTest.class.getResource("/icons/" + Menus.icon(id) + ".svg")).as(id + "'s icon is a resource").isNotNull();
@@ -95,7 +103,7 @@ class MenusTest {
         assertThat(new HashSet<>(placed)).hasSameSizeAs(placed);
         assertThat(Menus.AREAS.keySet()).doesNotContainAnyElementsOf(placed);
         assertThat(Menus.AREAS).as("the corner's commands are in no menu: each has its area")
-                .containsKeys(Menus.corner(true).stream().flatMap(List::stream).toArray(String[]::new));
+                .containsKeys(Menus.corner(true, true).stream().flatMap(List::stream).toArray(String[]::new));
         assertThat(Menus.AREAS).containsEntry("run", "Run").containsEntry("session.model.opus", "Session ▸ Model")
                 .containsEntry("panel.9", "Panels").containsEntry("theme.slate_silver", "Theme").containsEntry("view.results.alt", "Window").doesNotContainKey("view.lastPrompt");
     }
