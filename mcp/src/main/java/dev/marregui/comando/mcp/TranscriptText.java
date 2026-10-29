@@ -84,18 +84,21 @@ final class TranscriptText {
         int start = prompt;
         int ends = 0;
         int lastEnd = -1;
+        boolean lastError = false;
+        // each block is read once: a clear() between two reads of one index would turn the second into null
         for (int i = prompt + 1; i < size; i++) {
-            if (!(t.get(i) instanceof Block.TurnEnd)) {
+            if (!(t.get(i) instanceof Block.TurnEnd end)) {
                 continue;
             }
             if (ends == open) {
-                return new Turn(true, ((Block.TurnEnd) t.get(i)).error(), text(t, start, i));
+                return new Turn(true, end.error(), text(t, start, i));
             }
             ends++;
             start = i;
             lastEnd = i;
+            lastError = end.error();
         }
-        return lastEnd < 0 ? new Turn(false, false, text(t, prompt, size)) : new Turn(true, ((Block.TurnEnd) t.get(lastEnd)).error(), text(t, prompt, lastEnd));
+        return lastEnd < 0 ? new Turn(false, false, text(t, prompt, size)) : new Turn(true, lastError, text(t, prompt, lastEnd));
     }
 
     /** Claude's top-level text strictly between {@code from} and {@code to}. */

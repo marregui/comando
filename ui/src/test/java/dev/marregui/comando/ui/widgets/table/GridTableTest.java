@@ -17,7 +17,44 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - find forward and backward wraps at the ends, ignoring case
 /// - a find without a match counts zero and moves nothing
 /// - CSV quotes a field holding a carriage return or a newline
+/// - find is bounded by cells and matches without regard to case; a copy is capped, selected or not
 class GridTableTest {
+
+    /// A find looks at the rows whose cells fit the bound: all of a narrow result, fewer of a wide one, at least one.
+    @Test
+    void findIsBoundedByCellsNotRows() {
+        assertThat(GridTable.findRows(10, 1)).isEqualTo(10);
+        assertThat(GridTable.findRows(1_000_000, 1)).as("the row bound").isEqualTo(GridTable.MAX_EDT_ROWS);
+        assertThat(GridTable.findRows(1_000_000, 100)).as("a wide result").isEqualTo((int) (GridTable.MAX_EDT_CELLS / 100));
+        assertThat(GridTable.findRows(5, 10_000_000)).as("at least the first row").isEqualTo(1);
+    }
+
+    /// The cell match ignores case and needs no allocation per cell: a needle at the start, the end, absent, or longer.
+    @Test
+    void cellMatchIgnoresCase() {
+        String needle = GridTable.lowerCase("MaTcH");
+        assertThat(GridTable.containsLowerCase(new StringBuilder("A MATCH here"), needle)).isTrue();
+        assertThat(GridTable.containsLowerCase(new StringBuilder("ends in match"), needle)).isTrue();
+        assertThat(GridTable.containsLowerCase(new StringBuilder("matc"), needle)).isFalse();
+        assertThat(GridTable.containsLowerCase(new StringBuilder("no hit"), needle)).isFalse();
+    }
+
+    /// Copying every row selected of a result larger than the cap copies the cap: the header and the capped rows.
+    @Test
+    void aCopyOfAllRowsSelectedIsCapped() throws Exception {
+        List<List<String>> rows = new ArrayList<>();
+        for (int i = 0; i < GridTable.MAX_COPY_ROWS + 5; i++) {
+            rows.add(List.of("r"));
+        }
+        GridTable grid = new GridTable();
+        grid.setSource(TableSource.of(new ViewSpec.Table(List.of("v"), rows)), "t.csv");
+        AtomicInteger lines = new AtomicInteger();
+        SwingUtilities.invokeAndWait(() -> {
+            grid.table().selectAll();
+            lines.set((int) grid.copyText().lines().count());
+        });
+        assertThat(lines.get()).isEqualTo(GridTable.MAX_COPY_ROWS + 1);
+    }
 
     /** Ten rows of one column; rows 3, 5 and 8 hold the word. */
     private static GridTable grid() {

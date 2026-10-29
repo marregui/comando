@@ -27,18 +27,19 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
-import java.util.Locale;
 
 /**
  * A grid over a {@link TableSource}. JTable paints only the visible rows; cells format into one reused
  * buffer. Sorting keeps a permutation of row indices instead of a sorter over boxed values. Sort and find run on the
- * event thread, so both are bounded to {@link #MAX_EDT_ROWS} rows, a few tens of milliseconds: a larger result is not
- * sorted, and find looks at its first rows. A growing source adds rows without rebuilding the columns.
+ * event thread: a sort is bounded to {@link #MAX_EDT_ROWS} rows, and a larger result is not sorted; a find, whose cost
+ * is rows times columns, to {@link #MAX_EDT_CELLS} cells, and looks at the first rows that fit. A copy takes at most
+ * {@link #MAX_COPY_ROWS} rows, selected or not. A growing source adds rows without rebuilding the columns.
  */
 public final class GridTable implements Searchable, Copyable, Exportable {
 
     static final int MAX_EDT_ROWS = 200_000;
-    private static final int MAX_COPY_ROWS = 200_000;
+    static final long MAX_EDT_CELLS = 2_000_000L;
+    static final int MAX_COPY_ROWS = 200_000;
 
     final Model model = new Model(); // package-visible for tests
     private final JTable table = new JTable(model);
@@ -257,9 +258,9 @@ public final class GridTable implements Searchable, Copyable, Exportable {
         if (s == null || text.isEmpty()) {
             return 0;
         }
-        String needle = text.toLowerCase(Locale.ROOT);
-        int rows = Math.min(model.rows, MAX_EDT_ROWS);
+        String needle = lowerCase(text);
         int cols = s.columnCount();
+        int rows = findRows(model.rows, cols);
         long cells = (long) rows * cols;
         int matches = 0;
         int firstRow = -1;
@@ -275,7 +276,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
             int c = (int) (i % cols);
             sb.setLength(0);
             s.format(model.sourceRow(r), c, sb);
-            if (sb.toString().toLowerCase(Locale.ROOT).contains(needle)) {
+            if (containsLowerCase(sb, needle)) {
                 matches++;
                 if (firstRow < 0) {
                     firstRow = r;
@@ -309,6 +310,35 @@ public final class GridTable implements Searchable, Copyable, Exportable {
         return matches;
     }
 
+    /** The rows a find looks at: the first of {@code rows} whose cells, {@code cols} each, fit {@link #MAX_EDT_CELLS}. */
+    static int findRows(int rows, int cols) {
+        return (int) Math.min(Math.min(rows, MAX_EDT_ROWS), Math.max(1L, MAX_EDT_CELLS / Math.max(1, cols)));
+    }
+
+    /** {@code text} lowercased char by char, as {@link #containsLowerCase} compares. */
+    static String lowerCase(String text) {
+        char[] a = text.toCharArray();
+        for (int i = 0; i < a.length; i++) {
+            a[i] = Character.toLowerCase(a[i]);
+        }
+        return new String(a);
+    }
+
+    /** Whether {@code text}, lowercased char by char, holds {@code needle}, from {@link #lowerCase}; allocates nothing. */
+    static boolean containsLowerCase(CharSequence text, String needle) {
+        int n = needle.length();
+        for (int i = 0, last = text.length() - n; i <= last; i++) {
+            int j = 0;
+            while (j < n && Character.toLowerCase(text.charAt(i + j)) == needle.charAt(j)) {
+                j++;
+            }
+            if (j == n) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public void clearFind() {
         findRow = -1;
@@ -327,7 +357,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
             out.append(c == 0 ? "" : "\t").append(s.columnName(c));
         }
         out.append('\n');
-        int n = rows.length > 0 ? rows.length : Math.min(model.rows, MAX_COPY_ROWS);
+        int n = Math.min(rows.length > 0 ? rows.length : model.rows, MAX_COPY_ROWS);
         for (int i = 0; i < n; i++) {
             int r = model.sourceRow(rows.length > 0 ? rows[i] : i);
             for (int c = 0; c < s.columnCount(); c++) {

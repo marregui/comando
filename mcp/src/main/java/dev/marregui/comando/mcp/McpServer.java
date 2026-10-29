@@ -126,7 +126,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
                 default -> send(ex, 405, null); // no server-initiated stream
             }
         } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.ERROR, "mcp request failed", e);
+            LOG.log(System.Logger.Level.ERROR, "cannot answer an MCP request [method=" + ex.getRequestMethod() + ", path=" + ex.getRequestURI().getPath() + ']', e);
         }
     }
 

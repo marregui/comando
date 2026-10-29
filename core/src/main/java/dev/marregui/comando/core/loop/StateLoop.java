@@ -194,7 +194,7 @@ public final class StateLoop implements IntentSink, AutoCloseable {
                     try {
                         l.onState(previous, t.state());
                     } catch (RuntimeException e) {
-                        LOG.log(System.Logger.Level.ERROR, "listener failed", e);
+                        LOG.log(System.Logger.Level.ERROR, "cannot notify a listener [listener=" + l.getClass().getName() + ']', e);
                     }
                 }
             }

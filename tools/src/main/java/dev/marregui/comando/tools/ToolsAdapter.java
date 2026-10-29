@@ -369,7 +369,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                 watchedFolders.forEach(f -> readFolder(f, false));
             } catch (RuntimeException e) {
                 // a task that throws is never run again: log and keep polling
-                LOG.log(System.Logger.Level.WARNING, "folder poll failed", e);
+                LOG.log(System.Logger.Level.WARNING, "cannot poll the folders [folders=" + watchedFolders.size() + ']', e);
             }
         }, every.toMillis(), every.toMillis(), TimeUnit.MILLISECONDS);
     }
@@ -728,7 +728,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             try {
                 sink.dispatch(trash(folder, items));
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "moving to the Trash failed", e);
+                LOG.log(System.Logger.Level.WARNING, "cannot move to the Trash [root=" + root + ", items=" + items.size() + ']', e);
                 sink.dispatch(new Intent.Notify(Notice.Level.ERROR, "Cannot move to the Trash: " + e, false));
             } finally {
                 trashing.unlock();

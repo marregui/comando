@@ -104,7 +104,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                     SubagentFiles.find(settings.projectsDir(), event.path("conversation").asString(""), event.path("tool_use_id").asString(""), json)
                             .ifPresent(f -> event.set("spend", SubagentFiles.spend(f.transcript(), json)));
                 } catch (RuntimeException e) {
-                    LOG.log(System.Logger.Level.WARNING, "cannot read a sub-agent's spend", e);
+                    LOG.log(System.Logger.Level.WARNING, "cannot read a sub-agent's spend [toolUseId=" + event.path("tool_use_id").asString("") + ']', e);
                 }
                 log.write(event);
             });
@@ -855,7 +855,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 }
                 usageMetrics(codexUsage);
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.ERROR, "plan usage read failed", e);
+                LOG.log(System.Logger.Level.ERROR, "cannot read the plan usage", e);
             }
         }, 0, every.toMillis(), TimeUnit.MILLISECONDS);
     }
