@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-19 | accepted; its Claude Code kit… item removed by [record 80](0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md) | Miguel and Claude |
+| 2026-10-19 | accepted; its Claude Code kit… item removed by [record 80](0080-the-kit-is-a-claude-code-setup-comando-runs-its-sessions-on.md); its menu bar replaced by [record 114](0114-help-menu-and-corner-buttons.md) | Miguel and Claude |
 
 ## 1. Context
 

@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-18 | accepted; following and large files amended on 2026-10-18 | Miguel and Claude |
+| 2026-10-18 | accepted; following and large files amended on 2026-10-18; its view amended by [record 109](0109-a-sub-agent-is-a-session-tab.md) | Miguel and Claude |
 
 ## 1. Context
 

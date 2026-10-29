@@ -84,7 +84,7 @@ flowchart LR
   CL -->|"SessionInit, SessionTurnEnded"| Q
   CC["Claude Code"] -->|"MCP calls"| MC
   CL --- CC
-  MC -->|"ShowView, ApprovalRequested"| Q
+  MC -->|"ShowView, ApprovalRequested, PromptSession"| Q
   TL -->|"CommandFinished, FolderLoaded, ReposLoaded"| Q
 ```
 
@@ -136,7 +136,7 @@ A record of the sealed interface `Intent`; anything that changes the state is on
 | Running text | `RunText` (target auto, SQL or Claude), `RefreshSql` (a live plot's re-run), `CancelRun` |
 | SQL events | `SqlStarted`, `SqlRows`, `SqlCompleted`, `SqlFailed`, `SqlCancelled`, `SqlWarning` |
 | Connections | `SaveConnection`, `RemoveConnection`, `OpenConnection`, `CloseConnection`, `TestConnection`, `ExploreSchema`, `SchemaChanged`, `ConnectionOpened`, `ConnectionClosed`, `ConnectionFailed`, `ConnectionLost`, `ConnectionTested` |
-| Sessions | `SaveSession`, `RemoveSession`, `ImportSessions`, `StartSession`, `StartFresh`, `StopSession`, `InterruptSession`, `Checkpoint`, `SessionCommand`, `OrderSessions`, `ClearTranscript`, `SetSessionModel`, `SetSessionEffort`, `SessionStarted`, `SessionInit`, `SessionActivity`, `SessionTurnRunning`, `SessionTurnEnded`, `SessionTasksChanged`, `SessionExited`, `SessionBranch`, `PlanUsageRead` |
+| Sessions | `SaveSession`, `RemoveSession`, `ImportSessions`, `StartSession`, `StartFresh`, `StopSession`, `InterruptSession`, `Checkpoint`, `SessionCommand`, `OrderSessions`, `ClearTranscript`, `SetSessionModel`, `SetSessionEffort`, `SessionStarted`, `SessionInit`, `SessionActivity`, `SessionTurnRunning`, `SessionTurnEnded`, `SessionTasksChanged`, `SessionExited`, `SessionBranch`, `SessionRanAt` (the model and effort a turn ran at), `SessionContext` (record 120), `PromptSession` (one session prompting another, record 44, and an instance's consult, record 123), `PlanUsageRead` |
 | Approvals | `ApprovalRequested`, `ApprovalAnswered`, `ApprovalWithdrawn` |
 | Views | `ShowView`, `RefreshView`, `CloseView`, `PinView`, `SelectLowerTab`, `Arrange`, `SessionLayout`, `SessionFocus` |
 | Editor and files | `EditPanel`, `OpenFile`, `OpenSubagent` |
@@ -246,7 +246,7 @@ code outside the kinds below starts a thread or an executor.
 | K2 | Watchdog | must run while what it watches is held | one `watchdog` (platform) for the EDT and the reducer, from `Watchdog.shared()`; started with the first look, ended after the last |
 | K3 | Session reader | reads a pipe live: a pipe read holds its operating-system thread even on a virtual thread (measured on JDK 25: 100 blocked readers, 101 carriers) | `claude-out-<session>` (platform), one per running session |
 | K4 | Strand | sequential work on one resource; its waits hold no operating-system thread | one virtual thread each, from `Threads.strand` or, with timers, `Threads.timedStrand` (the JDK's one delay thread keeps the timers) |
-| K5 | Errand | one blocking call started by a gesture or an event, then gone | a virtual thread from its owner's `Errands` (`App`, `ToolsAdapter`, `EmbeddedQuestDb`, `Peers`, `DbAdapter`'s connection tests, the window's `UiErrands`), interrupted and waited for at the owner's close |
+| K5 | Errand | one blocking call started by a gesture or an event, then gone | a virtual thread from its owner's `Errands` (`App`, `ToolsAdapter`, `EmbeddedQuestDb`, `EmbeddedEdge`, `Peers`, `DbAdapter`'s connection tests, the window's `UiErrands`), interrupted and waited for at the owner's close |
 | K6 | Fork | a thread its caller collects in the same call, with a bound | a virtual thread from `Threads.fork` |
 
 The rest of a running process is not comando's: the JVM's (GC, compiler, VM), AWT's and Java2D's, the virtual threads'
@@ -292,12 +292,14 @@ file of a unique name beside the target, moved over it atomically where the file
 | `peers` | K4, timed | this instance's presence on the comando Edge, sent when it changed, looked at every 2 s |
 | `peer-broker`, `peer-messages` | K4, timed; K4 | whether the registry names a live Edge, every 5 s, connecting or leaving; the MQTT client's callbacks and the messages to their handlers, in order |
 | `claude-in-`, `claude-exit-<session>` | K6 | the stdin queue; the wait for the process's exit, then the stderr tail |
-| `git-out`, `git-err`, `tool-output-<run>`, `keychain-output`, `claude-version` | K6 | one process's output while its caller waits for it, bounded |
+| `tool-output-<run>` | K6 | one streamed run's output while its caller waits for it, bounded |
+| `terminal-job`, `transcript-layout-<n>` | K6 | each shell's foreground program, by `ps`, one per shell, joined within one bound; a transcript's stale blocks laid out across forks, joined in the same call |
 | `gradle-<run>`, `tool-kill-<run>`, `folder-read`, `repo-read`, `file-trash` | K5 (`ToolsAdapter`) | a run's process; SIGKILL what a stop left alive after 2 s; folder and repository reads; moving files to the Trash |
-| `claude-version`, `questdb-toggle` | K5 (`App`, `EmbeddedQuestDb`) | the start-up check; one start or stop of the embedded QuestDB |
+| `claude-version`, `questdb-toggle`, `edge-toggle`, `edge-check` | K5 (`App`, `EmbeddedQuestDb`, `EmbeddedEdge`) | the start-up check; one start or stop of the embedded QuestDB or of the comando Edge; the Edge registry read at most once a second |
+| `db-test-<connection>` | K5 (`DbAdapter`) | one connection test |
 | `peer-answer` | K5 (`Peers`) | one question from another instance: its consult session made and prompted, the wait for the turn, the reply |
-| `open-file`, `show-file`, `log-entry`, `open-link`, `note-link`, `reveal`, `external-editor`, `notify`, `export`, `plot-prepare`, `diff-compute`, `folder-facts`, `read-conversations`, `opened-files`, `kit-status`, `brain-backup`, `write-tutorial`, `show-tutorial`, `pty-preload`, `terminal-exit` | K5 (`UiErrands`) | one blocking call each, off the EDT |
-| MCP requests; a connection test, a cancel | per-task virtual executors | JSON-RPC (an `approve` call waits for its card); `DbAdapter`'s testers and cancellers |
+| `open-file`, `show-file`, `log-entry`, `open-link`, `note-link`, `reveal`, `external-editor`, `notify`, `export`, `plot-prepare`, `diff-compute`, `folder-facts`, `read-conversations`, `opened-files`, `kit-status`, `brain-backup`, `write-tutorial`, `show-tutorial`, `pty-preload`, `terminal-exit`, `terminal-jobs`, `terminal-kill`, `outline`, `kit-jobs`, `kit-jobs-save`, `kit-jobs-apply`, `kit-jobs-run` | K5 (`UiErrands`) | one blocking call each, off the EDT |
+| MCP requests; a cancel | per-task virtual executors | JSON-RPC (an `approve` call waits for its card); `DbAdapter`'s cancellers |
 | `exit`, `shutdown` | platform, at quit only | close the application after Quit, or from the shutdown hook |
 
 How work crosses threads:

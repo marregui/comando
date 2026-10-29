@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-27 | accepted | Miguel and Claude |
+| 2026-10-27 | accepted; its links extended to every card by [record 108](0108-links-in-every-card.md) | Miguel and Claude |
 
 ## 1. Context
 

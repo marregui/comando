@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-27 | accepted; the folder groups' headers replaced by rows by [record 118](0118-brain-and-kit-are-rows-each-one-unit.md) | Miguel and Claude |
+| 2026-10-27 | accepted; the folder groups' headers replaced by rows by [record 118](0118-brain-and-kit-are-rows-each-one-unit.md); its folder icons in a colour per kind replaced by [record 100](0100-a-theme-is-four-tiers-of-tokens.md) | Miguel and Claude |
 
 ## 1. Context
 
