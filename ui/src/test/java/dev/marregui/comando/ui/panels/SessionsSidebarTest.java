@@ -389,9 +389,10 @@ class SessionsSidebarTest {
         assertThat(first.isEnabled()).as("focus elsewhere: the session's first panel, empty, asks nothing").isFalse();
     }
 
-    /// A click on a name shows its card beside the widest row at once; moving onto another name switches the card after a
-    /// short follow, onto a control tells the card the pointer left, and a closed card, or a double click that opens the
-    /// session, stops the following.
+    /// A click on a name selects and shows no card; a click on the ⓘ of the row the pointer is over shows its card beside
+    /// the widest row at once (2026-10-29: so a double click on the name acts with no card flashing up); moving onto another
+    /// name switches the card after a short follow, onto a control tells the card the pointer left, and a closed card, or
+    /// a double click that opens the session, stops the following.
     @Test
     @SuppressWarnings("unchecked")
     void aClickOnASessionsNameShowsItsCardWhichFollowsThePointerOntoOtherNamesUntilItCloses() throws Exception {
@@ -448,7 +449,12 @@ class SessionsSidebarTest {
         assertThat(told).as("resting on a name shows nothing").isEmpty();
         assertThat(sidebar.following()).isFalse();
         click(list, workName, 1);
-        assertThat(told).as("a click on the name shows its card, at once").containsExactly("show work " + workRow.y);
+        assertThat(told).as("a click on the name selects: no card").isEmpty();
+        Rectangle workInfo = on(() -> sidebar.controlBounds(iWork, SessionRow.Control.INFO));
+        assertThat(workInfo.x).as("the ⓘ at the row's right edge").isGreaterThan(workRow.x + workRow.width / 2);
+        click(list, workInfo, 0);
+        click(list, workInfo, 1);
+        assertThat(told).as("a click on the ⓘ shows its card, at once").containsExactly("show work " + workRow.y);
         int widest = on(() -> {
             int most = 0;
             for (int i = 0; i < list.getModel().getSize(); i++) {
@@ -477,12 +483,13 @@ class SessionsSidebarTest {
         assertThat(sidebar.cardRow()).isEqualTo("work");
         assertThat(told).as("back on a name: nothing without a click").hasSize(3);
 
+        click(list, workInfo, 1);
         click(list, workName, 1);
         click(list, workName, 2);
         assertThat(told).as("a double click opens the session: its card closes").endsWith("show work " + workRow.y, "left");
         assertThat(sidebar.following()).isFalse();
 
-        click(list, workName, 1);
+        click(list, workInfo, 1);
         SwingUtilities.invokeAndWait(() -> closer.getFirst().accept(null));
         assertThat(sidebar.following()).as("closed by its ✕ or a click on it").isFalse();
     }
@@ -563,8 +570,8 @@ class SessionsSidebarTest {
 
         SessionRow row = (SessionRow) render(list, 0);
         assertThat(row.tip(new Rectangle(0, 0, 260, 60), new Point(0, 0))).isEmpty();
-        assertThat(SessionRow.Control.values()).as("the state icon alone: the rest is in the menu")
-                .containsExactly(SessionRow.Control.POWER);
+        assertThat(SessionRow.Control.values()).as("the state icon and the ⓘ: the rest is in the menu")
+                .containsExactly(SessionRow.Control.POWER, SessionRow.Control.INFO);
         Rectangle power = s[0].controlBounds(0, SessionRow.Control.POWER);
         assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Connected; click to disconnect (stops the session)");
     }
@@ -791,7 +798,7 @@ class SessionsSidebarTest {
     }
 
     /// A click on a connection's icon connects or disconnects; a double click on the name binds it to the focused panel; a
-    /// click on the name shows its card and moving onto the icon tells the card it was left; "Copy details" copies its
+    /// click on the ⓘ shows its card, a click on the name only selects, and moving onto the icon tells the card it was left; "Copy details" copies its
     /// facts without the password.
     @Test
     void aConnectionRowsIconConnectsItsNameBindsAndShowsTheCardAndItsMenuCopies() throws Exception {
@@ -849,7 +856,12 @@ class SessionsSidebarTest {
         SwingUtilities.invokeAndWait(() -> list.dispatchEvent(mouse(list, MouseEvent.MOUSE_MOVED, row.x + 80, row.y + 6, 0)));
         assertThat(told).as("resting on the name shows nothing").isEmpty();
         click(list, new Rectangle(row.x + 80, row.y + 6, 1, 1), 1);
-        assertThat(told).as("a click on the name shows its card").containsExactly("connection local " + row.y);
+        assertThat(told).as("a click on the name selects: no card").isEmpty();
+        Rectangle info = on(() -> sidebar.connectionInfoBounds(0));
+        assertThat(on(() -> list.getToolTipText(event(list, info, 0)))).as("the ⓘ's tip").isEqualTo(IconRow.INFO_TIP);
+        click(list, info, 0);
+        click(list, info, 1);
+        assertThat(told).as("a click on the ⓘ shows its card").containsExactly("connection local " + row.y);
         SwingUtilities.invokeAndWait(() -> list.dispatchEvent(event(list, icon[0], 0)));
         assertThat(told).as("onto the icon: its tip, the card told").containsExactly("connection local " + row.y, "left");
 

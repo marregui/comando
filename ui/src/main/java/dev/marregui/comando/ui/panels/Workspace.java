@@ -166,6 +166,8 @@ public final class Workspace {
     private final TabCard card = new TabCard(key -> readTopic(key, true));
     /** The tab the pointer rests on, whose card shows when the hover timer fires; -1 when none. */
     private int hoverIndex = -1;
+    /** The tab a mouse press landed on: no card for it until the pointer leaves it; -1 when none (2026-10-29). */
+    private int pressedIndex = -1;
     private final Timer hover = new Timer(ToolTipManager.sharedInstance().getInitialDelay(), e -> showCard(hoverIndex));
     /** Runs when the pointer left the card's tab: the card closes unless the pointer reached it. */
     private final Timer leave = new Timer(LEAVE_GRACE_MILLIS, e -> closeCardIfLeft());
@@ -234,11 +236,14 @@ public final class Workspace {
             @Override
             public void mouseMoved(MouseEvent e) {
                 int i = tabs.indexAtLocation(e.getX(), e.getY());
+                if (i != pressedIndex) {
+                    pressedIndex = -1;
+                }
                 if (i != hoverIndex) {
                     hoverIndex = i;
                     hover.restart();
                 }
-                if (i < 0) {
+                if (i < 0 || i == pressedIndex) {
                     hover.stop();
                 }
                 // off the tab whose card shows, the card closes unless the pointer goes on into it
@@ -254,6 +259,7 @@ public final class Workspace {
             public void mouseExited(MouseEvent e) {
                 // a card not yet shown is not shown; one shown closes unless the pointer goes on into it
                 hoverIndex = -1;
+                pressedIndex = -1;
                 hover.stop();
                 if (card.shown() != null) {
                     leave.restart();
@@ -262,8 +268,14 @@ public final class Workspace {
 
             @Override
             public void mousePressed(MouseEvent e) {
-                // a press selects the tab, as a tooltip's would: no card until the pointer rests on another tab
+                // any press, a click or the menu's, is the user acting on the tab: its card closes, or never shows,
+                // until the pointer leaves the tab and rests on one again
+                pressedIndex = tabs.indexAtLocation(e.getX(), e.getY());
                 hover.stop();
+                if (card.shown() != null && card.over() == tabs) {
+                    leave.stop();
+                    card.hide();
+                }
                 popup(e);
             }
 
@@ -504,6 +516,9 @@ public final class Workspace {
      * look puts it on the tab while the pointer is over the button.
      */
     void showCard(int index) {
+        if (index >= 0 && index == pressedIndex) {
+            return; // pressed since the wait began: the user acts on the tab
+        }
         if (index >= 0 && index < tabs.getTabCount() && tabs.getToolTipTextAt(index) != null) {
             hoverIndex = -1; // over the close button: the next move on the tab starts the wait again
             return;

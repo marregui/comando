@@ -1,6 +1,9 @@
 package dev.marregui.comando.ui.panels;
 
+import dev.marregui.comando.ui.kit.icon.Icons;
+
 import javax.swing.BorderFactory;
+import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -14,14 +17,22 @@ import java.awt.Rectangle;
 import java.util.Optional;
 
 /**
- * A resource's row in the sidebar, one line: its state icon, which a click connects or disconnects, and its name with
- * its marks; everything else is in the row's menu, and the row's card shows over its name (records 90 and 92). A list
- * paints it as a cell renderer, so its icon is not live: the list finds it under a click with {@link #onIcon}.
+ * A resource's row in the sidebar, one line: its state icon, which a click connects or disconnects, its name with its
+ * marks, and at its right edge, on the row the pointer is over, the ⓘ that shows the row's card (2026-10-29: a click on
+ * the name no longer does, so a double click acts without the card flashing up first); everything else is in the row's
+ * menu (records 90 and 92). A list paints it as a cell renderer, so its buttons are not live: the list finds them under a
+ * click with {@link #onIcon} and {@link #onInfo}.
  */
 abstract class IconRow extends JPanel {
 
     protected final JLabel title = new JLabel();
     protected final JButton power = new JButton();
+    /** The ⓘ: drawn on the row the pointer is over; elsewhere its place stays empty, so no row changes width. */
+    protected final JButton info = new JButton();
+    static final String INFO_TIP = "Show the card: its facts and its summary";
+    private static final Icon INFO = Icons.get("info");
+    private static final Icon NO_INFO = new EmptyIcon(INFO.getIconWidth(), INFO.getIconHeight());
+    private boolean hovered;
 
     IconRow() {
         super(new BorderLayout(4, 0));
@@ -31,6 +42,50 @@ abstract class IconRow extends JPanel {
         power.setMargin(new Insets(0, 2, 0, 2));
         add(power, BorderLayout.WEST);
         add(title, BorderLayout.CENTER);
+        info.putClientProperty("JButton.buttonType", "toolBarButton");
+        info.setFocusable(false);
+        info.setMargin(new Insets(0, 2, 0, 2));
+        info.getAccessibleContext().setAccessibleName("Show the card");
+        add(info, BorderLayout.EAST);
+        hovered(false);
+    }
+
+    /** Whether the pointer is over this row: only then is its ⓘ drawn and clickable. */
+    void hovered(boolean on) {
+        hovered = on;
+        info.setIcon(on ? INFO : NO_INFO);
+        info.setToolTipText(on ? INFO_TIP : null);
+    }
+
+    /** Whether {@code p}, a point in the cell whose bounds this row was laid out to, is on the ⓘ of a hovered row. */
+    boolean onInfo(Rectangle cell, Point p) {
+        layOut(cell);
+        return hovered && SwingUtilities.getDeepestComponentAt(this, p.x - cell.x, p.y - cell.y) == info;
+    }
+
+    /** Where the ⓘ is, in the list's coordinates. */
+    Rectangle infoBounds(Rectangle cell) {
+        layOut(cell);
+        Rectangle r = SwingUtilities.convertRectangle(info.getParent(), info.getBounds(), this);
+        r.translate(cell.x, cell.y);
+        return r;
+    }
+
+    /** An icon that takes room and draws nothing: the ⓘ's place on a row the pointer is not over. */
+    private record EmptyIcon(int width, int height) implements Icon {
+        @Override
+        public void paintIcon(Component c, java.awt.Graphics g, int x, int y) {
+        }
+
+        @Override
+        public int getIconWidth() {
+            return width;
+        }
+
+        @Override
+        public int getIconHeight() {
+            return height;
+        }
     }
 
     /** Whether {@code p}, a point in the cell whose bounds this row was laid out to, is on the state icon. */
@@ -50,8 +105,11 @@ abstract class IconRow extends JPanel {
         return r;
     }
 
-    /** The state icon's tooltip when {@code p} is on it; empty over the name, where the card shows. */
+    /** The tooltip of the state icon or the ⓘ when {@code p} is on one; empty over the name. */
     Optional<String> iconTip(Rectangle cell, Point p) {
+        if (onInfo(cell, p)) {
+            return Optional.of(INFO_TIP);
+        }
         return onIcon(cell, p) ? Optional.ofNullable(power.getToolTipText()) : Optional.empty();
     }
 

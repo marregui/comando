@@ -200,7 +200,8 @@ has the focus. Marks follow the name: a gold ↑ when the session runs an older 
 (each start runs the CLI installed then; start it again to use the newer), the context in purple once its checkpoint
 is due, and ⚑ with the count of approvals waiting. A double click on the row opens its panel.
 
-A click on the row's name shows the card the panel tabs show
+A click on the ⓘ at the right edge of the row the pointer is over shows the card the panel tabs show; a click on the
+name only selects the row, so a double click opens its panel with no card coming up first (2026-10-29)
 ([record 87](adr/0087-a-session-row-shows-the-tabs-card.md)): the card of the session's panel (the focused panel when it
 is the session's, else its own), or, for a session with no panel open, a card of its own whose summary is read from the
 end of its conversation. Its title is set in the headings' serif, in the tint; then come its facts (`CardFacts`), each once and
@@ -211,7 +212,9 @@ click opens as the sub-agent's own tab in the lower panel ([record 109](adr/0109
 the summary. The card stands beside the rows, after the
 longest name, its top at the row's, so no name is under it; with no room there, under the row. While it is open, the
 pointer on another row's name, or leaving the card onto one, shows that row's card without a click; off the names, at its ✕ or at a click
-on it, the card closes, and the next needs a click again ([record 107](adr/0107-a-rows-card-opens-at-a-click.md)).
+on it, the card closes, and the next needs a click on an ⓘ again ([record 107](adr/0107-a-rows-card-opens-at-a-click.md)). A right-click
+opens the row's menu and closes its card. A panel tab shows its card when the pointer rests on it; any press on the tab,
+a click or the menu's, closes the card or keeps it from showing until the pointer leaves the tab.
 
 Everything else is in the row's menu:
 

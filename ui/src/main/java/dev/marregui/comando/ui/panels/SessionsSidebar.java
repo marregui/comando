@@ -157,6 +157,10 @@ public final class SessionsSidebar {
         }
     }
 
+    /** The rows the pointer is over, each drawn with its ⓘ; -1 for none. */
+    private int hoveredSession = -1;
+    private int hoveredConnection = -1;
+
     /** The row the pointer rests on over its text: a session's, or a connection's. */
     private record Rest(boolean connection, String name) {
     }
@@ -260,11 +264,15 @@ public final class SessionsSidebar {
         connections.getAccessibleContext().setAccessibleName("Connections");
         sessions.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
         connections.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
-        sessions.setCellRenderer((list, s, index, selected, focus) -> row(s).show(s, state != null && state.homePanel(s.name()).isPresent(),
-                boundToFocused(s),
-                state == null ? 0 : state.pendingApprovals(s.name()), selected,
-                selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground(),
-                newestCli()));
+        sessions.setCellRenderer((list, s, index, selected, focus) -> {
+            SessionRow r = row(s).show(s, state != null && state.homePanel(s.name()).isPresent(),
+                    boundToFocused(s),
+                    state == null ? 0 : state.pendingApprovals(s.name()), selected,
+                    selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground(),
+                    newestCli());
+            r.hovered(index == hoveredSession);
+            return r;
+        });
         // ⌘C, and Edit ▸ Copy, which forwards it, copy the selected session's details
         sessions.setTransferHandler(new TransferHandler() {
             @Override
@@ -279,8 +287,12 @@ public final class SessionsSidebar {
             }
         });
         // one line, as a session's (record 92): the state icon, which connects and disconnects, and the name
-        connections.setCellRenderer((list, c, index, selected, focus) -> connectionRow.show(c, usedByFocused(c), selected,
-                selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground()));
+        connections.setCellRenderer((list, c, index, selected, focus) -> {
+            ConnectionRow r = connectionRow.show(c, usedByFocused(c), selected,
+                    selected ? list.getSelectionBackground() : list.getBackground(), selected ? list.getSelectionForeground() : list.getForeground());
+            r.hovered(index == hoveredConnection);
+            return r;
+        });
         // ⌘C, and Edit ▸ Copy, which forwards it, copy the selected connection's details
         connections.setTransferHandler(new TransferHandler() {
             @Override
@@ -306,9 +318,8 @@ public final class SessionsSidebar {
                     if (e.getClickCount() == 1) {
                         act(s, control.get());
                     }
-                } else if (e.getClickCount() == 1) {
-                    openCard(new Rest(false, s.name()));
                 } else if (e.getClickCount() == 2) {
+                    // a click on the name selects; its card is the ⓘ's, so a double click acts with no card first
                     leaveCard();
                     intents.dispatch(new Intent.OpenSession(s.name(), state.focused(), PanelId.random()));
                 }
@@ -327,6 +338,7 @@ public final class SessionsSidebar {
             @Override
             public void mouseExited(MouseEvent e) {
                 pointerOnList = false;
+                hoveredSession = hover(sessions, hoveredSession, -1);
                 restOn(null);
                 // the order held while the pointer was on the list takes effect now
                 if (state != null) {
@@ -344,6 +356,7 @@ public final class SessionsSidebar {
             private void popup(MouseEvent e) {
                 SessionState s = at(sessions, e);
                 if (e.isPopupTrigger() && s != null) {
+                    leaveCard(); // the menu, not the card
                     sessions.setSelectedValue(s, false);
                     sessionMenu(s).show(sessions, e.getX(), e.getY());
                 }
@@ -353,6 +366,7 @@ public final class SessionsSidebar {
             @Override
             public void mouseMoved(MouseEvent e) {
                 SessionState s = at(sessions, e);
+                hoveredSession = hover(sessions, hoveredSession, s == null ? -1 : sessions.locationToIndex(e.getPoint()));
                 boolean onControl = s != null && control(s, e).isPresent();
                 sessions.setCursor(onControl ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
                 // over a row's text its card, once a click opened one; over a control the control's own tip
@@ -366,13 +380,16 @@ public final class SessionsSidebar {
                 if (c == null || !SwingUtilities.isLeftMouseButton(e)) {
                     return;
                 }
-                if (onIcon(c, e)) {
+                if (onInfo(c, e)) {
+                    if (e.getClickCount() == 1) {
+                        openCard(new Rest(true, c.name()));
+                    }
+                } else if (onIcon(c, e)) {
                     if (e.getClickCount() == 1) {
                         intents.dispatch(c.status().isUsable() ? new Intent.CloseConnection(c.name()) : new Intent.OpenConnection(c.name()));
                     }
-                } else if (e.getClickCount() == 1) {
-                    openCard(new Rest(true, c.name()));
                 } else if (e.getClickCount() == 2) {
+                    // a click on the name selects; its card is the ⓘ's, so a double click acts with no card first
                     leaveCard();
                     intents.dispatch(new Intent.BindConnection(state.focused(), c.name()));
                 }
@@ -380,6 +397,7 @@ public final class SessionsSidebar {
 
             @Override
             public void mouseExited(MouseEvent e) {
+                hoveredConnection = hover(connections, hoveredConnection, -1);
                 restOn(null);
             }
 
@@ -398,6 +416,7 @@ public final class SessionsSidebar {
             private void popup(MouseEvent e) {
                 ConnectionState c = at(connections, e);
                 if (e.isPopupTrigger() && c != null) {
+                    leaveCard(); // the menu, not the card
                     connections.setSelectedValue(c, false);
                     connectionMenu(c).show(connections, e.getX(), e.getY());
                 }
@@ -407,7 +426,8 @@ public final class SessionsSidebar {
             @Override
             public void mouseMoved(MouseEvent e) {
                 ConnectionState c = at(connections, e);
-                boolean onIcon = c != null && onIcon(c, e);
+                hoveredConnection = hover(connections, hoveredConnection, c == null ? -1 : connections.locationToIndex(e.getPoint()));
+                boolean onIcon = c != null && (onIcon(c, e) || onInfo(c, e));
                 connections.setCursor(onIcon ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
                 restOn(c == null || onIcon ? null : new Rest(true, c.name()));
             }
@@ -735,6 +755,7 @@ public final class SessionsSidebar {
     private void act(SessionState s, SessionRow.Control control) {
         switch (control) {
             case POWER -> intents.dispatch(s.status().isUsable() ? new Intent.StopSession(s.name()) : new Intent.StartSession(s.name()));
+            case INFO -> openCard(new Rest(false, s.name()));
         }
     }
 
@@ -962,7 +983,8 @@ public final class SessionsSidebar {
             return layOutRow(s, i).hit(cell, p).isPresent() ? null : new Rest(false, s.name());
         }
         ConnectionState c = connectionModel.get(i);
-        return layOutConnection(c, i).hit(cell, p) ? null : new Rest(true, c.name());
+        ConnectionRow r = layOutConnection(c, i);
+        return r.hit(cell, p) || r.onInfo(cell, p) ? null : new Rest(true, c.name());
     }
 
     /** The wait is over: the card of the row the pointer rests on shows under the row. */
@@ -1169,6 +1191,35 @@ public final class SessionsSidebar {
 
     private boolean usedByFocused(ConnectionState c) {
         return state != null && state.focusedPanel().connection().equals(c.name());
+    }
+
+    /** Whether a mouse event on {@code c}'s cell is on its ⓘ. */
+    private boolean onInfo(ConnectionState c, MouseEvent e) {
+        int i = connections.locationToIndex(e.getPoint());
+        return layOutConnection(c, i).onInfo(connections.getCellBounds(i, i), e.getPoint());
+    }
+
+    /** Where a connection row's ⓘ is, in the list's coordinates; for tests. */
+    Rectangle connectionInfoBounds(int index) {
+        return layOutConnection(connectionModel.get(index), index).infoBounds(connections.getCellBounds(index, index));
+    }
+
+    /**
+     * The row the pointer is over in {@code list} is now {@code now} (-1 for none), was {@code was}: both rows repaint,
+     * the ⓘ moving from one to the other; returns {@code now}.
+     */
+    private static int hover(JList<?> list, int was, int now) {
+        if (was != now) {
+            for (int i : new int[] {was, now}) {
+                if (i >= 0 && i < list.getModel().getSize()) {
+                    Rectangle r = list.getCellBounds(i, i);
+                    if (r != null) {
+                        list.repaint(r);
+                    }
+                }
+            }
+        }
+        return now;
     }
 
     /** Whether a mouse event on {@code c}'s cell is on its state icon. */

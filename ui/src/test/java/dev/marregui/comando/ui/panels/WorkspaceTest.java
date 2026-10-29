@@ -842,8 +842,9 @@ class WorkspaceTest {
         assertThat(card.ticketLinks()).isEmpty();
     }
 
-    /// A press on a tab cancels the pending hover card, the close button's tooltip shows no card, a card follows its tab when
-    /// an earlier tab closes, and a summary that looks like HTML is shown as plain text.
+    /// A press on a tab, a click or the menu's, cancels the pending hover card and closes a shown one, and the tab shows
+    /// none until the pointer leaves it (2026-10-29); the close button's tooltip shows no card, a card follows its tab
+    /// when an earlier tab closes, and a summary that looks like HTML is shown as plain text.
     @Test
     void aPressOrTheCloseButtonShowsNoCardAndACardFollowsItsTabAndShowsHtmlAsText() throws Exception {
         PanelId a = new PanelId("a");
@@ -873,6 +874,28 @@ class WorkspaceTest {
         assertThat(w[0].hoverWaiting()).isFalse();
         SwingUtilities.invokeAndWait(() -> mouseMoved(tabs, first.x + 6, first.y + 4));
         assertThat(w[0].hoverWaiting()).as("moving on the same tab does not start it again").isFalse();
+        SwingUtilities.invokeAndWait(() -> w[0].showCard(0));
+        assertThat(w[0].cardShown()).as("the pressed tab's wait, firing late, shows nothing").isNull();
+
+        // a card shown when the menu's press comes closes
+        SwingUtilities.invokeAndWait(() -> {
+            mouseMoved(tabs, second.x + 4, second.y + 4);
+            w[0].showCard(1);
+        });
+        assertThat(w[0].cardShown()).isEqualTo(b);
+        SwingUtilities.invokeAndWait(() -> {
+            for (MouseListener l : tabs.getMouseListeners()) {
+                l.mousePressed(mouse(tabs, MouseEvent.MOUSE_PRESSED, second.x + 4, second.y + 4));
+            }
+        });
+        assertThat(w[0].cardShown()).as("a press closes the tab's card").isNull();
+
+        // off the tabs and back: resting shows the card again
+        SwingUtilities.invokeAndWait(() -> {
+            mouseMoved(tabs, first.x + 4, first.y + first.height + 40);
+            mouseMoved(tabs, first.x + 4, first.y + 4);
+        });
+        assertThat(w[0].hoverWaiting()).isTrue();
 
         // over the close button the look puts its tooltip on the tab: no card, and the next move waits again
         SwingUtilities.invokeAndWait(() -> {

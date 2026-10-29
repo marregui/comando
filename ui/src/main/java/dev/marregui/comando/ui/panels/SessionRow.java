@@ -30,7 +30,9 @@ final class SessionRow extends IconRow {
 
     /** The controls of a row: its state icon. */
     enum Control {
-        POWER
+        POWER,
+        /** The ⓘ, which shows the row's card. */
+        INFO
     }
 
     SessionRow() {
@@ -154,12 +156,15 @@ final class SessionRow extends IconRow {
 
     /** The control at {@code p}, a point in the cell whose bounds this row was laid out to. */
     Optional<Control> hit(Rectangle cell, Point p) {
+        if (onInfo(cell, p)) {
+            return Optional.of(Control.INFO);
+        }
         return onIcon(cell, p) ? Optional.of(Control.POWER) : Optional.empty();
     }
 
     /** Where {@code control} is, in the list's coordinates, for a menu to drop from it; empty while it is hidden. */
     Rectangle bounds(Rectangle cell, Control control) {
-        return iconBounds(cell);
+        return control == Control.INFO ? infoBounds(cell) : iconBounds(cell);
     }
 
     /** The tooltip of the control at {@code p}, or empty over the text. */
