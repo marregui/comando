@@ -142,7 +142,8 @@ final class PanelsWithoutSession {
         // a group's header, as the Files tab's (record 98)
         JLabel title = SidebarLook.header("Without a session");
         JScrollPane scroll = new JScrollPane(list);
-        scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        // a name wider than the sidebar scrolls into view, as in the sessions and connections lists above it
+        scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
         scroll.setBorder(null);
         SidebarLook.list(list);
         SidebarLook.ground(scroll);

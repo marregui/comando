@@ -44,6 +44,7 @@ import javax.swing.JMenuItem;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.JViewport;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
 import javax.swing.TransferHandler;
@@ -788,10 +789,10 @@ public final class SessionsSidebar {
             setToolTipText("");
         }
 
-        /** As wide as the tab: a row's line clips at its edge. */
+        /** As wide as the tab while every name fits; wider than it, the tab scrolls sideways to a long name. */
         @Override
         public boolean getScrollableTracksViewportWidth() {
-            return true;
+            return fitsTab(this);
         }
 
         @Override
@@ -1205,9 +1206,10 @@ public final class SessionsSidebar {
             }
         }
 
+        /** As wide as the tab while every name fits; wider than it, the tab scrolls sideways to a long name. */
         @Override
         public boolean getScrollableTracksViewportWidth() {
-            return true;
+            return fitsTab(this);
         }
 
         @Override
@@ -1225,10 +1227,15 @@ public final class SessionsSidebar {
         return i >= 0 && list.getCellBounds(i, i).contains(e.getPoint()) ? list.getModel().getElementAt(i) : null;
     }
 
-    /** A tab's content, filling it, on the sidebar's ground. */
+    /** Whether {@code list}'s rows, at their widest, fit the tab it shows in: it then fills the tab, else it scrolls. */
+    private static boolean fitsTab(JList<?> list) {
+        return !(list.getParent() instanceof JViewport v) || v.getWidth() >= list.getPreferredSize().width;
+    }
+
+    /** A tab's content, filling it, on the sidebar's ground; a name wider than the tab scrolls into view (2026-10-29). */
     private static JPanel section(JComponent content) {
         if (content instanceof JScrollPane sp) {
-            sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+            sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
             sp.setBorder(null);
             SidebarLook.ground(sp);
         }

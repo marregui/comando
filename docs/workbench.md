@@ -187,7 +187,9 @@ No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-ba
 clones and removes it (`ResourceActions`). Removing something in use asks **Stop and remove**, **Disconnect and remove**
 or **Close and remove**, or **Leave it** ([record 37](adr/0037-session-actions-act-on-the-selected-row.md)). ⌘B or the
 `⋯` button hides the sidebar to a rail on the left edge: its `⋯` shows the sidebar again at the width it had, and an
-icon per tab under it shows the sidebar at that tab.
+icon per tab under it shows the sidebar at that tab. A name wider than the sidebar scrolls sideways into view, in every
+tab: the sessions, the panels without a session, the connections and the Files tree show a horizontal scroll bar while
+a row is wider than the tab, and none while every row fits (2026-10-29).
 
 **A session row** is one line: the state icon and the name
 ([record 90](adr/0090-a-session-row-is-its-icon-and-name.md)). The icon, which a click starts or stops, is

@@ -1127,6 +1127,46 @@ class SessionsSidebarTest {
         return found;
     }
 
+    /// A session's or a connection's name wider than the sidebar scrolls into view sideways instead of being cut at the
+    /// edge; while every name fits, the lists fill the tab and show no scrollbar (2026-10-29).
+    @Test
+    void aNameWiderThanTheSidebarScrollsIntoView() throws Exception {
+        String longName = "a-session-with-a-name-far-wider-than-a-narrow-sidebar";
+        SessionState session = SessionState.closed(SessionSpec.fresh(longName, "/w/edge"));
+        ConnectionState connection = ConnectionState.closed(ConnectionSpec.questDbDefaults("a-connection-named-far-wider-than-the-sidebar"));
+        AppState state = AppState.initial(List.of(new PanelState(new PanelId("p"), "main", "", "")), List.of(connection), List.of(session));
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intent -> {
+            }, NO_DIALOGS, () -> {
+            });
+            s[0].render(state);
+        });
+        Component root = s[0].component();
+        JList<?> sessions = search(root, JList.class, l -> l.getModel().getSize() > 0 && l.getModel().getElementAt(0) instanceof SessionState);
+        JList<?> connections = search(root, JList.class, l -> l.getModel().getSize() > 0 && l.getModel().getElementAt(0) instanceof ConnectionState);
+        for (JList<?> list : List.of(sessions, connections)) {
+            javax.swing.JScrollPane sp = (javax.swing.JScrollPane) SwingUtilities.getAncestorOfClass(javax.swing.JScrollPane.class, list);
+            assertThat(sp.getHorizontalScrollBarPolicy()).isEqualTo(javax.swing.JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+
+            SwingUtilities.invokeAndWait(() -> {
+                sp.setSize(120, 300);
+                sp.doLayout();
+                sp.getViewport().doLayout();
+            });
+            assertThat(list.getScrollableTracksViewportWidth()).as("narrow: the list keeps its width").isFalse();
+            assertThat(list.getWidth()).as("narrow: the name is whole, past the edge").isGreaterThan(sp.getViewport().getWidth());
+
+            SwingUtilities.invokeAndWait(() -> {
+                sp.setSize(900, 300);
+                sp.doLayout();
+                sp.getViewport().doLayout();
+            });
+            assertThat(list.getScrollableTracksViewportWidth()).as("wide: the list fills the tab").isTrue();
+            assertThat(list.getWidth()).isEqualTo(sp.getViewport().getWidth());
+        }
+    }
+
     private static <T extends Component> T search(Component root, Class<T> type, Predicate<T> match) {
         if (type.isInstance(root) && match.test(type.cast(root))) {
             return type.cast(root);
