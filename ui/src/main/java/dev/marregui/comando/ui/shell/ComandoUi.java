@@ -140,6 +140,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -382,7 +383,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         // a named instance carries its name's first letter on its Dock icon, so the icons differ without hovering (record 122)
         String instance = InstanceName.current();
         if (!instance.isEmpty() && Taskbar.isTaskbarSupported() && Taskbar.getTaskbar().isSupported(Taskbar.Feature.ICON_BADGE_TEXT)) {
-            Taskbar.getTaskbar().setIconBadge(instance.substring(0, 1).toUpperCase(java.util.Locale.ROOT));
+            Taskbar.getTaskbar().setIconBadge(instance.substring(0, 1).toUpperCase(Locale.ROOT));
         }
         livePlots = new LivePlots(deps.intents(), deps.results());
         UiErrands.start("pty-preload", TerminalWidget::preload);

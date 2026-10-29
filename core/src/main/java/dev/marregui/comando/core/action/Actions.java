@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * The registry of user actions (record 121): every action a person has in the window, as an agent's MCP tool, and every
@@ -221,6 +222,6 @@ public final class Actions {
     }
 
     private static List<String> withDefault(List<String> values) {
-        return java.util.stream.Stream.concat(java.util.stream.Stream.of(""), values.stream()).toList();
+        return Stream.concat(Stream.of(""), values.stream()).toList();
     }
 }

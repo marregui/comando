@@ -38,10 +38,12 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
@@ -87,7 +89,7 @@ public final class McpTools {
     private final ObjectMapper json = new ObjectMapper();
     private final ArrayNode definitions;
     /** The first tools' names, from {@code tools.json}; the registry's other actions are {@link ActionTools}' (record 121). */
-    private final java.util.Set<String> builtIn;
+    private final Set<String> builtIn;
     private final ActionTools actions;
     /** The other comando instances, through the comando Edge (record 123); null until the application wires them. */
     private volatile Peers peers;
@@ -117,9 +119,9 @@ public final class McpTools {
         this.approvalTimeout = approvalTimeout;
         try (var in = McpTools.class.getResourceAsStream("/mcp/tools.json")) {
             ArrayNode first = (ArrayNode) json.readTree(in);
-            java.util.Set<String> names = new java.util.LinkedHashSet<>();
+            Set<String> names = new LinkedHashSet<>();
             first.forEach(d -> names.add(d.path("name").asText()));
-            builtIn = java.util.Set.copyOf(names);
+            builtIn = Set.copyOf(names);
             actions = new ActionTools(sink, state);
             definitions = first.deepCopy();
             definitions.addAll(actions.definitions(builtIn));
