@@ -1056,7 +1056,7 @@ public final class Workspace {
                         card.hide();
                     }
                     tabs.remove(gone);
-                    gone.editor().dispose();
+                    gone.editor().unmount();
                     if (deletedFile != null) {
                         intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Removed " + was.title() + ": " + deletedFile
                                 + " was deleted outside comando", false));

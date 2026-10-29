@@ -75,7 +75,7 @@ final class SubagentFiles {
                 }
             }
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot list " + projectsDir + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot list [dir=" + projectsDir + ']', e);
         }
         return Optional.empty();
     }
@@ -102,7 +102,7 @@ final class SubagentFiles {
             }
             return json.readTree(Files.readAllBytes(meta));
         } catch (IOException | JacksonException e) {
-            LOG.log(System.Logger.Level.DEBUG, "cannot read " + meta + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "cannot read [file=" + meta + ']', e);
             return null;
         }
     }
@@ -144,7 +144,7 @@ final class SubagentFiles {
                 cacheCreate += u.path("cache_creation_input_tokens").asLong(0);
             }
         } catch (IOException | UncheckedIOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot read " + file + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot read [file=" + file + ']', e);
         }
         out.put("calls", calls);
         out.put("input", input);

@@ -8,14 +8,14 @@ import javax.swing.JComponent;
  *
  * @param <V> the value it renders
  */
-public interface Widget<V> {
+public interface Widget<V> extends Unmountable {
 
     JComponent component();
 
     /** Renders {@code view}; called on the EDT whenever the value or its version changes. */
     void render(V view);
 
-    /** Releases listeners and timers; the component is about to leave the hierarchy. */
+    @Override
     default void unmount() {
     }
 }

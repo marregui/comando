@@ -21,6 +21,7 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// A panel's text lives in a Markdown file of its own, kept in step with the editor and with outside edits.
 class PanelFilesTest {
 
     @TempDir
@@ -36,6 +37,8 @@ class PanelFilesTest {
         }
     }
 
+    /// Each panel's text is saved as a Markdown file in the panels folder named after its title, `panels.json` names
+    /// the file and holds no text, and a fresh start reads titles, text and file paths back.
     @Test
     void eachPanelsTextIsAMarkdownFileNamedAfterItsTitleAndPanelsJsonHoldsNoText() throws Exception {
         PanelId spec = new PanelId("a");
@@ -60,6 +63,8 @@ class PanelFilesTest {
         }
     }
 
+    /// Text that an older comando kept inside `panels.json` moves into the panel's own file at the first load, and
+    /// `panels.json` is rewritten without it.
     @Test
     void textStoredInPanelsJsonBeforePanelsHadFilesMovesIntoFiles() throws Exception {
         Files.writeString(home.resolve("connections.json"), "[]");
@@ -74,6 +79,8 @@ class PanelFilesTest {
         assertThat(Files.readString(home.resolve("panels.json"))).contains("\"file\" : \"main.md\"").doesNotContain("content");
     }
 
+    /// Titles equal but for case get numbered file names, and renaming a panel moves its file to the name its new title
+    /// makes safe, with its text.
     @Test
     void aRenamedPanelMovesItsFileAndEqualTitlesGetNumberedNames() throws Exception {
         PanelId one = new PanelId("1");
@@ -94,6 +101,8 @@ class PanelFilesTest {
         }
     }
 
+    /// A new panel whose title matches a file left by an earlier panel takes the next numbered name and leaves that
+    /// file's text alone.
     @Test
     void aNewPanelNeverTakesTheFileOfAClosedOne() throws Exception {
         Files.createDirectories(dir());
@@ -109,6 +118,8 @@ class PanelFilesTest {
         assertThat(Files.readString(dir().resolve("spec 2.md"))).isEqualTo("new");
     }
 
+    /// When a panel's file was changed by another editor since comando last wrote it, comando's next save overwrites it
+    /// but first keeps the outside version in a file named `(outside comando ...)` and posts one notice.
     @Test
     void anEditMadeOutsideComandoIsKeptAsideAndTheUserIsTold() throws Exception {
         PanelId id = new PanelId("x");
@@ -133,6 +144,8 @@ class PanelFilesTest {
         assertThat(notices).singleElement().asString().startsWith("spec.md changed outside comando");
     }
 
+    /// A closed panel keeps its file with the text it had when it closed, blank or not, nothing is deleted on close,
+    /// and after a restart it is listed among the closed panels with that text.
     @Test
     void aClosedPanelKeepsItsFileWithItsLastTextBlankOrNotAndComesBackClosed() throws Exception {
         PanelId full = new PanelId("f");
@@ -164,6 +177,8 @@ class PanelFilesTest {
         assertThat(Files.readString(home.resolve("panels.json"))).contains("\"closed\" : true");
     }
 
+    /// A Markdown file in the panels folder that no panel names is listed as a closed panel under the sessions, with a
+    /// notice and its text; half-written temporary files are ignored.
     @Test
     void aFileOfThePanelsFolderWithoutAPanelBecomesAClosedPanel() throws Exception {
         Files.createDirectories(dir());
@@ -189,6 +204,8 @@ class PanelFilesTest {
         assertThat(Files.readString(home.resolve("panels.json"))).contains("\"file\" : \"reviews.md\"").contains("\"closed\" : true");
     }
 
+    /// A stored file name that differs only in case from the file on disk still finds its file, so every file of the
+    /// panels folder belongs to a panel and the typed text is reachable.
     @Test
     void everyFileOfThePanelsFolderBelongsToAPanelWhenAStoredNameDiffersInCase() throws Exception {
         Files.createDirectories(dir());
@@ -218,6 +235,8 @@ class PanelFilesTest {
         }
     }
 
+    /// A panels folder with no JSON files at all, as after losing the data root's settings, is adopted file by file as
+    /// closed panels.
     @Test
     void aPanelsFolderWithoutTheJsonFilesIsAdoptedAsClosedPanels() throws Exception {
         Files.createDirectories(dir());
@@ -228,6 +247,8 @@ class PanelFilesTest {
         }
     }
 
+    /// A document opened from elsewhere whose folder refuses the last write at close keeps its text and comes back
+    /// after a restart on its own path, never as a copy in the panels folder.
     @Test
     void aDocumentWhoseLastWriteFailsAtCloseComesBackOnItsOwnPathNeverAsAPanelFile() throws Exception {
         Path docs = Files.createDirectories(home.resolve("docs"));
@@ -261,6 +282,8 @@ class PanelFilesTest {
         assertThat(dir().resolve("PLAN.md")).as("never a copy in panels/").doesNotExist();
     }
 
+    /// A document that cannot be read at the start keeps its path in `panels.json` and is not copied into the panels
+    /// folder.
     @Test
     void aDocumentUnreadableAtTheStartKeepsItsPathAndNeverBecomesAPanelFile() throws Exception {
         Path docs = Files.createDirectories(home.resolve("docs"));
@@ -309,6 +332,8 @@ class PanelFilesTest {
         assertThat(log).hasContent("one\ntwo\nthree\n");
     }
 
+    /// Text typed after an outside change was reported, with the autosave landing before the window answers, wins: the
+    /// report's `take` declines and the typed text stays the panel's text.
     @Test
     void anEditAfterAnOutsideChangeReportIsNotReplacedEvenOnceItIsSaved() throws Exception {
         PanelId id = new PanelId("w");
@@ -329,6 +354,8 @@ class PanelFilesTest {
         }
     }
 
+    /// Text typed after a deletion was reported, with the autosave landing before the window answers, keeps the panel:
+    /// the report's `remove` declines and the save writes the file again.
     @Test
     void anEditAfterADeletionReportKeepsThePanelEvenOnceItIsSaved() throws Exception {
         PanelId id = new PanelId("e");
@@ -349,6 +376,8 @@ class PanelFilesTest {
         assertThat(Files.readString(dir().resolve("spec.md"))).isEqualTo("typed after the report");
     }
 
+    /// A new panel gets its file at the first save even when empty, and a removed panel loses it, a save running before
+    /// the list without the panel arrives not bringing it back.
     @Test
     void aNewPanelGetsItsFileAtOnceEvenEmptyAndARemovedOneLosesIt() throws Exception {
         PanelId id = new PanelId("e");
@@ -369,6 +398,8 @@ class PanelFilesTest {
         assertThat(Files.readString(home.resolve("panels.json"))).doesNotContain("empty");
     }
 
+    /// A stored file name that reaches out of the panels folder is read as a document, and removing its panel leaves
+    /// the file in place.
     @Test
     void aStoredNameReachingOutOfTheFolderIsADocumentAndIsNeverDeleted() throws Exception {
         Path outside = Files.writeString(home.resolve("victim.md"), "keep");
@@ -379,6 +410,7 @@ class PanelFilesTest {
         assertThat(Files.readString(outside)).isEqualTo("keep");
     }
 
+    /// Deleting the panel of a bound document leaves the document on disk with its text.
     @Test
     void removingADocumentsPanelNeverDeletesTheDocument() throws Exception {
         Path doc = Files.writeString(home.resolve("PLAN.md"), "# plan");
@@ -394,6 +426,8 @@ class PanelFilesTest {
         assertThat(Files.readString(doc)).isEqualTo("# plan");
     }
 
+    /// At the start, a closed panel whose file was deleted while comando was closed is dropped with a notice, and an
+    /// open panel whose file is missing gets an empty one.
     @Test
     void atTheStartAClosedPanelWhoseFileIsGoneIsDroppedAndAnOpenOneGetsAnEmptyFile() throws Exception {
         Files.writeString(home.resolve("connections.json"), "[]");
@@ -413,6 +447,8 @@ class PanelFilesTest {
         assertThat(Files.readString(dir().resolve("open.md"))).as("a blank panel of an older comando gets its file").isEmpty();
     }
 
+    /// Opening a file from the panels folder binds it under its own name and saves into it, while a file that no longer
+    /// exists is refused with its name in the reason.
     @Test
     void aSpecOpensFromTheFolderOnlyAndKeepsItsName() throws Exception {
         Path elsewhere = Files.writeString(home.resolve("other.md"), "no");
@@ -438,6 +474,8 @@ class PanelFilesTest {
         Files.setLastModifiedTime(f, FileTime.fromMillis(Files.getLastModifiedTime(f).toMillis() + 2_000));
     }
 
+    /// An outside edit is reported once, never for comando's own writes, and taking it makes the outside version the
+    /// panel's text, with no copy kept aside.
     @Test
     void anOutsideEditIsReportedOnceAndTakingItMakesItThePanelsText() throws Exception {
         PanelId id = new PanelId("w");
@@ -469,6 +507,8 @@ class PanelFilesTest {
         assertThat(Files.readString(dir().resolve("spec.md"))).isEqualTo("v3");
     }
 
+    /// An outside edit meeting text typed since the report is not taken, and the next save keeps the outside version
+    /// aside under an `(outside comando ...)` name.
     @Test
     void anOutsideEditMeetingUnsavedEditsIsNotTakenAndIsKeptAside() throws Exception {
         PanelId id = new PanelId("u");
@@ -490,6 +530,8 @@ class PanelFilesTest {
         assertThat(names()).hasSize(2).anyMatch(n -> n.startsWith("spec (outside comando "));
     }
 
+    /// A deleted panel file, open or closed, is reported once and its panel goes unless text was typed since, the
+    /// removed panel's file not being written again and a kept one being written back on the next save.
     @Test
     void aPanelsFileDeletedOutsideIsReportedForThePanelToBeRemovedUnlessEditedSince() throws Exception {
         PanelId open = new PanelId("d");
@@ -519,6 +561,8 @@ class PanelFilesTest {
         }
     }
 
+    /// An outside edit of a closed panel's file is taken at once, with no report since no editor shows it, and no copy
+    /// is kept aside.
     @Test
     void aClosedPanelTakesAnOutsideEditAtOnce() throws Exception {
         PanelId id = new PanelId("c");
@@ -538,6 +582,8 @@ class PanelFilesTest {
         assertThat(names()).as("taken, not kept aside").containsExactly("spec.md");
     }
 
+    /// A document deleted outside is reported so its panel closes, with no warning notice, and closing the panel does
+    /// not bring the document or its folder back.
     @Test
     void aDocumentDeletedOutsideIsReportedForItsPanelToCloseAndNotWrittenAgain() throws Exception {
         Path day = Files.createDirectories(home.resolve("SCRATCHPAD").resolve("2026-10-14"));
@@ -569,6 +615,8 @@ class PanelFilesTest {
         assertThat(day).as("closing the document's panel does not bring its folder back").doesNotExist();
     }
 
+    /// At the start, a document deleted while comando was closed leaves no panel, with a notice, unless the panel holds
+    /// unsaved text.
     @Test
     void aDocumentDeletedWhileComandoWasClosedLeavesNoPanelUnlessItHasUnsavedText() throws Exception {
         Path day = Files.createDirectories(home.resolve("SCRATCHPAD").resolve("2026-10-14"));
@@ -590,6 +638,8 @@ class PanelFilesTest {
         assertThat(notices).containsExactly("READ-01-X.md was deleted while comando was closed; its panel is gone");
     }
 
+    /// A panel typed in and closed within one save interval still reaches its file with its text, the close ordering
+    /// listing it among the closed.
     @Test
     void aNewPanelClosedBeforeItsFirstSaveStillReachesAFile() throws Exception {
         PanelId kept = new PanelId("k");
@@ -610,6 +660,8 @@ class PanelFilesTest {
         assertThat(Files.readString(dir().resolve("quick.md"))).isEqualTo("typed and closed within 800 ms");
     }
 
+    /// When the panels folder refuses a write, the save reports the failure, a notice names the file, and the typed
+    /// text survives a restart.
     @Test
     void aPanelFileThatCannotBeWrittenKeepsItsTextAcrossARestartAndTheUserIsTold() throws Exception {
         PanelId id = new PanelId("n");
@@ -635,6 +687,8 @@ class PanelFilesTest {
         }
     }
 
+    /// A closed panel's file cannot be opened into another panel meanwhile, and reopening the panel gives it the text
+    /// it had when it closed, written back to the same file.
     @Test
     void aReopenedPanelHasItsLastTextAndItsFileIsNeverBoundToAnotherPanel() throws Exception {
         PanelId closing = new PanelId("c");
@@ -656,6 +710,8 @@ class PanelFilesTest {
         assertThat(Files.readString(dir().resolve("spec.md"))).isEqualTo("v2 typed just before closing");
     }
 
+    /// A panel closed while the panels folder refuses writes is still listed as closed after a restart, with the text
+    /// typed before it closed.
     @Test
     void aClosedPanelWhoseFileCannotBeWrittenKeepsItsTextAcrossARestart() throws Exception {
         PanelId kept = new PanelId("k");
@@ -685,6 +741,7 @@ class PanelFilesTest {
         }
     }
 
+    /// A file already bound to one panel is refused to a second, which is told it is already open.
     @Test
     void aFileOpenInOnePanelIsNotBoundToASecond() throws Exception {
         try (Store store = new Store(home)) {
@@ -696,6 +753,8 @@ class PanelFilesTest {
         }
     }
 
+    /// A new panel titled like a closed panel whose file is still waiting to be written takes the next numbered name,
+    /// so each file ends with its own panel's text.
     @Test
     void aNewPanelNeverTakesTheNameOfAClosedPanelStillWaitingToBeWritten() throws Exception {
         PanelId closed = new PanelId("c");
@@ -724,6 +783,8 @@ class PanelFilesTest {
         assertThat(Files.readString(dir().resolve("spec 2.md"))).isEqualTo("the new panel's text");
     }
 
+    /// Closing the store writes at once what a failed save left pending instead of waiting out the retry delay, and no
+    /// write is left to land after the close returns.
     @Test
     void closingDropsAPendingRetryAndWritesNothingAfterItReturns() throws Exception {
         PanelId id = new PanelId("q");
@@ -752,6 +813,8 @@ class PanelFilesTest {
         assertThat(store.writerTerminated()).as("no write left to land after close").isTrue();
     }
 
+    /// A panel renamed and closed within one save interval, with the folder refusing the move, is still listed as
+    /// closed under its new title with the text it had.
     @Test
     void aPanelWhoseFileCannotBeNamedAtCloseKeepsItsTextAcrossARestart() throws Exception {
         PanelId id = new PanelId("r");
@@ -781,6 +844,8 @@ class PanelFilesTest {
         }
     }
 
+    /// When `panels.json` cannot be written the save reports it and posts a notice, and the write is tried again after
+    /// the retry delay without another edit.
     @Test
     void aPanelsJsonThatCannotBeWrittenIsToldAndTriedAgain() throws Exception {
         PanelId id = new PanelId("j");
@@ -809,6 +874,9 @@ class PanelFilesTest {
         }
     }
 
+    /// A file opened from outside the panels folder is read and written in place, keeps its name when its panel is
+    /// renamed, reports outside edits, and is neither deleted when blanked and closed nor left with temporary files
+    /// beside it.
     @Test
     void aFileElsewhereOpensInAPanelAndIsNeverRenamedOrDeletedByComando() throws Exception {
         Path day = Files.createDirectories(home.resolve("SCRATCHPAD").resolve("2026-10-14"));
@@ -847,6 +915,8 @@ class PanelFilesTest {
         }
     }
 
+    /// A panel bound to a file elsewhere comes back on that file after a restart with the text saved, and nothing is
+    /// copied into the panels folder.
     @Test
     void aPanelOnAFileElsewhereComesBackOnThatFileAfterARestart() throws Exception {
         Path doc = Files.writeString(Files.createDirectories(home.resolve("SCRATCHPAD")).resolve("PLAN.md"), "# plan");
@@ -866,6 +936,8 @@ class PanelFilesTest {
         assertThat(Files.notExists(dir()) || !names().contains("PLAN.md")).as("nothing copied into panels/").isTrue();
     }
 
+    /// A title becomes a safe file name: separators and colons turn into `-`, leading dots and edge spaces go, tabs
+    /// become `-`, a blank title becomes `panel`, and the length is capped.
     @Test
     void titlesBecomeSafeFileNames() {
         assertThat(PanelFiles.safe("a/b\\c:d")).isEqualTo("a-b-c-d");

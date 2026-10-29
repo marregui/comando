@@ -104,7 +104,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                     SubagentFiles.find(settings.projectsDir(), event.path("conversation").asString(""), event.path("tool_use_id").asString(""), json)
                             .ifPresent(f -> event.set("spend", SubagentFiles.spend(f.transcript(), json)));
                 } catch (RuntimeException e) {
-                    LOG.log(System.Logger.Level.WARNING, "cannot read a sub-agent's spend: " + e.getMessage());
+                    LOG.log(System.Logger.Level.WARNING, "cannot read a sub-agent's spend", e);
                 }
                 log.write(event);
             });
@@ -147,7 +147,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 Files.deleteIfExists(f);
             }
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.DEBUG, "cannot clean " + runDir + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "cannot clean [dir=" + runDir + ']', e);
         }
     }
 
@@ -570,7 +570,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         try {
             t.conversation.read();
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot read " + t.found.transcript() + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot read the sub-agent transcript [file=" + t.found.transcript() + ']', e);
             subagentSays(new Intent.Notify(Notice.Level.WARN, "Session " + t.session + ": cannot read the sub-agent's transcript", false));
             return false;
         }
@@ -797,7 +797,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             try {
                 Files.deleteIfExists(run.mcpConfig);
             } catch (IOException e) {
-                LOG.log(System.Logger.Level.DEBUG, "cannot delete " + run.mcpConfig + ": " + e.getMessage());
+                LOG.log(System.Logger.Level.DEBUG, "cannot delete [file=" + run.mcpConfig + ']', e);
             }
             run.mcpConfig = null;
         }
@@ -816,7 +816,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 }
             }
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot list " + dir + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot list [dir=" + dir + ']', e);
         }
         return null;
     }
@@ -838,7 +838,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             try {
                 PlanUsage usage = PlanUsageReader.read(settings.executable(), settings.launch(), settings.runDir(), json);
                 if (!usage.problem().isEmpty()) {
-                    LOG.log(System.Logger.Level.WARNING, "cannot read the plan's usage limits: " + usage.problem());
+                    LOG.log(System.Logger.Level.WARNING, "cannot read the plan's usage limits [problem=" + usage.problem() + ']');
                 }
                 if (!closed) {
                     sink.dispatch(new Intent.PlanUsageRead(usage));
@@ -847,7 +847,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
                 PlanUsage codexUsage = CodexUsageReader.read(codex, json, CodexUsageReader.TIMEOUT, ZoneId.systemDefault());
                 // logged when it changes: without Codex installed, every read fails the same way
                 if (!codexUsage.problem().isEmpty() && !codexUsage.problem().equals(lastCodexProblem)) {
-                    LOG.log(System.Logger.Level.INFO, "cannot read the Codex plan's usage limits: " + codexUsage.problem());
+                    LOG.log(System.Logger.Level.INFO, "cannot read the Codex plan's usage limits [problem=" + codexUsage.problem() + ']');
                 }
                 lastCodexProblem = codexUsage.problem();
                 if (!closed) {

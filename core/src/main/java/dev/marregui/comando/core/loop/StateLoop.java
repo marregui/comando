@@ -290,7 +290,7 @@ public final class StateLoop implements IntentSink, AutoCloseable {
             try {
                 w.close();
             } catch (Exception e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot stop watching the loop: " + e.getMessage());
+                LOG.log(System.Logger.Level.WARNING, "cannot stop watching the loop", e);
             }
         }
     }

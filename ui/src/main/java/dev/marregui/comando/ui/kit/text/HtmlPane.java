@@ -398,7 +398,7 @@ public class HtmlPane extends JEditorPane {
                     doc.setOuterHTML(stand, inItsLink(stand, r.getValue()));
                 } catch (BadLocationException | IOException e) {
                     // not expected of Swing's own document; the whole page drawn again shows it all the same
-                    LOG.log(System.Logger.Level.DEBUG, "cannot put a picture in place [id=" + r.getKey() + "]: " + e.getMessage());
+                    LOG.log(System.Logger.Level.DEBUG, "cannot put a picture in place [id=" + r.getKey() + ']', e);
                     String shown = markdown;
                     Edt.later(() -> redraw(shown));
                     return;

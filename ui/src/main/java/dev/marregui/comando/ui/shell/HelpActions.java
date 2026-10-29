@@ -62,7 +62,7 @@ final class HelpActions {
             try {
                 HelpFiles.writeTutorial(home);
             } catch (IOException | RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot write the tutorial into " + home + ": " + e.getMessage());
+                LOG.log(System.Logger.Level.WARNING, "cannot write the tutorial [home=" + home + ']', e);
             }
         });
     }

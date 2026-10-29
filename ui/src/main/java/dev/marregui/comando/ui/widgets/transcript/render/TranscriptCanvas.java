@@ -33,14 +33,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.IdentityHashMap;
-import java.util.LinkedHashMap;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
@@ -59,9 +54,6 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     public static final String SUBAGENT_SCHEME = "subagent:";
     /** How long a sub-agent launched into the background counts as working before the session lists it. */
     static final long LAUNCH_GRACE_MILLIS = 10_000;
-    private static final String LOCAL_AGENT = "local_agent";
-    /** The most ids kept across rebuilds; the oldest go first. */
-    private static final int KEPT_IDS = 2048;
 
     private static final int PAD_X = Theme.PAD * 2;
     private static final int PAD_Y = Theme.PAD;
@@ -73,28 +65,13 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     private final List<Item> items = new ArrayList<>();
     private final Map<Integer, Item> byIndex = new HashMap<>();
-    private final Map<String, Items.ToolItem> cards = new HashMap<>();
     /** The card or hook group each nested item sits in. */
     private final Map<Item, Item> parentOf = new IdentityHashMap<>();
-    private final Set<Items.ToolItem> running = Collections.newSetFromMap(new IdentityHashMap<>());
-    /** The running top-level sub-agent cards, in the order they started. */
-    private final Set<Items.ToolItem> runningAgents = new LinkedHashSet<>();
-    /** The cards whose result launched a sub-agent into the background. */
-    private final Set<Items.ToolItem> launched = Collections.newSetFromMap(new IdentityHashMap<>());
-    /** The session's background sub-agents now open, and every one this canvas has seen open, by id. */
-    private Set<String> openTasks = Set.of();
-    private final Set<String> seenTasks = Collections.newSetFromMap(bounded());
-    /**
-     * Each card's times (see {@link Items.ToolItem}) by tool-use id, kept across {@link #clear}: a session switch or
-     * "Show earlier" rebuilds the cards, and a call five minutes in still reads five minutes.
-     */
-    private final Map<String, long[]> times = bounded();
-    private Runnable agentsChanged = () -> { };
-    private Set<Items.ToolItem> waitingCards = Collections.newSetFromMap(new IdentityHashMap<>());
-    private List<Approval> waitingFor = List.of();
     /** Repaints running cards' elapsed time once a second while one runs and the canvas is on screen. */
     private final ShownTimer ticker = new ShownTimer(this, 1000, this::tick);
     private LongSupplier clock = System::currentTimeMillis;
+    /** The cards by id, what they run, and the approvals that hold them up. */
+    private final AgentTracker agents = new AgentTracker(this::nowMillis, parentOf::get, this::updateTicker, this::repaint);
     private final Consumer<String> links;
     private int[] tops = new int[0];
     /** Heights used for positions: exact, or estimated while {@link #estimated}. */
@@ -122,16 +99,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private String pressedLink;
     /** The clicks of the press on {@link #pressedLink}: a link is followed at a double click, as everywhere in comando. */
     private int pressedClicks;
-    private final List<int[]> matches = new ArrayList<>();
-    private Map<TextBox, List<int[]>> matchesByBox = new IdentityHashMap<>();
-    private int currentMatch = -1;
-    private String findText = "";
-    /** Where {@link #rewindFind} left the current match: its box, its item and its offset; -1 when not rewound. */
-    private TextBox rewoundBox;
-    private Item rewoundItem;
-    private int rewoundAt = -1;
-    /** Items the current find opened; clearing the find closes them again. */
-    private final List<Item> revealed = new ArrayList<>();
+    /** Find: its matches, the current one, and the items it opened. */
+    private final Finder finder = new Finder(new FindHost());
 
     public TranscriptCanvas(Consumer<String> links) {
         this.links = links;
@@ -188,19 +157,13 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         endKeptAt = -1;
         items.clear();
         byIndex.clear();
-        cards.clear();
+        agents.clear();
         parentOf.clear();
-        running.clear();
-        runningAgents.clear();
-        launched.clear();
-        waitingCards.clear();
-        revealed.clear();
         updateTicker();
         clearSelection();
         // another session's blocks: the next find, even with the text the find bar kept, is a new one that opens the
         // closed cards holding it
-        findText = "";
-        clearMatches();
+        finder.reset();
         structureChanged = true;
         changed();
     }
@@ -211,16 +174,15 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      */
     public void append(int index, Block b) {
         Item item = switch (b) {
-            case Block.ToolCall call -> new Items.ToolItem(call, index, times.getOrDefault(call.toolUseId(), Items.ToolItem.newTimes()));
+            case Block.ToolCall call -> agents.newCard(call, index);
             case Block.Note n when n.kind() == Block.NoteKind.HOOK -> new Items.NoteItem(n, true);
             default -> Items.of(b);
         };
         byIndex.put(index, item);
         if (item instanceof Items.ToolItem card) {
-            cards.put(card.call().toolUseId(), card);
-            track(card);
+            agents.added(card);
         }
-        Items.ToolItem parent = b.parent().isEmpty() ? null : cards.get(b.parent());
+        Items.ToolItem parent = b.parent().isEmpty() ? null : agents.card(b.parent());
         List<Item> siblings = parent != null ? parent.children() : items;
         Item shown = item;
         if (item instanceof Items.NoteItem hook && hook.isHook()) {
@@ -253,7 +215,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
             parentOf.put(shown, parent);
             invalidateAncestors(parent);
             if (item instanceof Items.ToolItem card) {
-                countTool(parent, card);
+                agents.nested(parent, card);
             }
         } else {
             items.add(shown);
@@ -261,9 +223,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
                 frameReport();
             }
         }
-        if (!waitingFor.isEmpty()) {
-            resolveWaiting();
-        }
+        agents.appended();
         structureChanged = true;
         changed();
     }
@@ -304,57 +264,10 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         item.update(b);
         invalidateAncestors(parentOf.get(item));
         if (item instanceof Items.ToolItem card) {
-            track(card);
-            lastToolChanged(card);
-            if (!waitingFor.isEmpty() || !waitingCards.isEmpty()) {
-                resolveWaiting();
-            }
+            agents.updated(card);
         }
         structureChanged = true;
         changed();
-    }
-
-    /**
-     * Keeps the set of active cards, which drives the elapsed-time repaint, the running top-level sub-agents, and the
-     * cards that launched a sub-agent into the background.
-     */
-    private void track(Items.ToolItem card) {
-        long now = nowMillis();
-        card.launchSeen(now);
-        if (!card.launchedAgent().isEmpty()) {
-            launched.add(card);
-            card.setBackground(inBackground(card, now)); // before the times: a launch is not the end
-        } else {
-            launched.remove(card);
-        }
-        card.seen(now);
-        if (card.call().isSubagent() && card.runningSince() >= 0) {
-            times.putIfAbsent(card.call().toolUseId(), card.times());
-        }
-        boolean agent = card.call().isSubagent() && card.call().parent().isEmpty();
-        if (card.isActive()) {
-            running.add(card);
-            if (agent) {
-                runningAgents.add(card);
-            }
-        } else {
-            running.remove(card);
-            runningAgents.remove(card);
-        }
-        updateTicker();
-    }
-
-    /**
-     * A sub-agent launched into the background works while the session lists it among its open tasks. Its launch can
-     * reach the canvas before the list that holds it: a launch seen live counts as working for {@link #LAUNCH_GRACE_MILLIS},
-     * unless the list already held it and let it go.
-     */
-    private boolean inBackground(Items.ToolItem card, long now) {
-        String id = card.launchedAgent();
-        if (openTasks.contains(id)) {
-            return true;
-        }
-        return !seenTasks.contains(id) && card.launchedAt() >= 0 && now - card.launchedAt() < LAUNCH_GRACE_MILLIS;
     }
 
     /**
@@ -362,69 +275,12 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * {@code local_agent} tasks reads as running in the background until the task leaves the list.
      */
     public void setBackgroundTasks(List<BackgroundTask> tasks) {
-        Set<String> open = new HashSet<>();
-        for (BackgroundTask t : tasks) {
-            if (t.kind().equals(LOCAL_AGENT)) {
-                open.add(t.id());
-            }
-        }
-        if (open.equals(openTasks)) {
-            return;
-        }
-        openTasks = open;
-        seenTasks.addAll(open);
-        retrackLaunched();
-    }
-
-    /** Re-reads whether each launched sub-agent still works; repaints, and tells the listener, when one changed. */
-    private void retrackLaunched() {
-        boolean changed = false;
-        for (Items.ToolItem card : List.copyOf(launched)) {
-            boolean was = card.isActive();
-            track(card);
-            changed |= was != card.isActive();
-        }
-        if (changed) {
-            repaint();
-            agentsChanged.run();
-        }
+        agents.setBackgroundTasks(tasks);
     }
 
     /** Runs when the running sub-agents change with no block appended or replaced: a launch's grace ending, a task list. */
     public void onAgentsChanged(Runnable listener) {
-        agentsChanged = listener;
-    }
-
-    private static <V> Map<String, V> bounded() {
-        return new LinkedHashMap<>(16, 0.75f, false) {
-            @Override
-            protected boolean removeEldestEntry(Map.Entry<String, V> eldest) {
-                return size() > KEPT_IDS;
-            }
-        };
-    }
-
-    /** A tool call nested in {@code parent}: it counts in every card it sits in, up to the top level. */
-    private void countTool(Items.ToolItem parent, Items.ToolItem card) {
-        String label = Items.ToolItem.lastLabel(card.call());
-        for (Item p = parent; p != null; p = parentOf.get(p)) {
-            if (p instanceof Items.ToolItem t) {
-                t.toolAdded(card.call().toolUseId(), label);
-            }
-        }
-    }
-
-    /** A nested call changed (its input arrived): the cards showing it as their latest call show the new summary. */
-    private void lastToolChanged(Items.ToolItem card) {
-        String label = null;
-        for (Item p = parentOf.get(card); p != null; p = parentOf.get(p)) {
-            if (p instanceof Items.ToolItem t && t.isLastTool(card.call().toolUseId())) {
-                if (label == null) {
-                    label = Items.ToolItem.lastLabel(card.call());
-                }
-                t.lastToolChanged(label);
-            }
-        }
+        agents.onAgentsChanged(listener);
     }
 
     /**
@@ -436,35 +292,30 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     /** The running top-level sub-agent cards, in the order they started. */
     public List<RunningAgent> runningAgents() {
-        List<RunningAgent> out = new ArrayList<>(runningAgents.size());
-        for (Items.ToolItem card : runningAgents) {
-            Block.ToolCall c = card.call();
-            out.add(new RunningAgent(c.toolUseId(), card.summary(), card.runningSince(), card.launchedAgent()));
-        }
-        return out;
+        return agents.runningAgents();
     }
 
     /** The tool calls nested in the card {@code toolUseId}, at any depth; -1 when there is no such card. For tests. */
     int toolCount(String toolUseId) {
-        Items.ToolItem card = cards.get(toolUseId);
+        Items.ToolItem card = agents.card(toolUseId);
         return card == null ? -1 : card.toolCount();
     }
 
     /** The latest tool call nested in the card {@code toolUseId}, as its status shows it. For tests. */
     String lastTool(String toolUseId) {
-        Items.ToolItem card = cards.get(toolUseId);
+        Items.ToolItem card = agents.card(toolUseId);
         return card == null ? "" : card.lastTool();
     }
 
     /** Whether the card {@code toolUseId} is open. */
     public boolean isCardOpen(String toolUseId) {
-        Items.ToolItem card = cards.get(toolUseId);
+        Items.ToolItem card = agents.card(toolUseId);
         return card != null && card.isOpen();
     }
 
     /** The top of the top-level item holding the card {@code toolUseId}; -1 when there is none or it has no position. For tests. */
     int topOf(String toolUseId) {
-        Item item = cards.get(toolUseId);
+        Item item = agents.card(toolUseId);
         if (item == null) {
             return -1;
         }
@@ -480,7 +331,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * false when there is no such card.
      */
     public boolean reveal(String toolUseId) {
-        Items.ToolItem card = cards.get(toolUseId);
+        Items.ToolItem card = agents.card(toolUseId);
         if (card == null) {
             return false;
         }
@@ -555,53 +406,18 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * MCP tool ({@code mcp__server__name}).
      */
     public void setWaiting(List<Approval> approvals) {
-        waitingFor = List.copyOf(approvals);
-        resolveWaiting();
-    }
-
-    private void resolveWaiting() {
-        Set<Items.ToolItem> now = Collections.newSetFromMap(new IdentityHashMap<>());
-        for (Approval a : waitingFor) {
-            Items.ToolItem card = null;
-            if (!a.toolUseId().isEmpty()) {
-                card = cards.get(a.toolUseId());
-            } else {
-                for (Items.ToolItem c : running) {
-                    if (isTool(c.call().name(), a.toolName()) && (card == null || c.order() > card.order())) {
-                        card = c;
-                    }
-                }
-            }
-            if (card != null && card.isRunning()) {
-                now.add(card);
-            }
-        }
-        if (now.equals(waitingCards)) {
-            return;
-        }
-        for (Items.ToolItem c : waitingCards) {
-            c.setWaiting(now.contains(c));
-        }
-        for (Items.ToolItem c : now) {
-            c.setWaiting(true);
-        }
-        waitingCards = now;
-        repaint();
-    }
-
-    private static boolean isTool(String callName, String toolName) {
-        return !toolName.isEmpty() && (callName.equals(toolName) || callName.endsWith("__" + toolName));
+        agents.setWaiting(approvals);
     }
 
     /** The status a card shows beside its title ({@code running · 12 s}, the wait for an approval); empty when done or unknown. */
     public String cardStatus(String toolUseId) {
-        Items.ToolItem card = cards.get(toolUseId);
+        Items.ToolItem card = agents.card(toolUseId);
         return card == null ? "" : card.statusText(nowMillis());
     }
 
     /** Whether some card runs, so the elapsed-time repaint has work while the canvas is on screen. */
     public boolean hasRunningCards() {
-        return !running.isEmpty();
+        return agents.hasRunning();
     }
 
     /** For tests: the clock running cards are timed by. */
@@ -615,16 +431,14 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     private void updateTicker() {
-        ticker.want(!running.isEmpty());
+        ticker.want(agents.hasRunning());
     }
 
     private void tick() {
-        if (running.isEmpty()) {
+        if (!agents.hasRunning()) {
             return;
         }
-        if (!launched.isEmpty()) {
-            retrackLaunched(); // a launch's grace ends with no event to say so
-        }
+        agents.tick();
         repaint();
     }
 
@@ -1032,25 +846,12 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
 
     @Override
     public List<int[]> finds(TextBox box) {
-        return matchesByBox.get(box);
+        return finder.finds(box);
     }
 
     @Override
     public int currentFind(TextBox box) {
-        if (currentMatch < 0 || placed == null) {
-            return -1;
-        }
-        int[] m = matches.get(currentMatch);
-        if (placed.get(m[0]).box() != box) {
-            return -1;
-        }
-        List<int[]> inBox = matchesByBox.get(box);
-        for (int i = 0; inBox != null && i < inBox.size(); i++) {
-            if (inBox.get(i)[0] == m[1]) {
-                return i;
-            }
-        }
-        return -1;
+        return finder.currentFind(box, placed);
     }
 
     @Override
@@ -1075,8 +876,8 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         if (anchorBox != null && (!boxIndex.containsKey(anchorBox) || !boxIndex.containsKey(focusBox))) {
             clearSelection();
         }
-        if (!findText.isEmpty()) {
-            rematch();
+        if (finder.active()) {
+            finder.rematch(placed);
         }
     }
 
@@ -1271,41 +1072,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * closes what the previous one opened.
      */
     public int find(String text, boolean forward) {
-        boolean fromRewound = false;
-        if (!text.equals(findText)) {
-            fromRewound = rewoundAt >= 0;
-            findText = text;
-            currentMatch = -1;
-            concealRevealed(Set.of());
-            if (!text.isEmpty()) {
-                revealContaining(items, text.toLowerCase(Locale.ROOT));
-            }
-            relayoutKeepingView(getWidth() > 0 ? getWidth() : viewportWidth());
-            placed = null;
-        }
-        ensureExact(); // the same text again, after a switch or new blocks: matches are counted over every item
-        ensurePlaced();
-        rematch();
-        if (matches.isEmpty()) {
-            currentMatch = -1;
-            dropRewound();
-            repaint();
-            return 0;
-        }
-        if (fromRewound) {
-            currentMatch = atOrAfterRewound();
-        } else {
-            currentMatch = currentMatch < 0 ? (forward ? 0 : matches.size() - 1)
-                    : Math.floorMod(currentMatch + (forward ? 1 : -1), matches.size());
-        }
-        dropRewound();
-        int[] m = matches.get(currentMatch);
-        Placed p = placed.get(m[0]);
-        int y = p.y() + Math.round(p.box().topOf(m[1]));
-        Rectangle visible = getVisibleRect();
-        scrollRectToVisible(new Rectangle(0, Math.max(0, y - visible.height / 3), 1, visible.height / 2));
-        repaint();
-        return matches.size();
+        return finder.find(text, forward);
     }
 
     /**
@@ -1313,54 +1080,12 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * reader's eye rather than going back to the first in the transcript.
      */
     public void rewindFind() {
-        dropRewound();
-        if (placed != null && currentMatch >= 0 && currentMatch < matches.size()) {
-            int[] m = matches.get(currentMatch);
-            rewoundBox = placed.get(m[0]).box();
-            rewoundItem = placed.get(m[0]).item();
-            rewoundAt = m[1];
-        }
-    }
-
-    /** The first match at or after the anchor, in reading order; the first match when the anchor's text is gone. */
-    private int atOrAfterRewound() {
-        int from = -1;
-        for (int i = 0; i < placed.size() && from < 0; i++) {
-            if (placed.get(i).box() == rewoundBox) {
-                from = i;
-            }
-        }
-        for (int i = 0; i < placed.size() && from < 0; i++) {
-            if (placed.get(i).item() == rewoundItem) {
-                from = i;
-            }
-        }
-        if (from < 0) {
-            return 0;
-        }
-        for (int k = 0; k < matches.size(); k++) {
-            int[] m = matches.get(k);
-            if (m[0] > from || (m[0] == from && m[1] >= rewoundAt)) {
-                return k;
-            }
-        }
-        return 0;
-    }
-
-    private void dropRewound() {
-        rewoundBox = null;
-        rewoundItem = null;
-        rewoundAt = -1;
+        finder.rewind(placed);
     }
 
     /** The top of the current match in the canvas, -1 when there is none; for tests. */
     int currentMatchY() {
-        if (placed == null || currentMatch < 0 || currentMatch >= matches.size()) {
-            return -1;
-        }
-        int[] m = matches.get(currentMatch);
-        Placed p = placed.get(m[0]);
-        return p.y() + Math.round(p.box().topOf(m[1]));
+        return finder.currentMatchY(placed);
     }
 
     /**
@@ -1368,97 +1093,58 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
      * current match, with the cards around it.
      */
     public void clearFind() {
-        Set<Item> keep = Collections.newSetFromMap(new IdentityHashMap<>());
-        if (!findText.isEmpty() && !revealed.isEmpty()) {
+        finder.clear();
+    }
+
+    /** What a find needs from the canvas. */
+    private final class FindHost implements Finder.Host {
+
+        @Override
+        public List<Item> items() {
+            return items;
+        }
+
+        @Override
+        public Item parentOf(Item item) {
+            return parentOf.get(item);
+        }
+
+        @Override
+        public List<Placed> placedExactly() {
             ensureExact();
             ensurePlaced();
-            if (currentMatch >= 0 && currentMatch < matches.size()) {
-                for (Item i = placed.get(matches.get(currentMatch)[0]).item(); i != null; i = parentOf.get(i)) {
-                    keep.add(i);
-                }
-            }
+            return placed;
         }
-        findText = "";
-        dropRewound();
-        clearMatches();
-        if (concealRevealed(keep)) {
+
+        @Override
+        public void foldChanged(Item item) {
+            item.foldChanged();
+            invalidateAncestors(parentOf.get(item));
+            structureChanged = true;
+        }
+
+        @Override
+        public void relayout() {
+            relayoutKeepingView(getWidth() > 0 ? getWidth() : viewportWidth());
+            placed = null;
+        }
+
+        @Override
+        public void structureChanged() {
             structureChanged = true;
             changed();
-        } else {
-            repaint();
         }
-    }
 
-    /** Closes what the find opened, except {@code keep}; true when something closed. */
-    private boolean concealRevealed(Set<Item> keep) {
-        boolean closed = false;
-        for (Item item : revealed) {
-            if (item.fold().conceal(keep.contains(item))) {
-                item.foldChanged();
-                invalidateAncestors(parentOf.get(item));
-                closed = true;
-            }
+        @Override
+        public void scrollTo(int y) {
+            Rectangle visible = getVisibleRect();
+            scrollRectToVisible(new Rectangle(0, Math.max(0, y - visible.height / 3), 1, visible.height / 2));
         }
-        revealed.clear();
-        if (closed) {
-            structureChanged = true;
-        }
-        return closed;
-    }
 
-    private void clearMatches() {
-        matches.clear();
-        matchesByBox = new IdentityHashMap<>();
-        currentMatch = -1;
-    }
-
-    private void rematch() {
-        int keep = currentMatch;
-        matches.clear();
-        matchesByBox = new IdentityHashMap<>();
-        if (findText.isEmpty()) {
-            currentMatch = -1;
-            return;
+        @Override
+        public void repaint() {
+            TranscriptCanvas.this.repaint();
         }
-        String needle = findText.toLowerCase(Locale.ROOT);
-        for (int i = 0; i < placed.size(); i++) {
-            TextBox box = placed.get(i).box();
-            String hay = box.text().toLowerCase(Locale.ROOT);
-            for (int at = hay.indexOf(needle); at >= 0; at = hay.indexOf(needle, at + needle.length())) {
-                matches.add(new int[]{i, at});
-                matchesByBox.computeIfAbsent(box, k -> new ArrayList<>()).add(new int[]{at, at + needle.length()});
-            }
-        }
-        currentMatch = keep < matches.size() ? keep : -1;
-    }
-
-    private void revealContaining(List<Item> list, String needle) {
-        for (Item item : list) {
-            Fold fold = item.fold();
-            if ((fold == null && item.children().isEmpty()) || !subtreeContains(item, needle)) {
-                continue;
-            }
-            if (fold != null && fold.reveal()) {
-                item.foldChanged();
-                invalidateAncestors(parentOf.get(item));
-                revealed.add(item);
-                structureChanged = true;
-            }
-            revealContaining(item.children(), needle);
-        }
-    }
-
-    /** True when the item or any block nested in it, at any depth, contains {@code needle}. */
-    private static boolean subtreeContains(Item item, String needle) {
-        if (item.text().toLowerCase(Locale.ROOT).contains(needle)) {
-            return true;
-        }
-        for (Item c : item.children()) {
-            if (subtreeContains(c, needle)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

@@ -154,18 +154,18 @@ final class DiffWindow {
         try {
             String reason = editor.save().get(SAVE_AT_QUIT.toMillis(), TimeUnit.MILLISECONDS);
             if (reason != null) {
-                LOG.log(System.Logger.Level.WARNING, "the comparison window's edits were not saved: " + reason);
+                LOG.log(System.Logger.Level.WARNING, "cannot save the comparison window's edits [reason=" + reason + ']');
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException | TimeoutException e) {
-            LOG.log(System.Logger.Level.WARNING, "the comparison window's edits were not saved in time", e);
+            LOG.log(System.Logger.Level.WARNING, "cannot save the comparison window's edits in time", e);
         }
     }
 
     void dispose() {
         reread.stop();
-        editor.dispose();
+        editor.unmount();
         if (dialog != null) {
             dialog.dispose();
             dialog = null;

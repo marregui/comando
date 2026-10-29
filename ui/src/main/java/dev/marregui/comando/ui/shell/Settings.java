@@ -54,11 +54,11 @@ final class Settings {
             try {
                 return new Settings(file, read(JSON.readTree(file.toFile())));
             } catch (JacksonException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot read " + file + ", kept aside: " + e.getMessage());
+                LOG.log(System.Logger.Level.WARNING, "cannot read the settings, kept aside [file=" + file + ']', e);
                 try {
                     Files.move(file, file.resolveSibling(file.getFileName() + ".unreadable"), StandardCopyOption.REPLACE_EXISTING);
                 } catch (IOException moved) {
-                    LOG.log(System.Logger.Level.WARNING, "cannot keep " + file + " aside: " + moved.getMessage());
+                    LOG.log(System.Logger.Level.WARNING, "cannot keep the settings aside [file=" + file + ']', moved);
                 }
                 return new Settings(file, new TreeMap<>());
             }
@@ -98,7 +98,7 @@ final class Settings {
                 }
             }
         } catch (BackingStoreException | IllegalStateException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot read the earlier preferences: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot read the earlier preferences", e);
         }
         return out;
     }
@@ -160,7 +160,7 @@ final class Settings {
             AtomicFiles.write(file, JSON.writeValueAsBytes(root));
             dirty = false;
         } catch (IOException | JacksonException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot write " + file + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot write the settings [file=" + file + ']', e);
         }
     }
 }

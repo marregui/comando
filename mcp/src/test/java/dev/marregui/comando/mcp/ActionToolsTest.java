@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The registry's actions as MCP tools (record 121): creating and driving sessions, and the two rules. */
+/// The registry's actions as MCP tools (record 121): creating and driving sessions, and the two rules.
 class ActionToolsTest {
 
     private final ObjectMapper json = new ObjectMapper();
@@ -50,6 +50,8 @@ class ActionToolsTest {
         state.set(with(state.get(), session("foreman", ""), session("mine", "foreman"), session("grandchild", "mine"), session("users", "")));
     }
 
+    /// `session_new` saves a session with the given name, folder and model, records the calling session as its creator,
+    /// and with a prompt starts it, headed with who sent it, without writing to any panel; a notice names the caller.
     @Test
     void sessionNewCreatesOpensAndWithAPromptStartsASessionThatRecordsItsCreator() throws Exception {
         McpTools.Outcome out = call("foreman", "session_new", "{\"name\":\"slug-writer\",\"work_dir\":\"" + home + "\",\"model\":\"sonnet\","
@@ -69,6 +71,7 @@ class ActionToolsTest {
         assertThat(sink.of(Intent.Notify.class)).anyMatch(n -> n.text().startsWith("foreman: session new"));
     }
 
+    /// `session_new` refuses a name already taken and a folder that does not exist, and saves nothing.
     @Test
     void sessionNewRefusesATakenNameAndAMissingFolder() throws Exception {
         assertThat(call("foreman", "session_new", "{\"name\":\"mine\",\"work_dir\":\"" + home + "\"}").text()).contains("exists");
@@ -76,6 +79,8 @@ class ActionToolsTest {
         assertThat(sink.of(Intent.SaveSession.class)).isEmpty();
     }
 
+    /// A caller starts only sessions it created, directly or through others; starting a session of the user's is
+    /// refused citing record 44, while stopping any session is always allowed.
     @Test
     void aStoppedSessionIsStartedOnlyByItsCreatorsRecord44() throws Exception {
         assertThat(call("foreman", "session_start", "{\"session\":\"mine\"}").error()).isFalse();
@@ -87,6 +92,8 @@ class ActionToolsTest {
         assertThat(call("foreman", "session_stop", "{\"session\":\"users\"}").error()).as("stopping is always allowed").isFalse();
     }
 
+    /// Rule 1: an approval is not answered by the session that asks for it nor by a session that created the asker; any
+    /// other caller answers it, allowing with a scope or denying with a message.
     @Test
     void anApprovalIsNeverAnsweredByItsAskerNorByTheAskersCreatorsRule1() throws Exception {
         state.set(state.get().withApprovals(List.of(card(1, "foreman"), card(2, "grandchild"), card(3, "users"))));
@@ -100,6 +107,8 @@ class ActionToolsTest {
         assertThat(sink.of(Intent.ApprovalAnswered.class).get(1).decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION));
     }
 
+    /// Rule 2: a destructive action such as `session_remove` is refused until `agents.json` grants it to the caller,
+    /// then runs for that caller only.
     @Test
     void aDestructiveActionRunsOnlyForACallerTheUserGrantedItRule2() throws Exception {
         McpTools.Outcome refused = call("foreman", "session_remove", "{\"session\":\"mine\"}");
@@ -111,6 +120,8 @@ class ActionToolsTest {
         assertThat(sink.of(Intent.RemoveSession.class)).extracting(Intent.RemoveSession::name).containsExactly("mine");
     }
 
+    /// `session_edit` saves the changes asked for, here the name and effort, under the previous name, and keeps the
+    /// creator and the settings it was not asked to change.
     @Test
     void anEditKeepsTheCreatorAndWhatItDoesNotChange() throws Exception {
         assertThat(call("foreman", "session_edit", "{\"session\":\"mine\",\"new_name\":\"mine2\",\"effort\":\"max\"}").error()).isFalse();
@@ -122,6 +133,8 @@ class ActionToolsTest {
         assertThat(save.spec().createdBy()).isEqualTo("foreman");
     }
 
+    /// Panels are addressed by title, an unknown title answers with the panels there are, a slash command is explained,
+    /// and the state JSON lists the sessions with their creators, the approvals and the closed panels.
     @Test
     void panelsAreFoundByTitleAndTheStateSaysWhatTheWindowShows() throws Exception {
         assertThat(call("foreman", "panel_rename", "{\"panel\":\"" + state.get().panels().getFirst().title() + "\",\"title\":\"notes\"}").error()).isFalse();
@@ -133,6 +146,8 @@ class ActionToolsTest {
         assertThat(s.has("closedPanels")).isTrue();
     }
 
+    /// Every registered action is listed as a tool, none twice, and calling it reaches a runner instead of answering
+    /// unknown tool.
     @Test
     void everyActionIsListedWithItsSchemaAndHasARunner() throws Exception {
         Set<String> listed = new HashSet<>();

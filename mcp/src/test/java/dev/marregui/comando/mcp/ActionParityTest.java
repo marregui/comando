@@ -17,15 +17,15 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * An agent has every action the user has (record 121): every kind of intent is classified once, and every intent the window
- * sends on a gesture is offered as a tool. A feature added to the window without its action fails here.
- */
+/// An agent has every action the user has (record 121): every kind of intent is classified once, and every intent the
+/// window sends on a gesture is offered as a tool. A feature added to the window without its action fails here.
 class ActionParityTest {
 
     /** {@code new Intent.X(} and {@code Intent.X::new} in the window's sources. */
     private static final Pattern SENT = Pattern.compile("(?:new\\s+Intent\\.(\\w+)\\s*\\(|Intent\\.(\\w+)::new)");
 
+    /// Each kind of intent is in exactly one class: offered as a tool, an event, a window gesture with its reason, or
+    /// not yet offered with its reason; an intent in none or in two fails.
     @Test
     void everyKindOfIntentIsClassifiedOnce() {
         List<String> unclassified = new ArrayList<>();
@@ -45,6 +45,8 @@ class ActionParityTest {
         assertThat(twice).as("intents in two classes").isEmpty();
     }
 
+    /// Scanning the window's sources for the intents it sends finds more than forty, and each is offered as a tool or
+    /// listed as window-only or not yet offered, with its reason.
     @Test
     void everyIntentTheWindowSendsIsOfferedOrSaysWhyNot() throws IOException {
         Set<String> sent = new TreeSet<>();

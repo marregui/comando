@@ -32,7 +32,7 @@ class CommandEditorTest {
             assertThat(e.area().getFont().getSize2D()).isEqualTo(40f);
             e.zoom(-100);
             assertThat(e.area().getFont().getSize2D()).isEqualTo(8f);
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -49,7 +49,7 @@ class CommandEditorTest {
             assertThat(e.ranStart()).isEqualTo(TEXT.indexOf("Explain"));
             e.area().insert("x", 0);
             assertThat(e.ranStart()).as("the next edit clears the tint").isEqualTo(-1);
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -70,7 +70,7 @@ class CommandEditorTest {
             assertThat(e.runText(0)).as("no selection: the whole block").isEqualTo("SELECT 1;");
             assertThat(e.area().getCaretPosition()).isEqualTo(3);
             assertThat(e.runText(1)).as("the blank line has no mark").isEmpty();
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -85,7 +85,7 @@ class CommandEditorTest {
             assertThat(e.area().getSelectedText()).isEqualTo("SELECT");
             assertThat(e.text()).as("a blank line after it ends its block").endsWith("SELECT 2;\n\n");
             assertThat(e.text()).startsWith(TEXT);
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -100,7 +100,7 @@ class CommandEditorTest {
             // Nothing ran from the editor: the insert appends, it no longer lands after the selection
             assertThat(e.text()).startsWith(TEXT).endsWith("SELECT 2;\n\n");
             assertThat(e.area().getSelectedText()).isEqualTo("SELECT 1;");
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -114,7 +114,7 @@ class CommandEditorTest {
             assertThat(e.text()).isEqualTo("new text");
             e.area().undoLastAction();
             assertThat(e.text()).isEqualTo(TEXT);
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -134,7 +134,7 @@ class CommandEditorTest {
             e.area().insert(" ", 0);
             assertThat(e.errorStart()).as("an edit clears the underline").isEqualTo(-1);
             assertThat(e.markError(ran, 3)).as("the text changed since the run").isFalse();
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -149,7 +149,7 @@ class CommandEditorTest {
             e.insertAtCaret("SELECT 1;");
             type(e, "and explain it");
             assertThat(e.text()).startsWith("Write a query for trades\nand explain it\n\nSELECT 1;");
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -162,7 +162,7 @@ class CommandEditorTest {
             e.appendQuietly("SELECT 1;");
             type(e, "explain ");
             assertThat(e.text()).startsWith("explain \n\nSELECT 1;");
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -187,7 +187,7 @@ class CommandEditorTest {
             assertThat(e.text()).isEqualTo("Write a query for the biggest trade\n\nselect * From trades;");
             e.area().undoLastAction();
             assertThat(e.text()).as("the user's typing is a step of its own").isEqualTo("\n\nselect * From trades;");
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -206,7 +206,7 @@ class CommandEditorTest {
             assertThat(e.text()).isEqualTo("ask\n\nSELECT 1;\n\nnotes more");
             e.area().undoLastAction();
             assertThat(e.text()).isEqualTo("ask\n\nnotes more");
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -229,8 +229,8 @@ class CommandEditorTest {
             f.appendQuietly("SELECT 1;");
             type(f, " today");
             assertThat(f.text()).isEqualTo("Write a query for trades today\n\nSELECT 1;\n\n");
-            e.dispose();
-            f.dispose();
+            e.unmount();
+            f.unmount();
         });
     }
 
@@ -256,7 +256,7 @@ class CommandEditorTest {
             assertThat(e.text()).as("a second insert follows the first")
                     .isEqualTo("top\n\nWrite a query for trades\n\nSELECT 1;\n\nSELECT 2;\n\nnotes below");
             assertThat(e.area().getSelectedText()).isEqualTo("trades");
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -274,7 +274,7 @@ class CommandEditorTest {
             assertThat(e.area().getCaretPosition()).isEqualTo("Write a query for trades".length());
             e.insertAtCaret("SELECT 2;");
             assertThat(e.text()).isEqualTo("Write a query for trades\n\nSELECT 1;\n\nSELECT 2;\n\n");
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -289,7 +289,7 @@ class CommandEditorTest {
             e.insertAtCaret("XYZ");
             assertThat(e.text()).isEqualTo("abc def ghi\n\nXYZ\n\n");
             assertThat(e.area().getSelectedText()).isEqualTo("def");
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -304,7 +304,7 @@ class CommandEditorTest {
             e.appendQuietly("SELECT 2;");
             assertThat(e.area().getCaret().getMark()).isEqualTo(20);
             assertThat(e.area().getCaret().getDot()).isEqualTo(15);
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -319,7 +319,7 @@ class CommandEditorTest {
             String ran = e.runText();
             assertThat(e.markError(ran, 16)).isFalse();
             assertThat(e.errorStart()).isEqualTo(-1);
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -351,7 +351,7 @@ class CommandEditorTest {
             assertThat(changes).as("the panel's file is saved empty").last().isEqualTo("");
             e.area().undoLastAction();
             assertThat(e.text()).isEqualTo(TEXT);
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -361,7 +361,7 @@ class CommandEditorTest {
         c.load(text);
         c.area().setCaretPosition(text.length());
         boolean in = c.caretInSql();
-        c.dispose();
+        c.unmount();
         return in;
     }
 
@@ -384,7 +384,7 @@ class CommandEditorTest {
             e.area().undoLastAction();
             assertThat(e.text()).as("one step back").isEqualTo("SELECT 2;\n");
             assertThat(changes).as("an undo is the user's edit, and is saved").isNotEmpty().last().isEqualTo("SELECT 2;\n");
-            e.dispose();
+            e.unmount();
         });
     }
 
@@ -403,7 +403,7 @@ class CommandEditorTest {
             assertThat(e.caretInSql()).as("no SQL completion pops up in Java").isFalse();
             e.syntax(CommandEditor.PANEL_STYLE);
             assertThat(e.marked()).isEqualTo(2);
-            e.dispose();
+            e.unmount();
         });
     }
 

@@ -200,12 +200,12 @@ public final class Peers implements AutoCloseable {
                 broker.publish(presenceTopic(me.slug()), now.getBytes(StandardCharsets.UTF_8), true, null, null)
                         .whenComplete((v, e) -> {
                             if (e != null) {
-                                LOG.log(System.Logger.Level.DEBUG, "presence not sent: " + e.getMessage());
+                                LOG.log(System.Logger.Level.DEBUG, "presence not sent [cause=" + e.getMessage() + ']');
                             }
                         });
             }
         } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "presence failed: " + e.getMessage(), e);
+            LOG.log(System.Logger.Level.WARNING, "cannot send presence", e);
         }
     }
 
@@ -248,7 +248,7 @@ public final class Peers implements AutoCloseable {
             peers.put(slug, new Peer(slug, p.path("name").asString(slug), p.path("version").asString(""), p.path("busy").asBoolean(false),
                     p.path("started").asString(""), List.copyOf(sessions)));
         } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.DEBUG, "unreadable presence [instance=" + slug + "]: " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "unreadable presence [instance=" + slug + ", cause=" + e.getMessage() + ']');
         }
     }
 
@@ -263,7 +263,7 @@ public final class Peers implements AutoCloseable {
         try {
             q = json.readTree(m.payload());
         } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.DEBUG, "unreadable question, dropped: " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "unreadable question, dropped [cause=" + e.getMessage() + ']');
             return;
         }
         if (q.path("from").asString("").isBlank()) {
@@ -276,7 +276,7 @@ public final class Peers implements AutoCloseable {
             try {
                 r = answer(from, q.path("name").asString(from), q.path("session").asString(""), q.path("text").asString(""));
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "a question from instance " + from + " failed: " + e.getMessage(), e);
+                LOG.log(System.Logger.Level.WARNING, "a question failed [instance=" + from + ']', e);
                 r = new Reply(ERROR, me.name() + " could not answer: " + e.getMessage(), me.name(), CONSULT + from);
             }
             send(m.responseTopic(), m.correlation(), r);
@@ -405,7 +405,7 @@ public final class Peers implements AutoCloseable {
         p.put("session", r.session());
         broker.publish(topic, p.toString().getBytes(StandardCharsets.UTF_8), false, null, correlation).whenComplete((v, e) -> {
             if (e != null) {
-                LOG.log(System.Logger.Level.WARNING, "a reply was not sent [topic=" + topic + "]: " + e.getMessage());
+                LOG.log(System.Logger.Level.WARNING, "a reply was not sent [topic=" + topic + ']', e);
             }
         });
     }
@@ -576,7 +576,7 @@ public final class Peers implements AutoCloseable {
             try {
                 broker.publish(presenceTopic(me.slug()), new byte[0], true, null, null).get(CLEAR_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
             } catch (ExecutionException | TimeoutException e) {
-                LOG.log(System.Logger.Level.WARNING, "presence not cleared at close: " + e.getMessage());
+                LOG.log(System.Logger.Level.WARNING, "presence not cleared at close", e);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }

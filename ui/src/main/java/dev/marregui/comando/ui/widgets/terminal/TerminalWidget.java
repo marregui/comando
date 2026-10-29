@@ -186,7 +186,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         try {
             started = Pty.start(command, directory, 120, 30);
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot start a shell in " + directory + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot start a shell [directory=" + directory + ']', e);
             exitedLabel.setText("Cannot start a shell in " + Labels.shortPath(directory.toString()) + ": " + e.getMessage());
             restartButton.setText("Try again");
             exitedBar.setVisible(true);
@@ -322,7 +322,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         try {
             p.write(text);
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot write to the shell: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot write to the shell", e);
         }
     }
 

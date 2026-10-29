@@ -25,6 +25,8 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// The data root's files: settings, panels and their text, the Files tab's folders and the secret store behind the
+/// connections.
 class StoreTest {
 
     private static final Path CLAUDE_DIR = Path.of("/home/u/.claude");
@@ -32,6 +34,8 @@ class StoreTest {
     @TempDir
     Path home;
 
+    /// A data root with no files starts with the default connection and one welcome panel bound to it, and writes
+    /// `connections.json` and `panels.json`.
     @Test
     void freshRootGetsDefaultsAndWritesThem() {
         Store.Loaded loaded;
@@ -45,6 +49,8 @@ class StoreTest {
         assertThat(home.resolve("panels.json")).exists();
     }
 
+    /// When a settings file cannot be replaced, here `sessions.json` blocked by a non-empty directory, the save posts a
+    /// notice naming the file.
     @Test
     void aSettingsFileThatCannotBeWrittenIsTold() throws Exception {
         List<String> notices = new CopyOnWriteArrayList<>();
@@ -62,6 +68,7 @@ class StoreTest {
         assertThat(notices).anyMatch(n -> n.startsWith("Cannot write sessions.json"));
     }
 
+    /// Connections, sessions, the panel bound to them and the panel's text survive a close and a fresh load unchanged.
     @Test
     void roundTripOfSpecsBindingsAndText() {
         PanelId id = new PanelId("p-1");
@@ -81,6 +88,8 @@ class StoreTest {
         }
     }
 
+    /// A file written through the store lands whole, in a folder created if it is gone, and a second write replaces it,
+    /// leaving no temporary file beside it.
     @Test
     void aFileIsWrittenWholeOnTheWritersThreadEvenWhereItsFolderIsGone() throws Exception {
         Path file = home.resolve("repo/docs/gone/a.md");
@@ -93,6 +102,9 @@ class StoreTest {
         }
     }
 
+    /// The Files tab's folders start as the default, come back as saved with their index, excludes, icon, group and
+    /// trash listing, a hand-written entry with only a name and path loads with defaults, an emptied list stays empty,
+    /// and an unreadable `folders.json` gives the default and is kept aside.
     @Test
     void theFilesTabsFoldersHaveADefaultAndAreKeptAsSavedEvenEmpty() throws Exception {
         try (Store store = new Store(home)) {
@@ -137,6 +149,8 @@ class StoreTest {
         }
     }
 
+    /// On the first start on a kit's root its folders are put first and recorded, and afterwards they are neither added
+    /// again nor kept once the user took them out; a root with no kit adds nothing.
     @Test
     void theKitsFoldersComeFirstAtTheFirstStartOnItsRootAndOnlyThen() throws Exception {
         Path root = home.resolve("claude/kit");
@@ -161,10 +175,12 @@ class StoreTest {
         assertThat(Files.readAllLines(home.resolve("kit-folders"))).containsExactly(root.toString());
     }
 
+    /// A fresh data home on a kit root shows the kit's folders, the default folder being the kit's own root and so not
+    /// counting as the kit already shown.
     @Test
     void aFreshHomeOnAKitRootGetsTheKitsFoldersInsteadOfTheDefault() throws Exception {
         // the default folder is the config folder, which is the kit's own root ("Kit", path "."): it must not count as
-        // the kit already shown (found by an agent on a fresh data root, 2026-10-29)
+        // the kit already shown
         Path root = Files.createDirectories(home.resolve("claude/kit"));
         Path memory = Files.createDirectories(root.resolve("BRAIN/MEMORY"));
         KitRoot kitRoot = new KitRoot(root, Optional.of(new KitRoot.Manifest("k", "BRAIN",
@@ -182,6 +198,8 @@ class StoreTest {
         }
     }
 
+    /// A home that recorded the kit's root while saving no folders file, so the tab showed only the default, gets the
+    /// kit's folders at the next start, and a list the user then empties stays empty.
     @Test
     void aHomeTheDefaultHidTheKitFromIsRepairedAtTheNextStart() throws Exception {
         // before the fix a fresh home recorded the root in kit-folders and saved no folders file: the Files tab showed only
@@ -202,6 +220,9 @@ class StoreTest {
         }
     }
 
+    /// A hand-edited `folders.json` is held to the rules of the folders dialog: duplicate or empty names, relative
+    /// paths, an index outside the folder and a missing path are left out, `~` is expanded, and one notice says what
+    /// was left out and why.
     @Test
     void aHandEditedFoldersFileMeetsTheDialogsRulesAndSaysWhatItLeftOut() throws Exception {
         Files.writeString(home.resolve("folders.json"), """
@@ -220,6 +241,9 @@ class StoreTest {
                 .contains("a folder without a name (", "Out (the index file must be inside the folder", "NoPath (choose the folder to show)");
     }
 
+    /// A `folders.json` changed by hand is read again and handed to the tab once, while an unchanged file or the
+    /// store's own write is not; one that stops reading leaves the tab's folders, posts a notice and is not moved
+    /// aside.
     @Test
     void foldersJsonChangedByHandIsReadAgainAndOneThatDoesNotReadStaysWhereItIs() throws Exception {
         Path json = home.resolve("folders.json");
@@ -251,6 +275,7 @@ class StoreTest {
         }
     }
 
+    /// A notice raised while loading is kept and delivered to the listener that registers afterwards.
     @Test
     void whatTheStartFoundIsToldWhenTheListenerComesLater() throws Exception {
         Files.writeString(home.resolve("connections.json"), "[]");
@@ -265,6 +290,7 @@ class StoreTest {
         }
     }
 
+    /// A `sessions.json` written before sessions had a checkpoint command loads with the default `/reflect`.
     @Test
     void aSessionsFileFromBeforeTheCheckpointFieldLoadsWithTheDefaultCommand() throws Exception {
         Files.writeString(home.resolve("connections.json"), "[]");
@@ -276,6 +302,7 @@ class StoreTest {
         }
     }
 
+    /// A panel bound to a connection or session that no longer exists loads unbound.
     @Test
     void bindingsToMissingNamesAreDropped() throws Exception {
         Files.writeString(home.resolve("connections.json"), "[]");
@@ -286,6 +313,8 @@ class StoreTest {
         }
     }
 
+    /// A session bound to several panels stays with the first and is detached from the others, and one notice names the
+    /// session and the detached panels; a list with one binding each is left as it is.
     @Test
     void aSessionBoundToSeveralPanelsKeepsItsFirstAtTheStart() {
         List<PanelState> panels = List.of(new PanelState(new PanelId("a"), "one", "", "work"),
@@ -299,6 +328,8 @@ class StoreTest {
                 .containsExactly("work", "", "edge");
     }
 
+    /// A settings file that does not parse loads as empty and is kept aside under a `.corrupt-` name instead of being
+    /// overwritten.
     @Test
     void anUnreadableFileIsKeptAsideAndNotOverwritten() throws Exception {
         Files.writeString(home.resolve("connections.json"), "{ this is not json");
@@ -312,6 +343,7 @@ class StoreTest {
         }
     }
 
+    /// Repeated saves leave no `.tmp` file in the data root.
     @Test
     void writesLeaveNoTemporaryFiles() throws Exception {
         try (Store store = new Store(home)) {
@@ -351,6 +383,8 @@ class StoreTest {
         }
     }
 
+    /// A connection's password goes to the secret store and not into `connections.json`, a blank one stores nothing, it
+    /// reads back at the next load, and a connection saved with a blank password has its item removed.
     @Test
     void passwordsLiveInTheSecretStoreNotInTheFile() throws Exception {
         MapSecrets secrets = new MapSecrets();
@@ -368,6 +402,8 @@ class StoreTest {
         assertThat(secrets.map).isEmpty();
     }
 
+    /// When the secret store cannot be read, as with a locked keychain, the connection loads without its password and
+    /// saving it, or renaming it, keeps the stored item.
     @Test
     void aPasswordTheStoreCouldNotReadIsNotDeletedBySaving() throws Exception {
         MapSecrets secrets = new MapSecrets();
@@ -391,6 +427,8 @@ class StoreTest {
         assertThat(locked.map).containsEntry("lab", "s3cret");
     }
 
+    /// A secret store write stuck on an unanswered unlock prompt does not hold back the panels' text, which reaches its
+    /// file meanwhile; the password is stored once the prompt is answered.
     @Test
     void aKeychainPromptNobodyAnswersDoesNotHoldBackPanelText() throws Exception {
         CountDownLatch prompt = new CountDownLatch(1);
@@ -422,6 +460,8 @@ class StoreTest {
         assertThat(waiting.map).containsEntry("lab", "s3cret");
     }
 
+    /// The keychain's answer is decoded in both forms it prints, the quoted password and the hex form with escapes, a
+    /// quoted `0x` text stays text, and an empty password is empty.
     @Test
     void keychainAnswersAreDecodedInBothForms() {
         assertThat(Secrets.Keychain.password("keychain: \"/x\"\npassword: \"pa ss\"word\"\n")).isEqualTo("pa ss\"word");
@@ -431,6 +471,8 @@ class StoreTest {
         assertThat(Secrets.Keychain.password("password: \n")).isEmpty();
     }
 
+    /// The login keychain stores, replaces, reads and deletes a password, with quotes and non-ASCII characters intact;
+    /// it touches the real keychain, so it runs only when asked by a property.
     @Test
     void theKeychainStoresReadsAndDeletes() {
         Assumptions.assumeTrue(Boolean.getBoolean("comando.keychainTest"), "set -Dcomando.keychainTest=true to touch the login keychain");
@@ -449,6 +491,9 @@ class StoreTest {
         assertThat(k.read(name)).isEmpty();
     }
 
+    /// A folder naming an index file that is missing inside the config folder gets it created once, with a heading and
+    /// a note on how it is kept; an existing index, a path into a missing subfolder and a folder outside the config
+    /// folder are left alone.
     @Test
     void anIndexNamedButMissingInsideTheConfigFolderIsCreatedOnceAndNothingElseIs() throws Exception {
         Path claude = Files.createDirectories(home.resolve(".claude"));

@@ -89,7 +89,7 @@ public final class MetricsLog {
                     }
                 }
             } catch (IOException | RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot read metrics [file=" + file + "]: " + e.getMessage());
+                LOG.log(System.Logger.Level.WARNING, "cannot read metrics [file=" + file + ']', e);
             }
         }
         return Optional.empty();
@@ -106,7 +106,7 @@ public final class MetricsLog {
             Files.writeString(file, json.writeValueAsString(event) + "\n", StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException | JacksonException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot write metrics [file=" + file + "]: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot write metrics [file=" + file + ']', e);
         }
     }
 }

@@ -20,6 +20,7 @@ import dev.marregui.comando.ui.kit.text.RenderedMarkdown;
 import dev.marregui.comando.ui.kit.text.SplitDiff;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
+import dev.marregui.comando.ui.widget.Unmountable;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 import javax.swing.AbstractAction;
@@ -64,7 +65,7 @@ import java.util.function.Consumer;
  * the file to the Trash, from the same menu. A read of the file while it has edits not yet written is left unshown: the edits win.
  * EDT only.
  */
-public final class ChangeEditor {
+public final class ChangeEditor implements Unmountable {
 
     private static final System.Logger LOG = System.getLogger(ChangeEditor.class.getName());
 
@@ -215,7 +216,8 @@ public final class ChangeEditor {
     }
 
     /** Stops writing every second; the window is gone. */
-    public void dispose() {
+    @Override
+    public void unmount() {
         autosave.stop();
         recompare.stop();
     }

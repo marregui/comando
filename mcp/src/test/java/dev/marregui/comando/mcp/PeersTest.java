@@ -39,10 +39,8 @@ import java.util.regex.Pattern;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 
-/**
- * Instances consulting each other through a broker (record 123), with a broker in memory between fake instances: each
- * with its own state, transcripts and data root, and a window that applies the intents a test needs.
- */
+/// Instances consulting each other through a broker (record 123), with a broker in memory between fake instances: each
+/// with its own state, transcripts and data root, and a window that applies the intents a test needs.
 class PeersTest {
 
     private static final Duration WAIT = Duration.ofSeconds(10);
@@ -61,6 +59,8 @@ class PeersTest {
         callers.shutdownNow();
     }
 
+    /// Each instance lists the others with their sessions, itself marked; a new session shows at the next tick, and the
+    /// presence of an instance that closes, or whose link dies and fires the last will, is cleared.
     @Test
     void presenceIsSeenFollowsTheSessionsAndIsClearedOnCloseAndByTheLastWill() throws Exception {
         Node main = node("", Peers.ANSWER_WITHIN);
@@ -82,6 +82,9 @@ class PeersTest {
         assertThat(call(main, "instances_list", "{}").text()).contains("no other instance is connected");
     }
 
+    /// A first question creates the consult session on the asked instance, created by the asker's peer, and prompts it
+    /// headed with who asks; a second question, addressed by the instance's display name, reuses it, and the asker
+    /// prompts nothing of its own.
     @Test
     void anAskMakesTheConsultSessionOnceAndPromptsItThroughItsPanelHeadedWithWhoAsks() throws Exception {
         Node main = node("", Peers.ANSWER_WITHIN);
@@ -106,6 +109,8 @@ class PeersTest {
         assertThat(main.window.recorded.of(Intent.PromptSession.class)).as("the asker prompts nothing of its own").isEmpty();
     }
 
+    /// The asker gets no reply while the consult turn runs; when the turn ends it gets Claude's text of that turn,
+    /// without the tool output.
     @Test
     void theReplyIsClaudesTextOfTheTurnOnceItEndsWithoutItsToolOutput() throws Exception {
         Node main = node("", Peers.ANSWER_WITHIN);
@@ -122,6 +127,8 @@ class PeersTest {
                 .doesNotContain("tool output");
     }
 
+    /// When the consult session is still in an earlier turn, the answer is the text of the turn that took the new
+    /// question, and nothing of the earlier turn.
     @Test
     void aQuestionToABusySessionIsAnsweredByItsOwnTurnNotTheOneStillRunning() throws Exception {
         Node main = node("", Peers.ANSWER_WITHIN);
@@ -141,6 +148,8 @@ class PeersTest {
         assertThat(reply.text()).contains("now is the answer").doesNotContain("earlier");
     }
 
+    /// A peer denied in the receiving instance's `agents.json` gets a refusal naming the file; no session is made or
+    /// prompted there, and a notice tells the user.
     @Test
     void aPeerTheUserDeniedIsRefusedAndNothingIsPrompted() throws Exception {
         Node main = node("", Peers.ANSWER_WITHIN);
@@ -154,6 +163,8 @@ class PeersTest {
         assertThat(b.window.recorded.of(Intent.Notify.class)).anyMatch(n -> n.text().startsWith("Refused a question from instance comando"));
     }
 
+    /// A question not answered within its wait returns an id; `instance_reply` says there is no reply yet, then returns
+    /// the answer once the turn ends, and a later read says it was read once.
     @Test
     void anAskThatOutlastsItsWaitReturnsAnIdAndInstanceReplyReadsTheAnswerOnce() throws Exception {
         Node main = node("", Peers.ANSWER_WITHIN);
@@ -171,6 +182,8 @@ class PeersTest {
         assertThat(call(main, "instance_reply", "{\"id\":\"" + id.group(1) + "\"}").text()).contains("waits for a reply", "read once");
     }
 
+    /// A consult turn that outlasts the receiving instance's bound is answered with a timeout naming the consult
+    /// session and the bound.
     @Test
     void aConsultTurnThatOutlastsItsBoundRepliesTimeout() throws Exception {
         Node main = node("", Peers.ANSWER_WITHIN);
@@ -180,6 +193,7 @@ class PeersTest {
         assertThat(out.text()).startsWith("timeout:").contains("consult-main", "did not finish its turn within 1 s");
     }
 
+    /// With the instance not connected to the comando Edge, the instance tools say so and point to the Edge toggle.
     @Test
     void withTheEdgeDownTheToolsSaySoAndHowToStartIt() throws Exception {
         Node main = node("", Peers.ANSWER_WITHIN);
@@ -192,6 +206,9 @@ class PeersTest {
         }
     }
 
+    /// An unknown instance, the asking instance itself and a question with a missing field are each refused with a
+    /// message naming what is wrong or the instances there are; names turn into slugs and client ids without a doubled
+    /// prefix.
     @Test
     void anUnknownInstanceAndThisOneAreRefusedWithTheInstancesNamed() throws Exception {
         Node main = node("", Peers.ANSWER_WITHIN);

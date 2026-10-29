@@ -185,7 +185,7 @@ public final class LocalImages {
         try {
             return extension(name).equals(SVG) ? drawSvg(key) : rasterSize(file);
         } catch (IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.DEBUG, "picture not shown [file=" + file + "]: " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "picture not shown [file=" + file + ']', e);
             return new Picture.Unavailable("cannot read " + name + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
         }
     }

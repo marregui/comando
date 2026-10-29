@@ -50,7 +50,7 @@ public final class ExternalEditor {
             try {
                 new ProcessBuilder(cmd).redirectErrorStream(true).redirectOutput(ProcessBuilder.Redirect.DISCARD).start();
             } catch (IOException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot open " + file + " [command=" + cmd + "]: " + e.getMessage());
+                LOG.log(System.Logger.Level.WARNING, "cannot open [file=" + file + ", command=" + cmd + ']', e);
             }
         });
     }

@@ -75,6 +75,8 @@ final class TabCard {
 
     /** The bar's width, as the report's. */
     private static final int BAR = 3;
+    /** Stops the card hearing tint changes; set while it is shown. */
+    private Runnable stopHearingTint;
     private final JPanel card = new JPanel() {
         @Override
         protected void paintComponent(Graphics g0) {
@@ -243,8 +245,6 @@ final class TabCard {
         topic.addMouseMotionListener(summaryLinks);
         hearPointer(card);
         paintTint();
-        // one card for the window's life: it hears every tint chosen
-        Theme.onTint(this::paintTint);
         // the rule under the heading runs the card's width, as under a report's heading
         heading.setMaximumSize(new Dimension(Integer.MAX_VALUE, heading.getPreferredSize().height));
     }
@@ -497,6 +497,11 @@ final class TabCard {
             layer = root.getLayeredPane();
         }
         shown = key;
+        // the card hears the tint only while shown, so a closed window's card holds no listener
+        if (stopHearingTint == null) {
+            paintTint();
+            stopHearingTint = Theme.onTint(this::paintTint);
+        }
         tabs = over;
         anchor = new Point(tab.x, tab.y + tab.height + 2);
         besideAt = beside < 0 ? null : new Point(beside, tab.y);
@@ -649,6 +654,10 @@ final class TabCard {
         }
         shown = null;
         pointerIn = false;
+        if (stopHearingTint != null) {
+            stopHearingTint.run();
+            stopHearingTint = null;
+        }
         if (layer != null && card.getParent() == layer) {
             Rectangle was = card.getBounds();
             layer.remove(card);

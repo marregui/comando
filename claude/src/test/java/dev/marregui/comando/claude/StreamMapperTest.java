@@ -17,6 +17,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+/// The stream-json lines of a conversation, live or stored, become transcript blocks and intents for the session.
 class StreamMapperTest {
 
     private final RecordingSink sink = new RecordingSink();
@@ -35,6 +36,8 @@ class StreamMapperTest {
         return blocks().stream().filter(type::isInstance).map(type::cast).toList();
     }
 
+    /// A clear that follows a checkpoint shows a note saying so and the summary it carried, then the turn's end; a
+    /// clear by hand shows only its own note, and both turns still end.
     @Test
     void aCheckpointsClearShowsOnlyWhatItCarriedAndAClearByHandShowsItself() {
         String reset = "{\"type\":\"conversation_reset\",\"trigger\":\"clear\"}";
@@ -58,6 +61,9 @@ class StreamMapperTest {
         assertThat(blocks(Block.TurnEnd.class)).hasSize(2);
     }
 
+    /// A recorded run with a tool approval and a question yields the session's init, the Bash and question calls done
+    /// with their results, the final answers as finished text, and a turn end for each answer carrying the last call's
+    /// context size, the window and the cost.
     @Test
     void approvalsAndQuestionRecording() {
         mapper.prompt("Run the shell command: touch probe-file.txt", "one");
@@ -125,6 +131,10 @@ class StreamMapperTest {
         assertThat(empty.of(Intent.SessionContext.class)).as("nothing known, nothing sent").hasSize(1);
     }
 
+    /// A recorded run with a queued prompt, a compaction and an interrupt folds the queued prompt into the running
+    /// turn's one answer, notes the compaction, interrupt and command, shows the compacted size until the next call
+    /// reports one, ends the last turn as interrupted with its running tool in error, and reports the activity as
+    /// requesting and compacting.
     @Test
     void queuedPromptCompactionAndInterruptRecording() {
         Fixtures.stream("queued-compact-interrupt").forEach(mapper::accept);
@@ -150,6 +160,8 @@ class StreamMapperTest {
                 .contains("requesting", "compacting", "");
     }
 
+    /// A recorded `/clear` names a new conversation in its init and notes it, and its own turn, which makes no model
+    /// call, reports an empty context while the turns around it report theirs.
     @Test
     void clearRecordingStartsANewConversationWithAnEmptyContext() {
         Fixtures.stream("clear").forEach(mapper::accept);
@@ -164,6 +176,8 @@ class StreamMapperTest {
         assertThat(blocks(Block.Note.class)).extracting(Block.Note::text).contains("Conversation cleared (clear); a new one starts");
     }
 
+    /// Streamed text deltas grow one streaming block in place, and the complete message replaces it with a finished
+    /// block of the same message.
     @Test
     void streamedTextGrowsInPlaceAndTheFinalMessageReplacesIt() {
         mapper.accept("""
@@ -179,6 +193,8 @@ class StreamMapperTest {
         assertThat(blocks()).singleElement().isEqualTo(new Block.AssistantText("m1", 0, "Hello.", false, ""));
     }
 
+    /// The prompt and the messages of a sub-agent are blocks that carry the id of the call that started it as their
+    /// parent, and the call's result is that of the main conversation.
     @Test
     void subagentBlocksCarryTheirParent() {
         mapper.accept("""
@@ -196,7 +212,9 @@ class StreamMapperTest {
         assertThat(((Block.ToolCall) blocks().get(0)).resultText()).isEqualTo("report");
     }
 
-    /** The event shapes Claude Code 2.1.302 sent for a foreground and a background sub-agent (read on 2026-10-18). */
+    /// A foreground sub-agent ends with its call's result; a background one is not ended by the result that only says
+    /// it launched, nor by a running notification, and ends with its completed task notification; a call that is not a
+    /// sub-agent never ends as one. The event shapes are those of version 2.1.302 of the CLI (read on 2026-10-18).
     @Test
     void aSubagentEndsAtItsCallsResultOrForABackgroundOneAtItsTaskNotification() {
         mapper.accept("""
@@ -226,6 +244,8 @@ class StreamMapperTest {
         assertThat(mapper.agentEnded("bg")).isTrue();
     }
 
+    /// Replaying a stored conversation keeps the prompts typed and a slash command as a note with its arguments, and
+    /// skips meta lines and records that are not messages.
     @Test
     void historyKeepsTypedPromptsAndSkipsMetaLines() {
         mapper.acceptHistory("""
@@ -241,6 +261,9 @@ class StreamMapperTest {
                 new Block.Note(Block.NoteKind.COMMAND, "/compact focus", ""));
     }
 
+    /// A stored turn ends after the last line of the message that stopped at its end, not after the earlier lines of a
+    /// message that stopped for a tool; a sub-agent's end gives none, and a turn open at the end of the file is ended
+    /// once, however often the end is signalled.
     @Test
     void aStoredTurnEndsAfterTheLastLineOfTheMessageThatStoppedAtItsEnd() {
         // shapes as version 2.1.302 stores them: one line per content block, each with its message's stop reason
@@ -278,6 +301,7 @@ class StreamMapperTest {
                 "prompt and now", "text Fixed.", "end");
     }
 
+    /// A stored conversation cut off while a message still waited on a tool shows no turn end.
     @Test
     void aStoredConversationCutOffMidTurnHasNoEnd() {
         mapper.acceptHistory("""
@@ -288,6 +312,9 @@ class StreamMapperTest {
         assertThat(blocks(Block.TurnEnd.class)).isEmpty();
     }
 
+    /// The set of background tasks reported follows the session's own background work: an agent is listed while it runs
+    /// and removed when it completes, while a command run by that agent and a task the CLI runs on its own are not in
+    /// it.
     @Test
     void theBackgroundSetIsTheSessionsBackgroundWork() {
         // shapes as Claude Code 2.1.300 sends them for a background agent that runs a shell command of its own
@@ -309,6 +336,7 @@ class StreamMapperTest {
                 .extracting(Intent.SessionTasksChanged::open).containsExactly(List.of(agent), List.of(agent), List.of());
     }
 
+    /// A model call of the main conversation reports the turn as running; a call of a background sub-agent does not.
     @Test
     void aCallOfTheMainConversationRunsATurnAndASubagentCallDoesNot() {
         mapper.accept("""
@@ -319,12 +347,15 @@ class StreamMapperTest {
         assertThat(sink.of(Intent.SessionTurnRunning.class)).containsExactly(new Intent.SessionTurnRunning("work"));
     }
 
+    /// A line that is not JSON produces no intent and no block.
     @Test
     void garbageLinesAreIgnored() {
         assertThat(mapper.accept("not json")).isEmpty();
         assertThat(blocks()).isEmpty();
     }
 
+    /// Ending the running tools marks as failed, with the missing-result text, only the calls that have no result,
+    /// reports how many, and finds none the second time.
     @Test
     void endingRunningToolsClosesOnlyTheCallsWithoutAResult() {
         mapper.accept("{\"type\":\"assistant\",\"message\":{\"id\":\"m1\",\"content\":[{\"type\":\"tool_use\",\"id\":\"a\",\"name\":\"Bash\",\"input\":{}},"

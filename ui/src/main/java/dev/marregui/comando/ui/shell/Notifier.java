@@ -56,12 +56,12 @@ final class Notifier {
             p.getOutputStream().close();
             if (!p.waitFor(bound.toMillis(), TimeUnit.MILLISECONDS)) {
                 p.destroyForcibly();
-                LOG.log(System.Logger.Level.DEBUG, "notification not posted within " + bound.toSeconds() + " s");
+                LOG.log(System.Logger.Level.DEBUG, "notification not posted in time [seconds=" + bound.toSeconds() + ']');
                 return false;
             }
             return true;
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.DEBUG, "notification failed: " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "notification failed [cause=" + e.getMessage() + ']');
             return false;
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -79,7 +79,7 @@ final class Notifier {
             try {
                 taskbar.requestUserAttention(true, true);
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.DEBUG, "attention request failed: " + e.getMessage());
+                LOG.log(System.Logger.Level.DEBUG, "attention request failed [cause=" + e.getMessage() + ']');
             }
         }
     }
@@ -100,7 +100,7 @@ final class Notifier {
             }
             trayIcon.displayMessage(title, Clip.keepStart(text, MAX_CHARS), TrayIcon.MessageType.INFO);
         } catch (AWTException | RuntimeException e) {
-            LOG.log(System.Logger.Level.DEBUG, "notification failed: " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "notification failed [cause=" + e.getMessage() + ']');
         }
     }
 

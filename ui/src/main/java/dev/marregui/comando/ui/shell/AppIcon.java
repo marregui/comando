@@ -30,7 +30,7 @@ final class AppIcon {
             try {
                 Taskbar.getTaskbar().setIconImage(image);
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.DEBUG, "Dock icon not set: " + e.getMessage());
+                LOG.log(System.Logger.Level.DEBUG, "Dock icon not set [cause=" + e.getMessage() + ']');
             }
         }
     }
@@ -39,7 +39,7 @@ final class AppIcon {
         try (InputStream in = AppIcon.class.getResourceAsStream("/icons/comando.png")) {
             return in == null ? null : ImageIO.read(in);
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.DEBUG, "app icon not read: " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "cannot read the app icon", e);
             return null;
         }
     }

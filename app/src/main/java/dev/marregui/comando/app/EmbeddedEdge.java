@@ -7,8 +7,18 @@ import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.ui.shell.ServerToggle;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
+import org.xml.sax.InputSource;
 import tools.jackson.core.JacksonException;
 
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
@@ -414,7 +424,7 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
             download(url, sha256, zip);
             return Located.of(zip);
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot download the Edge [url=" + url + "]: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot download the Edge [url=" + url + ']', e);
             return new Located(null, "Cannot download the Edge from " + url + ": " + e.getMessage() + "; or name a zip with -D"
                     + ZIP_PROPERTY + " or " + ZIP_ENV);
         } catch (InterruptedException e) {
@@ -600,15 +610,15 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
      */
     static String enforce(String xml, Ports ports) {
         try {
-            javax.xml.parsers.DocumentBuilderFactory f = javax.xml.parsers.DocumentBuilderFactory.newInstance();
+            DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
             f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
             f.setExpandEntityReferences(false);
-            org.w3c.dom.Document doc = f.newDocumentBuilder().parse(new org.xml.sax.InputSource(new StringReader(xml)));
-            org.w3c.dom.Document ours = f.newDocumentBuilder().parse(new org.xml.sax.InputSource(new StringReader(config(ports))));
-            org.w3c.dom.Element top = doc.getDocumentElement();
+            Document doc = f.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
+            Document ours = f.newDocumentBuilder().parse(new InputSource(new StringReader(config(ports))));
+            Element top = doc.getDocumentElement();
             for (String name : List.of("mqtt-listeners", "admin-api")) {
-                org.w3c.dom.Node replacement = doc.importNode(ours.getElementsByTagName(name).item(0), true);
-                org.w3c.dom.NodeList have = top.getElementsByTagName(name);
+                Node replacement = doc.importNode(ours.getElementsByTagName(name).item(0), true);
+                NodeList have = top.getElementsByTagName(name);
                 if (have.getLength() > 0 && have.item(0).getParentNode() == top) {
                     top.replaceChild(replacement, have.item(0));
                 } else if (name.equals("mqtt-listeners")) {
@@ -617,12 +627,12 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
                     top.appendChild(replacement);
                 }
             }
-            javax.xml.transform.Transformer t = javax.xml.transform.TransformerFactory.newInstance().newTransformer();
+            Transformer t = TransformerFactory.newInstance().newTransformer();
             StringWriter out = new StringWriter();
-            t.transform(new javax.xml.transform.dom.DOMSource(doc), new javax.xml.transform.stream.StreamResult(out));
+            t.transform(new DOMSource(doc), new StreamResult(out));
             return out.toString();
         } catch (Exception e) {
-            LOG.log(System.Logger.Level.WARNING, "the Edge's config.xml does not parse; comando's template replaces it: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot parse the Edge's config.xml, the template replaces it", e);
             return config(ports);
         }
     }
@@ -750,7 +760,7 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
                 Files.deleteIfExists(registry);
             }
         } catch (IOException ex) {
-            LOG.log(System.Logger.Level.WARNING, "cannot remove " + registry + ": " + ex.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot remove the registry [file=" + registry + ']', ex);
         }
     }
 
@@ -777,7 +787,7 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
                 LOG.log(System.Logger.Level.INFO, "Edge stopped with comando [pid=" + e.pid() + ']');
             }
         } catch (IOException ex) {
-            LOG.log(System.Logger.Level.WARNING, "cannot read " + registry + " at close: " + ex.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot read the registry at close [file=" + registry + ']', ex);
         }
     }
 }

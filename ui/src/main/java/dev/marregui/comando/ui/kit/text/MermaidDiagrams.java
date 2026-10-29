@@ -220,7 +220,7 @@ public final class MermaidDiagrams {
         try {
             Files.deleteIfExists(png);
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.DEBUG, "cannot remove " + png + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "cannot remove [file=" + png + ']', e);
         }
         LOG.log(System.Logger.Level.WARNING, "Mermaid diagram not shown [key=" + key + "]: " + why);
         return why;
@@ -294,7 +294,7 @@ public final class MermaidDiagrams {
                 versions.sorted((a, b) -> compareVersions(b.getFileName().toString(), a.getFileName().toString()))
                         .forEach(v -> candidates.add(v.resolve("bin").resolve("mmdc")));
             } catch (IOException e) {
-                LOG.log(System.Logger.Level.DEBUG, "cannot list " + nvm + ": " + e.getMessage());
+                LOG.log(System.Logger.Level.DEBUG, "cannot list [dir=" + nvm + ']', e);
             }
         }
         candidates.add(Path.of("/opt/homebrew/bin/mmdc"));

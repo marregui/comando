@@ -49,7 +49,7 @@ public final class OpenedFiles {
         } catch (NoSuchFileException e) {
             // nothing opened yet
         } catch (IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot read the opened files " + file + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot read the opened files [file=" + file + ']', e);
         }
         return o;
     }
@@ -104,7 +104,7 @@ public final class OpenedFiles {
             Files.createDirectories(file.getParent());
             AtomicFiles.writeString(file, lines.stream().map(l -> l + System.lineSeparator()).collect(Collectors.joining()));
         } catch (IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot write the opened files " + file + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot write the opened files [file=" + file + ']', e);
         }
     }
 }

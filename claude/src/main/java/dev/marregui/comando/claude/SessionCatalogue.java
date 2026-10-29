@@ -55,7 +55,7 @@ public final class SessionCatalogue {
                     .limit(limit)
                     .toList();
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot list " + projectsDir + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot list [dir=" + projectsDir + ']', e);
             return List.of();
         }
         List<Entry> entries = new ArrayList<>(files.size());
@@ -130,7 +130,7 @@ public final class SessionCatalogue {
                 }
             }
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.DEBUG, "cannot read " + file + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "cannot read [file=" + file + ']', e);
             return null;
         }
         if (cwd.isEmpty()) {

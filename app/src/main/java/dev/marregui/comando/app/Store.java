@@ -237,12 +237,12 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         }
         List<String> adopted = adoptLooseFiles(orEmpty(panels.read()), shut);
         if (!adopted.isEmpty()) {
-            LOG.log(System.Logger.Level.INFO, "files in panels/ without a panel, listed as closed panels " + adopted);
+            LOG.log(System.Logger.Level.INFO, "files in panels/ without a panel, listed as closed panels [files=" + adopted + ']');
             notices.accept(String.join(", ", adopted) + (adopted.size() == 1 ? " has" : " have")
                     + " no panel; listed as closed under the sessions, without a session");
         }
         if (!gone.isEmpty()) {
-            LOG.log(System.Logger.Level.INFO, "files deleted while comando was closed, their panels dropped " + gone);
+            LOG.log(System.Logger.Level.INFO, "files deleted while comando was closed, their panels dropped [files=" + gone + ']');
             notices.accept(String.join(", ", gone) + (gone.size() == 1 ? " was" : " were")
                     + " deleted while comando was closed; " + (gone.size() == 1 ? "its panel is" : "their panels are") + " gone");
         }
@@ -256,7 +256,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         p = new ArrayList<>(all.subList(0, openCount));
         shut = new ArrayList<>(all.subList(openCount, all.size()));
         if (!unbound.isEmpty()) {
-            LOG.log(System.Logger.Level.INFO, "sessions bound to several panels keep their first " + unbound);
+            LOG.log(System.Logger.Level.INFO, "sessions bound to several panels keep their first [sessions=" + unbound + ']');
             notices.accept("A session has one panel now: " + String.join("; ", unbound));
             schedulePanels();
         }
@@ -285,7 +285,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 fromFile = files.read(sp.id(), title, sp.file());
             } catch (IOException | RuntimeException e) {
                 LOG.log(System.Logger.Level.ERROR, "cannot read the panel file, the panel saves to another file [file="
-                        + files.dir().resolve(sp.file()) + "]: " + e.getMessage());
+                        + files.dir().resolve(sp.file()) + ']', e);
                 notices.accept("Cannot read " + sp.file() + "; the panel " + title + " saves to another file");
             }
         }
@@ -328,11 +328,11 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     shut.add(new PanelState(id, title, "", ""));
                     adopted.add(name);
                 } catch (IOException | RuntimeException e) {
-                    LOG.log(System.Logger.Level.WARNING, "cannot read a file of panels/, left alone [file=" + f + "]: " + e.getMessage());
+                    LOG.log(System.Logger.Level.WARNING, "cannot read a file of panels/, left alone [file=" + f + ']', e);
                 }
             }
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot list panels/: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot list panels/", e);
         }
         return adopted;
     }
@@ -421,7 +421,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             return secrets.read(spec.name()).map(spec::withPassword).orElse(spec);
         } catch (Secrets.Unreadable e) {
             // unknown is not "no password": remember it, so the next save does not delete the stored item
-            LOG.log(System.Logger.Level.WARNING, "connection password not loaded [connection=" + spec.name() + "]: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "connection password not loaded [connection=" + spec.name() + ']', e);
             unreadSecrets.add(spec.name());
             return spec;
         }
@@ -497,7 +497,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             Files.writeString(kitFolders, key + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
             // added again at the next start: the user's list is still kept
-            LOG.log(System.Logger.Level.WARNING, "cannot write " + kitFolders + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot write [file=" + kitFolders + ']', e);
         }
         if (!merged.equals(loaded)) {
             LOG.log(System.Logger.Level.INFO, "the Files tab gains the kit's folders [root=" + key + ", folders="
@@ -535,7 +535,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             }
         }
         if (!dropped.isEmpty()) {
-            LOG.log(System.Logger.Level.WARNING, "folders.json entries left out " + dropped);
+            LOG.log(System.Logger.Level.WARNING, "folders.json entries left out [entries=" + dropped + ']');
             notices.accept("folders.json: left out " + String.join("; ", dropped));
         }
         return List.copyOf(valid);
@@ -546,7 +546,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         submit(() -> {
             write(folders, List.copyOf(specs));
             foldersSeen = Stamp.of(folders.path());
-            createIndexes(specs, HomeDir.claudeDir()).forEach(f -> LOG.log(System.Logger.Level.INFO, "created the index " + f));
+            createIndexes(specs, HomeDir.claudeDir()).forEach(f -> LOG.log(System.Logger.Level.INFO, "created the index [file=" + f + ']'));
         });
     }
 
@@ -571,7 +571,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                         StandardCharsets.UTF_8, StandardOpenOption.CREATE_NEW);
                 created.add(index.get());
             } catch (IOException | RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot create the index " + index.get(), e);
+                LOG.log(System.Logger.Level.WARNING, "cannot create the index [file=" + index.get() + ']', e);
             }
         }
         return created;
@@ -664,14 +664,14 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                         // the stored name: a document's absolute path, so it comes back on its own file, never in panels/
                         String name = files.storedName(id).orElse(null);
                         unsaved.put(id, new StoredPanel(id, was.title(), was.connection(), was.session(), name, text, null));
-                        LOG.log(System.Logger.Level.ERROR, "cannot save the closed panel's file [panel=" + was.title() + "]: " + e.getMessage(), e);
+                        LOG.log(System.Logger.Level.ERROR, "cannot save the closed panel's file [panel=" + was.title() + ']', e);
                         notices.accept("Cannot write " + (name == null ? "the file" : name) + " for the closed panel " + was.title() + ": "
                                 + reason(e) + "; comando keeps trying, and the panel comes back at the next start if it still cannot");
                         return;
                     }
                 }
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.ERROR, "cannot save the closed panel's file [panel=" + id + "]: " + e.getMessage(), e);
+                LOG.log(System.Logger.Level.ERROR, "cannot save the closed panel's file [panel=" + id + ']', e);
             } finally {
                 failing.remove(id);
                 opening.remove(id);
@@ -696,7 +696,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             try {
                 files.remove(id);
             } catch (IOException | RuntimeException e) {
-                LOG.log(System.Logger.Level.ERROR, "cannot delete the removed panel's file [panel=" + id + "]: " + e.getMessage(), e);
+                LOG.log(System.Logger.Level.ERROR, "cannot delete the removed panel's file [panel=" + id + ']', e);
                 notices.accept("Cannot delete the removed panel's file: " + reason(e));
             }
         });
@@ -780,7 +780,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 long seen = edits.getOrDefault(id, 0L);
                 files.outside(id).ifPresent(o -> outsideChanges.accept(new Outside(p.id(), name, o.text(), () -> take(id, o, seen))));
             } catch (IOException | RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot check the panel's file [panel=" + p.title() + "]: " + e.getMessage());
+                LOG.log(System.Logger.Level.WARNING, "cannot check the panel's file [panel=" + p.title() + ']', e);
             }
         }
     }
@@ -854,7 +854,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     PanelFiles.replace(file.toAbsolutePath().normalize(), text);
                     done.complete(null);
                 } catch (IOException | RuntimeException e) {
-                    LOG.log(System.Logger.Level.ERROR, "cannot write " + file + ": " + e.getMessage(), e);
+                    LOG.log(System.Logger.Level.ERROR, "cannot write [file=" + file + ']', e);
                     done.complete(reason(e));
                 }
             });
@@ -877,7 +877,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                     persistPanels();
                     done.complete(null);
                 } catch (IOException | RuntimeException e) {
-                    LOG.log(System.Logger.Level.ERROR, "cannot save the panels: " + e.getMessage(), e);
+                    LOG.log(System.Logger.Level.ERROR, "cannot save the panels", e);
                     done.complete(e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage());
                 }
             });
@@ -919,7 +919,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         try {
             persistPanels();
         } catch (IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.ERROR, "cannot save the panels: " + e.getMessage(), e);
+            LOG.log(System.Logger.Level.ERROR, "cannot save the panels", e);
         }
     }
 
@@ -960,7 +960,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                 }
                 failing.remove(id);
             } catch (IOException e) {
-                LOG.log(System.Logger.Level.ERROR, "cannot save the panel's file [panel=" + p.title() + "]: " + e.getMessage(), e);
+                LOG.log(System.Logger.Level.ERROR, "cannot save the panel's file [panel=" + p.title() + ']', e);
                 if (failing.add(id)) {
                     notices.accept("Cannot write " + (name == null ? "the file of " + p.title() : name) + ": " + reason(e)
                             + "; the text is kept in panels.json and tried again every few seconds");
@@ -987,7 +987,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
             panels.write(out);
             failing.remove(PANELS_JSON);
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.ERROR, "cannot save [file=" + panels.path() + "]: " + e.getMessage(), e);
+            LOG.log(System.Logger.Level.ERROR, "cannot save [file=" + panels.path() + ']', e);
             if (failing.add(PANELS_JSON)) {
                 notices.accept("Cannot write panels.json: " + reason(e) + "; the panel list is tried again every few seconds");
             }
@@ -1017,7 +1017,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         try {
             file.write(value);
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.ERROR, "cannot save [file=" + file.path() + "]: " + e.getMessage(), e);
+            LOG.log(System.Logger.Level.ERROR, "cannot save [file=" + file.path() + ']', e);
             notices.accept("Cannot write " + file.path().getFileName() + ": " + reason(e) + "; it is written again with the next change");
         }
     }

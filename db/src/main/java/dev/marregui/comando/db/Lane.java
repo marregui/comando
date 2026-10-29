@@ -358,7 +358,7 @@ final class Lane implements AutoCloseable {
         try {
             connection = DriverManager.getConnection(spec.jdbcUrl(), driverProperties(spec));
         } catch (SQLException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot connect [connection=" + name + ", sqlState=" + e.getSQLState() + "]: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot connect [connection=" + name + ", sqlState=" + e.getSQLState() + ']', e);
             throw e;
         }
         connection.setAutoCommit(true);
@@ -487,7 +487,7 @@ final class Lane implements AutoCloseable {
                 try {
                     r.statement().cancel();
                 } catch (SQLException e) {
-                    LOG.log(System.Logger.Level.WARNING, "cancel failed [connection=" + name + ", request=" + r.requestId() + "]: " + e.getMessage());
+                    LOG.log(System.Logger.Level.WARNING, "cancel failed [connection=" + name + ", request=" + r.requestId() + ']', e);
                 }
             });
         } catch (RejectedExecutionException e) {
@@ -505,7 +505,7 @@ final class Lane implements AutoCloseable {
         try {
             now.connection().abort(Runnable::run);
         } catch (SQLException e) {
-            LOG.log(System.Logger.Level.WARNING, "abort failed [connection=" + name + "]: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "abort failed [connection=" + name + ']', e);
         }
     }
 
@@ -516,7 +516,7 @@ final class Lane implements AutoCloseable {
             try {
                 c.close();
             } catch (SQLException e) {
-                LOG.log(System.Logger.Level.DEBUG, "close failed [connection=" + name + "]: " + e.getMessage());
+                LOG.log(System.Logger.Level.DEBUG, "close failed [connection=" + name + ']', e);
             }
         }
     }

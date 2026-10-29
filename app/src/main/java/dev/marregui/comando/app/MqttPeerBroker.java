@@ -88,7 +88,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
                 }
             }
         } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "following the comando Edge failed: " + e.getMessage(), e);
+            LOG.log(System.Logger.Level.WARNING, "cannot follow the comando Edge", e);
         }
     }
 
@@ -110,7 +110,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
         c.publishes(MqttGlobalPublishFilter.ALL, this::deliver, messages);
         c.connectWith().cleanStart(true).sessionExpiryInterval(0).willPublish(will).send().whenComplete((ack, e) -> {
             if (e != null) {
-                LOG.log(System.Logger.Level.DEBUG, "not connected to the comando Edge yet, retrying: " + e.getMessage());
+                LOG.log(System.Logger.Level.DEBUG, "not connected to the comando Edge yet, retrying [cause=" + e.getMessage() + ']');
             }
         });
         return c;
@@ -133,7 +133,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
             try {
                 l.run();
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "a connect listener failed: " + e.getMessage(), e);
+                LOG.log(System.Logger.Level.WARNING, "a connect listener failed", e);
             }
         }
         Mqtt5AsyncClient c = current();
@@ -152,7 +152,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     private static void subscribe(Mqtt5AsyncClient c, String filter) {
         c.subscribe(Mqtt5Subscribe.builder().topicFilter(filter).qos(MqttQos.AT_LEAST_ONCE).build()).whenComplete((ack, e) -> {
             if (e != null) {
-                LOG.log(System.Logger.Level.WARNING, "subscription failed [filter=" + filter + "]: " + e.getMessage());
+                LOG.log(System.Logger.Level.WARNING, "subscription failed [filter=" + filter + ']', e);
             }
         });
     }
@@ -172,7 +172,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
             try {
                 h.accept(m);
             } catch (RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "a message handler failed [topic=" + m.topic() + "]: " + e.getMessage(), e);
+                LOG.log(System.Logger.Level.WARNING, "a message handler failed [topic=" + m.topic() + ']', e);
             }
         }
     }
@@ -256,7 +256,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
             try {
                 c.disconnect().get(CLOSE_WAIT.toMillis(), TimeUnit.MILLISECONDS);
             } catch (ExecutionException | TimeoutException e) {
-                LOG.log(System.Logger.Level.DEBUG, "disconnect from the comando Edge: " + e.getMessage());
+                LOG.log(System.Logger.Level.DEBUG, "disconnect from the comando Edge incomplete [cause=" + e.getMessage() + ']');
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }

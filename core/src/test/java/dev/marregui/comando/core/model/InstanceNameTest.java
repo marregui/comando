@@ -6,9 +6,12 @@ import java.nio.file.Path;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** Several instances on one machine tell themselves apart by name (record 122). */
+/// Several instances on one machine tell themselves apart by name (record 122).
 class InstanceNameTest {
 
+    /// An instance's name is the data root's folder name after `.comando` and its separator, the folder name itself
+    /// when it has no such prefix, and empty for the main instance; a name given explicitly wins, trimmed, and a bare
+    /// `.comando_` has nothing after its separator and keeps `comando_`.
     @Test
     void theNameComesFromTheDataRootUnlessGiven() {
         assertThat(InstanceName.of(Path.of("/Users/m/.comando"), null)).as("the main instance").isEmpty();
@@ -19,6 +22,9 @@ class InstanceNameTest {
         assertThat(InstanceName.of(Path.of("/Users/m/.comando_"), null)).as("nothing after the separator").isEqualTo("comando_");
     }
 
+    /// The main instance shows as `comando` and keeps the plain preferences node, another shows as `comando · name`
+    /// with a node of its own, a name that already says comando is shown as given, and characters unfit for a node
+    /// become `_`.
     @Test
     void theMainInstanceKeepsItsDisplayAndPreferences() {
         assertThat(InstanceName.display("")).isEqualTo("comando");

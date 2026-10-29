@@ -148,8 +148,6 @@ class EmbeddedEdgeTest {
         toggle(edge, sink);
     }
 
-    /// The same zip again starts the installed home as it is; a newer zip with another top folder replaces the home,
-    /// the old one is gone, `installed` names the new zip, and a file in `edge/data` is still there.
     /// What the user or the Edge's UI saved in the configuration stays across starts; only the listeners and the admin
     /// API are set to comando's ports again, and the shipped files the folder lacks are copied in.
     @Test
@@ -172,6 +170,8 @@ class EmbeddedEdgeTest {
         assertThat(EmbeddedEdge.enforce("not xml", ports)).as("unparseable: the template").contains("<port>" + ports.api() + "</port>");
     }
 
+    /// The same zip again starts the installed home as it is; a newer zip with another top folder replaces the home,
+    /// the old one is gone, `installed` names the new zip, and a file in `edge/data` is still there.
     @Test
     void aNewerZipReplacesTheHomeAndTheDataStays() throws Exception {
         Path root = dir.resolve("a/edge");

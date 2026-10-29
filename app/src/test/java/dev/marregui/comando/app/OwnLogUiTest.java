@@ -34,6 +34,8 @@ class OwnLogUiTest {
     @TempDir
     Path home;
 
+    /// The log opened as a panel shows the lines already written, then a line logged while it is open, and its view
+    /// stays at the end; after a restart the restored log panel is as live as one just opened.
     @Test
     void comandosOwnLogShowsWhatIsLoggedWhileItIsOpen() throws Exception {
         AppConfig config = new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false);

@@ -72,11 +72,11 @@ final class JsonFile<T> {
             return JSON.readValue(path.toFile(), type);
         } catch (JacksonException e) {
             Path aside = path.resolveSibling(path.getFileName() + ".corrupt-" + Instant.now().toEpochMilli());
-            LOG.log(System.Logger.Level.ERROR, "unreadable store file kept aside [file=" + path + ", aside=" + aside + "]: " + e.getMessage());
+            LOG.log(System.Logger.Level.ERROR, "unreadable store file kept aside [file=" + path + ", aside=" + aside + ']', e);
             try {
                 Files.move(path, aside);
             } catch (IOException moveFailed) {
-                LOG.log(System.Logger.Level.ERROR, "cannot move the unreadable file aside [file=" + path + "]: " + moveFailed.getMessage());
+                LOG.log(System.Logger.Level.ERROR, "cannot move the unreadable file aside [file=" + path + ']', moveFailed);
             }
             return null;
         }

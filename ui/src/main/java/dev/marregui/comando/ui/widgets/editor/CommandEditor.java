@@ -10,6 +10,7 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.TextSearch;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.widget.Unmountable;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Searchable;
 import dev.marregui.comando.ui.widget.capability.Zoomable;
@@ -43,7 +44,7 @@ import java.util.function.IntConsumer;
  * what ran and nothing written into the editor from outside lands on it. A session's write is one undo step of its own,
  * keeps the user's caret and selection, and never joins the line the user is typing.
  */
-public final class CommandEditor implements Searchable, Zoomable {
+public final class CommandEditor implements Searchable, Unmountable, Zoomable {
 
     /**
      * The style of a panel's own text: each block coloured as what it is, SQL while the panel's database is open, a
@@ -81,7 +82,8 @@ public final class CommandEditor implements Searchable, Zoomable {
     private int marked;
 
     /** The panel closed: releases what outlives the component (the completion's global listener, the gutter timer). */
-    public void dispose() {
+    @Override
+    public void unmount() {
         completion.uninstall();
         markers.stop();
         occurrences.stop();

@@ -149,7 +149,10 @@ A null panel in `RunText`, `RunGradle` or `EditPanel` means the focused panel.
 
 `Reducer.apply(state, intent)` returns a `Transition`: the next state and a list of effects. It is pure in its
 arguments, a `Clock` and the home folder, so tests drive it with a fake clock. Nothing a user or an adapter sends makes
-it throw: an intent naming a missing panel, connection or session changes nothing or sets a notice.
+it throw: an intent naming a missing panel, connection or session changes nothing or sets a notice. `Reducer` holds the entry
+point and dispatches each intent to the rules of its domain, package-private classes beside it: `PanelRules`,
+`SessionRules`, `TurnRules`, `QueryRules` (runs and connections), `ApprovalRules`, `FolderRules`, `ViewRules`, with
+`Shared` for the helpers several use.
 
 | Rule | What the reducer does |
 |---|---|
@@ -386,7 +389,7 @@ The packages of `ui`, under `dev.marregui.comando.ui`, in layer order. The class
 | `widgets` | one package per widget: approval, changes, console, diff, editor, markdown, plot, table, terminal, text, transcript (with `doc` and `render`), tree |
 | `panels` | the window's regions: `Workspace`, `EditorPanel`, `LowerPanel`, `SessionsSidebar` (its rows: `SessionRow`, `ConnectionRow`), `PanelsWithoutSession`, `FilesTab`, `SidePane`, `SessionBar`, `StatusBar`, `ResultsView`, `TerminalTabs`, `ViewTabs`, … |
 | `dialogs` | `folders` (the Files tab's folders: `FoldersEditor`, `FoldersDialog`), `resource` (`ResourceDialog`, one dialog for connections and sessions), `sessions` (import), `jobs` (the Kit jobs window, [record 117](adr/0117-kit-jobs-a-row-and-a-window.md)) |
-| `shell` | `ComandoUi` (the frame and the UI port), `WindowLayout`, `HelpActions`, `Menus`, `Keys`, `LivePlots`, `Notifier`, `HelpFiles`, `OpenFiles`, `DiffWindow`, … |
+| `shell` | `ComandoUi` (the frame, the render and the UI port) and its collaborators `Commands` (the command table), `MenuBuilder`, `LayoutKeeper` (split panes and the saved layout), `FocusRouter`, `PanelFiles` (open, save, close, export), `QuitFlow`; `WindowLayout`, `HelpActions`, `Menus`, `Keys`, `LivePlots`, `Notifier`, `HelpFiles`, `OpenFiles`, `DiffWindow`, … |
 | (top) | `PanelTexts`: editor text between saves |
 
 A layer uses only those above it in this table: `kit` uses `core` and the UI libraries; `widget` adds `kit`; a widget

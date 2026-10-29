@@ -11,7 +11,7 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [RunSettings] reads what a message ran at from the transcript Claude Code writes, `<projects>/<project>/<id>.jsonl`.
+/// [RunSettings] reads what a message ran at from the conversation's transcript, `<projects>/<project>/<id>.jsonl`.
 /// - A message's assistant line gives its model and its `perTurnEffort`, else its `effort`.
 /// - A message whose line is not in the transcript yet, or a conversation with no transcript, gives nothing.
 /// - Only the file's end is read: a message near the end of a file larger than the tail is still found.

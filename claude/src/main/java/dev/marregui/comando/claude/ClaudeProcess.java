@@ -110,7 +110,7 @@ final class ClaudeProcess {
                 }
             }
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.DEBUG, "stdout closed: " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "stdout closed [cause=" + e.getMessage() + ']');
         }
     }
 
@@ -126,7 +126,7 @@ final class ClaudeProcess {
                 out.flush();
             }
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.DEBUG, "stdin closed: " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "stdin closed [cause=" + e.getMessage() + ']');
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }
@@ -146,7 +146,7 @@ final class ClaudeProcess {
             }
             stderrTail = String.join("\n", lines.subList(Math.max(0, lines.size() - STDERR_LINES), lines.size()));
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.DEBUG, "cannot read stderr: " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "cannot read stderr", e);
         }
         dropStderr();
     }
@@ -155,7 +155,7 @@ final class ClaudeProcess {
         try {
             Files.deleteIfExists(stderrFile);
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.DEBUG, "cannot delete " + stderrFile + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "cannot delete [file=" + stderrFile + ']', e);
         }
     }
 

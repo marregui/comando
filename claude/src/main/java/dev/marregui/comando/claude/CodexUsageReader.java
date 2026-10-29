@@ -70,7 +70,7 @@ final class CodexUsageReader {
         try {
             in.close();
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.DEBUG, "closing 'codex app-server' input: " + e.getMessage());
+            LOG.log(System.Logger.Level.DEBUG, "closing the 'codex app-server' input failed [cause=" + e.getMessage() + ']');
         }
     }
 

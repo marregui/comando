@@ -132,7 +132,7 @@ class PanelTokenMakerTest {
                     e.load(text);
                     test.accept(e);
                 } finally {
-                    e.dispose();
+                    e.unmount();
                 }
             });
         } catch (InvocationTargetException x) {

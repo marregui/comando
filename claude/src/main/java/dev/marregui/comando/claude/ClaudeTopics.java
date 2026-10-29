@@ -109,7 +109,7 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
             topic = Topic.failed("the read failed: " + e.getMessage(), System.currentTimeMillis());
         }
         if (!topic.problem().isEmpty() && !topic.problem().equals(lastProblem)) {
-            LOG.log(System.Logger.Level.WARNING, "cannot read a panel's topic: " + topic.problem());
+            LOG.log(System.Logger.Level.WARNING, "cannot read a panel's topic [problem=" + topic.problem() + ']');
         }
         lastProblem = topic.problem();
         if (!closed) {

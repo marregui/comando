@@ -369,7 +369,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                 watchedFolders.forEach(f -> readFolder(f, false));
             } catch (RuntimeException e) {
                 // a task that throws is never run again: log and keep polling
-                LOG.log(System.Logger.Level.WARNING, "folder poll failed: " + e, e);
+                LOG.log(System.Logger.Level.WARNING, "folder poll failed", e);
             }
         }, every.toMillis(), every.toMillis(), TimeUnit.MILLISECONDS);
     }
@@ -402,8 +402,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                 return;
             }
             if (FolderTree.isUnreadable(tree) && (before == null || !before.tree().equals(tree))) {
-                LOG.log(System.Logger.Level.WARNING, "cannot read the folder " + folder.name() + " at " + folder.path() + ": "
-                        + tree.children().getFirst().label());
+                LOG.log(System.Logger.Level.WARNING, "cannot read the folder [name=" + folder.name() + ", path=" + folder.path() + ", reason="
+                        + tree.children().getFirst().label() + ']');
             }
             // under the lock, so two sends of one folder reach the state loop in the order their reads were ticketed
             sink.dispatch(new Intent.FolderLoaded(folder, tree));
@@ -768,7 +768,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                     break;
                 }
             } catch (IOException | RuntimeException e) {
-                LOG.log(System.Logger.Level.WARNING, "cannot move " + item + " to the Trash", e);
+                LOG.log(System.Logger.Level.WARNING, "cannot move to the Trash [item=" + item + ']', e);
                 failed.add(name + ": " + (e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage()));
                 continue;
             }
@@ -797,7 +797,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
                             .append(String.join(", ", r.mentions().stream().map(String::valueOf).toList()));
                 }
             } catch (IOException | RuntimeException ex) {
-                LOG.log(System.Logger.Level.WARNING, "cannot update " + e.getKey(), ex);
+                LOG.log(System.Logger.Level.WARNING, "cannot update [key=" + e.getKey() + ']', ex);
                 unlisted.add(where + " not updated: " + (ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()));
             }
         }

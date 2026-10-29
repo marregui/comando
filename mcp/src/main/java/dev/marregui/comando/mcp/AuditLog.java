@@ -47,7 +47,7 @@ public final class AuditLog {
             Path file = dir.resolve("audit-" + LocalDate.now(ZoneOffset.UTC) + ".jsonl");
             Files.writeString(file, line + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
         } catch (IOException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot write audit log [dir=" + dir + "]: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot write audit log [dir=" + dir + ']', e);
         }
     }
 }

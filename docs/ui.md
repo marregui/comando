@@ -133,7 +133,10 @@ public interface Widget<V> {
 
 A widget holds no state beyond what Swing needs and changes nothing directly: it dispatches intents through
 `WidgetContext.intents()`. It calls no adapter, imports no other widget, and in `unmount()` removes every listener it
-added to a long-lived object. `WidgetContext` carries the intent sink and the action registry.
+added to a long-lived object. `WidgetContext` carries the intent sink and the action registry. `unmount()` comes from
+`Unmountable`, which the panel editors that are not widgets (`CommandEditor`, `ChangeEditor`) implement too, so every
+holder releases a component by one name; `TerminalWidget.close()` keeps its own, as it ends a shell process. A
+component that hears the theme's tint subscribes in `addNotify` and unsubscribes in `removeNotify`.
 
 ### 3.2 The registry
 

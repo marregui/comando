@@ -205,7 +205,7 @@ public final class App implements AutoCloseable {
         errands.start("claude-version", () -> {
             String problem = ClaudeVersion.check(executable, launch);
             if (!problem.isEmpty()) {
-                LOG.log(System.Logger.Level.WARNING, problem);
+                LOG.log(System.Logger.Level.WARNING, "claude version check failed [problem=" + problem + ']');
                 loop.dispatch(new Intent.Notify(Notice.Level.WARN, problem, false));
             }
         });
@@ -225,7 +225,7 @@ public final class App implements AutoCloseable {
         try {
             ui.kitStatus(setup.status());
         } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "the kit's version could not be read: " + e.getMessage(), e);
+            LOG.log(System.Logger.Level.WARNING, "cannot read the kit's version", e);
         }
     }
 
@@ -265,7 +265,7 @@ public final class App implements AutoCloseable {
             try {
                 c.close();
             } catch (Exception e) {
-                LOG.log(System.Logger.Level.WARNING, "close failed [part=" + c.getClass().getSimpleName() + "]: " + e.getMessage(), e);
+                LOG.log(System.Logger.Level.WARNING, "close failed [part=" + c.getClass().getSimpleName() + ']', e);
             }
             long millis = (System.nanoTime() - partStart) / 1_000_000;
             if (millis >= SLOW_CLOSE_MILLIS) {

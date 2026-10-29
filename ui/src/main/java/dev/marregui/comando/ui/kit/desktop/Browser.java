@@ -35,7 +35,7 @@ public final class Browser {
                 try {
                     Desktop.getDesktop().browse(uri);
                 } catch (Exception e) {
-                    LOG.log(System.Logger.Level.WARNING, "cannot open " + uri + ": " + e.getMessage());
+                    LOG.log(System.Logger.Level.WARNING, "cannot open [uri=" + uri + ']', e);
                 }
             });
         }
@@ -49,7 +49,7 @@ public final class Browser {
                 try {
                     Desktop.getDesktop().browse(uri);
                 } catch (Exception e) {
-                    LOG.log(System.Logger.Level.WARNING, "cannot open " + uri + ": " + e.getMessage());
+                    LOG.log(System.Logger.Level.WARNING, "cannot open [uri=" + uri + ']', e);
                 }
             });
         }
@@ -63,7 +63,7 @@ public final class Browser {
         try {
             uri = URI.create(href);
         } catch (IllegalArgumentException e) {
-            LOG.log(System.Logger.Level.WARNING, "cannot open " + href + ": " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot open [href=" + href + ", cause=" + e.getMessage() + ']');
             return;
         }
         UiErrands.start("open-link", () -> browse.accept(uri));

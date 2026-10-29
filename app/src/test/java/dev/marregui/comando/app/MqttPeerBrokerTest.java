@@ -12,13 +12,16 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/** The instances' broker on the MQTT client (record 123), without a broker: no test here connects or opens a port. */
+/// The instances' broker on the MQTT client (record 123), without a broker: no test here connects or opens a port.
 class MqttPeerBrokerTest {
 
     private static final String INBOX = "comando/v1/local/instance/b/inbox";
     private static final String REPLY = "comando/v1/local/instance/main/reply";
     private static final String PRESENCE = "comando/v1/local/instance/b/presence";
 
+    /// A publish carries its payload, response topic and correlation data into the client's message at least once and
+    /// unretained, and reads back out of it unchanged; a retained presence with no payload, response topic or
+    /// correlation reads back empty and null.
     @Test
     void aQuestionKeepsItsResponseTopicAndCorrelationDataThroughTheClientsTypes() {
         Mqtt5Publish p = MqttPeerBroker.publishOf(INBOX, bytes("{\"text\":\"what is X?\"}"), false, REPLY, bytes("id-1"));
@@ -36,6 +39,9 @@ class MqttPeerBrokerTest {
         assertThat(presence.correlation()).isNull();
     }
 
+    /// A delivered message goes to the handlers whose topic filter matches it, wildcard or exact, and to no other:
+    /// presence reaches the presence handler, the inbox message the inbox handler, and a third instance's inbox
+    /// neither.
     @Test
     void aMessageReachesOnlyTheHandlersWhoseFiltersMatchItsTopic() {
         MqttPeerBroker broker = new MqttPeerBroker("comando-test", 1, () -> false);
@@ -51,6 +57,8 @@ class MqttPeerBrokerTest {
         broker.close();
     }
 
+    /// While the Edge is not running, following asks the question each time and never connects, and a publish fails at
+    /// once instead of waiting; closing twice is harmless.
     @Test
     void withNoEdgeRunningItNeverConnectsAndAPublishFailsAtOnce() {
         AtomicInteger looked = new AtomicInteger();
@@ -67,6 +75,8 @@ class MqttPeerBrokerTest {
         broker.close();
     }
 
+    /// The reconnect delay doubles from one second (1, 2, 4) and then settles at the follow interval, however many
+    /// attempts have failed.
     @Test
     void aDroppedConnectionIsRetriedSoonThenAtMostEveryFiveSeconds() {
         assertThat(MqttPeerBroker.reconnectDelay(0)).isEqualTo(1_000);

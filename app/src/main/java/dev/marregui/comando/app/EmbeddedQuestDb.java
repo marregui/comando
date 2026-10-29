@@ -197,7 +197,7 @@ final class EmbeddedQuestDb implements ServerToggle, AutoCloseable {
         try {
             server.close();
         } catch (RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "QuestDB did not close cleanly: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot close QuestDB cleanly", e);
         } finally {
             server = null;
         }

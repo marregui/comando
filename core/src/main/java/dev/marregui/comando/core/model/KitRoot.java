@@ -140,7 +140,7 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
         try {
             return Optional.of(reader.read(file));
         } catch (IOException | RuntimeException e) {
-            LOG.log(System.Logger.Level.WARNING, "the kit's " + file + " does not read, so comando runs without a kit: " + e.getMessage());
+            LOG.log(System.Logger.Level.WARNING, "cannot read the kit, comando runs without one [file=" + file + ']', e);
             return Optional.empty();
         }
     }

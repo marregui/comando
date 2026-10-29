@@ -65,13 +65,13 @@ class SqlCompletionTest {
         assertThat(c.provider().getCompletionByInputText("FROM")).hasSize(1);
     }
 
-    /// A [CommandEditor] adds a `UIManager` listener and removes it on dispose.
+    /// A [CommandEditor] adds a `UIManager` listener and removes it on unmount.
     @Test
-    void aDisposedEditorLeavesNoGlobalListener() {
+    void anUnmountedEditorLeavesNoGlobalListener() {
         int before = UIManager.getPropertyChangeListeners().length;
         CommandEditor editor = new CommandEditor();
         assertThat(UIManager.getPropertyChangeListeners().length).isGreaterThan(before);
-        editor.dispose();
+        editor.unmount();
         assertThat(UIManager.getPropertyChangeListeners().length).isEqualTo(before);
     }
 
