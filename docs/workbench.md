@@ -399,8 +399,10 @@ login is public. It stops at exit, after the lanes.
 Edge: comando's gateway to devices, the cloud and other Edges, and the one place every comando instance on the machine
 talks through ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md) §2.4).
 
-- **The distribution** is the zip named by `-Dcomando.edge.zip` or `COMANDO_EDGE_ZIP`, else the newest
-  `hivemq-edge-full-*.zip` in `~/edge/hivemq-edge2/build/distributions/`; with none, a notice says where it looked.
+- **The distribution** is the zip named by `-Dcomando.edge.zip` or `COMANDO_EDGE_ZIP`, else the open-source Edge release
+  comando pins (`hivemq-edge-full-2026.15.zip`, 359 MB): downloaded once into
+  `edge/dist/` of the data root, with a notice, and kept only when its SHA-256 is the published one. When it cannot be
+  had, a notice says why and how to name a zip.
 - **Installed** in `edge/` of the data root: unzipped when there is no home yet or the zip is another or newer than the
   one `edge/installed` records. Its data and logs are `edge/data` and `edge/log`, beside the home (named to the Edge
   through `HIVEMQ_DATA_FOLDER` and `HIVEMQ_LOG_FOLDER`), so a newer zip replaces the home and keeps them.

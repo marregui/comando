@@ -1,5 +1,6 @@
 package dev.marregui.comando.app;
 
+import com.sun.net.httpserver.HttpServer;
 import dev.marregui.comando.app.EmbeddedEdge.Entry;
 import dev.marregui.comando.app.EmbeddedEdge.Located;
 import dev.marregui.comando.app.EmbeddedEdge.Ports;
@@ -7,25 +8,31 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.testkit.RecordingSink;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.nio.file.attribute.FileTime;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Predicate;
 import java.util.stream.Stream;
@@ -328,32 +335,85 @@ class EmbeddedEdgeTest {
         assertThat(registry).doesNotExist();
     }
 
-    /// The distribution is the zip named by the property before the variable, else the newest `hivemq-edge-full-*.zip`
-    /// in the build folder; without one, the toggle warns saying where it looked and how to name one, and starts nothing.
+    /// The distribution is the zip named by the property before the variable, else the pinned release in `dist`,
+    /// downloaded there once: a second start reads the kept zip without asking the server again. A download whose
+    /// SHA-256 differs keeps nothing, and the toggle warns saying why and how to name a zip, and starts nothing.
     @Test
-    void theDistributionIsTheNamedZipElseTheNewestBuiltOne() throws Exception {
-        Path build = Files.createDirectories(dir.resolve("build"));
-        Located none = EmbeddedEdge.locate(null, " ", build);
-        assertThat(none.zip()).isNull();
-        assertThat(none.problem()).contains(build.toString(), "-Dcomando.edge.zip", "COMANDO_EDGE_ZIP");
+    void theDistributionIsTheNamedZipElseTheReleaseDownloadedOnce() throws Exception {
+        byte[] release = "the release".getBytes(StandardCharsets.UTF_8);
+        String sha = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(release));
+        AtomicInteger asked = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress(InetAddress.getLoopbackAddress(), 0), 0);
+        server.createContext("/edge/", x -> {
+            if (!x.getRequestURI().getPath().endsWith("/hivemq-edge-full-2026.15.zip")) {
+                x.sendResponseHeaders(404, -1);
+                x.close();
+                return;
+            }
+            asked.incrementAndGet();
+            x.sendResponseHeaders(200, release.length);
+            try (OutputStream out = x.getResponseBody()) {
+                out.write(release);
+            }
+        });
+        server.start();
+        try {
+            URI url = URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/edge/hivemq-edge-full-2026.15.zip");
+            Path dist = dir.resolve("dist");
+            RecordingSink sink = new RecordingSink();
 
-        Path older = Files.writeString(build.resolve("hivemq-edge-full-2026.13.zip"), "x");
-        Path newer = Files.writeString(build.resolve("hivemq-edge-full-2026.14-SNAPSHOT.zip"), "x");
-        Files.writeString(build.resolve("hivemq-edge-2026.15.zip"), "not a full distribution");
-        Files.setLastModifiedTime(older, FileTime.from(Instant.now().minusSeconds(3600)));
-        assertThat(EmbeddedEdge.locate(null, null, build).zip()).isEqualTo(newer);
-        assertThat(EmbeddedEdge.locate(null, older.toString(), build).zip()).isEqualTo(older);
-        assertThat(EmbeddedEdge.locate(newer.toString(), older.toString(), build).zip()).as("the property first").isEqualTo(newer);
-        assertThat(EmbeddedEdge.locate(dir.resolve("missing.zip").toString(), null, build).problem()).contains("missing.zip");
+            Path named = Files.writeString(dir.resolve("mine.zip"), "x");
+            Path other = Files.writeString(dir.resolve("other.zip"), "x");
+            assertThat(EmbeddedEdge.locate(null, named.toString(), dist, url, sha, sink).zip()).isEqualTo(named);
+            assertThat(EmbeddedEdge.locate(named.toString(), other.toString(), dist, url, sha, sink).zip()).as("the property first").isEqualTo(named);
+            assertThat(EmbeddedEdge.locate(dir.resolve("missing.zip").toString(), null, dist, url, sha, sink).problem()).contains("missing.zip");
+            assertThat(asked).as("a named zip downloads nothing").hasValue(0);
 
+            Located fetched = EmbeddedEdge.locate(null, " ", dist, url, sha, sink);
+            assertThat(fetched.zip()).isEqualTo(dist.resolve("hivemq-edge-full-2026.15.zip"));
+            assertThat(fetched.zip()).hasBinaryContent(release);
+            assertThat(sink.of(Intent.Notify.class).getLast().text()).contains("Downloading the Edge", "hivemq-edge-full-2026.15.zip");
+            assertThat(EmbeddedEdge.locate(null, null, dist, url, sha, sink).zip()).isEqualTo(fetched.zip());
+            assertThat(asked).as("downloaded once").hasValue(1);
+
+            Path elsewhere = dir.resolve("elsewhere");
+            Located refused = EmbeddedEdge.locate(null, null, elsewhere, url, "00" + sha.substring(2), sink);
+            assertThat(refused.zip()).isNull();
+            assertThat(refused.problem()).contains("SHA-256", "-Dcomando.edge.zip", "COMANDO_EDGE_ZIP");
+            try (Stream<Path> left = Files.list(elsewhere)) {
+                assertThat(left).as("neither the zip nor its .part").isEmpty();
+            }
+
+            EmbeddedEdge edge = new EmbeddedEdge(dir.resolve("a/edge"), dir.resolve("a"), "", sink, registry, ports,
+                    () -> EmbeddedEdge.locate(null, null, dir.resolve("a/edge/dist"), url.resolve("missing.zip"), sha, sink), p -> true, WAIT);
+            edges.add(edge);
+            Intent.Notify warned = toggle(edge, sink);
+            assertThat(warned.level()).isEqualTo(Notice.Level.WARN);
+            assertThat(warned.text()).contains("HTTP 404", "-Dcomando.edge.zip");
+            assertThat(registry).doesNotExist();
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    /// The pinned release, downloaded from hivemq.com and started for real on free loopback ports: its admin API
+    /// answers and its MQTT listener accepts a connection; the toggle stops it. Opt-in, as it downloads 359 MB the
+    /// first time (`./gradlew :app:test -PedgeLiveTest=true`); `-Dcomando.edge.zip` is not read here.
+    @Test
+    void thePinnedReleaseStartsForReal() throws Exception {
+        Assumptions.assumeTrue(Boolean.getBoolean("comando.edgeLiveTest"), "set -Dcomando.edgeLiveTest=true to download and run the release");
+        Path cache = Path.of(System.getProperty("comando.edgeLiveCache", dir.resolve("dist").toString()));
         RecordingSink sink = new RecordingSink();
-        EmbeddedEdge edge = new EmbeddedEdge(dir.resolve("a/edge"), dir.resolve("a"), "", sink, registry, ports,
-                () -> EmbeddedEdge.locate(null, null, dir.resolve("nowhere")), p -> true, WAIT);
+        EmbeddedEdge edge = new EmbeddedEdge(dir.resolve("live/edge"), dir.resolve("live"), "", sink, registry, ports,
+                () -> EmbeddedEdge.locate(null, null, cache, EmbeddedEdge.RELEASE_ZIP, EmbeddedEdge.RELEASE_SHA256, sink),
+                p -> answers(p.api()), Duration.ofMinutes(10));
         edges.add(edge);
-        Intent.Notify warned = toggle(edge, sink);
-        assertThat(warned.level()).isEqualTo(Notice.Level.WARN);
-        assertThat(warned.text()).contains(dir.resolve("nowhere").toString());
-        assertThat(registry).doesNotExist();
+        Intent.Notify up = toggle(edge, sink, Duration.ofMinutes(15));
+        assertThat(up.text()).as(up.text()).contains("Edge is up", "127.0.0.1:" + ports.mqtt());
+        try (Socket s = new Socket()) {
+            s.connect(new InetSocketAddress(InetAddress.getLoopbackAddress(), ports.mqtt()), 2_000);
+        }
+        assertThat(toggle(edge, sink).text()).isEqualTo("Edge is down");
     }
 
     // ---- helpers
@@ -386,12 +446,32 @@ class EmbeddedEdgeTest {
     /// Toggles once the previous toggle has finished, and returns the notice of its outcome: the last it posts, after
     /// the "Starting the Edge…" or "Stopping the Edge…" said at once.
     private static Intent.Notify toggle(EmbeddedEdge edge, RecordingSink sink) {
-        await().atMost(WAIT).until(() -> !edge.busy());
+        return toggle(edge, sink, WAIT);
+    }
+
+    private static Intent.Notify toggle(EmbeddedEdge edge, RecordingSink sink, Duration within) {
+        await().atMost(within).until(() -> !edge.busy());
         sink.clear();
         edge.toggle();
-        sink.await(Intent.Notify.class, WAIT);
-        await().atMost(WAIT).until(() -> !edge.busy());
+        sink.await(Intent.Notify.class, within);
+        await().atMost(within).until(() -> !edge.busy());
         return sink.of(Intent.Notify.class).getLast();
+    }
+
+    /// Something answers HTTP on `port` on loopback, whatever its status.
+    private static boolean answers(int port) {
+        try {
+            HttpURLConnection c = (HttpURLConnection) URI.create("http://127.0.0.1:" + port + "/").toURL().openConnection();
+            c.setConnectTimeout(1_000);
+            c.setReadTimeout(2_000);
+            try {
+                return c.getResponseCode() > 0;
+            } finally {
+                c.disconnect();
+            }
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /// A distribution with one top folder: `bin/run.sh` with the shipped JMX port records its environment and pid in

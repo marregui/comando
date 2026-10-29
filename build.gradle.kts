@@ -39,6 +39,10 @@ subprojects {
         systemProperty("comando.home", layout.buildDirectory.dir("test-home").get().asFile.absolutePath)
         // opt-in: the keychain test writes and deletes one item in the login keychain
         systemProperty("comando.keychainTest", providers.gradleProperty("keychainTest").getOrElse("false"))
+        // opt-in: the Edge live test downloads the pinned HiveMQ Edge release (359 MB) and runs it on free loopback ports;
+        // -PedgeLiveCache=<folder> keeps the zip between runs
+        systemProperty("comando.edgeLiveTest", providers.gradleProperty("edgeLiveTest").getOrElse("false"))
+        providers.gradleProperty("edgeLiveCache").orNull?.let { systemProperty("comando.edgeLiveCache", it) }
         testLogging {
             events("failed")
             exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL

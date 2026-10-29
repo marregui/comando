@@ -12,22 +12,27 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.io.StringWriter;
-import java.io.UncheckedIOException;
 import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.PosixFilePermission;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Comparator;
 import java.util.EnumSet;
+import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -54,6 +59,9 @@ import java.util.zip.ZipFile;
  * <p>
  * The Edge's data and log folders sit beside its home ({@code edge/data}, {@code edge/log}), named to it through
  * {@code HIVEMQ_DATA_FOLDER} and {@code HIVEMQ_LOG_FOLDER}: a newer zip replaces the home and keeps them.
+ * <p>
+ * The distribution is the open-source HiveMQ Edge release comando pins ({@link #RELEASE}), downloaded once into {@code
+ * edge/dist} and checked against its published SHA-256, unless the user names a zip of their own.
  */
 final class EmbeddedEdge implements ServerToggle, AutoCloseable {
 
@@ -83,8 +91,12 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
 
     /** The registry every comando instance on this machine reads. */
     static final Path REGISTRY = Path.of(System.getProperty("user.home"), ".comando-edge.json");
-    /** Where the newest distribution is looked for when none is named: the build output of the main Edge checkout. */
-    static final Path BUILD_DIR = Path.of(System.getProperty("user.home"), "edge", "hivemq-edge2", "build", "distributions");
+    /** The HiveMQ Edge release comando runs when the user names no zip: the latest open-source one. */
+    static final String RELEASE = "2026.15";
+    static final URI RELEASE_ZIP = URI.create("https://www.hivemq.com/releases/edge/hivemq-edge-full-" + RELEASE + ".zip");
+    /** The release zip's SHA-256, as published beside it ({@code .sha256}). */
+    static final String RELEASE_SHA256 = "1368ee4a1df78227a3fe2c0e4a57e0df770f540f6f4d9101154b829f9c4c9a82";
+    private static final Duration CONNECT_WITHIN = Duration.ofSeconds(30);
     static final String ZIP_PROPERTY = "comando.edge.zip";
     static final String ZIP_ENV = "COMANDO_EDGE_ZIP";
     static final Duration READY_WITHIN = Duration.ofSeconds(60);
@@ -120,11 +132,12 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
 
     /**
      * comando's Edge in {@code root}, for the instance on data root {@code owner} named {@code name}; the shared registry,
-     * the standard ports, the distribution as {@link #locate} finds it.
+     * the standard ports, the distribution as {@link #locate} finds it, the pinned release in {@code root/dist}.
      */
     EmbeddedEdge(Path root, Path owner, String name, IntentSink intents) {
         this(root, owner, name, intents, REGISTRY, Ports.DEFAULT,
-                () -> locate(System.getProperty(ZIP_PROPERTY), System.getenv(ZIP_ENV), BUILD_DIR), EmbeddedEdge::answers, READY_WITHIN);
+                () -> locate(System.getProperty(ZIP_PROPERTY), System.getenv(ZIP_ENV), root.resolve("dist"), RELEASE_ZIP, RELEASE_SHA256, intents),
+                EmbeddedEdge::answers, READY_WITHIN);
     }
 
     /** As above, with the registry, the ports, the distribution, the readiness check and its bound given; for tests. */
@@ -379,34 +392,69 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
     // ---- the distribution
 
     /**
-     * The distribution: the zip named by the property, else by the environment variable, else the newest {@code
-     * hivemq-edge-full-*.zip} in {@code dir}; when there is none, a problem saying where it looked and how to name one.
+     * The distribution: the zip named by the property, else by the environment variable, else the release at {@code
+     * url}, kept in {@code dist} under its own name and downloaded there the first time, saying so to the user; when it
+     * cannot be had, a problem saying why and how to name a zip instead.
      */
-    static Located locate(String property, String env, Path dir) {
+    static Located locate(String property, String env, Path dist, URI url, String sha256, IntentSink intents) {
         String named = property != null && !property.isBlank() ? property : env != null && !env.isBlank() ? env : null;
         if (named != null) {
             Path zip = Path.of(named.strip());
             return Files.isRegularFile(zip) ? Located.of(zip)
                     : new Located(null, "No Edge distribution at " + zip + " (named by -D" + ZIP_PROPERTY + " or " + ZIP_ENV + ")");
         }
-        try (Stream<Path> files = Files.list(dir)) {
-            Optional<Path> newest = files.filter(f -> f.getFileName().toString().matches("hivemq-edge-full-.*\\.zip") && Files.isRegularFile(f))
-                    .max(Comparator.comparing(EmbeddedEdge::modified));
-            if (newest.isPresent()) {
-                return Located.of(newest.get());
-            }
-        } catch (IOException | UncheckedIOException e) {
-            // no such folder: said below
+        String file = url.getPath().substring(url.getPath().lastIndexOf('/') + 1);
+        Path zip = dist.resolve(file);
+        if (Files.isRegularFile(zip)) {
+            return Located.of(zip);
         }
-        return new Located(null, "No Edge distribution: no hivemq-edge-full-*.zip in " + dir + "; build one there, or name a zip with -D"
-                + ZIP_PROPERTY + " or " + ZIP_ENV);
+        intents.dispatch(new Intent.Notify(Notice.Level.INFO, "Downloading the Edge, " + file + ", once…", false));
+        try {
+            download(url, sha256, zip);
+            return Located.of(zip);
+        } catch (IOException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot download the Edge [url=" + url + "]: " + e.getMessage());
+            return new Located(null, "Cannot download the Edge from " + url + ": " + e.getMessage() + "; or name a zip with -D"
+                    + ZIP_PROPERTY + " or " + ZIP_ENV);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            return new Located(null, "The Edge's download was interrupted");
+        }
     }
 
-    private static long modified(Path f) {
-        try {
-            return Files.getLastModifiedTime(f).toMillis();
-        } catch (IOException e) {
-            throw new UncheckedIOException(e);
+    /**
+     * Downloads {@code url} to {@code zip}: into a {@code .part} file beside it, moved into place only when its SHA-256
+     * is {@code sha256}, so a zip in {@code dist} is always a whole and checked one. A failed download leaves nothing.
+     */
+    static void download(URI url, String sha256, Path zip) throws IOException, InterruptedException {
+        Files.createDirectories(zip.getParent());
+        Path part = zip.resolveSibling(zip.getFileName() + ".part");
+        try (HttpClient http = HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).connectTimeout(CONNECT_WITHIN).build()) {
+            HttpResponse<Path> r = http.send(HttpRequest.newBuilder(url).GET().build(), HttpResponse.BodyHandlers.ofFile(part));
+            if (r.statusCode() != 200) {
+                throw new IOException("HTTP " + r.statusCode());
+            }
+            String actual = sha256(part);
+            if (!actual.equalsIgnoreCase(sha256)) {
+                throw new IOException("SHA-256 " + actual + ", expected " + sha256);
+            }
+            Files.move(part, zip, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            LOG.log(System.Logger.Level.INFO, "Edge downloaded [url=" + url + ", zip=" + zip + ']');
+        } finally {
+            Files.deleteIfExists(part);
+        }
+    }
+
+    private static String sha256(Path f) throws IOException {
+        try (InputStream in = Files.newInputStream(f)) {
+            MessageDigest d = MessageDigest.getInstance("SHA-256");
+            byte[] buf = new byte[1 << 16];
+            for (int n; (n = in.read(buf)) > 0; ) {
+                d.update(buf, 0, n);
+            }
+            return HexFormat.of().formatHex(d.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("every JDK has SHA-256", e);
         }
     }
 

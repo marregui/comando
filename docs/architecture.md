@@ -437,6 +437,7 @@ runs against fake CLI scripts and recorded streams; the MCP server is tested ove
 | Opt-in test | Enabled by | Why |
 |---|---|---|
 | keychain round trip | `./gradlew test -PkeychainTest=true` | writes and deletes a login keychain item |
+| comando Edge live start | `./gradlew :app:test -PedgeLiveTest=true` | downloads the pinned open-source Edge release (359 MB) and runs it |
 | window tests | `./gradlew :app:uiTest` | need a display; their windows open on no screen and take no focus |
 
 Gates:
