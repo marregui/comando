@@ -17,7 +17,7 @@ import java.util.List;
  */
 public record ClaudeSettings(String executable, Path runDir, Path projectsDir, String uiInstructions, RootLaunch launch) {
 
-    /** On the environment comando was started with: tests. */
+    /** Every process on the environment comando was started with ({@link RootLaunch#INHERIT}); for tests. */
     public ClaudeSettings(String executable, Path runDir, Path projectsDir, String uiInstructions) {
         this(executable, runDir, projectsDir, uiInstructions, RootLaunch.INHERIT);
     }

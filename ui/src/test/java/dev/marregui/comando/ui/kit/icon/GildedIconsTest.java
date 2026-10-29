@@ -37,8 +37,8 @@ class GildedIconsTest {
         assertThat(Icons.gilded(new Color(Icons.SVG_GOLD))).isEqualTo(Tint.TREASURE.body);
     }
 
-    /// [Tint#named] falls back to TREASURE for a name no tint has, and every tint's [Tint#at] gives highlight at 0, body at
-    /// 0.45 and shade at 1.
+    /// [Tint#named] falls back to TREASURE for a name no tint has, and every tint's [Tint#at] gives highlight at 0,
+    /// body at 0.45 and shade at 1.
     @Test
     void aNameNoTintHasIsTreasureAndTheRampRunsFromHighlightThroughBodyToShade() {
         assertThat(Tint.named("COPPER")).isEqualTo(Tint.TREASURE);

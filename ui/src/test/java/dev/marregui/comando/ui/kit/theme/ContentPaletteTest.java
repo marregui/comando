@@ -12,7 +12,8 @@ import static org.assertj.core.api.Assertions.within;
 /// - [Oklch] round-trips and cuts chroma, not lightness or hue, out of gamut.
 /// - The hue wheel turns at most 30° to put the tint between two category hues.
 /// - Syntax, selection, diffs, inline code and terminal colours keep their text legible on every ground.
-/// - Each category stands apart from the others, the keyword and the ink, near its customary hue and away from the tint.
+/// - Each category stands apart from the others, the keyword and the ink, near its customary hue and away from the
+///   tint.
 /// - The golds share one palette but for their keywords; plot series start at the tint and stay apart.
 /// - The palette in use follows the tint and ground chosen.
 class ContentPaletteTest {
@@ -20,8 +21,8 @@ class ContentPaletteTest {
     private static final String[] CATEGORIES = {"annotation", "number", "string", "regex", "type", "variable"};
     private static final double[] CUSTOM = {0, 60, 120, 180, 240, 300};
 
-    /// An in-gamut colour returns its lightness, chroma and hue; an out-of-gamut one keeps its lightness within 0.02 and
-    /// its hue within 6°, giving up chroma.
+    /// An in-gamut colour returns its lightness, chroma and hue; an out-of-gamut one keeps its lightness within 0.02
+    /// and its hue within 6°, giving up chroma.
     @Test
     void oklchRoundTripsAndCutsChromaNotHue() {
         double[] lch = Oklch.lch(Oklch.of(0.7, 0.1, 150));
@@ -102,8 +103,8 @@ class ContentPaletteTest {
         }
     }
 
-    /// Ink stays legible on the selection and on added and removed lines and words, inline code on its ground, line numbers
-    /// are quiet but visible (2–4.5), and added and removed are apart, on every tint and ground.
+    /// Ink stays legible on the selection and on added and removed lines and words, inline code on its ground, line
+    /// numbers are quiet but visible (2–4.5), and added and removed are apart, on every tint and ground.
     @Test
     void theEditorsSelectionDiffsAndCodeKeepTheirTextLegible() {
         for (Tint t : Tint.values()) {
@@ -122,8 +123,8 @@ class ContentPaletteTest {
         }
     }
 
-    /// The six ANSI colours and their bright forms pass their contrast floors and stay within 6° of their named hue on every
-    /// ground, white and bright black read, and a tint does not change red.
+    /// The six ANSI colours and their bright forms pass their contrast floors and stay within 6° of their named hue on
+    /// every ground, white and bright black read, and a tint does not change red.
     @Test
     void theTerminalsColoursReadOnEveryGroundAndKeepTheirNames() {
         String[] names = {"red", "green", "yellow", "blue", "magenta", "cyan"};
@@ -159,7 +160,8 @@ class ContentPaletteTest {
         }
     }
 
-    /// [Theme#content] is the cached palette of the tint and ground chosen, keywords in the tint and code ground per ground.
+    /// [Theme#content] is the cached palette of the tint and ground chosen, keywords in the tint and code ground per
+    /// ground.
     @Test
     void thePaletteInUseFollowsTheTintAndTheGroundChosen() {
         try {

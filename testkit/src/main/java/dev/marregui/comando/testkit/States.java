@@ -10,7 +10,10 @@ import dev.marregui.comando.core.state.SessionState;
 
 import java.util.List;
 
-/** A small state used by most tests: panel p1 bound to connection "local" and session "work". */
+/**
+ * A small state used by most tests: panel p1 bound to connection "local" and session "work", panel p2 bound to "local"
+ * alone; the connection and the session closed.
+ */
 public final class States {
 
     public static final PanelId P1 = new PanelId("p1");

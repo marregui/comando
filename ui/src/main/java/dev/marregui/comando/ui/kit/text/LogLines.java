@@ -9,7 +9,9 @@ import java.time.format.DateTimeParseException;
  */
 public final class LogLines {
 
-    /** How long after the time a notice names its entry may have been written: a pause between reading it and logging. */
+    /**
+     * How long after the time a notice names its entry may have been written: the pause between reading and logging.
+     */
     public static final long SLACK_MILLIS = 1_000;
 
     private LogLines() {
@@ -43,7 +45,7 @@ public final class LogLines {
         return found;
     }
 
-    /** The time an entry's line starts with, in epoch milliseconds; {@link Long#MIN_VALUE} for a line that is not one. */
+    /** The time an entry's line starts with, in epoch milliseconds; {@link Long#MIN_VALUE} for any other line. */
     static long timeOf(String text, int start, int end) {
         if (start >= end || !Character.isDigit(text.charAt(start))) {
             return Long.MIN_VALUE;

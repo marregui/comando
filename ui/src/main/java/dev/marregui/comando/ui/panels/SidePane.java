@@ -45,7 +45,7 @@ public final class SidePane {
         return views.size() > 0;
     }
 
-    /** Returns true when the pane holds views. */
+    /** Shows the side views of {@code s}, the one new or shown again in front; returns whether the pane holds any. */
     public boolean render(AppState s) {
         boolean changed = views.render(s.views());
         if (changed) {

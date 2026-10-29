@@ -112,7 +112,7 @@ public final class FindBar extends JPanel {
         return target != null;
     }
 
-    /** Finds the next or previous match of the bar's text, as ⌘G and ⌘⇧G do; does nothing when the bar is closed. */
+    /** Finds the next or previous match of the bar's text (⌘G, ⌘⇧G); does nothing when the bar is closed. */
     public void next(boolean forward) {
         find(forward);
     }
@@ -124,6 +124,7 @@ public final class FindBar extends JPanel {
         }
     }
 
+    /** Clears the target's highlights and hides the bar. */
     public void close() {
         typing.stop();
         if (target != null) {

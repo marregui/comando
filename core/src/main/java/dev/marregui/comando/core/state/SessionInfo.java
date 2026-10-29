@@ -9,10 +9,9 @@ import java.util.Objects;
  *
  * @param model          the model the session runs: the {@code system/init}'s, then the first message's of each turn,
  *                       so a {@code /model} typed in the prompt shows
- * @param effort         the effort level Claude Code's settings give the {@code system/init}'s model, empty when they give
- *                       none
- * @param reportedEffort the effort the latest turn started at, as its first message ran: the session's own setting, so a
- *                       {@code /effort} shows; empty before the first turn
+ * @param effort the effort level Claude Code's settings give the {@code system/init}'s model, empty when they give none
+ * @param reportedEffort the effort the latest turn started at, as its first message ran: the session's own setting, so
+ *                       a {@code /effort} shows; empty before the first turn
  * @param turnModel      the model the running turn's latest message ran at, empty when no turn runs: a skill's
  *                       {@code model} lasts the rest of its turn
  * @param turnEffort     the effort the running turn's latest message ran at, empty when no turn runs: a skill's
@@ -48,8 +47,8 @@ public record SessionInfo(String claudeSessionId, String model, String cwd, Stri
     }
 
     /**
-     * A message of the running turn ran at {@code runModel} and {@code runEffort} (either empty when unknown); the first
-     * of a turn also gives the session's own model and effort.
+     * A message of the running turn ran at {@code runModel} and {@code runEffort} (either empty when unknown); the
+     * first of a turn also gives the session's own model and effort.
      */
     public SessionInfo ranAt(String runModel, String runEffort, boolean firstOfTurn) {
         String m = runModel == null ? "" : runModel;

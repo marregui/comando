@@ -54,6 +54,7 @@ final class LivePlots {
         this.results = results;
     }
 
+    /** Refreshes {@code panel}'s plot of {@code sql} every {@code seconds} (1 s to a day), in place of a live one. */
     void start(PanelId panel, String sql, String title, int seconds) {
         stop(panel);
         Live l = new Live(panel, sql, title, Math.clamp(seconds, 1, MAX_SECONDS));

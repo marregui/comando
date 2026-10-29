@@ -17,7 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - A tooltip's edge is the reports' bar in the tint chosen, over a ground no tint changes.
 /// - Choosing a tint tells every listener once; a stopped listener hears no more.
 /// - Every tint reads on every ground, and attention stays treasure gold.
-/// - An unknown ground name is graphite; a ground chosen moves the ground and the table-head band and tells tint listeners.
+/// - An unknown ground name is graphite; a ground chosen moves the ground and the table-head band and tells tint
+///   listeners.
 class TooltipTintTest {
 
     @AfterEach
@@ -25,8 +26,8 @@ class TooltipTintTest {
         Theme.tint(Tint.TREASURE);
     }
 
-    /// [TintBarBorder] insets text clear of its bar and paints the bar's top in the tint's highlight, following a change
-    /// from CHAMPAGNE to ELECTRIC_BLUE, while `ToolTip.background` stays.
+    /// [TintBarBorder] insets text clear of its bar and paints the bar's top in the tint's highlight, following a
+    /// change from CHAMPAGNE to ELECTRIC_BLUE, while `ToolTip.background` stays.
     @Test
     void aTooltipsEdgeIsTheReportsBarInTheTintChosenOnTheTranscriptsGround() {
         TintBarBorder border = new TintBarBorder();

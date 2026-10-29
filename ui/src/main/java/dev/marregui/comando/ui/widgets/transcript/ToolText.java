@@ -60,7 +60,10 @@ public final class ToolText {
         return HomeDir.claudeDir().resolve("skills");
     }
 
-    /** {@code name}'s {@code SKILL.md} under {@code root}, null when it is not there or the name is a plugin's ({@code a:b}). */
+    /**
+     * {@code name}'s {@code SKILL.md} under {@code root}, null when it is not there or the name is a plugin's
+     * ({@code a:b}).
+     */
     static Path skillFile(String name, Path root) {
         String bare = name.startsWith("/") ? name.substring(1) : name;
         if (bare.isEmpty() || bare.startsWith(".") || !bare.matches("[\\w.\\-]+")) {

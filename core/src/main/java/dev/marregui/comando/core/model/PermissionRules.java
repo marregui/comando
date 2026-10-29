@@ -18,8 +18,7 @@ import java.util.regex.Pattern;
  * a Bash command allows its command prefix (one rule per subcommand of a compound command, after the wrappers
  * Claude Code strips), an edit allows the file's directory, a read allows the directory it reads, a fetch allows
  * its host, and any other tool allows the tool. Only Bash and WebFetch rules may be saved beyond the session.
- * The MCP server sends the rules with the answer; the approval card shows them before the user commits. Depends
- * on the JDK only.
+ * The MCP server sends the rules with the answer; the approval card shows them before the user commits.
  */
 public final class PermissionRules {
 
@@ -105,7 +104,7 @@ public final class PermissionRules {
                 // no host to name (no scheme, a file: URL): the tool itself, for the session only
                 yield host == null ? session(new Rule(tool, "")) : new Rules(List.of(new Rule(tool, "domain:" + host)), true);
             }
-            // file permissions are checked against Edit rules only: a path rule naming Write or NotebookEdit is never consulted
+            // file permissions are checked against Edit rules only: a path rule naming Write or NotebookEdit is unused
             case "Edit", "Write", "MultiEdit" -> session(file("Edit", field.apply("file_path")));
             case "NotebookEdit" -> session(file("Edit", field.apply("notebook_path")));
             // Read rules cover every tool that reads files: Grep and Glob search the directory they are given
@@ -269,7 +268,7 @@ public final class PermissionRules {
         }
         for (int i = 0; i < n; i++) {
             if (!plainWord(w.get(i)) || i > 0 && w.get(i).startsWith("-") && !(module && i == 1)) {
-                // a quote, a variable or an assignment, or an option before the subcommand (git -C dir): no prefix to name safely
+                // a quote, a variable, an assignment or an option before the subcommand (git -C dir): no safe prefix
                 return exact;
             }
         }
@@ -364,7 +363,10 @@ public final class PermissionRules {
 
     // ---- paths
 
-    /** {@code Tool(//abs/dir/**)} for an absolute file, {@code Tool(./dir/**)} for a relative one, the whole tool for none. */
+    /**
+     * {@code Tool(//abs/dir/**)} for an absolute file, {@code Tool(./dir/**)} for a relative one, the whole tool for
+     * none.
+     */
     static Rule file(String tool, String file) {
         String f = file == null ? "" : file.strip();
         if (f.isEmpty()) {

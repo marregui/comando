@@ -15,7 +15,8 @@ none of them changed with the tint or the ground. Miguel agreed to derive them (
 ## 2. Decision
 
 `ContentPalette`, in `ui.kit.theme`, is made once per tint and ground; `Theme.content()` is the one chosen. Its colours
-are computed in OKLCH, a perceptual space in which colours of one lightness and chroma weigh the same whatever their hue.
+are computed in OKLCH, a perceptual space in which colours of one lightness and chroma weigh the same whatever their
+hue.
 
 | Content | Rule | Why |
 |---|---|---|
@@ -37,10 +38,10 @@ Miguel decided D2. Claude decided the wheel, its lightness and chroma, and the m
 `Theme.DIFF_*`, `Theme.SERIES`, `Theme.ANSWER_CODE`, `ANSWER_CODE_GROUND` and `CODE_GROUND` are gone. `Theme.INFO`
 stays a status colour of the first tier. Record 93 stands: comando is dark throughout.
 
-Tested in `ContentPaletteTest` on every tint and ground (42 pairs): contrast floors for each syntax colour, selected text,
-diff lines and words, inline code, the terminal's colours; each category apart from the others, the keywords and the
-ink in OKLab, near its customary hue and away from the tint; the golds' categories within 0.02 of each other. Mutation-
-checked: syntax at lightness 0.55 fails it, and so does a wheel that does not turn. `EditorsTest` reads the editors'
-colours from the palette and a changed tint; `UiKeysTest` checks that an editor shown takes a new ground's selection and
-string colour and keeps its zoom. The sheet `ui/build/snapshots/content.png` (`ContentSheetTest`) paints every tint and
-every ground: code, the terminal's sixteen colours, diff lines, inline code and the plot series.
+Tested in `ContentPaletteTest` on every tint and ground (42 pairs): contrast floors for each syntax colour, selected
+text, diff lines and words, inline code, the terminal's colours; each category apart from the others, the keywords and
+the ink in OKLab, near its customary hue and away from the tint; the golds' categories within 0.02 of each other.
+Mutation-checked: syntax at lightness 0.55 fails it, and so does a wheel that does not turn. `EditorsTest` reads the
+editors' colours from the palette and a changed tint; `UiKeysTest` checks that an editor shown takes a new ground's
+selection and string colour and keeps its zoom. The sheet `ui/build/snapshots/content.png` (`ContentSheetTest`) paints
+every tint and every ground: code, the terminal's sixteen colours, diff lines, inline code and the plot series.

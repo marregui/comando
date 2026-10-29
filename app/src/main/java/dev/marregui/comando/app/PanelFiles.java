@@ -20,13 +20,13 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
 
 /**
- * Each panel's text as a file of its own. A panel's own file is Markdown in one folder, named after the panel's
- * title; it is written when the panel is created, follows the panel's renames, stays while the panel is closed, and
- * goes only when the panel is removed or the file is deleted outside comando. A panel opened on a file elsewhere
- * (a document from the Files tab) is bound to that path: comando never renames or deletes it. No file is overwritten after an
- * edit made outside comando: {@link #outside} reports the outside text so the panel can take it, and a write that finds an outside
- * edit nobody took keeps it next to the file under another name. Writes go to a temporary file moved over the old
- * one, as the store files do.
+ * Each panel's text as a file of its own. A panel's own file is Markdown in one folder, named after the panel's title;
+ * it is written when the panel is created, follows the panel's renames, stays while the panel is closed, and goes only
+ * when the panel is removed or the file is deleted outside comando. A panel opened on a file elsewhere (a document from
+ * the Files tab) is bound to that path: comando never renames or deletes it. No file is overwritten after an edit made
+ * outside comando: {@link #outside} reports the outside text so the panel can take it, and a write that finds an
+ * outside edit nobody took keeps it next to the file under another name. Writes go to a temporary file moved over the
+ * old one, as the store files do.
  * <p>
  * The store's writer thread calls every method that writes, and {@link #bind}; {@link #file} is called from the EDT,
  * and only reads a binding, which a new name never takes.
@@ -278,7 +278,7 @@ final class PanelFiles {
         gone.remove(id);
     }
 
-    /** Replaces {@code f}'s text, or writes it new with its folders: through a temporary file beside it, so whole or not at all. */
+    /** Replaces {@code f}'s text, or writes it with its folders, through a temporary file: whole or not at all. */
     static void replace(Path f, String text) throws IOException {
         if (!Files.isDirectory(f.getParent())) {
             Files.createDirectories(f.getParent());
@@ -286,7 +286,9 @@ final class PanelFiles {
         AtomicFiles.writeString(f, text);
     }
 
-    /** {@code base}, else {@code base 2}, {@code base 3}…: not a file in the folder, nor the name of another open panel. */
+    /**
+     * {@code base}, else {@code base 2}, {@code base 3}…: not a file in the folder, nor the name of another open panel.
+     */
     private String free(String base, String id, Collection<String> open) throws IOException {
         Set<String> taken = new HashSet<>();
         for (String other : open) {
@@ -311,7 +313,7 @@ final class PanelFiles {
         return candidate;
     }
 
-    /** A title made a file name: no path separators, colons or control characters, no leading dot, at most 80 characters. */
+    /** A title as a file name: no path separators, colons, control characters or leading dot; at most 80 characters. */
     static String safe(String title) {
         StringBuilder sb = new StringBuilder(title.length());
         for (int i = 0; i < title.length(); i++) {

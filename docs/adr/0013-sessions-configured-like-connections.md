@@ -18,4 +18,4 @@ Miguel decided, on the default proposed in the review of the design plan.
 
 One `ResourceKind<S>` model and one `ResourceDialog<S>` serve both
 ([One model for connections, sessions and folders](../workbench.md#11-one-model-for-connections-sessions-and-folders)).
-Record 88, proposed, makes a session and its own panel share a name.
+[Record 88](0088-a-session-and-its-panel-share-a-name.md) makes a session and its own panel share a name.

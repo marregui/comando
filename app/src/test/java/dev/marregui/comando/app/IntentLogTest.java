@@ -60,8 +60,9 @@ class IntentLogTest {
             new Intent.CommandFinished(4L, 1, 10L, false, ViewSpec.TreeNode.NONE, Map.of("A.b", "boom")),
             new Intent.Notify(Notice.Level.WARN, "careful", true));
 
-    /// A log of one sample per intent kind, written to a file and replayed, gives back the initial state and every intent
-    /// equal; a plot's series arrays, which records compare by identity, match element by element with a `NaN` kept.
+    /// A log of one sample per intent kind, written to a file and replayed, gives back the initial state and every
+    /// intent equal; a plot's series arrays, which records compare by identity, match element by element with a `NaN`
+    /// kept.
     @Test
     void everyIntentRoundTrips(@TempDir Path dir) throws Exception {
         AppState initial = AppState.initial(List.of(new PanelState(new PanelId("p1"), "one", "lab", "edge")),

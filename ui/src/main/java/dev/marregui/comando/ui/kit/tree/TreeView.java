@@ -50,8 +50,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
- * A {@link ViewSpec.TreeNode} tree: details muted after the label; a double click or Enter activates a
- * node; a right click asks for its menu. The one tree every widget uses.
+ * A {@link ViewSpec.TreeNode} tree: details muted after the label; a double click on a leaf, or ⏎ on the selected
+ * node, activates it; a right click asks for its menu. The one tree every widget uses.
  */
 public final class TreeView {
 
@@ -128,7 +128,7 @@ public final class TreeView {
     public static final Icon NO_ICON = new ImageIcon();
     /** The height of a header's space above its row. */
     static final int HEADER = 24;
-    /** A cell with more than a name: the look's label with the name, the mark after it if any, then the detail, muted. */
+    /** A cell with more than a name: the look's label, the mark after it if any, then the detail, muted. */
     private final JPanel cell = new JPanel(new FlowLayout(FlowLayout.LEADING, 0, 0));
     private final JLabel mark = new JLabel();
     private final JLabel detail = new JLabel();
@@ -265,8 +265,9 @@ public final class TreeView {
 
     /**
      * The sidebar's marks over the painted rows: the report's bar down the left edge of each selected row, then each
-     * header in its space above its row, on the ground the selection's band does not reach: the header's words in spaced
-     * capitals in the tint's body, and a hairline of the tint's shade on to the edge; an empty header, the hairline alone.
+     * header in its space above its row, on the ground the selection's band does not reach: the header's words in
+     * spaced capitals in the tint's body, and a hairline of the tint's shade on to the edge; an empty header, the
+     * hairline alone.
      */
     private void paintSidebar(Graphics g0) {
         Graphics2D g = (Graphics2D) g0.create();
@@ -333,10 +334,10 @@ public final class TreeView {
     }
 
     /**
-     * Gives the tree the sidebar's look (record 98): the transcript's ground, names in its ivory, the selection a band of
-     * the tint's shade with the name in its highlight and the report's bar at the left edge, and {@code headers}' text
-     * above the nodes it names one for, in spaced capitals in the tint, over a hairline (the hairline alone for an empty
-     * text); rows then take their own heights.
+     * Gives the tree the sidebar's look (record 98): the transcript's ground, names in its ivory, the selection a band
+     * of the tint's shade with the name in its highlight and the report's bar at the left edge, and {@code headers}'
+     * text above the nodes it names one for, in spaced capitals in the tint, over a hairline (the hairline alone for an
+     * empty text); rows then take their own heights.
      */
     public void sidebar(Function<DefaultMutableTreeNode, String> headers) {
         this.sidebar = true;
@@ -373,7 +374,9 @@ public final class TreeView {
         return ((DefaultMutableTreeNode) path.getLastPathComponent()).getUserObject() instanceof ViewSpec.TreeNode n ? n : null;
     }
 
-    /** The parent of the selected node, for keys built from a node and its parent. */
+    /**
+     * The parent of {@code child} when it is the selected node, else null; for keys built from a node and its parent.
+     */
     public ViewSpec.TreeNode parentOf(ViewSpec.TreeNode child) {
         TreePath path = tree.getSelectionPath();
         if (path == null || path.getPathCount() < 2 || node(path) != child) {
@@ -443,16 +446,16 @@ public final class TreeView {
     }
 
     /**
-     * One click opens or closes a folder, and the second click of a double click does neither; off by default, where a
-     * double click opens or closes it.
+     * One click opens or closes a folder, and the second click of a double click does neither; off by default, where
+     * a double click opens or closes it.
      */
     public void toggleOnClick(boolean on) {
         toggleOnClick = on;
     }
 
     /**
-     * Puts {@code path} back as it was before the double click whose first click opened or closed it, for a caller whose
-     * double click on that node does something else; nothing when that click toggled no node or another.
+     * Puts {@code path} back as it was before the double click whose first click opened or closed it, for a caller
+     * whose double click on that node does something else; nothing when that click toggled no node or another.
      */
     public void undoClickToggle(TreePath path) {
         if (path.equals(toggledByPress)) {
@@ -465,7 +468,7 @@ public final class TreeView {
         toggledByPress = null;
     }
 
-    /** Shows {@code root}, expanded to {@code levels} below it. */
+    /** Shows {@code root}, expanded to {@code levels} below it within the first 500 rows. */
     public void setRoot(ViewSpec.TreeNode root, int levels) {
         tree.setModel(new DefaultTreeModel(build(root)));
         for (int i = 0; i < Math.min(tree.getRowCount(), 500); i++) {

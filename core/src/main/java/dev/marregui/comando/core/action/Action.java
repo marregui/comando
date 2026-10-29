@@ -8,8 +8,8 @@ import java.util.Set;
 
 /**
  * One thing a person can do in comando's window, offered to agents as the MCP tool {@link #tool} (record 121). The
- * registry {@link Actions} lists them; the {@code mcp} module builds each tool's schema from {@link #args} and performs it
- * by sending the intents named in {@link #intents}.
+ * registry {@link Actions} lists them; the {@code mcp} module builds each tool's schema from {@link #args} and performs
+ * it by sending the intents named in {@link #intents}.
  *
  * @param tool        the MCP tool's name, {@code <area>_<verb>}
  * @param kind        read, act or destructive: a destructive action runs only for a caller the user granted it

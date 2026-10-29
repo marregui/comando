@@ -12,7 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Without a launcher, the system opener opens the file.
 class ExternalEditorTest {
 
-    /// With a launcher, a positive line becomes `--line N` before the path; line 0 means no line and passes only the path.
+    /// With a launcher, a positive line becomes `--line N` before the path; line 0 means no line and passes only the
+    /// path.
     @Test
     void ideaLauncherGetsTheLine() {
         assertThat(ExternalEditor.command(Optional.of(Path.of("/bin/idea")), Path.of("/w/A.java"), 42))

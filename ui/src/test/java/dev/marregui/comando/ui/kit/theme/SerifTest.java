@@ -17,8 +17,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /// - The fallback is the logical sans in the same style and size.
 class SerifTest {
 
-    /// With no New York file the first installed family in preference order is used, with none installed the bold logical
-    /// serif, and a file Java cannot read falls back to the installed family.
+    /// With no New York file the first installed family in preference order is used, with none installed the bold
+    /// logical serif, and a file Java cannot read falls back to the installed family.
     @Test
     void withoutNewYorkTheFirstInstalledSerifElseJavasLogicalSerif(@TempDir Path dir) throws Exception {
         Path none = dir.resolve("NewYork.ttf");
@@ -31,8 +31,8 @@ class SerifTest {
         assertThat(Theme.pickSerif(notAFont, Set.of("Georgia")).getName()).as("a file Java cannot read").isEqualTo("Georgia");
     }
 
-    /// On macOS New York loads bold from [Theme#NEW_YORK] and cannot draw `→`, which is why the fallback exists. Skipped
-    /// elsewhere.
+    /// On macOS New York loads bold from [Theme#NEW_YORK] and cannot draw `→`, which is why the fallback exists.
+    /// Skipped elsewhere.
     @Test
     void onMacOsNewYorkLoadedFromItsFile() {
         assumeTrue(Files.isRegularFile(Theme.NEW_YORK), "macOS only");

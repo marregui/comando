@@ -372,7 +372,7 @@ final class QueryRules {
     }
 
     static Transition connectionOpened(AppState s, Intent.ConnectionOpened i) {
-        // an open that completes after the user's Close is stale: the queued disconnect closes it; no schema load reopens it
+        // an open done after the user's Close is stale: the queued disconnect closes it; no schema load reopens it
         return s.connection(i.name()).map(c -> c.status() == Status.CLOSING).orElse(false)
                 ? Transition.of(s)
                 : withSchemaLoad(Transition.of(clear(connectionStatus(s, i.name(), Status.OPEN, "").state(), Notice.connection(i.name()))),

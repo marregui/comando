@@ -16,8 +16,8 @@ class ToolTextTest {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
-    /// Read, Write and NotebookEdit link their path, trimmed; WebFetch links an `https` address but not a `javascript:` one;
-    /// Bash links nothing.
+    /// Read, Write and NotebookEdit link their path, trimmed; WebFetch links an `https` address but not a `javascript:`
+    /// one; Bash links nothing.
     @Test
     void aCallsSummaryLinksTheFileOrAddressItWorksOn() throws Exception {
         assertThat(ToolText.target("Read", JSON.readTree("{\"file_path\":\"/w/a.md\"}"))).isEqualTo("comando-file:/w/a.md");

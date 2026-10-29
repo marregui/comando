@@ -31,8 +31,8 @@ class TerminalTabsTest {
     private static final PanelId P2 = new PanelId("p2");
     private static final Path HOME = Path.of(System.getProperty("user.home"));
 
-    /// A terminal without a shell starts at home, then follows its panel's binding on each render, also when another panel
-    /// is focused.
+    /// A terminal without a shell starts at home, then follows its panel's binding on each render, also when another
+    /// panel is focused.
     @Test
     void aTerminalNotStartedTakesItsPanelsCurrentDirectoryOnEveryRender(@TempDir Path root) throws Exception {
         Path edge = Files.createDirectory(root.resolve("edge"));
@@ -59,8 +59,8 @@ class TerminalTabsTest {
         assertThat(tabs.focused()).isSameAs(tabs.terminal(P2));
     }
 
-    /// A running shell keeps its directory when the panel is rebound; once it exits, with nothing rendered since, the exit
-    /// bar and Restart use the directory the panel is bound to now.
+    /// A running shell keeps its directory when the panel is rebound; once it exits, with nothing rendered since, the
+    /// exit bar and Restart use the directory the panel is bound to now.
     @Test
     void anExitedShellRestartsWhereItsPanelIsBoundNow(@TempDir Path root) throws Exception {
         Path edge = Files.createDirectory(root.resolve("edge"));
@@ -116,8 +116,8 @@ class TerminalTabsTest {
         assertThat(TerminalTabs.directory(s)).isEqualTo(HOME);
     }
 
-    /// Terminals that never started a shell report no running job, also for a panel without a terminal; the asynchronous
-    /// check answers at once, empty, when there is no shell to ask.
+    /// Terminals that never started a shell report no running job, also for a panel without a terminal; the
+    /// asynchronous check answers at once, empty, when there is no shell to ask.
     @Test
     void terminalsWithoutShellsRunNoJobs() {
         TerminalTabs tabs = new TerminalTabs();

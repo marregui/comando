@@ -18,8 +18,8 @@ class WorkedInTest {
     @TempDir
     Path tmp;
 
-    /// From Read and Edit calls with absolute paths, [WorkedIn#roots] gives the repository top of the latest first and the
-    /// loose folder after it, ignores a relative Grep path and a Bash call, honours the limit, and lets
+    /// From Read and Edit calls with absolute paths, [WorkedIn#roots] gives the repository top of the latest first and
+    /// the loose folder after it, ignores a relative Grep path and a Bash call, honours the limit, and lets
     /// [dev.marregui.comando.ui.kit.desktop.FileSearch#bySuffix] find a file under them.
     @Test
     void theRepositoriesOfTheFilesASessionsCallsNamedTheLatestFirst() throws Exception {

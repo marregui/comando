@@ -12,7 +12,8 @@ import java.util.prefs.Preferences;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [Settings] keeps comando's settings in a JSON file, migrating the earlier Java preferences once.
-/// - The first open copies the earlier preferences typed, in key order, and leaves them as they were; the file wins after.
+/// - The first open copies the earlier preferences typed, in key order, and leaves them as they were; the file wins
+///   after.
 /// - A change is written at flush, atomically, and read by the next window.
 /// - An unreadable file is kept aside and the settings start empty.
 class SettingsTest {
@@ -45,8 +46,8 @@ class SettingsTest {
                 .isEqualTo(NamedTheme.MIDNIGHT_BLUE);
     }
 
-    /// With nothing to migrate no file is written; a theme and Gradle tasks set through [WindowLayout] are read by a fresh
-    /// open, and no temporary file is left.
+    /// With nothing to migrate no file is written; a theme and Gradle tasks set through [WindowLayout] are read by a
+    /// fresh open, and no temporary file is left.
     @Test
     void aChangeIsWrittenAtFlushAndReadByTheNextWindow(@TempDir Path home) throws Exception {
         Path file = home.resolve("settings.json");

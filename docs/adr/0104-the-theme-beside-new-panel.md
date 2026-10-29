@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-27 | accepted | Miguel and Claude |
+| 2026-10-27 | accepted; Actions ▸ Theme removed by [record 114](0114-help-menu-and-corner-buttons.md) | Miguel and Claude |
 
 ## 1. Context
 

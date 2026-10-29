@@ -25,7 +25,7 @@ and the file's shape.
 
 ## 3. Consequences
 
-`About` holds the parser, the facts and the card; `ComandoUi.showAbout` opens it, one at a time. The snapshot draws it
+`About` holds the parser, the facts and the card; `HelpActions.showAbout` opens it, one at a time. The snapshot draws it
 as `02k-about.png`.
 
 ## 4. Alternatives

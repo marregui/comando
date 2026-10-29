@@ -22,7 +22,9 @@ import java.util.Set;
  */
 final class FocusRouter {
 
-    /** What gives the keyboard away once the lower tab holding {@code shown} shows, after the render that selects it. */
+    /**
+     * What gives the keyboard away once the lower tab holding {@code shown} shows, after the render that selects it.
+     */
     private record FocusAfterRender(Component shown, Runnable focus) {
     }
 

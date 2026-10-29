@@ -17,18 +17,18 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * One session in the sidebar's list, one line (record 90): its state icon, which a click on connects or disconnects
+ * One session in the sidebar's list, one line (record 90): its state icon, which a click connects or disconnects
  * (Claude's orange while it runs, grey while stopped, faint while it starts or stops, red when it failed, one glyph at
  * one size; it spins while the session works and shows the hourglass while it waits on background work); its name,
  * dimmed while its own panel is not open, with an amber ↑ when it runs an older Claude Code than another running
  * session, the context in purple once its checkpoint is due, and the approvals waiting. Everything else a session does
- * is in its menu. Its folder, branch, context and the rest are on the card the row shows (record 87). The list paints it
- * as a cell renderer, so its icon is not live: the list finds it under a click with {@link #hit}. A connection's row
- * is the same row ({@link ConnectionRow}).
+ * is in its menu. Its folder, branch, context and the rest are on the card its ⓘ shows (record 87). The list paints it
+ * as a cell renderer, so its controls are not live: the list finds them under a click with {@link #hit}. A connection's
+ * row is the same row ({@link ConnectionRow}).
  */
 final class SessionRow extends IconRow {
 
-    /** The controls of a row: its state icon. */
+    /** The controls of a row: its state icon and its ⓘ. */
     enum Control {
         POWER,
         /** The ⓘ, which shows the row's card. */
@@ -36,7 +36,8 @@ final class SessionRow extends IconRow {
     }
 
     SessionRow() {
-        // one line (record 90): the state icon, which connects and disconnects, and the name; the rest is in the menu
+        // one line (record 90): the state icon, which connects and disconnects, the name and the ⓘ; the rest is in the
+        // menu
     }
 
     /** The icon a working session shows in place of its state, turned by the list's timer. */
@@ -52,9 +53,9 @@ final class SessionRow extends IconRow {
     }
 
     /**
-     * Shows {@code s}: the name dimmed when its own panel is not {@code open}, in the accent colour when {@code focused}
-     * (one of its panels is the focused panel); {@code approvals} counts the waiting approvals; {@code newestCli} is
-     * the newest Claude Code version a running session reported.
+     * Shows {@code s}: the name dimmed when its own panel is not {@code open}, in the accent colour when
+     * {@code focused} (one of its panels is the focused panel); {@code approvals} counts the waiting approvals;
+     * {@code newestCli} is the newest Claude Code version a running session reported.
      */
     SessionRow show(SessionState s, boolean open, boolean focused, int approvals, boolean selected,
                     Color background, Color foreground, String newestCli) {
@@ -93,7 +94,7 @@ final class SessionRow extends IconRow {
         return !cliText(s).isEmpty() && compareVersions(s.info().cliVersion(), newestCli) < 0;
     }
 
-    /** Compares "2.1.302" and "2.1.303" by their numbers; a part that is not a number counts as 0, an empty text is oldest. */
+    /** Compares "2.1.302" and "2.1.303" by number; a part that is not a number counts as 0, an empty text is oldest. */
     static int compareVersions(String a, String b) {
         if (a.isEmpty() || b.isEmpty()) {
             return Boolean.compare(!a.isEmpty(), !b.isEmpty());
@@ -271,8 +272,8 @@ final class SessionRow extends IconRow {
 
     /**
      * The name, dimmed when its own panel is not open, in the accent colour while one of its panels has the focus; an
-     * amber ↑ when it runs an older Claude Code than another running session ({@code newestCli} as in {@link #show}); the
-     * context in purple once the checkpoint is due; the approvals waiting. Never wraps, clipped at the edge.
+     * amber ↑ when it runs an older Claude Code than another running session ({@code newestCli} as in {@link #show});
+     * the context in purple once the checkpoint is due; the approvals waiting. Never wraps, clipped at the edge.
      */
     static String titleHtml(SessionState s, boolean open, boolean focused, int approvals, String newestCli) {
         String older = olderCli(s, newestCli) ? "&nbsp;<span style='color:" + Theme.hex(Theme.ATTENTION) + "'>↑</span>" : "";

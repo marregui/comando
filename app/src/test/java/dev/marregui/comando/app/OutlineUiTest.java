@@ -37,8 +37,8 @@ class OutlineUiTest {
     @TempDir
     Path home;
 
-    /// The Outline button shows the document's headings beside the rendered page, and a double click on a heading below the
-    /// first screen scrolls the page so that heading is in view.
+    /// The Outline button shows the document's headings beside the rendered page, and a double click on a heading below
+    /// the first screen scrolls the page so that heading is in view.
     @Test
     void theOutlineButtonShowsTheHeadingsAndADoubleClickScrollsThePageToOne() throws Exception {
         Path doc = home.resolve("plan.md");

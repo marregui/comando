@@ -23,8 +23,8 @@ class NamedThemeTest {
         assertThat(Arrays.stream(NamedTheme.values()).map(NamedTheme::commandId).distinct()).hasSize(6);
     }
 
-    /// [NamedTheme#chosen] is the default theme at start, empty for a pair no theme makes, and the matching theme once both
-    /// fit.
+    /// [NamedTheme#chosen] is the default theme at start, empty for a pair no theme makes, and the matching theme once
+    /// both fit.
     @Test
     void theThemeChosenIsTheOneTheGroundAndTintMake() {
         try {
@@ -39,8 +39,8 @@ class NamedThemeTest {
         }
     }
 
-    /// [NamedTheme#closest] returns an exact pair, else the theme of the ground chosen, else the theme of the tint alone,
-    /// when the ground has no theme or none was chosen.
+    /// [NamedTheme#closest] returns an exact pair, else the theme of the ground chosen, else the theme of the tint
+    /// alone, when the ground has no theme or none was chosen.
     @Test
     void aGroundAndTintKeptFromBeforeThemesMapToTheClosestTheme() {
         assertThat(NamedTheme.closest(Optional.of(Ground.MIDNIGHT), Tint.ELECTRIC_BLUE)).as("a pair").isEqualTo(NamedTheme.MIDNIGHT_BLUE);

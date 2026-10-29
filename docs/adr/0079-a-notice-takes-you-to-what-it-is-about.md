@@ -36,5 +36,4 @@ The flash is a text highlight painted the line's whole width, not an `RTextArea`
 paints its own highlight over line highlights, and the caret sits on the entry's line, so a line highlight was never
 seen (found on the probe). A failure some code already logged with its stack (the panel store's) is logged once more as
 the notice's one line; the click finds the first of the two, the one with the stack, written in the same millisecond
-on the probe. Notices of the other kinds keep opening the recent notices until their targets land. At HEAD, 11 sites
-call `Intent.Notify.logged`.
+on the probe. Notices of the other kinds keep opening the recent notices until their targets land.

@@ -97,7 +97,10 @@ public sealed interface Effect {
     record ForgetSession(String name) implements Effect {
     }
 
-    /** Reads, off the EDT, the stored conversation of the sub-agent that the Agent call {@code toolUseId} started, and shows it. */
+    /**
+     * Reads, off the EDT, the stored conversation of the sub-agent that the Agent call {@code toolUseId} started, and
+     * shows it.
+     */
     record ShowSubagent(String name, String claudeSessionId, String toolUseId) implements Effect {
     }
 
@@ -161,7 +164,10 @@ public sealed interface Effect {
         }
     }
 
-    /** Takes {@code changes} of the repository at {@code root} back to {@code HEAD}: changed versions to the Trash first, new files to the Trash. */
+    /**
+     * Takes {@code changes} of the repository at {@code root} back to {@code HEAD}: changed versions to the Trash
+     * first, new files to the Trash.
+     */
     record RollBack(String root, List<RepoStatus.FileChange> changes) implements Effect {
         public RollBack {
             changes = List.copyOf(changes);
@@ -187,8 +193,8 @@ public sealed interface Effect {
     }
 
     /**
-     * Reads from now on the git repositories of {@code folders}, every configured folder: those of the open folders, and
-     * of all while {@code changesShown}, every few seconds; the others less often.
+     * Reads from now on the git repositories of {@code folders}, every configured folder: those of the open folders,
+     * and of all while {@code changesShown}, every few seconds; the others less often.
      */
     record WatchRepos(List<FolderRoot> folders, boolean changesShown) implements Effect {
         public WatchRepos {

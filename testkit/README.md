@@ -1,7 +1,8 @@
 # `testkit`
 
 What every module's tests share: a fake for every effect port, a recording intent sink, a fake clock, a small state,
-Claude Code streams recorded from the real CLI, and a synthetic session for rendering measurements. It depends on `core`
+in-memory preferences, Claude Code streams recorded from the real CLI, and a synthetic session for rendering
+measurements. It depends on `core`
 (`api`, so a test sees `core`'s types through it). Its code sits in `src/main` so that other modules can depend on it;
 every module takes it as `testImplementation`, and no production code does.
 
@@ -21,6 +22,7 @@ One package, `dev.marregui.comando.testkit`.
 | `FakeClock` | a `Clock` a test sets and advances |
 | `States` | `twoPanels()`: panel `p1` bound to connection `local` (QuestDB defaults) and session `work`, panel `p2` bound to `local` alone; the connection and the session closed |
 | `FakeResult` | a small `ResultView` held as rows of objects |
+| `MemoryPreferences` | Java preferences held in memory, so a test never reads or writes the user's store |
 | `Fixtures` | `stream(name)`: recorded stream-JSON, one event per line, from `fixtures/stream/<name>.jsonl` |
 | `SyntheticSession` | a deterministic eight-turn session: Markdown text, 41 tool calls with one subagent, about 10 k tokens in all; `steps(deltaChars)` replays it as the stream would arrive, `transcript()` gives it whole |
 
@@ -56,6 +58,7 @@ flowchart LR
 | `UiReplayTest`, `UiKeysTest` (`app`) | `RecordingPorts` behind a real `EffectRouter`, with a real `StateLoop` and Swing shell |
 | transcript tests and `./gradlew :ui:transcriptGate` (`ui`) | `SyntheticSession` |
 | `StreamMapperTest` (`claude`) | `Fixtures` |
+| `SettingsTest` (`ui`) | `MemoryPreferences` |
 
 `RecordingPorts` implements the port interfaces, so a new port method does not compile until it records here too.
 

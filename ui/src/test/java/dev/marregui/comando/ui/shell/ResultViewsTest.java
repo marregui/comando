@@ -34,8 +34,8 @@ class ResultViewsTest {
                 List.of(Arrays.asList(1_000_000L, "a", 1.5, 3L), Arrays.asList(2_000_000L, "b", null, 4L)));
     }
 
-    /// [ResultViews#plot] uses the timestamp column as a time x axis in milliseconds, plots the double and long columns as
-    /// series, and turns a null into NaN.
+    /// [ResultViews#plot] uses the timestamp column as a time x axis in milliseconds, plots the double and long columns
+    /// as series, and turns a null into NaN.
     @Test
     void timeIsXAndNumericColumnsAreSeries() {
         ViewSpec.Plot p = ResultViews.plot(result(1));
@@ -62,8 +62,8 @@ class ResultViewsTest {
         assertThat(t.rows().get(1)).containsExactly("1970-01-01T00:00:02.000000Z", "b", "null", "4");
     }
 
-    /// A completed run of the plot's query shows the view under its title; a run of another query while the tab is open is
-    /// not plotted, and once the tab closes the live plot stops, never running anything but SQL.
+    /// A completed run of the plot's query shows the view under its title; a run of another query while the tab is open
+    /// is not plotted, and once the tab closes the live plot stops, never running anything but SQL.
     @Test
     void livePlotRerunsAndReplotsItsQueryUntilItsTabCloses() {
         RecordingSink sink = new RecordingSink();

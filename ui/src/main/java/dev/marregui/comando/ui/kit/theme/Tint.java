@@ -5,12 +5,11 @@ import java.awt.LinearGradientPaint;
 import java.util.Arrays;
 
 /**
- * The tint of the window: the transcript's headings, list marks and table heads, the bar beside a turn's report and down
- * a tooltip's edge, new files in the Files tab, the tab card's title and summary heading and About's accents. Three
- * steps each, as polished metal reads: a pale highlight, the body, a darker shade; large type and the report's bar run
- * from one to the next, small text takes the body alone. Each is light on the transcript's ground, its body above 8:1 and
- * its shade above 4.5:1 there. {@link Theme#tint()} is the one chosen. The golds came first
- * (record 83); silver, tropical forest and electric blue were added with the choice in Actions (record 96).
+ * The tint of the window: the transcript's headings, list marks and table heads, the bar beside a turn's report and
+ * down a tooltip's edge, new files in the Files tab, the tab card's title and summary heading and About's accents.
+ * Three steps each, as polished metal reads: a pale highlight, the body, a darker shade; large type and the report's
+ * bar run from one to the next, small text takes the body alone. Each is light on the transcript's ground, its body
+ * above 8:1 and its shade above 4.5:1 there. {@link Theme#tint()} is the one chosen (records 83, 96).
  */
 public enum Tint {
 
@@ -38,15 +37,15 @@ public enum Tint {
         return Arrays.stream(values()).filter(t -> t.name().equals(name)).findFirst().orElse(TREASURE);
     }
 
-    /** The ramp at {@code t}, 0 the highlight's end, 1 the shade's: highlight to body in the first 45 %, then to the shade. */
+    /** The ramp at {@code t}, 0 the highlight, 1 the shade: highlight to body in the first 45 %, then to the shade. */
     public Color at(float t) {
         float u = Math.clamp(t, 0f, 1f);
         return u < 0.45f ? mix(highlight, body, u / 0.45f) : mix(body, shade, (u - 0.45f) / 0.55f);
     }
 
     /**
-     * The paint of polished metal from {@code top} to {@code bottom} (y, in the space it fills): highlight, then body at
-     * 45 %, then the shade, or for letters the ramp at 85 %, whose bottom would read too dark at small sizes.
+     * The paint of polished metal from {@code top} to {@code bottom} (y, in the space it fills): highlight, then body
+     * at 45 %, then the shade, or for letters the ramp at 85 %, whose bottom would read too dark at small sizes.
      */
     public LinearGradientPaint ramp(float top, float bottom, boolean letters) {
         return new LinearGradientPaint(0, top, 0, Math.max(top + 1, bottom), new float[]{0f, 0.45f, 1f},

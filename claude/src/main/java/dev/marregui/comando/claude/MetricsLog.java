@@ -20,9 +20,9 @@ import java.util.function.LongSupplier;
 /**
  * What the sessions spend and how their work ends, kept to calibrate who does what (record 110): one JSON object a
  * line, {@code metrics-<UTC date>.jsonl} in the data root's {@code metrics} folder, appended whole. Each object has
- * {@code ts} (UTC, ISO 8601), {@code event} ({@code turn}, {@code agent}, {@code usage}) and the event's fields. Written
- * from the sessions' strands and the plan-usage strand; one line a write, under a lock, so lines never interleave.
- * Money fields are kept as they arrive and shown nowhere.
+ * {@code ts} (UTC, ISO 8601), {@code event} ({@code turn}, {@code agent}, {@code usage}) and the event's fields.
+ * Written from the sessions' strands and the plan-usage strand; one line a write, under a lock, so lines never
+ * interleave. Money fields are kept as they arrive and shown nowhere.
  */
 public final class MetricsLog {
 

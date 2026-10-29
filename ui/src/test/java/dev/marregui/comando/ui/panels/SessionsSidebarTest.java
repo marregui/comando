@@ -62,12 +62,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [SessionsSidebar] and its rows ([SessionRow], [ConnectionRow]): three tabs of sessions, connections and files.
 /// - the column is three icon tabs in one row and hides to a rail whose buttons show it again
 /// - the Files tab shows one row per folder and opens a file with a double click
-/// - a session row's state icon connects, its name opens and shows the card, its menu holds the session's commands
+/// - a session row's state icon connects, its name opens, its ⓘ shows the card, its menu holds the session's commands
 /// - tab menus add; row menus edit, clone and remove, with no bar of buttons
 /// - sessions list running first, then by name, until a drag orders them; a started row stays put under the pointer
-/// - a row is one line: the state icon, the name dimmed while its own panel is closed, approvals, context and CLI version
-/// - a connection row matches a session row, its icon connects, its name binds and shows the card, its details hide the
-///   password
+/// - a row is one line: the state icon, the name dimmed while its own panel is closed, approvals, context and CLI
+///   version
+/// - a connection row matches a session row, its icon connects, its name binds, its ⓘ shows the card, its details hide
+///   the password
 /// - each row is kept per session so its HTML is parsed once
 /// - CLI versions compare by number, a missing part as zero
 class SessionsSidebarTest {
@@ -79,7 +80,8 @@ class SessionsSidebarTest {
     @BeforeAll
     static void flatLaf() throws Exception {
         previous = UIManager.getLookAndFeel();
-        UIManager.setLookAndFeel(new FlatDarkLaf()); // the application's look: the tab strip's trailing button is FlatLaf's
+        // the application's look: the tab strip's trailing button is FlatLaf's
+        UIManager.setLookAndFeel(new FlatDarkLaf());
     }
 
     @AfterAll
@@ -88,8 +90,8 @@ class SessionsSidebarTest {
     }
 
     /// The Sessions, Connections and Files tabs sit in one row as icons named by tooltip, packed under 160 px, with no
-    /// Panels tab; the hide button is on every tab, hiding leaves a 16–40 px rail whose buttons show the sidebar, at a given
-    /// tab for the per-tab ones.
+    /// Panels tab; the hide button is on every tab, hiding leaves a 16–40 px rail whose buttons show the sidebar, at a
+    /// given tab for the per-tab ones.
     @Test
     void theColumnIsThreeTabsInOneRowAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
         AtomicInteger toggles = new AtomicInteger();
@@ -167,8 +169,8 @@ class SessionsSidebarTest {
         assertThat(shows(show, sidebar.component())).isFalse();
     }
 
-    /// The Files tab hides its root, shows one row per folder, watches a folder only when expanded, and opens a file on a
-    /// double click, not a single one.
+    /// The Files tab hides its root, shows one row per folder, watches a folder only when expanded, and opens a file on
+    /// a double click, not a single one.
     @Test
     void theFilesTabShowsOneRowPerFolderAndOpensAFileWithADoubleClick() throws Exception {
         List<Path> opened = new CopyOnWriteArrayList<>();
@@ -220,9 +222,9 @@ class SessionsSidebarTest {
         assertThat(opened).containsExactly(Path.of("/s/2026-10-14/READ-01-X.md"));
     }
 
-    /// A click on the state icon sends `StartSession` and its tooltip says so; the name has no tooltip; a double click on
-    /// the icon binds nothing, on the name it sends `OpenSession` for the focused panel; the model and effort items check the
-    /// current value and send the change.
+    /// A click on the state icon sends `StartSession` and its tooltip says so; the name has no tooltip; a double click
+    /// on the icon binds nothing, on the name it sends `OpenSession` for the focused panel; the model and effort items
+    /// check the current value and send the change.
     @Test
     void aSessionRowConnectsAndChangesModelAndEffort() throws Exception {
         SessionsSidebar.Dialogs dialogs = new Dialogs();
@@ -273,8 +275,8 @@ class SessionsSidebarTest {
         assertThat(intents).containsExactly(new Intent.SetSessionModel("edge", "fable"), new Intent.SetSessionEffort("edge", "max"));
     }
 
-    /// There is no button bar over the lists; tab menus open the new and import dialogs, row menus open edit and clone, and
-    /// removing an open connection asks to disconnect first before sending `RemoveConnection`.
+    /// There is no button bar over the lists; tab menus open the new and import dialogs, row menus open edit and clone,
+    /// and removing an open connection asks to disconnect first before sending `RemoveConnection`.
     @Test
     void tabMenusAddAndRowMenusEditCloneAndRemoveWithNoBarOfButtons() throws Exception {
         List<String> opened = new CopyOnWriteArrayList<>();
@@ -332,8 +334,8 @@ class SessionsSidebarTest {
     }
 
     /// A stopped session's menu has no rewrite item; a running one's offers to rewrite its focused panel, sending a
-    /// `RunText` to the session with the panel's whole text, and has no clear item; with focus elsewhere and the first panel
-    /// empty, the item is disabled.
+    /// `RunText` to the session with the panel's whole text, and has no clear item; with focus elsewhere and the first
+    /// panel empty, the item is disabled.
     @Test
     void aRunningSessionsMenuHasItsPanelRewrittenAsADocumentAndNoClear() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();
@@ -389,10 +391,10 @@ class SessionsSidebarTest {
         assertThat(first.isEnabled()).as("focus elsewhere: the session's first panel, empty, asks nothing").isFalse();
     }
 
-    /// A click on a name selects and shows no card; a click on the ⓘ of the row the pointer is over shows its card beside
-    /// the widest row at once (2026-10-29: so a double click on the name acts with no card flashing up); moving onto another
-    /// name switches the card after a short follow, onto a control tells the card the pointer left, and a closed card, or
-    /// a double click that opens the session, stops the following.
+    /// A click on a name selects and shows no card, so a double click on the name acts with no card first; a click on
+    /// the ⓘ of the row the pointer is over shows its card beside the widest row at once; moving onto another name
+    /// switches the card after a short follow, onto a control tells the card the pointer left, and a closed card, or a
+    /// double click that opens the session, stops the following.
     @Test
     @SuppressWarnings("unchecked")
     void aClickOnASessionsNameShowsItsCardWhichFollowsThePointerOntoOtherNamesUntilItCloses() throws Exception {
@@ -545,7 +547,7 @@ class SessionsSidebarTest {
     }
 
     /// A running session with a focused panel shows its name in the tint; one whose own panel is closed, or that has no
-    /// panel, is muted; the state icon is the only row control and its tooltip says what a click does.
+    /// panel, is muted; the row's controls are the state icon and the ⓘ, and the icon's tooltip says what a click does.
     @Test
     void aRowDimsTheNameWhileItsOwnPanelIsNotOpenAndItsStateIconConnects() throws Exception {
         SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
@@ -576,8 +578,8 @@ class SessionsSidebarTest {
         assertThat(list.getToolTipText(event(list, power, 0))).isEqualTo("Connected; click to disconnect (stops the session)");
     }
 
-    /// Sessions sort running first, then by name ignoring case; dragging a row sends `OrderSessions` and keeps that order,
-    /// also when a session starts, until the Sort item restores it; a drop in place sends nothing.
+    /// Sessions sort running first, then by name ignoring case; dragging a row sends `OrderSessions` and keeps that
+    /// order, also when a session starts, until the Sort item restores it; a drop in place sends nothing.
     @Test
     void sessionsListRunningFirstThenByNameUntilADragOrdersThemAndSortRestoresIt() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();
@@ -634,8 +636,8 @@ class SessionsSidebarTest {
         assertThat(intents).as("dropped where it was: nothing moves").isEmpty();
     }
 
-    /// A running session's menu offers checkpoint, compact, model, effort and copy details and no fresh start; a stopped
-    /// one's offers the fresh start and no compact; each item sends its intent or copies the details.
+    /// A running session's menu offers checkpoint, compact, model, effort and copy details and no fresh start; a
+    /// stopped one's offers the fresh start and no compact; each item sends its intent or copies the details.
     @Test
     void aSessionsMenuHoldsWhatItsRowHeld() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();
@@ -669,8 +671,8 @@ class SessionsSidebarTest {
         assertThat(intents).containsExactly(new Intent.StartFresh("work"));
     }
 
-    /// A session started while the pointer is over the list keeps its place with its new state until the pointer leaves;
-    /// [SessionsSidebar#held] drops a removed session and puts a new one last.
+    /// A session started while the pointer is over the list keeps its place with its new state until the pointer
+    /// leaves; [SessionsSidebar#held] drops a removed session and puts a new one last.
     @Test
     void aSessionStartedUnderThePointerKeepsItsRowUntilThePointerLeaves() throws Exception {
         SessionState developer = SessionState.closed(SessionSpec.fresh("comando developer", "/w"));
@@ -704,8 +706,8 @@ class SessionsSidebarTest {
                 .as("a removed session goes, a new one comes last").containsExactly(improvement, goose);
     }
 
-    /// A running session's details list name, path, branch, id, status, uptime, context share and model in that order; a
-    /// new session says it has no id yet and its context is unknown, with no uptime.
+    /// A running session's details list name, path, branch, id, status, uptime, context share and model in that order;
+    /// a new session says it has no id yet and its context is unknown, with no uptime.
     @Test
     void theDetailsNameWhatADecisionOnTheSessionNeeds() {
         long started = 1_760_000_000_000L;
@@ -728,9 +730,9 @@ class SessionsSidebarTest {
                 .contains("Session id: none yet\n", "Status: closed\n", "Context: unknown until a turn ends\n").doesNotContain("Uptime");
     }
 
-    /// The row title is the bold name, muted when its own panel is closed, with waiting approvals counted and the context in
-    /// purple when a checkpoint is due; running and stopped rows are one line of equal height with their state icons, and
-    /// the power tooltip names the running tool.
+    /// The row title is the bold name, muted when its own panel is closed, with waiting approvals counted and the
+    /// context in purple when a checkpoint is due; running and stopped rows are one line of equal height with their
+    /// state icons, and the power tooltip names the running tool.
     @Test
     void aRowIsOneLineItsStateIconAndTheName() throws Exception {
         long started = 1_760_000_000_000L;
@@ -766,8 +768,8 @@ class SessionsSidebarTest {
     }
 
     /// A production connection shows a "prod" mark, in the accent colour when focused; the icon follows the state, the
-    /// tooltip says what a click does, details and the card's facts never show the password, and the row is as tall as a
-    /// session row.
+    /// tooltip says what a click does, details and the card's facts never show the password, and the row is as tall as
+    /// a session row.
     @Test
     void aConnectionRowIsItsStateIconAndItsNameAsASessionsIs() throws Exception {
         ConnectionState open = ConnectionState.closed(new ConnectionSpec("live", "db.example", 8812, "qdb", "admin", "secret", true))
@@ -797,9 +799,9 @@ class SessionsSidebarTest {
         assertThat(height[0]).as("as tall as a session row").isEqualTo(height[1]);
     }
 
-    /// A click on a connection's icon connects or disconnects; a double click on the name binds it to the focused panel; a
-    /// click on the ⓘ shows its card, a click on the name only selects, and moving onto the icon tells the card it was left; "Copy details" copies its
-    /// facts without the password.
+    /// A click on a connection's icon connects or disconnects; a double click on the name binds it to the focused
+    /// panel; a click on the ⓘ shows its card, a click on the name only selects, and moving onto the icon tells the
+    /// card it was left; "Copy details" copies its facts without the password.
     @Test
     void aConnectionRowsIconConnectsItsNameBindsAndShowsTheCardAndItsMenuCopies() throws Exception {
         List<String> told = new CopyOnWriteArrayList<>();
@@ -869,9 +871,9 @@ class SessionsSidebarTest {
         assertThat(copied).singleElement().asString().startsWith("Connection: local\nHost: localhost:8812").doesNotContain("quest\n");
     }
 
-    /// A stopped session's chips read "default"; a running one shows the model as reported and the CLI's effort setting;
-    /// the session's own effort takes precedence at once, its own model only once it is stopped; a full model id asked for is
-    /// shortened.
+    /// A stopped session's chips read "default"; a running one shows the model as reported and the CLI's effort
+    /// setting; the session's own effort takes precedence at once, its own model only once it is stopped; a full model
+    /// id asked for is shortened.
     @Test
     void theModelAndEffortChipsSayWhatTheSessionRunsAt() {
         SessionState stopped = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
@@ -889,9 +891,9 @@ class SessionsSidebarTest {
         assertThat(SessionRow.modelName(set)).as("the model it runs until it starts again").isEqualTo("opus");
         assertThat(SessionRow.modelName(set.withStatus(Status.CLOSED, ""))).isEqualTo("haiku");
     }
-    /// What the session's messages ran at wins: while a turn runs, its latest message's model and effort (a skill raised
-    /// `low` to `high`, and its tips say so); after the turn, the effort its first message ran at (a `/effort` typed in the
-    /// prompt), over the one set for the session; a stopped session shows its own setting again.
+    /// What the session's messages ran at wins: while a turn runs, its latest message's model and effort (a skill
+    /// raised `low` to `high`, and its tips say so); after the turn, the effort its first message ran at (a `/effort`
+    /// typed in the prompt), over the one set for the session; a stopped session shows its own setting again.
     @Test
     void theChipsFollowWhatTheSessionsMessagesRanAt() {
         SessionState running = SessionState.closed(SessionSpec.fresh("edge", "/w/edge").withEffort("medium")).withStatus(Status.OPEN, "")
@@ -910,8 +912,8 @@ class SessionsSidebarTest {
     }
 
 
-    /// A running session on an older CLI than another session gets an amber `↑` and a details line saying so; a stopped one
-    /// gets none; [SessionRow#compareVersions] compares numerically and treats empty as oldest.
+    /// A running session on an older CLI than another session gets an amber `↑` and a details line saying so; a stopped
+    /// one gets none; [SessionRow#compareVersions] compares numerically and treats empty as oldest.
     @Test
     void aRowSaysWhichCliVersionItRunsAndWhenAnotherSessionRunsANewerOne() {
         long started = 1_760_000_000_000L;
@@ -982,7 +984,8 @@ class SessionsSidebarTest {
                 false, id == MouseEvent.MOUSE_MOVED || id == MouseEvent.MOUSE_DRAGGED ? MouseEvent.NOBUTTON : MouseEvent.BUTTON1);
     }
 
-    /// Each session has its own row component, so drawing another row neither replaces it nor parses its HTML label again.
+    /// Each session has its own row component, so drawing another row neither replaces it nor parses its HTML label
+    /// again.
     @Test
     void eachSessionKeepsItsOwnRowSoDrawingAnotherDoesNotParseItsLabelAgain() throws Exception {
         SessionState edge = SessionState.closed(SessionSpec.fresh("edge", "/w/edge"));
@@ -1021,7 +1024,10 @@ class SessionsSidebarTest {
         return c[0];
     }
 
-    /** The row's text, read on the EDT in the same step as the render: the list shares one renderer, which a paint reuses. */
+    /**
+     * The row's text, read on the EDT in the same step as the render: the list shares one renderer, which a paint
+     * reuses.
+     */
     private static String rowText(JList<?> list, int index) throws Exception {
         String[] text = new String[1];
         SwingUtilities.invokeAndWait(() -> {
@@ -1102,8 +1108,8 @@ class SessionsSidebarTest {
         return find(root, AbstractButton.class, b -> name.equals(b.getAccessibleContext().getAccessibleName()));
     }
 
-    /// Each tab's menu lists its own actions first, then the window commands added by the shell; the Files tab has only the
-    /// window commands.
+    /// Each tab's menu lists its own actions first, then the window commands added by the shell; the Files tab has only
+    /// the window commands.
     @Test
     void eachTabsMenuOffersItsOwnActionsThenTheWindowsThenHidingTheSidebar() throws Exception {
         SessionsSidebar[] s = new SessionsSidebar[1];
@@ -1140,7 +1146,7 @@ class SessionsSidebarTest {
     }
 
     /// A session's or a connection's name wider than the sidebar scrolls into view sideways instead of being cut at the
-    /// edge; while every name fits, the lists fill the tab and show no scrollbar (2026-10-29).
+    /// edge; while every name fits, the lists fill the tab and show no scrollbar.
     @Test
     void aNameWiderThanTheSidebarScrollsIntoView() throws Exception {
         String longName = "a-session-with-a-name-far-wider-than-a-narrow-sidebar";

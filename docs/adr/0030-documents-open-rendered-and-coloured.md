@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-14 | accepted; its editor theme amended by [record 57](0057-a-light-editor-and-a-header-of-icons.md) and [record 93](0093-comando-is-dark-throughout.md) | Miguel and Claude |
+| 2026-10-14 | accepted; its editor theme amended by [record 57](0057-a-light-editor-and-a-header-of-icons.md) and [record 93](0093-comando-is-dark-throughout.md), its colours replaced by [record 101](0101-content-colours-derived-from-the-theme.md) | Miguel and Claude |
 
 ## 1. Context
 

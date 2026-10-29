@@ -28,7 +28,8 @@ import static dev.marregui.comando.testkit.States.P1;
 import static dev.marregui.comando.testkit.States.P2;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [Reducer] maintains notices, runs, sessions, panels, and layout while translating intents into state transitions and effects.
+/// [Reducer] maintains notices, runs, sessions, panels, and layout while translating intents into state transitions and
+/// effects.
 ///
 /// - error notices remain visible until their subject settles
 /// - completed schema changes reload the affected connection
@@ -55,7 +56,8 @@ class ReducerNoticeAndLayoutTest {
                 .withPanel(state.panel(P2).orElseThrow().withSession("other"));
     }
 
-    /// An error for panel `p1` stays standing across unrelated information, while both notices remain in chronological history.
+    /// An error for panel `p1` stays standing across unrelated information, while both notices remain in chronological
+    /// history.
     @Test
     void anErrorStandsOverALaterInfoAboutSomethingElseAndTheHistoryKeepsBoth() {
         apply(new Intent.Notify(Notice.Level.ERROR, "boom", false, Notice.panel("p1")));
@@ -65,7 +67,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.notices()).extracting(Notice::text).containsExactly("boom", "QuestDB is up");
     }
 
-    /// An update for the same connection replaces its standing error, and a newer error replaces an earlier global error.
+    /// An update for the same connection replaces its standing error, and a newer error replaces an earlier global
+    /// error.
     @Test
     void aNoticeAboutTheSameSubjectOrANewerErrorReplacesAStandingError() {
         apply(new Intent.Notify(Notice.Level.ERROR, "first", false, Notice.connection("local")));
@@ -77,7 +80,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.notice().text()).isEqualTo("two");
     }
 
-    /// More than `NOTICE_HISTORY` information notices discard the seven oldest entries while retaining the newest fifty.
+    /// More than `NOTICE_HISTORY` information notices discard the seven oldest entries while retaining the newest
+    /// fifty.
     @Test
     void theHistoryKeepsTheLastFiftyNotices() {
         for (int i = 0; i < AppState.NOTICE_HISTORY + 7; i++) {
@@ -88,7 +92,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.notices().getLast().text()).isEqualTo("n56");
     }
 
-    /// Starting a replacement SQL run clears its panel error, and explicit dismissal clears even an unrelated error notice.
+    /// Starting a replacement SQL run clears its panel error, and explicit dismissal clears even an unrelated error
+    /// notice.
     @Test
     void aSuccessfulRunClearsItsPanelsErrorAndDismissClearsAnyNotice() {
         apply(new Intent.RunText(P1, "SELECT 1", Target.AUTO));
@@ -175,7 +180,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.notice().level()).isEqualTo(Notice.Level.ERROR);
     }
 
-    /// An automatic target containing only line comments creates no run or effect and explains that nothing is runnable.
+    /// An automatic target containing only line comments creates no run or effect and explains that nothing is
+    /// runnable.
     @Test
     void aBlockOfCommentsOnlyRunsNothing() {
         apply(new Intent.RunText(P1, "-- a note\n-- another", Target.AUTO));
@@ -229,7 +235,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.notice().text()).isEqualTo("Imported old and opened it in its own panel");
     }
 
-    /// An attributed two-line editor write emits `EditPanelText` and announces its source, while an unattributed write leaves that notice intact.
+    /// An attributed two-line editor write emits `EditPanelText` and announces its source, while an unattributed write
+    /// leaves that notice intact.
     @Test
     void aSessionsWriteIntoTheEditorIsAnnounced() {
         apply(new Intent.EditPanel(P1, "SELECT 1\nFROM t", EditMode.APPEND, "work"));
@@ -243,7 +250,8 @@ class ReducerNoticeAndLayoutTest {
 
     // ---- panels
 
-    /// Reopening a closed panel inserts it after the focused panel, preserves its title, and drops a connection removed while it was closed.
+    /// Reopening a closed panel inserts it after the focused panel, preserves its title, and drops a connection removed
+    /// while it was closed.
     @Test
     void aClosedPanelReopensAfterTheFocusedOneWithTheBindingsThatStillExist() {
         PanelId back = new PanelId("p3");
@@ -263,7 +271,8 @@ class ReducerNoticeAndLayoutTest {
 
     // ---- what a session may change
 
-    /// A lower view from an unfocused session is added without selecting its tab, whereas the focused session's view becomes the lower tab.
+    /// A lower view from an unfocused session is added without selecting its tab, whereas the focused session's view
+    /// becomes the lower tab.
     @Test
     void aViewFromASessionTheUserIsNotLookingAtDoesNotTakeTheLowerPanel() {
         state = state.withSessions(List.of(state.session("work").orElseThrow(), SessionState.closed(SessionSpec.fresh("other", "/tmp"))));
@@ -277,7 +286,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.lowerTab().kind()).isEqualTo(LowerTab.Kind.VIEW);
     }
 
-    /// A session layout request for another panel defers the requested lower tab to an arrange effect instead of changing the current tab.
+    /// A session layout request for another panel defers the requested lower tab to an arrange effect instead of
+    /// changing the current tab.
     @Test
     void aTabAskedWithAFocusWaitsForTheFocus() {
         otherOnP2();
@@ -290,7 +300,8 @@ class ReducerNoticeAndLayoutTest {
                 new Layout(Layout.Toggle.KEEP, Layout.Toggle.KEEP, Double.NaN, P2, LowerTab.TERMINAL, "other")));
     }
 
-    /// A delayed focus request is ignored after its panel is rebound to another session, then selects the panel and terminal tab when ownership matches.
+    /// A delayed focus request is ignored after its panel is rebound to another session, then selects the panel and
+    /// terminal tab when ownership matches.
     @Test
     void aFocusRequestAppliedAfterThePanelWasReboundChangesNothing() {
         otherOnP2();
@@ -309,7 +320,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.lowerTab()).isEqualTo(LowerTab.TERMINAL);
     }
 
-    /// Session layout affects only its own focused panel: focus requests wait for shell timing, tab requests wait for focus, and pane changes still arrange.
+    /// Session layout affects only its own focused panel: focus requests wait for shell timing, tab requests wait for
+    /// focus, and pane changes still arrange.
     @Test
     void aSessionFocusesOnlyItsOwnPanelAndSelectsTabsOnlyWhileTheUserLooksAtIt() {
         otherOnP2();
@@ -318,7 +330,7 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.focused()).isEqualTo(P1);
         assertThat(state.lowerTab()).isEqualTo(LowerTab.SESSION);
 
-        // changed: the reducer used to focus the panel at once; the shell now focuses it after the typing pause
+        // the reducer does not focus the panel: the shell does, once the user pauses typing
         apply(new Intent.SessionLayout("other", P2, null, null));
         assertThat(state.focused()).isEqualTo(P1);
         assertThat(effects).containsExactly(new Effect.Arrange(new Layout(Layout.Toggle.KEEP, Layout.Toggle.KEEP, Double.NaN, P2, null, "other")));
@@ -333,7 +345,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.notice().text()).isEqualTo("other arranged the panes (Restore layout in the palette undoes it)");
     }
 
-    /// A session focus request remains pending for the shell and combines its panel focus and pane toggles in one arrange effect.
+    /// A session focus request remains pending for the shell and combines its panel focus and pane toggles in one
+    /// arrange effect.
     @Test
     void aSessionsFocusRequestWaitsForTheShellAndItsPanesComeInTheSameArrange() {
         apply(new Intent.FocusPanel(P2));
@@ -348,7 +361,8 @@ class ReducerNoticeAndLayoutTest {
 
     // ---- one error per failed start, background runs, subjects cleared by removal and withdrawal
 
-    /// A failed session start creates one desktop error; its later synthetic turn end neither replaces the error nor creates another notice.
+    /// A failed session start creates one desktop error; its later synthetic turn end neither replaces the error nor
+    /// creates another notice.
     @Test
     void aPromptToASessionWhoseStartFailedRaisesOneErrorOnly() {
         apply(new Intent.RunText(P1, "explain", Target.CLAUDE));
@@ -366,7 +380,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.session("work").orElseThrow().pendingTurns()).isZero();
     }
 
-    /// A completed background plot refresh leaves the existing approval notice standing and adds no second query-completed history notice.
+    /// A completed background plot refresh leaves the existing approval notice standing and adds no second
+    /// query-completed history notice.
     @Test
     void aLivePlotsRefreshFinishesWithoutANotice() {
         apply(new Intent.RunText(P2, "SELECT 1", Target.SQL));
@@ -383,7 +398,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.notices()).extracting(Notice::text).filteredOn(t -> t.startsWith("Query finished")).hasSize(1);
     }
 
-    /// Repeated live-plot failures are panel warnings without desktop alerts, unlike an otherwise identical foreground SQL failure.
+    /// Repeated live-plot failures are panel warnings without desktop alerts, unlike an otherwise identical foreground
+    /// SQL failure.
     @Test
     void aLivePlotsFailedRefreshIsAWarningWithoutADesktopNotification() {
         apply(new Intent.RunText(P2, "SELECT * FROM trades", Target.SQL));
@@ -419,7 +435,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.notice()).isEqualTo(Notice.NONE);
     }
 
-    /// Stopping a session or ending a turn withdraws its waiting approvals and clears the notice for each withdrawn request.
+    /// A session's exit withdraws all its waiting approvals, and a turn's end its waiting SQL card; each withdrawn
+    /// card's notice is cleared.
     @Test
     void cardsWithdrawnInBulkClearTheirRequestNotice() {
         apply(new Intent.ApprovalRequested(new Approval(8L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)));
@@ -440,7 +457,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.notice()).isEqualTo(Notice.NONE);
     }
 
-    /// Removing a failed connection clears its notice; removing a failed session replaces its session notice with the removal notice.
+    /// Removing a failed connection clears its notice; removing a failed session replaces its session notice with the
+    /// removal notice.
     @Test
     void removingAConnectionOrASessionClearsItsNotice() {
         apply(new Intent.ConnectionFailed("local", "Connection refused"));
@@ -455,7 +473,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(state.notice().text()).isEqualTo("Removed session work and its panel");
     }
 
-    /// Any DDL within a completed SQL block reloads its schema, with the explorer flag enabled only after that explorer is open.
+    /// Any DDL within a completed SQL block reloads its schema, with the explorer flag enabled only after that explorer
+    /// is open.
     @Test
     void aSchemaChangeAnywhereInTheBlockReloadsTheSchemaAndAnOpenExplorer() {
         apply(new Intent.RunText(P1, "INSERT INTO a VALUES (1); CREATE TABLE b (x INT)", Target.SQL));
@@ -470,7 +489,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(effects).contains(new Effect.LoadSchema(States.LOCAL, true));
     }
 
-    /// A session schema-change signal reloads an existing connection quietly or refreshes its open explorer, and ignores an unknown connection.
+    /// A session schema-change signal reloads an existing connection quietly or refreshes its open explorer, and
+    /// ignores an unknown connection.
     @Test
     void aSessionsSchemaChangeReloadsTheSchemaQuietlyOrShowsAnOpenExplorer() {
         apply(new Intent.SchemaChanged("local"));
@@ -484,7 +504,8 @@ class ReducerNoticeAndLayoutTest {
         assertThat(effects).isEmpty();
     }
 
-    /// Failure after `CREATE TABLE` warns that preceding statements may have run and reloads schema; a failed single SELECT does neither.
+    /// Failure after `CREATE TABLE` warns that preceding statements may have run and reloads schema; a failed single
+    /// SELECT does neither.
     @Test
     void aFailedBlockSaysTheEarlierStatementsMayHaveRunAndReloadsAfterASchemaChange() {
         apply(new Intent.RunText(P1, "CREATE TABLE t1 (x INT); INSERT INTO nosuch VALUES (1);", Target.SQL));

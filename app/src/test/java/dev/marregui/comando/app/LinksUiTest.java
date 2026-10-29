@@ -47,8 +47,9 @@ class LinksUiTest {
     @TempDir
     Path home;
 
-    /// The page shows the front matter's `name` and `metadata.type` as facts and the note link as its name without brackets;
-    /// a double click on the note link opens the file declaring that name in a new panel, and on a URL calls the browser.
+    /// The page shows the front matter's `name` and `metadata.type` as facts and the note link as its name without
+    /// brackets; a double click on the note link opens the file declaring that name in a new panel, and on a URL calls
+    /// the browser.
     @Test
     void aDoubleClickOnANoteLinkOpensItsFileInAPanelAndOnAnAddressTheBrowser() throws Exception {
         Path brain = home.resolve("brain");
@@ -111,8 +112,8 @@ class LinksUiTest {
     }
 
     /// A file link without a line, written relative to a folder deep under the session's, is found there and opens in a
-    /// panel as the Files tab opens a file, not as a side view; a second follow brings that panel forward instead of opening
-    /// another.
+    /// panel as the Files tab opens a file, not as a side view; a second follow brings that panel forward instead of
+    /// opening another.
     @Test
     void aFileLinkWithoutALineIsFoundUnderTheSessionsFolderAndOpensInAPanelAsTheFilesTabOpensIt() throws Exception {
         Path work = Files.createDirectories(home.resolve("work"));

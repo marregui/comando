@@ -43,8 +43,8 @@ class PanelTextsTest {
         assertThat(ResultsView.statusLine(insert)).contains("100,000 rows changed").doesNotContain("· 0 rows");
     }
 
-    /// A run started at 10 s shows "Running on local · 12 s" at 22 s, and a run carrying a block note ends its status line
-    /// with that note.
+    /// A run started at 10 s shows "Running on local · 12 s" at 22 s, and a run carrying a block note ends its status
+    /// line with that note.
     @Test
     void aRunningStatementShowsItsElapsedTimeAndABlockItsNote() {
         SqlRun run = SqlRun.queued(1, P, "local", "SELECT 1").started(10_000);
@@ -74,8 +74,8 @@ class PanelTextsTest {
         assertThat(SessionRow.details(running.withStatus(Status.CLOSED, ""), started + 60_000, utc, "")).as("stopped").doesNotContain("Uptime");
     }
 
-    /// The checkpoint icon is `checkpoint-due` only past 60% context; its tooltip names what a checkpoint sends and says
-    /// when a carried summary still waits for the next prompt.
+    /// The checkpoint icon is `checkpoint-due` only past 60% context; its tooltip names what a checkpoint sends and
+    /// says when a carried summary still waits for the next prompt.
     @Test
     void theCheckpointButtonIsPurpleOnlyWhenDue() {
         SessionState x = SessionState.closed(States.WORK);
@@ -98,8 +98,8 @@ class PanelTextsTest {
         assertThat(SessionBar.busyText(SessionState.closed(States.WORK))).isEmpty();
     }
 
-    /// A session waiting on one background task names it with its elapsed seconds; on two it counts them; the chip keeps
-    /// the session's name, and the tick counts a waiting session as it does a working one.
+    /// A session waiting on one background task names it with its elapsed seconds; on two it counts them; the chip
+    /// keeps the session's name, and the tick counts a waiting session as it does a working one.
     @Test
     void aSessionWaitingOnBackgroundWorkSaysOnWhatAndSinceWhen() {
         long started = System.currentTimeMillis() - 5_000;
@@ -124,8 +124,8 @@ class PanelTextsTest {
         assertThat(StatusBar.fullLine(new Notice(Notice.Level.ERROR, long400, 0L))).as("the tooltip has the whole text").hasSize(400);
     }
 
-    /// A short notice keeps a tooltip as wide as its text, with HTML escaped and newlines as breaks; long prose wraps at a
-    /// fixed width, and a word longer than a line breaks every 70 characters.
+    /// A short notice keeps a tooltip as wide as its text, with HTML escaped and newlines as breaks; long prose wraps
+    /// at a fixed width, and a word longer than a line breaks every 70 characters.
     @Test
     void theTooltipWrapsOnlyALongNotice() {
         assertThat(StatusBar.wrapped("Query finished")).isEqualTo("<html>Query finished</html>");

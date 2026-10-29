@@ -25,7 +25,9 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 
-/** The one place text areas are configured: theme (IntelliJ's Dark colours), font, syntax by file type. */
+/**
+ * The one place text areas are configured: colours from the content palette (record 101), font, syntax by file type.
+ */
 public final class Editors {
 
     private static final Map<String, String> STYLES = Map.ofEntries(
@@ -160,6 +162,7 @@ public final class Editors {
         return a;
     }
 
+    /** {@code area} in a borderless scroll pane, with or without line numbers, without fold indicators. */
     public static RTextScrollPane scroll(RSyntaxTextArea area, boolean lineNumbers) {
         RTextScrollPane sp = new RTextScrollPane(area, lineNumbers);
         sp.setFoldIndicatorEnabled(false);
@@ -175,6 +178,7 @@ public final class Editors {
         return styleFor(dot < 0 ? name : name.substring(dot + 1));
     }
 
+    /** The style of {@code syntax}: a file extension, a fence's language or a style constant; none when unknown. */
     public static String styleFor(String syntax) {
         if (syntax == null || syntax.isEmpty()) {
             return SyntaxConstants.SYNTAX_STYLE_NONE;

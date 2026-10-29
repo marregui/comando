@@ -49,7 +49,8 @@ class TypeAndSpacingRulesTest {
         assertThat(off).as("sizes off the type scale: use Theme.font or Theme.size").isEmpty();
     }
 
-    /// Scanning empty borders and insets finds no number above 3 that is not a multiple of 4, except the aligned field hint.
+    /// Scanning empty borders and insets finds no number above 3 that is not a multiple of 4, except the aligned field
+    /// hint.
     @Test
     void everyInsetIsOnTheGrid() throws IOException {
         List<String> off = new ArrayList<>();
@@ -72,8 +73,8 @@ class TypeAndSpacingRulesTest {
         assertThat(off).as("insets off the grid: use Theme.SPACE_*").isEmpty();
     }
 
-    /// [Theme#size] maps a base to its small and body steps to the half point, the title is the first heading scale of the
-    /// base size, [Theme#rowHeight] rounds up to the grid, and every spacing constant is a multiple of 4.
+    /// [Theme#size] maps a base to its small and body steps to the half point, the title is the first heading scale of
+    /// the base size, [Theme#rowHeight] rounds up to the grid, and every spacing constant is a multiple of 4.
     @Test
     void theScaleAndTheGridHoldTheirSteps() {
         assertThat(Theme.size(13f, Theme.TextSize.SMALL)).isEqualTo(12f);

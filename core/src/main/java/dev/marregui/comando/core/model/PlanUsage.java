@@ -4,12 +4,12 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * A plan's usage limits as its agent reports them. Claude Code's: the current session's window, the week across all
- * models, and the week of a single model (Fable); Codex's: the 5-hour session window and the week. A read that failed
- * has no windows and says why.
+ * A plan's usage limits as its command-line tool reports them. Claude Code's: the current session's window, the week
+ * across all models, and the week of a single model (Fable); Codex's: the 5-hour session window and the week. A read
+ * that failed has no windows and says why.
  *
  * @param provider     whose plan: {@link #CLAUDE} or {@link #CODEX}
- * @param windows      in the order the agent lists them
+ * @param windows      in the order the tool lists them
  * @param readAtMillis when the read finished
  * @param problem      why there are no windows; empty when the read succeeded
  */

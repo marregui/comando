@@ -7,14 +7,14 @@ import java.util.Objects;
 /**
  * One SQL statement run from a panel. Its rows live in the result registry under {@code requestId}.
  *
- * @param requestId   identity of the run; late events for another id are dropped
- * @param rowCount    rows fetched so far
- * @param updateCount rows changed by a statement that returns no rows, -1 otherwise
- * @param truncated   the fetch stopped at the row cap
+ * @param requestId     identity of the run; late events for another id are dropped
+ * @param rowCount      rows fetched so far
+ * @param updateCount   rows changed by a statement that returns no rows, -1 otherwise
+ * @param truncated     the fetch stopped at the row cap
  * @param startedMillis when the statement started executing, 0 before; the running overlay counts from it
- * @param note        what the statements after the first one did, empty when the block held one statement
- * @param noteFailed  a statement after the first one failed
- * @param background  nobody typed this run (a live plot's refresh): its outcome is not announced
+ * @param note          what the statements after the first one did, empty when the block held one statement
+ * @param noteFailed    a statement after the first one failed
+ * @param background    nobody typed this run (a live plot's refresh): its outcome is not announced
  */
 public record SqlRun(
         long requestId,

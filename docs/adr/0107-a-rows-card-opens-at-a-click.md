@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted; amended 2026-10-29: the click is on the row's ⓘ, not its name; a press on a tab cancels its card | Miguel and Claude |
+| 2026-10-28 | accepted; amended on 2026-10-29 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -17,8 +17,8 @@ This record amends where and when records 87 and 92 show the card; what it shows
 
 | Question | Rule | Why |
 |---|---|---|
-| opening | a click on the ⓘ at the right edge of the row the pointer is over shows its card at once; a click on the name selects the row and shows nothing; resting on a name shows nothing | Miguel's ask; 2026-10-29: on the name, the first click of a double click had shown the card before the double click opened the panel. The ⓘ's place is kept on every row, drawn only on the hovered one, so no row changes width |
-| a press | a right-click on a row opens its menu and closes its card; any press on a panel tab, a click or the menu's, closes the tab's card or keeps it from showing until the pointer leaves the tab | Miguel, 2026-10-29: the card came up beside the context menu |
+| opening | a click on the ⓘ at the right edge of the row the pointer is over shows its card at once; a click on the name selects the row and shows nothing; resting on a name shows nothing | Miguel's ask; the ⓘ's place is kept on every row, drawn only on the hovered one, so no row changes width |
+| a press | a right-click on a row opens its menu and closes its card; any press on a panel tab, a click or the menu's, closes the tab's card or keeps it from showing until the pointer leaves the tab | the card came up beside the context menu |
 | following | while a card opened by a click is open, the pointer resting on another row's name shows that row's card in its place after 150 ms, as does the pointer leaving the card onto a name | Miguel's ask; the wait lets the pointer cross the next row's edge into the card, which hangs 2 px under its row |
 | closing | the pointer leaving the row or the card for anything that is not a name (a control, the gap under the rows, the rest of the window), the card's ✕, a click on the card; the card follows no more, and the next card needs a click | Miguel's ask; the grace off the row is the tab card's, 500 ms |
 | where | beside the rows: its left edge after the widest row's icon, name and marks, reaching 4 px (the row's right padding) back over the rows; its top at the clicked row's, raised to stay in the window. With no room for it whole beside the rows, under the row, as before. A panel tab's card stays under its tab | no name is under the card, so the pointer can follow onto any; the overlap leaves no gap (border, scrollbar, divider) between the card and the rows, so leaving the card toward the names always lands on a row |
@@ -38,3 +38,8 @@ double click closes it, a connection's name, where beside the rows), `WorkspaceT
 tab's does not; beside the rows, and under the row without room), and off screen in `SessionCardUiTest` (`:app:uiTest`:
 the click, the card beside the rows with no name under it, following onto a name across the state icons, out of the
 card onto a name and out of its left edge, onto the window, ✕).
+
+## Amendments
+
+2026-10-29 (Miguel): the card opens at a click on the row's ⓘ, no longer on its name, since on the name the first click
+of a double click showed the card before the double click opened the panel; the row "a press" is added.

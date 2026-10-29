@@ -38,7 +38,10 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-/** A search box over every command: type, arrow, Enter. Every action is one keystroke away. */
+/**
+ * A search box over the commands that can run when it opens: typing filters them, the arrows choose, ⏎ or a double
+ * click runs, and Esc or a click elsewhere closes it.
+ */
 public final class CommandPalette {
 
     private final ActionRegistry registry;
@@ -190,8 +193,8 @@ public final class CommandPalette {
     }
 
     /**
-     * A key as the desktop writes it: with macOS's keys its modifiers ⌃⌥⇧⌘ in that order, then the key ("⇧⌘⏎", "⌃1");
-     * with the others' Ctrl, Alt, Shift, Super, then the key ("Ctrl+Shift+Enter", "Alt+1").
+     * A key as the desktop writes it: with macOS's keys its modifiers ⌃⌥⇧⌘ in that order, then the key ("⇧⌘⏎",
+     * "⌃1"); with the others' Ctrl, Alt, Shift, Super, then the key ("Ctrl+Shift+Enter", "Alt+1").
      */
     public static String keyText(KeyStroke k) {
         return Platform.macKeys() ? macText(k) : otherText(k);

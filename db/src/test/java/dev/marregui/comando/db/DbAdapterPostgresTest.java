@@ -21,12 +21,12 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [DbAdapter] runs PostgreSQL queries, cancellation, schema discovery, and metadata lookup through the driver.
+/// [DbAdapter] against PostgreSQL 16 in a container; skipped without Docker.
 ///
-/// - PostgreSQL values map to the matching result column kinds.
-/// - Cancelling a running statement returns promptly and publishes cancellation.
-/// - Queued work can be withdrawn before execution.
-/// - Schema and column descriptions use PostgreSQL metadata.
+/// - Integer, float, boolean, text, timestamp and null values take their result column kinds.
+/// - A cancel returns at once and ends a running statement.
+/// - A query withdrawn while it waits on the lane never runs.
+/// - The schema comes from the information schema, a table's columns from the driver's metadata.
 @Testcontainers(disabledWithoutDocker = true)
 class DbAdapterPostgresTest {
 

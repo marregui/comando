@@ -67,7 +67,10 @@ class TranscriptCanvasViewportTest {
         return out;
     }
 
-    /** As the widget does on a session switch: clear, append the history, lay out through the viewport, scroll to the end. */
+    /**
+     * As the widget does on a session switch: clear, append the history, lay out through the viewport, scroll to the
+     * end.
+     */
     private void rebuildAtEnd(List<Block> blocks) {
         viewport.setView(canvas);
         viewport.setSize(W, H);
@@ -115,8 +118,8 @@ class TranscriptCanvasViewportTest {
         return diff / (double) (a.getWidth() * a.getHeight());
     }
 
-    /// A pointer move over a rebuilt session of about 2 000 items, before the idle pass ends, lays out fewer than half of
-    /// them.
+    /// A pointer move over a rebuilt session of about 2 000 items, before the idle pass ends, lays out fewer than half
+    /// of them.
     @Test
     void aHoverDuringTheIdlePassLaysOutOnlyWhatIsVisible() {
         rebuildAtEnd(session(27));
@@ -148,12 +151,13 @@ class TranscriptCanvasViewportTest {
         assertThat(atEnd()).as("the view that followed the end still shows the end after a hover").isTrue();
     }
 
-    /// When the first paint, which grows the content well past the guessed end, runs before the idle pass, the view still
-    /// shows the end once everything is laid out.
+    /// When the first paint, which grows the content well past the guessed end, runs before the idle pass, the view
+    /// still shows the end once everything is laid out.
     @Test
     void aRebuiltSessionPaintedBeforeTheIdlePassStaysAtTheEnd() {
-        // order 1: the repaint after the scroll to the end runs before the first slice of the idle pass; the last answer
-        // is headings, which the first guess takes for body lines, so the visible pass grows the content well past the end
+        // order 1: the repaint after the scroll to the end runs before the first slice of the idle pass; the last
+        // answer is headings, which the first guess takes for body lines, so the visible pass grows the content well
+        // past the end
         List<Block> blocks = session(27);
         blocks.add(new Block.AssistantText("end", 0, "# Heading\n".repeat(30), false, ""));
         rebuildAtEnd(blocks);
@@ -177,8 +181,8 @@ class TranscriptCanvasViewportTest {
         assertThat(atEnd()).isTrue();
     }
 
-    /// Select all during the idle pass lays out everything, sets the scroll range to the exact content and keeps the end in
-    /// view.
+    /// Select all during the idle pass lays out everything, sets the scroll range to the exact content and keeps the
+    /// end in view.
     @Test
     void selectAllDuringTheIdlePassKeepsTheViewAndTheWholeSessionScrollable() {
         JPanel parent = new JPanel(null);
@@ -196,7 +200,8 @@ class TranscriptCanvasViewportTest {
         assertThat(atEnd()).as("the view that showed the end still shows it").isTrue();
     }
 
-    /// A switch to a large session while the find bar holds a query lays out fewer than half the items at the first paint.
+    /// A switch to a large session while the find bar holds a query lays out fewer than half the items at the first
+    /// paint.
     @Test
     void aSessionSwitchWithTheFindBarOpenLaysOutOnlyWhatIsVisible() {
         rebuildAtEnd(session(1));
@@ -210,7 +215,8 @@ class TranscriptCanvasViewportTest {
         assertThat(laid).as("the first paint after a switch lays out only what is near the view").isLessThan(items.size() / 2);
     }
 
-    /// After a hover and the end of the idle pass, the scroll range covers the whole content, or a revalidation is pending.
+    /// After a hover and the end of the idle pass, the scroll range covers the whole content, or a revalidation is
+    /// pending.
     @Test
     void aHoverDuringTheIdlePassLeavesTheWholeSessionScrollable() {
         JPanel parent = new JPanel(null);
@@ -228,8 +234,8 @@ class TranscriptCanvasViewportTest {
                 .as("the scroll range covers the whole session, or a revalidation is pending").isTrue();
     }
 
-    /// A backward find from the top during the idle pass scrolls the last match, near the end, into view with an exact scroll
-    /// range.
+    /// A backward find from the top during the idle pass scrolls the last match, near the end, into view with an exact
+    /// scroll range.
     @Test
     void findDuringTheIdlePassShowsTheMatch() {
         JPanel parent = new JPanel(null);
@@ -261,8 +267,8 @@ class TranscriptCanvasViewportTest {
     /// A slice of the idle pass that runs after an append and before its layout does not throw.
     @Test
     void aBlockAppendedDuringTheIdlePassBeforeItsLayoutDoesNotBreakTheNextSlice() {
-        // a live session: the idle pass runs after the switch, a new block arrives, and the timer's tick runs before the
-        // repaint manager's validation lays the new block out
+        // a live session: the idle pass runs after the switch, a new block arrives, and the timer's tick runs before
+        // the repaint manager's validation lays the new block out
         rebuildAtEnd(session(27));
         paintView();
         viewport.doLayout();

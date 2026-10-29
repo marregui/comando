@@ -86,8 +86,8 @@ class ClaudeAdapterTest {
         return out;
     }
 
-    /// A started `work` session writes a private bearer-token configuration, maps two replies in order, and removes
-    /// that configuration and registration after a clean exit; two prompts distinguish persistent process state.
+    /// A started `work` session writes an owner-only configuration with its bearer token, answers two prompts on one
+    /// process (`pong 1`, `pong 2`), and after a clean stop leaves no configuration and no registration.
     @Test
     void startSendAnswerStop() throws Exception {
         ClaudeAdapter a = adapter("fake-claude.sh");

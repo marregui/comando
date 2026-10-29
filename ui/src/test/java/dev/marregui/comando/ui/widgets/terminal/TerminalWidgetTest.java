@@ -40,8 +40,8 @@ class TerminalWidgetTest {
 
     private static final String HOME = System.getProperty("user.home");
 
-    /// An unstarted terminal names its directory, with `~` for home, and the key that starts it; a new directory updates
-    /// the text.
+    /// An unstarted terminal names its directory, with `~` for home, and the key that starts it; a new directory
+    /// updates the text.
     @Test
     void beforeItsShellStartsTheAreaSaysWhereAndHow() {
         TerminalWidget t = new TerminalWidget(Path.of(HOME, "lane2"));
@@ -119,8 +119,8 @@ class TerminalWidgetTest {
         assertThat(TerminalWidget.foregroundJob(4242, "/bin/zsh", args -> List.of("4242 4242 /usr/bin/ssh"))).contains("ssh");
     }
 
-    /// A login shell's `-zsh`, a full shell path, another shell started by `exec` and a shell under its install path are
-    /// no job.
+    /// A login shell's `-zsh`, a full shell path, another shell started by `exec` and a shell under its install path
+    /// are no job.
     @Test
     void aShellInFrontRunsNoJobWhateverItsNameLooksLike() {
         assertThat(TerminalWidget.foregroundJob(4242, "/bin/zsh", args -> List.of("4242 4242 -zsh"))).isEmpty();
@@ -129,8 +129,8 @@ class TerminalWidgetTest {
         assertThat(TerminalWidget.foregroundJob(4242, "/opt/homebrew/bin/fish", args -> List.of("4242 4242 fish"))).isEmpty();
     }
 
-    /// [TerminalWidget#jobName] drops an interpreter in front of a script, keeps a shell given an option, keeps a program's
-    /// arguments, and clips at [TerminalWidget#JOB_CHARS] with `…`.
+    /// [TerminalWidget#jobName] drops an interpreter in front of a script, keeps a shell given an option, keeps a
+    /// program's arguments, and clips at [TerminalWidget#JOB_CHARS] with `…`.
     @Test
     void aJobIsNamedAsTypedAScriptByItsOwnNameNotItsInterpreters() {
         assertThat(TerminalWidget.jobName("/bin/sh /usr/bin/man cat")).isEqualTo("man cat");
@@ -141,8 +141,8 @@ class TerminalWidgetTest {
         assertThat(TerminalWidget.jobName("java " + "-D".repeat(60))).hasSize(TerminalWidget.JOB_CHARS).endsWith("…");
     }
 
-    /// The job in front is named from its process group's leader, a script such as `man` rather than `sh` or `less`; with
-    /// the leader gone, another member of the group names it.
+    /// The job in front is named from its process group's leader, a script such as `man` rather than `sh` or `less`;
+    /// with the leader gone, another member of the group names it.
     @Test
     void theJobInFrontIsReadFromItsGroupsLeader() throws Exception {
         // the test's own process, given a child, stands for a shell with a job; ps is told what that job is
@@ -222,8 +222,8 @@ class TerminalWidgetTest {
         }
     }
 
-    /// Find counts both matches of a lower-case word for an upper-case query, and zoom and clear find on a live terminal do
-    /// not fail.
+    /// Find counts both matches of a lower-case word for an upper-case query, and zoom and clear find on a live
+    /// terminal do not fail.
     @Test
     void findCountsMatchesInTheBufferIgnoringCaseAndZoomRefontsALiveTerminal(@TempDir Path dir) throws Exception {
         AtomicReference<TerminalWidget> t = new AtomicReference<>();

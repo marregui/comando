@@ -45,7 +45,8 @@ class NotifyLoggedTest {
         }
     }
 
-    /// Logged errors retain their cause and get a `log:` subject from the timestamp read before logging; warnings record without a cause.
+    /// Logged errors retain their cause and get a `log:` subject from the timestamp read before logging; warnings
+    /// record without a cause.
     @Test
     void aLoggedFailureNamesItsLogEntryWhichHoldsTheNoticeAndItsCause() {
         Recording log = new Recording();

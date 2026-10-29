@@ -54,9 +54,9 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
- * comando's MCP tools. A UI tool validates its input and sends an intent; it returns at once. The approval
- * tool and a database write park the calling (virtual) thread on a future that the user's answer
- * completes, up to an absolute deadline.
+ * comando's MCP tools. A UI tool validates its input and sends an intent; it returns at once. The approval tool
+ * parks the calling (virtual) thread on a future the user's answer completes, up to a deadline; a database call parks
+ * on its query's future, behind a card first when the statement is not read-only.
  */
 public final class McpTools {
 
@@ -88,14 +88,16 @@ public final class McpTools {
     private final Duration approvalTimeout;
     private final ObjectMapper json = new ObjectMapper();
     private final ArrayNode definitions;
-    /** The first tools' names, from {@code tools.json}; the registry's other actions are {@link ActionTools}' (record 121). */
+    /** The first tools' names, from {@code tools.json}; the registry's other actions are {@link ActionTools}'. */
     private final Set<String> builtIn;
     private final ActionTools actions;
     /** The other comando instances, through the comando Edge (record 123); null until the application wires them. */
     private volatile Peers peers;
     private final AtomicLong approvalIds = new AtomicLong(1_000_000L);
     private final ConcurrentHashMap<Long, CompletableFuture<ApprovalDecision>> pending = new ConcurrentHashMap<>();
-    /** The approval each in-flight JSON-RPC call waits on, by "session#request id", for {@code notifications/cancelled}. */
+    /**
+     * The approval each in-flight JSON-RPC call waits on, by "session#request id", for {@code notifications/cancelled}.
+     */
     private final ConcurrentHashMap<String, Long> approvalByCall = new ConcurrentHashMap<>();
     /** The session each pending approval was asked by, so a session's exit denies what it still waits on. */
     private final ConcurrentHashMap<Long, String> askedBy = new ConcurrentHashMap<>();
@@ -149,7 +151,7 @@ public final class McpTools {
         return call(session, name, args, null);
     }
 
-    /** As {@link #call(String, String, JsonNode)}, for the JSON-RPC request {@code callKey} names, so it can be cancelled. */
+    /** As {@link #call(String, String, JsonNode)}, for the cancellable JSON-RPC request {@code callKey}. */
     Outcome call(String session, String name, JsonNode args, String callKey) {
         CALL.set(callKey);
         try {
@@ -211,8 +213,6 @@ public final class McpTools {
         return out;
     }
 
-    // ---- approvals
-
     private Outcome approve(String session, JsonNode args) {
         String tool = args.path("tool_name").asString("");
         JsonNode input = args.path("input");
@@ -236,7 +236,7 @@ public final class McpTools {
             approvalByCall.put(call, id);
         }
         try {
-            // a session that ended before its card was shown gets no card: its process is gone and nothing it asked runs
+            // a session that ended before its card was shown gets none: its process is gone and nothing it asked runs
             if (!live.test(session)) {
                 return SESSION_ENDED;
             }
@@ -323,7 +323,7 @@ public final class McpTools {
                 }
                 ObjectNode update = r.putArray("updatedPermissions").addObject();
                 if (ApprovalKind.ofTool(tool) == ApprovalKind.PLAN) {
-                    // a plan approved beyond once switches the session to accepting edits, as the terminal's third plan choice does
+                    // a plan approved beyond once sets the session to accept edits, as the terminal's third choice does
                     update.put("type", "setMode");
                     update.put("mode", "acceptEdits");
                     update.put("destination", "session");
@@ -340,15 +340,13 @@ public final class McpTools {
                     }
                 }
                 update.put("behavior", "allow");
-                // the card offers no Always for a rule that may not be saved; an Always for one still stays in the session
+                // the card offers no Always for a rule that may not be saved; an Always for one stays in the session
                 boolean save = a.scope() == ApprovalDecision.Scope.ALWAYS && rules.persistable();
                 update.put("destination", save ? "localSettings" : "session");
             }
         }
         return r.toString();
     }
-
-    // ---- UI tools
 
     private Outcome show(String session, String title, ViewSpec spec, JsonNode args) {
         Placement placement = "side".equalsIgnoreCase(args.path("placement").asString("lower")) ? Placement.SIDE : Placement.LOWER;
@@ -398,7 +396,7 @@ public final class McpTools {
         return mine.getFirst();
     }
 
-    /** The panel with id {@code name}, or titled {@code name} in any case: the one lookup every tool naming a panel uses. */
+    /** The panel with id {@code name}, or titled {@code name} in any case: every tool naming a panel looks it up so. */
     private static Optional<PanelState> panelNamed(AppState s, String name) {
         return s.panels().stream().filter(p -> p.id().value().equals(name) || p.title().equalsIgnoreCase(name)).findFirst();
     }
@@ -479,7 +477,9 @@ public final class McpTools {
         return Outcome.ok(done.substring(0, done.length() - 2));
     }
 
-    /** Closes a view this session placed and the user has not pinned; the user's own views are not Claude's to close. */
+    /**
+     * Closes a view this session placed and the user has not pinned; the user's own views are not Claude's to close.
+     */
     private Outcome closeView(String session, JsonNode args) {
         JsonNode id = args.path("id");
         if (!id.canConvertToLong() && !(id.isString() && id.asString("").matches("\\d+"))) {
@@ -591,9 +591,9 @@ public final class McpTools {
         }
     }
 
-    // ---- sessions
-
-    /** The first line of a prompt one session sends another: the receiving session and the user both see who sent it. */
+    /**
+     * The first line of a prompt one session sends another: the receiving session and the user both see who sent it.
+     */
     static String fromLine(String session) {
         return "[from session " + session + "]";
     }
@@ -642,7 +642,9 @@ public final class McpTools {
                 + "; read what it does with session_read {\"session\": \"" + to + "\", \"after\": " + cursor + ", \"wait_seconds\": 300}");
     }
 
-    /** Another session's transcript from a cursor on, after waiting, when asked, for that session to finish its turns. */
+    /**
+     * Another session's transcript from a cursor on, after waiting, when asked, for that session to finish its turns.
+     */
     private Outcome sessionRead(JsonNode args) {
         String of = args.path("session").asString("").strip();
         if (of.isEmpty()) {
@@ -676,8 +678,6 @@ public final class McpTools {
     private static String sessionNames(AppState s) {
         return String.join(", ", s.sessions().stream().map(SessionState::name).toList());
     }
-
-    // ---- database tools
 
     private Outcome runSql(String session, JsonNode args) {
         String sql = args.path("sql").asString("").strip();
@@ -759,7 +759,10 @@ public final class McpTools {
         }
     }
 
-    /** The named connection; else the one bound to the caller's panel; else the focused panel's. */
+    /**
+     * The named connection; else that of the caller's panel: the focused one when it is the caller's, else its first,
+     * else its closed one.
+     */
     private ConnectionSpec connectionFor(String session, String name) {
         AppState s = state.get();
         String chosen = name;

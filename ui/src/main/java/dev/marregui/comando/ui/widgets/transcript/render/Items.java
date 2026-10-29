@@ -151,8 +151,8 @@ final class Items {
         private List<Paras.View> views = List.of();
         private int[] tops = new int[0];
         /**
-         * True when this text ends its turn: the report, on the transcript's ground with a bar of the tint down its left
-         * edge, so it is found again among the turn's cards.
+         * True when this text ends its turn: the report, on the transcript's ground with a bar of the tint down its
+         * left edge, so it is found again among the turn's cards.
          */
         private boolean report;
 
@@ -327,7 +327,8 @@ final class Items {
 
         @Override
         void paint(Graphics2D g, int x, int y, Rectangle clip, Marks marks) {
-            // no mark before it: the line itself says Thought, in the theme's colours (record 119); kept in the tools' column
+            // no mark before it: the line itself says Thought, in the theme's colours (record 119); kept in the tools'
+            // column
             Paras.paintBox(g, header, x + 22, y + 2, clip, marks);
             if (!shown()) {
                 return;
@@ -627,7 +628,10 @@ final class Items {
             return Collections.unmodifiableList(hooks);
         }
 
-        /** {@code hook · SessionStart}, or {@code hooks · UserPromptSubmit, SessionStart (3)}: the events in order of arrival, and the count. */
+        /**
+         * {@code hook · SessionStart}, or {@code hooks · UserPromptSubmit, SessionStart (3)}: the events in order of
+         * arrival, and the count.
+         */
         String title() {
             Set<String> events = new LinkedHashSet<>();
             for (NoteItem h : hooks) {
@@ -724,8 +728,8 @@ final class Items {
 
         /**
          * {@code 12.4 s}, after the error text when the turn failed or was interrupted; nothing for a turn of a stored
-         * conversation, which records no time. No spend: a subscription's limits are the plan usage the status bar shows,
-         * not money per turn.
+         * conversation, which records no time. No spend: a subscription's limits are the plan usage the status bar
+         * shows, not money per turn.
          */
         String summary() {
             Block.TurnEnd t = turn();

@@ -20,24 +20,24 @@ import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
 /**
- * A folder of the Files tab as a tree, every level ordered the same way: folders not named after a date first, by
- * name; then date-named folders ({@code yyyy-MM-dd}) oldest first; then files by name, ignoring case. The folder's
- * index file, when it sits at the top level, comes before everything else there. A file links to
- * itself; a folder has no link and its label has no trailing slash. Hidden entries, the folder's excluded names and
- * the entries a caller skips (those git ignores) are left out; a symbolic link to a folder is listed as a folder and not followed into. A subfolder that cannot be
- * read says so and the rest of the tree stands. The depth and the number of entries are bounded, and so is the read:
- * at most {@link #MAX_ENTRIES} entries are listed and looked at in the whole tree, so a folder read every few seconds
- * while open costs a bounded read however large it is. Past either bound a folder ends with
+ * A folder of the Files tab as a tree, every level ordered the same way, names ignoring case: folders not named after
+ * a date first, by name; then date-named folders ({@code yyyy-MM-dd}) oldest first; then files by name. The folder's
+ * index file, when it sits at the top level, comes before everything else there. A file links to itself; a folder has
+ * no link and its label has no trailing slash. Hidden entries, the folder's excluded names and the entries a caller
+ * skips (those git ignores) are left out; a symbolic link to a folder is listed as a folder and not followed into. A
+ * subfolder that cannot be read says so and the rest of the tree stands. The depth is bounded, and so is the read: at
+ * most {@link #MAX_LISTED} names are listed and {@link #MAX_ENTRIES} entries kept in the whole tree, so a folder read
+ * every few seconds while open costs a bounded read however large it is. Past a bound a folder ends with
  * {@link ViewSpec.TreeNode#MORE}. The tree's root is labelled with the folder's name and details its path.
  */
 final class FolderTree {
 
     static final int MAX_DEPTH = 12;
-    /** Entries read per folder at most; past it a folder ends with {@link ViewSpec.TreeNode#MORE}. */
+    /** Entries kept in the whole tree at most; past it a folder ends with {@link ViewSpec.TreeNode#MORE}. */
     static final int MAX_ENTRIES = 20_000;
     /**
-     * Names listed per folder at most, hidden and left-out ones included: a folder of millions of hidden entries costs
-     * a bounded listing too.
+     * Names listed in the whole tree at most, hidden and left-out ones included: a folder of millions of hidden entries
+     * costs a bounded listing too.
      */
     static final int MAX_LISTED = 4 * MAX_ENTRIES;
 
@@ -144,7 +144,9 @@ final class FolderTree {
         return out;
     }
 
-    /** "3 entries", "1 entry"; "5 entries or more" for a folder read in part; "cannot be read" for one that could not. */
+    /**
+     * "3 entries", "1 entry"; "5 entries or more" for a folder read in part; "cannot be read" for one that could not.
+     */
     private static String entries(List<ViewSpec.TreeNode> kids) {
         if (kids.size() == 1 && kids.getFirst().label().startsWith(UNREADABLE)) {
             return "cannot be read";
@@ -182,7 +184,10 @@ final class FolderTree {
         }
     }
 
-    /** The index file, then folders not named after a date, then date-named folders oldest first, then files; names ignoring case. */
+    /**
+     * The index file, then folders not named after a date, then date-named folders oldest first, then files; names
+     * ignoring case.
+     */
     static final Comparator<Entry> ORDER = Comparator.comparingInt(Entry::rank).thenComparing(Entry::lower).thenComparing(Entry::name);
 
     private static String size(Path p) {

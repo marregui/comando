@@ -51,7 +51,7 @@ public final class Style {
     final Tint tint;
     /**
      * True for Claude's answers on the transcript's ground ({@link #outside()}): tinted headings, list marks and table
-     * heads, a brighter bold, tinted code; elsewhere each of these is the text's own colour, as before.
+     * heads, a brighter bold, tinted code; elsewhere each of these is the text's own colour.
      */
     final boolean answer;
     /** Bold text. */
@@ -135,7 +135,10 @@ public final class Style {
         return new Style(baseFont(), Theme.mono(), zoom);
     }
 
-    /** {@code zoom} kept to the steps that move the body text between 8 and 40 pt: a step past either end changes nothing. */
+    /**
+     * {@code zoom} kept to the steps that move the body text between 8 and 40 pt: a step past either end changes
+     * nothing.
+     */
     public static int clampZoom(int zoom) {
         float base = baseFont().getSize2D();
         return Math.round(Zoomable.clampSize(base + zoom) - base);

@@ -73,8 +73,8 @@ class TintSheetTest {
 
     private Color labelWas;
 
-    /// For every tint, an answer with headings, a list, a quote and a table contains pixels of that tint's highlight and
-    /// none of any other tint's; the sheet is written for review.
+    /// For every tint, an answer with headings, a list, a quote and a table contains pixels of that tint's highlight
+    /// and none of any other tint's; the sheet is written for review.
     @Test
     void everyTintPaintsTheSameAnswerInItsOwnColoursOnly() throws IOException {
         Tint[] tints = Tint.values();

@@ -9,7 +9,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [KitFolders] recognizes configured kit folders by name or resolved location and merges only missing folders.
+/// [KitFolders] recognises configured kit folders by name or resolved location and merges only missing folders.
 ///
 /// - startup preserves an existing kit-folder selection
 /// - symbolic links resolve to their target folders
@@ -20,7 +20,8 @@ class KitFoldersTest {
         return new FolderRoot(name, path.toString(), "", List.of());
     }
 
-    /// Startup prepends kit folders only when none is already shown, retaining user folders and omitting kit names already taken.
+    /// Startup prepends kit folders only when none is already shown, retaining user folders and omitting kit names
+    /// already taken.
     @Test
     void atStartTheKitsFoldersGoFirstWhenTheTabShowsNoneOfThemAndTheUsersStay(@TempDir Path tmp) throws Exception {
         Path root = Files.createDirectories(tmp.resolve("kit"));
@@ -50,7 +51,8 @@ class KitFoldersTest {
         assertThat(KitFolders.use(List.of(mine), List.of(kit, kb))).as("the action adds what is missing, first").containsExactly(kb, mine);
     }
 
-    /// A user folder with the kit folder's name blocks that kit entry, and path comparison ignores case after normalization.
+    /// A user folder with the kit folder's name blocks that kit entry, and path comparison ignores case after
+    /// normalisation.
     @Test
     void aNameTakenByAnotherFolderLeavesTheKitsFolderOut(@TempDir Path tmp) throws Exception {
         FolderRoot elsewhere = folder("Memory", Files.createDirectories(tmp.resolve("elsewhere")));

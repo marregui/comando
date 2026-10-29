@@ -34,7 +34,7 @@ class LowerDividerUiTest {
     @TempDir
     Path home;
 
-    /// Two files opened to read hide the lower area until it is asked for (2026-10-29); asked for, a panel never in front
+    /// Two files opened to read hide the lower area until it is asked for; asked for, a panel never in front
     /// takes the last height shown, 150 px; the divider moved with one panel in front goes back to the other panel's
     /// position when that one comes forward, and to the moved position when the first returns.
     @Test

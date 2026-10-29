@@ -28,8 +28,8 @@ class MarkdownSheetTest {
     }
 
     /// What the sheet says comando draws, and what it does not, as the renderer does it: line breaks, nesting, lists,
-    /// autolinks, note links, front matter, local pictures but not web ones, heading ids, literal strike-through and task
-    /// boxes, escaped HTML, aligned tables and backslash escapes.
+    /// autolinks, note links, front matter, local pictures but not web ones, heading ids, literal strike-through and
+    /// task boxes, escaped HTML, aligned tables and backslash escapes.
     @Test
     void whatTheSheetSaysIsWhatThePreviewDoes() {
         assertThat(MarkdownHtml.render("line one\nline two")).as("a line break is a new line").contains("line one<br>line two");

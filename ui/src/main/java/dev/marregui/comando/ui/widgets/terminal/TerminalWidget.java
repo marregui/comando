@@ -80,7 +80,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
     private static final long KILL_GRACE_MILLIS = 2_000;
     /** The job reported when {@code ps} cannot say what the shell runs: closing asks rather than kills unseen. */
     public static final String UNCHECKED_JOB = "a program comando could not check";
-    /** Names of shells: a pty whose process carries another name has been replaced by a program ({@code exec ssh host}). */
+    /** Names of shells: a pty whose process carries another name was replaced by a program ({@code exec ssh host}). */
     private static final Set<String> SHELLS = Set.of("sh", "bash", "zsh", "fish", "dash", "ksh", "mksh",
             "tcsh", "csh", "nu", "xonsh", "elvish", "pwsh", "login");
     /** What runs a script named after it: a shell or a language's interpreter. */
@@ -139,7 +139,10 @@ public final class TerminalWidget implements Zoomable, Searchable {
         return root;
     }
 
-    /** The keys a shell reads with Ctrl: the letters, {@code [ \ ]} and space ({@code ^A}…{@code ^Z}, {@code ^[ ^\ ^]}, {@code ^@}). */
+    /**
+     * The keys a shell reads with Ctrl: the letters, {@code [ \ ]} and space ({@code ^A}…{@code ^Z}, {@code ^[ ^\ ^]},
+     * {@code ^@}).
+     */
     static final int MODIFIERS = InputEvent.SHIFT_DOWN_MASK | InputEvent.CTRL_DOWN_MASK | InputEvent.ALT_DOWN_MASK
             | InputEvent.META_DOWN_MASK | InputEvent.ALT_GRAPH_DOWN_MASK;
 
@@ -375,7 +378,7 @@ public final class TerminalWidget implements Zoomable, Searchable {
         return foregroundJobs(shells, boundMillis, TerminalWidget::ps);
     }
 
-    /** {@link #foregroundJobs(Map, long)} with {@code ps} as {@link #foregroundJob(long, String, Function)} takes it. */
+    /** {@link #foregroundJobs(Map, long)}, {@code ps} as {@link #foregroundJob(long, String, Function)} takes it. */
     static <K> Map<K, String> foregroundJobs(Map<K, Shell> shells, long boundMillis, Function<List<String>, List<String>> ps) {
         Map<K, Optional<String>> answered = new ConcurrentHashMap<>();
         Map<K, Thread> forks = new LinkedHashMap<>();
@@ -400,8 +403,10 @@ public final class TerminalWidget implements Zoomable, Searchable {
     }
 
     /**
-     * What the terminal {@code shellPid} leads runs in front, else empty. Fails closed: when {@code ps} fails,
-     * times out or prints what cannot be read, the answer is {@link #UNCHECKED_JOB}, so closing asks.
+     * What the terminal {@code shellPid} leads runs in front, else empty; {@code shell} is the command the pty started,
+     * as a path or a name, and {@code ps} runs {@code ps} with its arguments and returns its non-blank lines, or none
+     * when it failed. Fails closed: when {@code ps} fails, times out or prints what cannot be read, the answer is
+     * {@link #UNCHECKED_JOB}, so closing asks.
      * <ul>
      *   <li>The pty's process no longer carries the name of a shell (the shell ran {@code exec ssh host}): that
      *       program's name.</li>
@@ -411,9 +416,6 @@ public final class TerminalWidget implements Zoomable, Searchable {
      * </ul>
      * With job control off ({@code set +m}, or a shell started without it) a job runs in the shell's own process
      * group, so the two groups match and this check cannot see the job: it reports none.
-     *
-     * @param shell the command the pty started, as a path or a name
-     * @param ps    runs {@code ps} with its arguments; returns its non-blank lines, or none when it failed
      */
     static Optional<String> foregroundJob(long shellPid, String shell, Function<List<String>, List<String>> ps) {
         List<String> self = ps.apply(List.of("-o", "tpgid=,pgid=,comm=", "-p", Long.toString(shellPid)));
@@ -617,7 +619,8 @@ public final class TerminalWidget implements Zoomable, Searchable {
             if (at != null && selectAt(found, at)) {
                 result = forward ? panel.selectNextFindResultItem() : panel.selectPrevFindResultItem();
             } else {
-                result = panel.selectPrevFindResultItem(); // from the first item, "previous" is the last: the latest output
+                // from the first item, "previous" is the last: the latest output
+                result = panel.selectPrevFindResultItem();
             }
         } else {
             result = forward ? panel.selectNextFindResultItem() : panel.selectPrevFindResultItem();

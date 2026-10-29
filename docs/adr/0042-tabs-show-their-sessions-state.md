@@ -40,8 +40,7 @@ attention.
 - The window and the Dock show comando's own icon: a command prompt on a dark glass tile with a rim light and a
   shadow, the chevron in phosphor green with its glow, the block cursor in Claude's colour. The name comando came
   from three ideas (the one who commands, going commando, and the 1985 arcade game played at home on an 8-bit
-  machine); the icon takes the first, the glow the third. A first, pixel-drawn version was replaced the same day. The
-  disk image bundles the same picture as `comando.icns`.
+  machine); the icon takes the first, the glow the third. The disk image bundles the same picture as `comando.icns`.
 
 Miguel decided the states and their precedence, the spinner, the Dock bounce and an icon of comando's own; Claude
 decided how.

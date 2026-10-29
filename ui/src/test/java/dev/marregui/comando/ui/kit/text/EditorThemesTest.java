@@ -10,7 +10,7 @@ import java.awt.Font;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [EditorThemes] applies comando's dark editor theme to an [RSyntaxTextArea].
+/// [EditorThemes] gives an [RSyntaxTextArea] the editors' colours, from the content palette.
 /// - Zooming one editor leaves the other editors' token fonts alone.
 class EditorThemesTest {
 

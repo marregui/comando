@@ -3,8 +3,8 @@
 The development tools behind `core`'s `ToolPort`: Gradle runs with their console and test tree, the Files tab's folders
 read as trees and their entries moved to the Trash, and the git repositories of those folders read, and changed on
 request from the comparison window (roll back, remove, unstage). It also reads a kit's version and backs up its brain
-for `app`. Everything runs outside the reducer and the EDT and ends in an intent or a returned value. It depends on
-`core` only, and never imports Swing or AWT.
+and its root for `app`. Everything runs outside the reducer and the EDT and ends in an intent or a returned value. It
+depends on `core` only, and never imports Swing or AWT.
 
 1. [Architecture](#1-architecture)
 2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
@@ -18,14 +18,14 @@ One package, `dev.marregui.comando.tools`.
 | Class | Does |
 |---|---|
 | `ToolsAdapter` | the port: Gradle runs as child processes, folder reads, the folder poll, moves to the Trash, the repositories' reads, and roll back, removal and unstaging through git and the Trash |
-| `Git` | the `git` command line: the repositories a folder belongs to (at most 20), `git status --porcelain=v2` parsed into a `RepoStatus` and the ignored entries, a changed file's `HEAD` and working-tree versions (a version over 4 MB is not compared); every run bounded (10 s, 32 MB of output), without optional locks or prompts, killed at close |
+| `Git` | the `git` command line: the repositories a folder belongs to (at most 20), `git status --porcelain=v2` parsed into a `RepoStatus` and the ignored entries, a changed file's `HEAD` and working-tree versions (a version over 4 MB is not compared); every run goes through `core`'s `Processes`, its output on temporary files, bounded (10 s, 32 MiB of output, 4 KiB of errors), without optional locks or prompts, killed at close |
 | `GradleBuild` | the build a directory belongs to (the nearest directory at or above it with an executable `gradlew`) and the command: `<gradle-serial> <root> <tasks>`, else `<root>/gradlew --console=plain <tasks>` |
 | `Args` | splits the tasks the user typed as a POSIX shell splits words, without expansion |
 | `TestReports` | JUnit XML written since the run started, as a tree with failures first, each linked to its source line |
 | `FolderTree` | a folder as a tree, ordered and bounded (12 levels; 80 000 names listed, 20 000 entries kept), without hidden entries, excluded names and the entries a caller skips |
 | `ListingLines` | the lines a listing file (an index file that names the entries beside it) gives an entry, taken out once the entry went to the Trash; other lines naming it stay and are reported |
 | `ToolSettings` | where the tools are, by convention: a `gradle-serial` executable on comando's `PATH` when there is one, and the JDK for child processes |
-| `KitGit` | the kit's root and brain as git checkouts: `git describe --tags --always` and the newer `vX.Y.Z` tags of `git ls-remote --tags origin` (`core`'s `KitVersion`); the backup of the brain or the kit's root (`git add -A`, a commit when anything changed whose message says what it adds, `Brain backup <date>: <top folders and counts>` then one line a file, `git push`) only when the folder is a repository's top with a remote; remote runs bounded at 120 s, the commit at 60 s |
+| `KitGit` | the kit's root and brain as git checkouts: `git describe --tags --always` and the newer `vX.Y.Z` tags of `git ls-remote --tags origin` (`core`'s `KitVersion`); the backup of the brain or the kit's root (`git add -A`, a commit when anything changed whose message says what it adds, `Brain backup <date>: <top folders and counts>` or `Kit backup …`, then one line a file, `git push`) only when the folder is a repository's top with a remote; remote runs bounded at 120 s, the commit at 60 s |
 
 **A Gradle run.** The process runs on an errand that copies its output into the run's `Console` and sends
 `CommandFinished` with the exit code, the test tree and the failures. Past 4 Mi characters the rest of the output is
@@ -90,7 +90,9 @@ The terminal is not here: JediTerm is a Swing component and lives in `ui`.
 | `folder-poll` | timed strand | reads the watched repositories, then the open folders, every period | `close()` |
 | `change-read` | strand | a changed file's two versions, one at a time | `close()` |
 | `repo-write` | strand | `RollBack`, `RemoveFiles`, `Unstage` through git (`restore`, `rm --cached`) and the Trash, then the repositories read again | `close()` |
-| `git-out`, `git-err` | forks, per git run | its output and the start of its errors | the run's bound, or `close()` |
+
+A git run starts no thread: it runs on the calling thread through `Processes`, which writes the output to temporary
+files and reads them back once git has exited.
 
 `close()` stops the folder poll, the change reads, the repository writes and every git run, sends SIGTERM to every run's
 process tree and SIGKILL 2 s later, and closes the errands last.

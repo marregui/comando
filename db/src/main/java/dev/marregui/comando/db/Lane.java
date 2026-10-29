@@ -70,7 +70,9 @@ final class Lane implements AutoCloseable {
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
     private volatile Running running;
     private volatile boolean closed;
-    /** Set when close runs the queued tasks on its own thread: the lane thread is still busy, and owns the connection. */
+    /**
+     * Set when close runs the queued tasks on its own thread: the lane thread is still busy, and owns the connection.
+     */
     private volatile boolean drained;
     private int pending; // guarded by this: tasks accepted and not yet ended
     private boolean retired; // guarded by this
@@ -88,7 +90,7 @@ final class Lane implements AutoCloseable {
         this.thread = Threads.strand("db-" + name);
     }
 
-    /** False when the lane has stopped; so for every method that queues work. */
+    /** Queues the connection's open; false when the lane has stopped, as for every method that queues work. */
     boolean open(ConnectionSpec spec) {
         return work(() -> {
             try {
@@ -567,8 +569,9 @@ final class Lane implements AutoCloseable {
     }
 
     /**
-     * The second half of {@link #close}: waits for the lane thread until {@code deadlineNanos} ({@link System#nanoTime});
-     * past it, the tasks still queued are run on the caller as closed. Begins the close first when nobody has.
+     * The second half of {@link #close}: waits for the lane thread until {@code deadlineNanos}
+     * ({@link System#nanoTime}); past it, the tasks still queued are run on the caller as closed. Begins the close
+     * first when nobody has.
      */
     void finishClose(long deadlineNanos) {
         beginClose();

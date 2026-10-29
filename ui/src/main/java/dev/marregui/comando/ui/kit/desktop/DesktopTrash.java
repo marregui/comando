@@ -5,7 +5,10 @@ import java.awt.GraphicsEnvironment;
 import java.io.IOException;
 import java.nio.file.Path;
 
-/** The desktop's Trash, where a file or folder moved there can be taken back from: the Finder's on macOS, none without a display. */
+/**
+ * The desktop's Trash, from which a file or folder moved there can be taken back: the Finder's on macOS, none without
+ * a display.
+ */
 public final class DesktopTrash {
 
     private DesktopTrash() {

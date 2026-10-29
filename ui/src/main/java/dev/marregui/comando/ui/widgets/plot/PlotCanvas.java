@@ -476,7 +476,7 @@ final class PlotCanvas extends JComponent {
         }
     }
 
-    /** "Nice" tick values: steps of 1, 2 or 5 times a power of ten. */
+    /** Round tick values: steps of 1, 2 or 5 times a power of ten. */
     static double[] ticks(double lo, double hi, int target) {
         double range = hi - lo;
         if (!(range > 0) || !Double.isFinite(range)) {

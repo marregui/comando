@@ -50,8 +50,8 @@ class ViewTabsTest {
     }
 
     /// A markdown view titled Results replaced by a table view with the same title keeps its id; the tab shows the new
-    /// table widget in the same place, still selected, and the markdown widget is unmounted. Rendering the same state twice
-    /// creates no second widget.
+    /// table widget in the same place, still selected, and the markdown widget is unmounted. Rendering the same state
+    /// twice creates no second widget.
     @Test
     void aViewReplacedInPlaceByAnotherTypeRendersInTheSameTab() throws Exception {
         Reducer reducer = new Reducer(new FakeClock());

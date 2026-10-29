@@ -24,7 +24,8 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [LocalImages] shows the pictures a document links to from this machine only, never from the network.
-/// - An image link resolves beside the document, in any folder, or by its full path; remote, data, unknown kinds and folders do not.
+/// - An image link resolves beside the document, in any folder, or by its full path; remote, data, unknown kinds and
+///   folders do not.
 /// - PNG, JPEG and GIF show as they are at their own size.
 /// - An SVG loads only files in its folder and embedded data, and fetches nothing from the network.
 /// - An SVG is drawn once into the cache at twice its size, and again when it changes.
@@ -125,7 +126,8 @@ class LocalImagesTest {
     }
 
     /// Where the library's own policy resolves `//host` to a remote file, [LocalImages#beside] refuses other machines,
-    /// web addresses, paths that climb out of the SVG's folder and absolute paths, and allows files under it and `data:`.
+    /// web addresses, paths that climb out of the SVG's folder and absolute paths, and allows files under it and
+    /// `data:`.
     @Test
     void anSvgLoadsOnlyFilesInItsFolderAndEmbeddedData() {
         Path svg = Path.of("/kb/notes/img/flow.svg");
@@ -143,8 +145,8 @@ class LocalImagesTest {
         assertThat(beside.resolveResourceURI(base, "data:image/png;base64,AAAA")).isNotNull();
     }
 
-    /// A 120×60 SVG is ready at that size from a 240×120 PNG in the cache, shown at once when asked again, and redrawn in
-    /// its new colour after the file changes on disk, leaving no temporary files.
+    /// A 120×60 SVG is ready at that size from a 240×120 PNG in the cache, shown at once when asked again, and redrawn
+    /// in its new colour after the file changes on disk, leaving no temporary files.
     @Test
     void anSvgIsDrawnOnceIntoTheCacheTwiceAsLargeAndAgainWhenItChanges() throws Exception {
         Path cache = dir.resolve("cache");
@@ -174,8 +176,8 @@ class LocalImagesTest {
         }
     }
 
-    /// An SVG with only a view box takes the view box's size; a 40000×20000 one is capped at [LocalImages#MAX_SIDE] with
-    /// its 2:1 shape kept.
+    /// An SVG with only a view box takes the view box's size; a 40000×20000 one is capped at [LocalImages#MAX_SIDE]
+    /// with its 2:1 shape kept.
     @Test
     void anSvgWithoutASizeTakesItsViewBoxAndAHugeOneIsDrawnSmaller() throws Exception {
         LocalImages images = images(dir.resolve("cache"));
@@ -191,8 +193,8 @@ class LocalImagesTest {
         });
     }
 
-    /// A missing file, text named `.png`, a broken SVG, a file over [LocalImages#MAX_BYTES], and an SVG with no cache are
-    /// each unavailable with a reason naming the file or the limit.
+    /// A missing file, text named `.png`, a broken SVG, a file over [LocalImages#MAX_BYTES], and an SVG with no cache
+    /// are each unavailable with a reason naming the file or the limit.
     @Test
     void whatCannotBeShownSaysWhy() throws Exception {
         LocalImages images = images(dir.resolve("cache"));

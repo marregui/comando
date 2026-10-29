@@ -22,9 +22,8 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * The window's help: the tutorial, the tool and folder settings as documents, the keyboard and Markdown sheets, About,
- * the log and the data root. Each opens through the window it is given; file and process work
- * runs on a thread of its own, Swing on the EDT.
+ * The window's help: the tutorial, the keyboard and Markdown sheets, About, the logs and the data root. Each opens
+ * through the window it is given; file and process work runs on an errand of the window, Swing on the EDT.
  */
 final class HelpActions {
 
@@ -52,7 +51,9 @@ final class HelpActions {
         this.commands = commands;
     }
 
-    /** The tutorial's file exists from the start, to be opened as any file, not only from Help. */
+    /**
+     * Writes the tutorial's file off the EDT, so it exists from the start and opens as any file, not only from Help.
+     */
     void writeTutorial() {
         Path home = deps.home();
         if (home == null) {
@@ -123,6 +124,7 @@ final class HelpActions {
         deps.intents().dispatch(new Intent.ShowView("", "Markdown", new ViewSpec.Markdown(MarkdownSheet.markdown()), Placement.SIDE));
     }
 
+    /** Opens {@code dir} in the desktop's file manager, off the EDT; a failure is a notice. */
     void reveal(Path dir) {
         UiErrands.start("reveal", () -> {
             try {

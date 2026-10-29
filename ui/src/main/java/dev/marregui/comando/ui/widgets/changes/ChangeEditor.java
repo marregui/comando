@@ -59,11 +59,11 @@ import java.util.function.Consumer;
  * differences, or, for Markdown, both rendered as a panel's preview renders them. The working tree's side may be
  * edited: the differences are worked out again as it changes, undo and redo go back and forth through every edit made
  * here (⌘Z, ⌘⇧Z), and the text is written every second while it has edits, and on leaving the file (another file,
- * closing the window, quitting comando); beside the side's title it says "edited" until written, then "saved". Roll back, in that side's menu, puts
- * {@code HEAD}'s text in its place, as one edit that undo takes back, saves it and takes the file out of the index; a
- * file {@code HEAD} does not have, or one git renamed, goes back through git, its version to the Trash. Remove moves
- * the file to the Trash, from the same menu. A read of the file while it has edits not yet written is left unshown: the edits win.
- * EDT only.
+ * closing the window, quitting comando); beside the side's title it says "edited" until written, then "saved". Roll
+ * back, in that side's menu, puts {@code HEAD}'s text in its place, as one edit that undo takes back, saves it and
+ * takes the file out of the index; a file {@code HEAD} does not have, or one git renamed, goes back through git, its
+ * version to the Trash. Remove moves the file to the Trash, from the same menu. A read of the file while it has edits
+ * not yet written is left unshown: the edits win. EDT only.
  */
 public final class ChangeEditor implements Unmountable {
 
@@ -195,7 +195,7 @@ public final class ChangeEditor implements Unmountable {
         return count.getText();
     }
 
-    /** For tests: whether the switch to the rendered sides is offered, and whether the menu's Roll back and Remove are on. */
+    /** For tests: whether the switch to the rendered sides is offered, and whether Roll back and Remove are on. */
     boolean offered(String action) {
         return switch (action) {
             case "rendered" -> mode.isVisible();
@@ -500,9 +500,9 @@ public final class ChangeEditor implements Unmountable {
     }
 
     /**
-     * Renders both sides, each shaded as its text is: the blocks whose lines the comparison found changed, and the words
-     * inside them, red on {@code HEAD}'s side, green on the working tree's. A comparison not yet worked out for the
-     * texts shown shades nothing.
+     * Renders both sides, each shaded as its text is: the blocks whose lines the comparison found changed, and the
+     * words inside them, red on {@code HEAD}'s side, green on the working tree's. A comparison not yet worked out for
+     * the texts shown shades nothing.
      */
     private void renderSides() {
         Path folder = file().getParent();

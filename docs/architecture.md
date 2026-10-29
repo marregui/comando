@@ -34,7 +34,7 @@ comando is built with and runs on JDK 25.
 | `core` | state, intents, reducer, effects, ports, the stores outside the state, the SQL-or-prompt classifier, the thread kit, the root sessions run on and its kit (`KitRoot`) | JDK only |
 | `testkit` | fakes for every effect port, a fake clock, recorded Claude streams, a synthetic session, a recording intent sink | `core` |
 | `db` | JDBC lanes (one strand per connection), cancel, columnar results, schema reading, queries for Claude | `core`, PostgreSQL JDBC driver |
-| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, subagents' conversations, the plans' usage, the tabs' topics, `comando-kit.json` (`KitJson`) | `core`, Jackson |
+| `claude` | the `claude -p` process per session, the stream-JSON mapper, stored conversations, subagents' conversations, the plans' usage, the tabs' topics, `comando-kit.json` (`KitJson`) and the kit's jobs through its `kit.py` (`KitJobsCli`) | `core`, Jackson |
 | `mcp` | the MCP server on loopback, its tools, the SQL policy, the audit log, the other instances (`Peers`, through the `PeerBroker` interface) | `core`, Jackson |
 | `tools` | Gradle runs, the Files tab's folder reads and moves to the Trash, the folders' git repositories, the kit's version and the brain's and the kit's backups (the `git` command line) | `core` |
 | `ui` | the Swing shell, panels, dialogs, widgets and the kit they share | `core`, FlatLaf (and Extras), jsvg, RSyntaxTextArea and AutoComplete, CommonMark (with tables), java-diff-utils, Jackson, JediTerm, pty4j |
@@ -114,7 +114,7 @@ One immutable record of metadata and ids. Lists hold tens of entries, so lookups
 | `focused` | the panel the user works in; the lower panel follows it |
 | `connections` | each connection's spec, status (closed, opening, open, closing, failed) and last error |
 | `sessions` | each session's spec, status, `system/init` facts, pending turns, cost, context size and window, activity, branch, process and turn start, last turn error, background tasks and whether the last turn handed work to them, whether a checkpoint is due (`Reflection`), whether the running checkpoint clears when it ends |
-| `folders` | the Files tab's folders in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file |
+| `folders` | the Files tab's folders in order: name, path, index file, names left out, icon, whether entries go to the Trash, the listing file, the group whose row shows them ([record 118](adr/0118-brain-and-kit-are-rows-each-one-unit.md)) |
 | `runs` | at most one SQL run per panel: request id, SQL, status, counts, timings, error, whether it is a live plot's background refresh |
 | `approvals` | permission prompts waiting for an answer, from every session |
 | `views` | views placed by Claude or the user: id, title, spec, placement (lower or side), pinned, owning session, version |
@@ -149,10 +149,10 @@ A null panel in `RunText`, `RunGradle` or `EditPanel` means the focused panel.
 
 `Reducer.apply(state, intent)` returns a `Transition`: the next state and a list of effects. It is pure in its
 arguments, a `Clock` and the home folder, so tests drive it with a fake clock. Nothing a user or an adapter sends makes
-it throw: an intent naming a missing panel, connection or session changes nothing or sets a notice. `Reducer` holds the entry
-point and dispatches each intent to the rules of its domain, package-private classes beside it: `PanelRules`,
-`SessionRules`, `TurnRules`, `QueryRules` (runs and connections), `ApprovalRules`, `FolderRules`, `ViewRules`, with
-`Shared` for the helpers several use.
+it throw: an intent naming a missing panel, connection or session changes nothing or sets a notice. `Reducer` holds
+the entry point and dispatches each intent to the rules of its domain, package-private classes beside it:
+`PanelRules`, `SessionRules`, `TurnRules`, `QueryRules` (runs and connections), `ApprovalRules`, `FolderRules`,
+`ViewRules`, with `Shared` for the helpers several use.
 
 | Rule | What the reducer does |
 |---|---|
@@ -255,10 +255,10 @@ code outside the kinds below starts a thread or an executor.
 The rest of a running process is not comando's: the JVM's (GC, compiler, VM), AWT's and Java2D's, the virtual threads'
 scheduler (its carriers: one per core while busy, plus one for each virtual thread held in file or pipe I/O, which is
 why a session's reader is a platform thread), the JDK's `process reaper` (one per child process), the MCP server's
-dispatcher and the libraries' (JNA, a `java.util.Timer`, and the MQTT client's one Netty event loop while this instance is
-connected to the comando Edge). Measured with five sessions: about 45 threads in all, 7 of
-them comando's own platform threads. The GC threads were measured too: halving them to two lengthened the G1 pause p99
-from 5–6 ms to 30–48 ms on `:ui:transcriptGate`, so the JVM keeps its default.
+dispatcher and the libraries' (JNA, a `java.util.Timer`, and the MQTT client's one Netty event loop while this
+instance is connected to the comando Edge). Measured with five sessions: about 45 threads in all, 7 of them comando's
+own platform threads. Halving the GC threads to two lengthened the G1 pause p99 from 5–6 ms to 30–48 ms on
+`:ui:transcriptGate`, so the JVM keeps its default.
 
 Swing timers are not threads, so neither test above sees them, yet one left running keeps AWT, and a JVM that does
 not call `System.exit`, alive. A delay after the last of a burst is a `Debouncer`; a timer that repeats while
@@ -266,12 +266,13 @@ something holds is a `ShownTimer`, which runs only while its owner wants it and 
 component built and never shown starts none (an editor's caret stays hidden, its blink stopped, until the first
 focus).
 
-A program run to its end with a bound (`ps`, `git`, `claude --version`, the keychain tool) goes through `Processes`
-(the streamed tool runs, Mermaid's renderer and fire-and-forget launches keep their own handling):
-its output and input go through temporary files, so no thread holds a carrier in a pipe read while it runs (a K3
-reason: `ThreadBudgetTest` counted five carriers on three cores while two readers per run did), each output kept to a
-bound when read back, and at the bound or an interrupt the program's descendants are killed, then the program. A file written whole goes through `AtomicFiles`: a temporary
-file of a unique name beside the target, moved over it atomically where the file system can.
+A program run to its end with a bound (`ps`, `git`, `claude --version`, the keychain tool) goes through `Processes`;
+the streamed tool runs, Mermaid's renderer and fire-and-forget launches keep their own handling. Its output and input
+go through temporary files, so no thread holds a carrier in a pipe read while it runs (measured with two readers per
+run: five carriers on three cores in `ThreadBudgetTest`). Each output is kept to a bound when read back, and at the
+bound or an interrupt the program's descendants are killed, then the program. A file written whole goes through
+`AtomicFiles`: a temporary file of a unique name beside the target, moved over it atomically where the file system
+can.
 
 | Thread | Kind | Does |
 |---|---|---|
@@ -342,9 +343,9 @@ Bounded waits:
 ## 7. Ownership and exit
 
 `App` creates every long-lived part in dependency order on a stack; `close()` pops it, so parts close in reverse order,
-each once. Three are moved to the end: the comando Edge, which stops after this instance has cleared its presence there and left it, the
-embedded QuestDB, which the lanes may still use, and the window, titled
-"comando — closing…" and greyed under a cover until everything behind it has closed. Every `close()` is idempotent,
+each once. Three are moved to the end: the comando Edge, which stops after this instance has cleared its presence
+there and left it, the embedded QuestDB, which the lanes may still use, and the window, titled with the instance's
+name and "— closing…" and greyed under a cover until everything behind it has closed. Every `close()` is idempotent,
 never throws (failures are logged with the part's name), and is safe on a half-built part; a failed constructor step
 closes what was built and rethrows. A part that takes 100 ms or more to close is named in the log.
 
@@ -373,9 +374,10 @@ closes what was built and rethrows. A part that takes 100 ms or more to close is
 Quit (window, Dock, menu) first asks when work would stop: a running query, a turn, a session's background work, a shell
 job in the foreground, a Gradle run; Cancel is the default. The shells' jobs are looked up off the EDT, every shell
 at once, 2 s in all (a shell not answered by then is asked about as a program comando could not check); the question
-opens, or the quit goes on, once they answer; closing a panel looks up its shell's job the same way. Quit then saves the layout, ends terminals and live plots,
-greys the window, and runs `onQuit`, which starts the `exit` thread: `App.close()`, then `System.exit(0)`. A shutdown
-hook calls `App.close()` too; the second call does nothing.
+opens, or the quit goes on, once they answer; closing a panel looks up its shell's job the same way. Quit then saves
+the layout, ends terminals and live plots, greys the window, and runs `onQuit`, which starts the `exit` thread:
+`App.close()`, then `System.exit(0)`. A shutdown hook calls `App.close()` too; the second call does nothing. `QuitFlow`
+holds the question and the greying.
 
 ## 8. UI packages
 
@@ -437,13 +439,8 @@ rates are UI rates.
 
 `./gradlew build` compiles every module with warnings as errors and runs the unit and adapter tests. The database tests
 run against an embedded QuestDB, and against PostgreSQL through Testcontainers when Docker is there; the Claude adapter
-runs against fake CLI scripts and recorded streams; the MCP server is tested over HTTP.
-
-| Opt-in test | Enabled by | Why |
-|---|---|---|
-| keychain round trip | `./gradlew test -PkeychainTest=true` | writes and deletes a login keychain item |
-| comando Edge live start | `./gradlew :app:test -PedgeLiveTest=true` | downloads the pinned open-source Edge release (359 MB) and runs it |
-| window tests | `./gradlew :app:uiTest` | need a display; their windows open on no screen and take no focus |
+runs against fake CLI scripts and recorded streams; the MCP server is tested over HTTP. The opt-in tests, the window
+tests, CI and the release workflow are in [Build and run](build-and-run.md#2-gradle-tasks).
 
 Gates:
 
@@ -458,17 +455,5 @@ its log ([UI §1](ui.md#1-the-kit)). The packaged runtime keeps `jdk.jfr`, `jdk.
 `jdk.management.agent`, so the installed application can be recorded and watched over JMX
 ([record 54](adr/0054-comando-knows-nothing-of-jfr.md)).
 
-CI (`.github/workflows/build.yml`, Temurin 25, actions pinned by SHA) runs on Ubuntu and macOS for every push to `main`
-and every pull request that changes more than the docs (`docs/tutorial.md` counts as code: the ui jar bundles it), every
-Monday, and on demand (`workflow_dispatch`). Each system runs `build`, `:app:uiTest` (under `xvfb-run` on Ubuntu, on the
-runner's display on macOS), a test summary (`ci/TestReport.java`) and the transcript gate (reported, not enforced, as
-runner speed varies); macOS also builds `:app:dmg` as a packaging smoke test. PostgreSQL through Testcontainers runs on
-Ubuntu only, as macOS runners have no Docker. `dependabot.yml` groups monthly updates of the actions and of the Gradle
-dependencies. `./gradlew :app:dmg` builds an unsigned disk image with `jpackage` and a runtime of the modules listed in
-`app/build.gradle.kts` ([record 16](adr/0016-unsigned-macos-build.md)).
-
-Releases (`.github/workflows/release.yml`): a pushed tag `v*` runs `:app:package` with `-PreleaseVersion=<tag without
-v>` on `macos-latest`, `ubuntu-latest` and `windows-latest`, without the tests, keeps each file as an artifact, and a
-last job on Ubuntu makes the tag's GitHub release with the three files and the commits since the previous tag as its
-notes. Run by hand (`workflow_dispatch`), it builds the three files as artifacts kept 7 days and makes no release unless
-it runs on a tag with dry run off. Nothing is signed; [INSTALL.md](../INSTALL.md) is the install recipe.
+The packages are built with `jpackage` and a runtime of the modules listed in `app/build.gradle.kts`, and nothing is
+signed ([record 16](adr/0016-unsigned-macos-build.md)); [INSTALL.md](../INSTALL.md) is the install recipe.

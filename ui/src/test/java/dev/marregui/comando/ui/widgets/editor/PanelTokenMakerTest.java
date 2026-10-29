@@ -46,8 +46,8 @@ class PanelTokenMakerTest {
         });
     }
 
-    /// A `/reflect` command is a preprocessor token, a `-- @claude` line a comment, and the block after the marker has no
-    /// reserved words.
+    /// A `/reflect` command is a preprocessor token, a `-- @claude` line a comment, and the block after the marker has
+    /// no reserved words.
     @Test
     void aSlashCommandAndAMarkerAreMarked() {
         withEditor(TEXT, e -> {
@@ -69,7 +69,8 @@ class PanelTokenMakerTest {
         });
     }
 
-    /// A block comment continues onto the block's next line, but a blank line ends the block and an unclosed comment with it.
+    /// A block comment continues onto the block's next line, but a blank line ends the block and an unclosed comment
+    /// with it.
     @Test
     void aCommentRunsAcrossLinesOfABlockButNotAcrossABlankLine() {
         withEditor("select 1 /* one\ntwo */ from t\n\n/* three\n\nfour */\n", e -> {

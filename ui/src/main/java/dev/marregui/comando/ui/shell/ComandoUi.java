@@ -102,7 +102,8 @@ import java.util.prefs.Preferences;
 /**
  * The Swing shell and the UI port. Builds the window from its parts and renders the state on the EDT, at most once
  * per pending change; the commands, the layout, the keyboard's routing, the panels' files and quitting are its
- * collaborators'. Owns the dialogs and desktop notifications.
+ * collaborators'. Owns the dialogs and desktop notifications. {@code app} alone constructs it; {@link #start} builds
+ * the window on the EDT and {@link #close} ends it.
  */
 public final class ComandoUi implements UiPort, AutoCloseable {
 
@@ -151,8 +152,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private final Coalescer render = new Coalescer(this::render);
     private final Coalescer transcriptRender = new Coalescer(this::renderTranscript);
     /**
-     * What the window keeps, in {@code settings.json} in the data root; read once from the Java preferences node that kept
-     * it before, which tests point elsewhere with {@code comando.prefsNode}.
+     * What the window keeps, in {@code settings.json} in the data root; without that file, read once from the Java
+     * preferences node, which tests point elsewhere with {@code comando.prefsNode}.
      */
     private final WindowLayout windowLayout;
     /** The window's parts; null before the build. */
@@ -199,7 +200,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return parts == null ? null : parts.frame();
     }
 
-    /** Every command registered once {@link #start} has run, with its key on this desktop; the keyboard tests read them. */
+    /**
+     * Every command registered once {@link #start} has run, with its key on this desktop; the keyboard tests read them.
+     */
     public List<Command> commands() {
         return actions.all();
     }
@@ -209,7 +212,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         help.showAbout();
     }
 
-    /** Shows the kit's newer release on the Files tab's KIT row, and whether the brain and the kit can be backed up. Any thread. */
+    /** Shows the kit's newer release on the Files tab's KIT row, and whether the brain and the kit can be backed up. */
     public void kitStatus(Setup.Status status) {
         kit.show(status);
     }
@@ -258,14 +261,14 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 quitFlow.quit();
             }
         });
-        // Quit from the Dock, the application menu or a logout: without a handler the JDK calls System.exit on
-        // the AppKit thread, and closing then waits on an EDT that may need that thread. The handler runs the
-        // same quit as closing the window; when the user cancels it the response cancels a pending logout too, and
-        // when it goes ahead the response stays unanswered because the exit ends the process.
         // the application menu's About comando opens comando's own card, worded by about.md
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_ABOUT)) {
             Desktop.getDesktop().setAboutHandler(event -> Edt.later(help::showAbout));
         }
+        // Quit from the Dock, the application menu or a logout: without a handler the JDK calls System.exit on
+        // the AppKit thread, and closing then waits on an EDT that may need that thread. The handler runs the
+        // same quit as closing the window; when the user cancels it the response cancels a pending logout too, and
+        // when it goes ahead the response stays unanswered because the exit ends the process.
         if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.APP_QUIT_HANDLER)) {
             Desktop.getDesktop().setQuitHandler((event, response) -> Edt.later(() -> quitFlow.request(response)));
         }
@@ -277,7 +280,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         }, deps.intents(), deps.texts()::write, ResourceActions.Questions.MODAL);
         AppIcon.install(frame);
-        // a named instance carries its name's first letter on its Dock icon, so the icons differ without hovering (record 122)
+        // a named instance's Dock icon carries its name's first letter, so instances differ at a glance (record 122)
         String instance = InstanceName.current();
         if (!instance.isEmpty() && Taskbar.isTaskbarSupported() && Taskbar.getTaskbar().isSupported(Taskbar.Feature.ICON_BADGE_TEXT)) {
             Taskbar.getTaskbar().setIconBadge(instance.substring(0, 1).toUpperCase(Locale.ROOT));
@@ -289,7 +292,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         workspace.onClose(this::closePanel);
         workspace.onOpenFile(this::openFile);
         workspace.outline(windowLayout.outlineShown(), windowLayout::outlineShown);
-        // a link double-clicked anywhere opens its file as a link in a panel's page does: a panel, at its heading (record 94)
+        // a link double-clicked anywhere opens its file as a panel's page does: in a panel, at its heading (record 94)
         Links.install((file, heading) -> {
             if (heading != null) {
                 workspace.headingWhenOpen(file, heading);
@@ -297,7 +300,6 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             openFile(file);
         }, text -> deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, text, false)),
                 session -> deps.state().get().session(session).map(x -> Path.of(x.spec().workDir())).orElse(null));
-        // a panel's "New session ‹title›…": the session dialog, named after the panel, which becomes its own (record 88)
         workspace.topics(topics, deps.transcripts()::of);
         deps.schemas().addListener(schemaListener);
         LowerPanel lower = new LowerPanel(ctx, deps.results(), deps.transcripts(), widgets);
@@ -348,6 +350,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         sidebar.watchOpened(openedFiles);
         StatusBar status = new StatusBar(deps.intents(), this::noticeTarget);
         SessionBar sessionBar = new SessionBar(deps.intents());
+        // a panel's "New session ‹title›…": the session dialog, named after the panel, which joins it (record 88)
         sessionBar.onNewSession(name -> sessionsDialog.showNew(deps.state().get(), name));
         kit.attach(sidebar::kitRelease);
         // a panel's Locate button: its document in the Files tab, else its session in the Sessions tab (record 119)
@@ -471,8 +474,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /**
-     * Opens the log that holds the entry written at {@code atMillis}, scrolled to it, its line flashed; the log as Actions
-     * ▸ Show the log opens it, with a notice, when the logs kept no longer hold it.
+     * Opens the log that holds the entry written at {@code atMillis}, scrolled to it, its line flashed; the log as
+     * Help ▸ Show the log opens it, with a notice, when the logs kept no longer hold it.
      */
     private void showLogEntry(long atMillis) {
         Path dir = deps.logDir();
@@ -496,7 +499,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         return stall.where().isEmpty() ? "[" + stall.kind() + "]" : "[" + stall.kind() + "] " + stall.where();
     }
 
-    /** Once a second: elapsed times on the session bar, the panels' tabs and the results, uptimes on the session rows. */
+    /**
+     * Once a second: elapsed times on the session bar, the panels' tabs and the results, uptimes on the session rows.
+     */
     private void tick() {
         parts.sessionBar().tick();
         parts.workspace().tick();
@@ -613,7 +618,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
     }
 
-    /** Opens the file in a panel, or shows it in the side pane: a binary or large one, and one at a line (record 111). */
+    /**
+     * Opens the file in a panel, or shows it in the side pane: a binary or large one, and one at a line (record 111).
+     */
     @Override
     public void showFile(String session, String path, String baseDir, int line) {
         Edt.run(() -> files.showFile(session, path, baseDir, line));
@@ -643,7 +650,10 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         });
     }
 
-    /** A change read for the comparison window; one that follows the selection, or is read again, shows only in a window already open. */
+    /**
+     * A change read for the comparison window; one that follows the selection, or is read again, shows only in a
+     * window already open.
+     */
     @Override
     public void showChange(ChangeTexts texts, ChangeAsk ask) {
         Edt.run(() -> {
@@ -717,7 +727,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     }
 
     /**
-     * What the sidebar's add, edit and clone buttons open in the dialog; read at the click, as the sidebar is built
+     * What the sidebar's add, edit and clone menu items open in the dialog; read at the click, as the sidebar is built
      * before the dialogs.
      */
     private ResourceActions.Editor editor(Supplier<ResourceDialog<?>> dialog) {
@@ -751,7 +761,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
         files.closePanel(id);
     }
 
-    /** Whether {@code p} is {@code dir} or inside it, links followed: {@code ~/.claude/MEMORY} may be a link into the brain. */
+    /**
+     * Whether {@code p} is {@code dir} or inside it, links followed: {@code ~/.claude/MEMORY} may link into the brain.
+     */
     static boolean inside(Path p, Path dir) {
         return MenuBuilder.inside(p, dir);
     }

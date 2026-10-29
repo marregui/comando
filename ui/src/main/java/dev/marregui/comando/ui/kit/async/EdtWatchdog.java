@@ -105,7 +105,7 @@ public final class EdtWatchdog implements AutoCloseable {
         this.watching = Watchdog.shared().watch(this::look);
     }
 
-    /** How long the latest probe has waited for the EDT, 0 once answered; for tests, which hold the EDT until it is seen. */
+    /** How long the latest probe has waited for the EDT, 0 once answered; for tests, which hold the EDT until seen. */
     long probeWaitMillis() {
         long p = posted;
         return p == 0 || answered == p ? 0 : (System.nanoTime() - p) / 1_000_000;
@@ -141,7 +141,7 @@ public final class EdtWatchdog implements AutoCloseable {
                 || (c.endsWith("RenderQueue$QueueFlusher") && f.getMethodName().equals("flushNow"));
     }
 
-    /** {@code in=} the first frame outside {@code java.base}, {@code comando=} the first comando frame with its line. */
+    /** {@code in=} the first frame outside {@code java.base}; {@code comando=} the first comando frame and its line. */
     static String where(StackTraceElement[] frames) {
         String in = "-";
         String comando = "-";

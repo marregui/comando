@@ -5,8 +5,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 /**
  * The one watchdog thread: every {@link #PERIOD_MILLIS} it runs each look registered with it, in the order they came.
  * It is a platform thread so that it runs while what it watches is held: the reducer, the EDT, or the virtual threads'
- * scheduler. A look must not block; it reads timestamps and, at most, a stack. The thread starts with the first look and
- * ends a period after the last one leaves.
+ * scheduler. A look must not block; it reads timestamps and, at most, a stack. The thread starts with the first look
+ * and ends a period after the last one leaves.
  */
 public final class Watchdog {
 

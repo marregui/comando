@@ -14,10 +14,10 @@ import java.util.function.Consumer;
 /**
  * Runs a program with a time limit and collects what it writes: the one way comando runs a short command. Standard
  * output and standard error go to temporary files, and standard input comes from one, so no thread reads or writes a
- * pipe while the program runs: a pipe read holds its carrier even on a virtual thread (§6, K3), and a program that writes
- * more than a pipe holds still never blocks. Each output keeps at most its limit when read back. Past the time limit, or
- * when the caller is interrupted, the program and every process it started are ended forcibly, children first. The
- * files are deleted before the call returns.
+ * pipe while the program runs: a pipe read holds its carrier even on a virtual thread ({@code docs/architecture.md} §6,
+ * K3), and a program that writes more than a pipe holds still never blocks. Each output keeps at most its limit when
+ * read back. Past the time limit, or when the caller is interrupted, the program and every process it started are ended
+ * forcibly, children first. The files are deleted before the call returns.
  */
 public final class Processes {
 

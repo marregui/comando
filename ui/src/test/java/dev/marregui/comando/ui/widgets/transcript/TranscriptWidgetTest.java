@@ -71,8 +71,8 @@ class TranscriptWidgetTest {
         assertThat(new Color(image.getRGB(399, 299))).as("a corner no block reaches").isEqualTo(Theme.ground());
     }
 
-    /// A transcript rendered while not showing keeps following when more blocks arrive, although an unlaid-out scroll bar
-    /// reads as at the top.
+    /// A transcript rendered while not showing keeps following when more blocks arrive, although an unlaid-out scroll
+    /// bar reads as at the top.
     @Test
     void aTranscriptLoadedWhileHiddenKeepsFollowingTheEnd() {
         // a restored session: the transcript is loaded while the Session tab is hidden, then a new turn arrives
@@ -102,8 +102,8 @@ class TranscriptWidgetTest {
         assertThat(widget.following()).isTrue();
     }
 
-    /// While scrolled away the latest button shows; a prompt replayed from history does not move the view, but a prompt sent
-    /// from a panel follows again and hides the button.
+    /// While scrolled away the latest button shows; a prompt replayed from history does not move the view, but a prompt
+    /// sent from a panel follows again and hides the button.
     @Test
     void aPromptSentFromAPanelFollowsAgainAndHidesTheLatestButton() {
         Transcript t = new Transcript();
@@ -124,8 +124,8 @@ class TranscriptWidgetTest {
         assertThat(widget.latestShown()).isFalse();
     }
 
-    /// A waiting approval changes its tool call's status to "waiting for your approval", the mark comes back after another
-    /// transcript is shown and this one rebuilt, and clearing the approvals restores "running".
+    /// A waiting approval changes its tool call's status to "waiting for your approval", the mark comes back after
+    /// another transcript is shown and this one rebuilt, and clearing the approvals restores "running".
     @Test
     void aWaitingApprovalMarksItsToolCallAndSurvivesAReload() {
         Transcript t = new Transcript();
@@ -177,8 +177,8 @@ class TranscriptWidgetTest {
         return strip.chips().stream().map(JLabel::getText).map(t -> t.replaceAll(" · \\d+ s$", "")).toList();
     }
 
-    /// Chips list running calls in start order, clipped when long, then background sub-agents, never shell tasks; finished
-    /// calls leave, and the strip hides when nothing runs.
+    /// Chips list running calls in start order, clipped when long, then background sub-agents, never shell tasks;
+    /// finished calls leave, and the strip hides when nothing runs.
     @Test
     void theStripNamesRunningSubagentsThenBackgroundOnesAndHidesWhenNoneRun() {
         Transcript t = new Transcript();

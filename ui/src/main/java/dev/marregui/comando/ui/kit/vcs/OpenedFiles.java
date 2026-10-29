@@ -64,7 +64,9 @@ public final class OpenedFiles {
         return paths.contains(path.toAbsolutePath().normalize());
     }
 
-    /** Records that the file at {@code path} was opened; listeners hear of it and the file is written when it is new. */
+    /**
+     * Records that the file at {@code path} was opened; when it is new, listeners hear of it and the file is written.
+     */
     public void add(Path path) {
         if (!keep(path)) {
             return;

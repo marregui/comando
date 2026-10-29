@@ -18,8 +18,8 @@ import java.awt.Color;
 import java.awt.GridBagLayout;
 
 /**
- * The uniform empty, loading and error states. A widget wraps its content once and switches states; no
- * widget draws its own spinner or placeholder.
+ * A widget's content and its empty, loading and error states, one shown at a time. A widget wraps its content once
+ * and switches states, so no widget draws its own progress bar or placeholder.
  */
 public final class Overlay extends JPanel {
 

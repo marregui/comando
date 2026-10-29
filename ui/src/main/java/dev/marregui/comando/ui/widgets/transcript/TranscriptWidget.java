@@ -161,7 +161,7 @@ public final class TranscriptWidget implements Widget<TranscriptView>, Searchabl
     /** What the widget says over a transcript with no blocks yet; empty for a session's own words. */
     private String whenEmpty = "";
 
-    /** Says {@code text} over a transcript with no blocks yet, in place of a session's (a sub-agent's tab, record 109). */
+    /** Says {@code text} over a transcript with no blocks yet, not a session's (a sub-agent's tab, record 109). */
     public void whenEmpty(String text) {
         whenEmpty = text;
     }

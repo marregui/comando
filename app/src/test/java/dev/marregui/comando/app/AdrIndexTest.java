@@ -16,7 +16,7 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// `docs/adr/README.md` is the index of the records, and each row repeats what its record says of itself: a status
-/// copied by hand drifted in 17 rows before this test (2026-10-29), so the index is checked against the records.
+/// copied by hand drifts, so the index is checked against the records.
 /// - every record has one row, and every row names a record that exists
 /// - a row's title, date, deciders and status are the record's heading and header, word for word
 class AdrIndexTest {

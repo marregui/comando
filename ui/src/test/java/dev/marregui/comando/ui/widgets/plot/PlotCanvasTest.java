@@ -15,8 +15,8 @@ class PlotCanvasTest {
 
     private static final double T0 = 1_791_800_000_000d; // 2026-10-12, a whole hour in UTC
 
-    /// Each series is sorted by x with a NaN x last, a series sharing the x array sorts the same way, and a point without a
-    /// finite x counts for no bound; one time point gets ±30 s and ±1 around it.
+    /// Each series is sorted by x with a NaN x last, a series sharing the x array sorts the same way, and a point
+    /// without a finite x counts for no bound; one time point gets ±30 s and ±1 around it.
     @Test
     void preparingSortsEachSeriesByXAndFindsTheBoundsOfFinitePoints() {
         double[] x = {3, 1, 2, Double.NaN};

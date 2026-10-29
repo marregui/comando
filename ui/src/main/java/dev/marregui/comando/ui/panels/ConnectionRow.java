@@ -17,7 +17,7 @@ import java.util.Optional;
  * disconnects (the database in blue while connected, grey while not, faint while it connects or closes, red when it
  * failed, one glyph at one size), and its name, in the accent colour while the focused panel uses it, with a red "prod"
  * for a production database. Everything else is in its menu, and its host, database, user and the rest are on the card
- * the row shows, which has no summary.
+ * its ⓘ shows, which has no summary.
  */
 final class ConnectionRow extends IconRow {
 
@@ -37,7 +37,7 @@ final class ConnectionRow extends IconRow {
         return onIcon(cell, p);
     }
 
-    /** The state icon's tooltip at {@code p}, or empty over the name. */
+    /** The tooltip of the state icon or the ⓘ at {@code p}; empty over the name. */
     Optional<String> tip(Rectangle cell, Point p) {
         return iconTip(cell, p);
     }

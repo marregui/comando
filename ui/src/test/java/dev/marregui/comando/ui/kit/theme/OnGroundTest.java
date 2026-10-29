@@ -17,7 +17,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Every surface stands off every ground, and a card's border off the card.
 class OnGroundTest {
 
-    /// On the default ground the card and user bubble are their historic hex values.
+    /// On the default ground the card is `#2d2d2d` and the user bubble `#2e3a4a`.
     @Test
     void onGraphiteTheSurfacesKeepTheirColours() {
         assertThat(Theme.hex(Theme.CARD)).isEqualTo("#2d2d2d");
@@ -47,8 +47,8 @@ class OnGroundTest {
         }
     }
 
-    /// On each ground the card, its border, the user bubble and the inline code ground differ from the ground by more than
-    /// 0.04 in Oklch, and the border from the card by more than 0.03.
+    /// On each ground the card, its border, the user bubble and the inline code ground differ from the ground by more
+    /// than 0.04 in Oklch, and the border from the card by more than 0.03.
     @Test
     void everySurfaceStandsOffEveryGround() {
         try {

@@ -5,7 +5,7 @@ import java.awt.Component;
 import java.awt.Graphics;
 import java.util.List;
 
-/** Icons in a row, left to right, {@link #GAP} apart and centred on one line: two marks where a cell has room for one icon. */
+/** Icons in a row, left to right, {@link #GAP} apart and centred on one line: two marks where a cell has one icon. */
 public final class RowIcon implements Icon {
 
     static final int GAP = 2;

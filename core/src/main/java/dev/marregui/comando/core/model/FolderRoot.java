@@ -11,8 +11,8 @@ import java.util.Set;
 
 /**
  * A folder the Files tab shows at its top level, configured like a connection: a name, the folder, the file its name
- * opens (its index, such as {@code 00_START_HERE.md}), the names of entries left out besides {@link #ALWAYS_EXCLUDED}, the
- * icon of its row, whether its entries may go to the Trash and the file each of its folders lists them in. The
+ * opens (its index, such as {@code 00_START_HERE.md}), the names of entries left out besides {@link #ALWAYS_EXCLUDED},
+ * the icon of its row, whether its entries may go to the Trash and the file each of its folders lists them in. The
  * folders are configured in {@code folders.json} and lie inside Claude Code's folder ({@link HomeDir#claudeDir}); the
  * Files tab shows them, and moves entries of a deletable folder to the Trash.
  *
@@ -20,14 +20,15 @@ import java.util.Set;
  * dev.marregui.comando.core.resource.FolderKind} holds the rules (a name, a full path, an index inside the folder), and
  * the store applies them to each entry it reads, so one bad entry is left out rather than the whole file.</p>
  *
- * @param index    a path relative to the folder, empty when none
- * @param excludes folder or file names left out wherever they appear, matched ignoring case
+ * @param index     a path relative to the folder, empty when none
+ * @param excludes  folder or file names left out wherever they appear, matched ignoring case
  * @param icon      one of {@link #ICONS}; {@link #FOLDER} when none is set
  * @param deletable whether the Files tab moves the folder's files and subfolders to the Trash; never the folder itself
  * @param listedIn  a file name, such as {@code INDEX.md}, that lists the entries beside it: an entry moved to the Trash
  *                  leaves the nearest such file above it, without its own lines; empty when none
- * @param group     the row the Files tab shows the folders that share it under, such as {@code Brain}: its name in
- *                  capitals, and the folders inside that row when the group has more than one (record 118); empty when none
+ * @param group the row the Files tab shows the folders that share it under, such as {@code Brain}: its name in
+ *                  capitals, and the folders inside that row when the group has more than one (record 118); empty when
+ *                  none
  */
 public record FolderRoot(String name, String path, String index, List<String> excludes, String icon, boolean deletable, String listedIn,
                          String group) {
@@ -41,7 +42,7 @@ public record FolderRoot(String name, String path, String index, List<String> ex
     public static final Set<String> ALWAYS_EXCLUDED = Set.of("node_modules", "build", "target", "__pycache__", "out");
 
     public FolderRoot {
-        // a missing field, as from a hand-edited file, is empty: the folder's rules then leave the entry out, not the file
+        // a missing field (a hand-edited file) is empty: the folder's rules then leave out the entry, not the file
         name = name == null ? "" : name;
         path = path == null ? "" : path;
         index = index == null ? "" : index.strip();
@@ -74,7 +75,10 @@ public record FolderRoot(String name, String path, String index, List<String> ex
     public static final List<String> CLAUDE_STATE = List.of("projects", "file-history", "shell-snapshots", "session-env", "sessions",
             "todos", "statsig", "telemetry", "debug", "cache", "paste-cache", "backups", "ide", "downloads");
 
-    /** A user who never configured a folder sees Claude Code's own ({@link HomeDir#claudeDir}), opening its {@code CLAUDE.md}. */
+    /**
+     * A user who never configured a folder sees Claude Code's own ({@link HomeDir#claudeDir}), opening its
+     * {@code CLAUDE.md}.
+     */
     public static List<FolderRoot> defaults(Path claudeDir) {
         return List.of(new FolderRoot("Claude", claudeDir.toString(), "CLAUDE.md", CLAUDE_STATE));
     }

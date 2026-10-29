@@ -21,8 +21,8 @@ class ShrinkingRowTest {
         return p;
     }
 
-    /// At 340 px all fit; at 240 px the 100 px shortfall is taken 3:1 from the chips' spare 150 and 50 px while the plugs
-    /// keep 20 px inside the row; at 100 px the chips stop at the 50 px minimum.
+    /// At 340 px all fit; at 240 px the 100 px shortfall is taken 3:1 from the chips' spare 150 and 50 px while the
+    /// plugs keep 20 px inside the row; at 100 px the chips stop at the 50 px minimum.
     @Test
     void chipsGiveWayInProportionAndTheRestKeepsItsWidth() {
         JComponent chipA = box(200);

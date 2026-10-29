@@ -71,10 +71,11 @@ import java.util.regex.Pattern;
 /**
  * One editor panel: a header with its connection and its controls, and the command editor; its session is shown in the
  * session bar under the lower panel (record 105). A panel's own text is SQL and prompts; a panel opened on a file, such
- * as a document from the Files tab, is coloured as the file's language, and a Markdown one opens rendered. Such a panel switches between the editor and the rendered text with its header button,
- * which names the other view: Preview while editing, Edit while previewing. An HTML file opens as its text, with a
- * button that opens it in the browser. A link to a file on this machine, of any kind, double-clicked in the rendered
- * text, opens that file in a panel (record 94). A production connection frames the panel in red.
+ * as a document from the Files tab, is coloured as the file's language, and a Markdown one opens rendered. Such a panel
+ * switches between the editor and the rendered text with its header button, which names the other view: Preview while
+ * editing, Edit while previewing. An HTML file opens as its text, with a button that opens it in the browser. A link to
+ * a file on this machine, of any kind, double-clicked in the rendered text, opens that file in a panel (record 94). A
+ * production connection frames the panel in red.
  */
 public final class EditorPanel extends JPanel {
 
@@ -88,11 +89,11 @@ public final class EditorPanel extends JPanel {
     static final int TIP_CHARS = 80;
     private final JButton run = iconButton();
     private final JButton stop = iconButton();
-    /** Empties the panel's own text in one step ⌘Z takes back; a document, a file of its own, is never emptied from here. */
+    /** Empties the panel's own text in one step ⌘Z takes back; a document, a file of its own, is never emptied here. */
     private final JButton clear = iconButton();
     /**
-     * Shows where the panel comes from in the sidebar (record 119): a document's file in the Files tab, else the panel's
-     * session in the Sessions tab; not there for a panel with neither.
+     * Shows where the panel comes from in the sidebar (record 119): a document's file in the Files tab, else the
+     * panel's session in the Sessions tab; not there for a panel with neither.
      */
     private final JButton locate = iconButton();
     private BiConsumer<Path, String> locator = (file, session) -> {
@@ -135,7 +136,7 @@ public final class EditorPanel extends JPanel {
     private String pendingHeading;
     /** How long a log entry asked for waits for the text to hold it and the panel to be laid out. */
     static final long ENTRY_WAIT_MILLIS = 5_000;
-    /** The time of the log entry the text scrolls to once it holds it, {@link Long#MIN_VALUE} when none waits. EDT only. */
+    /** The log entry's time to scroll to once the text holds it, {@link Long#MIN_VALUE} when none waits. EDT only. */
     private long pendingEntry = Long.MIN_VALUE;
     /**
      * A log's view shows its end, so what is appended keeps it there: true when it opens, then as the reader leaves it,
@@ -281,8 +282,8 @@ public final class EditorPanel extends JPanel {
     /**
      * The prompt that has the panel's session rewrite {@code text}, the whole of the panel titled {@code title}, as a
      * professional Markdown document and put it in place of the panel's text: the author's intent and facts kept, the
-     * sentences addressed to Claude dropped, nothing of its own added but the questions the text leaves open; then a few
-     * lines on what changed beyond wording.
+     * sentences addressed to Claude dropped, nothing of its own added but the questions the text leaves open; then a
+     * few lines on what changed beyond wording.
      */
     static String polishPrompt(String title, String text) {
         return "Rewrite the text below, the whole text of the comando panel \"" + title + "\", as a professional Markdown "
@@ -298,8 +299,8 @@ public final class EditorPanel extends JPanel {
     }
 
     /**
-     * The last {@code max} characters of the text, read without copying the rest: where the user writes what a session is
-     * asked, the newest at the end.
+     * The last {@code max} characters of the text, read without copying the rest: where the user writes what a session
+     * is asked, the newest at the end.
      */
     String textEnd(int max) {
         Document d = editor.area().getDocument();
@@ -506,7 +507,7 @@ public final class EditorPanel extends JPanel {
         return outline;
     }
 
-    /** Puts the outline beside the text or the preview when it is wanted and the text renders as a page, else takes it away. */
+    /** Puts the outline beside the text or the preview when wanted and the text renders as a page, else removes it. */
     private void layOutBody() {
         boolean on = outlineWanted && rendersAsPage();
         showOutlineButton();
@@ -627,8 +628,8 @@ public final class EditorPanel extends JPanel {
     }
 
     /**
-     * Scrolls the preview to the heading whose id is {@code fragment}: now when it is laid out, else once it is. A panel
-     * showing its text, not the preview, stays as it is.
+     * Scrolls the preview to the heading whose id is {@code fragment}: now when it is laid out, else once it is. A
+     * panel showing its text, not the preview, stays as it is.
      */
     public void showHeading(String fragment) {
         if (!previewing) {
@@ -733,7 +734,7 @@ public final class EditorPanel extends JPanel {
         }
     }
 
-    /** The folder of the panel's file, which its Markdown's relative image links are read from; null before it has one. */
+    /** The folder of the panel's file, which its Markdown's relative image links resolve against; null before one. */
     private Path folder() {
         return file == null ? null : file.toAbsolutePath().getParent();
     }
@@ -749,7 +750,7 @@ public final class EditorPanel extends JPanel {
         clear.setEnabled(!previewing && editor.area().getDocument().getLength() > 0);
     }
 
-    /** The Locate button: the Files tab's icon for a document, the Sessions tab's for a session's panel, else not there. */
+    /** The Locate button: the Files tab's icon for a document, the Sessions tab's for a session's panel, else none. */
     private void showLocate() {
         boolean isFile = document && file != null;
         boolean isSession = panel != null && !panel.session().isEmpty();
@@ -869,7 +870,8 @@ public final class EditorPanel extends JPanel {
         showLocate();
         Optional<ConnectionState> c = p.connection().isEmpty() ? Optional.empty() : s.connection(p.connection());
         Optional<SessionState> x = p.session().isEmpty() ? Optional.empty() : s.session(p.session());
-        // the connection: one icon in the state's colour, a click connects or disconnects; the name beside it binds another
+        // the connection: one icon in the state's colour, a click connects or disconnects; the name beside it binds
+        // another
         if (c.isPresent()) {
             ConnectionState cs = c.get();
             connectionToggle.setIcon(Icons.get(connectionIcon(cs.status())));

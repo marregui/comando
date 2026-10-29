@@ -17,8 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * tint. The golds lie near a midpoint of the customary wheel, so it hardly turns for them and they share one palette in
  * all but the keywords. A tint with too little chroma to have a hue, silver, leaves the wheel where custom puts it.
  *
- * <p>The terminal's sixteen colours keep their names' hues, since programs mean red by red; diffs lay green and red over
- * the ground; plot series start at the tint and go round the wheel.
+ * <p>The terminal's sixteen colours keep their names' hues, since programs mean red by red; diffs lay green and red
+ * over the ground; plot series start at the tint and go round the wheel.
  */
 public final class ContentPalette {
 
@@ -144,8 +144,8 @@ public final class ContentPalette {
     }
 
     /**
-     * How far the wheel turns, −30° to 30°, so that {@code tintHue} lies midway between two of its hues: the nearest
-     * midpoint of the customary wheel (30°, 90°, … 330°) is moved onto the tint.
+     * How far the wheel turns, −30° to 30°, so that {@code tintHue} lies midway between two of its hues: the
+     * nearest midpoint of the customary wheel (30°, 90°, … 330°) is moved onto the tint.
      */
     static double turn(double tintHue) {
         double off = (((tintHue - 30) % 60) + 60) % 60;

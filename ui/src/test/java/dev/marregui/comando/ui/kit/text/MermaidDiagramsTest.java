@@ -30,7 +30,9 @@ class MermaidDiagramsTest {
     @TempDir
     Path dir;
 
-    /** A stand-in for mmdc: counts its runs, then copies a picture to the -o path, or fails as mmdc does on bad text. */
+    /**
+     * A stand-in for mmdc: counts its runs, then copies a picture to the -o path, or fails as mmdc does on bad text.
+     */
     private Path fakeMmdc(boolean fails) throws Exception {
         Path picture = dir.resolve("picture.png");
         ImageIO.write(new BufferedImage(400, 120, BufferedImage.TYPE_INT_ARGB), "png", picture.toFile());
@@ -80,8 +82,8 @@ class MermaidDiagramsTest {
         }
     }
 
-    /// Three asks with one callback while the script waits at a gate stay pending; once a second diagram queued behind it
-    /// calls back, the shared callback has run exactly once.
+    /// Three asks with one callback while the script waits at a gate stay pending; once a second diagram queued behind
+    /// it calls back, the shared callback has run exactly once.
     @Test
     void theSameCallbackHandedInAgainWhileTheDiagramIsDrawnRunsOnce() throws Exception {
         Path picture = dir.resolve("picture.png");
@@ -113,8 +115,8 @@ class MermaidDiagramsTest {
         }
     }
 
-    /// A script that exits 1 with a parse error yields unavailable with `mmdc cannot draw it:` and the stderr line, and a
-    /// second ask runs no second process.
+    /// A script that exits 1 with a parse error yields unavailable with `mmdc cannot draw it:` and the stderr line, and
+    /// a second ask runs no second process.
     @Test
     void aDiagramMmdcRejectsSaysWhyAndIsNotDrawnAgain() throws Exception {
         MermaidDiagrams diagrams = new MermaidDiagrams(dir.resolve("cache"), fakeMmdc(true));
@@ -196,8 +198,8 @@ class MermaidDiagramsTest {
         }
     }
 
-    /// A script that outlives the 500 ms bound yields unavailable `mmdc did not finish within…`, and the child it started
-    /// is no longer alive.
+    /// A script that outlives the 500 ms bound yields unavailable `mmdc did not finish within…`, and the child it
+    /// started is no longer alive.
     @Test
     void mmdcThatDoesNotFinishIsStoppedWithWhatItStarted() throws Exception {
         Path child = dir.resolve("child.pid");
@@ -232,8 +234,8 @@ class MermaidDiagramsTest {
                 u -> assertThat(u.why()).contains("npm install -g @mermaid-js/mermaid-cli"));
     }
 
-    /// [MermaidDiagrams#key] is a 32-character key equal for the text with blank lines around it and different for other
-    /// text; [MermaidDiagrams#compareVersions] compares Node versions numerically.
+    /// [MermaidDiagrams#key] is a 32-character key equal for the text with blank lines around it and different for
+    /// other text; [MermaidDiagrams#compareVersions] compares Node versions numerically.
     @Test
     void theKeyFollowsTheTextNotItsSurroundingBlankLines() {
         assertThat(MermaidDiagrams.key(FLOW)).isEqualTo(MermaidDiagrams.key("\n" + FLOW + "\n\n"))
@@ -242,9 +244,9 @@ class MermaidDiagramsTest {
         assertThat(MermaidDiagrams.compareVersions("v9.0.0", "v10.0.0")).isNegative();
     }
 
-    /// [HtmlPane#diagramHtml] scales a ready picture to the pane's width keeping its ratio, shows a pending one's escaped
-    /// source under `drawing the diagram…`; [MarkdownHtml#render] hands mermaid fences to the diagram function, or renders
-    /// them as code without one.
+    /// [HtmlPane#diagramHtml] scales a ready picture to the pane's width keeping its ratio, shows a pending one's
+    /// escaped source under `drawing the diagram…`; [MarkdownHtml#render] hands mermaid fences to the diagram function,
+    /// or renders them as code without one.
     @Test
     void thePreviewShowsThePictureNoWiderThanThePaneElseTheSourceUnderANote() {
         Path png = dir.resolve("d.png");

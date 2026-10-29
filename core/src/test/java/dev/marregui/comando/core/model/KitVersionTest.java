@@ -23,7 +23,8 @@ class KitVersionTest {
             7777777777777777777777777777777777777777\trefs/tags/v1.1.9
             """;
 
-    /// Exact release tags and commits past them yield the release, whereas partial tags, plain commits, and blanks do not.
+    /// Exact release tags and commits past them yield the release, whereas partial tags, plain commits, and blanks do
+    /// not.
     @Test
     void aDescribedVersionIsAtOrPastARelease() {
         assertThat(KitVersion.release("v1.2.0")).contains("v1.2.0");
@@ -44,7 +45,8 @@ class KitVersionTest {
         assertThat(KitVersion.newerThan(Optional.of("v1.2.0"), "")).isEmpty();
     }
 
-    /// A described release shows the newest available upgrade, while an untagged commit and a failed remote retain their respective text and problem.
+    /// A described release shows the newest available upgrade, while an untagged commit and a failed remote retain
+    /// their respective text and problem.
     @Test
     void theStatusBarSaysTheKitsNameVersionAndTheNewestRelease() {
         KitVersion past = KitVersion.of("v1.2.0-3-gabc1234\n", LS_REMOTE);

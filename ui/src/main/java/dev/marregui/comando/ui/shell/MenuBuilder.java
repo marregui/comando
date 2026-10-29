@@ -15,7 +15,9 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
-/** The window's menu bar, its corner buttons and the commands the sidebar's menus gain, built from the registered commands. */
+/**
+ * The window's menu bar, its corner buttons and the commands the sidebar's menus gain, from the registered commands.
+ */
 final class MenuBuilder {
 
     private final ComandoUi.Dependencies deps;
@@ -30,7 +32,9 @@ final class MenuBuilder {
         return actions.menuBar(Menus.bar(), Menus::tip, id -> null);
     }
 
-    /** The buttons left of the theme's swatch: the shell, the refreshing plots, the embedded server and the Edge when there are. */
+    /**
+     * The buttons left of the theme's swatch: the shell, the live plots, and the embedded server and the Edge if any.
+     */
     List<CommandButton> cornerButtons() {
         List<CommandButton> buttons = new ArrayList<>();
         for (List<String> ids : Menus.corner(deps.server() != null, deps.edge() != null)) {
@@ -61,7 +65,7 @@ final class MenuBuilder {
 
     /**
      * A Files tab top row's menu (record 118): the brain's row, or a folder inside the brain, gains the brain's backup;
-     * the kit's root's row gains the kit's and the kit's upgrade (record 119), each enabled as it can run.
+     * the kit's root's row gains the kit's backup and its upgrade (record 119), each enabled as it can run.
      */
     void folderMenu(FolderRoot folder, JPopupMenu menu) {
         KitRoot root = deps.setup().root();
@@ -84,7 +88,9 @@ final class MenuBuilder {
         }
     }
 
-    /** Whether {@code p} is {@code dir} or inside it, links followed: {@code ~/.claude/MEMORY} may be a link into the brain. */
+    /**
+     * Whether {@code p} is {@code dir} or inside it, links followed: {@code ~/.claude/MEMORY} may link into the brain.
+     */
     static boolean inside(Path p, Path dir) {
         Path a = p.toAbsolutePath().normalize();
         Path b = dir.toAbsolutePath().normalize();

@@ -62,8 +62,8 @@ class FilesTabTest {
         return new ViewSpec.TreeNode(name, children.length + " entries", List.of(children));
     }
 
-    /// [FilesTab#iconName] maps day folders, `work`, plan, read and index files, and each extension to its icon; an index
-    /// counts only when listed, a `.jfr` is a plain file, and placeholder entries have no icon.
+    /// [FilesTab#iconName] maps day folders, `work`, plan, read and index files, and each extension to its icon; an
+    /// index counts only when listed, a `.jfr` is a plain file, and placeholder entries have no icon.
     @Test
     void eachKindOfEntryHasItsIcon() {
         Set<String> none = Set.of();
@@ -105,9 +105,9 @@ class FilesTabTest {
         assertThat(FilesTab.matches(tree, "zzz")).isEmpty();
     }
 
-    /// Expanding a folder shows a reading row and sends `WatchFolders` without opening its index; the first read opens the
-    /// newest day, later reads keep the user's expansion and send nothing, an unconfigured folder's read is ignored,
-    /// collapsing unwatches, and an empty folder says so.
+    /// Expanding a folder shows a reading row and sends `WatchFolders` without opening its index; the first read opens
+    /// the newest day, later reads keep the user's expansion and send nothing, an unconfigured folder's read is
+    /// ignored, collapsing unwatches, and an empty folder says so.
     @Test
     void openingAFolderWatchesItAndOpensNoFileAndARestoredRowChangesNothing(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("ALPHA.md"), "# index");
@@ -142,8 +142,8 @@ class FilesTabTest {
         assertThat(f.labels()).as("an empty folder says so").containsExactly("KB", "Notes", FilesTab.EMPTY);
     }
 
-    /// A folder whose settings change while open is watched again and its old tree dropped; removing it unwatches it, and
-    /// no folders at all shows the hint to add some.
+    /// A folder whose settings change while open is watched again and its old tree dropped; removing it unwatches it,
+    /// and no folders at all shows the hint to add some.
     @Test
     void aFolderEditedWhileOpenIsWatchedAgainAndReadWithItsNewSettings() throws Exception {
         FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
@@ -166,8 +166,8 @@ class FilesTabTest {
         assertThat(f.labels()).containsExactly("No folders yet: right-click the Files tab to add some");
     }
 
-    /// Typing a filter reads the folders never read once; matching folders stay closed, a filter with no match says so, and
-    /// clearing it shows the tree behind exactly as it was.
+    /// Typing a filter reads the folders never read once; matching folders stay closed, a filter with no match says so,
+    /// and clearing it shows the tree behind exactly as it was.
     @Test
     void theFilterSearchesEveryFolderAndClearingItBringsBackTheTreeAsLeft() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of()), new FolderRoot("KB", "/kb", "", List.of()));
@@ -222,8 +222,8 @@ class FilesTabTest {
         }
     }
 
-    /// The tab has no buttons; a file's menu opens or edits it in a panel, a folder with an index offers to open it, a folder
-    /// without one and outside a repository has no menu, and top folders show their configured icon.
+    /// The tab has no buttons; a file's menu opens or edits it in a panel, a folder with an index offers to open it, a
+    /// folder without one and outside a repository has no menu, and top folders show their configured icon.
     @Test
     void theTabHasNoButtonsAndItsMenusOnlyOpen() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Memory", "/m", "MEMORY.md", List.of(), "memory"),
@@ -257,9 +257,9 @@ class FilesTabTest {
         assertThat(f.tab.rowIcon(folder("Memory"))).as("a subfolder named as a folder").isEmpty();
     }
 
-    /// In a deletable folder, a selection of entries is moved to the Trash only after confirming, and the question names
-    /// the listing file whose lines for them are taken out; the folder's own row, a selection reaching another folder and
-    /// a folder that is not deletable never offer it.
+    /// In a deletable folder, a selection of entries is moved to the Trash only after confirming, and the question
+    /// names the listing file whose lines for them are taken out; the folder's own row, a selection reaching another
+    /// folder and a folder that is not deletable never offer it.
     @Test
     void aDeletableFoldersSelectionGoesToTheTrashAfterAskingAndNoOtherFolderOffersIt() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of(), "scratchpad").withTrash("ALPHA.md"),
@@ -318,7 +318,8 @@ class FilesTabTest {
         throw new AssertionError("no item " + text);
     }
 
-    /// While filtering, the menu is built for the row selected in the filter's tree, not the selection in the tree behind.
+    /// While filtering, the menu is built for the row selected in the filter's tree, not the selection in the tree
+    /// behind.
     @Test
     void whileFilteringTheMenuActsOnTheEntryPickedInTheFiltersTree() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of()), new FolderRoot("KB", "/kb", "ALPHA.md", List.of()));
@@ -347,8 +348,8 @@ class FilesTabTest {
         }
     }
 
-    /// Successive keystrokes ask for the unread folder once; a read that arrives while filtering keeps the user's expansion
-    /// and selection and opens the new folder to its matches.
+    /// Successive keystrokes ask for the unread folder once; a read that arrives while filtering keeps the user's
+    /// expansion and selection and opens the new folder to its matches.
     @Test
     void whileFilteringAReadKeepsWhatTheUserOpenedAndEachUnreadFolderIsAskedForOnce() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Scratchpad", "/s", "", List.of()), new FolderRoot("KB", "/kb", "", List.of()));
@@ -409,9 +410,9 @@ class FilesTabTest {
                 .containsExactly(null, null, null, null, Theme.DANGER);
     }
 
-    /// An untracked file and its folders carry the new-file mark and a modified file's trail the changes mark, each with
-    /// its tooltip, and selection keeps the mark; once the new file is opened its trail goes while the changed file's stays,
-    /// and another new file lights the trail again.
+    /// An untracked file and its folders carry the new-file mark and a modified file's trail the changes mark, each
+    /// with its tooltip, and selection keeps the mark; once the new file is opened its trail goes while the changed
+    /// file's stays, and another new file lights the trail again.
     @Test
     void aNewFileAndEveryFolderOnTheWayDownToItCarryTheMarkOfNewFiles() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Repo", "/s", "", List.of()));
@@ -483,8 +484,8 @@ class FilesTabTest {
         f.edt(() -> assertThat(f.tab.holdsNew(node(f.tree(), 1))).as("another new file in the same folder lights the trail again").isTrue());
     }
 
-    /// Only a repository's root row is a repository row; its double click opens the changes view of that repository, and
-    /// with no changes, or on a folder in no repository, it shows a notice instead.
+    /// Only a repository's root row is a repository row; its double click opens the changes view of that repository,
+    /// and with no changes, or on a folder in no repository, it shows a notice instead.
     @Test
     void aRepositoryRowHasTheGitIconAFlagWhileItHasChangesAndItsDoubleClickOpensTheChangesView() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Repo", "/s", "", List.of()), new FolderRoot("Plain", "/p", "", List.of()));
@@ -518,8 +519,9 @@ class FilesTabTest {
                 "No changes to see in Repo: its working tree matches HEAD", "No changes to see in Plain: no git repository holds it");
     }
 
-    /// A top folder inside a repository carries the marks of the changes inside it alone, widens for them, counts them in
-    /// its tooltip, and its double click shows the changes under that folder only; a clean folder says it matches HEAD.
+    /// A top folder inside a repository carries the marks of the changes inside it alone, widens for them, counts them
+    /// in its tooltip, and its double click shows the changes under that folder only; a clean folder says it matches
+    /// HEAD.
     @Test
     void aFolderRowInARepositoryHasTheMarkOfItsChangesSaysThemAndItsDoubleClickShowsOnlyThose() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Memory", "/c/MEMORY", "", List.of()), new FolderRoot("KB", "/c/KB", "", List.of()));
@@ -560,8 +562,9 @@ class FilesTabTest {
         return tree.getToolTipText(new MouseEvent(tree, MouseEvent.MOUSE_MOVED, 0, 0, r.x + 4, r.y + r.height / 2, 0, false));
     }
 
-    /// Every folder is a top row; a repository's top folder has the changes mark and a tooltip with its branch, a changed
-    /// file's menu offers "Compare with HEAD" sending `OpenChange`, and a folder's menu shows the changes inside it.
+    /// Every folder is a top row; a repository's top folder has the changes mark and a tooltip with its branch, a
+    /// changed file's menu offers "Compare with HEAD" sending `OpenChange`, and a folder's menu shows the changes
+    /// inside it.
     @Test
     void everyFolderIsARowOfTheTreeAndItsMenusShowItsOwnChanges() throws Exception {
         Fixture f = new Fixture(new FolderRoot("Memory", "/c/MEMORY", "", List.of()), new FolderRoot("app", "/r", "", List.of()));

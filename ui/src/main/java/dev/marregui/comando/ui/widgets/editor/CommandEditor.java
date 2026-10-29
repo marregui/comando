@@ -71,7 +71,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
     /** Where the text that ran last starts, and that text; -1 once the text changes. */
     private int lastRunStart = -1;
     private String lastRunText = "";
-    /** The end of the block that ran last; it follows later edits, and a session's insert lands after it. Null when none. */
+    /** The end of the block that ran last; it follows later edits, and a session's insert lands after it. Else null. */
     private Position ranEnd;
     private Consumer<String> onChange = t -> {
     };
@@ -343,7 +343,7 @@ public final class CommandEditor implements Searchable, Unmountable, Zoomable {
         return lastRunText;
     }
 
-    /** The end of the block holding the character before {@code selectionEnd}, or {@code selectionEnd} outside any block. */
+    /** The end of the block holding the character before {@code selectionEnd}; {@code selectionEnd} outside blocks. */
     private static int blockEnd(String text, int selectionEnd) {
         int last = Math.max(0, selectionEnd - 1);
         Blocks.Block b = Blocks.at(text, last);

@@ -2,23 +2,22 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted: increment 1 built (§3); increments 2–4 proposed | Miguel and Claude |
+| 2026-10-29 | accepted; increment 1 built, increments 2–4 proposed (§3) | Miguel and Claude |
 
 ## 1. Context
 
-Miguel, 2026-10-29: "I would like comando to offer an agent the exact same actions a human user has on the UI, so that
-the agent can use comando exactly as I would: creating sessions, doing any action on the sessions that I can do over
-comando from the UI, for every feature."
+Miguel, 2026-10-29: comando should offer an agent the same actions a person has in the window, so that an agent uses
+comando as he does: creating sessions and doing any action on them, for every feature.
 
-An agent-side trial on 2026-10-29 (a second instance, the latest build, a fresh kit and brain) asked a session to set up a
-writer and a reviewer as sessions of their own. It found that no tool creates a session, declined to edit
+An agent-side trial on 2026-10-29 (a second instance, the latest build, a fresh kit and brain) asked a session to set up
+a writer and a reviewer as sessions of their own. It found that no tool creates a session, declined to edit
 `sessions.json` by hand, and asked a person for two clicks. The window dispatches 52 kinds of user intent; the MCP
 server offers 15 tools, none of which creates, starts, stops, renames or removes a session or a panel
 ([record 44](0044-sessions-prompt-each-other-without-asking.md) gave sessions `session_send` and `session_read` only).
 
 The interview settled four choices: a registry of actions with a parity test; every action exposed, with two rules; the
-callers are the instance's sessions and, later, outside clients with a grant (the D10 rule of the fleet vision: read and
-prompt by default, the rest by grant); built in increments, this one first.
+callers are the instance's sessions and, later, outside clients with a grant (read and prompt by default, the rest by
+grant); built in increments, this one first.
 
 ## 2. Decision
 
@@ -27,14 +26,14 @@ prompt by default, the rest by grant); built in increments, this one first.
 | the record | `core`'s `action/Actions` lists every user action once: its tool name, its area, a one-line description, its arguments, its class (`read`, `act`, `destructive`) and the intent (or `Setup` call) it performs | one place says what a person can do; the MCP tools are built from it |
 | what counts as a user action | every `Intent` the window dispatches on a person's gesture, and every `Setup` call a dialog or menu makes (kit, brain, jobs, folders); view state (scrolling, selection, the search box, copy) is not an action: an agent reads the content directly | parity is about what changes or opens, not about pointer gestures |
 | the parity test | `ActionParityTest`: every permitted subtype of `Intent` is classified, as exposed by an action, as an event (sent by an adapter, never by a person) or as excluded with a reason; every `Intent` constructed under `ui/src/main` is exposed or excluded with a reason; every `Setup` method likewise | a feature added to the window without its action fails the build |
-| the tools | one MCP tool per action, named `<area>_<verb>` (`session_new`, `session_start`, `panel_add`, `approval_answer`…); the 15 tools of today keep their names and become entries of the registry; arguments are named as the intent's fields, in snake case | each tool has its own schema and description; Claude Code loads MCP tools on demand, so their number does not fill the context |
+| the tools | one MCP tool per action, named `<area>_<verb>` (`session_new`, `session_start`, `panel_add`, `approval_answer`…); the 15 tools then keep their names and become entries of the registry; arguments are named as the intent's fields, in snake case | each tool has its own schema and description; Claude Code loads MCP tools on demand, so their number does not fill the context |
 | what an agent sees | `ui_get_state` returns what the window shows: panels, sessions with status, model, effort, context, busy and queued turns, pending approvals, connections, folders, open views | an agent decides from the same facts as the person |
 | rule 1: approvals | `approval_answer` is refused when the approval was raised by the caller or by a session the caller created, directly or through others (`SessionSpec.createdBy`) | an approval card exists so that someone other than the asker decides |
 | rule 2: destructive actions | the `destructive` class (removing a session, panel or connection, clearing a transcript; later deleting or rolling back files and unstaging) runs only for a caller the user granted it: the data root's `agents.json`, `{"grants": {"<caller>": ["destructive"]}}`, read at each call; no file, no grant | work an agent can destroy is the user's to hand over; a file of its own, because the window rewrites `settings.json` |
 | record 44's circuit breaker | `session_start` and `session_fresh` run only for a caller that created the session, directly or through others; any caller may stop or interrupt a session ([record 44](0044-sessions-prompt-each-other-without-asking.md) is amended accordingly) | stopping a session stays the user's way to end a loop; an agent still starts the team it made |
-| identity | a session calls with its process token as today; a session an agent creates records its creator in `createdBy` (a session name, or `""` for the user) | rule 1 needs the chain |
-| audit and notice | every call is audited as today, with the caller; every `act` or `destructive` call posts a notice naming the caller and the action | the user sees what agents did in the window |
-| outside clients | a discovery file `run/instance.json` (port, pid, instance name, kit root, version; mode 0600) and client tokens the user issues, read and prompt by default, `act` and `destructive` by grant | the fleet vision's D10; a later increment |
+| identity | a session calls with its process token as before; a session an agent creates records its creator in `createdBy` (a session name, or `""` for the user) | rule 1 needs the chain |
+| audit and notice | every call is audited as before, with the caller; every `act` or `destructive` call posts a notice naming the caller and the action | the user sees what agents did in the window |
+| outside clients | a discovery file `run/instance.json` (port, pid, instance name, kit root, version; mode 0600) and client tokens the user issues, read and prompt by default, `act` and `destructive` by grant | the callers' rule above; a later increment |
 
 ## 3. Increments
 

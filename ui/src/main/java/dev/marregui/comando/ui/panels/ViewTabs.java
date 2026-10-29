@@ -71,7 +71,7 @@ final class ViewTabs {
                 int at = tabs.indexOfComponent(t.widget().component());
                 Widget<ViewSpec> w = t.widget();
                 if (!t.view().spec().type().equals(v.spec().type())) {
-                    // Replaced in place by a view of another type: a new widget in the same tab, selection kept.
+                    // replaced in place by a view of another type: a new widget in the same tab, selection kept
                     w.unmount();
                     w = registry.create(v.spec().type(), context);
                     w.render(v.spec());

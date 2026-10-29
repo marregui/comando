@@ -10,14 +10,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [OpenedFiles] remembers which files the user has opened, bounded, in a file under the data root.
-/// - The files opened are kept normalized, once each, oldest first, written whole with no temporary file left, and read back.
+/// - The files opened are kept normalised, once each, oldest first, written whole with no temporary file left, and
+///   read back.
 /// - Listeners hear only of a file not opened before, until stopped.
 /// - Past the bound the oldest is dropped.
 /// - A store that cannot be read starts empty.
 class OpenedFilesTest {
 
-    /// Adding a path, a path with `..` to another, and the first again writes two normalized lines with no temporary file
-    /// left, and a fresh load contains both and nothing else.
+    /// Adding a path, a path with `..` to another, and the first again writes two normalised lines with no temporary
+    /// file left, and a fresh load contains both and nothing else.
     @Test
     void theFilesOpenedAreKeptAndReadBack(@TempDir Path dir) throws Exception {
         Path store = dir.resolve("home").resolve("opened-files");
@@ -36,7 +37,8 @@ class OpenedFilesTest {
         assertThat(again.contains(Path.of("/a/z.md"))).isFalse();
     }
 
-    /// A repeated add is not heard, a stopped listener hears nothing more, and an in-memory store's write is already complete.
+    /// A repeated add is not heard, a stopped listener hears nothing more, and an in-memory store's write is already
+    /// complete.
     @Test
     void listenersHearOnlyOfAFileNotOpenedBefore() {
         OpenedFiles o = OpenedFiles.inMemory();

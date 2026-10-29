@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [AppConfig] selects and expands the application data-root path.
 ///
 /// - expands a leading home-directory marker
-/// - prioritizes the system property over the environment
+/// - puts the system property before the environment
 /// - defaults to the hidden application directory
 class AppConfigTest {
 

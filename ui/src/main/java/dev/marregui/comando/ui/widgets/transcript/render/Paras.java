@@ -136,8 +136,8 @@ final class Paras {
         }
 
         /**
-         * Paints the glyphs of {@code b} at {@code (x, y)} again along the tint's ramp, highlight at the letters' tops to
-         * shade at the baseline, as light runs down polished metal; the selection and find marks under them stay.
+         * Paints the glyphs of {@code b} at {@code (x, y)} again along the tint's ramp, highlight at the letters' tops
+         * to shade at the baseline, as light runs down polished metal; the selection and find marks under them stay.
          */
         private static void gild(Graphics2D g, TextBox b, int x, int y, Tint tint) {
             for (TextBox.Line line : b.lines()) {
@@ -183,7 +183,8 @@ final class Paras {
 
         /**
          * Grows from the longest of {@code previous} whose text this one's starts with, in the same language: its whole
-         * lines keep their layouts, which a code block streamed one delta at a time would otherwise lay out again each time.
+         * lines keep their layouts, which a code block streamed one delta at a time would otherwise lay out again each
+         * time.
          */
         void growFrom(List<View> previous) {
             for (View v : previous) {

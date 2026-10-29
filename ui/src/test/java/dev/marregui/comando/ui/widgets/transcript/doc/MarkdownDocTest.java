@@ -14,7 +14,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - raw HTML stays text
 class MarkdownDocTest {
 
-    /// A heading and a paragraph with bold, italic and code spans parse into two paragraphs, a soft line break kept as `\n`.
+    /// A heading and a paragraph with bold, italic and code spans parse into two paragraphs, a soft line break kept as
+    /// `\n`.
     @Test
     void headingsParagraphsAndInlineStyles() {
         List<Para> doc = MarkdownDoc.parse("# Title\n\nSome **bold** and *it* and `code`.\nNext line.");
@@ -34,8 +35,8 @@ class MarkdownDocTest {
         assertThat(doc).extracting(p -> ((Para.Text) p).depth()).containsExactly(1, 2, 1, 1, 1);
     }
 
-    /// A fenced block keeps its language, a table keeps its header and styled cells, and a quote and a rule parse as their
-    /// kinds.
+    /// A fenced block keeps its language, a table keeps its header and styled cells, and a quote and a rule parse as
+    /// their kinds.
     @Test
     void codeBlocksTablesQuotesAndRules() {
         List<Para> doc = MarkdownDoc.parse("```java\nint x;\n```\n\n| a | b |\n|---|---|\n| 1 | **2** |\n\n> quoted\n\n---\n");
@@ -88,8 +89,8 @@ class MarkdownDocTest {
         assertThat(p.plain()).isEqualTo("a <b>tag</b> here");
     }
 
-    /// The fence language is the first word of the info string after any spaces, ignoring what follows a tab or spaces; no
-    /// info gives an empty language.
+    /// The fence language is the first word of the info string after any spaces, ignoring what follows a tab or spaces;
+    /// no info gives an empty language.
     @Test
     void aFenceLanguageIsTheFirstWordOfItsInfo() {
         assertThat(MarkdownDoc.parse("```python\ttitle=x\nprint(1)\n```").getFirst()).isEqualTo(new Para.Code("python", "print(1)", 0));

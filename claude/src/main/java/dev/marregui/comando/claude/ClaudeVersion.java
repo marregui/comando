@@ -11,15 +11,14 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The Claude Code version comando was tested against, and a check of the installed one. The stream
- * format is not versioned, so a version outside the tested line gets a warning, not a refusal; features
- * are detected from the {@code capabilities} of the {@code system/init} event.
+ * The Claude Code versions comando is tested against, and a check of the installed one. The stream format is not
+ * versioned, so a version outside the tested range gets a warning, not a refusal.
  */
 public record ClaudeVersion(int major, int minor, int patch) implements Comparable<ClaudeVersion> {
 
     /** The oldest version the stream fixtures were recorded with. */
     public static final ClaudeVersion TESTED_FROM = new ClaudeVersion(2, 1, 296);
-    /** The first version outside the tested line. */
+    /** The first version after the tested range. */
     public static final ClaudeVersion TESTED_UNTIL = new ClaudeVersion(2, 2, 0);
 
     private static final Pattern VERSION = Pattern.compile("(\\d+)\\.(\\d+)\\.(\\d+)");
@@ -51,8 +50,8 @@ public record ClaudeVersion(int major, int minor, int patch) implements Comparab
 
     /**
      * Runs {@code <executable> --version}; the result is a message for the user, empty when the version is tested.
-     * Blocks up to six seconds: five for the CLI to exit, one more for its output; call it off the EDT and off the
-     * reducer thread.
+     * Blocks up to six seconds: five for the CLI to exit, one for it to be gone once ended; call it off the EDT and off
+     * the reducer thread.
      */
     public static String check(String executable, RootLaunch launch) {
         Processes.Result r;

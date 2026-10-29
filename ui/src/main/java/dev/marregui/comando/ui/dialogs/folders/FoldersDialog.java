@@ -31,10 +31,10 @@ import java.util.List;
 import java.util.Optional;
 
 /**
- * The Files tab's folders inside Claude Code's folder in a window over comando's: the {@link FoldersEditor}, Cancel and
- * Save, and {@link #USE_KIT} when comando runs on a kit.
- * Save writes {@code folders.json} once and is on only while every entry passes; Cancel, Esc and the window's close drop
- * the edits, asking first when there are any. EDT only.
+ * The Files tab's folders inside Claude Code's folder in a window over comando's: the {@link FoldersEditor}, Cancel
+ * and Save, and {@link #USE_KIT} when comando runs on a kit. Save writes {@code folders.json} once, when something
+ * changed, and is on only while every entry passes; Cancel, Esc and the window's close drop the edits, asking first
+ * when there are any. EDT only.
  */
 public final class FoldersDialog {
 
@@ -85,7 +85,7 @@ public final class FoldersDialog {
         south.setBorder(BorderFactory.createEmptyBorder(0, Theme.PAD, Theme.PAD, Theme.PAD));
         south.add(buttons, BorderLayout.EAST);
         if (!kitFolders.isEmpty()) {
-            // the kit's layout back at the top, as comando set it at the first start on the kit; the user's folders stay
+            // the kit's folders back at the top, as comando set them at the first start on the kit; the user's stay
             JButton kit = new JButton(USE_KIT);
             kit.setToolTipText("Put the kit's folders the list lacks at its top; the others stay");
             kit.addActionListener(e -> editor.addFirst(kitFolders));
@@ -112,7 +112,9 @@ public final class FoldersDialog {
         return HomeDir.shorten(HomeDir.claudeDir().toString()) + " folders";
     }
 
-    /** Opens the window over {@code owner}; returns when it closes. It offers {@link #USE_KIT} when the kit has folders. */
+    /**
+     * Opens the window over {@code owner}; returns when it closes. Offers {@link #USE_KIT} when the kit has folders.
+     */
     public static void show(Window owner, List<FolderRoot> folders, RepoChanges repos, IntentSink intents, List<FolderRoot> kitFolders) {
         new FoldersDialog(owner, folders, repos, intents, kitFolders).dialog.setVisible(true);
     }

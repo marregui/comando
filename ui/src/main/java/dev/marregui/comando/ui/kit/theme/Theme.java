@@ -76,9 +76,9 @@ public final class Theme {
     /** Text where the look and feel names no label colour. */
     public static final Color TEXT_FALLBACK = new Color(0xDFE1E5);
     /**
-     * A state that asks to be looked at (an approval waiting, a session opening, an edit not saved yet, the flash on what
-     * a click brought into view, the SVGs' amber): Treasure gold's body in every tint, a status colour as {@link #DANGER}
-     * is (record 96). It followed the gold chosen while every tint was a gold (record 83).
+     * A state that asks to be looked at (an approval waiting, a session opening, an edit not saved yet, the flash on
+     * what a click brought into view, the SVGs' amber): Treasure gold's body in every tint, a status colour as
+     * {@link #DANGER} is (record 96).
      */
     public static final Color ATTENTION = Tint.TREASURE.body;
     /** A window's ground that lets the desktop through: an undecorated card with the system's shadow. */
@@ -107,7 +107,9 @@ public final class Theme {
     public static final int PAD = SPACE_M;
     public static final int RADIUS = 8;
 
-    /** A row's height for text {@code textHeight} pixels high: the text with {@link #SPACE_S} around it, up to the grid. */
+    /**
+     * A row's height for text {@code textHeight} pixels high: the text plus {@link #SPACE_S}, rounded up to the grid.
+     */
     public static int rowHeight(int textHeight) {
         int h = textHeight + SPACE_S;
         return (h + SPACE_XS - 1) / SPACE_XS * SPACE_XS;
@@ -154,9 +156,9 @@ public final class Theme {
     }
 
     /**
-     * The first three heading levels' sizes, as multiples of the text's, from the type scale: title, subtitle, body, the
-     * transcript and rendered Markdown pages both (records 96, 102). Levels 4 to 6 are the text's size, bold; the third
-     * is told from them by the headings' serif.
+     * The first three heading levels' sizes, as multiples of the text's, from the type scale: title, subtitle, body,
+     * in the transcript and in rendered Markdown pages (records 96, 102). Levels 4 to 6 are the text's size, bold; the
+     * third is told from them by the headings' serif.
      */
     public static final float[] HEADING_SCALE = {TextSize.TITLE.pt / BASE_SIZE, TextSize.SUBTITLE.pt / BASE_SIZE, 1f};
 
@@ -166,7 +168,7 @@ public final class Theme {
      * from its file.
      */
     static final Path NEW_YORK = Path.of("/System/Library/Fonts/NewYork.ttf");
-    /** The headings' face where New York is not: serifs of Windows, macOS and the Linux distributions, in that order. */
+    /** The headings' face where New York is not: serifs of Windows, macOS and Linux distributions, in that order. */
     static final String[] SERIFS = {"Georgia", "Cambria", "Noto Serif", "DejaVu Serif", "Liberation Serif"};
     private static volatile Tint tint = Tint.TREASURE;
     private static volatile Ground ground = Ground.GRAPHITE;
@@ -245,7 +247,7 @@ public final class Theme {
         }
     }
 
-    /** The monospaced font: JetBrains Mono when installed, then the platform's. */
+    /** The monospaced font: JetBrains Mono when installed, else SF Mono, Menlo, Consolas, DejaVu Sans Mono, Java's. */
     public static Font mono(float size) {
         return mono.deriveFont(size);
     }
@@ -342,19 +344,20 @@ public final class Theme {
         return () -> TINT_LISTENERS.remove(listener);
     }
 
-    /** {@code c} with {@code alpha} (0 to 255): a tint laid over text, such as the accent behind a statement that ran. */
+    /** {@code c} with {@code alpha} (0 to 255): a tint laid over text, such as the accent behind a statement run. */
     public static Color withAlpha(Color c, int alpha) {
         return new Color(c.getRed(), c.getGreen(), c.getBlue(), alpha);
     }
 
     /**
-     * The spinner's bar {@code behindHead} bars behind its head: the tint's body at the head, fading into the ground with
-     * each bar behind; something running is "where I am", which the tint marks (records 100, 103).
+     * The spinner's bar {@code behindHead} bars behind its head: the tint's body at the head, fading into the ground
+     * with each bar behind; something running is "where I am", which the tint marks (records 100, 103).
      */
     public static Color spinnerShade(int behindHead) {
         return Tint.over(ground(), tint.body, 1f - 0.11f * behindHead);
     }
 
+    /** {@code c} as {@code #rrggbb}, for HTML and FlatLaf styles. */
     public static String hex(Color c) {
         return String.format("#%02x%02x%02x", c.getRed(), c.getGreen(), c.getBlue());
     }

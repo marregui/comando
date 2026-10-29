@@ -38,7 +38,7 @@ public final class Capabilities {
         return at(KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner(), type);
     }
 
-    /** The nearest capability owner of type {@code type} at or above {@code c}; null when there is none or c is null. */
+    /** The nearest capability owner of type {@code type} at or above {@code c}; null when there is none. */
     public static <T> T at(Component c, Class<T> type) {
         for (; c != null; c = c.getParent()) {
             if (c instanceof JComponent jc && type.isInstance(jc.getClientProperty(OWNER))) {
@@ -76,6 +76,7 @@ public final class Capabilities {
     private static final Map<Object, WeakReference<JComponent>> ROOTS =
             Collections.synchronizedMap(new WeakHashMap<>());
 
+    /** Makes {@code owner} the capability owner of {@code root} and everything under it. */
     public static void mark(JComponent root, Object owner) {
         root.putClientProperty(OWNER, owner);
         ROOTS.put(owner, new WeakReference<>(root));
@@ -98,9 +99,9 @@ public final class Capabilities {
     }
 
     /**
-     * Asks for a file, starting in {@code dir}, takes the widget's snapshot on the EDT, and writes it on a virtual
-     * thread; {@code outcome} then gets the file and null, or the file and the error, on the EDT. Nothing happens when
-     * the user cancels.
+     * Asks for a file, starting in {@code dir}, takes the widget's snapshot on the EDT, and writes it on the window's
+     * {@code export} errand; {@code outcome} then gets the file and null, or the file and the error, on the EDT.
+     * Nothing happens when the user cancels.
      */
     public static void export(Component parent, Exportable e, Path dir, BiConsumer<Path, String> outcome) {
         Optional<Path> chosen = FileChoosers.save(parent, "Export", dir, e.exportName());

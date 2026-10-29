@@ -21,7 +21,7 @@ import java.util.Map;
 /**
  * The sidebar's look (record 98): the transcript's ground, the transcript's ivory for names, the chosen tint for group
  * headers and the selection: a band of the tint's shade, the name in its highlight and the report's bar down the left
- * edge. Quiet by design: the tint marks structure and the selection, never the running names.
+ * edge. The tint marks structure and the selection, never the names.
  */
 public final class SidebarLook {
 

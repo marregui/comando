@@ -6,12 +6,10 @@
 
 ## 1. Context
 
-Miguel, 2026-10-28: "the BRAIN and KIT folders should have no icons to the left … this way it will be visually
-simpler. the kit part of the app status bar should be removed from there, and the commit number should be present next
-to the repo name. from any panel in the workspace there should be a button next to the clear panel button, to its
-left, after the stop button, that would take me to the files tab, with the file selected in the tree and the tree
-expanded if nodes along the path were collapsed by the user. the session panel has three purple dots before the
-thinking report line … I would much rather not have the icon there." Asked once, he chose: the short commit on the
+Miguel, 2026-10-28: no icons left of BRAIN and KIT; the kit off the status bar and the commit beside the
+repository's name; on every panel, a button left of Clear and after Stop that shows the file in the Files tab,
+selected, with every folder on its way opened even if the user closed it; no purple dots before the thinking line
+in the Session tab. Asked once, he chose: the short commit on the
 BRAIN and KIT rows, the kit's newer release after KIT's; Upgrade the kit… in KIT's menu and the palette; on a panel
 that is no file, the button shows the Sessions tab with the panel's session selected.
 

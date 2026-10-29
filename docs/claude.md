@@ -126,18 +126,19 @@ of text and shown to 400 lines.
   `<session-id>/subagents/`, with per subagent `agent-<id>.jsonl` (its whole conversation, `isSidechain: true`) and
   `agent-<id>.meta.json` (`agentType`, `description`, `toolUseId` = the Agent call's id; `finished: true` once it ended,
   written by Claude Code 2.1.30x and absent from files earlier versions wrote). `SubagentFiles` finds the meta file
-  whose `toolUseId` matches (files over 4 kB skipped). Its `Conversation` reads the file as it grows, parsing only the
-  whole lines added since the last read, and keeps the task (the first line) and the steps from the last 100 tool calls
-  on, saying how many of all it shows; a file over 256 MB is read from where its last 256 MB start, and the view says
-  so.
-- **Following a subagent.** `ClaudeAdapter.showSubagent` reads the file on a thread of its own and shows a lower view;
-  while the session runs it then renders it again every 2 s the file grew. It stops when the stream says the subagent
-  ended (`StreamMapper` records the Agent call's result, unless it is a launch, and a background task's
-  `task_notification`), when the meta file says `finished`, when the session stops, or after 10 min without growth, a
-  backstop: a subagent writes nothing while a tool runs or the model answers, often for minutes. The view's last line
-  says whether it is still updated and, if not, why. At most 4 views follow at once; the oldest stops first. A file
-  missing or moved by a later Claude Code gives the notice "transcript not found for this subagent"
-  ([record 64](adr/0064-sub-agents-are-shown-live.md)).
+  whose `toolUseId` matches (files over 4 kB skipped). Its `Conversation` reads the file as it grows and hands on only
+  the whole lines added since the last read; a file over 256 MB is read from where its last 256 MB start, and the tab
+  says so.
+- **Following a subagent.** `ClaudeAdapter.showSubagent` reads the file on the `subagent-tail` strand into a
+  transcript of its own, shown as a tab in the lower panel (`ViewSpec.Agent`,
+  [record 109](adr/0109-a-sub-agent-is-a-session-tab.md)); while the session runs it reads the lines the file gained
+  every 2 s. It stops when the stream says the subagent ended (`StreamMapper` records the Agent call's result, unless it
+  is a launch, and a background task's `task_notification`), when the meta file says `finished`, when the session
+  stops, or after 10 min without growth, a backstop: a subagent writes nothing while a tool runs or the model answers,
+  often for minutes. The tab's last line says whether it is still updated and, if not, why. At most 4 tabs follow at
+  once; the oldest stops first. A file missing or moved by a later Claude Code gives the notice "transcript not found
+  for this sub-agent" ([record 64](adr/0064-sub-agents-are-shown-live.md)). The tab itself is in
+  [UI §4.2](ui.md#42-the-widget).
 
 ## 2. MCP tools
 
@@ -175,9 +176,10 @@ of text and shown to 400 lines.
 | `instance_ask` | `instance`, `text`, `wait_seconds` | asks another instance: its session `consult-<this instance>` is prompted in its panel, headed `[from instance <name> · session <s>]`; the reply is Claude's text in the turn that answers it; waits up to `wait_seconds` (default 300, ≤ 600), else returns an id |
 | `instance_reply` | `id`, `wait_seconds` | the reply to an earlier `instance_ask` by its id, read once |
 
-**Every action the user has** ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)). The tools above, but the
-three instance tools, are entries of `core`'s registry `action/Actions`; its other entries are tools too, named `<area>_<verb>`, their schemas built from the
-registry, performed by `ActionTools` with the intents the window sends for the same gesture:
+**Every action the user has** ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)). The tools above,
+except the three instance tools, are entries of `core`'s registry `action/Actions`; its other entries are tools too,
+named `<area>_<verb>`, their schemas built from the registry, performed by `ActionTools` with the intents the window
+sends for the same gesture:
 
 | Area | Tools |
 |---|---|
@@ -191,8 +193,8 @@ registry, performed by `ActionTools` with the intents the window sends for the s
 - **Creator.** A session made by `session_new` or `session_import` records its caller in `createdBy` (`sessions.json`;
   empty for the user); an edit keeps it.
 - **First prompt.** `session_new`'s `prompt` goes out as `PromptSession`, which the reducer sends to the session's own
-  panel, the one created with it ([record 88](adr/0088-a-session-and-its-panel-share-a-name.md)), whatever panel the user
-  has focused meanwhile.
+  panel, the one created with it ([record 88](adr/0088-a-session-and-its-panel-share-a-name.md)), whatever panel the
+  user has focused meanwhile.
 - **Rule 1.** `approval_answer` refuses a card raised by the caller, or by a session the caller created, directly or
   through others.
 - **Rule 2.** A destructive tool (marked * above) runs only for a caller the user granted it in the data root's

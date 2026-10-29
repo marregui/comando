@@ -23,10 +23,9 @@ public final class Edt {
     }
 
     /**
-     * Runs now when on the EDT, else on the EDT and waits at most {@code bound} for it: for shutdown, where an EDT
-     * that does not answer must not hold the closing thread forever. A task that has not started by then never runs.
-     *
-     * @return true when the task ran to its end within the bound
+     * Runs now when on the EDT, else on the EDT, waiting at most {@code bound}; true when the task ran to its end
+     * within the bound. For shutdown, where an EDT that does not answer must not hold the closing thread forever. A
+     * task that has not started by then never runs.
      */
     public static boolean runAndWait(Runnable task, Duration bound) {
         if (SwingUtilities.isEventDispatchThread()) {

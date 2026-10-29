@@ -45,9 +45,9 @@ final class Keys {
     }
 
     /**
-     * Every command with a key, with its menu or area, as a Markdown table, grouped by where it belongs, each group where
-     * its first command is; then the keys that belong to one place and are no command:
-     * an approval card's, and those of the find bar, the transcript, the sessions list, the Files tab and the dialogs.
+     * Every command with a key, with its menu or area, as a Markdown table, grouped by where it belongs, each group
+     * where its first command is; then the keys that belong to one place and are no command: an approval card's, and
+     * those of the find bar, the transcript, the sessions list, the Files tab and the dialogs.
      */
     static String markdown(List<Command> commands) {
         StringBuilder md = new StringBuilder("# Keyboard shortcuts\n\n| Where | Command | Keys |\n|---|---|---|\n");

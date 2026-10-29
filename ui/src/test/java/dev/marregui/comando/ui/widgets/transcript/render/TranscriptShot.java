@@ -11,7 +11,7 @@ import java.awt.image.BufferedImage;
 import java.nio.file.Path;
 import java.util.List;
 
-/** Paints the synthetic session at a scroll offset to a PNG: {@code TranscriptShot <file> <offset> [width] [height]}. */
+/** Paints the synthetic session at a scroll offset to a PNG: {@code TranscriptShot <file> <offset> [width] [height]} */
 public final class TranscriptShot {
 
     private TranscriptShot() {

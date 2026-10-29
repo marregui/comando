@@ -29,7 +29,9 @@ class ThreadBudgetTest {
 
     static final Set<String> SINGLETONS = Set.of("comando-reducer", "watchdog");
     static final String SESSION_READER = "claude-out-";
-    /** More sessions than cores: were a session's reader a virtual thread, its pipe read would add a carrier past them. */
+    /**
+     * More sessions than cores: were a session's reader a virtual thread, its pipe read would add a carrier past them.
+     */
     static final int SESSIONS = Runtime.getRuntime().availableProcessors() + 4;
 
     /** Threads that are not comando's: the JVM's, the toolkit's, the libraries' and the test runner's. */
@@ -114,7 +116,7 @@ class ThreadBudgetTest {
 
     /**
      * Each thread {@link #comandos} counts: its class, whether a daemon, its state and its top frames. A thread named
-     * by the JDK's default ({@code Thread-5}) says nothing of its owner; its frames do (macOS CI, 2026-10-27).
+     * by the JDK's default ({@code Thread-5}) says nothing of its owner; its frames do.
      */
     private static String stacks(Set<Long> before) {
         StringBuilder out = new StringBuilder();

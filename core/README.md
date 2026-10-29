@@ -32,11 +32,11 @@ transcripts, console output, schemas) lives in registries the state refers to by
 | `state` | `AppState` and its parts: `PanelState`, `ConnectionState`, `SessionState`, `SqlRun`, `ViewState`, `Notice`, `LowerTab`, `BackgroundTask`, `Reflection`, `RunStatus`, `SessionInfo` |
 | `intent` | `Intent`, the sealed interface of every change; `EditMode` |
 | `action` | `Action` and `Actions`: every user action as an agent's tool, with its arguments and class, and every kind of intent classified (offered, event, window, not yet) ([record 121](../docs/adr/0121-an-agent-has-every-action-the-user-has.md)) |
-| `reduce` | `Reducer` (intent → `Transition`), `Transition` (the next state and its effects) |
+| `reduce` | `Reducer` (intent → `Transition`), which hands each intent to the rules of its domain: `PanelRules`, `SessionRules`, `TurnRules`, `QueryRules`, `ApprovalRules`, `FolderRules`, `ViewRules`, with `Shared` for what several use (notices, the saved lists, fresh panel ids); `Transition` (the next state and its effects) |
 | `effect` | `Effect`, the sealed interface of work for adapters; `EffectRouter`, which hands each effect to its port |
-| `loop` | `StateLoop` (the queue, the reducer thread, its look on the watchdog, listeners and observers); the thread kit: `Threads`, `Errands`, `Watchdog` |
+| `loop` | `StateLoop` (the queue, the reducer thread, its look on the watchdog, listeners and observers); the thread kit: `Threads`, `Errands`, `Watchdog`; `Processes`, the one way a short command is run |
 | `port` | the interfaces adapters implement ([§2](#2-interface-with-the-rest-of-the-app)) |
-| `model` | configuration and values every module shares: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `Topic`, `HomeDir`, `Status`, `StartMode`; `KitRoot` (the Claude Code folder sessions run on and its `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the Files tab's), `KitJob` and `KitJobs` (the kit's scheduled jobs, their checks, and how the scheduler holds them); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for); `LinearTickets` (ticket ids in a text, with the address Linear shows each at) |
+| `model` | configuration and values every module shares: `ConnectionSpec`, `SessionSpec`, `FolderRoot`, `PanelId`, `Approval`, `ApprovalDecision`, `ApprovalKind`, `PermissionRules`, `PlanUsage`, `Topic`, `HomeDir`, `Status`, `StartMode`; `AtomicFiles` (a file written whole or not at all); `InstanceName` (the name an instance goes by, from `-Dcomando.name`, `COMANDO_NAME`, the data root's `instance.json` or its folder); `KitRoot` (the Claude Code folder sessions run on and its `comando-kit.json`), `KitVersion` (the kit's release and the newer ones), `KitFolders` (the kit's folders merged into the Files tab's), `KitJob` and `KitJobs` (the kit's scheduled jobs, their checks, and how the scheduler holds them); `RepoStatus` (a repository's branch and changed files), `ChangeTexts` (a changed file's two versions), `ChangeAsk` (why they are asked for); `LinearTickets` (ticket ids in a text, with the address Linear shows each at) |
 | `resource` | `ResourceKind`, its kinds (`ConnectionKind`, `SessionKind`, `FolderKind`) and `Attribute`: the attributes and rules one dialog edits |
 | `dispatch` | `Blocks`, `Statements`, `Classifier`, `Target`: editor text split into blocks and statements, and the SQL-or-prompt decision |
 | `view` | `ViewSpec` (the data of each view type), `Placement`, `Layout`, `FileView`, `Clip` |
@@ -104,7 +104,9 @@ a case in `EffectRouter` and a port method, which `testkit`'s `RecordingPorts` m
 `loop` also holds the thread kit of [Architecture §6](../docs/architecture.md#6-threads). `Threads` makes strands
 (`strand`, `timedStrand`) and forks on virtual threads, and lists the live ones by name for tests (`Threads.alive`).
 `Errands` holds one owner's errands, interrupted and waited for at its close. `Watchdog` is the one platform thread that
-runs every watchdog's look.
+runs every watchdog's look. `Processes` runs a short command on the caller's thread with its standard streams on
+temporary files, so no thread reads a pipe; past its time limit, or when the caller is interrupted, the command and
+every process it started are ended.
 
 An intent that takes 200 ms or more is a stall, logged once it ends with its slowest part. One of 1 s or more also sets
 a notice whose click opens the log at the hang. The reducer, each effect and each listener are guarded: a failure is
@@ -112,16 +114,16 @@ logged and the loop goes on.
 
 ## 4. Tests
 
-Unit tests, with no I/O except the temporary files of `FileViewTest`, `KitRootTest` and `KitFoldersTest`. They use
-`testkit`'s `FakeClock` and `States`.
+Unit tests, with no I/O except the temporary files of `FileViewTest`, `KitRootTest`, `KitFoldersTest` and
+`AtomicFilesTest`, and the child processes of `ProcessesTest`. They use `testkit`'s `FakeClock` and `States`.
 
 | Subject | Tests |
 |---|---|
 | reducer | `ReducerTest`, `ReducerNoticeAndLayoutTest`, `ReducerSubagentTest`, `ReducerChangesTest` |
-| loop and threads | `StateLoopTest` (`applyNow` drives the loop without its thread), `ThreadKitTest`, `NotifyLoggedTest` |
+| loop and threads | `StateLoopTest` (`applyNow` drives the loop without its thread), `ThreadKitTest`, `NotifyLoggedTest`, `ProcessesTest` |
 | dispatch | `ClassifierTest`, `BlocksTest`, `StatementsTest` |
 | stores | `TranscriptTest`, `TopicSourceTest`, `ConsoleTest`, `FormatsTest` |
-| state and model | `ReflectionTest`, `ResourceKindTest`, `FileViewTest`, `HomeDirTest`, `ClipTest`, `KitRootTest`, `KitVersionTest`, `KitFoldersTest`, `KitJobTest`, `LinearTicketsTest` |
+| state and model | `ReflectionTest`, `ResourceKindTest`, `FileViewTest`, `HomeDirTest`, `InstanceNameTest`, `AtomicFilesTest`, `ClipTest`, `KitRootTest`, `KitVersionTest`, `KitFoldersTest`, `KitJobTest`, `LinearTicketsTest` |
 
 ```
 ./gradlew :core:test

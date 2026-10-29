@@ -84,8 +84,8 @@ class SplitDiffTest {
         assertThat(b).isEmpty();
     }
 
-    /// Two 20 000-line texts with nothing in common under a 100 ms budget finish within 2 s as one whole chunk with a note
-    /// saying so.
+    /// Two 20 000-line texts with nothing in common under a 100 ms budget finish within 2 s as one whole chunk with a
+    /// note saying so.
     @Test
     void aRewriteTooLargeToMatchInTimeIsComparedAsAWholeWithinTheBudget() {
         StringBuilder a = new StringBuilder();
@@ -153,7 +153,8 @@ class SplitDiffTest {
         assertThat(d.previous()).isFalse();
     }
 
-    /// [SplitDiff#show] fills both editors in the file's syntax style, finds the one chunk and highlights the changed word.
+    /// [SplitDiff#show] fills both editors in the file's syntax style, finds the one chunk and highlights the changed
+    /// word.
     @Test
     void showingTwoTextsColoursTheirLinesAndWords() {
         SplitDiff d = new SplitDiff();

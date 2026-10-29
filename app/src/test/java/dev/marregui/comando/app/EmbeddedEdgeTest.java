@@ -170,6 +170,20 @@ class EmbeddedEdgeTest {
         assertThat(EmbeddedEdge.enforce("not xml", ports)).as("unparseable: the template").contains("<port>" + ports.api() + "</port>");
     }
 
+    /// A saved configuration that does not parse is replaced by the template and kept beside it, each such file under
+    /// a name of its own, so a second unparseable file does not overwrite the first.
+    @Test
+    void anUnparseableConfigurationIsKeptBesideTheTemplate() throws Exception {
+        Path conf = Files.createDirectories(dir.resolve("conf"));
+        Files.writeString(conf.resolve("config.xml"), "<hivemq><first>");
+        EmbeddedEdge.prepareConfig(dir.resolve("none"), conf, ports);
+        assertThat(Files.readString(conf.resolve("config.xml"))).contains("<port>" + ports.mqtt() + "</port>");
+        Files.writeString(conf.resolve("config.xml"), "<hivemq><second>");
+        EmbeddedEdge.prepareConfig(dir.resolve("none"), conf, ports);
+        assertThat(conf.resolve("config.xml.unparsed-1")).hasContent("<hivemq><first>");
+        assertThat(conf.resolve("config.xml.unparsed-2")).hasContent("<hivemq><second>");
+    }
+
     /// The same zip again starts the installed home as it is; a newer zip with another top folder replaces the home,
     /// the old one is gone, `installed` names the new zip, and a file in `edge/data` is still there.
     @Test
@@ -283,7 +297,7 @@ class EmbeddedEdgeTest {
     }
 
     /// A port whose only trace is a connection in TIME_WAIT, as the stopped Edge leaves behind the instances' MQTT
-    /// connections, is free; one with a listener is taken (2026-10-29: a start right after a stop was refused).
+    /// connections, is free, so a start right after a stop is not refused; one with a listener is taken.
     @Test
     void aConnectionInTimeWaitLeavesThePortFree() throws Exception {
         InetAddress lo = InetAddress.getLoopbackAddress();
@@ -415,8 +429,6 @@ class EmbeddedEdgeTest {
         }
         assertThat(toggle(edge, sink).text()).isEqualTo("Edge is down");
     }
-
-    // ---- helpers
 
     private EmbeddedEdge edge(Path root, Path owner, String name, RecordingSink sink, Path zip) {
         EmbeddedEdge e = new EmbeddedEdge(root, owner, name, sink, registry, ports, () -> Located.of(zip), pidWritten(root), WAIT);

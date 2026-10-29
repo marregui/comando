@@ -58,9 +58,9 @@ public final class MarkdownHtml {
     }
 
     /**
-     * What changed in a Markdown text, to be shaded where it renders: its source lines (from 0) and the character spans
-     * of its changed words (offsets into the text, end exclusive), as a comparison worked them out; {@code gained} for the
-     * newer side, in green, else the older one, in red.
+     * What changed in a Markdown text, to be shaded where it renders: its source lines (from 0) and the character
+     * spans of its changed words (offsets into the text, end exclusive), as a comparison worked them out;
+     * {@code gained} for the newer side, in green, else the older one, in red.
      */
     public record Marks(Set<Integer> lines, List<int[]> words, boolean gained) {
 
@@ -109,12 +109,16 @@ public final class MarkdownHtml {
             .nodeRendererFactory(NoteLinkHtml::new)
             .build();
 
-    /** What a heading's id leaves out of its text: all but letters, marks, digits, connectors such as {@code _}, spaces and hyphens. */
+    /**
+     * What a heading's id leaves out of its text: all but letters, marks, digits, connectors such as {@code _}, spaces
+     * and hyphens.
+     */
     private static final Pattern NOT_IN_SLUG = Pattern.compile("[^\\p{L}\\p{M}\\p{N}\\p{Pc} -]");
 
     private MarkdownHtml() {
     }
 
+    /** Markdown to HTML, a Mermaid block shown as code. */
     public static String render(String markdown) {
         return render(markdown, null);
     }
@@ -157,8 +161,8 @@ public final class MarkdownHtml {
     }
 
     /**
-     * A heading of a Markdown text, as an outline lists it (record 113): its level (1 to 6), its text as the rendered page
-     * shows it, the id the rendered page gives it, and its line in the text, from 0.
+     * A heading of a Markdown text, as an outline lists it (record 113): its level (1 to 6), its text as the rendered
+     * page shows it, the id the rendered page gives it, and its line in the text, from 0.
      */
     public record Section(int level, String text, String id, int line) {
     }
@@ -225,8 +229,8 @@ public final class MarkdownHtml {
     }
 
     /**
-     * Shades a block whose source lines changed: a paragraph, a heading, a table's cell, a rule, an indented code block,
-     * and a list item whose own text is a paragraph (a tight list writes no paragraph to shade).
+     * Shades a block whose source lines changed: a paragraph, a heading, a table's cell, a rule, an indented code
+     * block, and a list item whose own text is a paragraph (a tight list writes no paragraph to shade).
      */
     private static final class ShadedBlocks implements AttributeProvider {
         private final Marks marks;
@@ -246,7 +250,7 @@ public final class MarkdownHtml {
         }
     }
 
-    /** Writes a run of text with its changed words shaded; a run whose text is not its source's, as with escapes, plainly. */
+    /** Writes a run of text with its changed words shaded; a run whose text is not its source's (an escape), plain. */
     private static final class ShadedWords implements NodeRenderer {
         private final HtmlNodeRendererContext context;
         private final Marks marks;
@@ -288,7 +292,7 @@ public final class MarkdownHtml {
         }
     }
 
-    /** The front matter's facts as a quiet table: the key muted, the value with its links. */
+    /** The front matter's facts as a table: the key muted, the value with its links. */
     static String facts(List<FrontMatter.Fact> facts) {
         StringBuilder out = new StringBuilder("<table class=\"front\" cellspacing=\"0\">");
         for (FrontMatter.Fact f : facts) {
@@ -394,7 +398,10 @@ public final class MarkdownHtml {
         }
     }
 
-    /** A heading's text as GitHub makes it an id: lower case, letters, digits, {@code _} and {@code -} kept, each space a hyphen. */
+    /**
+     * A heading's text as GitHub makes it an id: lower case, without punctuation or symbols but {@code _} and
+     * {@code -}, each space a hyphen.
+     */
     static String slug(String text) {
         return NOT_IN_SLUG.matcher(text.toLowerCase(Locale.ROOT)).replaceAll("").replace(' ', '-');
     }
@@ -500,6 +507,7 @@ public final class MarkdownHtml {
         return out.toString();
     }
 
+    /** {@code text} with {@code &}, {@code <} and {@code >} escaped for HTML. */
     public static String escape(String text) {
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }

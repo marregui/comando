@@ -32,11 +32,12 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
- * The comando Edge as the instances' broker (record 123), on the HiveMQ MQTT client: MQTT 5 to {@code 127.0.0.1}, client
- * id {@code comando-<instance>}. It follows the Edge rather than the window: every {@link #FOLLOW_EVERY}, on a strand of
- * its own, it reads whether the registry names a live Edge, whichever instance started it; it connects when one does and
- * disconnects when none does. While the Edge runs the client reconnects by itself, 1 s after a drop and then at most every
- * {@link #FOLLOW_EVERY}, and renews its subscriptions after every connect; once the Edge stops it stops trying. Messages reach their handlers on one strand, in order.
+ * The comando Edge as the instances' broker (record 123), on the HiveMQ MQTT client: MQTT 5 to {@code 127.0.0.1},
+ * client id {@code comando-<instance>}. It follows the Edge rather than the window: every {@link #FOLLOW_EVERY}, on a
+ * strand of its own, it reads whether the registry names a live Edge, whichever instance started it; it connects when
+ * one does and disconnects when none does. While the Edge runs the client reconnects by itself, 1 s after a drop and
+ * then at most every {@link #FOLLOW_EVERY}, and renews its subscriptions after every connect; once the Edge stops it
+ * stops trying. Messages reach their handlers on one strand, in order.
  */
 final class MqttPeerBroker implements PeerBroker, AutoCloseable {
 
@@ -58,7 +59,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
     private Mqtt5AsyncClient client;
     private boolean closed;
 
-    /** A broker for client {@code clientId} on the Edge's MQTT {@code port}, connected while {@code edgeUp} says the Edge runs. */
+    /** Client {@code clientId} on the Edge's MQTT {@code port}, connected while {@code edgeUp} says the Edge runs. */
     MqttPeerBroker(String clientId, int port, BooleanSupplier edgeUp) {
         this.clientId = clientId;
         this.port = port;
@@ -98,8 +99,9 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
                 // one event loop thread, and the client's callbacks on a strand rather than RxJava's pool
                 .executorConfig().nettyThreads(1).applicationScheduler(Schedulers.from(messages)).applyExecutorConfig()
                 .addConnectedListener(context -> messages.execute(this::onConnect))
-                // reconnects by itself, a first connect that failed included, for as long as it is the client of a running Edge;
-                // the client's automatic reconnect would go on after the Edge stopped, as a disconnect while it waits fails
+                // reconnects by itself, a first connect that failed included, for as long as it is the client of a
+                // running Edge; the client's automatic reconnect would go on after the Edge stopped, as a disconnect
+                // while it waits fails
                 .addDisconnectedListener(context -> {
                     if (wanted(self.get())) {
                         context.getReconnector().reconnect(true).delay(reconnectDelay(context.getReconnector().getAttempts()), TimeUnit.MILLISECONDS);

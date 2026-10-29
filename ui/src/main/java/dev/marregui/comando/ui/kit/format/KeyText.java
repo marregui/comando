@@ -6,11 +6,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Keys named in text, as the desktop names them. comando's texts write keys as macOS does ("⌘⇧T", "⌃2", "⌥⏎"); with
- * the other desktops' keys ({@link Platform#macKeys()} false) each chord reads as there: ⌘ is Ctrl, ⌥ Alt, ⇧ Shift,
- * modifiers in the order Ctrl, Alt, Shift, then the key ("Ctrl+Shift+T"). macOS's ⌃ keys moved where Ctrl would make
- * them another command's: ⌃ with a digit (the lower tabs) is Alt, ⌃⏎ (the line to the terminal) is Ctrl+Alt+⏎; any
- * other ⌃ is Ctrl.
+ * Keys named in text, as the desktop names them. comando's texts write keys as macOS does ("⌘⇧T", "⌃2", "⌥⏎");
+ * with the other desktops' keys ({@link Platform#macKeys()} false) each chord reads as there: ⌘ is Ctrl, ⌥ Alt,
+ * ⇧ Shift, modifiers in the order Ctrl, Alt, Shift, then the key ("Ctrl+Shift+T"). macOS's ⌃ keys move where Ctrl
+ * would make them another command's: ⌃ with a digit (the lower tabs) is Alt, ⌃⏎ (the line to the terminal) is
+ * Ctrl+Alt+⏎; any other ⌃ is Ctrl.
  */
 public final class KeyText {
 

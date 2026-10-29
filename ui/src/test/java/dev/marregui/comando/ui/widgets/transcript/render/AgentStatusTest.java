@@ -15,7 +15,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [TranscriptCanvas]'s sub-agent cards: live status, the running list, revealing a card and the link to its transcript.
+/// [TranscriptCanvas]'s sub-agent cards: live status, the running list, revealing a card and the link to its
+/// transcript.
 /// - a card counts the tools its blocks call, nested ones too, and names the latest, clipped
 /// - the latest tool's summary follows its input when it arrives later
 /// - a finished card says how long it ran and how many tools it called; a failed one keeps its own mark
@@ -109,7 +110,8 @@ class AgentStatusTest {
         assertThat(canvas.lastTool("a1")).hasSize(Items.ToolItem.LAST_CHARS).startsWith("Bash xxx").endsWith("…");
     }
 
-    /// A finished card reads "done · 20 s · 1 tool"; a failed card and a finished non-sub-agent card have an empty status.
+    /// A finished card reads "done · 20 s · 1 tool"; a failed card and a finished non-sub-agent card have an empty
+    /// status.
     @Test
     void aFinishedSubagentSaysHowLongItRanAndHowManyToolsItCalled() {
         Block.ToolCall a = agent("a1", "survey", "");
@@ -131,8 +133,8 @@ class AgentStatusTest {
         assertThat(canvas.cardStatus("t1")).as("other cards say nothing when done").isEmpty();
     }
 
-    /// Running sub-agents are listed with their start times in start order, excluding other tools; a finished one leaves and
-    /// clearing the canvas empties the list.
+    /// Running sub-agents are listed with their start times in start order, excluding other tools; a finished one
+    /// leaves and clearing the canvas empties the list.
     @Test
     void runningAgentsAreInStartOrderAndLeaveWhenTheyFinish() {
         Block.ToolCall first = agent("a1", "first", "");
@@ -183,8 +185,8 @@ class AgentStatusTest {
         assertThat(canvas.reveal("nope")).isFalse();
     }
 
-    /// The card header shows a [TranscriptCanvas#SUBAGENT_SCHEME] link; a single click follows nothing, a double click follows it without toggling
-    /// the card, and elsewhere the header still toggles.
+    /// The card header shows a [TranscriptCanvas#SUBAGENT_SCHEME] link; a single click follows nothing, a double click
+    /// follows it without toggling the card, and elsewhere the header still toggles.
     @Test
     void theHeaderLinkOfASubagentCardOpensItsTranscript() {
         int at = add(agent("a1", "survey", ""));

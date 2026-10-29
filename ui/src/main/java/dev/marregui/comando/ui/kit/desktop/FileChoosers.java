@@ -85,7 +85,7 @@ public final class FileChoosers {
         return c.showSaveDialog(owner) == JFileChooser.APPROVE_OPTION ? Optional.of(c.getSelectedFile().toPath()) : Optional.empty();
     }
 
-    /** The folder a chooser opens in: {@code start} when a folder, its folder when a file, else the nearest existing parent, else home. */
+    /** The folder a chooser opens in: {@code start} when it is one, else its nearest existing parent, else home. */
     static Path startDirectory(Path start) {
         Path home = Path.of(System.getProperty("user.home"));
         if (start == null) {

@@ -202,8 +202,8 @@ class StoreTest {
     /// kit's folders at the next start, and a list the user then empties stays empty.
     @Test
     void aHomeTheDefaultHidTheKitFromIsRepairedAtTheNextStart() throws Exception {
-        // before the fix a fresh home recorded the root in kit-folders and saved no folders file: the Files tab showed only
-        // "Claude", and no later start tried again
+        // a fresh home that recorded the root in kit-folders and saved no folders file: the Files tab would show only
+        // "Claude", and no later start would try again
         Path root = Files.createDirectories(home.resolve("claude/kit"));
         KitRoot kitRoot = new KitRoot(root, Optional.of(new KitRoot.Manifest("k", "BRAIN",
                 List.of(new FolderRoot("Kit", ".", "", List.of(), "folder")), List.of(), List.of(), List.of())), root);

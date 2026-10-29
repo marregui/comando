@@ -14,8 +14,8 @@ import java.util.Set;
 
 /**
  * Finds the file a relative path names when it is not where the path is read from (record 111): a session writes
- * {@code harness/07-fleet-vision.md} for a file deep under its folder, or under a folder of the Files tab. The first root
- * that holds a file whose path ends with the one written gives it; of several there, the newest. The walk is bounded,
+ * {@code notes/07-plan.md} for a file deep under its folder, or under a folder of the Files tab. The first root that
+ * holds a file whose path ends with the one written gives it; of several there, the newest. The walk is bounded,
  * skips build and version-control folders, and runs off the EDT.
  */
 public final class FileSearch {

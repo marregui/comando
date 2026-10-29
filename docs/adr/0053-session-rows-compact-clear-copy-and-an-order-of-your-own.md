@@ -44,6 +44,6 @@ back, and where each is kept.
 `SessionRow.Control` gains `COMPACT`, `CLEAR` and `COPY`; a hidden control is never hit and has no bounds. The session
 list tracks the viewport's width, so the right-hand buttons stay in view and lines clip rather than widen the list. A
 drag starts on a row's text after 5 pixels, draws a line where the row will land, and leaves the click that may follow
-it unanswered. `Reducer.checkpoint` became `sessionCommand`, which the checkpoint, compact and clear share.
+it unanswered. `Reducer.checkpoint` became `TurnRules.sessionCommand`, which the checkpoint, compact and clear share.
 `:app:snapshot` paints the Sessions tab with a running session as `02a-sidebar-sessions.png`; the stream fixture
 `clear.jsonl` holds the recorded clear.

@@ -30,7 +30,9 @@ final class Shared {
         return s.sessions().stream().map(SessionState::spec).toList();
     }
 
-    /** A panel id no panel holds, open or closed, and the state that took it: the reducer makes ids deterministically. */
+    /**
+     * A panel id no panel holds, open or closed, and the state that took it: the reducer makes ids deterministically.
+     */
     record Fresh(AppState state, PanelId id) {
     }
 

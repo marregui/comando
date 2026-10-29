@@ -17,8 +17,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the login shell is an executable run with `-l`
 class PtyTest {
 
-    /// The child prints the real path of its directory, finds stdout a tty, sees `xterm-256color`, and reports the resized
-    /// 50 rows by 132 columns.
+    /// The child prints the real path of its directory, finds stdout a tty, sees `xterm-256color`, and reports the
+    /// resized 50 rows by 132 columns.
     @Test
     void runsInTheDirectoryOnATerminalAndResizes(@TempDir Path dir) throws Exception {
         Pty pty = Pty.start(List.of("/bin/sh", "-c", "pwd; [ -t 1 ] && echo tty; echo $TERM; sleep 1; stty size"), dir, 100, 40);

@@ -12,7 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class SqlPolicyTest {
 
     /// [SqlPolicy#isReadOnly] accepts `SELECT`, `WITH`, `SHOW`, and safe `EXPLAIN` forms but rejects writes, locks,
-    /// multiple statements, dollar quoting, and backslash-escaped or unclosed literals across representative inputs.
+    /// multiple statements, dollar quoting, and backslash-escaped or unclosed literals.
     @ParameterizedTest(name = "{0} -> {1}")
     @CsvSource(delimiter = '|', quoteCharacter = '`', textBlock = """
             SELECT * FROM t                                   | true

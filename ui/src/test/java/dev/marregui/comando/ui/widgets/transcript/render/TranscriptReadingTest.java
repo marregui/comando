@@ -73,8 +73,9 @@ class TranscriptReadingTest {
 
     // ---- hook notes
 
-    /// Three hook notes in a row become one closed group titled with their distinct events and count, a later hook after
-    /// another block starts a new group, every block keeps its item, and the hook text is selectable only once opened.
+    /// Three hook notes in a row become one closed group titled with their distinct events and count, a later hook
+    /// after another block starts a new group, every block keeps its item, and the hook text is selectable only once
+    /// opened.
     @Test
     void consecutiveHookNotesFoldIntoOneClosedLineNamingTheirEvents() {
         add(new Block.UserPrompt("go", "main", ""));
@@ -102,8 +103,8 @@ class TranscriptReadingTest {
         assertThat(canvas.selectionText()).contains("SessionStart:startup: hook output").contains("UserPromptSubmit: watermark 61%");
     }
 
-    /// A hook reply whose JSON only adds context shows that context after the event name; a reply that says more, or plain
-    /// output, is shown whole.
+    /// A hook reply whose JSON only adds context shows that context after the event name; a reply that says more, or
+    /// plain output, is shown whole.
     @Test
     void aHookReplyInJsonReadsAsTheContextItAdds() {
         int at = add(new Block.Note(Block.NoteKind.HOOK, "UserPromptSubmit: " + CONTEXT_JSON, ""));
@@ -129,8 +130,8 @@ class TranscriptReadingTest {
 
     // ---- notes
 
-    /// A long info note starts closed showing its first line, an error note starts open showing all of it, a one-line note
-    /// cannot toggle, and the export always holds the full text.
+    /// A long info note starts closed showing its first line, an error note starts open showing all of it, a one-line
+    /// note cannot toggle, and the export always holds the full text.
     @Test
     void notesOpenAndCloseAndErrorsOpenByDefault() {
         String tail = "Process exited [code=1]\n" + "stderr line\n".repeat(30) + "the cause is on the last line";
@@ -215,8 +216,8 @@ class TranscriptReadingTest {
 
     // ---- find
 
-    /// Find opens every closed card holding a match; clearing it closes them again except the card of the current match and
-    /// one the user toggled during the find.
+    /// Find opens every closed card holding a match; clearing it closes them again except the card of the current match
+    /// and one the user toggled during the find.
     @Test
     void clearingTheFindClosesWhatItOpenedExceptTheCurrentMatchAndUserChoices() {
         List<Integer> bashes = new ArrayList<>();
@@ -264,8 +265,8 @@ class TranscriptReadingTest {
 
     // ---- copy
 
-    /// The export quotes prompts, shows commands as code, clips long results with a count of the lines left out, renders
-    /// edits as diffs and other inputs as JSON, ends turns with their time, and leaves out thinking.
+    /// The export quotes prompts, shows commands as code, clips long results with a count of the lines left out,
+    /// renders edits as diffs and other inputs as JSON, ends turns with their time, and leaves out thinking.
     @Test
     void theMarkdownExportIsAReadableRecord() {
         add(new Block.UserPrompt("Run the tests", "main", ""));
@@ -300,7 +301,8 @@ class TranscriptReadingTest {
         assertThat(canvas.selectionText()).contains("Done.").endsWith("12.0 s");
     }
 
-    /// [Items#fence] uses one more backtick than the longest run in the body, and three with a language for a plain body.
+    /// [Items#fence] uses one more backtick than the longest run in the body, and three with a language for a plain
+    /// body.
     @Test
     void fencesOutgrowBackticksInTheBody() {
         assertThat(Items.fence("", "a ``` b")).startsWith("````\n").endsWith("\n````");
@@ -324,8 +326,8 @@ class TranscriptReadingTest {
 
     // ---- running calls
 
-    /// An approval naming a call marks that call as waiting; one naming no call marks the last running call of its tool;
-    /// clearing approvals restores "running".
+    /// An approval naming a call marks that call as waiting; one naming no call marks the last running call of its
+    /// tool; clearing approvals restores "running".
     @Test
     void aCallHeldUpByAnApprovalSaysSo() {
         add(running("t1", "Bash", "{\"command\":\"rm -rf build\"}"));
@@ -358,8 +360,8 @@ class TranscriptReadingTest {
         assertThat(canvas.cardStatus("late")).as("a finished call waits for nothing").isEmpty();
     }
 
-    /// A running call shows its elapsed seconds, then minutes and seconds, and does not tick while off screen; once finished
-    /// it has no status and no running cards remain.
+    /// A running call shows its elapsed seconds, then minutes and seconds, and does not tick while off screen; once
+    /// finished it has no status and no running cards remain.
     @Test
     void aRunningCallShowsHowLongItHasRun() {
         Block.ToolCall bash = running("b", "Bash", "{\"command\":\"sleep 60\"}");

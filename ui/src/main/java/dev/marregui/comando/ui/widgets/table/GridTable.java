@@ -310,7 +310,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
         return matches;
     }
 
-    /** The rows a find looks at: the first of {@code rows} whose cells, {@code cols} each, fit {@link #MAX_EDT_CELLS}. */
+    /** The rows a find reads: the first of {@code rows} whose cells, {@code cols} each, fit {@link #MAX_EDT_CELLS}. */
     static int findRows(int rows, int cols) {
         return (int) Math.min(Math.min(rows, MAX_EDT_ROWS), Math.max(1L, MAX_EDT_CELLS / Math.max(1, cols)));
     }
@@ -324,7 +324,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
         return new String(a);
     }
 
-    /** Whether {@code text}, lowercased char by char, holds {@code needle}, from {@link #lowerCase}; allocates nothing. */
+    /** Whether {@code text}, lowercased char by char, holds {@code needle} from {@link #lowerCase}; no allocation. */
     static boolean containsLowerCase(CharSequence text, String needle) {
         int n = needle.length();
         for (int i = 0, last = text.length() - n; i <= last; i++) {

@@ -23,8 +23,8 @@ class StatusBarUsageTest {
             new PlanUsage.Window("Week", 43, "Oct 15 at 1:59pm (Europe/Madrid)"),
             new PlanUsage.Window("Fable", 17, "Oct 15 at 1:59pm (Europe/Madrid)")), 1L, "");
 
-    /// [StatusBar#usageText] joins the windows with the session's reset time; [StatusBar#resetTime] takes the clock time
-    /// out of a dated reset and returns empty for a relative one.
+    /// [StatusBar#usageText] joins the windows with the session's reset time; [StatusBar#resetTime] takes the clock
+    /// time out of a dated reset and returns empty for a relative one.
     @Test
     void theBarShowsEachWindowAndWhenTheSessionResets() {
         assertThat(StatusBar.usageText(READ)).isEqualTo("Session 5% (resets 7:19pm) · Week 43% · Fable 17%");
@@ -32,8 +32,8 @@ class StatusBarUsageTest {
         assertThat(StatusBar.resetTime("in 3 hours")).isEmpty();
     }
 
-    /// A failed first read keeps the label hidden; after a good read, a failed one keeps its text, mutes it and adds the
-    /// failure, HTML-escaped, to the tooltip.
+    /// A failed first read keeps the label hidden; after a good read, a failed one keeps its text, mutes it and adds
+    /// the failure, HTML-escaped, to the tooltip.
     @Test
     void aFailedReadKeepsTheLastNumbersMutedAndSaysWhy() throws Exception {
         StatusBar bar = new StatusBar(intent -> {
@@ -53,8 +53,8 @@ class StatusBarUsageTest {
         assertThat(label.getToolTipText()).contains("failed: &lt;b&gt;timeout&lt;/b&gt;");
     }
 
-    /// The second plan's read shows in its own label after the first, prefixed with its name, in danger at 92%, with its
-    /// source in the tooltip; its later failure keeps its last text muted and adds no failure to the first label.
+    /// The second plan's read shows in its own label after the first, prefixed with its name, in danger at 92%, with
+    /// its source in the tooltip; its later failure keeps its last text muted and adds no failure to the first label.
     @Test
     void codexHasALabelOfItsOwnAfterClaudes() throws Exception {
         StatusBar bar = new StatusBar(intent -> {

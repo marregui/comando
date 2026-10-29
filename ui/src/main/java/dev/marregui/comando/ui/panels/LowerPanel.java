@@ -29,9 +29,9 @@ import java.util.Map;
 
 /**
  * The lower panel: Session (the focused panel's transcript), Approvals (every session), Terminal (the focused
- * panel's shell), Results, then one tab per view placed below. The selected tab follows the state, and selecting a tab updates the state.
- * Results and Session carry a dot when something new arrived while another tab was in front. While Session is in front,
- * a Clear button at the end of the tab strip empties it; the conversation goes on, whole in Claude Code's files.
+ * panel's shell), Results, then one tab per view placed below. The selected tab follows the state, and selecting a tab
+ * updates the state. Results and Session carry a dot when something new arrived while another tab was in front. The
+ * palette's Clear empties the Session tab (record 104); the conversation goes on, whole in Claude Code's files.
  */
 public final class LowerPanel {
 
@@ -129,7 +129,7 @@ public final class LowerPanel {
         return tabs.getSelectedComponent();
     }
 
-    /** The placed view in front, or -1 when a fixed tab (Results, Session, Approvals, Terminal) is in front. */
+    /** The placed view in front, or -1 when a fixed tab (Session, Approvals, Terminal, Results) is in front. */
     public long selectedView() {
         int i = tabs.getSelectedIndex();
         return i < FIXED_TABS ? -1 : views.viewAt(i);

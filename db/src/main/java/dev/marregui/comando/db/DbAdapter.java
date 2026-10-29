@@ -34,7 +34,8 @@ import java.util.function.Predicate;
 
 /**
  * The database port: a lane per connection name while the connection is open or has work queued, a timer for
- * health checks and cancel escalation, and virtual threads for connection tests. Every method returns at once.
+ * health checks and cancel escalation, and virtual threads for connection tests and cancels. Every method returns at
+ * once; outcomes come back as intents, and Claude's queries as futures.
  */
 public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
 
@@ -46,7 +47,7 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
     private final DbSettings settings;
     private final int maxCatalogueTables;
     private final ConcurrentHashMap<String, Lane> lanes = new ConcurrentHashMap<>();
-    /** Closes and forgets per connection name, so a schema load can tell it was overtaken. */
+    /** Each connection's count of closes and forgets, so a schema load can tell it was overtaken. */
     private final ConcurrentHashMap<String, AtomicLong> changes = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<Long, Lane> laneOfRequest = new ConcurrentHashMap<>();
     private final ScheduledExecutorService timer;
@@ -194,7 +195,7 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
         return new IllegalStateException("comando is closing; the database is no longer reached");
     }
 
-    /** Counts each connection's closes and forgets: a schema load started before one of them is overtaken by it. */
+    /** The connection's count of closes and forgets: a schema load started before one of them is overtaken by it. */
     private long changes(String name) {
         return changes.computeIfAbsent(name, n -> new AtomicLong()).get();
     }

@@ -49,8 +49,7 @@ class SessionCatalogueTest {
         assertThat(entries.get(1).title()).isEqualTo("Old work");
     }
 
-    /// A nonexistent projects directory yields no entries instead of a listing failure.
-    /// The temporary root has no child with the requested name.
+    /// A missing projects directory gives no entries, not a failure.
     @Test
     void missingDirectoryIsEmpty(@TempDir Path dir) {
         assertThat(new SessionCatalogue(dir.resolve("nope")).scan(10)).isEmpty();

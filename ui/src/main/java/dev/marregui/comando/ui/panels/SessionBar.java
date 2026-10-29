@@ -52,7 +52,8 @@ public final class SessionBar {
     private final JLabel context = new JLabel();
     /**
      * Sends the session's checkpoint command; once its turn has finished, the conversation is cleared and the turn's
-     * summary goes in front of the next prompt. Beside the context, which makes it due; shown while the session has one.
+     * summary goes in front of the next prompt. Beside the context, which makes it due; shown while the session has
+     * one.
      */
     private final JButton checkpoint = EditorPanel.iconButton();
     /** Opens the session dialog on a new session with the name given; the shell's. */
@@ -120,7 +121,7 @@ public final class SessionBar {
         return state == null || panel.session().isEmpty() ? Optional.empty() : state.session(panel.session());
     }
 
-    /** The shown session's models, its own checked, as the sidebar's menu has them; a choice applies now and is saved. */
+    /** The shown session's models, its own checked, as in the sidebar's menu; a choice applies now and is saved. */
     JPopupMenu modelMenu() {
         return choices(s -> SessionsSidebar.modelItems(s, intents));
     }
@@ -156,7 +157,8 @@ public final class SessionBar {
         session.setText(chipText(ss));
         session.setToolTipText(stateText(ss) + " · " + Labels.shortPath(ss.spec().workDir()) + (ss.error().isEmpty() ? "" : " · " + ss.error()));
         toggle.setVisible(true);
-        // the plug, as on the session's row in the sidebar: green while running, grey while not; a ▶ here would read as Run
+        // the plug, as on the session's row in the sidebar: green while running, grey while not; a ▶ here would read as
+        // Run
         toggle.setIcon(Icons.get(ss.status().isUsable() ? "plug" : "unplug"));
         toggle.setToolTipText(ss.status().isUsable() ? "Connected; click to disconnect (stops the session)"
                 : "Disconnected; click to connect (starts the session)");
@@ -248,7 +250,7 @@ public final class SessionBar {
         };
     }
 
-    /** "  working · 12 s" while a turn runs, "  waiting on …" while background work does; the shell's tick refreshes it. */
+    /** "  working · 12 s" while a turn runs, "  waiting on …" while background work runs; the shell's tick moves it. */
     static String busyText(SessionState ss) {
         if (ss.isWaiting()) {
             long since = ss.waitingSinceMillis();
@@ -300,7 +302,7 @@ public final class SessionBar {
         return !ss.spec().checkpoint().isEmpty();
     }
 
-    /** Grey, purple once the session is due its checkpoint: the context filled past the threshold since the last one. */
+    /** Grey; purple once the checkpoint is due: the context filled past the threshold since the last one. */
     static String checkpointIcon(SessionState ss) {
         return ss.reflection().due() ? "checkpoint-due" : "checkpoint";
     }

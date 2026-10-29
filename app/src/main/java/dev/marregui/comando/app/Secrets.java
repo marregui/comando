@@ -14,8 +14,8 @@ import java.util.Optional;
 
 /**
  * Where connection passwords live. On macOS that is the login keychain, through the {@code security}
- * tool, under service {@code comando} and the connection's name; elsewhere, nowhere, and the store keeps
- * the password in its file as before.
+ * tool, under service {@code comando} and the connection's name; elsewhere, nowhere: the store keeps
+ * the password in its connections file.
  */
 interface Secrets {
 
@@ -114,9 +114,9 @@ interface Secrets {
         }
 
         /**
-         * Runs the tool for at most {@link #TIMEOUT_SECONDS}. Its output is read on a thread of its own, so an
-         * unlock prompt nobody answers ends in a timeout instead of blocking the caller (the store's thread, or
-         * startup) for as long as the prompt stays open.
+         * Runs the tool for at most {@link #TIMEOUT_SECONDS}, its output going to a file, so an unlock prompt nobody
+         * answers ends in a timeout instead of blocking the caller (the store's thread, or startup) for as long as the
+         * prompt stays open.
          */
         private static Result run(List<String> cmd) {
             try {

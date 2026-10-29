@@ -146,7 +146,7 @@ final class Menus {
         return List.copyOf(buttons);
     }
 
-    /** The Connections tab's menu: the embedded server's start and stop, then the Edge's, each only when comando has one. */
+    /** The Connections tab's menu: the embedded server's start and stop, then the Edge's, each when comando has one. */
     static List<String> toggles(boolean server, boolean edge) {
         List<String> ids = new ArrayList<>();
         if (server) {

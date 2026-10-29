@@ -6,10 +6,9 @@
 
 ## 1. Context
 
-Miguel: "when I double click on something to open it, when I close it I want to regain focus to the component that
-called it. so I can chain opening and when I close a document, the document or component that triggered the open
-regains focus". Closing a panel focused its left neighbour (the reducer's rule), and the keyboard went wherever Swing
-moved it when the panel's component left the window.
+Miguel: closing what a double click opened should give the keyboard back to the component that opened it, so that
+openings chain and each close returns to the document or component that triggered it. Closing a panel focused its left neighbour (the
+reducer's rule), and the keyboard went wherever Swing moved it when the panel's component left the window.
 
 ## 2. Decision
 
@@ -27,8 +26,13 @@ when the give-back applies, the hand-on to an opener's opener and the bound.
 
 ## 3. Consequences
 
-`FocusOrigins` is added; `ComandoUi.render` reads the keyboard before the panes change. Any panel or view counts as
-opened by where the keyboard was, also one a session opens (`ui_show_view`) or ⌘N makes. ## Amendments
+`FocusOrigins` is added; `ComandoUi.render` has `FocusRouter.beforeRender` read the keyboard before the panes change.
+Any panel or view counts as opened by where the keyboard was, also one a session opens (`ui_show_view`) or ⌘N makes.
+Tested in `FocusOriginsTest` (the chain, a closed opener handing on, an opener outside the panels, closing what the
+keyboard was not in, no opener left) and off screen in `FocusBackUiTest` (`:app:uiTest`: A → B → C closed back to B
+then A, the session list; without the give-back the test fails).
+
+## Amendments
 
 2026-10-28, the rule itself (Miguel, "model 2", after reasoning it from first principles: opened from reviews, a
 click on main, the file closed, and he expected to understand where he should land). Three models were weighed:
@@ -59,8 +63,3 @@ panel in front too (`Origin.front`); giving back brings forward the panel the ke
 lower tab, then the component. Tested in `FocusBackUiTest` (a document opened from the reviews Session tab, with main
 at the reviews panel's right, closed: reviews in front, Session in front, the keyboard in its transcript; without the
 fix it fails).
-
-Tested in `FocusOriginsTest`
-(the chain, a closed opener handing on, an opener outside the panels, closing what the keyboard was not in, no opener
-left) and off screen in `FocusBackUiTest` (`:app:uiTest`: A → B → C closed back to B then A, the session list; without
-the give-back the test fails).

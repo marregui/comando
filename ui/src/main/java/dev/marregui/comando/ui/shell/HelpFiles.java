@@ -58,10 +58,9 @@ final class HelpFiles {
     }
 
     /**
-     * Writes the build's tutorial to {@link #tutorial}, unless the file already holds it: the file is comando's manual,
-     * replaced when this build's differs, so it never falls behind the app.
+     * Writes the build's tutorial to {@link #tutorial}, unless the file already holds it, and returns the file: it is
+     * comando's manual, replaced when this build's differs, so it never falls behind the app.
      *
-     * @return the file
      * @throws IOException when the build carries no tutorial, or the file cannot be written
      */
     static Path writeTutorial(Path home) throws IOException {

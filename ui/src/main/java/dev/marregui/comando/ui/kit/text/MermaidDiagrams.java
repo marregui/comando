@@ -31,9 +31,10 @@ import java.util.stream.Stream;
 /**
  * Mermaid diagrams drawn by {@code mmdc} (the Mermaid command-line renderer) into a cache folder, once per diagram
  * text, for the Markdown preview: Swing's HTML renderer runs no JavaScript, so it shows the picture {@code mmdc} made.
- * A diagram not drawn yet is drawn on a thread of its own, one at a time; whoever asked hears when it is ready. A
- * diagram {@code mmdc} rejects is remembered with the reason, so it is not drawn again until its text changes.
- * Until {@link #install} runs, and where {@code mmdc} is not installed, no diagram is drawn.
+ * A diagram not drawn yet is drawn on the {@code mermaid} strand, one at a time, within {@link #TIMEOUT}; whoever
+ * asked hears when it is ready. A diagram {@code mmdc} rejects is remembered with the reason, so it is not drawn
+ * again until its text changes. Until {@link #install} runs, and where {@code mmdc} is not installed, no diagram is
+ * drawn.
  */
 public final class MermaidDiagrams {
 
@@ -173,7 +174,7 @@ public final class MermaidDiagrams {
                         "-t", "dark", "-b", "transparent", "-s", Integer.toString(SCALE))
                         .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                         .redirectError(err.toFile());
-                // mmdc is a node script: an app started from Finder has no node on its PATH, so its own folder goes first
+                // mmdc is a node script and an app started from Finder has no node on its PATH: mmdc's folder first
                 pb.environment().put("PATH", mmdc.getParent() + File.pathSeparator + System.getenv().getOrDefault("PATH", "/usr/bin:/bin"));
                 p = pb.start();
                 drawing = p;

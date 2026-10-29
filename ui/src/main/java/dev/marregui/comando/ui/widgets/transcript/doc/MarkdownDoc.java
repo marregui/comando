@@ -161,8 +161,8 @@ public final class MarkdownDoc {
 
     /**
      * Adds text, splitting out its links unless the text is inside a link: {@code path:line} references, web addresses,
-     * and {@code [[name]]} notes, shown as their labels ({@link TextLinks}). A code span is as written, as on the rendered
-     * page: only its {@code path:line} references are links.
+     * and {@code [[name]]} notes, shown as their labels ({@link TextLinks}). A code span is as written, as on the
+     * rendered page: only its {@code path:line} references are links.
      */
     private static void text(String text, int style, String href, List<Span> out) {
         if (!href.isEmpty()) {

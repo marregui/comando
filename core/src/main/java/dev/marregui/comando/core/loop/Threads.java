@@ -63,7 +63,9 @@ public final class Threads {
         return t;
     }
 
-    /** A strand: one virtual thread running its tasks in order, for one resource (a connection, the store, a renderer). */
+    /**
+     * A strand: one virtual thread running its tasks in order, for one resource (a connection, the store, a renderer).
+     */
     public static ExecutorService strand(String name) {
         return Executors.newSingleThreadExecutor(virtualFactory(name));
     }

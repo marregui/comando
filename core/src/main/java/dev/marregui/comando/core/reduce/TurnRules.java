@@ -107,15 +107,15 @@ final class TurnRules {
     }
 
     /**
-     * A command (the checkpoint, {@code /compact}) runs as a prompt from the session's panel, as if the user had typed it
-     * there.
+     * A command (the checkpoint, {@code /compact}) runs as a prompt from the session's panel, as if the user had typed
+     * it there.
      */
     static Transition sessionCommand(Clock clock, AppState s, String name, String command) {
         Optional<SessionState> found = s.session(name);
         if (found.isEmpty() || command.isBlank() || found.get().status() == Status.CLOSING) {
             return Transition.of(s);
         }
-        // its own panel, else a document attached to it, else its own panel closed: the command needs a panel to show in
+        // its own panel, else a document attached to it, else its own panel closed: the command shows in a panel
         Optional<PanelState> panel = s.panelsBoundToSession(name).stream().findFirst().or(() -> s.closedPanelOfSession(name));
         if (panel.isEmpty()) {
             return Transition.of(notice(clock, s, Notice.Level.ERROR, "Session " + name + " has no panel; open it to send "
@@ -125,8 +125,8 @@ final class TurnRules {
     }
 
     /**
-     * Empties the session's Session tab; the conversation itself is untouched. Refused while a turn runs: its blocks are
-     * still being written.
+     * Empties the session's Session tab; the conversation itself is untouched. Refused while a turn runs: its blocks
+     * are still being written.
      */
     static Transition clearTranscript(Clock clock, AppState s, String name) {
         Optional<SessionState> found = s.session(name);
@@ -220,7 +220,10 @@ final class TurnRules {
         return new Transition(next, effects);
     }
 
-    /** A prompt to a session in its own panel: appended there and run, as {@link Intent.EditPanel} and {@link Intent.RunText} would. */
+    /**
+     * A prompt to a session in its own panel: appended there and run, as {@link Intent.EditPanel} and
+     * {@link Intent.RunText} would.
+     */
     static Transition promptSession(Clock clock, AppState s, Intent.PromptSession i) {
         Optional<PanelState> home = s.homePanel(i.session());
         if (home.isEmpty()) {

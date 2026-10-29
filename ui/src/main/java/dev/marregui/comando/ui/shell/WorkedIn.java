@@ -20,9 +20,9 @@ import java.util.Set;
  */
 final class WorkedIn {
 
-    /** The folders a search reads, the latest. */
+    /** How many folders a search reads, the latest first. */
     static final int MAX_ROOTS = 8;
-    /** The blocks read, from the end. */
+    /** How many transcript blocks are read, from the end. */
     static final int MAX_BLOCKS = 4_000;
     /** How far up from a file a repository's top is looked for. */
     static final int MAX_UP = 12;

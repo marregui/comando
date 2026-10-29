@@ -27,7 +27,7 @@ import java.util.concurrent.Executors;
 /**
  * comando's MCP server: streamable HTTP on 127.0.0.1, one JSON response per request, no server-initiated
  * stream. Each session's CLI authenticates with its own bearer token, which names the calling session.
- * Requests run on virtual threads, so an approval that waits for the user parks cheaply.
+ * Requests run on virtual threads, so an approval that waits for the user holds no operating-system thread.
  */
 public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable {
 
@@ -55,8 +55,8 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     }
 
     /**
-     * Starts on {@code port} of {@code 127.0.0.1}, the address {@link #url} names; 0 picks a free port. Named rather than
-     * the JVM's loopback address, which is {@code ::1} when IPv6 addresses are preferred.
+     * Starts on {@code port} of {@code 127.0.0.1}, the address {@link #url} names; 0 picks a free port. Named rather
+     * than the JVM's loopback address, which is {@code ::1} when IPv6 addresses are preferred.
      */
     public static McpServer start(McpTools tools, int port, String version) throws IOException {
         HttpServer http = HttpServer.create(new InetSocketAddress(InetAddress.ofLiteral("127.0.0.1"), port), 64);
@@ -71,8 +71,6 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
     public String url() {
         return "http://127.0.0.1:" + http.getAddress().getPort() + PATH;
     }
-
-    // ---- McpGateway
 
     @Override
     public Ticket register(String session) {
@@ -100,14 +98,10 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         }
     }
 
-    // ---- ApprovalPort
-
     @Override
     public void resolve(Approval approval, ApprovalDecision decision) {
         tools.resolve(approval, decision);
     }
-
-    // ---- HTTP
 
     private void handle(HttpExchange ex) throws IOException {
         try (ex) {

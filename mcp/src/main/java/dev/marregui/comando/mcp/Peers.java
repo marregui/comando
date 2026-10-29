@@ -44,17 +44,20 @@ import java.util.function.Supplier;
 
 /**
  * The comando instances on one machine consulting each other through the comando Edge (record 123). Each instance
- * publishes its presence, retained, when it connects and when it changes (at most every 2 s), and clears it on close; its
- * last will clears it when the instance dies. A question goes to the peer's inbox with a response topic and correlation
- * data; the peer prompts its session {@code consult-<asker>} through that session's panel, so its user sees the question,
- * and replies with Claude's text in the turn that answers it. Only the text a session chose to send and the reply's text
- * travel, never a brain's or a kit's files. A peer the user listed in the data root's {@code agents.json}
- * ({@code {"peers": {"deny": ["<id>"]}}}) is refused.
+ * publishes its presence, retained, when it connects and when it changes (at most every 2 s), and clears it on close;
+ * its last will clears it when the instance dies. A question goes to the peer's inbox with a response topic and
+ * correlation data; the peer prompts its session {@code consult-<asker>} through that session's panel, so its user sees
+ * the question, and replies with Claude's text in the turn that answers it. Only the text a session chose to send and
+ * the reply's text travel, never a brain's or a kit's files. A peer the user listed in the data root's
+ * {@code agents.json} ({@code {"peers": {"deny": ["<id>"]}}}) is refused.
  */
 public final class Peers implements AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(Peers.class.getName());
-    /** Every instance's topics are under this, then its id: {@code …/<id>/presence}, {@code …/<id>/inbox}, {@code …/<id>/reply}. */
+    /**
+     * Every instance's topics are under this, then its id: {@code …/<id>/presence}, {@code …/<id>/inbox},
+     * {@code …/<id>/reply}.
+     */
     static final String TOPICS = "comando/v1/local/instance/";
     static final Duration PRESENCE_EVERY = Duration.ofSeconds(2);
     /** How long an instance waits for its consult session's turn before it replies {@code timeout}. */
@@ -77,12 +80,17 @@ public final class Peers implements AutoCloseable {
 
     /** This instance: its name as the Dock shows it, its id in the topics, its version. */
     public record Me(String name, String slug, String version) {
-        /** The instance named {@code instanceName} ({@link InstanceName}; empty for the main one), at {@code version}. */
+        /**
+         * The instance named {@code instanceName} ({@link InstanceName}; empty for the main one), at {@code version}.
+         */
         public static Me of(String instanceName, String version) {
             return new Me(InstanceName.display(instanceName), Peers.slug(instanceName), version);
         }
 
-        /** Its MQTT client id: {@code comando-<slug>}, or the slug as it is when it already says comando ({@code comando-expert}). */
+        /**
+         * Its MQTT client id: {@code comando-<slug>}, or the slug as it is when it already says comando
+         * ({@code comando-expert}).
+         */
         public String clientId() {
             return slug.equals("comando") || slug.startsWith("comando-") ? slug : "comando-" + slug;
         }
@@ -146,7 +154,7 @@ public final class Peers implements AutoCloseable {
         this.answerWithin = answerWithin;
     }
 
-    /** An instance's id in the topics: its name in lowercase letters, digits and dashes; {@code main} for the main instance. */
+    /** An instance's id in the topics: its name in lowercase letters, digits and dashes; {@code main} when unnamed. */
     public static String slug(String instanceName) {
         String s = instanceName == null ? "" : instanceName.strip().toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "-")
                 .replaceAll("^-+|-+$", "");
@@ -165,7 +173,10 @@ public final class Peers implements AutoCloseable {
         return TOPICS + slug + "/reply";
     }
 
-    /** Sets the last will, subscribes, and publishes presence on every connect and on every change; before the broker connects. */
+    /**
+     * Sets the last will, subscribes, and publishes presence on every connect and every change; call it before the
+     * broker connects.
+     */
     public void start() {
         broker.will(presenceTopic(me.slug()), new byte[0], true);
         broker.onConnected(this::connected);
@@ -175,7 +186,7 @@ public final class Peers implements AutoCloseable {
         ticks.scheduleWithFixedDelay(this::tick, PRESENCE_EVERY.toMillis(), PRESENCE_EVERY.toMillis(), TimeUnit.MILLISECONDS);
     }
 
-    /** Connected, or again: the table is rebuilt from the retained presences the subscription brings, and this one's is sent. */
+    /** Connected, or again: the table is rebuilt from the retained presences that come, and this one's is sent. */
     private void connected() {
         peers.clear();
         synchronized (presenceLock) {
@@ -224,8 +235,6 @@ public final class Peers implements AutoCloseable {
         return p.toString();
     }
 
-    // ---- presence
-
     private void presence(PeerBroker.Message m) {
         String slug = between(m.topic(), TOPICS, "/presence");
         if (slug.isEmpty()) {
@@ -251,8 +260,6 @@ public final class Peers implements AutoCloseable {
             LOG.log(System.Logger.Level.DEBUG, "unreadable presence [instance=" + slug + ", cause=" + e.getMessage() + ']');
         }
     }
-
-    // ---- answering
 
     private void inbox(PeerBroker.Message m) {
         if (m.responseTopic() == null || m.correlation() == null) {
@@ -284,8 +291,8 @@ public final class Peers implements AutoCloseable {
     }
 
     /**
-     * Prompts this instance's session {@code consult-<from>} with the question, headed with who asks, in its panel; created
-     * by {@code peer:<from>} in the default folder on the first question. Waits for the turn that answers it.
+     * Prompts this instance's session {@code consult-<from>} with the question, headed with who asks, in its panel;
+     * created by {@code peer:<from>} in the default folder on the first question. Waits for the turn that answers it.
      */
     private Reply answer(String from, String fromName, String fromSession, String text) {
         String session = CONSULT + from;
@@ -358,7 +365,9 @@ public final class Peers implements AutoCloseable {
         }
     }
 
-    /** Waits for the reducer to have made {@code session}, at most {@link #MAKE_WITHIN} and never past {@code deadline}. */
+    /**
+     * Waits for the reducer to have made {@code session}, at most {@link #MAKE_WITHIN} and never past {@code deadline}.
+     */
     private boolean awaitSession(String session, long deadline) {
         long until = Math.min(deadline, System.nanoTime() + MAKE_WITHIN.toNanos());
         while (state.get().session(session).isEmpty()) {
@@ -375,7 +384,10 @@ public final class Peers implements AutoCloseable {
         return true;
     }
 
-    /** The first top-level prompt block from {@code cursor} on with this text that no other answer waits on, claimed; -1 when none. */
+    /**
+     * The first top-level prompt block from {@code cursor} on with this text that no other answer waits on, claimed; -1
+     * when none.
+     */
     private int find(Transcript t, String prompt, int cursor) {
         int size = t.size();
         String wanted = prompt.strip();
@@ -410,7 +422,7 @@ public final class Peers implements AutoCloseable {
         });
     }
 
-    /** Why {@code from} is refused, from {@code agents.json}'s {@code peers.deny}; an unreadable file refuses, naming it. */
+    /** Why {@code from} is refused, from {@code agents.json}'s {@code peers.deny}; an unreadable file refuses. */
     private Optional<String> refused(String from) {
         Path file = agentsFile;
         if (file == null || !Files.isRegularFile(file)) {
@@ -427,8 +439,6 @@ public final class Peers implements AutoCloseable {
             return Optional.of(file + " cannot be read, so its deny list cannot be checked: " + e.getMessage());
         }
     }
-
-    // ---- asking
 
     private void reply(PeerBroker.Message m) {
         if (m.correlation() == null) {
@@ -467,7 +477,9 @@ public final class Peers implements AutoCloseable {
                 .append("); ask one with instance_ask {\"instance\": \"<instance>\", \"text\": \"…\"}").toString());
     }
 
-    /** {@code instance_ask}: sends the question to the peer's inbox and waits up to {@code wait_seconds} for the reply. */
+    /**
+     * {@code instance_ask}: sends the question to the peer's inbox and waits up to {@code wait_seconds} for the reply.
+     */
     McpTools.Outcome ask(String caller, JsonNode args) {
         String to = args.path("instance").asString("").strip();
         String text = args.path("text").asString("").strip();
@@ -564,7 +576,10 @@ public final class Peers implements AutoCloseable {
         return topic.substring(prefix.length(), topic.length() - suffix.length());
     }
 
-    /** Clears this instance's presence, stops answering and fails the questions still waiting; before the broker closes. */
+    /**
+     * Clears this instance's presence, stops answering and fails the questions still waiting; call it before the broker
+     * closes.
+     */
     @Override
     public void close() {
         if (closed) {

@@ -16,7 +16,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [StateLoop] serializes intents, effects, and state notifications while reporting slow or hung application.
+/// [StateLoop] applies intents in order, hands out their effects, tells listeners, and reports a slow or hung intent.
 ///
 /// - effects precede listeners for each changed state
 /// - queued work completes before close returns
@@ -112,7 +112,8 @@ class StateLoopTest {
         }
     }
 
-    /// An `ExecuteSql` handler held for 700 ms reports one 300 ms hang with its stack, then one ended stall sharing the start time.
+    /// An `ExecuteSql` handler held for 700 ms reports one 300 ms hang with its stack, then one ended stall sharing the
+    /// start time.
     @Test
     void anIntentHeldPastTheHangLimitIsToldOnceWhileHeldWithTheLoopsStackThenWhenItEnds() throws Exception {
         List<StateLoop.Stall> stalls = new CopyOnWriteArrayList<>();

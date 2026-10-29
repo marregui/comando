@@ -226,8 +226,8 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     }
 
     /**
-     * One look at the loop, on the watchdog's thread every period until the close, which comes after the loop has applied
-     * what was queued, so the shutdown is watched too.
+     * One look at the loop, on the watchdog's thread every period until the close, which comes after the loop has
+     * applied what was queued, so the shutdown is watched too.
      */
     private void look() {
         Busy b = busy;

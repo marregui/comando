@@ -58,7 +58,9 @@ final class StreamMapper {
     private boolean replaying;
     /** The context size: input tokens of the last main-thread API call; -1 until one is seen. */
     private long contextTokens = -1;
-    /** The context window the last turn reported, or the one the stored conversation's last turn kept; 0 when unknown. */
+    /**
+     * The context window the last turn reported, or the one the stored conversation's last turn kept; 0 when unknown.
+     */
     private long contextWindow;
     /** While a stored conversation is read: the message that ended its turn, until its last line is read; else null. */
     private String turnEndingMessage;
@@ -131,9 +133,10 @@ final class StreamMapper {
     }
 
     /**
-     * Maps one line of a stored transcript: user and assistant messages, compaction, nothing live. A stored conversation
-     * has no {@code result} lines; a turn ends where a message stopped at the end of its turn ({@code stop_reason}
-     * {@code end_turn}), which gets a {@link Block.TurnEnd#stored()} after the message's last line.
+     * Maps one line of a stored transcript: user and assistant messages, compaction, nothing live. A stored
+     * conversation has no {@code result} lines; a turn ends where a message stopped at the end of its turn
+     * ({@code stop_reason} {@code end_turn}), which gets a {@link Block.TurnEnd#stored()} after the message's last
+     * line.
      */
     void acceptHistory(String line) {
         replaying = true;
@@ -218,8 +221,8 @@ final class StreamMapper {
     static final String CARRIED_ID = "carried";
 
     /**
-     * Shows {@code summary}, which a checkpoint carried out of the conversation it cleared, as the answer of a turn that
-     * ended: it is what the next prompt takes with it.
+     * Shows {@code summary}, which a checkpoint carried out of the conversation it cleared, as the answer of a turn
+     * that ended: it is what the next prompt takes with it.
      */
     void carried(String summary) {
         note(Block.NoteKind.INFO, "Conversation cleared after the checkpoint; its summary below goes in front of the next prompt");
@@ -252,10 +255,9 @@ final class StreamMapper {
     static final String NO_RESULT = "no result: the session ended before the tool returned";
 
     /**
-     * Ends every tool call still running with an error result: the process that ran it is gone (or a stored
-     * conversation stopped there), so no result will come and the call must not read "running" for ever.
-     *
-     * @return how many calls it ended
+     * Ends every tool call still running with an error result and returns how many it ended: the process that ran it
+     * is gone (or a stored conversation stopped there), so no result will come and the call must not read "running"
+     * for ever.
      */
     int endRunningTools() {
         int ended = 0;
@@ -282,8 +284,6 @@ final class StreamMapper {
         resetStreams();
         toolIndex.clear();
     }
-
-    // ---- system
 
     private void system(JsonNode e) {
         String subtype = e.path("subtype").asString("");
@@ -365,8 +365,6 @@ final class StreamMapper {
         sink.dispatch(new Intent.SessionInit(session, info));
     }
 
-    // ---- streaming
-
     private void streamEvent(JsonNode e) {
         JsonNode ev = e.path("event");
         String messageId = e.path("api_message_id").asString(ev.path("message").path("id").asString(""));
@@ -424,12 +422,10 @@ final class StreamMapper {
                 }
             }
             default -> {
-                // message_start, message_delta, message_stop, content_block_stop carry nothing new to show
+                // message_delta, message_stop and content_block_stop carry nothing new to show
             }
         }
     }
-
-    // ---- complete messages
 
     private void assistant(JsonNode e) {
         JsonNode message = e.path("message");
@@ -578,7 +574,8 @@ final class StreamMapper {
 
     /**
      * A sub-agent ended, live: its {@code agent} event, with what its call asked for (type, model, description,
-     * background), how long it ran, how it ended, and the tool calls inside it at any depth. The adapter adds its spend.
+     * background), how long it ran, how it ended, and the tool calls inside it at any depth. The adapter adds its
+     * spend.
      */
     private void agentEnded(String id, String status, boolean background) {
         Long started = agentStarted.remove(id);
@@ -658,7 +655,9 @@ final class StreamMapper {
         sink.dispatch(new Intent.SessionRanAt(session, model, effort, ranFirst));
     }
 
-    /** One read again later while a message waits for its line; a read the turn's end made first finds nothing pending. */
+    /**
+     * One read again later while a message waits for its line; a read the turn's end made first finds nothing pending.
+     */
     private void armRanRetry() {
         if (ranRetryArmed) {
             return;
@@ -672,8 +671,6 @@ final class StreamMapper {
             }
         });
     }
-
-    // ---- result
 
     private void result(JsonNode e) {
         if (ranPending != null) {
@@ -750,8 +747,6 @@ final class StreamMapper {
             note(Block.NoteKind.INFO, "Rate limit " + status + " (" + info.path("rateLimitType").asString("") + ")");
         }
     }
-
-    // ---- helpers
 
     private JsonNode parse(String line) {
         try {

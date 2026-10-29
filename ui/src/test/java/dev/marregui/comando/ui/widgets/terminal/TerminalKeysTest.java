@@ -15,8 +15,8 @@ import java.awt.event.KeyEvent;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [TerminalWidget#keepsKey]: a terminal keeps for its shell the control characters a shell reads: Ctrl with a letter,
-/// `[ \ ]` or space. On macOS ⌃ sends them and no command uses it; elsewhere Ctrl is also ⌘'s key, and in a terminal the
-/// shell has it.
+/// `[ \ ]` or space. On macOS ⌃ sends them and no command uses it; elsewhere Ctrl is also ⌘'s key, and in a terminal
+/// the shell has it.
 /// - Ctrl with a letter, bracket, backslash or space stays with the shell
 /// - other chords stay commands
 /// - on macOS the terminal keeps ⌘K as its clear buffer

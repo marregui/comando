@@ -21,12 +21,13 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [JobsEditor] edits the kit's scheduled jobs (record 117), checking each as `kit.py` would before it can be saved.
-/// - an unchanged list is valid and clean; a change makes it dirty, and undoing it clean again
-/// - the days, the time, the program and its arguments, the environment and the pause become the job handed to `kit.py`
-/// - a broken rule blocks the save and says which field and why; what `kit.py` refused shows until the next edit
-/// - adding gives a free name and asks for a program; removing takes the job out
-/// - the state line says how the scheduler holds the job; a new one is not the scheduler's yet
-/// - a job's menu runs it now or opens its log, only for a job the kit already has
+/// - An unchanged list is valid and clean; a change makes it dirty, and undoing it clean again.
+/// - The days, the time, the program and its arguments, the environment and the pause become the job handed to
+///   `kit.py`.
+/// - A broken rule blocks the save and says which field and why; what `kit.py` refused shows until the next edit.
+/// - Adding gives a free name and asks for a program; removing takes the job out.
+/// - The state line says how the scheduler holds the job; a new one is not the scheduler's yet.
+/// - A job's menu runs it now or opens its log, only for a job the kit already has.
 @ExtendWith(OnEdt.class)
 class JobsEditorTest {
 

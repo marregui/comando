@@ -52,16 +52,16 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * The Files tab's folders as a list with the selected one's fields beside it: add (a folder chosen first), remove, move
- * up and down, and the fields of an entry of {@code folders.json}. A folder lies inside Claude Code's folder ({@code
- * ~/.claude}) and is set only by choosing it. Each field is checked as it is typed, with {@link FolderKind}'s rules, a
- * name used once in {@code folders.json} and a folder that exists and can be read; a field that fails says why beside
- * it, the list marks its entry, and the list can be saved only when every entry passes. Whether a folder exists, and
- * the git repository it belongs to, are looked up off the event thread. EDT only.
+ * The Files tab's folders as a list with the selected one's fields beside it: add (a folder chosen first), remove,
+ * move up and down, and the fields of an entry of {@code folders.json}. A folder lies inside Claude Code's folder
+ * ({@code ~/.claude}) and is set only by choosing it. Each field is checked as it is typed, with {@link FolderKind}'s
+ * rules, a name used once in {@code folders.json} and a folder that exists and can be read; a field that fails says
+ * why beside it, the list marks its entry, and the list can be saved only when every entry passes. Whether a folder
+ * exists, and the git repository it belongs to, are looked up off the EDT. EDT only.
  */
 public final class FoldersEditor {
 
-    /** Picks a folder for {@code +}, or a file for the index and the listing; the desktop's choosers, or a test's answers. */
+    /** Picks a folder for {@code +}, or a file for the index and the listing: the desktop's choosers, or a test's. */
     public interface Chooser {
         Optional<Path> folder(Component owner, Path start);
 
@@ -83,11 +83,11 @@ public final class FoldersEditor {
     static final String LISTED_IN = "listedIn";
     static final String GROUP = "group";
 
-    /** What a folder's path is on disk, as looked up off the event thread. */
+    /** What a folder's path is on disk, as looked up off the EDT. */
     record Facts(boolean exists, boolean readable, Path gitRoot) {
     }
 
-    /** What an index file is on disk, as looked up off the event thread. */
+    /** What an index file is on disk, as looked up off the EDT. */
     record IndexFacts(boolean exists, boolean folderExists) {
     }
 
@@ -250,9 +250,9 @@ public final class FoldersEditor {
     }
 
     /**
-     * Entry {@code i}'s problems by field: a name missing or used twice in {@code folders.json}, a folder not chosen, not
-     * a full path, not there, not readable, still being looked up, or outside {@code ~/.claude}; an index outside the
-     * folder; a listing file that is no file name.
+     * Entry {@code i}'s problems by field: a name missing or used twice in {@code folders.json}, a folder not chosen,
+     * not a full path, not there, not readable, still being looked up, or outside {@code ~/.claude}; an index outside
+     * the folder or in a folder that does not exist; a listing file that is no file name.
      */
     Map<String, String> problems(int i) {
         Row r = rows.get(i);
@@ -353,8 +353,8 @@ public final class FoldersEditor {
     }
 
     /**
-     * "Use the kit's folders": the folders of {@code kit} the list lacks (none of its rows shows that folder or has that
-     * name) go first, in the kit's order, the first selected; answers how many were added.
+     * "Use the kit's folders": the folders of {@code kit} the list lacks (none of its rows shows that folder or has
+     * that name) go first, in the kit's order, the first selected; answers how many were added.
      */
     int addFirst(List<FolderRoot> kit) {
         List<FolderRoot> have = new ArrayList<>(rows.size());
@@ -432,7 +432,7 @@ public final class FoldersEditor {
         };
     }
 
-    /** The selected entry's problem with field {@code key}, as its outline and the message line show it; empty when none. */
+    /** The selected entry's problem with field {@code key}, as its outline and the message line show it; or empty. */
     String problemShown(String key) {
         int i = list.getSelectedIndex();
         return i < 0 ? "" : problems(i).getOrDefault(key, "");
@@ -447,7 +447,7 @@ public final class FoldersEditor {
         return facts.getText();
     }
 
-    // ---- facts looked up off the event thread
+    // ---- facts looked up off the EDT
 
     /** Looks up whether {@code shown} (as typed) exists and the repository it belongs to, then checks again. */
     private void lookUp(String shown) {
@@ -488,6 +488,7 @@ public final class FoldersEditor {
         return Path.of(HomeDir.expand(r.get(PATH).strip())).resolve(r.get(INDEX).strip()).toAbsolutePath().normalize();
     }
 
+    /** Whether {@code p} is a readable folder, and the git repository holding it; reads the disk. */
     static Facts facts(Path p) {
         boolean exists = Files.isDirectory(p);
         Path git = null;
@@ -500,7 +501,9 @@ public final class FoldersEditor {
         return new Facts(exists, exists && Files.isReadable(p), git);
     }
 
-    /** The git repository holding the selected folder: "repo: ~/.claude · master · 1 uncommitted", as read; "repo: none". */
+    /**
+     * The git repository holding {@code r}'s folder: "repo: ~/.claude · main · 1 uncommitted", as read; "repo: none".
+     */
     String factsOf(Row r) {
         String p = HomeDir.expand(r.get(PATH).strip());
         Facts f = looked.get(p);

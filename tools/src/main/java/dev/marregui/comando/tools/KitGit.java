@@ -13,8 +13,8 @@ import java.util.Map;
 
 /**
  * The kit's root and its brain as git checkouts: the kit's version and the newer releases its remote has, and the
- * backup of either, a commit of everything in it, saying what it adds, pushed to its remote. Each run is bounded, never asks for credentials,
- * and ends when this closes. Every method blocks: call it off the EDT and the reducer.
+ * backup of either, a commit of everything in it, saying what it adds, pushed to its remote. Each run is bounded, never
+ * asks for credentials, and ends when this closes. Every method blocks: call it off the EDT and the reducer.
  */
 public final class KitGit implements AutoCloseable {
 
@@ -34,9 +34,9 @@ public final class KitGit implements AutoCloseable {
     }
 
     /**
-     * The kit's version, {@code git describe --tags --always} in {@code root}, and the releases newer than it on {@code
-     * origin}; unknown when the root is no checkout. A remote that does not answer leaves the newer releases unknown, and
-     * says why.
+     * The kit's version, {@code git describe --tags --always} in {@code root}, and the releases newer than it on
+     * {@code origin}; unknown when the root is no checkout. A remote that does not answer leaves the newer releases
+     * unknown, and says why.
      */
     public KitVersion version(Path root) {
         Git.Run describe;
@@ -85,9 +85,10 @@ public final class KitGit implements AutoCloseable {
     }
 
     /**
-     * Backs {@code repo} up: {@code git add -A}, a commit when anything changed whose message says what it adds (a first
-     * line {@code <what> backup <date>: } with the counts of each top folder, then one line a file), and {@code git
-     * push}. Answers what was done, for the notice; throws, saying which step failed and git's message, when one fails.
+     * Backs {@code repo} up: {@code git add -A}, a commit when anything changed whose message says what it adds (a
+     * first line {@code <what> backup <date>: } with the counts of each top folder, then one line a file), and
+     * {@code git push}. Answers what was done, for the notice; throws, saying which step failed and git's message, when
+     * one fails.
      */
     public String backUp(Path repo, String what, LocalDate today) throws IOException {
         if (!canBackUp(repo)) {
@@ -136,9 +137,9 @@ public final class KitGit implements AutoCloseable {
     }
 
     /**
-     * The first line: {@code Brain backup 2026-10-28: MEMORY 2 changed; SCRATCHPAD 3 added, 1 changed}, each top folder (a
-     * file at the top is its own) with its counts in the order added, changed, renamed, removed; the areas past {@link
-     * #SUBJECT} characters are counted at its end.
+     * The first line: {@code Brain backup 2026-10-28: MEMORY 2 changed; SCRATCHPAD 3 added, 1 changed}, each top folder
+     * (a file at the top is its own) with its counts in the order added, changed, renamed, removed; the areas past
+     * {@link #SUBJECT} characters are counted at its end.
      */
     static String subject(String what, LocalDate today, List<Change> list) {
         Map<String, Map<String, Integer>> areas = new LinkedHashMap<>();
@@ -168,7 +169,10 @@ public final class KitGit implements AutoCloseable {
         return out.toString();
     }
 
-    /** One line a file, {@code added MEMORY/x.md} or {@code renamed a.md -> b.md}, the first {@link #LISTED}, then how many more. */
+    /**
+     * One line a file, {@code added MEMORY/x.md} or {@code renamed a.md -> b.md}, the first {@link #LISTED}, then how
+     * many more.
+     */
     static String body(List<Change> list) {
         List<String> lines = new ArrayList<>();
         for (Change c : list.subList(0, Math.min(LISTED, list.size()))) {

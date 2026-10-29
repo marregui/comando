@@ -94,9 +94,9 @@ class EditorPanelHeaderTest {
         assertThat(chips).as("no chip of words when there is no connection").isEmpty();
     }
 
-    /// The connection toggle shows the closed, open and failed icon of its state, sends `OpenConnection` when closed and
-    /// `CloseConnection` when open, and sits first of the tools with the name chip ("local ▾") next to it.
-    /// The failed state appends the failure reason to the tooltip.
+    /// The connection toggle shows the closed, open and failed icon of its state, sends `OpenConnection` when closed
+    /// and `CloseConnection` when open, and sits first of the tools with the name chip ("local ▾") next to it. The
+    /// failed state appends the failure reason to the tooltip.
     @Test
     void theConnectionIsOneIconInItsStatesColourFirstOfTheToolsItsNameBindsAnother() throws Exception {
         ConnectionState local = ConnectionState.closed(ConnectionSpec.questDbDefaults("local"));

@@ -11,7 +11,7 @@ package dev.marregui.comando.core.state;
  */
 public record Reflection(boolean due, boolean armed) {
 
-    /** The share of the context window at which a session is due: where the user's own context reminder fires. */
+    /** The share of the context window at which a session is due. */
     public static final double THRESHOLD = 0.6;
 
     /** A session nobody has checkpointed: due at its first crossing. */

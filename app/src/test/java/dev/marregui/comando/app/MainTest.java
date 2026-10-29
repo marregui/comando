@@ -16,7 +16,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class MainTest {
 
     /// A contended root names its exact path and directs the user to the existing window or a later retry.
-    /// The fixed Unix path makes interpolation visible in the complete message.
     @Test
     void aSecondInstanceSaysTheFirstMayStillBeClosing() {
         assertThat(Main.lockedMessage(Path.of("/w/.comando")))

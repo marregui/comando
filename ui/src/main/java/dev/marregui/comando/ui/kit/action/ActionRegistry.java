@@ -80,6 +80,7 @@ public final class ActionRegistry {
         return first;
     }
 
+    /** Runs command {@code id} when it is registered and can run now. */
     public void run(String id) {
         Command c = commands.get(id);
         if (c != null && c.enabled().getAsBoolean()) {
@@ -236,6 +237,7 @@ public final class ActionRegistry {
         }
     }
 
+    /** The Swing action of {@code c}: enabled while the command can run, with its key as the accelerator. */
     public static Action action(Command c) {
         AbstractAction a = new AbstractAction(c.label(), c.icon() == null ? null : Icons.get(c.icon())) {
             @Override

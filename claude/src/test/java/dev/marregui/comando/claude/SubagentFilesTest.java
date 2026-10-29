@@ -23,7 +23,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - `find` matches the call id among the meta files, and finds nothing for an unknown call, conversation or root
 /// - a meta file larger than `META_BYTES` is skipped; the meta file says when the sub-agent finished
 /// - the render quotes the task, keeps the texts, gives one line per tool with its result clipped at `RESULT_CHARS`
-/// - a file over the limit keeps its task, then only its tail, and says so; an empty file and a partial line render safely
+/// - a file over the limit keeps its task, then only its tail, and says so; an empty file and a partial line render
+///   safely
 /// - a long run keeps its last `LAST_TOOLS` tool calls and counts all of them
 /// - reading as the file grows renders as one whole read, parsing only new lines and restarting on a shorter file
 class SubagentFilesTest {
@@ -84,8 +85,8 @@ class SubagentFilesTest {
         assertThat(SubagentFiles.finished(subagents.resolve("agent-a1.meta.json"), json)).isFalse();
     }
 
-    /// The render starts with the task quoted line by line, keeps the assistant texts, and writes exactly two tool lines of
-    /// the form ``- `Bash` ls demo → result``.
+    /// The render starts with the task quoted line by line, keeps the assistant texts, and writes exactly two tool
+    /// lines of the form ``- `Bash` ls demo → result``.
     @Test
     void rendersThePromptTheTextsAndOneLinePerTool() throws IOException {
         String md = SubagentFiles.render(subagents.resolve("agent-a1.jsonl"), SubagentFiles.SCAN_BYTES, json);
@@ -111,8 +112,8 @@ class SubagentFilesTest {
         assertThat(md).doesNotContain("y".repeat(SubagentFiles.RESULT_CHARS + 1));
     }
 
-    /// A file over 3 MB rendered with a 2 MB limit starts with its first prompt and the notice "longer than 2.0 MB: only its
-    /// last 2.0 MB are read", keeps its last word, and stays under the limit plus 1 000 characters.
+    /// A file over 3 MB rendered with a 2 MB limit starts with its first prompt and the notice "longer than 2.0 MB:
+    /// only its last 2.0 MB are read", keeps its last word, and stays under the limit plus 1 000 characters.
     @Test
     void aFileOverTheLimitShowsItsTaskThenOnlyItsTailAndSaysSo() throws IOException {
         Path f = subagents.resolve("agent-huge.jsonl");
@@ -151,10 +152,8 @@ class SubagentFilesTest {
         assertThat(SubagentFiles.render(f, SubagentFiles.SCAN_BYTES, json)).isEqualTo("whole\n");
     }
 
-    // ---- the conversation read as it grows
-
-    /// Of 250 tool calls, the render keeps the task, a notice that earlier steps are hidden, calls 151 to 250, and ends with
-    /// "_100 of 250 tool calls shown._".
+    /// Of 250 tool calls, the render keeps the task, a notice that earlier steps are hidden, calls 151 to 250, and ends
+    /// with "_100 of 250 tool calls shown._".
     @Test
     void aLongSubagentKeepsItsTaskAndItsLastHundredToolCallsAndSaysHowManyOfAll() throws IOException {
         Path f = subagents.resolve("agent-many.jsonl");
@@ -173,8 +172,8 @@ class SubagentFilesTest {
         assertThat(md.strip()).endsWith("_100 of 250 tool calls shown._");
     }
 
-    /// A file read in pieces cut anywhere, mid-line too, renders exactly as the whole file read once and counts its 130 tool
-    /// calls.
+    /// A file read in pieces cut anywhere, mid-line too, renders exactly as the whole file read once and counts its 130
+    /// tool calls.
     @Test
     void aConversationReadAsItGrowsRendersAsTheWholeFileReadOnce() throws IOException {
         StringBuilder sb = new StringBuilder(userText("THE TASK")).append('\n');

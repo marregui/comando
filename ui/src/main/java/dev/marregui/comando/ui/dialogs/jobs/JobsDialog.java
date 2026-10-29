@@ -36,7 +36,9 @@ public final class JobsDialog {
 
     public static final String TITLE = "Kit jobs";
 
-    /** Hands the list to {@code kit.py} off the EDT, then, on the EDT, {@code done} or {@code refused} with its words. */
+    /**
+     * Hands the list to {@code kit.py} off the EDT, then runs {@code done}, or {@code refused} with why, on the EDT.
+     */
     public interface Saver {
         void save(List<KitJob> jobs, Runnable done, Consumer<String> refused);
     }

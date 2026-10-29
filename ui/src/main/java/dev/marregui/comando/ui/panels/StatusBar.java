@@ -44,10 +44,10 @@ import java.util.function.Consumer;
 import java.util.regex.Pattern;
 
 /**
- * The window's status: the standing notice on the left, which takes the user to what it is about when clicked and
- * opens the recent notices on a right click (or a click, when it is about nothing to go to); Claude's and Codex's plan
- * usage and the work running across every panel and session on the right. The kit is the Files tab's KIT row (record 119). The focused panel's session is
- * in the {@link SessionBar}, its connection in the panel's header (record 105).
+ * The window's status: the standing notice on the left, which takes the user to what it is about when clicked and opens
+ * the recent notices on a right click (or a click, when it is about nothing to go to); Claude's and Codex's plan usage
+ * and the work running across every panel and session on the right. The kit is the Files tab's KIT row (record 119).
+ * The focused panel's session is in the {@link SessionBar}, its connection in the panel's header (record 105).
  */
 public final class StatusBar {
 

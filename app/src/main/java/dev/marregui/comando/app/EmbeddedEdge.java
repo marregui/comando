@@ -62,8 +62,8 @@ import java.util.zip.ZipFile;
 
 /**
  * A HiveMQ Edge comando starts from a distribution zip, installed in its data root ({@code edge/}), on ports of its own
- * (MQTT 18883, WebSocket 18800, admin API 18080, JMX 18010), every one bound to {@code 127.0.0.1}. One such Edge runs on
- * the machine whichever comando instance started it, so that every instance talks through it: a registry file in the
+ * (MQTT 18883, WebSocket 18800, admin API 18080, JMX 18010), every one bound to {@code 127.0.0.1}. One such Edge runs
+ * on the machine whichever comando instance started it, so that every instance talks through it: a registry file in the
  * user's home ({@code ~/.comando-edge.json}) names its process, the data root that started it and its ports. Only that
  * instance stops it; the others see it running. No other process is ever signalled, so the user's own Edges, on their
  * own ports, are left alone.
@@ -142,8 +142,9 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
     private volatile String doing = "";
 
     /**
-     * comando's Edge in {@code root}, for the instance on data root {@code owner} named {@code name}; the shared registry,
-     * the standard ports, the distribution as {@link #locate} finds it, the pinned release in {@code root/dist}.
+     * comando's Edge in {@code root}, for the instance on data root {@code owner} named {@code name}; the shared
+     * registry, the standard ports, the distribution as {@link #locate} finds it, the pinned release in
+     * {@code root/dist}.
      */
     EmbeddedEdge(Path root, Path owner, String name, IntentSink intents) {
         this(root, owner, name, intents, REGISTRY, Ports.DEFAULT,
@@ -372,8 +373,8 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
     }
 
     /**
-     * SIGTERM to the recorded process, then up to {@link #STOP_WAIT} for it to exit, then SIGKILL; true once it is gone.
-     * Only a process this code started and recorded comes here.
+     * SIGTERM to the recorded process, then up to {@link #STOP_WAIT} for it to exit, then SIGKILL; true once it is
+     * gone. Only a process this code started and recorded comes here.
      */
     private static boolean terminate(ProcessHandle h) {
         h.destroy();
@@ -399,8 +400,6 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
             return !h.isAlive();
         }
     }
-
-    // ---- the distribution
 
     /**
      * The distribution: the zip named by the property, else by the environment variable, else the release at {@code
@@ -517,7 +516,10 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
         return p;
     }
 
-    /** Unzips {@code zip} into {@code into}; returns its one top folder. The scripts in its {@code bin} are made executable. */
+    /**
+     * Unzips {@code zip} into {@code into}; returns its one top folder. The {@code .sh} scripts in its {@code bin} are
+     * made executable.
+     */
     private static String unzip(Path zip, Path into) throws IOException {
         String top = null;
         try (ZipFile z = new ZipFile(zip.toFile())) {
@@ -564,7 +566,7 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
         }
     }
 
-    /** The edge-smoke configuration without its simulation adapter: both MQTT listeners and the admin API, on loopback. */
+    /** The configuration comando's Edge starts with: both MQTT listeners and the admin API, on loopback. */
     static String config(Ports ports) {
         return """
                 <?xml version="1.0"?>
@@ -583,8 +585,8 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
 
     /**
      * The Edge's configuration folder in the data root: the shipped files the folder lacks are copied from the home's
-     * {@code conf/}; {@code config.xml} is comando's template the first time, after that the saved one with only its MQTT
-     * listeners and admin API set to comando's ports, which the instances need to find one another (record 122).
+     * {@code conf/}; {@code config.xml} is comando's template the first time, after that the saved one with only its
+     * MQTT listeners and admin API set to comando's ports, which the instances need to find one another (record 122).
      */
     static void prepareConfig(Path shipped, Path conf, Ports ports) throws IOException {
         Files.createDirectories(conf);
@@ -601,40 +603,63 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
             }
         }
         Path config = conf.resolve("config.xml");
-        Files.writeString(config, Files.isRegularFile(config) ? enforce(Files.readString(config), ports) : config(ports));
+        if (!Files.isRegularFile(config)) {
+            Files.writeString(config, config(ports));
+            return;
+        }
+        String next;
+        try {
+            next = merged(Files.readString(config), ports);
+        } catch (Exception e) {
+            // the settings the Edge's own UI saved are not lost: the file stays beside the template that replaces it,
+            // under a name of its own, so a later unparseable file never overwrites an earlier one
+            Path kept = conf.resolve("config.xml.unparsed-1");
+            for (int n = 2; Files.exists(kept); n++) {
+                kept = conf.resolve("config.xml.unparsed-" + n);
+            }
+            Files.copy(config, kept);
+            LOG.log(System.Logger.Level.WARNING, "cannot parse the Edge's config.xml, the template replaces it [kept=" + kept + ']', e);
+            next = config(ports);
+        }
+        Files.writeString(config, next);
     }
 
     /**
      * {@code xml} with its {@code mqtt-listeners} and {@code admin-api} replaced by comando's, in place, and everything
-     * else as it was; a file that does not parse is replaced by the template, the old one kept beside it.
+     * else as it was; the template when {@code xml} does not parse.
      */
     static String enforce(String xml, Ports ports) {
         try {
-            DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
-            f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
-            f.setExpandEntityReferences(false);
-            Document doc = f.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
-            Document ours = f.newDocumentBuilder().parse(new InputSource(new StringReader(config(ports))));
-            Element top = doc.getDocumentElement();
-            for (String name : List.of("mqtt-listeners", "admin-api")) {
-                Node replacement = doc.importNode(ours.getElementsByTagName(name).item(0), true);
-                NodeList have = top.getElementsByTagName(name);
-                if (have.getLength() > 0 && have.item(0).getParentNode() == top) {
-                    top.replaceChild(replacement, have.item(0));
-                } else if (name.equals("mqtt-listeners")) {
-                    top.insertBefore(replacement, top.getFirstChild());
-                } else {
-                    top.appendChild(replacement);
-                }
-            }
-            Transformer t = TransformerFactory.newInstance().newTransformer();
-            StringWriter out = new StringWriter();
-            t.transform(new DOMSource(doc), new StreamResult(out));
-            return out.toString();
+            return merged(xml, ports);
         } catch (Exception e) {
             LOG.log(System.Logger.Level.WARNING, "cannot parse the Edge's config.xml, the template replaces it", e);
             return config(ports);
         }
+    }
+
+    /** {@code xml} with comando's listeners and admin API in place; throws when {@code xml} does not parse. */
+    private static String merged(String xml, Ports ports) throws Exception {
+        DocumentBuilderFactory f = DocumentBuilderFactory.newInstance();
+        f.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true);
+        f.setExpandEntityReferences(false);
+        Document doc = f.newDocumentBuilder().parse(new InputSource(new StringReader(xml)));
+        Document ours = f.newDocumentBuilder().parse(new InputSource(new StringReader(config(ports))));
+        Element top = doc.getDocumentElement();
+        for (String name : List.of("mqtt-listeners", "admin-api")) {
+            Node replacement = doc.importNode(ours.getElementsByTagName(name).item(0), true);
+            NodeList have = top.getElementsByTagName(name);
+            if (have.getLength() > 0 && have.item(0).getParentNode() == top) {
+                top.replaceChild(replacement, have.item(0));
+            } else if (name.equals("mqtt-listeners")) {
+                top.insertBefore(replacement, top.getFirstChild());
+            } else {
+                top.appendChild(replacement);
+            }
+        }
+        Transformer t = TransformerFactory.newInstance().newTransformer();
+        StringWriter out = new StringWriter();
+        t.transform(new DOMSource(doc), new StreamResult(out));
+        return out.toString();
     }
 
     /** The run script's JMX port, 9010 as shipped, set to {@code port}. */
@@ -676,7 +701,7 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
     /**
      * Something listens on {@code port} on loopback, or the port cannot be bound there as a listener binds it, with
      * {@code SO_REUSEADDR}: a connection the stopped Edge closed lingers in TIME_WAIT for up to a minute, and a bind
-     * without it fails on that, refusing a start the Edge itself would make (2026-10-29).
+     * without it fails on that, refusing a start the Edge itself would make.
      */
     static boolean taken(int port) {
         try (Socket s = new Socket()) {
@@ -710,8 +735,6 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
         }
     }
 
-    // ---- the registry
-
     /** The registry's entry, or null when there is none. */
     private Entry read() throws IOException {
         try {
@@ -738,7 +761,7 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
         return h;
     }
 
-    /** Writes {@code e} unless an entry exists: a temporary file linked into place, which fails when another got there first. */
+    /** Writes {@code e} unless an entry exists: a temporary file linked into place fails when another came first. */
     private boolean claim(Entry e) throws IOException {
         Path tmp = registry.resolveSibling(registry.getFileName() + "." + ProcessHandle.current().pid() + ".tmp");
         Files.write(tmp, JsonFile.JSON.writeValueAsBytes(e));

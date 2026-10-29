@@ -15,9 +15,9 @@ import static org.awaitility.Awaitility.await;
 /// - A stop drops a waiting request: the task does not run.
 class DebouncerTest {
 
-    /// Ten requests in a row on a 500 ms debouncer run the task exactly once, after the delay; [Debouncer#pending] reads
-    /// true while it waits and false once the task has run. The delay is long against the burst, so a loaded machine
-    /// cannot split it in two.
+    /// Ten requests in a row on a 500 ms debouncer run the task exactly once, after the delay; [Debouncer#pending]
+    /// reads true while it waits and false once the task has run. The delay is long against the burst, so a loaded
+    /// machine cannot split it in two.
     @Test
     void aBurstRunsTheTaskOnceAfterTheLastRequest() throws Exception {
         AtomicInteger runs = new AtomicInteger();
@@ -33,7 +33,8 @@ class DebouncerTest {
         assertThat(runs).as("one run for the whole burst").hasValue(1);
     }
 
-    /// A stop between a request and its delay drops the request: [Debouncer#pending] turns false and the task never runs.
+    /// A stop between a request and its delay drops the request: [Debouncer#pending] turns false and the task never
+    /// runs.
     @Test
     void aStopDropsTheWaitingRequest() throws Exception {
         AtomicInteger runs = new AtomicInteger();

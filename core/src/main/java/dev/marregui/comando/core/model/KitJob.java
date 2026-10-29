@@ -9,16 +9,16 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
- * One scheduled job of the kit, as {@code comando-kit.json} holds it and {@code install/kit.py} runs it (record 117): its
- * name, a one-line description, the days of the week it runs on (all seven: daily) at a time, the command (a path inside
- * the root, then its arguments), the environment it adds, the file its output goes to (empty: {@code .kit-jobs/<name>.log})
- * and whether it runs on its schedule or is paused. {@code kit.py} is the judge of a job; {@link #problems} checks the
- * same rules as they are typed.
+ * One scheduled job of the kit, as {@code comando-kit.json} holds it and {@code install/kit.py} runs it (record 117):
+ * its name, a one-line description, the days of the week it runs on (all seven: daily) at a time, the command (a path
+ * inside the root, then its arguments), the environment it adds, the file its output goes to (empty:
+ * {@code .kit-jobs/<name>.log}) and whether it runs on its schedule or is paused. {@code kit.py} is the judge of a job;
+ * {@link #problems} checks the same rules as they are typed.
  *
  * @param days    the weekdays, {@code MON} … {@code SUN}, in week order; all seven for a daily job
  * @param time    {@code HH:MM}, 24 hours
- * @param command the program, relative to the root with {@code /}, then its arguments; {@code {scheduler}} in any of them
- *                becomes the scheduler that started it
+ * @param command the program, relative to the root with {@code /}, then its arguments; {@code {scheduler}} in any of
+ *                them becomes the scheduler that started it
  */
 public record KitJob(String name, String description, List<String> days, String time, List<String> command,
                      Map<String, String> env, String log, boolean enabled) {
@@ -64,7 +64,9 @@ public record KitJob(String name, String description, List<String> days, String 
         return m.matches() ? String.format(Locale.ROOT, "%02d:%s", Integer.parseInt(m.group(1)), m.group(2)) : time.strip();
     }
 
-    /** {@code days} as the manifest writes them: a run of three or more as a range ({@code MON-FRI}), else one by one. */
+    /**
+     * {@code days} as the manifest writes them: a run of three or more as a range ({@code MON-FRI}), else one by one.
+     */
     public static String daysText(List<String> days) {
         List<Integer> at = WEEKDAYS.stream().filter(days::contains).map(WEEKDAYS::indexOf).toList();
         List<String> out = new ArrayList<>();
@@ -97,9 +99,9 @@ public record KitJob(String name, String description, List<String> days, String 
     }
 
     /**
-     * The problems of job {@code self} of {@code all} by field, as {@code kit.py} would refuse it: a name not in its form
-     * or used twice, a description longer than one line of 80, no day, a time that is no {@code HH:MM}, no program or one
-     * outside the root, an environment name not in capitals, a log outside the root. Whether the program is an
+     * The problems of job {@code self} of {@code all} by field, as {@code kit.py} would refuse it: a name not in its
+     * form or used twice, a description longer than one line of 80, no day, a time that is no {@code HH:MM}, no program
+     * or one outside the root, an environment name not in capitals, a log outside the root. Whether the program is an
      * executable file is {@code kit.py}'s to say.
      */
     public static Map<String, String> problems(List<KitJob> all, int self) {
@@ -143,7 +145,10 @@ public record KitJob(String name, String description, List<String> days, String 
         return out;
     }
 
-    /** As {@code kit.py}'s {@code inside}: relative, with {@code /}, no empty part, no {@code ..}, no drive in the first part. */
+    /**
+     * As {@code kit.py}'s {@code inside}: relative, with {@code /}, no empty part, no {@code ..}, no drive in the first
+     * part.
+     */
     private static boolean insideRoot(String rel) {
         String[] parts = rel.split("/", -1);
         if (rel.startsWith("/") || rel.contains("\\") || parts[0].contains(":")) {
@@ -157,7 +162,10 @@ public record KitJob(String name, String description, List<String> days, String 
         return true;
     }
 
-    /** The words of {@code line}, split at spaces; '…' and "…" keep spaces inside a word, and a backslash escapes in "…". */
+    /**
+     * The words of {@code line}, split at spaces; '…' and "…" keep spaces inside a word, and a backslash escapes in
+     * "…".
+     */
     public static List<String> words(String line) {
         List<String> out = new ArrayList<>();
         StringBuilder w = new StringBuilder();

@@ -39,6 +39,5 @@ it is settled. The rules are written down in [Running text](../workbench.md#2-ru
 [State, intents, effects](../architecture.md#4-state-intents-effects).
 
 In the code: `Workspace.CLOSED_KEPT` is 10, `ApprovalInbox.CONFIRM_MILLIS` is 3 000 ms and
-`ComandoUi.TYPING_PAUSE_MILLIS` is 2 000 ms. The menu bar has changed since item 24.8: five menus in
-[record 36](0036-five-menus-by-subject.md), three in [record 59](0059-three-menus-for-what-has-no-key.md), Edit and
-Actions in [record 75](0075-the-menu-bar-is-edit-and-actions-flat.md). ⌥⌘G still runs Gradle.
+`LayoutKeeper.TYPING_PAUSE_MILLIS` is 2 000 ms. The menus of item 24.8 are replaced (see the status); ⌥⌘G still runs
+Gradle.

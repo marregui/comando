@@ -19,7 +19,10 @@ public record ConnectionSpec(String name, String host, int port, String database
                              String sslMode) {
 
     public static final int DEFAULT_PORT = 8812;
-    /** TLS modes: {@code prefer} tries TLS and falls back; {@code require} encrypts; {@code verify-full} also checks the certificate and host. */
+    /**
+     * TLS modes: {@code prefer} tries TLS and falls back; {@code require} encrypts; {@code verify-full} also checks the
+     * certificate and host.
+     */
     public static final List<String> SSL_MODES = List.of("prefer", "disable", "allow", "require", "verify-ca", "verify-full");
 
     public ConnectionSpec(String name, String host, int port, String database, String user, String password, boolean prod) {

@@ -75,15 +75,15 @@ import java.util.function.Function;
 import java.util.function.LongSupplier;
 
 /**
- * Every pending approval of every session as a card. The keys act while the focus is anywhere in a card: Enter or
- * A gives the primary answer, S allows for the session, L twice always allows (only where the rule may be saved;
- * edits and MCP tools are allowed for the session only), D or Escape denies (with the note, if typed), Up and Down
- * move between cards. In a text field of the card the letters type; Enter in the note denies with the note when it
- * holds text and gives the primary answer when it is empty, the menu key with Enter denies with the note, Escape
- * returns to the card. A question's Other answer is a plain text box in the editors' font ({@link Editors#plain}), 120
- * characters wide: Enter starts a line, no key in it answers (the Answer button does), Escape returns to the card; it
- * holds nothing once the card is answered. Questions show their options with descriptions; a plan shows rendered; an edit shows its
- * diff.
+ * Every pending approval of every session as a card. The keys act while the focus is anywhere in a card: Enter or A
+ * gives the primary answer, S allows for the session, L twice always allows (only where the rule may be saved; edits
+ * and MCP tools are allowed for the session only), D or Escape denies (with the note, if typed), Up and Down move
+ * between cards. In a text field of the card the letters type; Enter in the note denies with the note when it holds
+ * text and gives the primary answer when it is empty, the menu key with Enter denies with the note, Escape returns to
+ * the card. A question's Other answer is a plain text box in the editors' font ({@link Editors#plain}), 120 characters
+ * wide: Enter starts a line, no key in it answers (the Answer button does), Escape returns to the card; it holds
+ * nothing once the card is answered. Questions show their options with descriptions; a plan shows rendered; an edit
+ * shows its diff.
  *
  * <p>Each time the inbox comes forward ({@link #shown}) it shows its top, the oldest request first, unless the keyboard
  * is in a card. A request arriving while it is in front moves nothing.</p>
@@ -335,7 +335,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         private final PermissionRules.Rules rules;
         /**
          * The Always confirmation: its text wrapped on lines of its own, its buttons on a row below. One flowing row
-         * reported the height of one line while its buttons wrapped below it, out of the card (2026-10-29).
+         * reports the height of one line while its buttons wrap below it, out of the card.
          */
         private final JPanel confirm = new JPanel();
         private final JTextArea confirmText = wrapped();
@@ -603,7 +603,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             answer(approval, new ApprovalDecision.Answer(answers));
         }
 
-        /** The first L asks for a second within {@link #CONFIRM_MILLIS}; a rule in the local settings outlives the session. */
+        /** A first L asks for a second within {@link #CONFIRM_MILLIS}; a local settings rule outlives the session. */
         private void alwaysKey() {
             long now = clock.getAsLong();
             if (armedByClick || (armedAt >= 0 && now - armedAt <= CONFIRM_MILLIS)) {
@@ -764,7 +764,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
             area.getActionMap().put("approval-card", keyAction(() -> focus.request(this)));
         }
 
-        /** The card's letters type in {@code field}: their press stops there, and the typed character still reaches it. */
+        /** The card's letters type in {@code field}: their press stops there; the typed character still reaches it. */
         private InputMap typesLetters(JTextComponent field) {
             InputMap m = field.getInputMap(JComponent.WHEN_FOCUSED);
             field.getActionMap().put("approval-type", keyAction(() -> { }));

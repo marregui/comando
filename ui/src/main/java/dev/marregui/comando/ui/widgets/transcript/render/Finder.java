@@ -202,7 +202,10 @@ final class Finder {
         currentMatch = -1;
     }
 
-    /** Matches the find's text over {@code placed}, the boxes in reading order, keeping the current match when it still is one. */
+    /**
+     * Matches the find's text over {@code placed}, the boxes in reading order, keeping the current match when it still
+     * is one.
+     */
     void rematch(List<Placed> placed) {
         int keep = currentMatch;
         matches.clear();

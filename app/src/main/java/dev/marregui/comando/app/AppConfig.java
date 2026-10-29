@@ -12,12 +12,12 @@ import java.nio.file.Path;
  * -Dcomando.home}, else {@code COMANDO_HOME}, else {@code ~/.comando}; tests point it at a temporary directory. The
  * Claude Code folder is the kit root ({@link KitRoot}).
  *
- * @param keychain keep connection passwords in the OS secret store; on for the default data root, off for any other unless
- *                 {@code -Dcomando.keychain=true}, so a test root never writes the user's keychain
+ * @param keychain keep connection passwords in the OS secret store; on for the default data root, off for any other
+ *                 unless {@code -Dcomando.keychain=true}, so a test root never writes the user's keychain
  */
 public record AppConfig(Path home, String claudeExecutable, KitRoot root, boolean recordIntents, boolean keychain) {
 
-    /** A configuration for tests and tools: Claude Code's folder holds {@code claudeProjects}, without a kit; no keychain. */
+    /** For tests and tools: Claude Code's folder holds {@code claudeProjects}, without a kit; no keychain. */
     public AppConfig(Path home, String claudeExecutable, Path claudeProjects, boolean recordIntents) {
         this(home, claudeExecutable, KitRoot.plain(claudeProjects.toAbsolutePath().normalize().getParent()), recordIntents, false);
     }

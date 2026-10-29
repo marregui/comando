@@ -101,9 +101,9 @@ class StreamMapperTest {
         assertThat(blocks(Block.Note.class)).filteredOn(n -> n.kind() == Block.NoteKind.INIT).hasSize(1);
     }
 
-    /// The context follows each top-level model call of a live turn, not only its end; a stored conversation's calls send
-    /// nothing as they replay, then one report when it is loaded: its last call's tokens with the window the metrics
-    /// kept, or the metrics' own tokens when the replay had none (record 120).
+    /// The context follows each top-level model call of a live turn, not only its end; a stored conversation's calls
+    /// send nothing as they replay, then one report when it is loaded: its last call's tokens with the window the
+    /// metrics kept, or the metrics' own tokens when the replay had none (record 120).
     @Test
     void theContextFollowsEachModelCallAndAStoredConversationReportsItOnce() {
         mapper.prompt("Run the shell command: touch probe-file.txt", "one");
@@ -214,7 +214,7 @@ class StreamMapperTest {
 
     /// A foreground sub-agent ends with its call's result; a background one is not ended by the result that only says
     /// it launched, nor by a running notification, and ends with its completed task notification; a call that is not a
-    /// sub-agent never ends as one. The event shapes are those of version 2.1.302 of the CLI (read on 2026-10-18).
+    /// sub-agent never ends as one. The event shapes are those of the CLI's 2.1.302.
     @Test
     void aSubagentEndsAtItsCallsResultOrForABackgroundOneAtItsTaskNotification() {
         mapper.accept("""
@@ -373,9 +373,9 @@ class StreamMapperTest {
 
     /// Each top-level message of a turn sends what it ran at, as its transcript line gives it: the first with
     /// `firstOfTurn`, so the session's own setting shows; a message's later blocks ask no more; a sub-agent's message
-    /// asks nothing; a message whose line is not yet written arms one read later (and is read again on the retry once its
-    /// line is there), else for the last time at the turn's end, before the turn's end is sent, with the stream's model
-    /// alone when the line never came.
+    /// asks nothing; a message whose line is not yet written arms one read later (and is read again on the retry once
+    /// its line is there), else for the last time at the turn's end, before the turn's end is sent, with the stream's
+    /// model alone when the line never came.
     @Test
     void eachTopLevelMessageSendsTheModelAndEffortItsTranscriptLineGives() {
         List<String> asked = new ArrayList<>();

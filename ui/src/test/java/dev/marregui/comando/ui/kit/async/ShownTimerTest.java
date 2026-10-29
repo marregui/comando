@@ -10,10 +10,10 @@ import java.awt.event.HierarchyEvent;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [ShownTimer] runs its repeating timer exactly while its owner wants ticks and is showing.
-/// - wanted but not showing, it never runs
-/// - wanted and shown, it runs
-/// - hidden, it stops; unwanted, it stops
-/// - showing again resumes it only if it is still wanted
+/// - Wanted but not showing, it never runs.
+/// - Wanted and shown, it runs.
+/// - Hidden, it stops; unwanted, it stops.
+/// - Showing again resumes it only if it is still wanted.
 @ExtendWith(OnEdt.class)
 class ShownTimerTest {
 

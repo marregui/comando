@@ -3,7 +3,8 @@
 comando's MCP server: the way a Claude Code session reaches back into the window. Streamable HTTP on `127.0.0.1`,
 JSON-RPC written on the JDK's `HttpServer` and Jackson with no MCP library, one bearer token per Claude Code process. It
 serves the UI tools, the database tools, the session tools, the tools that consult the other comando instances and the
-permission-prompt tool behind every approval card. It depends on `core` and Jackson, never on the MQTT client; `app` constructs it, and `claude` reaches it through `core`'s `McpGateway`.
+permission-prompt tool behind every approval card. It depends on `core` and Jackson, never on the MQTT client; `app`
+constructs it, and `claude` reaches it through `core`'s `McpGateway`.
 
 1. [Architecture](#1-architecture)
 2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
@@ -30,7 +31,8 @@ One package, `dev.marregui.comando.mcp`.
 
 The tools: `approve`; `ui_show_table`, `ui_plot`, `ui_show_view`, `ui_set_editor`, `ui_insert`, `ui_open_file`,
 `ui_notify`, `ui_get_state`, `ui_set_layout`, `ui_close_view`; `db_run_sql`, `db_describe`; `session_send`,
-`session_read`; `instances_list`, `instance_ask`, `instance_reply`. Their arguments and limits are in [Claude §2.2](../docs/claude.md#22-the-tools).
+`session_read`; `instances_list`, `instance_ask`, `instance_reply`; and, through `ActionTools`, every other action of
+`core`'s `Actions`. Their arguments and limits are in [Claude §2.2](../docs/claude.md#22-the-tools).
 
 **A UI tool** validates its input, sends one intent and returns at once. The reducer decides what the window does: that
 session's unpinned view with the same title and placement is replaced, a pinned one never is.
@@ -139,6 +141,7 @@ The JDK's `HttpServer` adds its own dispatcher thread, which is not comando's.
 |---|---|
 | `McpServerTest` | the server and every tool over HTTP |
 | `SqlPolicyTest` | the read-only policy |
+| `ViewSpecsPlotTest` | a plot's arguments into numeric series: named series, top-level `x` and `y`, the error naming a missing or non-numeric field |
 | `PermissionRulesTest` | the rules a "For session" or "Always" answer adds |
 | `McpToolsFormatTest` | the rows text the database tools return, within its budget |
 | `ActionToolsTest` | `session_new` with a first prompt and its creator, edits keeping the creator, the start rule, rule 1, rule 2, every action listed and run |

@@ -47,11 +47,11 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * The kit's scheduled jobs as a list with the selected one's fields beside it (record 117): add, remove, and the fields
- * of a job of {@code comando-kit.json}. Each field is checked as it is typed, with {@link KitJob#problems}; a field that
- * fails says why under the form, the list marks its job, and the list can be saved only when every job passes. Under the
- * fields, read only, how the scheduler holds the job: installed and loaded, its last run and its next. A job's row menu
- * runs it now or opens its log. EDT only.
+ * The kit's scheduled jobs as a list with the selected one's fields beside it (record 117): add, remove, and the
+ * fields of a job of {@code comando-kit.json}. Each field is checked as it is typed, with {@link KitJob#problems}; a
+ * field that fails says why under the form, the list marks its job, and the list can be saved only when every job
+ * passes. Under the fields, read-only, how the scheduler holds the job: installed and loaded, its last run and its
+ * next. A job's row menu runs it now, opens its log or removes it. EDT only.
  */
 public final class JobsEditor {
 
@@ -303,7 +303,7 @@ public final class JobsEditor {
         return state.getText().strip();
     }
 
-    /** The menu of the job at list row {@code i}: run it now and open its log, only for a job the kit already has; remove it. */
+    /** The menu of the job at row {@code i}: run it now and open its log, for a job the kit already has; remove it. */
     JPopupMenu menuFor(int i) {
         JPopupMenu menu = new JPopupMenu();
         Row r = rows.get(i);

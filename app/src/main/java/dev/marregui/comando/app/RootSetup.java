@@ -13,7 +13,7 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 
-/** The window's {@link Setup}: the kit root comando runs on, read through git, its jobs through its {@code install/kit.py}. */
+/** The window's {@link Setup}: the kit root comando runs on, through git; its jobs, through {@code install/kit.py}. */
 final class RootSetup implements Setup {
 
     private final KitRoot root;

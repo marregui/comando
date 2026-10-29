@@ -68,7 +68,7 @@ public final class ProbeNewSession {
     static void scenario(Robot r, String label, String addTip, boolean selectAllFirst, boolean click) throws Exception {
         System.out.println("=== " + label);
         if (addTip != null) {
-            // no bar of buttons since 2026-10-19: the Sessions tab's menu holds New session…
+            // the Sessions tab's menu holds New session…
             SwingUtilities.invokeAndWait(() -> {
                 for (Window w : Window.getWindows()) {
                     AbstractButton tab = findNamed(w, "Sessions");

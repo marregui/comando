@@ -70,7 +70,7 @@ final class PanelDocument extends RSyntaxDocument {
         repaintBlocks(e.getOffset(), e.getOffset());
     }
 
-    /** Repaints every line of the blocks that hold {@code from} to {@code to}: a change of kind recolours all of them. */
+    /** Repaints every line of the blocks holding {@code from} to {@code to}: a change of kind recolours all of them. */
     private void repaintBlocks(int from, int to) {
         if (!CommandEditor.PANEL_STYLE.equals(getSyntaxStyle())) {
             return;
@@ -144,7 +144,7 @@ final class PanelDocument extends RSyntaxDocument {
         }
     }
 
-    /** {@link CommandEditor#PANEL_STYLE} makes a {@link PanelTokenMaker} on this document; other styles are RSyntaxTextArea's. */
+    /** {@link CommandEditor#PANEL_STYLE} makes a {@link PanelTokenMaker}; other styles are RSyntaxTextArea's. */
     private static final class Factory extends TokenMakerFactory {
         private final PanelDocument doc;
 

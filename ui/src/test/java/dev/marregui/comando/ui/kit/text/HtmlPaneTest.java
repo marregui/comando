@@ -47,11 +47,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - A picture is no wider than the pane, and its alt text cannot add an attribute.
 /// - A document shows the pictures it names beside it and only those, loading first, then drawn.
 /// - Note links and addresses are followed at a real double click; a heading link scrolls the heading to the top.
-/// - A picture rendered before the pane had a width fits once laid out; one drawn above the reader's heading keeps it in view.
+/// - A picture rendered before the pane had a width fits once laid out; one drawn above the reader's heading keeps it
+///   in view.
 /// - Diagrams drawn later take their place without rendering the rest of the page again.
 class HtmlPaneTest {
 
-    /// The pane is not opaque, its body colour is the transcript text, and a Java fence carries the editor's keyword colour.
+    /// The pane is not opaque, its body colour is the transcript text, and a Java fence carries the editor's keyword
+    /// colour.
     @Test
     void aPageIsDarkTheWindowsGroundWithItsCodeInTheEditorsColours() throws Exception {
         HtmlPane[] p = new HtmlPane[1];
@@ -65,9 +67,10 @@ class HtmlPaneTest {
                 .contains(Theme.hex(Editors.colorOf(TokenTypes.RESERVED_WORD)).substring(1));
     }
 
-    /// [HtmlPane#pictureHtml] scales a wide picture to the pane keeping its ratio, keeps a small one or one in an unlaid pane
-    /// at its own size, keeps a hostile alt and a path with quotes and brackets inside their attributes as Swing parses
-    /// them, says `loading …` while pending, and shows an unavailable picture's escaped alt with its reason.
+    /// [HtmlPane#pictureHtml] scales a wide picture to the pane keeping its ratio, keeps a small one or one in an
+    /// unlaid pane at its own size, keeps a hostile alt and a path with quotes and brackets inside their attributes as
+    /// Swing parses them, says `loading …` while pending, and shows an unavailable picture's escaped alt with its
+    /// reason.
     @Test
     void aPictureIsShownNoWiderThanThePaneAndItsAltCannotAddAnAttribute() throws Exception {
         Path file = Path.of("/kb/img/chart.png");
@@ -94,8 +97,8 @@ class HtmlPaneTest {
     }
 
     /// A PNG, an SVG and a GIF named relative to the document show `loading` first, then as images (the SVG from the
-    /// cache), a missing one shows its reason and a web one stays alt text; a later render keeps the folder, and a render
-    /// with no folder reads no relative picture.
+    /// cache), a missing one shows its reason and a web one stays alt text; a later render keeps the folder, and a
+    /// render with no folder reads no relative picture.
     @Test
     void aDocumentShowsThePicturesItNamesBesideItAndOnlyThose(@TempDir Path dir) throws Exception {
         Path doc = dir.resolve("kb");
@@ -158,7 +161,8 @@ class HtmlPaneTest {
         }
     }
 
-    /// Press, release and click events with click counts 1 then 2 on a note link and a URL hand the handler each href once.
+    /// Press, release and click events with click counts 1 then 2 on a note link and a URL hand the handler each href
+    /// once.
     @Test
     void aNoteLinkAndAnAddressAreFollowedAtARealDoubleClick() throws Exception {
         List<String> opened = new CopyOnWriteArrayList<>();
@@ -193,8 +197,8 @@ class HtmlPaneTest {
     }
 
     /// A same-page fragment moves nothing on a single click and on a double click puts the heading at the top with the
-    /// caret; `#` goes to the top, a keyboard activation matches the heading's case-insensitive id up to the page's end,
-    /// a percent-encoded id is found, an unknown one stays, and only a link to another file reaches the handler.
+    /// caret; `#` goes to the top, a keyboard activation matches the heading's case-insensitive id up to the page's
+    /// end, a percent-encoded id is found, an unknown one stays, and only a link to another file reaches the handler.
     @Test
     void aLinkToAHeadingDoubleClickedScrollsItToTheTop() throws Exception {
         StringBuilder md = new StringBuilder("# Report\n\nSee [the decisions](#3-decisions), [notes](#Notes) and [the top](#).\n\n");
@@ -247,8 +251,8 @@ class HtmlPaneTest {
         assertThat(opened).containsExactly("other.md#3-decisions");
     }
 
-    /// A 2000 px picture rendered with no pane width is at its own size; after layout to 500 px and the resize settling,
-    /// [HtmlPane#flushResize] re-renders it narrower.
+    /// A 2000 px picture rendered with no pane width is at its own size; after layout to 500 px and the resize
+    /// settling, [HtmlPane#flushResize] re-renders it narrower.
     @Test
     void aPictureRenderedBeforeThePaneHadAWidthFitsOnceItIsLaidOut(@TempDir Path dir) throws Exception {
         Path wide = dir.resolve("wide.png");
@@ -278,8 +282,8 @@ class HtmlPaneTest {
         }
     }
 
-    /// When a 900 px picture above the heading the reader scrolled to arrives, the heading moves down by more than 500 px
-    /// and the view follows it.
+    /// When a 900 px picture above the heading the reader scrolled to arrives, the heading moves down by more than 500
+    /// px and the view follows it.
     @Test
     void aPictureDrawnAboveTheHeadingTheReaderWasTakenToKeepsTheHeadingInView(@TempDir Path dir) throws Exception {
         Path chart = dir.resolve("images/chart.png");

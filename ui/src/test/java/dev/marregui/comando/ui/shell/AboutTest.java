@@ -18,12 +18,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [About] draws the About card from its Markdown file, filled with this run's facts.
 /// - The file words the card; this run fills its facts, links and footer.
 /// - A fact left empty is not shown; an unknown placeholder stays as written.
-/// - The card paints at retina scale with rounded corners, and a clicked link goes where it says.
+/// - The card paints at scale 2 with rounded corners, and a clicked link goes where it says.
 /// - A value too long is cut in its middle.
 class AboutTest {
 
-    /// [About#load] gives the name, tagline, the five fact rows with the version, runtime, CLI version and the data folder
-    /// shortened to `~`, the three links, and a footer with the current year.
+    /// [About#load] gives the name, tagline, the five fact rows with the version, runtime, CLI version and the data
+    /// folder shortened to `~`, the three links, and a footer with the current year.
     @Test
     void theFileWordsTheCardAndThisRunFillsItsFacts() {
         Map<String, String> facts = About.facts("2.0.0", Path.of(System.getProperty("user.home"), ".comando"), "2.1.302");
@@ -39,8 +39,8 @@ class AboutTest {
         assertThat(c.footer()).isEqualTo("Made by hand by Miguel Arregui, " + Year.now().getValue() + ".");
     }
 
-    /// [About#parse] drops a row whose fact is empty, keeps an unknown `{placeholder}` literally, takes the last paragraph as
-    /// the footer, and gives no footer when there is only a tagline.
+    /// [About#parse] drops a row whose fact is empty, keeps an unknown `{placeholder}` literally, takes the last
+    /// paragraph as the footer, and gives no footer when there is only a tagline.
     @Test
     void aFactLeftEmptyIsNotShownAndAnUnknownPlaceholderStaysAsWritten() {
         About.Content c = About.parse("""

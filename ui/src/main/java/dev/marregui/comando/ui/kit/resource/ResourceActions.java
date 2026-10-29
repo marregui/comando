@@ -17,7 +17,7 @@ import java.util.function.Supplier;
  * menu offers, and remove one, which each row's menu offers with edit and clone. Remove asks first, naming what removal
  * does: a resource in use (a running session, an open connection or panel) offers "Stop and remove" ("Disconnect and
  * remove", "Close and remove") or "Leave it", one not in use "Remove" or "Cancel". The safe answer is the default, and
- * closing the question gives it. The list has no bar of buttons (Miguel, 2026-10-19).
+ * closing the question gives it. The list has no bar of buttons (record 74).
  *
  * @param <T> the list's rows
  */
@@ -53,7 +53,9 @@ public final class ResourceActions<T> {
     public record Rows<T>(String noun, Function<T, String> name, Function<T, String> label, Predicate<T> inUse,
                           String closeVerb, Function<T, String> question) {
 
-        /** Rows of a resource kind: named by their resource name, in use unless closed or failed, asked the kind's question. */
+        /**
+         * Rows of a resource kind: named by their resource name, in use unless closed or failed, asked its question.
+         */
         public static <T> Rows<T> of(ResourceKind<?> kind, Function<T, String> name, Function<T, Status> status, String closeVerb,
                                      Supplier<AppState> state) {
             return new Rows<>(kind.noun(), name, name, t -> status.apply(t) != Status.CLOSED && status.apply(t) != Status.FAILED,

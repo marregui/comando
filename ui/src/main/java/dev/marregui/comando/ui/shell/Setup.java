@@ -9,16 +9,19 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * The kit comando runs its sessions on, as the window reaches it: the root and its {@code comando-kit.json}, the kit's version
- * and newer releases, the brain's backup, and the kit's scheduled jobs through its {@code install/kit.py} (record 117).
- * {@link #status}, {@link #backUpBrain}, {@link #backUpKit} and the jobs' calls block (git, a remote, Python): call them off the EDT.
+ * The kit comando runs its sessions on, as the window reaches it: the root and its {@code comando-kit.json}, the kit's
+ * version and newer releases, the brain's and the kit's backups, and the kit's scheduled jobs through its
+ * {@code install/kit.py} (record 117). {@link #status}, {@link #backUpBrain}, {@link #backUpKit} and the jobs' calls
+ * block (git, a remote, Python): call them off the EDT. Implemented in {@code app}.
  */
 public interface Setup {
 
     /** The root comando starts its sessions on. */
     KitRoot root();
 
-    /** The kit's version, its newer releases, and whether the brain and the kit can be backed up; nothing without a kit. */
+    /**
+     * The kit's version, its newer releases, and whether the brain and the kit can be backed up; none without a kit.
+     */
     Status status();
 
     /** Commits everything in the brain and pushes it; what was done, for the notice. */
@@ -59,14 +62,14 @@ public interface Setup {
     /**
      * The kit as git sees it now.
      *
-     * @param version   the kit's version and the newer releases of its remote
+     * @param version      the kit's version and the newer releases of its remote
      * @param canBackUp    whether the brain is a git repository of its own with a remote
      * @param canBackUpKit whether the kit's root is a git repository with a remote
      */
     record Status(KitVersion version, boolean canBackUp, boolean canBackUpKit) {
         public static final Status NONE = new Status(KitVersion.UNKNOWN, false, false);
 
-        /** The brain's backup alone, as before the kit had one. */
+        /** A status without the kit's backup. */
         public Status(KitVersion version, boolean canBackUp) {
             this(version, canBackUp, false);
         }

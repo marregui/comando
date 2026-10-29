@@ -54,7 +54,10 @@ final class FolderRules {
         return new Transition(s, List.of(effect.get()));
     }
 
-    /** Entries of a deletable folder to the Trash: refused for any other folder, for the folder itself and for a path outside it. */
+    /**
+     * Entries of a deletable folder to the Trash: refused for any other folder, for the folder itself and for a path
+     * outside it.
+     */
     static Transition deleteFiles(Clock clock, AppState s, Intent.DeleteFiles i) {
         Optional<FolderRoot> folder = s.folder(i.folder());
         if (folder.isEmpty()) {
@@ -120,7 +123,7 @@ final class FolderRules {
     }
 
     static Transition folderLoaded(AppState s, Intent.FolderLoaded i) {
-        // a tree read with settings since edited, or of a folder since removed, is dropped: the tab shows only current folders
+        // a tree read with settings since edited, or of a folder since removed, is dropped
         return FolderRoot.withGroupRoots(s.folders()).contains(i.folder())
                 ? new Transition(s, List.of(new Effect.ShowFolder(i.folder(), i.tree()))) : Transition.of(s);
     }

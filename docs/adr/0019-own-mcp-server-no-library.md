@@ -18,7 +18,7 @@ Claude decided during implementation; Miguel accepted the record on 2026-10-13.
 ## 3. Consequences
 
 No dependency on the SDK's transport stack. Protocol versions `2025-03-26`, `2025-06-18` and `2025-11-25` are
-accepted; a new version needs one line (`McpServer.PROTOCOLS`). `McpServer` is 269 lines at HEAD.
+accepted; a new version needs one line (`McpServer.PROTOCOLS`).
 
 ## 4. Alternatives
 

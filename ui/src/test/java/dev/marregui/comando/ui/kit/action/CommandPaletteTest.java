@@ -18,7 +18,6 @@ class CommandPaletteTest {
     /// subsequence ranks 3. The palette lowercases both sides before calling [CommandPalette#rank].
     @Test
     void prefixAndWordMatchesRankBeforeSubsequences() {
-        // the palette compares lower case
         assertThat(CommandPalette.rank("terminal restart", "term")).isZero();
         assertThat(CommandPalette.rank("show the panel's terminal", "term")).isEqualTo(1);
         assertThat(CommandPalette.rank("focus the prompt bar", "term")).isEqualTo(3);

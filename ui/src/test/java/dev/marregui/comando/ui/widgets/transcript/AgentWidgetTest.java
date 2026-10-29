@@ -59,8 +59,8 @@ class AgentWidgetTest {
         assertThat(onEdt(() -> widget.transcript().canvas().itemCount())).as("closed: it listens no more").isEqualTo(2);
     }
 
-    /// [TranscriptRegistry#forget] drops the session's sub-agent transcripts and keeps those of a session whose name only
-    /// starts the same.
+    /// [TranscriptRegistry#forget] drops the session's sub-agent transcripts and keeps those of a session whose name
+    /// only starts the same.
     @Test
     void aSessionsSubagentsGoWithIt() {
         TranscriptRegistry transcripts = new TranscriptRegistry();

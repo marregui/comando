@@ -35,7 +35,9 @@ public interface ResourceKind<S> {
     /** A new spec with defaults. */
     S template(String name);
 
-    /** The {@link dev.marregui.comando.core.state.Notice#subject() subject} of notices about the resource {@code name}. */
+    /**
+     * The {@link dev.marregui.comando.core.state.Notice#subject() subject} of notices about the resource {@code name}.
+     */
     String noticeSubject(String name);
 
     /** The question asked before removing {@code name}, naming what the removal does in state {@code s}. */

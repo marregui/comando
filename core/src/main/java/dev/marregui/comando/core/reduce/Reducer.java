@@ -13,12 +13,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Applies one intent to the state and lists the effects that follow. Pure apart from the clock, which
- * only stamps notices and activity, and the home folder, where a file link or a Gradle run without a session starts: the same state,
- * intent, time and home always give the same transition.
+ * Applies one intent to the state and lists the effects that follow. Pure apart from the clock, which only stamps
+ * notices and activity, and the home folder, where a file link or a Gradle run without a session starts: the same
+ * state, intent, time and home always give the same transition.
  *
- * <p>Request identity closes the stale-result class of defects: every SQL run gets an id from the state's
- * counter, a panel holds one run, and an event for an id that is no longer a panel's run is dropped.</p>
+ * <p>Request identity drops stale results: every SQL run gets an id from the state's counter, a panel holds one run,
+ * and an event for an id that is no longer a panel's run is dropped.</p>
  *
  * <p>Each intent goes to the rules of its domain in this package; what follows any intent (the repository watch, the
  * desktop error) is added here.</p>

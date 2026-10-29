@@ -103,8 +103,8 @@ final class PanelFiles {
             deps.texts().open(id, file).thenAccept(opened -> {
                 switch (opened.kind()) {
                     case BOUND -> {
-                        // a file elsewhere keeps its extension, so it never takes a session's or a panel's name; a file of
-                        // the panels' folder is named after its panel's title, so it takes the title without .md
+                        // a file elsewhere keeps its extension, so it never takes a session's or a panel's name; a file
+                        // of the panels' folder is named after its panel's title, so it takes the title without .md
                         boolean document = deps.texts().document(id);
                         String title = document ? PanelTexts.documentTitle(file, deps.state().get()::titleTaken) : PanelTexts.titleOf(file);
                         deps.intents().dispatch(new Intent.AddPanel(id, title, document));
@@ -130,8 +130,8 @@ final class PanelFiles {
                     return;
                 }
                 FileView file = FileView.read(p, line);
-                // a file opens on the user's click only: it shows even in a side pane the user hid earlier, and even when
-                // it replaces the same file's view in place
+                // a file opens on the user's click only: it shows even in a side pane the user hid earlier, and even
+                // when it replaces the same file's view in place
                 Edt.run(() -> {
                     layout.revealSidePane();
                     openedFiles.add(p);
@@ -147,9 +147,9 @@ final class PanelFiles {
     }
 
     /**
-     * The file {@code path} names, read from {@code baseDir}; a relative one that is not there is looked for under that
-     * folder's tree, then under the repositories of the files {@code session}'s own tool calls named, the latest first,
-     * then under the Files tab's folders (record 111). Off the EDT.
+     * The file {@code path} names, read from {@code baseDir}; a relative one that is not there is looked for under
+     * that folder's tree, then under the repositories of the files {@code session}'s own tool calls named, the latest
+     * first, then under the Files tab's folders (record 111). Off the EDT.
      */
     private Path located(String session, String path, String baseDir) {
         Path p = FileView.resolve(path, baseDir);
@@ -231,7 +231,9 @@ final class PanelFiles {
         });
     }
 
-    /** Asks, when the panel's shell runs {@code job}, then closes; a panel gone meanwhile is closed without a question. */
+    /**
+     * Asks, when the panel's shell runs {@code job}, then closes; a panel gone meanwhile is closed without a question.
+     */
     private void answerClose(PanelId id, String job) {
         if (job != null && deps.state().get().panel(id).isPresent()) {
             String title = deps.state().get().panel(id).map(x -> x.title()).orElse("the panel");

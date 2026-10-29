@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 import static com.tngtech.archunit.library.dependencies.SlicesRuleDefinition.slices;
 
-/// The package rules of the UI (plan §4.6, architecture §8), checked on its main classes: each layer uses only those
+/// The UI's package rules (architecture §8), checked on its main classes: each layer uses only those
 /// above it (kit, widget, widgets, panels, dialogs, shell), so widgets do not duplicate each other.
 /// - No widget imports another widget.
 /// - Widgets use only the kit, the contract and core.

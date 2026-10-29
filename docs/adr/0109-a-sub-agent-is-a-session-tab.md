@@ -8,11 +8,10 @@
 
 A session that delegates runs sub-agents for minutes. [Record 64](0064-sub-agents-are-shown-live.md) showed one, from
 its card's "transcript" link, as a lower Markdown view: the task, then each step one list item, results clipped to 200
-characters. Miguel: a delegating session gave "no visual cues other than scrolling", "no easy accessors to get to the
-process being unfold"; a sub-agent should open "a tab in the lower panel where the session tab is, and act as a
-session tab with other icon but in the same color", and the sessions sidebar's card "needs to also give an
-understanding of what that looks like, with double clickeable go tos". This record amends record 64's view and adds
-the outline to the card of records 87 and 107.
+characters. Miguel: a delegating session gave no cue but scrolling and no way to reach the work under way; a sub-agent
+should open as a tab in the lower panel beside the Session tab and act as a session tab, with another icon in the same
+colour, and the sessions sidebar's card should outline the sub-agents, each a go-to at a double click. This record
+amends record 64's view and adds the outline to the card of records 87 and 107.
 
 ## 2. Decision
 
@@ -38,9 +37,8 @@ adapter's Markdown rendering of a sub-agent goes, and its follow states are plai
 lower panel's views, after the fixed tabs, as every placed view does. A launch seen in the stream before the session's
 task list holds it reads "done" in the outline for those seconds (the transcript card's 10 s grace is not repeated).
 
-Proposed in the fleet vision (scratchpad `harness/07-fleet-vision.md`), not built here: the tab's footer with the
-sub-agent's model, effort and tokens; `session_send` peers and Codex runs as tabs of the same kind; a fan-out mark on
-the sidebar row.
+Proposed, not built here: the tab's footer with the sub-agent's model, effort and tokens; `session_send` peers and Codex
+runs as tabs of the same kind; a fan-out mark on the sidebar row.
 
 Tested in `SubagentViewTest`, `SubagentFollowTest` and `SubagentTailEdgesTest` (the tab's spec and transcript as the
 file grows, the stops, two with one description, four at most), `AgentWidgetTest` (the transcript followed, the state,

@@ -1,6 +1,9 @@
 package dev.marregui.comando.ui.widget.capability;
 
-/** A widget that scales its content; positive steps enlarge. Text zooms between {@link #MIN_SIZE} and {@link #MAX_SIZE}. */
+/**
+ * A widget that scales its content; positive steps enlarge. Text zooms between {@link #MIN_SIZE} and
+ * {@link #MAX_SIZE} points.
+ */
 public interface Zoomable {
 
     float MIN_SIZE = 8f;

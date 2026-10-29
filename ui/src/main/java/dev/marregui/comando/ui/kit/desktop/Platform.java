@@ -32,8 +32,9 @@ public final class Platform {
     }
 
     /**
-     * True when comando uses macOS's keys: ⌘ for its commands, ⌃ left to the shell. Elsewhere Ctrl takes ⌘'s place. The
-     * desktop decides, unless {@link #KEYS_PROPERTY} says {@code mac} or {@code linux}, so either set is tested on any desktop.
+     * True when comando uses macOS's keys: ⌘ for its commands, ⌃ left to the shell. Elsewhere Ctrl takes ⌘'s place.
+     * The desktop decides, unless {@link #KEYS_PROPERTY} says {@code mac} or {@code linux}, so either set is tested on
+     * any desktop.
      */
     public static boolean macKeys() {
         String keys = System.getProperty(KEYS_PROPERTY, "");
@@ -54,7 +55,7 @@ public final class Platform {
         return mac ? InputEvent.META_DOWN_MASK : InputEvent.CTRL_DOWN_MASK;
     }
 
-    /** {@code program} in each folder of the PATH, in the PATH's order; whether each exists is the caller's question. */
+    /** {@code program} in each folder of the PATH, in the PATH's order; the caller checks which exist. */
     public static List<Path> onPath(String program) {
         return onPath(program, System.getenv("PATH"));
     }

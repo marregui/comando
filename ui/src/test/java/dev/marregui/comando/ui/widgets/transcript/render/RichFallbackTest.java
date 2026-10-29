@@ -16,8 +16,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 /// - text the font draws whole adds no run
 class RichFallbackTest {
 
-    /// Two adjacent private-use characters the font cannot display form one [Theme#fallback] run with the text's colour; the
-    /// text around them stays in the font. Skipped where the font draws every private-use character.
+    /// Two adjacent private-use characters the font cannot display form one [Theme#fallback] run with the text's
+    /// colour; the text around them stays in the font. Skipped where the font draws every private-use character.
     @Test
     void aCharacterTheFontLacksIsDrawnInTheFallbackAndTheRestInTheFont() {
         Font font = new Font(Font.SERIF, Font.BOLD, 1).deriveFont(20f);

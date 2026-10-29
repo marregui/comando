@@ -25,6 +25,7 @@ public final class DiffPane {
         return area;
     }
 
+    /** Shows the diff of {@code before} and {@code after}, or "(no changes)" when they are equal. */
     public void show(String path, String before, String after) {
         List<String> lines = Diffs.unified(path, before, after);
         StringBuilder text = new StringBuilder();

@@ -93,7 +93,7 @@ final class SessionRules {
         }
         List<SessionState> sessions = new ArrayList<>(s.sessions().size());
         for (SessionState x : s.sessions()) {
-            // the form has no carried summary nor creator: the one waiting stays, and so does who created it (record 121)
+            // the form has no carried summary nor creator: both stay as they were (record 121)
             sessions.add(x.name().equals(i.previousName())
                     ? x.withSpec(spec.withCarried(x.spec().carried()).withCreatedBy(x.spec().createdBy())) : x);
         }
@@ -194,7 +194,10 @@ final class SessionRules {
                 .orElse(Transition.of(s));
     }
 
-    /** A stopped session starts on a new conversation; the spec is saved first, so a crash mid-start resumes nothing old. */
+    /**
+     * A stopped session starts on a new conversation; the spec is saved first, so a crash mid-start resumes nothing
+     * old.
+     */
     static Transition startFresh(Clock clock, AppState s, String name) {
         Optional<SessionState> found = s.session(name).filter(x -> !x.status().isUsable() && x.status() != Status.CLOSING);
         if (found.isEmpty()) {

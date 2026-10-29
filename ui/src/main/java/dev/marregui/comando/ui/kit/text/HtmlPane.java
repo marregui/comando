@@ -41,17 +41,18 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * A read-only HTML pane styled from the theme, for rendered Markdown. Every link is followed at a double click (record
- * 94): a link to a heading of the page ({@code #} and its id) scrolls to it; any other link, a web page or a file, goes
- * to the {@link LinkHandler}.
+ * A read-only HTML pane styled from the theme, for rendered Markdown. Every link is followed at a double click
+ * (record 94): a link to a heading of the page ({@code #} and its id) scrolls to it; any other link, a web page or a
+ * file, goes to the {@link LinkHandler}.
  */
 public class HtmlPane extends JEditorPane {
 
     private static final System.Logger LOG = System.getLogger(HtmlPane.class.getName());
 
     /**
-     * Receives the links double-clicked or activated from the keyboard, but a heading of the page: a web page, a file
-     * beside the document, a {@code [[name]]} note. Unless set, {@link Links} follows them, read from the page's folder.
+     * Receives the links double-clicked or activated from the keyboard, except those to a heading of the page: a web
+     * page, a file beside the document, a {@code [[name]]} note. Unless set, {@link Links} follows them, read from the
+     * page's folder.
      */
     public interface LinkHandler {
         void open(String href);
@@ -80,8 +81,8 @@ public class HtmlPane extends JEditorPane {
         putClientProperty(JEditorPane.HONOR_DISPLAY_PROPERTIES, Boolean.TRUE);
         // the body's colour: the pane honours its display properties over the style sheet's
         setForeground(Theme.TRANSCRIPT_TEXT);
-        // the page grows as its pictures arrive and settles as it is laid out at its width: a reader taken to a heading
-        // and not scrolled since stays at the heading
+        // the page grows as its pictures arrive and settles as it is laid out at its width: a reader taken to a
+        // heading and not scrolled since stays at the heading
         addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
@@ -117,9 +118,9 @@ public class HtmlPane extends JEditorPane {
     }
 
     /**
-     * Scrolls the heading whose id is {@code fragment} (percent-decoded; the exact id first, then one differing only in
-     * case) to the top of the view; the top of the page for an empty fragment. The caret goes there too, so a render of
-     * a new version of the text keeps the reader there. False when the page has no such heading.
+     * Scrolls the heading whose id is {@code fragment} (percent-decoded; the exact id first, then one differing only
+     * in case) to the top of the view; the top of the page for an empty fragment. The caret goes there too, so a
+     * render of a new version of the text keeps the reader there. False when the page has no such heading.
      */
     public boolean scrollToHeading(String fragment) {
         String wanted = decoded(fragment);
@@ -141,8 +142,8 @@ public class HtmlPane extends JEditorPane {
         if (at < 0) {
             return false;
         }
-        // the page's height follows its width: a pane laid out once, as a panel just made is, is too short to scroll to
-        // its heading until laid out again at that width
+        // the page's height follows its width: a pane laid out once, as a panel just made is, is too short to scroll
+        // to its heading until laid out again at that width
         if (getParent() instanceof JViewport vp) {
             vp.doLayout();
         }
@@ -193,7 +194,7 @@ public class HtmlPane extends JEditorPane {
         String html = markdown == null ? getText() : null;
         HTMLEditorKit kit = (HTMLEditorKit) getEditorKit();
         kit.setStyleSheet(styles());
-        // setText fills the document it has, which keeps the style sheet it was made with: a new one takes the new rules
+        // setText fills the document it has, which keeps its first style sheet: a new document takes the new rules
         setDocument(kit.createDefaultDocument());
         if (markdown != null) {
             redraw(markdown);
@@ -203,9 +204,10 @@ public class HtmlPane extends JEditorPane {
     }
 
     /**
-     * The page's rules, over Swing's defaults. It reads as a turn's answer in the transcript: ivory text, headings in the
-     * headings' serif and the chosen tint over a tinted rule, at the transcript's scale ({@link Theme#HEADING_SCALE}),
-     * tinted table heads on a band of the tint's shade, bold brighter, code in the content palette (record 101), quotes beside a tinted bar.
+     * The page's rules, over Swing's defaults. It reads as a turn's answer in the transcript: ivory text, headings in
+     * the headings' serif and the chosen tint over a tinted rule, at the transcript's scale
+     * ({@link Theme#HEADING_SCALE}), tinted table heads on a band of the tint's shade, bold brighter, code in the
+     * content palette (record 101), quotes beside a tinted bar.
      */
     static StyleSheet styles() {
         StyleSheet css = new StyleSheet();
@@ -239,7 +241,7 @@ public class HtmlPane extends JEditorPane {
         css.addRule("td { border: 1px solid " + border + "; padding: 2px 6px; }");
         css.addRule("blockquote { margin-left: 8px; color: " + fg + "; font-style: italic; border-left-width: 3px; border-left-style: solid; "
                 + "border-left-color: " + Theme.hex(tint.body) + "; padding-left: 8px; }");
-        // front matter: its facts as a tab's card shows them, a quiet key and the value, no grid
+        // front matter: its facts as a tab's card shows them, the key muted beside the value, no grid
         css.addRule("table.front { margin: 0 0 8px 0; }");
         // Swing reads padding side by side, not a shorthand of four
         css.addRule("td.front-key { border-width: 0; padding-top: 1px; padding-bottom: 1px; padding-left: 0; padding-right: 14px; color: "
@@ -275,23 +277,24 @@ public class HtmlPane extends JEditorPane {
     /** The folder the Markdown's relative image links are read from; null for Markdown that is no file's. */
     private Path folder;
     /**
-     * The heading the reader was last taken to, and the view's top then: a redraw or a resize that finds the view still
-     * there scrolls to the heading again, since a picture drawn above it, or a new width, moves it. Null when none.
+     * The heading the reader was last taken to, and the view's top then: a redraw or a resize that finds the view
+     * still there scrolls to the heading again, since a picture drawn above it, or a new width, moves it. Null when
+     * none.
      */
     private String anchored;
     private int anchoredY = -1;
 
     /**
-     * The diagrams and pictures of the page shown that were not ready when it was rendered: the id of the element that
-     * stands in for each, and its HTML once it is ready, else null. Emptied at every render.
+     * The diagrams and pictures of the page shown that were not ready when it was rendered: the id of the element
+     * that stands in for each, and its HTML once it is ready, else null. Emptied at every render.
      */
     private final Map<String, Supplier<String>> waitingFor = new LinkedHashMap<>();
     private int waitingIds;
     /** Whether a fill is posted to the EDT: the arrivals of a burst are put in place by one fill. */
     private final AtomicBoolean fillPosted = new AtomicBoolean();
     /**
-     * Runs, on a drawing or reading thread, when a diagram or picture the page waits for is ready. The one callback the
-     * pane hands out, so the pane waits once for each, however often the page is rendered meanwhile.
+     * Runs, on a drawing or reading thread, when a diagram or picture the page waits for is ready. The one callback
+     * the pane hands out, so the pane waits once for each, however often the page is rendered meanwhile.
      */
     private final Runnable arrived = () -> {
         if (fillPosted.compareAndSet(false, true)) {
@@ -299,7 +302,9 @@ public class HtmlPane extends JEditorPane {
         }
     };
 
-    /** Shows {@code markdown} rendered; its Mermaid diagrams as pictures once {@link MermaidDiagrams} has drawn them. */
+    /**
+     * Shows {@code markdown} rendered; its Mermaid diagrams as pictures once {@link MermaidDiagrams} has drawn them.
+     */
     public void setMarkdown(String markdown) {
         this.markdown = markdown;
         sizedFor = -1;
@@ -324,7 +329,7 @@ public class HtmlPane extends JEditorPane {
         setMarkdown(markdown);
     }
 
-    /** Runs a re-size waiting for the resize to settle, now; false when none waits. For tests. */
+    /** Runs now the redraw that waits for a resize to settle; false when none waits. For tests. */
     boolean flushResize() {
         if (!resized.pending()) {
             return false;
@@ -370,9 +375,9 @@ public class HtmlPane extends JEditorPane {
     }
 
     /**
-     * Puts each diagram and picture that is ready in place of the element standing in for it, with the view where the
-     * reader left it. The rest of the page is not rendered again: on a long page with many diagrams that takes seconds,
-     * once for every diagram drawn.
+     * Puts each diagram and picture that is ready in place of the element standing in for it, with the view where
+     * the reader left it. The rest of the page is not rendered again: on a long page with many diagrams that takes
+     * seconds, once for every diagram drawn.
      */
     private void fill() {
         fillPosted.set(false);
@@ -416,7 +421,7 @@ public class HtmlPane extends JEditorPane {
         return html;
     }
 
-    /** {@code text} as an attribute's value: escaped, quotes included, so it cannot end the attribute and add another. */
+    /** {@code text} as an attribute's value: escaped, quotes included, so it cannot end the attribute. */
     static String attribute(String text) {
         return MarkdownHtml.escape(text).replace("\"", "&quot;").replace("'", "&#39;");
     }
@@ -508,9 +513,9 @@ public class HtmlPane extends JEditorPane {
     private static final Pattern HEADING = Pattern.compile("(<h[1-3][^>]*>)(.*?)(</h[1-3]>)", Pattern.DOTALL);
 
     /**
-     * {@code html} with the characters of its first three levels of heading that {@code serif} cannot draw set in Java's
-     * logical sans serif, as the transcript does: Swing's HTML draws a glyph its font lacks as nothing, and New York
-     * lacks the arrow. Tags, entities and code inside a heading are left as they are.
+     * {@code html} with the characters of its first three levels of heading that {@code serif} cannot draw set in
+     * Java's logical sans serif, as the transcript does: Swing's HTML draws a glyph its font lacks as nothing, and New
+     * York lacks the arrow. Tags, entities and code inside a heading are left as they are.
      */
     static String fallBackInHeadings(String html, Font serif) {
         Matcher m = HEADING.matcher(html);
@@ -550,6 +555,7 @@ public class HtmlPane extends JEditorPane {
         return out.toString();
     }
 
+    /** Shows {@code bodyHtml} as the page's body; text from outside must be escaped by the caller. */
     public void setHtml(String bodyHtml) {
         setText("<html><body>" + bodyHtml + "</body></html>");
     }

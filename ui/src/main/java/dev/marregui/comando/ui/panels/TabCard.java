@@ -56,15 +56,15 @@ import java.util.function.Consumer;
 /**
  * A tab's card, in place of its tooltip, and a session row's in the sidebar, the same card: laid out as a turn's report
  * in the transcript: the transcript's ground, a bar of the chosen tint down its left edge; its title, the panel's or
- * the session's name, in the headings' serif along the tint's ramp; its facts (record 90), each said once, a quiet label
- * and the value in the transcript's ivory; under them, set apart,
- * "Summary" in the headings' serif along the tint's ramp over a tinted rule, and the topic in the transcript's ivory,
- * wrapped to a few lines; the Linear tickets the panel's text names, as links a double click opens in the browser; at the bottom
- * left, a button that reads the summary again and one that closes the card. The card closes when the pointer leaves
- * it, at a click on it (not on a link) and at its close button. It floats in the window's popup layer under the tab or row it describes and stays until it is closed or clicked,
- * or until another card takes its place; the window moves it with itself. A card is known by a key: its panel's, a
- * headless session's, or a connection's. A connection's card is its title and facts alone: no summary, no tickets, no
- * buttons (record 92). EDT only.
+ * the session's name, in the headings' serif along the tint's ramp; its facts (record 90), each said once, a quiet
+ * label and the value in the transcript's ivory; under them, set apart, "Summary" in the headings' serif along the
+ * tint's ramp over a tinted rule, and the topic in the transcript's ivory, wrapped to a few lines; the Linear tickets
+ * the panel's text names, as links a double click opens in the browser; at the bottom left, a button that reads the
+ * summary again and one that closes the card. The card closes when the pointer leaves it, at a click on it (not on a
+ * link) and at its close button. It floats in the window's popup layer under the tab or row it describes and stays
+ * until it is closed or clicked, or until another card takes its place; the window moves it with itself. A card is
+ * known by a key: its panel's, a headless session's, or a connection's. A connection's card is its title and facts
+ * alone: no summary, no tickets, no buttons (record 92). EDT only.
  */
 final class TabCard {
 
@@ -140,7 +140,7 @@ final class TabCard {
     private final JButton refresh = button("refresh", "tab-card-refresh", "Summarise again with Haiku (about 2 s)",
             "Summarise again");
     private final JButton close = button("close", "tab-card-close", "Close the card", "Close the card");
-    /** The summary's parts: its heading, its text and the space around them, and the buttons; hidden on a card of facts. */
+    /** The summary's parts: heading, text and the space around them, and the buttons; hidden on a card of facts. */
     private final List<Component> summaryParts = new ArrayList<>();
     /** Whether the card shown has a summary. */
     private boolean summarised = true;
@@ -150,8 +150,8 @@ final class TabCard {
     private Point anchor;
     private JComponent tabs;
     /**
-     * A row's card: where it goes beside the rows, in the rows' coordinates, its left edge at x and its top at the row's;
-     * null for a tab's card, or under the row. It goes under the row when the window has no room beside them.
+     * A row's card: where it goes beside the rows, in the rows' coordinates, its left edge at x and its top at the
+     * row's; null for a tab's card, or under the row. It goes under the row when the window has no room beside them.
      */
     private Point besideAt;
 
@@ -461,8 +461,8 @@ final class TabCard {
 
     /**
      * As {@link #show(String, JComponent, Rectangle, CardFacts, String, boolean, boolean)}, a row's card: beside the
-     * rows, its left edge at {@code beside} and its top at the row's, when the window has room; under the row otherwise,
-     * or when {@code beside} is negative.
+     * rows, its left edge at {@code beside} and its top at the row's, when the window has room; under the row
+     * otherwise, or when {@code beside} is negative.
      */
     void show(String key, JComponent over, Rectangle row, int beside, CardFacts head, String topicText, boolean muted, boolean reading) {
         summarised(true);
@@ -603,8 +603,8 @@ final class TabCard {
     }
 
     /**
-     * Sizes the card: as wide as the title, the facts or the summary's width, whichever is widest, within the window; the
-     * summary wraps to that width, the facts clip at it, and the card is as tall as their lines.
+     * Sizes the card: as wide as the title, the facts or the summary's width, whichever is widest, within the window;
+     * the summary wraps to that width, the facts clip at it, and the card is as tall as their lines.
      */
     private void place() {
         Point at = SwingUtilities.convertPoint(tabs, anchor, layer);

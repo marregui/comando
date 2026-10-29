@@ -61,7 +61,8 @@ class TreeWidgetTest {
         return p;
     }
 
-    /// A render that adds a leaf and a sibling folder keeps the expanded table expanded and the selected column selected.
+    /// A render that adds a leaf and a sibling folder keeps the expanded table expanded and the selected column
+    /// selected.
     @Test
     void aRefreshedTreeKeepsWhatTheUserOpenedAndSelected() throws Exception {
         TreeWidget widget = new TreeWidget(new WidgetContext(intent -> { }, new ActionRegistry()));

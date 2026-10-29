@@ -41,8 +41,8 @@ class AgentBackgroundTest {
         return Arrays.stream(ids).map(id -> new BackgroundTask(id, "local_agent", "task " + id, 1L)).toList();
     }
 
-    /// A background launch whose task is briefly replaced by another session's tasks during a switch away and back keeps
-    /// running from its launch, and reads "done · 5 min 00 s" when its task ends.
+    /// A background launch whose task is briefly replaced by another session's tasks during a switch away and back
+    /// keeps running from its launch, and reads "done · 5 min 00 s" when its task ends.
     @Test
     void aSessionSwitchBackDoesNotEndTheBackgroundAgentsTime() {
         // session B launches a background sub-agent, seen live

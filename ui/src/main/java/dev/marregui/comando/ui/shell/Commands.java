@@ -147,7 +147,7 @@ final class Commands {
                 p.togglePreview();
             }
         });
-        // panel: running; run keys act while the keyboard is in the focused panel's editor, elsewhere the key is the component's
+        // panel: running; run keys act while the keyboard is in the focused panel's editor, else the component has them
         cmd("run", "Run", key(KeyEvent.VK_ENTER, shortcut), () -> run(Target.AUTO), focus::editorFocused);
         cmd("run.claude", "Send to Claude", key(KeyEvent.VK_ENTER, shortcut | SHIFT), () -> run(Target.CLAUDE), focus::editorFocused);
         cmd("run.sql", "Run as SQL", key(KeyEvent.VK_ENTER, ALT), () -> run(Target.SQL), focus::editorFocused);
@@ -163,7 +163,7 @@ final class Commands {
         cmd("session.interrupt", "Interrupt the turn", key(KeyEvent.VK_PERIOD, shortcut | SHIFT),
                 () -> focusedSession().ifPresent(x -> deps.intents().dispatch(new Intent.InterruptSession(x.name()))),
                 () -> focusedSession().map(SessionState::isBusy).orElse(false));
-        // the Session tab emptied, the conversation going on: from the palette alone, once a turn has ended (record 104)
+        // the Session tab emptied, the conversation going on: from the palette only, once a turn has ended (record 104)
         cmd("transcript.clear", "Clear the Session tab", null, lower::clearTranscript, lower::canClearTranscript);
         // as the session's menu in the sidebar: only a running session has a conversation to compact
         cmd("session.compact", "Compact the conversation", null, () -> focusedSession().ifPresent(x ->
@@ -217,7 +217,7 @@ final class Commands {
         cmd("tools.gradle", "Run Gradle tasks…", key(KeyEvent.VK_G, shortcut | ALT), this::runGradle, () -> focusedSession().isPresent());
         cmd("files.settings", "Configure " + FoldersDialog.title(), null, ui::editFolders);
         cmd("files.jobs", "Configure kit jobs", null, jobs::configure, jobs::available);
-        // the kit: its upgrade, by a session in its root, and the brain's backup; never on their own
+        // the kit: its upgrade, by a session in its root, and the backups of the brain and the kit; never on their own
         cmd("kit.upgrade", KitActions.UPGRADE, null, kit::upgrade, kit::canUpgrade);
         cmd("kit.backup", KitActions.BACK_UP, null, kit::backUp, kit::canBackUp);
         cmd("kit.backupKit", KitActions.BACK_UP_KIT, null, kit::backUpKit, kit::canBackUpKit);
@@ -292,8 +292,8 @@ final class Commands {
         cmd("help.edgeLog", "Show the Edge's log", null, () -> help.showLog(deps.edge()), () -> deps.edge() != null);
         cmd("help.questDbLog", "Show QuestDB's log", null, () -> help.showLog(deps.server()), () -> deps.server() != null);
         cmd("help.dataRoot", "Reveal comando folder", null, () -> help.reveal(deps.home()), () -> deps.home() != null);
-        // the themes, from the swatch beside New panel: a ground and its tint chosen together, each with its swatch (Menus), the one chosen
-        // ticked (record 103)
+        // the themes, from the swatch beside New panel: a ground and its tint chosen together, each with its swatch
+        // (Menus), the one chosen ticked (record 103)
         for (NamedTheme t : NamedTheme.values()) {
             cmd(t.commandId(), t.label, null, () -> ui.themeChosen(t));
             actions.choice(t.commandId(), () -> NamedTheme.chosen().orElse(null) == t);
@@ -318,8 +318,8 @@ final class Commands {
     }
 
     /**
-     * What an Edit command acts on: the comparison window's text while it has the keyboard, since macOS's menu bar takes
-     * the command's key before that window sees it; else the main window's.
+     * What an Edit command acts on: the comparison window's text while it has the keyboard, since macOS's menu bar
+     * takes the command's key before that window sees it; else the main window's.
      */
     private Component editTarget() {
         Component c = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusOwner();
@@ -360,7 +360,10 @@ final class Commands {
         }
     }
 
-    /** Opens the Changes view of every folder's repository in the side pane; closes it when it shows them all, widens it when it shows one. */
+    /**
+     * Opens the Changes view of every folder's repository in the side pane; closes it when it shows them all, widens
+     * it when it shows one.
+     */
     private void toggleChanges() {
         Optional<ViewState> open = deps.state().get().views().stream().filter(v -> v.spec() instanceof ViewSpec.Changes).findFirst();
         if (open.isPresent() && ((ViewSpec.Changes) open.get().spec()).root().isEmpty()) {
@@ -476,7 +479,9 @@ final class Commands {
                 .filter(i -> i >= 0 && i < r.rowCount()).limit(500).toArray();
     }
 
-    /** Plots the focused panel's last result: the first time or numeric column as x, the other numeric columns as series. */
+    /**
+     * Plots the focused panel's last result: the first time or numeric column as x, the other numeric ones as series.
+     */
     private void plotLastResult() {
         try {
             ViewSpec.Plot plot = ResultViews.plot(parts.lower().results().shown());
@@ -486,7 +491,7 @@ final class Commands {
         }
     }
 
-    /** Re-runs the focused panel's last query every few seconds and re-plots each result. */
+    /** Re-runs the focused panel's last query every N seconds, N asked for, and plots each result again. */
     private void plotLive() {
         AppState s = deps.state().get();
         SqlRun run = s.runOf(s.focused()).orElse(null);

@@ -4,10 +4,10 @@ import java.nio.file.Path;
 import java.util.Locale;
 
 /**
- * The name of a comando instance, so several on one machine tell themselves apart: in the Dock, the menu bar, the window
- * title and the icon's badge. Given by {@code -Dcomando.name}, {@code COMANDO_NAME} or the data root's {@link #FILE}; else
- * taken from the data root's folder: {@code ~/.comando} is the main instance and has no name, {@code ~/.comando_b} or {@code ~/.comando-b} is {@code b},
- * any other folder is its own name.
+ * The name of a comando instance, so several on one machine tell themselves apart: in the Dock, the menu bar, the
+ * window title and the icon's badge. Given by {@code -Dcomando.name}, {@code COMANDO_NAME} or the data root's
+ * {@link #FILE}; else taken from the data root's folder: {@code ~/.comando} is the main instance and has no name,
+ * {@code ~/.comando_b} or {@code ~/.comando-b} is {@code b}, any other folder is its own name.
  */
 public final class InstanceName {
 
@@ -20,7 +20,10 @@ public final class InstanceName {
     private InstanceName() {
     }
 
-    /** The instance's name: {@code explicit} when given, else from {@code dataRoot}'s folder name; empty for the main instance. */
+    /**
+     * The instance's name: {@code explicit} when given, else from {@code dataRoot}'s folder name; empty for the main
+     * instance.
+     */
     public static String of(Path dataRoot, String explicit) {
         if (explicit != null && !explicit.isBlank()) {
             return explicit.strip();
@@ -41,8 +44,10 @@ public final class InstanceName {
         return bare;
     }
 
-    /** What the Dock, the menu bar and the window call the application: {@code comando}, {@code comando · b}, or a name
-     * that already says comando as it is ({@code Comando Expert}). */
+    /**
+     * What the Dock, the menu bar and the window call the application: {@code comando}, {@code comando · b}, or a name
+     * that already says comando as it is ({@code Comando Expert}).
+     */
     public static String display(String name) {
         if (name == null || name.isBlank()) {
             return APP;
@@ -50,7 +55,10 @@ public final class InstanceName {
         return name.toLowerCase(Locale.ROOT).contains(APP) ? name : APP + " · " + name;
     }
 
-    /** The preferences node the window keeps its layout in: the main instance's as before, a named one's of its own. */
+    /**
+     * The preferences node the window keeps its layout in: {@code dev/marregui/comando} for the main instance, one of
+     * its own for a named one.
+     */
     public static String prefsNode(String name) {
         return name == null || name.isBlank() ? "dev/marregui/comando" : "dev/marregui/comando-" + name.replaceAll("[^A-Za-z0-9_.-]", "_");
     }

@@ -456,16 +456,16 @@ class PanelFilesTest {
         try (Store store = new Store(home)) {
             store.load();
             // put in the folder while comando runs: loose until the next start, so ⌘O binds it
-            Files.writeString(Files.createDirectories(dir()).resolve("Ravenna plan.md"), "# Ravenna");
+            Files.writeString(Files.createDirectories(dir()).resolve("Release plan.md"), "# Release");
             assertThat(store.open(new PanelId("g"), dir().resolve("gone.md")).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.refused("gone.md no longer exists"));
-            assertThat(store.open(id, dir().resolve("Ravenna plan.md")).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.BOUND);
-            assertThat(store.load(id)).isEqualTo("# Ravenna");
-            store.savePanels(List.of(new PanelState(id, PanelFiles.title(dir().resolve("Ravenna plan.md")), "", "")), List.of());
-            store.changed(id, "# Ravenna\n\nmore");
+            assertThat(store.open(id, dir().resolve("Release plan.md")).get(5, TimeUnit.SECONDS)).isEqualTo(PanelTexts.Opened.BOUND);
+            assertThat(store.load(id)).isEqualTo("# Release");
+            store.savePanels(List.of(new PanelState(id, PanelFiles.title(dir().resolve("Release plan.md")), "", "")), List.of());
+            store.changed(id, "# Release\n\nmore");
             store.saveNow().get(5, TimeUnit.SECONDS);
         }
-        assertThat(names()).containsExactly("Ravenna plan.md");
-        assertThat(Files.readString(dir().resolve("Ravenna plan.md"))).isEqualTo("# Ravenna\n\nmore");
+        assertThat(names()).containsExactly("Release plan.md");
+        assertThat(Files.readString(dir().resolve("Release plan.md"))).isEqualTo("# Release\n\nmore");
     }
 
     /** Writes a file as another editor would, with a modification time comando has not seen. */

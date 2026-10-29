@@ -2,17 +2,17 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted 2026-10-29 | Claude, on Miguel's ask |
+| 2026-10-28 | accepted on 2026-10-29 | Miguel and Claude |
 
 ## 1. Context
 
-Miguel: "no capture of metrics that can help improve overall as we work"; the plans' per-day, per-week and Fable
-allowances go unused while "some tasks are better done by certain models at a certain effort", which he wants
-"automatically callibrated and improved". Today the only record of who did what, at which model, and whether it
-passed is the agent ledger, written by hand. comando sees every turn's `result`, every sub-agent's start and end, and
-reads the plans' usage every few minutes, and kept none of it. The fleet vision (scratchpad `harness/07-fleet-vision.md`
-§3–§4) sets out the schema, the calibration loop that reads it and the pacing of the allowances; this record builds
-its first increment, the capture.
+Miguel: nothing captured the metrics that would improve the work as it goes; the plans' per-day, per-week and Fable
+allowances went unused while some tasks are better done by certain models at a certain effort, which he wants
+calibrated automatically. The only record of who did what, at which model, and whether it passed was the agent
+ledger, written by hand. comando sees every turn's `result`, every sub-agent's start and end, and reads the plans'
+usage every few minutes, and kept none of it. The fleet vision, a design kept outside the repository, sets out the
+schema, the calibration loop that reads it and the pacing of the allowances; this record builds its first increment,
+the capture.
 
 ## 2. Decision
 
@@ -38,8 +38,8 @@ added. A sub-agent's spend reads its file once more at its end, on the sub-agent
 
 Not built here, from the fleet vision: `verdict` events (acceptance, review findings, corrections) that score each run,
 which calibration needs; `tool`, `send`, `approval`, `stall` and `reflect` events; the importer of sessions comando did
-not run; retention and roll-ups; rows in the embedded QuestDB; the effort set per turn by `/effort`, which the stream does
-not carry.
+not run; retention and roll-ups; rows in the embedded QuestDB; the effort set per turn by `/effort`, which the stream
+does not carry.
 
 Tested in `MetricsTest` (a turn's and a sub-agent's events and fields, a background one ended by its notification, a
 replay writing nothing, a sub-agent's spend each message once, no data root).

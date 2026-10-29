@@ -31,8 +31,8 @@ import static com.tngtech.archunit.core.domain.properties.HasName.Predicates.nam
 import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
-/// The thread rules of `docs/architecture.md` §6, checked over every main class of comando: a platform thread only where
-/// a kind needs one, every other thread from [Threads], so a new part cannot add an operating-system thread or an
+/// The thread rules of `docs/architecture.md` §6, checked over every main class of comando: a platform thread only
+/// where a kind needs one, every other thread from [Threads], so a new part cannot add an operating-system thread or an
 /// unowned one without changing this test.
 /// - only the reducer, the watchdog, a session's stdout reader and quitting start platform threads
 /// - virtual threads, executors, thread pools and `java.util.Timer` come only from the thread kit
@@ -48,7 +48,8 @@ class ThreadRulesTest {
         comando = new ClassFileImporter().withImportOption(ImportOption.Predefined.DO_NOT_INCLUDE_TESTS).importPackages("dev.marregui.comando");
     }
 
-    /// No class but [StateLoop], [Watchdog], `ClaudeProcess` and [Main] calls `Thread.ofPlatform` or constructs a `Thread`.
+    /// No class but [StateLoop], [Watchdog], `ClaudeProcess` and [Main] calls `Thread.ofPlatform` or constructs a
+    /// `Thread`.
     @Test
     void platformThreadsComeOnlyFromTheKindsThatNeedThem() {
         noClasses().that().doNotHaveFullyQualifiedName(StateLoop.class.getName())
@@ -60,8 +61,8 @@ class ThreadRulesTest {
                 .check(comando);
     }
 
-    /// No class but [Threads] calls `Thread.ofVirtual`, an `Executors` factory other than `newVirtualThreadPerTaskExecutor`,
-    /// or constructs a `ThreadPoolExecutor` or a `java.util.Timer`.
+    /// No class but [Threads] calls `Thread.ofVirtual`, an `Executors` factory other than
+    /// `newVirtualThreadPerTaskExecutor`, or constructs a `ThreadPoolExecutor` or a `java.util.Timer`.
     @Test
     void virtualThreadsAndExecutorsComeFromTheThreadKit() {
         noClasses().that().doNotHaveFullyQualifiedName(Threads.class.getName())

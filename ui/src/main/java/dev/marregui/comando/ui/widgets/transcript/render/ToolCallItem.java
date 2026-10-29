@@ -49,7 +49,7 @@ class ToolCallItem extends Item {
     private final long[] times;
     /** A sub-agent launched into the background that still works, by the session's open tasks. */
     private boolean background;
-    /** The result the launched agent's id was read from, and that id; empty when the result is not a launch. */
+    /** The result the launched sub-agent's id was read from, and that id; empty when the result is not a launch. */
     private String agentOf;
     private String agentId = "";
     /** Tool calls nested in this card at any depth, counted as they are added. */
@@ -276,7 +276,7 @@ class ToolCallItem extends Item {
     }
 
     /**
-     * Opens edits, errors and running subagents unless the user chose otherwise. It only ever opens: a card
+     * Opens edits, errors and running sub-agents unless the user chose otherwise. It only ever opens: a card
      * that finishes keeps the state it had, so the blocks the user is reading stay where they are.
      */
     private void autoOpen() {
@@ -356,13 +356,13 @@ class ToolCallItem extends Item {
                 y += children.get(i).layout(Math.max(40, inner - CHILD_INDENT), s);
             }
         } else if (!children.isEmpty()) {
-            // a closed subagent card still shows its step count in the title row; nothing below
+            // a closed sub-agent card still shows its step count in the title row; nothing below
             childTops = new int[0];
         }
         return 3 + y + IN_Y + 3;
     }
 
-    /** The unified diff an edit makes, null for a tool that edits nothing. Text written in place of nothing is clipped. */
+    /** The unified diff an edit makes, null for a tool that edits nothing; text written over nothing is clipped. */
     private static List<String> editDiff(Block.ToolCall c, JsonNode in) {
         Diffs.Edit e = Diffs.edit(c.name(), in);
         if (e == null) {
@@ -565,7 +565,7 @@ class ToolCallItem extends Item {
 
     /**
      * The summary line, the input fenced (a shell command, a diff, or JSON), the result fenced and clipped, then a
-     * subagent's steps, each quoted.
+     * sub-agent's steps, each quoted.
      */
     @Override
     String markdown() {

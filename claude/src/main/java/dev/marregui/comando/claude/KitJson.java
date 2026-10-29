@@ -17,9 +17,9 @@ import java.util.Map;
 import java.util.function.Function;
 
 /**
- * A kit's {@code comando-kit.json} read into a {@link KitRoot.Manifest}: schema version 1, a name, the brain's folder and the
- * Files tab's folders inside the root, the requirements, credentials and jobs. A file that is no JSON, of another
- * version, without a name or brain, or with a folder outside the root, is refused whole.
+ * A kit's {@code comando-kit.json} read into a {@link KitRoot.Manifest}: schema version 1, a name, the brain's folder
+ * and the Files tab's folders inside the root, the requirements, credentials and jobs. A file that is no JSON, of
+ * another version, without a name or brain, or with a folder outside the root, is refused whole.
  */
 public final class KitJson {
 
@@ -96,7 +96,8 @@ public final class KitJson {
 
     /**
      * {@code path} when it names a place inside the root: relative, without {@code ..}; with {@code root}, the root
-     * itself too ({@code "."}): a folder of the Files tab may be the kit's whole folder, its excludes leaving out the rest.
+     * itself too ({@code "."}): a folder of the Files tab may be the kit's whole folder, its excludes leaving out the
+     * rest.
      */
     private static String inside(String path, String what, boolean root) throws IOException {
         Path p;

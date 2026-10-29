@@ -63,6 +63,7 @@ public final class Balloon {
         return shown != null;
     }
 
+    /** Takes the balloon away, if one shows. */
     public static void hide() {
         if (timer != null) {
             timer.stop();

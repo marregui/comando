@@ -44,8 +44,8 @@ public interface ToolPort {
     void deleteFiles(FolderRoot folder, List<String> paths);
 
     /**
-     * Takes {@code changes} of the repository at {@code root} back to {@code HEAD}, a changed version going to the Trash
-     * first, a new file to the Trash; says how it went, and the repositories are read again.
+     * Takes {@code changes} of the repository at {@code root} back to {@code HEAD}, a changed version going to the
+     * Trash first, a new file to the Trash; says how it went, and the repositories are read again.
      */
     void rollBack(String root, List<RepoStatus.FileChange> changes);
 

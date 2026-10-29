@@ -18,8 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - A refresh period beyond a day is a day.
 class LivePlotsTest {
 
-    /// A query that failed once fails every period: on a state whose run for the panel failed, the plot is removed and one
-    /// WARN notice says it stopped, with the panel as its subject.
+    /// A query that failed once fails every period: on a state whose run for the panel failed, the plot is removed and
+    /// one WARN notice says it stopped, with the panel as its subject.
     @Test
     void aLivePlotWhoseQueryFailsStops() throws Exception {
         RecordingSink sink = new RecordingSink();

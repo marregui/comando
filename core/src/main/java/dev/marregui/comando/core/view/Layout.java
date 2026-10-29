@@ -7,9 +7,9 @@ import dev.marregui.comando.core.state.LowerTab;
  * A change to the window's arrangement that is not application state: which panes show and how the
  * window is split. The UI keeps these values itself and stores them with the window.
  *
- * @param sidebar    show or hide the sessions sidebar
+ * @param sidebar    show or hide the sidebar
  * @param sidePane   show or hide the side pane
- * @param lowerShare the lower panel's share of the window height, in (0, 1); {@code NaN} keeps it
+ * @param lowerShare the lower panel's share of the window height, from 0.05 to 0.95; {@code NaN} keeps it
  * @param focus      a panel to focus once the user pauses typing, or null; set for a session's request only
  * @param tab        a lower tab to select with that focus, or null
  * @param session    the session that asked for the focus, checked again when the focus is applied; empty otherwise

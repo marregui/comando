@@ -8,10 +8,10 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Finds {@code path/to/File.java:42} references in plain text, which the transcript shows as links that open the file
- * at the line, and file paths without a line ({@code docs/adr/0107-x.md}, {@code /tmp/build.log}, {@code ~/notes/a.md}),
- * which open the file at its top; and reads such a link back. A path without a line names a folder, so a bare file name
- * ({@code Lane.java}) or a dotted word stays text.
+ * Finds {@code path/to/File.java:42} references in plain text, which the transcript shows as links that open the
+ * file at the line, and file paths without a line ({@code docs/adr/0107-x.md}, {@code /tmp/build.log},
+ * {@code ~/notes/a.md}), which open the file at its top; and reads such a link back. A path without a line must hold a
+ * folder, so a bare file name ({@code Lane.java}) or a dotted word stays text.
  */
 public final class SourceLinks {
 
@@ -22,11 +22,11 @@ public final class SourceLinks {
     private SourceLinks() {
     }
 
-    /** A {@code path:line} reference in plain text: its character range and the link it opens. */
+    /** A file reference in plain text: its character range and the link it opens. */
     public record Ref(int start, int end, String href) {
     }
 
-    /** The {@code path:line} references in {@code text}, in order. */
+    /** The file references in {@code text}, in order. */
     public static List<Ref> refs(CharSequence text) {
         Matcher m = REF.matcher(text);
         List<Ref> out = new ArrayList<>();

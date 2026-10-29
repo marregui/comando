@@ -28,8 +28,8 @@ summary's targets and the path rule.
 
 ## 3. Consequences
 
-`SourceLinks` finds paths without a line; `Items` links the input boxes, the summary, thinking and notes; `ToolText.target`
-names a summary's link. A rendered HTML page still shows neither `path:line` nor paths as links (`MarkdownHtml`), as
-before. Tested in `SourceLinksTest` (paths, what stays text), `TextLinksTest`, `ToolTextTest` (targets, a skill's file),
-`TranscriptCanvasTest` (a clipped Read summary, a command's path and address, a delegation's `~/` path, a skill's
-input, a double click following a command's path).
+`SourceLinks` finds paths without a line; `ToolCallItem` links the input boxes and the summary, `Items` thinking and
+notes; `ToolText.target` names a summary's link. A rendered HTML page still shows neither `path:line` nor paths as links
+(`MarkdownHtml`), as before. Tested in `SourceLinksTest` (paths, what stays text), `TextLinksTest`, `ToolTextTest`
+(targets, a skill's file), `TranscriptCanvasTest` (a clipped Read summary, a command's path and address, a delegation's
+`~/` path, a skill's input, a double click following a command's path).

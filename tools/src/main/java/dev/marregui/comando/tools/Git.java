@@ -22,8 +22,9 @@ import java.util.stream.Stream;
 
 /**
  * The git command line: which repositories a folder belongs to, what {@code git status} says of one, a changed file's
- * two versions, and the few writes the comparison window asks for (restore, unstage, remove from the index). Every run is bounded in time and in output, takes no optional lock (so it never holds
- * up the user's own git commands), never asks for credentials, and ends when this closes.
+ * two versions, and the runs the comparison window's writes and the kit's backups ask for. Every run is bounded in time
+ * and in output, takes no optional lock (so it never holds up the user's own git commands), never asks for
+ * credentials, and ends when this closes.
  */
 final class Git implements AutoCloseable {
 
@@ -140,7 +141,7 @@ final class Git implements AutoCloseable {
                     if (f.length == 10) {
                         boolean copied = f[1].charAt(0) == 'C';
                         if (f[1].length() > 1 && f[1].charAt(1) == 'D') {
-                            // renamed in the index, then deleted from the tree: against HEAD the old path is gone; a copy's source stays
+                            // renamed in the index, then deleted: against HEAD the old path is gone, a copy's stays
                             if (!copied) {
                                 changes.add(new RepoStatus.FileChange(from, "", RepoStatus.Kind.DELETED));
                             }
@@ -262,7 +263,10 @@ final class Git implements AutoCloseable {
                 || err.contains("exists on disk, but not in 'HEAD'");
     }
 
-    /** Whether {@code path} is a submodule in {@code HEAD}: its entry there has mode 160000, a commit of another repository. */
+    /**
+     * Whether {@code path} is a submodule in {@code HEAD}: its entry there has mode 160000, a commit of another
+     * repository.
+     */
     private boolean submodule(Path root, String path) {
         try {
             Run r = run(root, List.of("ls-tree", "HEAD", "--", path));
@@ -292,7 +296,10 @@ final class Git implements AutoCloseable {
         return false;
     }
 
-    /** Runs git in {@code dir}; its output is read on a thread of its own, so a stuck process is killed in time. */
+    /**
+     * Runs git in {@code dir} through {@link Processes}: its output goes to files, not a pipe a thread reads, and a run
+     * past {@link #TIMEOUT_MILLIS} is killed.
+     */
     Run run(Path dir, List<String> args) throws IOException {
         return run(dir, args, TIMEOUT_MILLIS);
     }

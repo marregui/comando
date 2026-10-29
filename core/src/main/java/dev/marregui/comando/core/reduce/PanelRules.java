@@ -195,9 +195,9 @@ final class PanelRules {
     }
 
     /**
-     * A document is attached to a session, or detached; any number of documents may be attached to one session. A panel of
-     * comando's own is never rebound: a session has one, titled with its name (record 88), so binding one to a session
-     * opens that session's own panel, and its own panel is never detached.
+     * A document is attached to a session, or detached; any number of documents may be attached to one session. A panel
+     * of comando's own is never rebound: a session has one, titled with its name (record 88), so binding one to a
+     * session opens that session's own panel, and its own panel is never detached.
      */
     static Transition bindSession(Clock clock, AppState s, Intent.BindSession i) {
         if (!i.session().isEmpty() && s.session(i.session()).isEmpty()) {
@@ -221,9 +221,9 @@ final class PanelRules {
     }
 
     /**
-     * Opens a session's own panel: open, it comes forward; closed, it opens again; none yet, a panel of comando's own with
-     * no session and the session's name becomes it, or a new one titled with the name, on {@code target}'s connection.
-     * Another panel is never taken (record 88).
+     * Opens a session's own panel: open, it comes forward; closed, it opens again; none yet, a panel of comando's own
+     * with no session and the session's name becomes it, or a new one titled with the name, on {@code target}'s
+     * connection. Another panel is never taken (record 88).
      */
     static Transition openSession(Clock clock, AppState s, Intent.OpenSession i) {
         if (s.session(i.session()).isEmpty()) {

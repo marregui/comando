@@ -37,8 +37,8 @@ class TabStatusTest {
         return SessionState.closed(SessionSpec.fresh("s", "/tmp")).withStatus(Status.OPEN, "");
     }
 
-    /// An unbound panel and a panel bound to a session that no longer exists are `NONE`; one bound to an open, quiet session
-    /// is `IDLE`.
+    /// An unbound panel and a panel bound to a session that no longer exists are `NONE`; one bound to an open, quiet
+    /// session is `IDLE`.
     @Test
     void noSessionIsNoneAndAQuietSessionIsIdle() {
         assertThat(TabStatus.of(UNBOUND, state(UNBOUND, null), false)).isEqualTo(TabStatus.NONE);
@@ -63,8 +63,8 @@ class TabStatusTest {
     }
 
     /// After a turn hands work off, the tab is `WAITING` with the task and its time, and stays active; a running turn
-    /// outranks waiting. When the work returns, the tab stays active for [TabStatus#REPORT_GRACE_MILLIS] or until the turn
-    /// that reads it ends.
+    /// outranks waiting. When the work returns, the tab stays active for [TabStatus#REPORT_GRACE_MILLIS] or until the
+    /// turn that reads it ends.
     @Test
     void backgroundWorkAfterTheTurnWaitsAndItsReturnIsNotYetAnOutcome() {
         SessionState waiting = open().withTurns(1, 1_000L).withTasks(List.of(task("a1", "review agent")), 1_000L).withTurns(0, 2_000L);
@@ -85,8 +85,8 @@ class TabStatusTest {
         assertThat(TabStatus.active(BOUND, state(BOUND, reading.withTurns(0, 20_000L)), 20_000L)).isFalse();
     }
 
-    /// A turn that answers a later question while handed-off work still runs is an outcome: `DONE` unseen, `WAITING` once
-    /// looked at.
+    /// A turn that answers a later question while handed-off work still runs is an outcome: `DONE` unseen, `WAITING`
+    /// once looked at.
     @Test
     void aLaterTurnThatEndsWhileOlderWorkRunsOnIsAnOutcome() {
         SessionState handedOff = open().withTurns(1, 1_000L).withTasks(List.of(task("b1", "build")), 1_500L).withTurns(0, 2_000L);
@@ -106,8 +106,8 @@ class TabStatusTest {
         assertThat(TabStatus.of(BOUND, state(BOUND, failed), false)).as("looked at: the work still runs").isEqualTo(TabStatus.WAITING);
     }
 
-    /// A failed turn unseen is `ERROR` described with its error, and `IDLE` once looked at; a session that died is `ERROR`
-    /// described with its exit.
+    /// A failed turn unseen is `ERROR` described with its error, and `IDLE` once looked at; a session that died is
+    /// `ERROR` described with its exit.
     @Test
     void aFailedTurnOrADeadSessionUnseenIsAnError() {
         SessionState failed = open().withTurns(1, 1L).withTurns(0, 2L).withLastTurnError("rate limited");

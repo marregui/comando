@@ -27,8 +27,8 @@ class ImportSessionsDialogTest {
         assertThat(root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).get(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0))).isNotNull();
     }
 
-    /// [ImportSessionsDialog#nameFor] uses the folder's last name; the root, an empty folder and a path with a NUL, which
-    /// is no valid path, fall back to `session`.
+    /// [ImportSessionsDialog#nameFor] uses the folder's last name; the root, an empty folder and a path with a NUL,
+    /// which is no valid path, fall back to `session`.
     @Test
     void anUntitledConversationIsNamedAfterItsFolderOrSession() {
         assertThat(ImportSessionsDialog.nameFor(new StoredConversation("1a2b3c4d5e", "/w/edge", "", "", "", 0L, 0L))).isEqualTo("edge 1a2b3c4d");

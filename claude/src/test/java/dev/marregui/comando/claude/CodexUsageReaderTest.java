@@ -26,7 +26,7 @@ class CodexUsageReaderTest {
     private static final long FIVE_HOURS_ON = NOW / 1000 + 5 * 3600;
     private static final long WEEK_ON = NOW / 1000 + 6 * 86_400;
 
-    /** The answer of {@code codex app-server} to {@code account/rateLimits/read} on a Plus plan, codex-cli 0.163.0, cut. */
+    /** The answer of {@code codex app-server} to {@code account/rateLimits/read} on a Plus plan, codex-cli 0.163.0. */
     private static String answer(double session, long sessionResets, double week) {
         return """
                 {"id":2,"result":{"ordinaryUsageAllowed":true,"rateLimits":{"limitId":"codex","limitName":null,\
@@ -73,8 +73,8 @@ class CodexUsageReaderTest {
                 .isEqualTo("no rate limits in Codex's answer");
     }
 
-    /// A read accepts the rate-limit response when initialization replies and a notification share one pipe chunk.
-    /// The captured requests also establish that the rate-limit request follows initialization.
+    /// A read finds the rate-limit answer when the `initialize` answer and a notification share one pipe chunk; the
+    /// rate-limit request follows `initialize`.
     @Test
     void theReadFindsTheAnswerAmongLinesThatArriveTogether() throws Exception {
         Path requests = dir.resolve("requests.txt");
@@ -109,7 +109,6 @@ class CodexUsageReaderTest {
     /// The script exits with code 7 without reading stdin.
     @Test
     void aServerThatExitsAtOnceSaysSoNotATimeout() throws Exception {
-        // review F4, 2026-10-27: an exit was reported as "did not answer within 10000 ms"
         PlanUsage u = CodexUsageReader.read(script("dead", "exit 7\n").toString(), JSON, Duration.ofSeconds(10), MADRID);
         assertThat(u.problem()).isEqualTo("'codex app-server' exited with code 7 without answering");
     }
@@ -126,8 +125,7 @@ class CodexUsageReaderTest {
         assertThat(u.problem()).isEqualTo("'codex app-server' did not answer within 300 ms");
     }
 
-    /// A nonexistent executable produces a failed usage value instead of exposing process-start I/O.
-    /// The absent path is rooted in the temporary test directory.
+    /// A missing executable gives a failed read, not an exception.
     @Test
     void aMissingExecutableIsAProblemNotAnException() {
         PlanUsage u = CodexUsageReader.read(dir.resolve("absent").toString(), JSON, Duration.ofSeconds(1), MADRID);

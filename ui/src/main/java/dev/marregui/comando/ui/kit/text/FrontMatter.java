@@ -17,7 +17,7 @@ public final class FrontMatter {
     public record Fact(String key, String value) {
     }
 
-    /** The facts read and the text without them: the front matter's characters are spaces, so lines and offsets hold. */
+    /** The facts read and the text without them: the front matter's characters become spaces, so offsets hold. */
     public record Split(List<Fact> facts, String body) {
 
         public boolean any() {
@@ -39,6 +39,7 @@ public final class FrontMatter {
     private FrontMatter() {
     }
 
+    /** The front matter of {@code text} and the text without it; no facts when the text opens with none. */
     public static Split split(String text) {
         Split none = new Split(List.of(), text);
         if (!text.startsWith("---")) {

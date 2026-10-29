@@ -29,7 +29,8 @@ import static org.awaitility.Awaitility.await;
 
 /// [FoldersEditor] edits the folders the Files tab shows, checking each before it can be saved.
 /// - An unchanged list is valid, clean and saves as it was.
-/// - A missing, relative or outside folder, an empty or taken name and an index outside the folder block the save and say why.
+/// - A missing, relative or outside folder, an empty or taken name and an index outside the folder block the save and
+///   say why.
 /// - The kit's folders the list lacks go first, once, and the user's stay.
 /// - Adding chooses the folder first and names it uniquely with its index guessed; a cancelled choice adds nothing.
 /// - Removing and moving change only the list, never the disk.
@@ -47,7 +48,9 @@ class FoldersEditorTest {
         return out.get();
     }
 
-    /** The folders' window, with the CLI's config folder at the file system's root so that every folder is inside it. */
+    /**
+     * The folders' window, with the CLI's config folder at the file system's root so that every folder is inside it.
+     */
     private FoldersEditor editor(List<FolderRoot> folders, RepoChanges repos) throws Exception {
         return editor(folders, Path.of("/"), repos);
     }
@@ -90,8 +93,8 @@ class FoldersEditorTest {
         assertThat(on(e, FoldersEditor::folders)).contains(List.of(a, b));
     }
 
-    /// A missing folder, a taken name, a blank name, an index climbing out and a relative path each show their problem and
-    /// make the editor invalid with no save; restoring the values makes it valid and clean again.
+    /// A missing folder, a taken name, a blank name, an index climbing out and a relative path each show their problem
+    /// and make the editor invalid with no save; restoring the values makes it valid and clean again.
     @Test
     void aMissingFolderAnEmptyOrTakenNameAndAnIndexOutsideBlockSaveAndSayWhy(@TempDir Path dir) throws Exception {
         FolderRoot a = new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of());
@@ -121,8 +124,8 @@ class FoldersEditorTest {
         assertThat(on(e, FoldersEditor::dirty)).as("back as it was").isFalse();
     }
 
-    /// [FoldersEditor#addFirst] adds only the kit folder the list lacks, in front, keeps the user's, marks the editor dirty,
-    /// and adds nothing the second time.
+    /// [FoldersEditor#addFirst] adds only the kit folder the list lacks, in front, keeps the user's, marks the editor
+    /// dirty, and adds nothing the second time.
     @Test
     void theKitsFoldersTheListLacksGoFirstAndTheUsersStay(@TempDir Path dir) throws Exception {
         FolderRoot memory = new FolderRoot("Memory", Files.createDirectories(dir.resolve("kit/BRAIN/MEMORY")).toString(), "MEMORY.md",
@@ -163,8 +166,8 @@ class FoldersEditorTest {
         assertThat(on(e, (FoldersEditor x) -> x.list().getModel().getSize())).as("a chooser cancelled adds nothing").isEqualTo(2);
     }
 
-    /// Moving the last folder up swaps it, a move past the top is clamped, removing drops it from the list, and its folder
-    /// stays on disk.
+    /// Moving the last folder up swaps it, a move past the top is clamped, removing drops it from the list, and its
+    /// folder stays on disk.
     @Test
     void removingAndMovingChangeOnlyTheList(@TempDir Path dir) throws Exception {
         FolderRoot a = new FolderRoot("A", Files.createDirectories(dir.resolve("a")).toString(), "", List.of());
@@ -181,8 +184,8 @@ class FoldersEditorTest {
         assertThat(Files.isDirectory(dir.resolve("c"))).as("nothing on disk changes").isTrue();
     }
 
-    /// A listing file with a folder in it is a problem while the Trash is on; turning the Trash off clears the problem and
-    /// disables the field.
+    /// A listing file with a folder in it is a problem while the Trash is on; turning the Trash off clears the problem
+    /// and disables the field.
     @Test
     void theListingFileCountsOnlyWithTheTrash(@TempDir Path dir) throws Exception {
         FolderRoot pad = new FolderRoot("Pad", Files.createDirectories(dir.resolve("pad")).toString(), "", List.of(), "scratchpad", true, "ALPHA.md");
@@ -195,8 +198,8 @@ class FoldersEditorTest {
         assertThat(on(e, (FoldersEditor x) -> x.field(FoldersEditor.LISTED_IN).isEnabled())).isFalse();
     }
 
-    /// A repository folder and a folder inside it show the repository, branch and uncommitted count; a plain folder shows
-    /// `repo: none`, and none of them has a problem.
+    /// A repository folder and a folder inside it show the repository, branch and uncommitted count; a plain folder
+    /// shows `repo: none`, and none of them has a problem.
     @Test
     void theFactsSayWhetherTheFolderIsARepositoryAndWhatItHolds(@TempDir Path dir) throws Exception {
         Path repo = Files.createDirectories(dir.resolve("repo"));
@@ -238,8 +241,8 @@ class FoldersEditorTest {
         assertThat(on(e, (FoldersEditor x) -> ((JTextField) x.field(FoldersEditor.PATH)).isEditable())).as("chosen, not typed").isFalse();
     }
 
-    /// A chosen folder outside the config folder is not added and says so, a chosen index outside the folder is not taken,
-    /// and an index inside it is taken relative to the folder, the message then clearing.
+    /// A chosen folder outside the config folder is not added and says so, a chosen index outside the folder is not
+    /// taken, and an index inside it is taken relative to the folder, the message then clearing.
     @Test
     void onlyFoldersInsideTheConfigFolderArePickedAndARefusedPickChangesNothing(@TempDir Path dir) throws Exception {
         Path claude = Files.createDirectories(dir.resolve(".claude"));

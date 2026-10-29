@@ -26,6 +26,7 @@ public final class Blocks {
         }
     }
 
+    /** The blocks of {@code text}, in order. */
     public static List<Block> all(String text) {
         List<Block> blocks = new ArrayList<>();
         int line = 0;

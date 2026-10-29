@@ -21,8 +21,7 @@ class ViewSpecsPlotTest {
         return JSON.readTree(text);
     }
 
-    /// [ViewSpecs#plot] reads an array-form series with its supplied name and y values, preserving the established
-    /// `series` representation.
+    /// [ViewSpecs#plot] reads a `series` array with each series' name and y values.
     @Test
     void seriesAreReadAsBefore() throws Exception {
         ViewSpec.Plot p = ViewSpecs.plot(json("{\"title\": \"t\", \"series\": [{\"name\": \"a\", \"x\": [1, 2], \"y\": [3, 4]}]}"));

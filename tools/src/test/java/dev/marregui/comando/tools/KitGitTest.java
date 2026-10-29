@@ -135,7 +135,8 @@ class KitGitTest {
         assertThat(git(remote, "log", "-1", "--format=%b")).isEqualTo("renamed bin/tool -> bin/tool2\nremoved old.md");
     }
 
-    /// The first line stops naming areas once it is long and counts the rest; the body lists at most [KitGit#LISTED] files.
+    /// The first line stops naming areas once it is long and counts the rest; the body lists at most [KitGit#LISTED]
+    /// files.
     @Test
     void aLongBackupCountsWhatItCannotName() {
         List<KitGit.Change> many = new ArrayList<>();

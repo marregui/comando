@@ -56,8 +56,8 @@ public final class Flash {
     }
 
     /**
-     * Flashes the whole width of the line that holds {@code offset} in {@code area}, over the caret line's highlight and
-     * under the text. Called on the EDT.
+     * Flashes the whole width of the line that holds {@code offset} in {@code area}, over the caret line's highlight
+     * and under the text. Called on the EDT.
      */
     public static void line(RTextArea area, int offset) {
         int start;

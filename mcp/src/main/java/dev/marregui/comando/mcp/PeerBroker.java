@@ -9,22 +9,24 @@ import java.util.function.Consumer;
  */
 public interface PeerBroker {
 
-    /** A message as it arrived: its topic, payload, and the MQTT 5 response topic and correlation data, null when absent. */
+    /** A message as it arrived: topic, payload, and the MQTT 5 response topic and correlation data, or null. */
     record Message(String topic, byte[] payload, String responseTopic, byte[] correlation) {
     }
 
     /** Whether the broker is connected now. */
     boolean connected();
 
-    /** Runs {@code listener} each time the broker connects, again after a reconnect, before the subscriptions are renewed. */
+    /** Runs {@code listener} at each connect, a reconnect included, before the subscriptions are renewed. */
     void onConnected(Runnable listener);
 
-    /** The message the broker publishes when this client goes without disconnecting; takes effect at the next connect. */
+    /**
+     * The message the broker publishes when this client goes without disconnecting; takes effect at the next connect.
+     */
     void will(String topic, byte[] payload, boolean retained);
 
-    /** Publishes at least once; fails at once when not connected. {@code responseTopic} and {@code correlation} may be null. */
+    /** At least once; fails at once when not connected. {@code responseTopic} and {@code correlation} may be null. */
     CompletableFuture<Void> publish(String topic, byte[] payload, boolean retained, String responseTopic, byte[] correlation);
 
-    /** Delivers the messages on topics matching {@code filter} to {@code handler}, from now on and after every reconnect. */
+    /** Delivers messages on topics matching {@code filter} to {@code handler}, now and after every reconnect. */
     void subscribe(String filter, Consumer<Message> handler);
 }

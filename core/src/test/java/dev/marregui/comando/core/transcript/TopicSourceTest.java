@@ -7,7 +7,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [TopicSource] builds bounded summary input from a session conversation, panel text, or document text.
 ///
 /// - Session sources retain main-conversation prompts, tool calls, and responses in chronological order.
-/// - Panel sources prioritize the latest paragraph and the most recent session response.
+/// - Panel sources prioritise the latest paragraph and the most recent session response.
 /// - Empty input produces no source and oversized text is clipped without splitting emoji.
 class TopicSourceTest {
 

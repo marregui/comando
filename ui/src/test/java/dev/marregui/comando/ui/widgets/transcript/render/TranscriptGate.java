@@ -16,12 +16,12 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * The renderer's frame-time gate (plan 4a.4): replays the synthetic session one stream delta per frame,
- * each frame applying the change, laying out and painting a 1200 x 800 viewport at the end, as the widget
- * does while following a live turn. Then streams a long thinking block, which stays open while it streams.
- * Prints percentiles; exits 1 when either p99 exceeds 16 ms, 2 when the JVM is still alive {@value #EXIT_GRACE_MILLIS} ms
- * after the measurement: AWT ends the JVM by itself once nothing posts to it, so a Swing timer or a displayable component
- * left behind would otherwise hang the gate for as long as its caller waits.
+ * The renderer's frame-time gate (plan 4a.4): replays the synthetic session one stream delta per frame, each frame
+ * applying the change, laying out and painting a 1200 x 800 viewport at the end, as the widget does while following a
+ * live turn. Then streams a long thinking block, which stays open while it streams. Prints percentiles; exits 1 when
+ * either p99 exceeds 16 ms, 2 when the JVM is still alive {@value #EXIT_GRACE_MILLIS} ms after the measurement: AWT
+ * ends the JVM by itself once nothing posts to it, so a Swing timer or a displayable component left behind would
+ * otherwise hang the gate for as long as its caller waits.
  */
 public final class TranscriptGate {
 

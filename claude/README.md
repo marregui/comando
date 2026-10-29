@@ -3,8 +3,9 @@
 The Claude Code adapter: one headless `claude -p` process per session, speaking stream-JSON on standard input and
 output, mapped into transcript blocks and intents. It also lists the conversations Claude Code stored, follows
 subagents' stored conversations, reads the plans' usage (Claude Code's, and Codex's when its CLI is installed), reads
-the tabs' topics with Haiku, checks the installed CLI's version, and reads a kit's `comando-kit.json`, so that every
-`claude` it starts runs on the kit's root. It depends on `core` and Jackson; `app` alone constructs it.
+the tabs' topics with Haiku, checks the installed CLI's version, keeps the sessions' metrics, and reads a kit's
+`comando-kit.json`, so that every `claude` it starts runs on the kit's root. It depends on `core` and Jackson; `app`
+alone constructs it.
 
 1. [Architecture](#1-architecture)
 2. [Interface with the rest of the app](#2-interface-with-the-rest-of-the-app)
@@ -21,6 +22,8 @@ One package, `dev.marregui.comando.claude`.
 | `ClaudeCommand` | the argument list of a session's process: stream-JSON in and out with partial messages, subagent text and hook events (`--verbose`, `--include-partial-messages`, `--forward-subagent-text`, `--include-hook-events`); the start mode (`--session-id`, `--resume`, `--fork-session`); `--name <session>`; `--mcp-config` with `--permission-prompt-tool mcp__comando__approve` and `--append-system-prompt`, only with comando's server; the spec's model, effort, permission mode, extra directories and budget |
 | `ClaudeProcess` | one child process and its threads: stdout lines to the strand, stdin from a queue, stderr to a file in the temp folder whose last 40 lines are read at the exit |
 | `StreamMapper` | stream-JSON events, or a stored conversation's lines, into `Block`s and intents; streaming blocks grow in place and the complete `assistant` event replaces them |
+| `RunSettings` | the model and effort a message ran at, from the assistant line of the conversation's transcript (`message.model`, `perTurnEffort`, else `effort`), read from the file's last 256 KiB on the session's strand; the stream names the model but not the effort |
+| `MetricsLog` | what the sessions spend and how their work ends, one JSON line per turn, sub-agent or plan-usage read, in `metrics/metrics-<UTC date>.jsonl` of the data root ([record 110](../docs/adr/0110-metrics-for-calibration.md)); `MetricsLog.NONE` keeps nothing |
 | `BaseEffort` | the effort a model's turns start at, from the root's `settings.json` (`modelSettings.<model>.effortLevel`, else `effortLevel`); the stream does not report it |
 | `SubagentFiles` | finds and reads a subagent's stored conversation (`<session-id>/subagents/agent-<id>.jsonl`), reading only what the file gained since the last read |
 | `SessionCatalogue` | Claude Code's stored conversations for the import dialog, from a bounded read of each file's head (64 KiB) and tail (256 KiB) |
@@ -49,6 +52,9 @@ does; the login is the CLI's own.
 
 **On the kit's root.** Sessions, the `/usage` read, the topic reads and `claude --version` all go through the one
 `RootLaunch`: one root for every `claude` comando starts.
+
+**Short commands.** The `/usage` read, the topic reads, `claude --version` and `kit.py` run through `core`'s
+`Processes`: on the caller's thread, the output on temporary files, ended at the bound with every process they started.
 
 **Measured.** A topic read with 2 000 characters in took a median of 2.0 s on Claude Code 2.1.308, so one reader serves
 every tab: however many panels ask, at most one Haiku process runs.
@@ -90,9 +96,9 @@ start sessions without comando's tools) and `ClaudeSettings`.
 `SessionTasksChanged`, `SessionExited`, `SessionBranch`, `PlanUsageRead`, `ShowView` and `RefreshView` (a subagent's
 conversation as a lower view, followed while it grows), `Notify`.
 
-**Reads, never writes:** the root's `projects/`, its `settings.json` and its `comando-kit.json`. **Writes outside the
-data root:** only a temporary file in the system temp folder for each plan-usage read, each topic read and each
-process's stderr, deleted after it.
+**Reads, never writes:** the root's `projects/`, its `settings.json` and its `comando-kit.json`. **Writes in the data
+root:** `run/` (the MCP configurations) and `metrics/`. **Writes outside it:** only temporary files in the system temp
+folder, for each short command's output and each process's stderr, deleted after use.
 
 ## 3. Threads
 
@@ -105,10 +111,9 @@ process's stderr, deleted after it.
 | `subagent-tail` | timed strand | follows up to 4 subagent conversations every 2 s while they run (a fifth stops the oldest); a file that has not grown for 10 minutes stops being followed | `close()` |
 | `plan-usage` | timed strand | the periodic `/usage` read, stopped after 30 s; then the Codex read, stopped after 10 s | `close()` |
 | `topic-reader` | strand | the tabs' topic reads, one at a time, each stopped after 30 s | `ClaudeTopics.close()` |
-| `claude-version` | fork | `claude --version`'s output, bounded at 5 s | its caller |
 
 `close()` sends SIGTERM to every process, SIGKILL to those alive 2 s later, deletes every MCP configuration file and
-revokes its token.
+revokes its token. `ClaudeVersion.check` runs on its caller's thread, bounded at 5 s.
 
 ## 4. Tests
 
@@ -118,6 +123,8 @@ revokes its token.
 | `ClaudeProcessTest` | the exit after the last line, a child holding the output open, the stderr tail, one platform thread per session |
 | `ClaudeCommandTest` | the argument list for a new, resumed and forked session |
 | `StreamMapperTest` | `testkit`'s recorded streams |
+| `RunSettingsTest` | a message's model and effort from a transcript written in a temporary folder; a line not written yet; a file larger than the tail |
+| `MetricsTest` | the turn and sub-agent lines `MetricsLog` writes, none from replayed history, nothing when metrics are off |
 | `SubagentFilesTest`, `SubagentFilesProbeTest` | the fixtures in `src/test/resources/subagents/`; generated inputs |
 | `PlanUsageReaderTest`, `CodexUsageReaderTest`, `ClaudeTopicsTest` | reads against fake scripts written in a temporary folder; `ClaudeTopicsTest` also paces a stubbed read to check one read at a time, the replacement of a waiting ask and the close |
 | `ClaudeVersionTest` | the version parse, the half-open tested range, a missing executable |

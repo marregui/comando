@@ -12,7 +12,7 @@ final class Oklch {
     private Oklch() {
     }
 
-    /** The sRGB colour at lightness {@code l}, chroma {@code c} and hue {@code h} degrees, its chroma cut to fit sRGB. */
+    /** The sRGB colour at lightness {@code l}, chroma {@code c} and hue {@code h} degrees, chroma cut to fit sRGB. */
     static Color of(double l, double c, double h) {
         double rad = Math.toRadians(h);
         double lo = 0;

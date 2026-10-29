@@ -16,9 +16,9 @@ public final class Icons {
     /** Icons painted in code, by name, at any size asked: the tints' swatches. */
     private static final ConcurrentHashMap<String, Icon> PAINTED = new ConcurrentHashMap<>();
     /**
-     * The golds the SVGs are drawn in: a new file's dot, painted in the tint chosen at each paint ({@link Theme#tint()});
-     * the amber of the work and skills folders, images, logs, the warning and the interrupt, painted in
-     * {@link Theme#ATTENTION}, which no tint changes (record 96).
+     * The golds the SVGs are drawn in: a new file's dot, painted in the tint chosen at each paint
+     * ({@link Theme#tint()}); the amber of the work and skills folders, images, logs, the warning and the interrupt,
+     * painted in {@link Theme#ATTENTION}, which no tint changes (record 96).
      */
     static final int SVG_GOLD = 0xF0BA4C;
     static final int SVG_AMBER = 0xEDA200;
@@ -41,6 +41,7 @@ public final class Icons {
         return to == null ? c : Theme.withAlpha(to, c.getAlpha());
     }
 
+    /** The SVG {@code name} at {@code size} pixels, or the icon painted in code under that name at its own size. */
     public static Icon get(String name, int size) {
         Icon painted = PAINTED.get(name);
         if (painted != null) {
@@ -50,9 +51,9 @@ public final class Icons {
     }
 
     /**
-     * A folder's icon by its name ({@code folder}, {@code folder-scratchpad}, … {@code folder-git}): the sidebar's family
-     * ({@code icons/sidebar/}), drawn as the sidebar's tabs are, an outline in one colour per kind (record 98), with git's
-     * mark on a repository's; any other name as {@link #get}.
+     * A folder's icon by its name ({@code folder}, {@code folder-scratchpad}, … {@code folder-git}): the sidebar's
+     * family ({@code icons/sidebar/}), drawn as the sidebar's tabs are, an outline in one colour per kind (record 98),
+     * with git's mark on a repository's; any other name as {@link #get(String)}.
      */
     public static Icon folder(String name) {
         return switch (name) {

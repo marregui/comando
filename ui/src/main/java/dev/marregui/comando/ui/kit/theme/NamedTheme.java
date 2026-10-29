@@ -6,8 +6,7 @@ import java.util.Optional;
 
 /**
  * A curated theme (record 103): a ground and the tint that sits on it, chosen together in Actions ▸ Theme or from the
- * swatch beside Clear. Six, each looked at as a whole window; Miguel chose the set on 2026-10-27, and the ground and
- * the tint are no longer chosen apart (decision D3).
+ * swatch beside New panel. The ground and the tint are not chosen apart.
  */
 public enum NamedTheme {
 
@@ -39,8 +38,8 @@ public enum NamedTheme {
     }
 
     /**
-     * The theme for a ground and tint kept from before themes: the one they make; else, when a ground was chosen, the
-     * theme on that ground; else the theme of that tint; else {@link #GRAPHITE_GOLD}.
+     * The theme for a ground and tint stored apart: the one they make; else, when a ground was chosen, the theme on
+     * that ground; else the theme of that tint; else {@link #GRAPHITE_GOLD}.
      */
     public static NamedTheme closest(Optional<Ground> ground, Tint tint) {
         Optional<NamedTheme> pair = ground.flatMap(g -> of(g, tint));

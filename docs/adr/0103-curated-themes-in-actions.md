@@ -26,13 +26,13 @@ Miguel decided D3 and chose the set. Claude chose the six pairs.
 ## 3. Consequences
 
 Supersedes the choosers of [record 96](0096-a-tint-chosen-in-actions.md) and
-[record 99](0099-a-ground-chosen-beside-the-tint.md): the tint and the ground are no longer chosen apart. On Graphite the
-surfaces are #2D2D2D, #3C3C3C and #2E3A4A, as before within a few levels.
+[record 99](0099-a-ground-chosen-beside-the-tint.md): the tint and the ground are no longer chosen apart. On Graphite
+the surfaces are #2D2D2D, #3C3C3C and #2E3A4A, as before within a few levels.
 
-Tested in `NamedThemeTest`, `MenusTest` (the submenu and its swatches), `OnGroundTest` (a border and a background made
-once take another ground; every surface stands off every ground), `NamedThemeTest` (a pair kept from before maps to
-the closest theme) and `UiKeysTest` (Actions ▸ Theme and the swatch beside Clear set and keep a theme; every panel, the
+Tested in `NamedThemeTest` (a pair kept from before maps to the closest theme), `MenusTest` (the submenu and its
+swatches), `OnGroundTest` (a border and a background made once take another ground; every surface stands off every
+ground) and `UiKeysTest` (Actions ▸ Theme and the swatch beside Clear set and keep a theme; every panel, the
 transcript and an editor take it, the editor keeping its zoom; no Tint or Ground submenu; the gold kept before tints
-opens in Espresso and champagne); `SpinnerIconTest` (the head in each theme's tint, no bar in the old blue; mutation-checked
-with the old shades put back) and its hourglass check. Sheets: `app/build/snapshots/themes.png` and `02f2-themes.png` of `:app:snapshot`,
-the whole window in each theme.
+opens in Espresso and champagne); `SpinnerIconTest` (the head in each theme's tint, no bar in the old blue;
+mutation-checked with the old shades put back) and its hourglass check. Sheets: `app/build/snapshots/themes.png` and
+`02f2-themes.png` of `:app:snapshot`, the whole window in each theme.

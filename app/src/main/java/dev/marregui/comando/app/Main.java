@@ -13,10 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
-/**
- * Entry point: configuration, logging, one instance per data root, the application, and an exit that closes
- * everything once.
- */
+/** Entry point: configuration, logging, one instance per data root, the application, an exit that closes all once. */
 public final class Main {
 
     private Main() {
@@ -27,14 +24,15 @@ public final class Main {
         // native file dialogs ignore it
         System.setProperty("apple.awt.application.appearance", "NSAppearanceNameDarkAqua");
         AppConfig config = AppConfig.fromEnvironment();
-        // several instances on one machine tell themselves apart: the Dock's and menu bar's name, the window's title and
-        // badge, and a preferences node of its own so their layouts never overwrite each other (record 122)
+        // several instances on one machine tell themselves apart: the Dock's and menu bar's name, the window's title
+        // and badge, and a preferences node of its own (record 122)
         String given = System.getProperty("comando.name", System.getenv("COMANDO_NAME"));
         String name = InstanceName.of(config.home(), given == null || given.isBlank() ? nameFile(config.home()) : given);
         System.setProperty(InstanceName.PROPERTY, name);
         System.setProperty("apple.awt.application.name", InstanceName.display(name));
         if (System.getProperty("comando.prefsNode") == null) {
-            // keyed by the data root's folder, so renaming an instance keeps its window layout
+            // keyed by the data root's folder, so a renamed instance keeps it; read for the layout only when the
+            // data root has no settings.json yet (record 106)
             String folder = InstanceName.of(config.home(), null);
             System.setProperty("comando.prefsNode", InstanceName.prefsNode(folder.isEmpty() ? name : folder));
         }
@@ -58,8 +56,10 @@ public final class Main {
         app[0].start();
     }
 
-    /** The name in the data root's {@code instance.json} ({@code {"name": "Comando Expert"}}, written by the kit's
-     * {@code kit.py instance new}), or null when the file is missing, unreadable or names none. */
+    /**
+     * The name in the data root's {@code instance.json} ({@code {"name": "Comando Expert"}}, written by the kit's
+     * {@code kit.py instance new}), or null when the file is missing, unreadable or names none.
+     */
     static String nameFile(Path home) {
         Path file = home.resolve(InstanceName.FILE);
         if (!Files.isRegularFile(file)) {

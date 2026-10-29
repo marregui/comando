@@ -28,8 +28,8 @@ final class ApprovalRules {
     }
 
     /**
-     * A session asks: its card joins the Approvals tab, which comes forward; the keyboard stays where it is, so typing in
-     * the editor goes on. A card asked for again (the same id) changes nothing.
+     * A session asks: its card joins the Approvals tab, which comes forward; the keyboard stays where it is, so typing
+     * in the editor goes on. A card asked for again (the same id) changes nothing.
      */
     static Transition approvalRequested(Clock clock, AppState s, Approval a) {
         if (s.approval(a.id()).isPresent()) {
@@ -68,7 +68,9 @@ final class ApprovalRules {
         return Transition.of(notice(clock, next, Notice.Level.WARN, "Approval withdrawn: " + i.reason(), Notice.approval(i.id())));
     }
 
-    /** Denies and drops every waiting approval of {@code session}, so no MCP call waits for an answer nobody can give. */
+    /**
+     * Denies and drops every waiting approval of {@code session}, so no MCP call waits for an answer nobody can give.
+     */
     static AppState withdrawApprovals(AppState s, String session, String reason, List<Effect> effects) {
         return withdrawApprovals(s, session, reason, effects, a -> true);
     }

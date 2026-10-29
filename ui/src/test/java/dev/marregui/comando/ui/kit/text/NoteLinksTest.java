@@ -14,7 +14,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - A file name, in any case or as a path from the root, wins and is found anywhere in the repository.
 /// - Of two matches the one nearest the folder wins.
 /// - Dashes in the name find underscores in the file name.
-/// - A missing note, a note in a hidden folder or no folder resolves to nothing; outside a repository the folder is the root.
+/// - A missing note, a note in a hidden folder or no folder resolves to nothing; outside a repository the folder is the
+///   root.
 class NoteLinksTest {
 
     @TempDir

@@ -44,8 +44,9 @@ class FocusBackUiTest {
     @TempDir
     Path home;
 
-    /// Closing the third panel of a chain of openings puts the keyboard back at its place in the second, closing the second
-    /// brings the first back, and a file opened with the keyboard in the sidebar's session list returns it to that list.
+    /// Closing the third panel of a chain of openings puts the keyboard back at its place in the second, closing the
+    /// second brings the first back, and a file opened with the keyboard in the sidebar's session list returns it to
+    /// that list.
     @Test
     void closingWhatWasOpenedGivesTheKeyboardBackToWhatOpenedItAndOpeningsChain() throws Exception {
         Path work = Files.createDirectories(home.resolve("work"));

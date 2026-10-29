@@ -13,9 +13,10 @@ import java.util.function.Predicate;
 /**
  * Gives the commands' keys priority over the focused component in one window. Swing offers a key to the focused
  * component's own bindings before menu accelerators and window-wide bindings, so a widget that binds the same
- * stroke takes it: RSyntaxTextArea binds ⌘⏎, ⌘J and ⌘⇧K, and the terminal consumes every key. The key typed
- * event that follows a claimed press is swallowed as well, so the stroke leaves no character behind. A component may keep
- * some keys for itself: the terminal keeps Ctrl with a letter for the shell, which is ⌘'s key on desktops other than macOS.
+ * stroke takes it: RSyntaxTextArea binds ⌘⏎, ⌘J and ⌘⇧K, and the terminal consumes every key. The key typed event
+ * that follows a claimed press is swallowed as well, so the stroke leaves no character behind. A component may keep
+ * some keys for itself: the terminal keeps Ctrl with a letter for the shell, which is ⌘'s key on desktops other than
+ * macOS.
  */
 public final class KeyPriority implements KeyEventDispatcher, AutoCloseable {
 
@@ -40,7 +41,7 @@ public final class KeyPriority implements KeyEventDispatcher, AutoCloseable {
         return p;
     }
 
-    /** For tests: the dispatcher without installing it, claiming keys whose source {@code owns} accepts and does not keep. */
+    /** For tests: the dispatcher, not installed, claiming keys whose source {@code owns} accepts and does not keep. */
     static KeyPriority detached(ActionRegistry registry, Predicate<Component> owns, BiPredicate<Component, KeyStroke> keeps) {
         return new KeyPriority(registry, owns, keeps);
     }

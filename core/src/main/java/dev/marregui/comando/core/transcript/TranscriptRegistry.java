@@ -5,7 +5,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /** Transcripts by session name; the state refers to them by that name. A sub-agent's is under {@link #subagentKey}. */
 public final class TranscriptRegistry {
 
-    /** Between a session's name and a sub-agent's id in a sub-agent's key: a character no session name holds. */
+    /** Between a session's name and a sub-agent's id in a sub-agent's key: U+241F, which a typed name does not hold. */
     private static final char SUBAGENT = '\u241F';
 
     /** The key of the transcript of the sub-agent {@code toolUseId} of {@code session} (record 109). */

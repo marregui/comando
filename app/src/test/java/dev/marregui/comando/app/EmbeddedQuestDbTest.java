@@ -112,7 +112,8 @@ class EmbeddedQuestDbTest {
     }
 
     /// While a start on a data root that is a file holds the server, `isRunning` answers false within 2 s and a second
-    /// toggle notices "QuestDB is starting"; the start then fails with one ERROR notice and the database is not running.
+    /// toggle notices "QuestDB is starting"; the start then fails with one ERROR notice and the database is not
+    /// running.
     @Test
     void isRunningAnswersAtOnceWhileAStartHoldsTheServerAndASecondToggleWaits(@TempDir Path dir) throws Exception {
         // a root that is a file: the start fails quickly, once the test lets it run

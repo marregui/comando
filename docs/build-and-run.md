@@ -51,9 +51,8 @@ place, as no build rewrites them; `clean` leaves `.gradle/` alone.
 
 Tests run headless, with the data root in each module's `build/test-home`, so they never read or change the user's
 data; a window test without a data root keeps its settings in memory, and the earlier preferences it might read are
-under a node of its own. The modules test side by side
-(`gradle.properties`), each in up to three JVMs; `:app:uiTest` runs one JVM per test class, one at a time, as its
-windows share one desktop.
+under a node of its own. The modules test side by side (`gradle.properties`), each in up to three JVMs; `:app:uiTest`
+runs one JVM per test class, one at a time, as its windows share one desktop.
 
 ### 2.1 The window tests
 
@@ -70,13 +69,21 @@ windows share one desktop.
 | `CheckpointClearUiTest` | the Checkpoint button against a stand-in for `claude -p`: the conversation cleared, the summary shown and carried into the next prompt, the panel's text kept ([record 86](adr/0086-a-checkpoint-clears-and-carries-its-summary.md)) |
 | `SessionCardUiTest` | a session's row shows the tab's card, a connection's row a card of its facts; both painted to `app/build/snapshots/` |
 | `LinksUiTest` | a memory file's front matter shown as facts; a double click on a `[[name]]` link opens the named file, on a web address goes to the browser ([record 94](adr/0094-links-in-both-styles-everywhere.md)) |
+| `FocusBackUiTest` | closing what a double click opened gives the keyboard back to what opened it ([record 112](adr/0112-closing-gives-the-keyboard-back.md)) |
+| `OutlineUiTest` | a Markdown document's outline at the panel's right; a double click on a heading scrolls the page to it ([record 113](adr/0113-a-documents-outline-at-the-panels-right.md)) |
+| `LowerDividerUiTest` | the divider above the lower panel is each panel's own ([record 115](adr/0115-the-lower-divider-per-panel.md)) |
+| `LocateUiTest` | a panel's Locate button selects its file in the Files tab or its session in the Sessions tab ([record 119](adr/0119-the-ui-simplified-kit-row-locate-no-thinking-mark.md)) |
+| `OwnLogUiTest` | comando's log opened from Help shows the lines written after it opened, at its end, also after a restart |
 
 ## 3. Continuous integration
 
 | Workflow | Runs on | Does |
 |---|---|---|
 | `build` | every push to `main` and every pull request, Ubuntu and macOS; a weekly run on Mondays; by hand | `./gradlew build`, then `:app:uiTest` (under `xvfb-run` on Ubuntu), a per-module test report with every skipped test named (`ci/TestReport.java`), `:ui:transcriptGate` reported but not enforced, as runner speed varies, and on macOS `:app:dmg` |
-| `release` | a tag `v*`; by hand | `:app:package` on macOS, Ubuntu and Windows without the tests, then a GitHub release of the three files for a tag; by hand, the packages are kept as the run's artifacts |
+| `release` | a tag `v*`; by hand | `:app:package` with `-PreleaseVersion=<tag without v>` on macOS, Ubuntu and Windows without the tests, then the tag's GitHub release of the three files, its notes the commits since the previous tag; by hand, the packages are the run's artifacts, kept 7 days, and a release is made only on a tag with dry run off |
+
+Both use Temurin 25 and actions pinned by SHA. `dependabot.yml` opens one grouped pull request a month for the actions
+and one for the Gradle dependencies.
 
 A push or pull request that changes only documentation builds nothing, except a change to `docs/tutorial.md`, which
 the ui jar carries. The PostgreSQL adapter test runs on Ubuntu only: macOS runners have no Docker.
@@ -87,14 +94,14 @@ the ui jar carries. The PostgreSQL adapter test runs on Ubuntu only: macOS runne
 |---|---|---|---|
 | `comando.home` | system property | — | the data root; wins over `COMANDO_HOME`; a leading `~` is the home folder |
 | `COMANDO_HOME` | environment | `~/.comando` | the data root; a leading `~` is the home folder |
-| `comando.name`, `COMANDO_NAME` | system property, environment | the data root's `instance.json` `name` (written by the kit's `kit.py instance new`), else its folder: none for `~/.comando`, `b` for `~/.comando_b` | the instance's name: the Dock's and menu bar's `comando · b` (a name that says comando, `Comando Expert`, as it is), the window title, the Dock badge, and a window-preferences node of its own, keyed by the data root's folder so a renamed instance keeps its layout ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)) |
+| `comando.name`, `COMANDO_NAME` | system property, environment | the data root's `instance.json` `name` (written by the kit's `kit.py instance new`), else its folder: none for `~/.comando`, `b` for `~/.comando_b` | the instance's name: the Dock's, the menu bar's and the window's `comando · b` (a name that says comando, `Comando Expert`, as it is), and the Dock badge, its first letter ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)) |
 | `COMANDO_CLAUDE` | environment | the search in [§1](#1-prerequisites) | the Claude Code executable |
 | `COMANDO_CODEX` | environment | the search in [§1](#1-prerequisites) | the Codex executable, read for the status bar's usage |
-| `comando.edge.zip`, `COMANDO_EDGE_ZIP` | system property, environment | the pinned open-source Edge release (`hivemq-edge-full-2026.15.zip`), downloaded once into `edge/dist/` of the data root | the Edge distribution the comando Edge is installed from; the property wins ([Workbench §3.5](workbench.md#35-the-comando-edge)) |
+| `comando.edge.zip`, `COMANDO_EDGE_ZIP` | system property, environment | the pinned open-source HiveMQ Edge 2026.15 release, downloaded once into `edge/dist/` of the data root and checked against its published SHA-256 | the Edge distribution the comando Edge is installed from; the property wins ([Workbench §3.5](workbench.md#35-the-comando-edge)) |
 | `CLAUDE_CONFIG_DIR` | environment | unset | the root comando's sessions run on, in place of `~/.claude` or `~/.claude/comando-kit` ([Workbench §7.1](workbench.md#71-the-root)) |
 | `comando.keychain` | system property | `true` for `~/.comando`, else `false` | keep connection passwords in the login keychain (macOS); elsewhere they stay in `connections.json` |
 | `comando.recordIntents` | system property | `false` | write the intent log to `logs/` in the data root |
-| `comando.prefsNode` | system property | `dev/marregui/comando` | the Java preferences node read once into `settings.json` when that file does not exist yet |
+| `comando.prefsNode` | system property | `dev/marregui/comando`; `dev/marregui/comando-<folder>` for another data root, named by its folder | the Java preferences node read once into the data root's `settings.json` when that file does not exist yet ([record 106](adr/0106-settings-in-the-data-root.md)) |
 | `comando.offScreen` | system property | `false` | `true` opens the window undecorated, left of every screen, never taking the focus; set by `:app:uiTest`, `:app:snapshot` and `:app:docImages` |
 | `comando.keys` | system property | the desktop's | `mac` or `linux` chooses macOS's keys or the other desktops' on any desktop; for tests |
 

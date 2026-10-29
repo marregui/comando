@@ -38,9 +38,9 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 
 /**
- * The pictures a Markdown document names by a path on this machine, for the preview: a PNG, JPEG or GIF as it is, an
- * SVG drawn once into a PNG in a cache folder. Nothing comes from the network: a web address is not resolved to a
- * picture, and an SVG may name only files beside it. Each picture is read on a thread of its own, one at a time; whoever
+ * The pictures a Markdown document names by a local path, for the preview: a PNG, JPEG or GIF as it is, an SVG drawn
+ * once into a PNG in a cache folder. Nothing comes from the network: a web address is not resolved to a picture, and
+ * an SVG may name only files beside it. Pictures are read on the {@code local-images} strand, one at a time; whoever
  * asked hears when it is ready, and a picture changed on disk is read again.
  */
 public final class LocalImages {
@@ -131,9 +131,9 @@ public final class LocalImages {
     }
 
     /**
-     * The picture {@code file} holds, or why there is none; when it is not read yet, reading starts and {@code
-     * whenReady} runs, on the reading thread, once it is read or refused: once, however often the same callback is
-     * handed in meanwhile.
+     * The picture {@code file} holds, or why there is none; when it is not read yet, reading starts and
+     * {@code whenReady} runs, on the reading thread, once it is read or refused: once, however often the same callback
+     * is handed in meanwhile.
      */
     public Picture picture(Path file, Runnable whenReady) {
         Key key;
@@ -207,7 +207,10 @@ public final class LocalImages {
         }
     }
 
-    /** An SVG is drawn once into a PNG in the cache, twice as large as it is shown; what it names outside its folder is not loaded. */
+    /**
+     * An SVG is drawn once into a PNG in the cache, twice as large as it is shown; what it names outside its folder is
+     * not loaded.
+     */
     private Picture drawSvg(Key key) throws IOException {
         if (cache == null) {
             return new Picture.Unavailable("SVG pictures are not drawn here");

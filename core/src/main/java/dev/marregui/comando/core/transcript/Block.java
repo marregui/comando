@@ -97,7 +97,9 @@ public sealed interface Block {
         }
     }
 
-    /** The {@code result} that ended a turn; or, read from a stored conversation, the end of a turn without its numbers. */
+    /**
+     * The {@code result} that ended a turn; or, read from a stored conversation, the end of a turn without its numbers.
+     */
     record TurnEnd(double costUsd, long durationMillis, int numTurns, boolean error, String text) implements Block {
         /** The duration of a turn read from a stored conversation, which records none. */
         public static final long UNTIMED = -1L;

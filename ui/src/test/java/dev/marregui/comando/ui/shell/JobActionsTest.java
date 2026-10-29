@@ -23,9 +23,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 
 /// [JobActions]: the kit's jobs reach `kit.py` only as the manifest holds them when the user acts (record 117).
-/// - a list that cannot be read opens no window and says why, so no Save can hand `kit.py` an empty list
-/// - Apply pending changes hands over the jobs read at that moment, not the list read a minute or hours before
-/// - Apply with a list that cannot be read hands over nothing and says why
+/// - A list that cannot be read opens no window and says why, so no Save can hand `kit.py` an empty list.
+/// - Apply pending changes hands over the jobs read at that moment, not the list read a minute or hours before.
+/// - Apply with a list that cannot be read hands over nothing and says why.
 class JobActionsTest {
 
     private static final KitRoot.Manifest KIT = new KitRoot.Manifest("marregui", "BRAIN", List.of(), List.of(), List.of(), List.of());

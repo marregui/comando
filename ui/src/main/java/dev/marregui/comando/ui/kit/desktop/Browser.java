@@ -9,8 +9,8 @@ import java.util.Locale;
 import java.util.function.Consumer;
 
 /**
- * Opens web links, and files such as HTML pages, in the user's browser. The browser call can block, so it runs on an {@code open-link} virtual
- * thread, never on the caller's (the EDT, for a clicked link).
+ * Opens web links, and files such as HTML pages, in the user's browser. The browser call can block, so it runs on the
+ * window's {@code open-link} errand, never on the caller's thread (the EDT, for a clicked link).
  */
 public final class Browser {
 
@@ -41,7 +41,7 @@ public final class Browser {
         }
     }
 
-    /** Opens a file of this machine, such as an HTML page, in the browser when the desktop can browse; returns at once. */
+    /** Opens a local file, such as an HTML page, in the browser when the desktop can browse; returns at once. */
     public static void openFile(Path file) {
         if (Desktop.isDesktopSupported()) {
             URI uri = file.toAbsolutePath().toUri();

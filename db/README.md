@@ -16,7 +16,7 @@ One package, `dev.marregui.comando.db`.
 
 | Class | Does |
 |---|---|
-| `DbAdapter` | the port: a lane per connection name, a request-to-lane map for cancel, a timer, virtual threads for connection tests and cancels; schema loads |
+| `DbAdapter` | the port: a lane per connection name, a request-to-lane map for cancel, a timer, an errand per connection test, virtual threads for cancels; schema loads |
 | `Lane` | one JDBC connection and the one thread that uses it: opens, closes, statements and health checks run on it in order; cancel and abort |
 | `ColumnarResult` | a run's rows by column in primitive chunks of 16 384 values (`long` for integers, booleans and times; `double`; text for the rest); implements `core`'s `ResultView` |
 | `DbSettings` | tunables; `DEFAULTS`: no statement timeout, 5 000 000 rows kept, 5 000 rows per fetch, a health check every 60 s, abort 2 s after an unanswered cancel |
@@ -78,7 +78,8 @@ when `loadSchema` is asked to show it), `Notify`.
 |---|---|---|---|
 | `db-<connection>` | strand, one per connection | opens, statements, fetches, closes, health checks (`isValid(5)`); its socket waits hold no operating-system thread | `close()`, after the running statement's cancel |
 | `db-timer` | timed strand | health checks every 60 s; the abort after an unanswered cancel | `close()` |
-| unnamed virtual threads | per-task executors | connection tests (`isValid(10)` on a connection of their own); `Statement.cancel()` calls | `close()` |
+| `db-test-<connection>` | errands | a connection test: `isValid(10)` on a connection of its own | `close()`, which interrupts and waits for them |
+| unnamed virtual threads | per-task executor | `Statement.cancel()` calls | `close()` |
 
 `close()` cancels running statements and closes every lane, then stops the timer, the testers and the cancellers.
 

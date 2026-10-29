@@ -19,6 +19,7 @@ public final class TextSearch {
         context.setRegularExpression(false);
     }
 
+    /** Selects the next (or previous) match of {@code text}, wrapping at the end; returns the number of matches. */
     public int find(String text, boolean forward) {
         context.setSearchFor(text);
         context.setSearchForward(forward);
@@ -31,6 +32,7 @@ public final class TextSearch {
         return r.getMarkedCount();
     }
 
+    /** Removes the marks. */
     public void clear() {
         context.setSearchFor("");
         SearchEngine.markAll(area, context);

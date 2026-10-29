@@ -21,8 +21,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - [EdtWatchdog#drawingOnly] and [EdtWatchdog#where] classify and place a stack.
 class EdtWatchdogTest {
 
-    /// A hold past the 400 ms hang limit is reported exactly once, marked reported, with a length of at least the limit,
-    /// kind [EdtWatchdog.Kind#COMANDO] and the holding method in its stack; its end is reported too.
+    /// A hold past the 400 ms hang limit is reported exactly once, marked reported, with a length of at least the
+    /// limit, kind [EdtWatchdog.Kind#COMANDO] and the holding method in its stack; its end is reported too.
     @Test
     void aHangIsReportedOnceAtItsLimitWithItsStack() throws Exception {
         List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
@@ -45,8 +45,8 @@ class EdtWatchdogTest {
         });
     }
 
-    /// A stall below its limit leaves no stack: one line when it ends, saying what held the EDT and where. The hold lasts
-    /// until the probe has waited 600 ms, three times the threshold, so late watchdog checks still see it.
+    /// A stall below its limit leaves no stack: one line when it ends, saying what held the EDT and where. The hold
+    /// lasts until the probe has waited 600 ms, three times the threshold, so late watchdog checks still see it.
     @Test
     void aShortStallIsToldOnlyWhenItEndsWithItsKindAndWhere() throws Exception {
         List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
@@ -72,8 +72,8 @@ class EdtWatchdogTest {
         });
     }
 
-    /// The stall notice needs the whole length: the threshold report comes at about 200 ms, the end one after it with at
-    /// least the 1 s the EDT was held.
+    /// The stall notice needs the whole length: the threshold report comes at about 200 ms, the end one after it with
+    /// at least the 1 s the EDT was held.
     @Test
     void theEndOfAReportedStallCarriesItsWholeLength() throws Exception {
         List<Long> ended = new CopyOnWriteArrayList<>();
@@ -88,12 +88,10 @@ class EdtWatchdogTest {
         assertThat(ended).singleElement().satisfies(m -> assertThat(m).isGreaterThanOrEqualTo(1_000L));
     }
 
-    /// An EDT busy for 130 ms when the first probe is posted answers between the 100 ms and 200 ms checks, so nothing is
-    /// reported; five rounds guard against a lucky schedule.
+    /// An EDT busy for 130 ms when the first probe is posted answers between the 100 ms and 200 ms checks, so nothing
+    /// is reported; five rounds guard against a lucky schedule.
     @Test
     void aWaitBelowTheThresholdIsNotReported() throws Exception {
-        // the EDT is busy for 130 ms when the first probe is posted: it answers between the watchdog's
-        // checks at 100 ms and 200 ms, so nothing may be reported
         List<String> stacks = new CopyOnWriteArrayList<>();
         SwingUtilities.invokeAndWait(() -> { }); // the EDT exists before the probes start
         for (int round = 0; round < 5; round++) {
@@ -116,7 +114,7 @@ class EdtWatchdogTest {
         CountDownLatch done = new CountDownLatch(1);
         SwingUtilities.invokeAndWait(() -> { }); // the EDT exists before the probes start
         AtomicReference<EdtWatchdog> watching = new AtomicReference<>();
-        // the window's build, before the watchdog's first probe, held until the probe has waited well past the threshold
+        // the window's build, before the first probe, held until the probe has waited well past the threshold
         SwingUtilities.invokeLater(() -> holdEdtUntil(() -> watching.get() != null && watching.get().probeWaitMillis() >= 600));
         EdtWatchdog w = new EdtWatchdog(stall -> { }, (stall, millis) -> {
             ended.add(stall);
@@ -134,8 +132,9 @@ class EdtWatchdogTest {
         });
     }
 
-    /// Drawing has a limit of its own, past the hang limit: Java2D waiting on macOS's GPU flush is not comando's. A drawing
-    /// stall past the 400 ms hang limit but below the 2 s drawing limit is only told at its end, marked as drawing.
+    /// Drawing has a limit of its own, past the hang limit: Java2D waiting on macOS's GPU flush is not comando's. A
+    /// drawing stall past the 400 ms hang limit but below the 2 s drawing limit is only told at its end, marked as
+    /// drawing.
     @Test
     void aStallInTheJdksDrawingIsReportedOnlyWhenItEndsMarkedAsDrawing() throws Exception {
         List<EdtWatchdog.Stall> reported = new CopyOnWriteArrayList<>();
@@ -180,8 +179,8 @@ class EdtWatchdogTest {
         });
     }
 
-    /// A stack waiting on Java2D's render queue or a flush is drawing even when comando's paint called it, Java2D alone is
-    /// drawing, while Java2D working for comando, the AWT lock without Java2D, or Swing alone is not.
+    /// A stack waiting on Java2D's render queue or a flush is drawing even when comando's paint called it, Java2D alone
+    /// is drawing, while Java2D working for comando, the AWT lock without Java2D, or Swing alone is not.
     @Test
     void waitingOnJava2dsRenderQueueIsDrawingWhoeverPaints() {
         assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{PARK, LOCK, QUEUE, REPAINT})).isTrue();
@@ -196,8 +195,8 @@ class EdtWatchdogTest {
         assertThat(EdtWatchdog.drawingOnly(new StackTraceElement[]{CREATE, REPAINT})).as("Swing alone").isFalse();
     }
 
-    /// [EdtWatchdog#where] gives `in=` the first frame outside `java.base` and `comando=` the first comando frame with its
-    /// line, or `-` when there is none.
+    /// [EdtWatchdog#where] gives `in=` the first frame outside `java.base` and `comando=` the first comando frame with
+    /// its line, or `-` when there is none.
     @Test
     void whereNamesTheFirstFrameOutsideJavaBaseAndTheFirstComandoFrame() {
         assertThat(EdtWatchdog.where(new StackTraceElement[]{PARK, LOCK, QUEUE, FILL, OURS, REPAINT}))

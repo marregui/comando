@@ -79,9 +79,9 @@ class SidebarLookTest {
         throw new AssertionError("no row " + label);
     }
 
-    /// The Brain group is one BRAIN row holding its three folders; the KIT and Notes rows each start after a separator, a
-    /// header with no words that takes extra height above the row; in each of three tints the ground is the theme's, the
-    /// selected row's bar is in the tint and the hairline is painted in its shade over the ground.
+    /// The Brain group is one BRAIN row holding its three folders; the KIT and Notes rows each start after a separator,
+    /// a header with no words that takes extra height above the row; in each of three tints the ground is the theme's,
+    /// the selected row's bar is in the tint and the hairline is painted in its shade over the ground.
     @Test
     void aGroupIsOneRowAndAHairlinePartsTheGroupsInTheTintChosen() {
         FilesTab tab = tab();

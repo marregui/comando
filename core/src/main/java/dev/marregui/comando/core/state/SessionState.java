@@ -10,22 +10,23 @@ import java.util.Objects;
 /**
  * A configured session and its live status.
  *
- * @param pendingTurns   prompts sent and not yet answered by a {@code result}
- * @param costUsd        spend reported by Claude Code for this conversation
- * @param contextTokens  input tokens of the last turn (prompt plus cache), the context size
- * @param contextWindow  the model's context window reported with the last turn, 0 when unknown
- * @param activity       what the session is doing now ("requesting", "compacting", a tool name), empty when idle
- * @param branch         git branch of the working directory, empty when unknown
+ * @param pendingTurns      prompts sent and not yet answered by a {@code result}
+ * @param costUsd           spend Claude Code reports for this process
+ * @param contextTokens     the context size: input tokens, cache included, of the latest model call or turn
+ * @param contextWindow     the model's context window as last reported, 0 when unknown
+ * @param activity          what the session is doing now ("requesting", "compacting", a tool name), empty when idle
+ * @param branch            git branch of the working directory, empty when unknown
  * @param turnStartedMillis when the running turn began (the first prompt of a busy stretch), 0 when idle
- * @param lastTurnError  why the last turn failed, empty when it finished, was interrupted, or a new turn has started
- * @param tasks          background work the session started and Claude Code reports still open, oldest first
- * @param returnedMillis when the last background task ended while no turn ran, 0 otherwise: Claude Code starts a turn
- *                       of its own to read the result, and until it does the work is not finished
- * @param handedOff      the last turn added background work that is still open: that turn's outcome is the work's, still to come
- * @param startedMillis  when the session's process started, 0 while it does not run
- * @param reflection     whether the session is due its checkpoint
- * @param checkpointClears the Checkpoint button's command runs: when its turn ends, the conversation is cleared and the
- *                       turn's last answer, its summary, is carried into the next prompt
+ * @param lastTurnError     why the last turn failed, empty when it finished, was interrupted, or a new turn has started
+ * @param tasks             background work the session started and Claude Code reports still open, oldest first
+ * @param returnedMillis    when the last background task ended while no turn ran, 0 otherwise: Claude Code starts a
+ *                          turn of its own to read the result, and until it does the work is not finished
+ * @param handedOff         the last turn added background work that is still open: that turn's outcome is the work's,
+ *                          still to come
+ * @param startedMillis     when the session's process started, 0 while it does not run
+ * @param reflection        whether the session is due its checkpoint
+ * @param checkpointClears  the Checkpoint button's command runs: when its turn ends, the conversation is cleared and
+ *                          the turn's last answer, its summary, is carried into the next prompt
  */
 public record SessionState(
         SessionSpec spec,
@@ -81,8 +82,8 @@ public record SessionState(
     }
 
     /**
-     * Waiting, and the last turn is what started that work: its outcome is the work's. A later turn that ends while older
-     * work runs on is an outcome of its own.
+     * Waiting, and the last turn is what started that work: its outcome is the work's. A later turn that ends while
+     * older work runs on is an outcome of its own.
      */
     public boolean isAwaitingHandOff() {
         return isWaiting() && handedOff;
@@ -114,8 +115,9 @@ public record SessionState(
     }
 
     /**
-     * The background tasks Claude Code reports open now, the whole set; a task already known keeps the time comando first
-     * heard of it, a new one starts {@code now}. When the last one ends while no turn runs, the work has returned.
+     * The background tasks Claude Code reports open now, the whole set; a task already known keeps the time comando
+     * first heard of it, a new one starts {@code now}. When the last one ends while no turn runs, the work has
+     * returned.
      */
     public SessionState withTasks(List<BackgroundTask> open, long now) {
         List<BackgroundTask> next = new ArrayList<>(open.size());
@@ -161,13 +163,18 @@ public record SessionState(
                 activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, newReflection, checkpointClears);
     }
 
-    /** Whether the end of the running turn clears the conversation and carries its summary; see {@link #checkpointClears}. */
+    /**
+     * Whether the end of the running turn clears the conversation and carries its summary; see
+     * {@link #checkpointClears}.
+     */
     public SessionState withCheckpointClears(boolean clears) {
         return clears == checkpointClears ? this : new SessionState(spec, status, error, info, pendingTurns, costUsd, contextTokens, contextWindow,
                 lastActivityMillis, activity, branch, turnStartedMillis, lastTurnError, tasks, returnedMillis, handedOff, startedMillis, reflection, clears);
     }
 
-    /** {@code newInfo} in place of the info, the last activity's time left as it was: the info only changed in detail. */
+    /**
+     * {@code newInfo} in place of the info, the last activity's time left as it was: the info only changed in detail.
+     */
     public SessionState withInfo(SessionInfo newInfo) {
         return newInfo.equals(info) ? this : withInfo(newInfo, lastActivityMillis);
     }

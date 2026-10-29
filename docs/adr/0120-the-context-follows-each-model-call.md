@@ -6,7 +6,7 @@
 
 ## 1. Context
 
-Miguel, 2026-10-29: "the session panel's status bar, the context is not being initialised or refreshed, it shows a -".
+Miguel, 2026-10-29: the session bar's context was neither set nor refreshed, and read "–".
 The context reached the session bar only in `SessionTurnEnded`, at a turn's end. After a restart a resumed session's
 state starts at zero, so the bar said "ctx –" until its next turn ended; during a long turn (18 minutes on 2026-10-28)
 it showed the previous turn's figure. The stream mapper already read each model call's input tokens, and the metrics

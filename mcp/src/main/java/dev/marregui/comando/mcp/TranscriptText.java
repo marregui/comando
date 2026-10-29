@@ -24,8 +24,9 @@ final class TranscriptText {
     }
 
     /**
-     * Blocks {@code after} onward, at most {@code maxChars} of them in text; {@code status} heads the text. An
-     * {@code after} beyond the end (a transcript that restarted) reads from the start.
+     * Blocks from {@code after} on, as at most {@code maxChars} characters of text (and at least one block);
+     * {@code status} heads the text. An {@code after} beyond the end (a transcript that restarted) reads from the
+     * start.
      */
     static Read read(String session, String status, Transcript t, int after, int maxChars) {
         int size = t.size();
@@ -61,15 +62,16 @@ final class TranscriptText {
         return new Read(body.isEmpty() ? head + "(no blocks)\n" : head + body, next);
     }
 
-    /**
-     * The turn that answers the prompt at {@code prompt}: whether it ended, whether it failed, and Claude's text in it,
-     * joined; tool calls and their results, thinking and sub-agents' text are left out. A prompt sent while earlier turns
-     * still ran is answered after their ends, so their text is not its answer. Without its own turn end (the session took
-     * queued prompts as one turn), the text after the prompt up to the last turn end.
-     */
+    /** A turn {@link #answer} found: whether it ended, whether it failed, and Claude's text in it. */
     record Turn(boolean ended, boolean failed, String text) {
     }
 
+    /**
+     * The turn that answers the prompt at {@code prompt}, with Claude's text in it joined; tool calls and their
+     * results, thinking and sub-agents' text are left out. A prompt sent while earlier turns still ran is answered
+     * after their ends, so their text is not its answer. Without its own turn end (the session took queued prompts as
+     * one turn), the text after the prompt up to the last turn end.
+     */
     static Turn answer(Transcript t, int prompt) {
         int open = 0;
         for (int i = 0; i < prompt; i++) {

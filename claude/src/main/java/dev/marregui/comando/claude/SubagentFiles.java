@@ -108,9 +108,9 @@ final class SubagentFiles {
     }
 
     /**
-     * What a sub-agent spent, from its file's assistant records (record 110): the model calls, each message counted once
-     * (a message is stored a content block a line, each with the same usage), the tokens by kind, and the models it ran
-     * on. An unreadable file gives what was read.
+     * What a sub-agent spent, from its file's assistant records (record 110): the model calls, each message counted
+     * once (a message is stored a content block a line, each with the same usage), the tokens by kind, and the models
+     * it ran on. An unreadable file gives what was read.
      */
     static ObjectNode spend(Path file, ObjectMapper json) {
         ObjectNode out = json.createObjectNode();
@@ -155,7 +155,7 @@ final class SubagentFiles {
         return out;
     }
 
-    /** True when the meta file says the sub-agent finished; a later Claude Code may not write it, then false. */
+    /** True when the meta file says the sub-agent finished; false when it does not say. */
     static boolean finished(Path meta, ObjectMapper json) {
         JsonNode m = readMeta(meta, json);
         return m != null && m.path("finished").asBoolean(false);
@@ -181,8 +181,8 @@ final class SubagentFiles {
     }
 
     /**
-     * A sub-agent's conversation, read as its file grows: each {@link #read} parses only the whole lines added since the
-     * last, so a long sub-agent followed every few seconds costs its growth, not its length. It keeps the task (the
+     * A sub-agent's conversation, read as its file grows: each {@link #read} parses only the whole lines added since
+     * the last, so a long sub-agent followed every few seconds costs its growth, not its length. It keeps the task (the
      * file's first line), and the steps from the last {@link #LAST_TOOLS} tool calls on: each answer's text, and each
      * tool call as one list item with its result clipped to {@link #RESULT_CHARS} characters. A file longer than
      * {@code scanBytes} at the first read is read from where its last {@code scanBytes} start, at the first whole line,
@@ -303,7 +303,9 @@ final class SubagentFiles {
             return String.join("\n\n", parts) + "\n";
         }
 
-        /** Parses the whole lines from {@link #offset} to {@code size}, read a chunk at a time; a line may span chunks. */
+        /**
+         * Parses the whole lines from {@link #offset} to {@code size}, read a chunk at a time; a line may span chunks.
+         */
         private void consume(FileChannel ch, long size) throws IOException {
             ByteArrayOutputStream line = new ByteArrayOutputStream();
             ByteBuffer buf = ByteBuffer.allocate(CHUNK_BYTES);
@@ -406,7 +408,10 @@ final class SubagentFiles {
             }
         }
 
-        /** Keeps {@code step}, dropping the oldest steps while more than {@link #LAST_TOOLS} tool calls or {@link #MAX_STEPS} steps are kept. */
+        /**
+         * Keeps {@code step}, dropping the oldest steps while more than {@link #LAST_TOOLS} tool calls or
+         * {@link #MAX_STEPS} steps are kept.
+         */
         private void add(Step step) {
             steps.addLast(step);
             while (toolsKept > LAST_TOOLS || steps.size() > MAX_STEPS) {
@@ -449,7 +454,10 @@ final class SubagentFiles {
             return "";
         }
 
-        /** The first line start at or after {@code pos}: {@code pos} itself when the byte before it ends a line; {@code size} when none. */
+        /**
+         * The first line start at or after {@code pos}: {@code pos} itself when the byte before it ends a line;
+         * {@code size} when none.
+         */
         private static long lineStart(FileChannel ch, long pos, long size) throws IOException {
             ByteBuffer buf = ByteBuffer.allocate(CHUNK_BYTES);
             for (long at = pos - 1; at < size; ) {
@@ -486,7 +494,7 @@ final class SubagentFiles {
         return "> " + text.strip().replace("\n", "\n> ");
     }
 
-    /** What a tool call works on: the first of the inputs a call is usually known by, else its first text input. */
+    /** What a tool call works on: the input a call is usually known by, else its first scalar, {@code key=value}. */
     private static String summary(JsonNode in) {
         for (String key : List.of("command", "file_path", "notebook_path", "pattern", "url", "query", "description", "skill")) {
             if (in.path(key).isString()) {

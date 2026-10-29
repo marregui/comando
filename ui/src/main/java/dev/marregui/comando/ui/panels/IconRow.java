@@ -11,6 +11,7 @@ import javax.swing.SwingUtilities;
 import java.awt.BorderLayout;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Graphics;
 import java.awt.Insets;
 import java.awt.Point;
 import java.awt.Rectangle;
@@ -18,10 +19,10 @@ import java.util.Optional;
 
 /**
  * A resource's row in the sidebar, one line: its state icon, which a click connects or disconnects, its name with its
- * marks, and at its right edge, on the row the pointer is over, the ⓘ that shows the row's card (2026-10-29: a click on
- * the name no longer does, so a double click acts without the card flashing up first); everything else is in the row's
- * menu (records 90 and 92). A list paints it as a cell renderer, so its buttons are not live: the list finds them under a
- * click with {@link #onIcon} and {@link #onInfo}.
+ * marks, and at its right edge, on the row the pointer is over, the ⓘ that shows the row's card; a click on the name
+ * shows none, so a double click acts without a card first. Everything else is in the row's menu (records 90 and 92). A
+ * list paints it as a cell renderer, so its buttons are not live: the list finds them under a click with
+ * {@link #onIcon} and {@link #onInfo}.
  */
 abstract class IconRow extends JPanel {
 
@@ -74,7 +75,7 @@ abstract class IconRow extends JPanel {
     /** An icon that takes room and draws nothing: the ⓘ's place on a row the pointer is not over. */
     private record EmptyIcon(int width, int height) implements Icon {
         @Override
-        public void paintIcon(Component c, java.awt.Graphics g, int x, int y) {
+        public void paintIcon(Component c, Graphics g, int x, int y) {
         }
 
         @Override

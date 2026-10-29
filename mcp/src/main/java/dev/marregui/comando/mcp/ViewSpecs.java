@@ -80,8 +80,8 @@ final class ViewSpecs {
     }
 
     /**
-     * The plot {@code data} asks for: {@code series}, an array of {@code {name, x, y}}; or, for one series, {@code x} and
-     * {@code y} beside the title, named after it. An array sent as JSON text ("[1, 2]") reads as the array.
+     * The plot {@code data} asks for: {@code series}, an array of {@code {name, x, y}}; or, for one series, {@code x}
+     * and {@code y} beside the title, named after it. An array sent as JSON text ("[1, 2]") reads as the array.
      */
     static ViewSpec.Plot plot(JsonNode data) {
         JsonNode series = data.path("series");

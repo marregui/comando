@@ -40,8 +40,8 @@ import java.util.regex.Pattern;
  * line numbers, the lines one side lost in red and those the other gained in green, the words that changed inside a
  * changed line marked more strongly, and a band between the two joining each difference to its place on the other
  * side. Scrolling either side scrolls the other to the matching line; neither side is padded, so line numbers and
- * copied text are the file's own. The left side is read only; the right one may be edited, its differences marked
- * again from a comparison worked out for its new text ({@link #remark}).
+ * copied text are the file's own. The left side is read-only; the right one may be made editable ({@link #editable}),
+ * its differences marked again from a comparison worked out for its new text ({@link #remark}).
  */
 public final class SplitDiff {
 
@@ -52,7 +52,9 @@ public final class SplitDiff {
     /** How many lines above a difference stay in view when it is scrolled to. */
     private static final int REVEAL_LINES = 3;
 
-    /** A difference: lines {@code [leftStart, leftEnd)} on the left became lines {@code [rightStart, rightEnd)} on the right. */
+    /**
+     * A difference: lines {@code [leftStart, leftEnd)} on the left became {@code [rightStart, rightEnd)} on the right.
+     */
     public record Chunk(int leftStart, int leftEnd, int rightStart, int rightEnd) {
 
         boolean inserted() {
@@ -138,11 +140,11 @@ public final class SplitDiff {
     }
 
     /**
-     * What a comparison shows, worked out off the event thread by {@link #compute}: the two texts, their differences,
-     * the spans of the words that changed (offsets into each text), and a note when the texts are not compared line by
-     * line or not at all.
+     * What a comparison shows, worked out off the EDT by {@link #compute}: the two texts, their differences, the spans
+     * of the words that changed (offsets into each text), and a note when the texts are not compared line by line or
+     * not at all.
      *
-     * @param compared false when the texts are not shown at all (a line too long for the editors), {@code note} says why
+     * @param compared false when the texts are not shown at all, {@code note} saying why (a line too long)
      */
     public record Model(String before, String after, List<Chunk> chunks, List<int[]> leftWords, List<int[]> rightWords,
                         String note, boolean compared) {
@@ -159,7 +161,7 @@ public final class SplitDiff {
      * The comparison of {@code before} and {@code after}, within about {@code budgetMillis}: past it, the texts are
      * compared as a whole (one difference, no word marks) and the note says so. Texts with a line longer than
      * {@link #MAX_LINE_CHARS} are not compared: the editors lay such a line out in time that grows with its square.
-     * Pure and thread-safe: run it off the event thread.
+     * Pure and thread-safe: run it off the EDT.
      */
     public static Model compute(String before, String after, long budgetMillis) {
         if (longestLine(before) > MAX_LINE_CHARS || longestLine(after) > MAX_LINE_CHARS) {
@@ -360,7 +362,8 @@ public final class SplitDiff {
 
     /**
      * The line on the other side that matches line {@code pos} (fractional, for a scroll position) on the left when
-     * {@code fromLeft}, else on the right: the same distance into an unchanged stretch, the same share of a changed one.
+     * {@code fromLeft}, else on the right: the same distance into an unchanged stretch, the same share of a changed
+     * one.
      */
     static double map(List<Chunk> chunks, double pos, boolean fromLeft) {
         double shift = 0;
@@ -411,9 +414,9 @@ public final class SplitDiff {
     }
 
     /**
-     * The character spans, in {@code a} and in {@code b}, of the words that differ between them, added to {@code
-     * aSpans} and {@code bSpans}; none, and false, when more than half of either side's words differ, since marking
-     * nearly all of a stretch tells nothing its line colour does not. Whitespace that differs is not marked.
+     * The character spans, in {@code a} and in {@code b}, of the words that differ between them, added to
+     * {@code aSpans} and {@code bSpans}; none, and false, when more than half of either side's words differ, since
+     * marking nearly all of a stretch tells nothing its line colour does not. Whitespace that differs is not marked.
      */
     static boolean wordChanges(String a, String b, List<int[]> aSpans, List<int[]> bSpans) {
         return wordChanges(a, b, aSpans, bSpans, Long.MAX_VALUE);
@@ -496,8 +499,8 @@ public final class SplitDiff {
     }
 
     /**
-     * Scrolls to the difference after the one last gone to, or, after the user scrolled, to the first below the right
-     * side's top; false when there is none.
+     * Scrolls to the difference after the one last gone to, or, after the user scrolled, to the first below the
+     * right side's top; false when there is none.
      */
     public boolean next() {
         int i = current;
@@ -521,8 +524,8 @@ public final class SplitDiff {
     }
 
     /**
-     * Scrolls to the difference before the one last gone to, or, after the user scrolled, to the last above the right
-     * side's top; false when there is none.
+     * Scrolls to the difference before the one last gone to, or, after the user scrolled, to the last above the
+     * right side's top; false when there is none.
      */
     public boolean previous() {
         int i = current;

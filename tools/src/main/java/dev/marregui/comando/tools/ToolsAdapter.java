@@ -43,11 +43,12 @@ import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
- * Runs the development tools. Each run is a child process on a virtual thread that copies its output
- * into the run's console and sends {@link Intent.CommandFinished} at the end; nothing blocks the caller.
- * Reading a folder also happens on a virtual thread and ends in a view, and so does moving a folder's entries to the
- * Trash, which ends in a notice and a read of the open folders. The git repositories of the open folders, and of every
- * folder while the Changes view is open, are read with the folders; what git ignores is left out of their trees.
+ * The tools port: Gradle runs, the Files tab's folders and their git repositories, and moves to the Trash. Nothing
+ * blocks the caller. A run is a child process an errand waits for while a fork copies its output into the run's
+ * console; it ends with {@link Intent.CommandFinished}. A folder read ends in {@link Intent.FolderLoaded}, a move to
+ * the Trash in a notice and a read of the open folders. The poll reads the repositories of the open folders, and of
+ * every folder while the Changes view is open, then the open folders, whose trees leave out what git ignores; the other
+ * repositories are read every {@link #COLD_POLLS} polls.
  */
 public final class ToolsAdapter implements ToolPort, AutoCloseable {
 
@@ -75,7 +76,9 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     private final Map<Long, Process> running = new ConcurrentHashMap<>();
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
     private final Set<Long> forgotten = ConcurrentHashMap.newKeySet();
-    /** Runs from their start until {@link Intent.CommandFinished} is sent; their consoles must outlive a closed view. */
+    /**
+     * Runs from their start until {@link Intent.CommandFinished} is sent; their consoles must outlive a closed view.
+     */
     private final Set<Long> active = ConcurrentHashMap.newKeySet();
     /** Set by {@link #close}: no process starts after it, so none outlives comando. */
     private volatile boolean closed;
@@ -293,7 +296,9 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         return tree;
     }
 
-    /** SIGKILL to whatever of the run's process tree is still alive: a child that ignores SIGTERM, or one forked late. */
+    /**
+     * SIGKILL to whatever of the run's process tree is still alive: a child that ignores SIGTERM, or one forked late.
+     */
     private static void forceRemaining(Process p, List<ProcessHandle> tree) {
         for (ProcessHandle h : tree) {
             if (h.isAlive()) {
@@ -350,7 +355,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         }
         List<FolderRoot> added = folders.stream().filter(f -> !before.contains(f)).toList();
         if (!added.isEmpty()) {
-            // the repositories first, so the new folders' trees leave out what git ignores and their colours come with them
+            // the repositories first: the new folders' trees leave out what git ignores and come with their colours
             errands.start("folder-read", () -> {
                 readRepos(false, false);
                 added.forEach(f -> readFolder(f, true));
@@ -359,8 +364,9 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     /**
-     * Keeps the Files tab's open folders in sync: every {@code every}, on a thread of its own, reads each watched folder
-     * and sends its tree when something was added, removed, renamed or resized. Folders that are not open cost nothing.
+     * Keeps the Files tab in sync: every {@code every}, on a thread of its own, reads the repositories, then each
+     * watched folder, and sends what changed: a tree when an entry was added, removed, renamed or resized. Folders that
+     * are not open cost nothing.
      */
     public void pollFolders(Duration every) {
         folderPoll.scheduleWithFixedDelay(() -> {
@@ -425,7 +431,10 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     private List<RepoStatus> sentRepos;
     /** One status read at a time: the poll's, a newly watched folder's, a folder read for the filter. */
     private final ReentrantLock repoReading = new ReentrantLock();
-    /** Every configured folder, whose repositories are read: the watched ones every poll, the others every {@link #COLD_POLLS}. */
+    /**
+     * Every configured folder, whose repositories are read: the watched ones every poll, the others every
+     * {@link #COLD_POLLS}.
+     */
     private volatile List<FolderRoot> repoFolders = List.of();
     /** Whether the Changes view is open: then every folder's repository is read every poll. */
     private volatile boolean changesShown;
@@ -434,7 +443,10 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     /** Polls so far. Poll thread only. */
     private long polls;
 
-    /** From now on the poll reads the repositories of {@code folders}, often while {@code changesShown}; all are read at once. */
+    /**
+     * From now on the poll reads the repositories of {@code folders}, often while {@code changesShown}; all are read at
+     * once.
+     */
     @Override
     public void watchRepos(List<FolderRoot> folders, boolean changesShown) {
         repoFolders = List.copyOf(folders);
@@ -453,7 +465,7 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
             if (closed) {
                 return;
             }
-            // the folders as they are now, under the lock: a read that waited for another never sends an older set after it
+            // the folders as they are now, under the lock: a read that waited never sends a set older than one sent
             List<Path> roots = new ArrayList<>();
             Set<FolderRoot> folders = new LinkedHashSet<>(repoFolders);
             folders.addAll(watchedFolders);
@@ -744,7 +756,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         List<String> failed = new ArrayList<>();
         // each listing file with the entries it loses, relative to its folder, a folder's with a trailing slash
         Map<Path, List<String>> listed = new LinkedHashMap<>();
-        // each entry's listing, found before anything moves: a listing that goes in the same batch is not replaced by one above it
+        // each entry's listing, found before anything moves: a listing that goes in the same batch is not replaced by
+        // one above it
         Map<Path, Optional<Path>> listings = new HashMap<>();
         items.forEach(item -> listings.put(item, listing(folder, root, item)));
         int moved = 0;
@@ -808,7 +821,10 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         return new Intent.Notify(failed.isEmpty() && unlisted.isEmpty() ? Notice.Level.INFO : Notice.Level.ERROR, text.toString(), false);
     }
 
-    /** The listing file nearest {@code item}: in its folder or one above it, up to the configured folder; empty when none. */
+    /**
+     * The listing file nearest {@code item}: in its folder or one above it, up to the configured folder; empty when
+     * none.
+     */
     private static Optional<Path> listing(FolderRoot folder, Path root, Path item) {
         if (folder.listedIn().isEmpty()) {
             return Optional.empty();
@@ -822,7 +838,10 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
         return Optional.empty();
     }
 
-    /** Stops every run; called at exit. */
+    /**
+     * Called at exit: stops the poll, the change reads, the repository writes and every git run, sends SIGTERM to every
+     * run's process tree and SIGKILL {@link #KILL_AFTER_MILLIS} later, then closes the errands.
+     */
     @Override
     public void close() {
         closed = true;

@@ -11,7 +11,8 @@ import java.util.Optional;
 
 /**
  * Opens a file at a line in IntelliJ IDEA through its command-line launcher, or in the system's default
- * application when no launcher is found. Launches on a virtual thread; never blocks the caller.
+ * application when no launcher is found. Launches on the window's {@code external-editor} errand; never blocks the
+ * caller.
  */
 public final class ExternalEditor {
 
@@ -20,7 +21,10 @@ public final class ExternalEditor {
     private ExternalEditor() {
     }
 
-    /** The {@code idea} launcher: Toolbox scripts first, then the PATH an app started from Finder has. */
+    /**
+     * The {@code idea} launcher: Toolbox's script, then {@code /usr/local/bin} and {@code /opt/homebrew/bin}, which
+     * the PATH of an app started from Finder lacks, then the PATH; empty when none is executable.
+     */
     public static Optional<Path> launcher() {
         String home = System.getProperty("user.home");
         List<Path> candidates = new ArrayList<>(List.of(

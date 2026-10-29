@@ -16,9 +16,9 @@ import java.util.function.UnaryOperator;
  * editor text live in owned stores outside it, referenced by id. Lists are small (tens of entries), so
  * lookups scan.
  *
- * <p>Invariants the reducer keeps: at least one panel; {@code focused} names a panel; names are unique
- * within connections and within sessions; at most one run per panel; a session is bound to at most one panel, open
- * or closed.</p>
+ * <p>Invariants the reducer keeps: at least one panel; {@code focused} names a panel; names are unique within
+ * connections and within sessions; at most one run per panel; a session has at most one panel of comando's own, open
+ * or closed, and any number of documents attached (record 88).</p>
  *
  * @param folders the folders the Files tab shows at its top level, in the user's order
  * @param closed  comando's own panels that are closed, most recently closed last: each keeps its file, title and
@@ -118,8 +118,8 @@ public record AppState(
     }
 
     /**
-     * The session's own panel, open: the one panel of comando's own bound to it, titled with its name. A session has one;
-     * documents attached to it are not its panel.
+     * The session's own panel, open: the one panel of comando's own bound to it, titled with its name. A session has
+     * one; documents attached to it are not its panel.
      */
     public Optional<PanelState> homePanel(String session) {
         return session.isEmpty() ? Optional.empty() : find(panels, p -> !p.document() && p.session().equals(session));
@@ -164,7 +164,7 @@ public record AppState(
         return withPanels(replace(panels, p -> p.id().equals(panel.id()), panel), focused);
     }
 
-    /** This state when {@code id} is already focused. */
+    /** The state with {@code id} focused; this one when it already is. */
     public AppState withFocused(PanelId id) {
         if (id.equals(focused)) {
             return this;
@@ -224,7 +224,7 @@ public record AppState(
         return new AppState(panels, closed, focused, connections, sessions, folders, runs, approvals, newViews, lowerTab, notice, notices, nextId);
     }
 
-    /** This state when {@code tab} is already selected. */
+    /** The state with {@code tab} selected; this one when it already is. */
     public AppState withLowerTab(LowerTab tab) {
         if (tab.equals(lowerTab)) {
             return this;

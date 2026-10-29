@@ -10,7 +10,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - sealing leaves uncapped output unchanged
 class ConsoleTest {
 
-    /// Output above `MAX_CHARS` holds back middle text, then sealing appends the last `TAIL_CHARS` so the failure and exit lines remain visible.
+    /// Output above `MAX_CHARS` holds back middle text, then sealing appends the last `TAIL_CHARS` so the failure and
+    /// exit lines remain visible.
     @Test
     void outputPastTheCapKeepsItsEndForTheSeal() {
         Console c = new Console();

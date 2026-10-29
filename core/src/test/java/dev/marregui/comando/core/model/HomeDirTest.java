@@ -13,7 +13,8 @@ class HomeDirTest {
 
     private final String home = System.getProperty("user.home");
 
-    /// `~` and `~/notes` expand from the current home, while other-user and absolute paths stay literal; shortening reverses only complete home boundaries.
+    /// `~` and `~/notes` expand from the current home, while other-user and absolute paths stay literal; shortening
+    /// reverses only complete home boundaries.
     @Test
     void theHomeFolderIsExpandedAndShortenedAtAPathBoundaryOnly() {
         assertThat(HomeDir.expand("~")).isEqualTo(home);

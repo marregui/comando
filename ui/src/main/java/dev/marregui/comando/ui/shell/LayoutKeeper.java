@@ -176,8 +176,8 @@ final class LayoutKeeper {
 
     /**
      * The side pane at a render, {@code hasSide} when it has views: a hidden side pane comes back for a new side view
-     * of the user's or of the focused panel's session; another session's view, an update of a view, or only a change of
-     * focus leaves it hidden; the user's own commands that show a side view reveal the pane themselves.
+     * of the user's or of the focused panel's session; another session's view, an update of a view, or only a change
+     * of focus leaves it hidden; the user's own commands that show a side view reveal the pane themselves.
      */
     void sidePane(AppState s, boolean hasSide) {
         String mine = s.focusedPanel().session();
@@ -186,7 +186,7 @@ final class LayoutKeeper {
             if (v.placement() == Placement.SIDE) {
                 versions.put(v.id(), v.version());
                 Long before = sideVersions.get(v.id());
-                // a new view only: an update of a view the user already has (a schema reloaded after a DDL) leaves it hidden
+                // a new view only: an update of a view the user has (a schema reloaded after a DDL) leaves it hidden
                 if (before == null && (v.session().isEmpty() || v.session().equals(mine))) {
                     sidePaneHidden = false;
                 }
@@ -248,8 +248,8 @@ final class LayoutKeeper {
     /**
      * The lower area for the panel in front. A document no session works in, a file opened to read, takes the whole
      * height and the lower area hides, until it is {@code asked} for while that document is in front (a lower tab
-     * chosen, ⌃1–⌃4, a request waiting in Approvals); then it shows for that document for the rest of the window's life.
-     * Any other panel shows it, at the height it had when that panel was last in front.
+     * chosen, ⌃1–⌃4, a request waiting in Approvals); then it shows for that document for the rest of the window's
+     * life. Any other panel shows it, at the height it had when that panel was last in front.
      */
     void lowerFor(AppState s, boolean asked) {
         PanelState front = s.focusedPanel();
@@ -276,8 +276,9 @@ final class LayoutKeeper {
     }
 
     /**
-     * The panel {@code front} came to the front: the lower divider goes where it was when that panel was last in front;
-     * a panel never in front keeps the divider as it is, or takes the last one shown when the lower area was hidden.
+     * The panel {@code front} came to the front: the lower divider goes where it was when that panel was last in
+     * front; a panel never in front keeps the divider as it is, or takes the last one shown when the lower area was
+     * hidden.
      */
     private void lowerDividerOf(PanelId front) {
         if (front.equals(dividerPanel)) {
@@ -365,7 +366,7 @@ final class LayoutKeeper {
 
     // ---- kept across restarts
 
-    /** The window's bounds, its dividers, the sidebar and the side pane as they were; maximized once the window shows. */
+    /** Puts back the window's bounds, its dividers, the sidebar, the side pane, the theme and Linear's site. */
     void restore() {
         int h = windowLayout.restoreBounds(parts.frame());
         parts.sidebar().selectTab(windowLayout.sidebarTab());
@@ -392,6 +393,7 @@ final class LayoutKeeper {
                 sidePaneHidden, vertical.getDividerLocation(), sidePaneShown ? editorAndSide.getDividerLocation() : -1));
     }
 
+    /** Saves the layout; a failure is logged, not thrown. */
     void saveQuietly() {
         try {
             save();

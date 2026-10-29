@@ -25,9 +25,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 
 /**
- * The kit in the window: its name and version in the status bar, its upgrade, which a session in the root does when the
- * user says so, and the backups of the brain and of the kit, only on the user's click. The version is read at start and every six hours by
- * the application; git runs off the EDT. EDT only, but for {@link #show}.
+ * The kit in the window: its name and version in the status bar, its upgrade, which a session in the root does when
+ * the user says so, and the backups of the brain and of the kit, only on the user's click. The version is read at
+ * start and every six hours by the application; git runs off the EDT. EDT only, but for {@link #show}.
  */
 final class KitActions {
 
@@ -51,9 +51,9 @@ final class KitActions {
     record Upgrade(String tag, boolean running) {
 
         /**
-         * Where the upgrade is once the kit's session is in {@code session}'s state: waiting until the session takes the
-         * prompt (a state rendered before the prompt was sent says nothing), then until its turn and the work it left
-         * running have ended; empty once it has reported, or stopped.
+         * Where the upgrade is once the kit's session is in {@code session}'s state: waiting until the session takes
+         * the prompt (a state rendered before the prompt was sent says nothing), then until its turn and the work it
+         * left running have ended; empty once it has reported, or stopped.
          */
         Optional<Upgrade> next(SessionState session) {
             boolean working = session != null && (session.isBusy() || session.isWaiting());
@@ -119,8 +119,9 @@ final class KitActions {
     }
 
     /**
-     * Asks which release (newest first), then opens the session {@value KitRoot#UPGRADE_SESSION} in the root, making it
-     * first, and sends it the upgrade. The session runs on the user's own Claude Code folder, so it can replace the kit.
+     * Asks which release (newest first), then opens the session {@value KitRoot#UPGRADE_SESSION} in the root, making
+     * it first, and sends it the upgrade. The session runs on the user's own Claude Code folder, so it can replace the
+     * kit.
      */
     void upgrade() {
         KitRoot root = deps.setup().root();
@@ -157,7 +158,10 @@ final class KitActions {
         LOG.log(System.Logger.Level.INFO, "kit upgrade sent [tag=" + tag + ", root=" + root.dir() + ']');
     }
 
-    /** Follows the kit's session until it has reported, then offers the restarts; starts the sessions restarted once stopped. */
+    /**
+     * Follows the kit's session until it has reported, then offers the restarts; starts each restarted one once
+     * stopped.
+     */
     void render(AppState s) {
         if (upgrade != null) {
             SessionState kit = s.session(KitRoot.UPGRADE_SESSION).orElse(null);
@@ -181,7 +185,7 @@ final class KitActions {
         }
     }
 
-    /** The sessions running on the kit as it was: every running one but the kit's own; busy ones are left to the user. */
+    /** The sessions running on the old kit: every open one but the kit's own; busy ones are left to the user. */
     static List<String> toRestart(AppState s) {
         return s.sessions().stream().filter(x -> x.status() == Status.OPEN && !x.isBusy() && !x.name().equals(KitRoot.UPGRADE_SESSION))
                 .map(SessionState::name).toList();

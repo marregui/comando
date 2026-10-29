@@ -23,9 +23,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - The Changes view's repositories are read at once, every kind of change listed.
 /// - A watched folder in a repository leaves out what git ignores, and brings its repository's status for the colours.
 /// - A folder that is a repository's top is read beside the repository that ignores it.
-/// - A folder git ignores as a whole shows all it holds; a folder outside any repository is read as before.
+/// - A folder git ignores as a whole shows all it holds; a folder outside any repository is read whole.
 /// - A change is read with its before and after texts.
-/// - Rolling back takes every kind of change to `HEAD` and keeps what it replaced in the Trash; without a Trash nothing is lost.
+/// - Rolling back takes every kind of change to `HEAD` and keeps what it replaced in the Trash; without a Trash nothing
+///   is lost.
 /// - Removing sends files to the Trash and takes a new file out of the index.
 class ToolsAdapterReposTest {
 
@@ -41,8 +42,8 @@ class ToolsAdapterReposTest {
         return new FolderRoot(name, path.toString(), "", List.of());
     }
 
-    /// Watching a folder inside a test repository with changes sends one ReposLoaded for the repository's top, listing the
-    /// added, deleted, renamed, untracked-in-a-subfolder and modified files in path order.
+    /// Watching a folder inside a test repository with changes sends one ReposLoaded for the repository's top, listing
+    /// the added, deleted, renamed, untracked-in-a-subfolder and modified files in path order.
     @Test
     void theChangesViewsRepositoriesAreReadAtOnce(@TempDir Path dir) throws Exception {
         Path root = GitTest.repo(dir.toRealPath());
@@ -56,8 +57,8 @@ class ToolsAdapterReposTest {
         }
     }
 
-    /// The tree of a watched repository folder holds its tracked and untracked entries but not the ignored `dist`, and the
-    /// repository's status follows for the Files tab's colours.
+    /// The tree of a watched repository folder holds its tracked and untracked entries but not the ignored `dist`, and
+    /// the repository's status follows for the Files tab's colours.
     @Test
     void aWatchedFolderInARepositoryLeavesOutWhatGitIgnores(@TempDir Path dir) throws Exception {
         Path root = GitTest.repo(dir.toRealPath());
@@ -73,8 +74,8 @@ class ToolsAdapterReposTest {
         }
     }
 
-    /// A nested repository (the brain inside the kit, ignored by the kit) is read as a repository of its own, each listing
-    /// only its own changes.
+    /// A nested repository (the brain inside the kit, ignored by the kit) is read as a repository of its own, each
+    /// listing only its own changes.
     @Test
     void aFolderThatIsARepositorysTopIsReadBesideTheRepositoryItIgnoresInside(@TempDir Path dir) throws Exception {
         Path kit = dir.toRealPath();
@@ -117,7 +118,8 @@ class ToolsAdapterReposTest {
         }
     }
 
-    /// Watching the ignored `dist` folder itself shows its files: ignore rules apply only from a repository folder above.
+    /// Watching the ignored `dist` folder itself shows its files: ignore rules apply only from a repository folder
+    /// above.
     @Test
     void aFolderGitIgnoresAsAWholeShowsAllItHolds(@TempDir Path dir) throws Exception {
         Path root = GitTest.repo(dir.toRealPath());
@@ -155,8 +157,8 @@ class ToolsAdapterReposTest {
         return new ToolsAdapter(sink, new ConsoleRegistry(), () -> new ToolSettings(Optional.empty(), System.getProperty("java.home")), trash);
     }
 
-    /// Rolling back modified, deleted, renamed, added and new files restores `HEAD`, leaves nothing to commit, says how many
-    /// files went back, and moves the replaced versions to the Trash.
+    /// Rolling back modified, deleted, renamed, added and new files restores `HEAD`, leaves nothing to commit, says how
+    /// many files went back, and moves the replaced versions to the Trash.
     @Test
     void rollingBackTakesEveryKindOfChangeToHeadAndKeepsWhatItReplacedInTheTrash(@TempDir Path dir) throws Exception {
         Path root = GitTest.repo(Files.createDirectories(dir.resolve("repo")).toRealPath());
@@ -180,7 +182,8 @@ class ToolsAdapterReposTest {
                 .containsExactlyInAnyOrder("added.txt", "new name.txt", "notes/deep/n.md", "src/main/A.java");
     }
 
-    /// On a desktop without a Trash the roll back is refused per file with a notice, and the modified file keeps its edit.
+    /// On a desktop without a Trash the roll back is refused per file with a notice, and the modified file keeps its
+    /// edit.
     @Test
     void withoutATrashAChangedFileStaysAsItIs(@TempDir Path dir) throws Exception {
         Path root = GitTest.repo(dir.toRealPath());

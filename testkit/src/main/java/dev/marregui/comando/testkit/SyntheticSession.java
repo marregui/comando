@@ -8,10 +8,10 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * A deterministic session for rendering measurements: eight turns with Markdown text (headings, lists,
- * code, tables, source references), forty tool calls (shell, reads, searches, edits, one subagent) and
- * their results, about 10 k tokens in all. {@link #steps} replays it as the stream would arrive: text in
- * small deltas, tool calls first running and then finished.
+ * A deterministic session for rendering measurements: eight turns with Markdown text (headings, lists, code, tables,
+ * source references), 41 tool calls (shell, reads, searches, edits, one subagent) and their results, about 10 k tokens
+ * in all. {@link #steps} replays it as the stream would arrive: text in small deltas, tool calls first running and then
+ * finished.
  */
 public final class SyntheticSession {
 

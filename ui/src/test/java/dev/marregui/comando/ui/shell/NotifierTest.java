@@ -30,8 +30,8 @@ class NotifierTest {
         assertThat(done).as("stdin is closed, so cat ends").isTrue();
     }
 
-    /// [Notifier#escape] backslash-escapes quotes and backslashes, turns a newline into a space, and clips 300 characters
-    /// to 200 ending in `…`.
+    /// [Notifier#escape] backslash-escapes quotes and backslashes, turns a newline into a space, and clips 300
+    /// characters to 200 ending in `…`.
     @Test
     void theNotificationTextIsClippedAndQuotedForAppleScript() {
         assertThat(Notifier.escape("say \"hi\"\\\nnow")).isEqualTo("say \\\"hi\\\"\\\\ now");

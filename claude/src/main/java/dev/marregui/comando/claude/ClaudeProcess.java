@@ -20,14 +20,14 @@ import java.util.function.Consumer;
 import java.util.function.IntConsumer;
 
 /**
- * One headless {@code claude -p} process: stdout lines go to {@code onLine}, stdin lines come from a queue, stderr goes to
- * a file whose last lines are kept for the error message. {@code onExit} runs after the last stdout line was handed over,
- * or {@link #DRAIN_MILLIS} after the process exited when a child of it still holds stdout open; lines after that are
- * dropped.
+ * One headless {@code claude -p} process: stdout lines go to {@code onLine}, stdin lines come from a queue, stderr goes
+ * to a file whose last lines are kept for the error message. {@code onExit} runs after the last stdout line was handed
+ * over, or {@link #DRAIN_MILLIS} after the process exited when a child of it still holds stdout open; lines after that
+ * are dropped.
  *
  * <p>Threads: stdout is read on a platform thread, the one operating-system thread a session costs: a read of a process
- * pipe holds its thread even from a virtual thread (measured on JDK 25). The stdin writer waits on its queue and the exit
- * on the process, both on virtual threads, which hold no operating-system thread while they wait. stderr needs no
+ * pipe holds its thread even from a virtual thread (measured on JDK 25). The stdin writer waits on its queue and the
+ * exit on the process, both on virtual threads, which hold no operating-system thread while they wait. stderr needs no
  * thread: the file is read once, at the exit, and deleted.</p>
  */
 final class ClaudeProcess {
@@ -46,7 +46,9 @@ final class ClaudeProcess {
     private final Path stderrFile;
     /** The last {@link #STDERR_LINES} lines of stderr, read at the exit. */
     private volatile String stderrTail = "";
-    /** Set when the exit stopped waiting for stdout: a line read later is not handed over. Guarded by {@link #handOver}. */
+    /**
+     * Set when the exit stopped waiting for stdout: a line read later is not handed over. Guarded by {@link #handOver}.
+     */
     private boolean drained;
     /** Held while a line is handed over and while {@link #drained} is set, so no line is handed over after the exit. */
     private final Object handOver = new Object();

@@ -10,7 +10,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [Browser] opens web links, and only web links, in the system browser off the caller's thread.
 /// - A web link is `http` or `https` in any letter case; other schemes are not.
-/// - The browser is called on a thread of its own.
+/// - The browser is called on the window's `open-link` errand.
 /// - A link that is not a web link, or not a valid URI, is not opened.
 class BrowserTest {
 

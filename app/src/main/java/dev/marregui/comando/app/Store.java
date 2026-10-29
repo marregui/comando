@@ -45,13 +45,12 @@ import java.util.function.Consumer;
 
 /**
  * The store files: {@code connections.json}, {@code sessions.json}, {@code folders.json} (the Files tab's folders),
- * {@code panels.json} (each panel's title,
- * bindings and file name, and whether it is closed) and one Markdown file per panel under {@code panels/} with its
- * text ({@link PanelFiles}). A panel of comando's own is kept, closed or open, until it is removed or its file is
- * deleted outside comando; its text stays in memory while it is closed, so it reopens at once.
- * Every write runs on one thread from an immutable snapshot, so a save never races an edit; panel text is saved
- * 800 ms after the first unsaved change, so continuous typing saves about every 800 ms, and only the panels that
- * changed are written.
+ * {@code panels.json} (each panel's title, bindings and file name, and whether it is closed) and one Markdown file per
+ * panel under {@code panels/} with its text ({@link PanelFiles}). A panel of comando's own is kept, closed or open,
+ * until it is removed or its file is deleted outside comando; its text stays in memory while it is closed, so it
+ * reopens at once. Every write runs on the {@code store} strand from an immutable snapshot, so a save never races an
+ * edit; connections go through the {@code store-secrets} strand, for the keychain. Panel text is saved 800 ms after the
+ * first unsaved change, so continuous typing saves about every 800 ms, and only the panels that changed are written.
  */
 final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
@@ -105,7 +104,9 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     }
     /** Panels whose text changed since their file was written. */
     private final Set<String> dirty = ConcurrentHashMap.newKeySet();
-    /** How many times each panel's text changed: a deletion report removes the panel only when no edit came after it. */
+    /**
+     * How many times each panel's text changed: a deletion report removes the panel only when no edit came after it.
+     */
     private final ConcurrentHashMap<String, Long> edits = new ConcurrentHashMap<>();
     /** Panels whose last file write failed; the user is told once per run of failures. Writer thread only. */
     private final Set<String> failing = new HashSet<>();
@@ -136,7 +137,9 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     /** Where {@code folders.json} goes when the user changed it; the Files tab follows. */
     private volatile Consumer<List<FolderRoot>> foldersChanged = f -> {
     };
-    /** {@code folders.json} as the store last read or wrote it; null while it is missing. Writer thread, and the start. */
+    /**
+     * {@code folders.json} as the store last read or wrote it; null while it is missing. Writer thread, and the start.
+     */
     private volatile Stamp foldersSeen;
     /** Whether the last {@link #loadFolders} found no folders file and returned the default list. */
     private volatile boolean foldersDefaulted;
@@ -194,7 +197,9 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         notices.accept(text);
     }
 
-    /** Reads the files; a fresh data root gets the defaults: a local QuestDB and a scratch panel with the welcome text. */
+    /**
+     * Reads the files; a fresh data root gets the defaults: a local QuestDB and a scratch panel with the welcome text.
+     */
     Loaded load() {
         boolean fresh = !connections.exists() && !sessions.exists() && !panels.exists();
         if (fresh) {
@@ -372,7 +377,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     /**
      * A session keeps its first panel, in panel order; a later panel bound to it keeps its text and loses the binding,
-     * told in {@code unbound} as "edge stays in one; two is detached".
+     * told in {@code unbound} as "work stays in one; two is detached".
      */
     static List<PanelState> oneBindingPerSession(List<PanelState> panels, List<String> unbound) {
         Map<String, String> first = new HashMap<>();
@@ -396,8 +401,6 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         PanelState scratch = new PanelState(PanelId.random(), "scratch", local.name(), "");
         return new Loaded(List.of(scratch), List.of(local), List.of());
     }
-
-    // ---- PersistencePort
 
     @Override
     public void saveConnections(List<ConnectionSpec> specs) {
@@ -429,7 +432,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     /**
      * Moves passwords to the secret store and returns the specs to write, without the passwords it took.
-     * A password the store refuses stays in the file rather than being lost. Runs on the store thread.
+     * A password the store refuses stays in the file rather than being lost. Runs on the {@code store-secrets} strand.
      */
     private List<ConnectionSpec> toSecretStore(List<ConnectionSpec> specs) {
         Set<String> names = new HashSet<>();
@@ -480,14 +483,14 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
     /**
      * The folders at the first start on a kit's root: when {@code loaded} shows none of the kit's folders, the kit's go
      * first and are saved; the user's own entries stay. Once per root, so a folder the user takes out stays out; the
-     * folders' window puts them back. With no folders file the default list is not the user's: the kit's folders replace
-     * it, since its one folder is the kit's own root and would otherwise count as the kit already shown.
+     * folders' window puts them back. With no folders file the default list is not the user's: the kit's folders
+     * replace it, since its one folder is the kit's own root and would otherwise count as the kit already shown.
      */
     List<FolderRoot> withKitFolders(List<FolderRoot> loaded, KitRoot root) {
         List<FolderRoot> kit = root.folders();
         String key = root.dir().toString();
-        // with no folders file the user never chose a list: the kit's folders apply even on a root recorded before, which
-        // repairs a home where the default hid them (a fresh home before record 121's fix recorded the root anyway)
+        // with no folders file the user never chose a list: the kit's folders apply even on a root recorded before, so
+        // a home whose root was recorded while the default list hid them gets them
         if (kit.isEmpty() || (!foldersDefaulted && kitRootsDone().contains(key))) {
             return loaded;
         }
@@ -577,7 +580,9 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         return created;
     }
 
-    /** Where the folders go when the user changed {@code folders.json}: once a second at most, from the writer thread. */
+    /**
+     * Where the folders go when the user changed {@code folders.json}: once a second at most, from the writer thread.
+     */
     void onFoldersChanged(Consumer<List<FolderRoot>> listener) {
         foldersChanged = listener;
     }
@@ -621,8 +626,6 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         schedulePanels();
     }
 
-    // ---- PanelTexts
-
     @Override
     public String load(PanelId panel) {
         return texts.getOrDefault(panel.value(), "");
@@ -638,8 +641,8 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     /**
      * The panel closed. A panel of comando's own keeps its text here and its file; the save that follows writes what
-     * changed. A document's last text reaches its file, and comando lets go of it. The reducer forgets a panel before it
-     * drops it from the list, so its title is known.
+     * changed. A document's last text reaches its file, and comando lets go of it. The reducer forgets a panel before
+     * it drops it from the list, so its title is known.
      */
     @Override
     public void forget(PanelId panel) {
@@ -660,8 +663,9 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
                         files.name(id, was.title(), reserved(open));
                         files.write(id, text);
                     } catch (IOException | RuntimeException e) {
-                        // naming (a rename's move, the folder's listing) or writing failed: the text waits in panels.json
-                        // the stored name: a document's absolute path, so it comes back on its own file, never in panels/
+                        // naming (a rename's move, the folder's listing) or writing failed: the text waits in
+                        // panels.json under the stored name, a document's absolute path, so it comes back on its own
+                        // file, never in panels/
                         String name = files.storedName(id).orElse(null);
                         unsaved.put(id, new StoredPanel(id, was.title(), was.connection(), was.session(), name, text, null));
                         LOG.log(System.Logger.Level.ERROR, "cannot save the closed panel's file [panel=" + was.title() + ']', e);
@@ -728,7 +732,7 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         deletions = listener;
     }
 
-    /** Checks the open panels' files and {@code folders.json} every second, on the writer thread, so a check never races a write. */
+    /** Checks open panels' files and {@code folders.json} each second on the writer thread: no check races a write. */
     private void pollFiles() {
         try {
             writer.scheduleWithFixedDelay(this::checkFiles, POLL_MILLIS, POLL_MILLIS, TimeUnit.MILLISECONDS);
@@ -844,7 +848,9 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         return done;
     }
 
-    /** Writes a file the diff window edited, on the writer thread, so it never races a panel's write of the same file. */
+    /**
+     * Writes a file the diff window edited, on the writer thread, so it never races a panel's write of the same file.
+     */
     @Override
     public CompletableFuture<String> write(Path file, String text) {
         CompletableFuture<String> done = new CompletableFuture<>();
@@ -887,8 +893,6 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         return done;
     }
 
-    // ---- writing
-
     private void schedulePanels() {
         schedulePanels(PANEL_DELAY_MILLIS);
     }
@@ -903,14 +907,14 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
         }
     }
 
-    /** The ids whose file names are taken: the given ones and the closed panels still waiting to be written. Writer thread. */
+    /** The ids whose file names are taken: the given ones and the closed panels still to be written. Writer thread. */
     private List<String> reserved(List<String> ids) {
         List<String> all = new ArrayList<>(ids);
         all.addAll(unsaved.keySet());
         return all;
     }
 
-    /** One file, whatever the spelling: absolute, normalised, ignoring case as APFS does by default. */
+    /** An exception's message, else its type's name. */
     private static String reason(Exception e) {
         return e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
     }
@@ -925,9 +929,9 @@ final class Store implements PersistencePort, PanelTexts, AutoCloseable {
 
     /**
      * Names each panel's file, open or closed (a new panel gets one, a renamed one moves it), writes the files whose
-     * text changed and a new panel's empty one, then {@code panels.json}. A panel whose file fails keeps its text in {@code panels.json}, which the
-     * next start prefers, stays unsaved, and is tried again in 5 s; the user is told once per run of failures. The
-     * others are still written; the first failure is thrown at the end.
+     * text changed and a new panel's empty one, then {@code panels.json}. A panel whose file fails keeps its text in
+     * {@code panels.json}, which the next start prefers, stays unsaved, and is tried again in 5 s; the user is told
+     * once per run of failures. The others are still written; the first failure is thrown at the end.
      */
     private void persistPanels() throws IOException {
         panelsPending.set(false);

@@ -16,9 +16,10 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Desktop notifications for work that finished while the user looked elsewhere: shown only when the
- * window is not active: Notification Center on macOS, a tray balloon where the desktop has a tray. And the
- * desktop's attention when a session needs the user: the Dock icon bounces until the window is activated.
+ * Desktop notifications for work that finished while the user looked elsewhere, shown only while the window is not
+ * active: Notification Center on macOS (through {@code osascript}, on the window's {@code notify} errand), a tray
+ * balloon where the desktop has a tray. And the desktop's attention when a session needs the user: the Dock icon
+ * bounces until the window is activated.
  */
 final class Notifier {
 
@@ -46,9 +47,8 @@ final class Notifier {
     }
 
     /**
-     * Runs {@code command} with no input and its output discarded, for at most {@code bound}; stops it after that.
-     *
-     * @return true when it ended within the bound
+     * Runs {@code command} with no input and its output discarded, for at most {@code bound}, then stops it; true when
+     * it ended within the bound.
      */
     static boolean run(List<String> command, Duration bound) {
         try {
@@ -69,7 +69,9 @@ final class Notifier {
         }
     }
 
-    /** Asks the desktop for attention while the window is not active: the Dock icon bounces until comando is in front. */
+    /**
+     * Asks for the desktop's attention while the window is not active: the Dock icon bounces until comando is in front.
+     */
     void attention() {
         if (window.isActive() || !Taskbar.isTaskbarSupported()) {
             return;
@@ -104,6 +106,7 @@ final class Notifier {
         }
     }
 
+    /** {@code s} cut to its first 200 characters and escaped for an AppleScript string, on one line. */
     static String escape(String s) {
         return Clip.keepStart(s, MAX_CHARS).replace("\\", "\\\\").replace("\"", "\\\"").replace('\n', ' ');
     }

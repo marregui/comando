@@ -39,7 +39,7 @@ final class ViewRules {
                 : new Intent.ShowView(shown.session(), Clip.keepStart(shown.title(), VIEW_TITLE_CHARS), shown.spec(), shown.placement());
         for (ViewState v : s.views()) {
             if (!v.pinned() && v.title().equals(i.title()) && v.session().equals(i.session()) && v.placement() == i.placement()) {
-                // the user's own command (session "") shows its view again; a session's update in place does not move the user
+                // the user's own command (session "") shows its view again; a session's update in place stays put
                 AppState next = s.withViews(replaceView(s.views(), v.replaced(i.spec())));
                 return Transition.of(i.session().isEmpty() && i.placement() == Placement.LOWER ? next.withLowerTab(LowerTab.view(v.id())) : next);
             }

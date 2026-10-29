@@ -98,7 +98,7 @@ class PanelsWithoutSessionTest {
     private static final List<SessionState> SESSIONS = List.of(SessionState.closed(SessionSpec.fresh("standard", "/w")),
             SessionState.closed(SessionSpec.fresh("reviews", "/w")));
 
-    /** Two sessions' own panels, a document, a panel without a session open, one closed, and one whose session is gone. */
+    /** Two sessions' own panels, a document, a sessionless panel open, one closed, and one whose session is gone. */
     private static AppState state() {
         return AppState.initial(List.of(new PanelState(MAIN, "main", "local", "standard"), new PanelState(DOC, "PLAN", "", "", true),
                         new PanelState(NOTES, "notes", "", "")), List.of(), SESSIONS)
@@ -120,8 +120,8 @@ class PanelsWithoutSessionTest {
         return t[0];
     }
 
-    /// The list holds, sorted by title, the panel whose session is gone, the open panel without a session and the closed
-    /// one; a closed row names its state, connection and file.
+    /// The list holds, sorted by title, the panel whose session is gone, the open panel without a session and the
+    /// closed one; a closed row names its state, connection and file.
     @Test
     void comandosOwnPanelsWithoutASessionOpenAndClosedByTitle() throws Exception {
         PanelsWithoutSession section = section(state());
@@ -138,8 +138,8 @@ class PanelsWithoutSessionTest {
         assertThat(closed[0]).contains("scratch").contains("closed").contains("local · s.md");
     }
 
-    /// With only session-owned panels and documents the list is empty and the section hidden; it shows again once a panel
-    /// has no session.
+    /// With only session-owned panels and documents the list is empty and the section hidden; it shows again once a
+    /// panel has no session.
     @Test
     void theSectionHidesWhileEveryPanelIsASessionsOwn() throws Exception {
         AppState owned = AppState.initial(List.of(new PanelState(MAIN, "main", "local", "standard"), new PanelState(DOC, "PLAN", "", "", true)),
@@ -152,8 +152,8 @@ class PanelsWithoutSessionTest {
         assertThat(section.component().isVisible()).as("back once a panel has no session").isTrue();
     }
 
-    /// In [SessionsSidebar] the section sits south of the scrolled Sessions list, and its "New session" opens the sidebar's
-    /// new-session dialog with the panel's title.
+    /// In [SessionsSidebar] the section sits south of the scrolled Sessions list, and its "New session" opens the
+    /// sidebar's new-session dialog with the panel's title.
     @Test
     void theSectionSitsUnderTheSessionsInTheirTab() throws Exception {
         SessionsSidebar[] s = new SessionsSidebar[1];
@@ -207,8 +207,8 @@ class PanelsWithoutSessionTest {
         assertThat(intents).containsExactly(new Intent.ReopenPanel(SCRATCH), new Intent.FocusPanel(NOTES));
     }
 
-    /// A row's menu holds Open, Rename, New session and Remove and no clone; "New session" asks for the session and sends
-    /// no intent itself.
+    /// A row's menu holds Open, Rename, New session and Remove and no clone; "New session" asks for the session and
+    /// sends no intent itself.
     @Test
     void aRowsMenuOpensRenamesMakesASessionAndRemovesButDoesNotClone() throws Exception {
         PanelsWithoutSession section = section(state());

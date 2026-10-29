@@ -16,7 +16,7 @@ import java.util.stream.Stream;
 
 /**
  * Lists the conversations Claude Code stored on disk, {@code <projects>/<project>/<session id>.jsonl}, for
- * the import dialog. Reads only the head (working directory, branch) and the tail (title, last prompt)
+ * the import dialog. Reads only the head (working directory, branch) and the tail (title, last prompt, latest branch)
  * of each file, so a large transcript costs two bounded reads.
  */
 public final class SessionCatalogue {

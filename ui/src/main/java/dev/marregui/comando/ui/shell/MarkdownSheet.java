@@ -13,6 +13,7 @@ final class MarkdownSheet {
     private MarkdownSheet() {
     }
 
+    /** The sheet's Markdown, its keys named as this desktop names them. */
     static String markdown() {
         try (InputStream in = MarkdownSheet.class.getResourceAsStream("markdown-sheet.md")) {
             if (in == null) {

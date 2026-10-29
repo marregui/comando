@@ -18,7 +18,7 @@ import java.util.Map;
 final class Pty extends ProcessTtyConnector {
 
     private final PtyProcess process;
-    /** When the shell last wrote, from {@link System#nanoTime()}; {@link InputGate#NO_OUTPUT} before its first output. */
+    /** When the shell last wrote, by {@link System#nanoTime()}; {@link InputGate#NO_OUTPUT} before its first output. */
     private volatile long lastOutputNanos = InputGate.NO_OUTPUT;
 
     private Pty(PtyProcess process, List<String> command) {

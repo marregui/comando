@@ -77,12 +77,12 @@ import java.util.function.Consumer;
 /**
  * The left column, three tabs in one row of icons: Sessions (every session as one row, its state icon and its name,
  * the rest in its card and its menu; under them, the panels of comando's own that belong to no session:
- * {@link PanelsWithoutSession}), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). No tab has a bar of buttons: a tab's menu adds (and, for sessions, imports
- * and sorts), and a row's menu edits, clones and removes, through the same {@link ResourceActions}. Double-click on a
- * session opens it in a panel ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. A session
- * row and a connection row are alike: the state icon, which a click starts or stops (a session) or connects or
- * disconnects (a connection), the name, a card over the
- * name (a connection's has no summary) and everything else in the row's menu. Sessions are
+ * {@link PanelsWithoutSession}), Connections, and Files (the folders the user chose, as trees: {@link FilesTab}). No
+ * tab has a bar of buttons: a tab's menu adds (and, for sessions, imports and sorts), and a row's menu edits, clones
+ * and removes, through the same {@link ResourceActions}. Double-click on a session opens it in a panel
+ * ({@link Intent.OpenSession}); on a connection, binds it to the focused panel. A session row and a connection row are
+ * alike: the state icon, which a click starts or stops (a session) or connects or disconnects (a connection), the name,
+ * the ⓘ that shows its card (a connection's has no summary), and everything else in the row's menu. Sessions are
  * listed running first, then by name, until the user drags one: from then on in the order the user left them, until
  * the tab menu's Sort. Hidden, the column collapses to a rail: its first button shows it again at its width, and one
  * button per tab, in the tabs' icons, shows it at that tab.
@@ -105,7 +105,7 @@ public final class SessionsSidebar {
         /** Opens a file in a panel, or brings forward the panel that has it. */
         void openFile(Path file);
 
-        /** The session dialog on a new session named {@code name}: a panel without a session's "New session ‹title›…". */
+        /** The session dialog on a new session named {@code name}: "New session ‹title›…" of a panel without one. */
         default void newSession(String name) {
         }
 
@@ -116,9 +116,10 @@ public final class SessionsSidebar {
     }
 
     /**
-     * The card a session row shows in place of a tooltip: the workspace's, the one a tab shows. {@code show} puts it under
-     * {@code row}, a rectangle of {@code over}, or beside the rows with its left edge at {@code beside}, in the same
-     * coordinates; {@code left} says the pointer left the row, so the card closes unless the pointer goes on into it.
+     * The card a session row shows in place of a tooltip: the workspace's, the one a tab shows. {@code show} puts it
+     * under {@code row}, a rectangle of {@code over}, or beside the rows with its left edge at {@code beside}, in the
+     * same coordinates; {@code left} says the pointer left the row, so the card closes unless the pointer goes on into
+     * it.
      */
     public interface Cards {
         Cards NONE = new Cards() {
@@ -142,7 +143,7 @@ public final class SessionsSidebar {
         default void showConnection(String connection, JComponent over, Rectangle row) {
         }
 
-        /** As {@link #showConnection(String, JComponent, Rectangle)}, beside the rows from {@code beside} when there is room. */
+        /** As {@link #showConnection(String, JComponent, Rectangle)}, beside the rows from {@code beside} if room. */
         default void showConnection(String connection, JComponent over, Rectangle row, int beside) {
             showConnection(connection, over, row);
         }
@@ -150,8 +151,8 @@ public final class SessionsSidebar {
         void left();
 
         /**
-         * {@code r} hears a row's card close: with the point on the screen the pointer left the card for, or null when it
-         * closed otherwise (its ✕, a click on it, the pointer off its row).
+         * {@code r} hears a row's card close: with the point on the screen the pointer left the card for, or null when
+         * it closed otherwise (its ✕, a click on it, the pointer off its row).
          */
         default void onClose(Consumer<Point> r) {
         }
@@ -186,8 +187,8 @@ public final class SessionsSidebar {
     private final DefaultListModel<SessionState> sessionModel = new DefaultListModel<>();
     private final DefaultListModel<ConnectionState> connectionModel = new DefaultListModel<>();
     /**
-     * One row component per session: a row's HTML label is parsed again only when its own text changes, where one shared
-     * renderer, filled with each row in turn, parsed every row on every paint of the list.
+     * One row component per session: a row's HTML label is parsed again only when its own text changes, where one
+     * shared renderer, filled with each row in turn, parsed every row on every paint of the list.
      */
     private final Map<String, SessionRow> rows = new HashMap<>();
     private final JList<SessionState> sessions = emptyText(new SessionList(sessionModel),
@@ -212,13 +213,13 @@ public final class SessionsSidebar {
     /** Whether the card shown is a session row's, so leaving the rows tells it. */
     private boolean cardShown;
     /**
-     * A click on a row's name opened its card, which has not closed since: the pointer resting on another row's name
-     * shows that row's card, without a click.
+     * A click on a row's ⓘ opened its card, which has not closed since: the pointer resting on another row's name shows
+     * that row's card, without a click.
      */
     private boolean following;
     /**
-     * The wait before the card follows the pointer onto another row: long enough for the pointer to cross the next row's
-     * edge on its way into the card shown, which hangs just under its row.
+     * The wait before the card follows the pointer onto another row: long enough for the pointer to cross the next
+     * row's edge on its way into the card shown, which hangs just under its row.
      */
     static final int FOLLOW_MILLIS = 150;
     /**
@@ -369,7 +370,7 @@ public final class SessionsSidebar {
                 hoveredSession = hover(sessions, hoveredSession, s == null ? -1 : sessions.locationToIndex(e.getPoint()));
                 boolean onControl = s != null && control(s, e).isPresent();
                 sessions.setCursor(onControl ? Cursor.getPredefinedCursor(Cursor.HAND_CURSOR) : null);
-                // over a row's text its card, once a click opened one; over a control the control's own tip
+                // over a row's text its card, once an ⓘ opened one; over a control the control's own tip
                 restOn(s == null || onControl ? null : new Rest(false, s.name()));
             }
         });
@@ -440,7 +441,7 @@ public final class SessionsSidebar {
         connectionActions = new ResourceActions<>(connections,
                 ResourceActions.Rows.of(ConnectionKind.INSTANCE, ConnectionState::name, ConnectionState::status, "Disconnect", () -> state),
                 dialogs.connections(), name -> intents.dispatch(new Intent.RemoveConnection(name)), questions);
-        // one row of icons (Miguel, 2026-10-19): the resources, then the documents; a click moves nothing. No bar of
+        // one row of icons: the resources, then the documents; a click moves nothing. No bar of
         // buttons: a tab's menu adds, a row's menu edits, clones and removes. A session and its own panel are one row,
         // so the panels have no tab of their own: those without a session sit under the sessions (record 91)
         JPanel sessionsTab = section(new JScrollPane(sessions));
@@ -508,7 +509,7 @@ public final class SessionsSidebar {
         files.show(folder, tree);
     }
 
-    /** Shows {@code file} in the Files tab, brought to the front, its folders opened and the file selected (record 119). */
+    /** Shows {@code file} in the Files tab, in front, its folders open and the file selected (record 119). */
     public void revealFile(Path file) {
         selectTab(FILES);
         files.reveal(file);
@@ -632,7 +633,7 @@ public final class SessionsSidebar {
 
     private static final String SORT_TIP = "Sort: running first, then by name";
 
-    /** Whether the user's order stands (a drag set it) rather than running first, then by name; kept across restarts by the owner. */
+    /** Whether the order a drag set stands, not running first, then by name; the owner keeps it across restarts. */
     public boolean manualOrder() {
         return manualOrder;
     }
@@ -650,8 +651,9 @@ public final class SessionsSidebar {
     }
 
     /**
-     * Whether the pointer is on the session list: a session that starts or stops keeps its row until the pointer leaves,
-     * so the row under it is still the one it was on and a second click does not land on another session (record 90).
+     * Whether the pointer is on the session list: a session that starts or stops keeps its row until the pointer
+     * leaves, so the row under it is still the one it was on and a second click does not land on another session
+     * (record 90).
      */
     private boolean pointerOnList;
 
@@ -686,8 +688,8 @@ public final class SessionsSidebar {
     }
 
     /**
-     * The session at {@code from} dropped into the gap before {@code gap} (the list's size for after the last): the list
-     * as shown, with that move, becomes the stored order, and the user's order stands from then on.
+     * The session at {@code from} dropped into the gap before {@code gap} (the list's size for after the last): the
+     * list as shown, with that move, becomes the stored order, and the user's order stands from then on.
      */
     void drop(int from, int gap) {
         if (from < 0 || from >= sessionModel.size() || gap < 0 || gap > sessionModel.size() || gap == from || gap == from + 1) {
@@ -792,8 +794,8 @@ public final class SessionsSidebar {
     }
 
     /**
-     * The session list: its tooltip names what the state icon does, and the row's card shows over its text; a row
-     * dragged by its text moves, a line marking where it will land.
+     * The session list: over a control its tip; over a row's text no tooltip, as the row's card follows there once an ⓘ
+     * opened one; a row dragged by its text moves, a line marking where it will land.
      */
     private final class SessionList extends JList<SessionState> {
         /** How far the mouse moves with the button down before a press becomes a drag. */
@@ -802,7 +804,7 @@ public final class SessionsSidebar {
         private Point pressedAt;
         /** The gap a drag would drop into, -1 while no drag runs. */
         private int gap = -1;
-        /** A drop just ended: the click the platform may send for the same press and release is not a click on a control. */
+        /** A drop just ended: a click the platform sends for the same press and release is not a click on a control. */
         private boolean dropped;
 
         SessionList(DefaultListModel<SessionState> model) {
@@ -906,7 +908,7 @@ public final class SessionsSidebar {
                 return null;
             }
             SessionState s = getModel().getElementAt(i);
-            // over a control its tip; over the text no tooltip: the row's card shows there, as a tab's
+            // over a control its tip; over the text no tooltip: the row's card follows there
             return layOutRow(s, i).tip(getCellBounds(i, i), e.getPoint()).map(Plain::text).orElse(null);
         }
     }
@@ -917,7 +919,7 @@ public final class SessionsSidebar {
         c.onClose(this::cardClosed);
     }
 
-    /** A click on {@code row}'s name: its card shows now, and follows the pointer onto other rows' names until it closes. */
+    /** A click on {@code row}'s ⓘ: its card shows now and follows the pointer onto other rows' names until closed. */
     private void openCard(Rest row) {
         following = true;
         cardRow = row;
@@ -935,9 +937,9 @@ public final class SessionsSidebar {
     }
 
     /**
-     * The pointer rests over {@code row}'s text, or over no row's text when null. While a card follows the pointer, a new
-     * row starts the wait for its card, which takes the place of the one shown; off every row's name, the card shown is
-     * told, and closes unless the pointer goes on into it.
+     * The pointer rests over {@code row}'s text, or over no row's text when null. While a card follows the pointer, a
+     * new row starts the wait for its card, which takes the place of the one shown; off every row's name, the card
+     * shown is told, and closes unless the pointer goes on into it.
      */
     private void restOn(Rest row) {
         if (Objects.equals(row, cardRow)) {
@@ -957,7 +959,7 @@ public final class SessionsSidebar {
 
     /**
      * The row's card closed. Left by the pointer for {@code at}, a point on the screen over another row's name, it goes
-     * on following: that row's card shows after the wait. Closed any other way, a click opens the next.
+     * on following: that row's card shows after the wait. Closed any other way, a click on an ⓘ opens the next.
      */
     private void cardClosed(Point at) {
         cardShown = false;
@@ -1114,8 +1116,8 @@ public final class SessionsSidebar {
 
     /**
      * Has the running session rewrite its panel's whole text as a professional Markdown document, put in place of the
-     * text: the focused panel when it is the session's, else the first of its panels. None for a session without an open
-     * panel; disabled while that panel's text is blank.
+     * text: the focused panel when it is the session's, else the first of its panels. None for a session without an
+     * open panel; disabled while that panel's text is blank.
      */
     private Optional<JMenuItem> rewriteItem(SessionState s) {
         List<PanelState> bound = state.panelsBoundToSession(s.name());
@@ -1238,7 +1240,7 @@ public final class SessionsSidebar {
         return layOutConnection(connectionModel.get(index), index).iconBounds(connections.getCellBounds(index, index));
     }
 
-    /** The connection list: over a row's icon the icon's tip; over its text no tooltip, the row's card shows there. */
+    /** The connection list: over a row's icon or ⓘ its tip; over its text no tooltip, the row's card follows there. */
     private final class ConnectionList extends JList<ConnectionState> {
         ConnectionList(DefaultListModel<ConnectionState> model) {
             super(model);
@@ -1278,12 +1280,12 @@ public final class SessionsSidebar {
         return i >= 0 && list.getCellBounds(i, i).contains(e.getPoint()) ? list.getModel().getElementAt(i) : null;
     }
 
-    /** Whether {@code list}'s rows, at their widest, fit the tab it shows in: it then fills the tab, else it scrolls. */
+    /** Whether {@code list}'s rows, at their widest, fit its tab: it then fills the tab, else it scrolls. */
     private static boolean fitsTab(JList<?> list) {
         return !(list.getParent() instanceof JViewport v) || v.getWidth() >= list.getPreferredSize().width;
     }
 
-    /** A tab's content, filling it, on the sidebar's ground; a name wider than the tab scrolls into view (2026-10-29). */
+    /** A tab's content, filling it, on the sidebar's ground; a name wider than the tab scrolls into view. */
     private static JPanel section(JComponent content) {
         if (content instanceof JScrollPane sp) {
             sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);

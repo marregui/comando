@@ -28,7 +28,7 @@ final class Delegation {
      */
     record Line(String toolUseId, String description, Block.ToolStatus status, boolean background, int tools) {
 
-        /** The line as the card reads it: a mark for the state, the description, and the tool count once there is one. */
+        /** The card's line: a mark for the state, the description, and the tool count once there is any. */
         String text() {
             String mark = switch (status) {
                 case RUNNING -> "▸ ";

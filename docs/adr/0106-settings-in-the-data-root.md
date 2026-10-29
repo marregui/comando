@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-28 | accepted | Miguel |
+| 2026-10-28 | accepted | Miguel and Claude |
 
 ## 1. Context
 
@@ -29,8 +29,8 @@ preferences as the one-time source.
 ## 3. Consequences
 
 `Settings` (in `ui.shell`) holds the keys and writes the file; `WindowLayout` stays the one place each key is named and
-writes after each change; `ComandoUi` reads the export folder and the Gradle tasks through it. `comando.prefsNode` now
-names only the preferences node read once. Tested in `SettingsTest` (the one-time copy, typed, preferences untouched,
-the file winning afterwards; a change read by the next window, mutation-checked with the theme's write removed; an
-unreadable file kept aside), `WindowLayoutTest`, and `UiKeysTest`, whose theme test keeps the theme in a data root's
-`settings.json` across windows.
+writes after each change; `PanelFiles` reads the export folder through it and `Commands` the Gradle tasks.
+`comando.prefsNode` now names only the preferences node read once. Tested in `SettingsTest` (the one-time copy, typed,
+preferences untouched, the file winning afterwards; a change read by the next window, mutation-checked with the theme's
+write removed; an unreadable file kept aside), `WindowLayoutTest`, and `UiKeysTest`, whose theme test keeps the theme in
+a data root's `settings.json` across windows.

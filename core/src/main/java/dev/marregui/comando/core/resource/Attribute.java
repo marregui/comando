@@ -4,8 +4,8 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * One editable attribute of a resource. The resource dialog builds its form from these, so connections,
- * sessions and folders share one dialog.
+ * One editable attribute of a resource. The resource dialog builds its form from these for connections and sessions;
+ * the folders window edits the folders' by their keys.
  *
  * @param hint     shown under the field
  * @param editable for a choice: whether the user may type a value that is not in {@code choices}

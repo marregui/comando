@@ -12,8 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Each edit tool maps to the text it replaces and writes; other tools map to nothing.
 class DiffsTest {
 
-    /// In a diff of SQL whose removed line is a `--` comment and whose added line starts `++`, lines 0 and 1 are headers
-    /// and the `---` and `+++` content lines are removed and added.
+    /// In a diff of SQL whose removed line is a `--` comment and whose added line starts `++`, lines 0 and 1 are
+    /// headers and the `---` and `+++` content lines are removed and added.
     @Test
     void removedSqlCommentsAreContentNotHeaders() {
         List<String> lines = Diffs.unified("q.sql", "-- old comment\nSELECT 1", "++ added\nSELECT 1");

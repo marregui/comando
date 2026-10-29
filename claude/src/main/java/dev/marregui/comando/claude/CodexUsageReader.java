@@ -25,8 +25,8 @@ import java.util.concurrent.TimeUnit;
 /**
  * Reads the Codex plan's usage limits from the Codex CLI itself: {@code codex app-server} speaks JSON-RPC over stdio,
  * and {@code account/rateLimits/read} answers with the 5-hour session window and the week, each with its share used
- * and its reset time. The read sends no prompt and spends nothing; it takes about a second (measured 2026-10-27,
- * codex-cli 0.163.0). Without Codex installed or signed in, the read says why and the status bar shows nothing.
+ * and its reset time. The read sends no prompt and spends nothing; it takes about a second (measured on codex-cli
+ * 0.163.0). Without Codex installed or signed in, the read says why and the status bar shows nothing.
  */
 final class CodexUsageReader {
 
@@ -45,7 +45,7 @@ final class CodexUsageReader {
     private CodexUsageReader() {
     }
 
-    /** The Codex CLI where its installers put it, else {@code codex} on the PATH. */
+    /** {@code COMANDO_CODEX}, else the Codex CLI where its installers put it, else {@code codex} on the PATH. */
     static String findExecutable() {
         String env = System.getenv("COMANDO_CODEX");
         if (env != null && !env.isBlank()) {
@@ -139,7 +139,7 @@ final class CodexUsageReader {
         }
     }
 
-    /** Our own child: its stdin is closed, so it exits on its own; else terminate, then kill. */
+    /** Gives the server 1 s to exit on its closed input, then SIGTERM, then SIGKILL 2 s later. */
     private static void stop(Process p) {
         try {
             if (!p.waitFor(1, TimeUnit.SECONDS)) {

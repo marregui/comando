@@ -14,10 +14,12 @@ import java.util.Objects;
  * @param addDirs         extra working directories ({@code --add-dir})
  * @param budgetUsd       spend cap per process ({@code --max-budget-usd}); 0 means none
  * @param claudeSessionId Claude Code's session id once known; empty for a session never started
- * @param checkpoint    the prompt the Checkpoint button sends ("/reflect"); empty hides the button
+ * @param checkpoint      the prompt the Checkpoint button sends ("/reflect"); empty hides the button
  * @param startMode       how the next start reaches the conversation
- * @param carried         what the Checkpoint button carried out of the conversation it cleared: the checkpoint's summary,
- *                        which goes in front of the next prompt; empty when nothing waits
+ * @param carried         what the Checkpoint button carried out of the conversation it cleared: the checkpoint's
+ *                        summary, which goes in front of the next prompt; empty when nothing waits
+ * @param createdBy       who created the session: empty for the user, else the session or client that called
+ *                        {@code session_new} (record 121)
  */
 public record SessionSpec(
         String name,
@@ -49,7 +51,7 @@ public record SessionSpec(
         checkpoint = checkpoint == null ? DEFAULT_CHECKPOINT : checkpoint.strip();
         // nor a carried summary: nothing waits
         carried = carried == null ? "" : carried;
-        // who created the session: empty for the user, else the session or client that called session_new (record 121)
+        // nor a creator: the user made it
         createdBy = createdBy == null ? "" : createdBy.strip();
         ConnectionSpec.requireName(name);
         Objects.requireNonNull(workDir, "workDir");

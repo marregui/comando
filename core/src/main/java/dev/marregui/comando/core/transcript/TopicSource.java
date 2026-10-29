@@ -16,8 +16,8 @@ public final class TopicSource {
 
     /**
      * At most this much of a conversation or a text is read, about 500 tokens: a card's summary is to come back within
-     * 3 s. Measured 2026-10-22 with Claude Code 2.1.308 (Haiku, the whole command): about 4 200 characters in took 2.6 to
-     * 4.5 s, 2 000 a median of 2.0 s; 1 200 was no faster.
+     * 3 s. Measured with Claude Code 2.1.308 (Haiku, the whole command): about 4 200 characters in took 2.6 to 4.5 s,
+     * 2 000 a median of 2.0 s; 1 200 was no faster.
      */
     public static final int MAX_CHARS = 2_000;
     static final int MAX_PROMPT = 800;
@@ -29,9 +29,9 @@ public final class TopicSource {
     }
 
     /**
-     * The end of {@code session}'s conversation, newest last, at most {@code maxChars}, headed by where the session works
-     * ({@code workDir}, and {@code branch} when known) so the summary can name the repository, and by its panel's title,
-     * {@code panel}, unless blank (a headless session); empty when it has none.
+     * The end of {@code session}'s conversation, newest last, at most {@code maxChars}, headed by where the session
+     * works ({@code workDir}, and {@code branch} when known) so the summary can name the repository, and by its panel's
+     * title, {@code panel}, unless blank (a headless session); empty when it has none.
      */
     public static String ofSession(String session, String panel, String workDir, String branch, Transcript t, int maxChars) {
         int size = t.size();
@@ -125,7 +125,10 @@ public final class TopicSource {
         return "";
     }
 
-    /** The start of a panel's own text, at most {@code maxChars}, with its file when it has one; empty when the text is blank. */
+    /**
+     * The start of a panel's own text, at most {@code maxChars}, with its file when it has one; empty when the text is
+     * blank.
+     */
     public static String ofText(String panel, String file, String text, int maxChars) {
         if (text.isBlank()) {
             return "";

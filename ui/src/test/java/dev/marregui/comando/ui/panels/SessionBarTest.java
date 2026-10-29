@@ -41,8 +41,9 @@ class SessionBarTest {
 
     private static final PanelId A = new PanelId("a");
 
-    /// For a panel bound to an open session the bar shows its name with the session icon, the plug, the model, the effort
-    /// and the context share with no cost; focusing a panel without a session leaves only "no session ▾" and hides the rest.
+    /// For a panel bound to an open session the bar shows its name with the session icon, the plug, the model, the
+    /// effort and the context share with no cost; focusing a panel without a session leaves only "no session ▾" and
+    /// hides the rest.
     @Test
     void theBarShowsTheFocusedPanelsSessionAndFollowsTheFocus() throws Exception {
         SessionState work = SessionState.closed(SessionSpec.fresh("work", "/w").withModel("opus").withEffort("high"))
@@ -97,8 +98,9 @@ class SessionBarTest {
         assertThat(button(bar[0], "Start a new conversation").isEnabled()).as("greyed out while it runs").isFalse();
     }
 
-    /// For a stopped session the model button names its configured model, as the session's row does, not a model the CLI
-    /// reported earlier; its menu checks it, and picking items sends `SetSessionModel` and `SetSessionEffort`. An unset effort reads "default".
+    /// For a stopped session the model button names its configured model, as the session's row does, not a model the
+    /// CLI reported earlier; its menu checks it, and picking items sends `SetSessionModel` and `SetSessionEffort`. An
+    /// unset effort reads "default".
     @Test
     void theModelAndTheEffortAreMenusThatChangeThem() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();
@@ -125,8 +127,8 @@ class SessionBarTest {
         assertThat(button(bar[0], "Effort").getText()).isEqualTo("default ▾");
     }
 
-    /// The context label is muted until the reflection is due, then [Theme#THINKING] with a tooltip saying the checkpoint
-    /// is due; a session without a checkpoint command stays muted even when due.
+    /// The context label is muted until the reflection is due, then [Theme#THINKING] with a tooltip saying the
+    /// checkpoint is due; a session without a checkpoint command stays muted even when due.
     @Test
     void theContextTurnsPurpleOnceTheCheckpointIsDue() throws Exception {
         SessionState x = SessionState.closed(SessionSpec.fresh("work", "/w").withCheckpoint("/reflect"))
@@ -146,8 +148,8 @@ class SessionBarTest {
         assertThat(label(bar[0], "Context").getForeground()).as("no checkpoint, nothing due").isEqualTo(Theme.MUTED);
     }
 
-    /// The bar has no clear or rewrite button; the checkpoint shares the context's group, the context reads "ctx –" before
-    /// a turn reports it, and a click on the checkpoint sends `Checkpoint`.
+    /// The bar has no clear or rewrite button; the checkpoint shares the context's group, the context reads "ctx –"
+    /// before a turn reports it, and a click on the checkpoint sends `Checkpoint`.
     @Test
     void theCheckpointSitsBesideTheContextAndNeitherClearsNorRewritesFromTheBar() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();
@@ -168,8 +170,9 @@ class SessionBarTest {
         assertThat(intents).containsExactly(new Intent.Checkpoint("work"));
     }
 
-    /// The chip's menu explains a session's own panel, offers a new or existing session to a panel without one, attach to a
-    /// document and detach to an attached document; "New session" passes the panel's title, and "Open" sends `OpenSession`.
+    /// The chip's menu explains a session's own panel, offers a new or existing session to a panel without one, attach
+    /// to a document and detach to an attached document; "New session" passes the panel's title, and "Open" sends
+    /// `OpenSession`.
     @Test
     void theSessionChipsMenuFollowsTheFocusedPanelsKind() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();

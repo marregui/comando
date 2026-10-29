@@ -31,8 +31,9 @@ stop either session, which ends the loop because the other cannot start it again
 still leave behind when a turn ends is a statement card
 ([record 43](0043-a-session-waiting-on-background-work-shows-it.md)).
 
-## Amendment (2026-10-29, record 121)
+## Amendments
 
-Sessions now have every action the user has, `session_start` among them. The circuit breaker holds in a narrower form: a
-stopped session is started again only by the user or by a session that created it, directly or through others; stopping
-either side of a loop still ends it.
+2026-10-29, by [record 121](0121-an-agent-has-every-action-the-user-has.md): sessions have every action the user has,
+`session_start` and `session_fresh` among them. The circuit breaker holds in a narrower form: a stopped session is
+started again only by the user or by a session that created it, directly or through others; stopping either side of a
+loop still ends it.

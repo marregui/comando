@@ -23,6 +23,6 @@ one connection, with the tools at the right and tooltips that say how to proceed
 
 ## 3. Consequences
 
-`EditorPanelHeaderTest`: unbound, the toggle says how to bind and no chip shows; bound, the icon follows closed, open and
-failed, the name sits beside it, both first in the tools' row, and clicks send `OpenConnection` then `CloseConnection`.
-`UiKeysTest` keeps every tooltip to one line of at most 80 characters.
+`EditorPanelHeaderTest`: unbound, the toggle says how to bind and no chip shows; bound, the icon follows closed, open
+and failed, the name sits beside it, both first in the tools' row, and clicks send `OpenConnection` then
+`CloseConnection`. `UiKeysTest` keeps every tooltip to one line of at most 80 characters.

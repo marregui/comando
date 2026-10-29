@@ -77,9 +77,9 @@ class EditorPanelOutlineTest {
         return null;
     }
 
-    /// The outline of a document with front matter, a fenced `#` line and a repeated heading lists four sections whose ids
-    /// (`scope`, `scope-1`) match those [MarkdownHtml#render] writes; typing a heading adds it, and each click on the button
-    /// toggles the pane and reports the new choice.
+    /// The outline of a document with front matter, a fenced `#` line and a repeated heading lists four sections whose
+    /// ids (`scope`, `scope-1`) match those [MarkdownHtml#render] writes; typing a heading adds it, and each click on
+    /// the button toggles the pane and reports the new choice.
     @Test
     void theOutlineListsTheHeadingsWithTheRenderedPagesIdsAndItsButtonRemembersTheChoice() throws Exception {
         List<Boolean> kept = new CopyOnWriteArrayList<>();

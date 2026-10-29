@@ -13,7 +13,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - each ticket appears once up to the requested limit
 class LinearTicketsTest {
 
-    /// Only valid workspace issue URLs establish a workspace and team; later trusted URLs add teams while unrelated text preserves the existing site.
+    /// Only valid workspace issue URLs establish a workspace and team; later trusted URLs add teams while unrelated
+    /// text preserves the existing site.
     @Test
     void theWorkspaceAndTeamsAreLearntFromLinearsLinksAndNothingElse() {
         LinearTickets.Site none = LinearTickets.Site.NONE;
@@ -25,7 +26,8 @@ class LinearTicketsTest {
         assertThat(LinearTickets.learn(site, "nothing new")).isSameAs(site);
     }
 
-    /// Known-team tickets from the final paragraph lead the unique result, followed by earlier tickets newest first, while word fragments and unknown sites yield none.
+    /// Known-team tickets from the final paragraph lead the unique result, followed by earlier tickets newest first,
+    /// while word fragments and unknown sites yield none.
     @Test
     void theTicketsOfTheLastParagraphComeFirstThenTheOthersNewestFirstEachOnce() {
         LinearTickets.Site site = new LinearTickets.Site("acme", Set.of("ENG", "OPS"));

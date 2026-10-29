@@ -33,8 +33,8 @@ class SubagentFilesProbeTest {
         return "{\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"SENTINEL\"}]}}";
     }
 
-    /// Each of nine JSON values, from `null` to a nested object, put in every field the renderer reads, renders without an
-    /// exception, and a valid sentinel line after it still renders.
+    /// Each of nine JSON values, from `null` to a nested object, put in every field the renderer reads, renders without
+    /// an exception, and a valid sentinel line after it still renders.
     @Test
     void everyJsonTypeInEveryFieldReadRendersWithoutThrowing() throws IOException {
         List<String> templates = List.of(
@@ -75,8 +75,8 @@ class SubagentFilesProbeTest {
         assertThat(failures).isEmpty();
     }
 
-    /// Meta files whose fields hold each JSON type never make [SubagentFiles#find] or [SubagentFiles#finished] throw, also
-    /// for an id no file has.
+    /// Meta files whose fields hold each JSON type never make [SubagentFiles#find] or [SubagentFiles#finished] throw,
+    /// also for an id no file has.
     @Test
     void everyJsonTypeInMetaFieldsFindsWithoutThrowing() throws IOException {
         Path projects = tmp.resolve("projects");
@@ -93,8 +93,8 @@ class SubagentFilesProbeTest {
         assertThatCode(() -> SubagentFiles.finished(dir.resolve("agent-empty.meta.json"), json)).doesNotThrowAnyException();
     }
 
-    /// A meta file with the number `7` as `toolUseId` is found for the id `"7"`, and an object `description` reads as empty;
-    /// this type confusion is recorded, not endorsed.
+    /// A meta file with the number `7` as `toolUseId` is found for the id `"7"`, and an object `description` reads as
+    /// empty; the test pins this behaviour, not a design.
     @Test
     void aNumericToolUseIdMatchesItsDigits() throws IOException {
         Path projects = tmp.resolve("projects");
@@ -137,8 +137,8 @@ class SubagentFilesProbeTest {
         assertThat(md).contains("LAST").doesNotContain("�");
     }
 
-    /// Files of 4 095 and 4 096 bytes rendered with a 4 096-byte limit have no notice and keep `FIRST`; at 4 097 bytes the
-    /// output starts with the notice, drops `FIRST` and keeps `LAST`.
+    /// Files of 4 095 and 4 096 bytes rendered with a 4 096-byte limit have no notice and keep `FIRST`; at 4 097 bytes
+    /// the output starts with the notice, drops `FIRST` and keeps `LAST`.
     @Test
     void aFileExactlyAtTheLimitIsReadWhole() throws IOException {
         for (int delta : new int[]{-1, 0}) {
@@ -150,8 +150,8 @@ class SubagentFilesProbeTest {
         assertThat(SubagentFiles.render(over, 4096, json)).startsWith("_The conversation is longer than").doesNotContain("FIRST").contains("LAST");
     }
 
-    /// A cut landing exactly at the start of the second line drops the first and shows the second and third whole, under the
-    /// notice.
+    /// A cut landing exactly at the start of the second line drops the first and shows the second and third whole,
+    /// under the notice.
     @Test
     void aCutAtALineStartKeepsThatLine() throws IOException {
         Path f = tmp.resolve("boundary.jsonl");
@@ -167,8 +167,8 @@ class SubagentFilesProbeTest {
         assertThat(md).as("the whole line that starts exactly at the cut").contains("SECOND");
     }
 
-    /// With a 5 000-character last line and a 4 096-byte limit, the output is the task prompt and the notice, with none of
-    /// the long line; this is recorded as the current behaviour.
+    /// With a 5 000-character last line and a 4 096-byte limit, the output is the task prompt and the notice, with none
+    /// of the long line; the test pins this behaviour, not a design.
     @Test
     void aLastLineLongerThanTheLimitShowsOnlyTheNotice() throws IOException {
         Path f = tmp.resolve("oneline.jsonl");

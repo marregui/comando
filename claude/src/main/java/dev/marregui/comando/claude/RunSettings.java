@@ -16,7 +16,7 @@ import java.util.Optional;
  * stream's {@code assistant} event names the model but not the effort, while each assistant line of the transcript
  * carries both ({@code message.model}, {@code perTurnEffort}, else {@code effort}). A skill that sets {@code effort} or
  * {@code model}, a {@code /effort} or a {@code /model} shows there from the next message on. Reads only the file's last
- * {@value #TAIL} bytes, where the latest message's lines are; one reader per session, on its stream's thread.
+ * {@value #TAIL} bytes, where the latest message's lines are; one reader per session, on the session's strand.
  */
 final class RunSettings {
 
@@ -38,8 +38,8 @@ final class RunSettings {
     }
 
     /**
-     * What message {@code messageId} of conversation {@code conversationId} ran at; empty while its line is not yet in the
-     * transcript, or the transcript cannot be found or read.
+     * What message {@code messageId} of conversation {@code conversationId} ran at; empty while its line is not yet in
+     * the transcript, or the transcript cannot be found or read.
      */
     Optional<Ran> of(String conversationId, String messageId) {
         if (conversationId.isEmpty() || messageId.isEmpty()) {

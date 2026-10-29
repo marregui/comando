@@ -24,8 +24,8 @@ class SqlCompletionTest {
             new Schema.Table("trades", List.of(new Schema.Column("ts", "TIMESTAMP"), new Schema.Column("price", "DOUBLE"))),
             new Schema.Table("quotes", List.of(new Schema.Column("ts", "TIMESTAMP"), new Schema.Column("bid", "DOUBLE")))));
 
-    /// A table, a column shared by two tables and a keyword each give one completion; the column's description names its
-    /// type and both tables.
+    /// A table, a column shared by two tables and a keyword each give one completion; the column's description names
+    /// its type and both tables.
     @Test
     void offersKeywordsTablesAndEachColumnOnce() {
         SqlCompletion c = new SqlCompletion();
@@ -75,9 +75,9 @@ class SqlCompletionTest {
         assertThat(UIManager.getPropertyChangeListeners().length).isEqualTo(before);
     }
 
-    /// [SqlCompletion#startsAStatement] accepts a leading SQL keyword, or a prefix of it of three letters or more, written
-    /// all in lower or all in upper case and followed by at most one word, the word its grammar requires, or a mark of SQL;
-    /// a mixed-case word such as `Show` and prose that starts with a SQL verb are rejected.
+    /// [SqlCompletion#startsAStatement] accepts a leading SQL keyword, or a prefix of it of three letters or more,
+    /// written all in lower or all in upper case and followed by at most one word, the word its grammar requires, or a
+    /// mark of SQL; a mixed-case word such as `Show` and prose that starts with a SQL verb are rejected.
     @Test
     void completionOpensOnAStatementBeingTypedNotOnAPrompt() {
         assertThat(SqlCompletion.startsAStatement("update tr")).isTrue();

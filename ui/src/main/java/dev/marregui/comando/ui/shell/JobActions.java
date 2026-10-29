@@ -22,10 +22,10 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 /**
- * The kit's scheduled jobs in the window (record 117): read through {@link Setup#jobs} at start, after each change and
- * every minute while the Files tab shows, shown on its Jobs row; edited in the {@link JobsDialog}, whose Save hands the
- * whole list to {@code kit.py}; run now, and brought to the scheduler, from the row's and the window's menus. Every call
- * of {@code kit.py} runs off the EDT. EDT only, but for the reads' answers.
+ * The kit's scheduled jobs in the window (record 117): read through {@link Setup#jobs} at start, after each change
+ * and every minute while the Files tab shows, shown on its Jobs row; edited in the {@link JobsDialog}, whose Save hands
+ * the whole list to {@code kit.py}; run now, and brought to the scheduler, from the row's and the window's menus.
+ * Every call of {@code kit.py} runs on an errand of the window. EDT only, but for those errands.
  */
 final class JobActions {
 
@@ -45,7 +45,7 @@ final class JobActions {
         this.openFile = openFile;
     }
 
-    /** The sidebar whose Files tab shows the jobs, once the window is built; reads them once, then every minute it shows. */
+    /** Shows the jobs in {@code bar}'s Files tab, once the window is built: read now, then every minute it shows. */
     void attach(SessionsSidebar bar) {
         sidebar = bar;
         bar.onJobs(this::configure, this::apply);
@@ -89,9 +89,9 @@ final class JobActions {
     }
 
     /**
-     * The window that edits the jobs, over comando's, on the jobs read now: a list read earlier may miss a later edit of
-     * the manifest, which Save would then undo. A list that cannot be read opens no window, as Save would hand {@code
-     * kit.py} the empty list and remove every job; the notice says why.
+     * The window that edits the jobs, over comando's, on the jobs read now: a list read earlier may miss a later edit
+     * of the manifest, which Save would then undo. A list that cannot be read opens no window, as Save would hand
+     * {@code kit.py} the empty list and remove every job; the notice says why.
      */
     void configure() {
         if (!available()) {
@@ -131,7 +131,9 @@ final class JobActions {
         }, this::save, null);
     }
 
-    /** Hands the whole list to {@code kit.py} off the EDT; on the EDT, {@code done} or {@code refused} with its words. */
+    /**
+     * Hands the whole list to {@code kit.py} off the EDT, then runs {@code done}, or {@code refused} with why, on it.
+     */
     private void save(List<KitJob> list, Runnable done, Consumer<String> refused) {
         UiErrands.start("kit-jobs-save", () -> {
             try {
@@ -152,8 +154,8 @@ final class JobActions {
     }
 
     /**
-     * Brings the scheduler to the manifest: the jobs as the manifest holds them now, read again and handed to {@code
-     * kit.py}; nothing when they cannot be read.
+     * Brings the scheduler to the manifest: the jobs as the manifest holds them now, read again and handed to
+     * {@code kit.py}; nothing when they cannot be read.
      */
     void apply() {
         UiErrands.start("kit-jobs-apply", () -> {

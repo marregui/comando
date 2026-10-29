@@ -53,7 +53,10 @@ public final class Links {
         browser = browse;
     }
 
-    /** Follows {@code href}, a relative one read from {@code folder} (null: none is); false when it is no link comando follows. */
+    /**
+     * Follows {@code href}, a relative one read from {@code folder} (may be null); false when comando does not follow
+     * it.
+     */
     public static boolean open(String href, Path folder) {
         return open(href, folder, files);
     }

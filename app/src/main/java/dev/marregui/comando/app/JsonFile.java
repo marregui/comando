@@ -27,8 +27,8 @@ final class JsonFile<T> {
 
     /**
      * A mapper for files comando wrote with Jackson 2, keeping its defaults where Jackson 3 changed them: properties in
-     * declaration order, a null primitive read as its default, enums by name, anything after the value ignored; unknown
-     * properties ignored, as before.
+     * declaration order, a null primitive read as its default, enums by name, anything after the value ignored; and
+     * unknown properties ignored.
      */
     static JsonMapper.Builder filed() {
         return JsonMapper.builder()

@@ -25,7 +25,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-/** One fake for every port; each call is recorded as a line such as {@code db.execute 7 local SELECT 1}. */
+/**
+ * One fake for each of the six effect ports; each call is recorded as a line such as
+ * {@code db.execute 7 local SELECT 1}.
+ */
 public final class RecordingPorts implements DatabasePort, ClaudePort, ApprovalPort, UiPort, PersistencePort, ToolPort {
 
     private final List<String> calls = Collections.synchronizedList(new ArrayList<>());

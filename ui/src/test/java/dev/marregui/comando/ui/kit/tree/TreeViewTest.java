@@ -55,8 +55,8 @@ class TreeViewTest {
         assertThat(view.selected()).as("a node that is gone leaves nothing selected").isNull();
     }
 
-    /// A single click activates nothing, a double click on a leaf activates it, a double click on a folder does not, and
-    /// the toggle click count is 2.
+    /// A single click activates nothing, a double click on a leaf activates it, a double click on a folder does not,
+    /// and the toggle click count is 2.
     @Test
     void onlyADoubleClickOpensALeafOrAFolder() throws Exception {
         TreeView view = new TreeView();
@@ -78,8 +78,8 @@ class TreeViewTest {
         assertThat(tree.getToggleClickCount()).as("a folder opens on a double click").isEqualTo(2);
     }
 
-    /// A node with a detail renders as a name label and a muted detail label, a `✗` row is red even when selected, no label
-    /// starts with `<html>`, and [JTree#convertValueToText] gives the node's label, not its record's text.
+    /// A node with a detail renders as a name label and a muted detail label, a `✗` row is red even when selected, no
+    /// label starts with `<html>`, and [JTree#convertValueToText] gives the node's label, not its record's text.
     @Test
     void aRowIsPlainLabelsNeverHtmlAndTheTreeNamesANodeByItsLabel() throws Exception {
         TreeView view = new TreeView();
@@ -108,7 +108,9 @@ class TreeViewTest {
         return (DefaultMutableTreeNode) tree.getPathForRow(row).getLastPathComponent();
     }
 
-    /** A left click of {@code count} on row {@code row}; the press before it needs a display, which tests do without. */
+    /**
+     * A left click of {@code count} on row {@code row}; the press before it needs a display, which tests do without.
+     */
     private static void click(JTree tree, int row, int count) {
         Rectangle r = tree.getRowBounds(row);
         tree.dispatchEvent(new MouseEvent(tree, MouseEvent.MOUSE_CLICKED, System.currentTimeMillis(), 0, r.x + r.width / 2,

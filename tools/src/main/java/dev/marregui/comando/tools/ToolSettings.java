@@ -18,7 +18,10 @@ public record ToolSettings(Optional<Path> gradleSerial, String javaHome) {
     /** The wrapper's name on the {@code PATH}. */
     static final String GRADLE_SERIAL = "gradle-serial";
 
-    /** The settings now: a {@code gradle-serial} on comando's {@code PATH} when there is one, else the checkout's {@code ./gradlew}. */
+    /**
+     * The settings now: a {@code gradle-serial} on comando's {@code PATH} when there is one, else the checkout's
+     * {@code ./gradlew}.
+     */
     public static ToolSettings now() {
         return of(System.getenv("PATH"));
     }

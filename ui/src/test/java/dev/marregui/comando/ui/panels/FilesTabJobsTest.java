@@ -28,7 +28,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - the row leads the KIT row, is a row of its own after a separator without a kit's folder, and is gone without a kit
 /// - its detail says how many and what runs next; its tip, one line, the most pressing first
 /// - a failed last run reds its name, a pending change marks it, nothing else does
-/// - its menu configures the jobs and applies a pending change, only while nothing runs; a double click opens the window
+/// - its menu configures the jobs and applies a pending change, only while nothing runs; a double click opens the
+///   window
 @ExtendWith(OnEdt.class)
 class FilesTabJobsTest {
 
@@ -83,8 +84,8 @@ class FilesTabJobsTest {
     }
 
     /// The Jobs row is the first inside the KIT row, which is the Kit group's one folder named in capitals; with no Kit
-    /// folder it is a top-level row of its own, last, after a separator; it has the clock icon and goes when the jobs are
-    /// [KitJobs#NONE].
+    /// folder it is a top-level row of its own, last, after a separator; it has the clock icon and goes when the jobs
+    /// are [KitJobs#NONE].
     @Test
     void theRowLeadsTheKitsRowAndGoesWithoutAKit() {
         FilesTab tab = tab();
@@ -131,7 +132,8 @@ class FilesTabJobsTest {
         }
     }
 
-    /// A failed last run or an unreadable list reds the row's name; a pending change marks it; a quiet list does neither.
+    /// A failed last run or an unreadable list reds the row's name; a pending change marks it; a quiet list does
+    /// neither.
     @Test
     void failureRedsTheNameAndAPendingChangeMarksTheRow() {
         FilesTab tab = tab();

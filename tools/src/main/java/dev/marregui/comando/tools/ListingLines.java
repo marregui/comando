@@ -15,7 +15,10 @@ import java.util.regex.Pattern;
  */
 final class ListingLines {
 
-    /** The text without the entries' own lines, how many lines went, and the 1-based numbers, in the text returned, of the lines that still name an entry. */
+    /**
+     * The text without the entries' own lines, how many lines went, and the 1-based numbers, in the text returned, of
+     * the lines that still name an entry.
+     */
     record Result(String text, int removed, List<Integer> mentions) {
         Result {
             mentions = List.copyOf(mentions);
@@ -99,7 +102,9 @@ final class ListingLines {
         return clean(firstElement(rest));
     }
 
-    /** The first element of a list item's text: a code span, a link's target, else the text up to a space or a colon. */
+    /**
+     * The first element of a list item's text: a code span, a link's target, else the text up to a space or a colon.
+     */
     private static String firstElement(String rest) {
         rest = unwrap(rest);
         if (rest.startsWith("`")) {

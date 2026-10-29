@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [Threads], [Errands], and [Watchdog] supply named threads with the ownership and shutdown rules of the runtime.
 ///
-/// - strands serialize work on virtual threads
+/// - strands serialise work on virtual threads
 /// - closing errands interrupts active calls and rejects new ones
 /// - one platform watchdog serves all registered looks
 class ThreadKitTest {
@@ -43,7 +43,8 @@ class ThreadKitTest {
         });
     }
 
-    /// A delayed task runs on a named virtual thread, and cancelling a later one immediately removes it from the timed strand queue.
+    /// A delayed task runs on a named virtual thread, and cancelling a later one immediately removes it from the timed
+    /// strand queue.
     @Test
     void aTimedStrandRunsOnAVirtualThreadAndACancelledTaskLeavesItsQueue() throws Exception {
         ScheduledExecutorService timed = Threads.timedStrand("kit-timed");

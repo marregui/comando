@@ -129,7 +129,7 @@ abstract class Item {
         return null;
     }
 
-    /** The link in the header at {@code (px, py)} (relative), which a click follows instead of toggling; null when none. */
+    /** The link in the header at {@code (px, py)} (relative), which a click follows rather than toggling; else null. */
     String headerLinkAt(int px, int py) {
         return null;
     }

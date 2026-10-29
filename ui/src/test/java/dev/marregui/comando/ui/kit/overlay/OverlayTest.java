@@ -24,7 +24,6 @@ class OverlayTest {
     /// after [Overlay#showLoading] and stops on content, empty and error, which keeps its text.
     @Test
     void theLoadingBarAnimatesOnlyWhileLoading() {
-        // an indeterminate bar runs its 15 ms animation timer even when hidden, so it is indeterminate only while shown
         Overlay overlay = new Overlay(new JLabel("content"));
         assertThat(overlay.animating()).as("built showing the content").isFalse();
         overlay.showLoading("Loading the schema");

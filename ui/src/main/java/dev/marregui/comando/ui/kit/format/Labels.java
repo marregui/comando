@@ -15,6 +15,7 @@ public final class Labels {
     private Labels() {
     }
 
+    /** How long ago {@code thenMillis} was: "now" under 10 s, then "42 s", "5 min", "3 h", "2 d"; empty when unset. */
     public static String ago(long thenMillis, long nowMillis) {
         if (thenMillis <= 0) {
             return "";
@@ -72,6 +73,7 @@ public final class Labels {
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm", Locale.ROOT);
     private static final DateTimeFormatter DAY_TIME = DateTimeFormatter.ofPattern("MMM d HH:mm", Locale.ROOT);
 
+    /** A token count: "950", "12.3k", "1.25M". */
     public static String tokens(long tokens) {
         if (tokens < 1000) {
             return Long.toString(tokens);
@@ -82,6 +84,7 @@ public final class Labels {
         return String.format(Locale.ROOT, "%.2fM", tokens / 1_000_000.0);
     }
 
+    /** {@code n} with thousands separators: "12,345". */
     public static String count(long n) {
         return String.format(Locale.ROOT, "%,d", n);
     }

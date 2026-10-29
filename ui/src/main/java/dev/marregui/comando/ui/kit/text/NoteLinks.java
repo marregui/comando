@@ -56,10 +56,10 @@ public final class NoteLinks {
 
     /**
      * The file {@code name} names, read from {@code folder}: within the git repository that holds the folder, else the
-     * folder itself, the first of: a file named {@code name} or {@code name.md}; a Markdown file whose front matter says
-     * {@code name: <name>}; a file named so with {@code -} and {@code _} swapped. Names match in any letter case; of
-     * several, the one nearest the folder wins, then the first by path. A name with a {@code /} is a path from the folder
-     * or from the root first. Reads the disk: never on the EDT.
+     * folder itself, the first of: a file named {@code name} or {@code name.md}; a Markdown file whose front matter
+     * says {@code name: <name>}; a file named so with {@code -} and {@code _} swapped. File names match in any letter
+     * case; of several, the one nearest the folder wins, then the first by path. A name with a {@code /} is tried
+     * first as a path from the folder, then from the root. Reads the disk: never on the EDT.
      */
     public static Optional<Path> resolve(Path folder, String name) {
         if (folder == null || name == null || name.isBlank()) {
@@ -135,7 +135,7 @@ public final class NoteLinks {
                 .min(Comparator.<Path>comparingInt(f -> distance(from, f)).thenComparing(Path::toString));
     }
 
-    /** How many folders apart {@code file} is from {@code folder}: up to their common folder, then down to the file's. */
+    /** How many folders apart {@code file} is from {@code folder}: up to their common folder, then down to its own. */
     static int distance(Path folder, Path file) {
         Path parent = file.getParent();
         int common = 0;

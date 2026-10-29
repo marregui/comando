@@ -13,7 +13,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Text without a chord is unchanged, and macOS keys leave the text as written.
 class KeyTextTest {
 
-    /** The keys the run chose ({@code -Dcomando.keys}), restored after each test, never cleared: later tests read them. */
+    /**
+     * The keys the run chose ({@code -Dcomando.keys}), restored after each test, never cleared: later tests read them.
+     */
     private final String keys = System.getProperty(Platform.KEYS_PROPERTY);
 
     @AfterEach
@@ -25,8 +27,8 @@ class KeyTextTest {
         }
     }
 
-    /// [KeyText#other] turns ⌘, ⌥, ⇧ and ⏎ into `Ctrl+`, `Alt+`, `Shift+` and `Enter`, always in Ctrl, Alt, Shift order,
-    /// inside running text.
+    /// [KeyText#other] turns ⌘, ⌥, ⇧ and ⏎ into `Ctrl+`, `Alt+`, `Shift+` and `Enter`, always in Ctrl, Alt, Shift
+    /// order, inside running text.
     @Test
     void cmdOptionAndShiftReadAsCtrlAltAndShiftInThatOrder() {
         assertThat(KeyText.other("New panel (⌘T)")).isEqualTo("New panel (Ctrl+T)");
@@ -37,7 +39,8 @@ class KeyTextTest {
         assertThat(KeyText.other("Find (⇧⏎ previous)")).isEqualTo("Find (Shift+Enter previous)");
     }
 
-    /// ⌃ with a digit reads as Alt with it, ⌃⏎ as `Ctrl+Alt+Enter`, and ⌃ with Tab or Space stays Ctrl, ranges included.
+    /// ⌃ with a digit reads as Alt with it, ⌃⏎ as `Ctrl+Alt+Enter`, and ⌃ with Tab or Space stays Ctrl, ranges
+    /// included.
     @Test
     void macOsControlKeysReadWhereTheyMovedSoTheyAreNoOtherCommandsKeys() {
         assertThat(KeyText.other("waiting for your approval · ⌃2")).isEqualTo("waiting for your approval · Alt+2");
@@ -47,8 +50,8 @@ class KeyTextTest {
         assertThat(KeyText.other("⌃Space")).isEqualTo("Ctrl+Space");
     }
 
-    /// A period, backslash or digit right after the modifiers is the key; a period, ellipsis, dash, comma or bracket after
-    /// the key stays text.
+    /// A period, backslash or digit right after the modifiers is the key; a period, ellipsis, dash, comma or bracket
+    /// after the key stays text.
     @Test
     void theKeyEndsTheChordAndPunctuationAfterItStays() {
         assertThat(KeyText.other("press ⌘⏎.")).isEqualTo("press Ctrl+Enter.");

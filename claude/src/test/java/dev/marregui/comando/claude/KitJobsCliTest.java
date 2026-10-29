@@ -43,7 +43,7 @@ class KitJobsCliTest {
             ]}
             """;
 
-    /** A stand-in for {@code kit.py}: writes its arguments and standard input beside it, prints {@code out}, exits {@code code}. */
+    /** A stand-in {@code kit.py}: writes its arguments and input beside it, prints {@code out}, exits {@code code}. */
     private static Path fake(Path root, String out, int code) throws IOException {
         Path install = Files.createDirectories(root.resolve("install"));
         Files.writeString(install.resolve("report.json"), out);
@@ -88,8 +88,8 @@ class KitJobsCliTest {
     }
 
     /// [KitJobsCli#save] hands `jobs set` the manifest's form on standard input: the schedule as `daily` or `weekly`,
-    /// the time padded, an empty description, environment and log left out, `enabled` only when false; the answer's exit
-    /// code and words come back.
+    /// the time padded, an empty description, environment and log left out, `enabled` only when false; the answer's
+    /// exit code and words come back.
     @Test
     void theListIsHandedOverInTheManifestsForm(@TempDir Path root) throws IOException {
         Path install = fake(root, "manifest: 2 job(s)\n", 1);

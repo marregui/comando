@@ -132,6 +132,7 @@ public final class ImportSessionsDialog {
         }
     }
 
+    /** Opens the dialog and reads the stored conversations off the EDT; those already imported are marked ✓. */
     public void show(AppState s) {
         if (dialog == null) {
             dialog = new JDialog(owner, "Import stored conversations");
@@ -202,6 +203,7 @@ public final class ImportSessionsDialog {
         }
     }
 
+    /** The session name of {@code c}: its title, else its folder and the first 8 characters of its id; at most 48. */
     static String nameFor(StoredConversation c) {
         String base = c.title().isBlank() ? folderName(c.cwd()) + " " + c.sessionId().substring(0, Math.min(8, c.sessionId().length()))
                 : c.title().strip();
@@ -263,7 +265,7 @@ public final class ImportSessionsDialog {
         }
     }
 
-    /** A cell shown as text and sorted by its number: "3 h ago" before "2 d ago", "900 KB" before "2 MB". */
+    /** A cell shown as text and sorted by its number: "3 h" before "2 d", "900 KB" before "2 MB". */
     record Sortable(long key, String text) implements Comparable<Sortable> {
         @Override
         public int compareTo(Sortable o) {

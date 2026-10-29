@@ -31,12 +31,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 /**
- * A changed file compared with its {@code HEAD} version, side by side ({@link ChangeEditor}), in a window of its own that
- * floats over comando's: one window, reused for every file compared, so moving through the Changes view moves it along.
- * It takes the keyboard when a file is opened, not when it follows the selection. While it shows, the file is read
- * again every few seconds, so edits made meanwhile (by a session, say) show where the user scrolled to. Its edits are
- * written every second, when it closes, when it moves to another file and when comando quits. F7 and ⇧F7 go to the
- * next and the previous difference, ⌘⇧M switches a Markdown file to its rendered sides, Esc closes it.
+ * A changed file compared with its {@code HEAD} version, side by side ({@link ChangeEditor}), in a window of its own
+ * that floats over comando's: one window, reused for every file compared, so moving through the Changes view moves it
+ * along. It takes the keyboard when a file is opened, not when it follows the selection. While it shows, the file is
+ * read again every {@link #REREAD_MILLIS}, so edits made meanwhile (by a session, say) show where the user scrolled
+ * to. Its edits are written every second, when it closes, when it moves to another file and when comando quits. F7
+ * and ⇧F7 go to the next and the previous difference, ⌘⇧M switches a Markdown file to its rendered sides, Esc and ⌘W
+ * close it.
  */
 final class DiffWindow {
 
@@ -53,8 +54,8 @@ final class DiffWindow {
     private JDialog dialog;
 
     /**
-     * {@code reread} asks for the file shown again; it runs every few seconds while the window shows; {@code writer}
-     * writes the file edited.
+     * {@code reread} asks for the file shown again, every {@link #REREAD_MILLIS} while the window shows;
+     * {@code writer} writes the file edited.
      */
     DiffWindow(Window owner, Runnable reread, IntentSink intents, ChangeEditor.Writer writer, ResourceActions.Questions questions) {
         this.owner = owner;
@@ -105,9 +106,9 @@ final class DiffWindow {
     }
 
     /**
-     * Shows {@code texts} as {@code ask} says: an opened file comes forward and takes the keyboard; a file the selection
-     * moved to shows in place, after the one shown is saved; a file read again shows only while the window still shows
-     * it, so a read asked for before the selection moved never takes the window back.
+     * Shows {@code texts} as {@code ask} says: an opened file comes forward and takes the keyboard; a file the
+     * selection moved to shows in place, after the one shown is saved; a file read again shows only while the window
+     * still shows it, so a read asked for before the selection moved never takes the window back.
      */
     void show(ChangeTexts texts, ChangeAsk ask) {
         RepoStatus.FileChange c = texts.change();
@@ -141,7 +142,7 @@ final class DiffWindow {
         }
     }
 
-    /** Drops the window's edits and closes it when it shows one of {@code paths} in {@code root}, which change elsewhere. */
+    /** Drops the window's edits and closes it when it shows one of {@code paths} in {@code root}, changed elsewhere. */
     void drop(String root, Collection<String> paths) {
         if (editor.change() != null && Objects.equals(editor.root(), root) && paths.contains(editor.change().path())) {
             editor.discard();

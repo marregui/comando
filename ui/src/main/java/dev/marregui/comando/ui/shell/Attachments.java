@@ -17,6 +17,7 @@ final class Attachments {
     private Attachments() {
     }
 
+    /** The error {@code sql} ended with, fenced. */
     static String error(String sql, String error) {
         List<String> lines = error.strip().lines().filter(l -> !l.isBlank()).toList();
         // an error without text would leave the fence empty: a blank line, which ends the block

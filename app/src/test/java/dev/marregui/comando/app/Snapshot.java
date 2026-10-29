@@ -151,8 +151,7 @@ public final class Snapshot {
         shoot(out.resolve("02b-sidebar-collapsed.png"));
         loop.dispatch(new Intent.Arrange(new Layout(Layout.Toggle.SHOW, Layout.Toggle.KEEP, Double.NaN)));
         Thread.sleep(2800);
-        // the focused panel's Markdown preview, switched on with its header's Preview button, and back with Edit; before
-        // the Files tab
+        // before the Files tab: the focused panel's Markdown preview, on with its Preview button, off with Edit
         click("Preview");
         Thread.sleep(800);
         shoot(out.resolve("02d-markdown-preview.png"));
@@ -269,7 +268,7 @@ public final class Snapshot {
         shoot(out.resolve("02f-source-colours.png"));
         // the same window in every curated theme, half size, three a row (record 103)
         themes(out.resolve("02f2-themes.png"));
-        // Help's tutorial and log open as documents from their files: the tutorial rendered, the log read-only at its end
+        // Help's tutorial and log open as documents from their files: the tutorial rendered, the log read-only at end
         menuItem("Help", "Tutorial");
         showing(loop, "tutorial.md");
         shoot(out.resolve("02g-help-tutorial.png"));
@@ -495,7 +494,7 @@ public final class Snapshot {
         return repo;
     }
 
-    /** A repository whose working tree has a file changed, one added, one deleted and one untracked, and an ignored folder. */
+    /** A repository with a file changed, one added, one deleted, one untracked, and an ignored folder. */
     static Path sampleRepo(Path repo) throws Exception {
         Path src = Files.createDirectories(repo.resolve("src/main/java/demo"));
         StringBuilder lane = new StringBuilder("package demo;\n\n/** A lane of work: one writer, many readers. */\nfinal class Lane {\n\n");
@@ -627,8 +626,8 @@ public final class Snapshot {
     }
 
     /**
-     * Runs the Files tab's command {@code id} as the user would: a right click on the tab's header, then its item in the
-     * menu that opens. EDT only.
+     * Runs the Files tab's command {@code id} as the user would: a right click on the tab's header, then its item in
+     * the menu that opens. EDT only.
      */
     static void findCommand(String id) {
         String text = switch (id) {
@@ -704,7 +703,7 @@ public final class Snapshot {
         return shown[0];
     }
 
-    /** Whether the visible window's tree named {@code name} shows a row labelled {@code label}; asked on the event thread. */
+    /** Whether the visible window's tree {@code name} shows a row labelled {@code label}; asked on the event thread. */
     static boolean rowShown(String name, String label) {
         boolean[] shown = new boolean[1];
         try {

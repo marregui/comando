@@ -41,10 +41,10 @@ background subagent's card reads done at its launch, as before this record, and 
 A running subagent whose card lies before the 2 000 blocks the tab loads has no card chip; a background one keeps its
 hourglass chip.
 
-`Intent.OpenSubagent` and `Effect.ShowSubagent` are added; `ClaudePort.showSubagent` is routed to `ClaudeAdapter`,
-which reads with the package-private `SubagentFiles.Conversation` on a thread of its own and asks the session's
-`StreamMapper` whether the subagent ended. `TranscriptCanvas` gains `runningAgents`, `reveal` and the header link;
-`TranscriptWidget` gains the `AgentStrip` and `setBackgroundTasks`, fed by `LowerPanel`.
+`Intent.OpenSubagent` and `Effect.ShowSubagent` are added; `ClaudePort.showSubagent` is routed to `ClaudeAdapter`, which
+reads with the package-private `SubagentFiles.Conversation` on a thread of its own and asks the session's `StreamMapper`
+whether the subagent ended. `TranscriptCanvas` gains `runningAgents` (kept by `AgentTracker`), `reveal` and the header
+link; `TranscriptWidget` gains the `AgentStrip` and `setBackgroundTasks`, fed by `LowerPanel`.
 
 ## Amendments
 

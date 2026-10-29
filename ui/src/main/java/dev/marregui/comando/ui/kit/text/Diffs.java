@@ -40,6 +40,7 @@ public final class Diffs {
         };
     }
 
+    /** The unified diff of {@code before} and {@code after}, its headers naming {@code path}, or before and after. */
     public static List<String> unified(String path, String before, String after) {
         List<String> a = before.isEmpty() ? List.of() : Arrays.asList(before.split("\n", -1));
         List<String> b = after.isEmpty() ? List.of() : Arrays.asList(after.split("\n", -1));

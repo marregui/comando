@@ -33,7 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a group of folders is one row in capitals, the folder holding them, with them inside it and its other folders, no
 ///   file and nothing hidden; a group of one is its folder's row, named in capitals
 /// - a group's folders inside its row keep their icons, are watched when open, and their entries resolve to their paths
-/// - only a top-level row shows its changes, on a double click or in its menu, and gains the window's items (the backup)
+/// - only a top-level row shows its changes, on a double click or in its menu, and gains the window's items (the
+///   backup)
 /// - a group's row has no icon and names its repository's commit, the kit's newer release after it (record 119)
 /// - reveal opens every row and folder on a file's way, waits for a folder's read, selects the file; says so when no
 ///   folder shows it
@@ -110,9 +111,9 @@ class FilesTabGroupsTest {
                 MouseEvent.BUTTON1));
     }
 
-    /// The Brain group's three folders share `/b`: one BRAIN row for `/b` holds them, then its other folder EVAL, not its
-    /// file or its hidden folder; the Kit group's one folder is the KIT row. Opening BRAIN reads it as a folder of its
-    /// own, its group's folders left out; opening a folder inside reads that folder.
+    /// The Brain group's three folders share `/b`: one BRAIN row for `/b` holds them, then its other folder EVAL, not
+    /// its file or its hidden folder; the Kit group's one folder is the KIT row. Opening BRAIN reads it as a folder of
+    /// its own, its group's folders left out; opening a folder inside reads that folder.
     @Test
     void aGroupIsOneRowInCapitalsHoldingItsFoldersAndItsOtherFolders() {
         assertThat(FolderRoot.groupRoots(List.of(SCRATCHPAD, KB, MEMORY, KIT))).containsExactly(BRAIN);

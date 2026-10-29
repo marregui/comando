@@ -57,7 +57,7 @@ record TestReports(ViewSpec.TreeNode tree, Map<String, String> failures) {
         }
     }
 
-    /** The reports under {@code root} written at or after {@code sinceMillis}. */
+    /** The reports under {@code root} written since {@code sinceMillis}, a second of file-time rounding allowed. */
     static TestReports collect(Path root, long sinceMillis) {
         List<Path> files = new ArrayList<>(walk(root, 8, p -> p.getFileName().toString().startsWith("TEST-") && p.toString().endsWith(".xml")
                 && p.toString().contains("test-results") && modifiedSince(p, sinceMillis)));
@@ -205,7 +205,10 @@ record TestReports(ViewSpec.TreeNode tree, Map<String, String> failures) {
 
     private static final Pattern FRAME = Pattern.compile("at ([\\w.$]+)\\.[\\w$<>]+\\(([\\w$]+\\.java):(\\d+)\\)");
 
-    /** The test source at the deepest frame of the test's own class, empty when not found. */
+    /**
+     * The link to the test source at the innermost frame of the test's own class, or at no line when no frame names it;
+     * empty when the source is not found.
+     */
     private static String link(Case c, Map<String, Path> sources) {
         Path src = sources.get(c.className());
         if (src == null) {

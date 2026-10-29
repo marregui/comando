@@ -124,8 +124,8 @@ class SubagentViewTest {
         }
     }
 
-    /// The view opens in the lower placement titled "agent · Count the widgets" as `FOLLOWING`, holds the first step, is
-    /// followed, and after the file grows holds both steps, read on from where it was.
+    /// The view opens in the lower placement titled "agent · Count the widgets" as `FOLLOWING`, holds the first step,
+    /// is followed, and after the file grows holds both steps, read on from where it was.
     @Test
     void showsTheSubagentAsALowerViewAndFollowsItsFileWhileItGrows() throws Exception {
         live();
@@ -196,8 +196,8 @@ class SubagentViewTest {
         assertThat(adapter.followedSubagents()).isZero();
     }
 
-    /// An id with no transcript file posts the warning "Session work: transcript not found for this sub-agent" and shows no
-    /// view.
+    /// An id with no transcript file posts the warning "Session work: transcript not found for this sub-agent" and
+    /// shows no view.
     @Test
     void noFileForTheCallSaysSo() {
         adapter.showSubagent("work", "conv-1", "toolu_missing");
@@ -241,8 +241,8 @@ class SubagentViewTest {
         assertThat(sink.of(Intent.RefreshView.class)).filteredOn(r -> r.title().equals("agent · agent 1")).hasSize(1);
     }
 
-    /// Two sub-agents described "Review the diff" get "agent · Review the diff" and "… (2)", each with its own transcript
-    /// and growth; the first opened again keeps its title and is read again whole.
+    /// Two sub-agents described "Review the diff" get "agent · Review the diff" and "… (2)", each with its own
+    /// transcript and growth; the first opened again keeps its title and is read again whole.
     @Test
     void twoSubagentsWithOneDescriptionGetTwoViews() throws Exception {
         live();
@@ -288,7 +288,8 @@ class SubagentViewTest {
         assertThat(said("toolu_d1")).as("read once, by one follower").containsExactly("first", "second");
     }
 
-    /// With six opens queued, `close()` returns in under 5 s, and a show afterwards posts no view and no notice within 1 s.
+    /// With six opens queued, `close()` returns in under 5 s, and a show afterwards posts no view and no notice within
+    /// 1 s.
     @Test
     void closeWithOpensQueuedReturnsAndALaterShowDoesNothing() throws Exception {
         live();

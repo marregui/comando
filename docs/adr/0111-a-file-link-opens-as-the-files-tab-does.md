@@ -9,8 +9,9 @@
 Miguel double clicked `harness/07-fleet-vision.md` in a session's answer: the log says "Cannot open
 harness/07-fleet-vision.md: no such file". The path was written relative to the scratchpad's day folder
 (`~/.claude/BRAIN/SCRATCHPAD/2026-10-28/`), and comando read it from the session's folder (`~/.claude`) alone. Had it
-been found, it would have opened in the side pane, as a `path:line` link does ([record 108](0108-links-in-every-card.md)),
-not "as if I had chosen it and double clicked on it" in the Files tab, which opens a panel.
+been found, it would have opened in the side pane, as a `path:line` link does
+([record 108](0108-links-in-every-card.md)), not "as if I had chosen it and double clicked on it" in the Files tab,
+which opens a panel.
 
 ## 2. Decision
 
@@ -25,8 +26,11 @@ bounds, and that `path:line` keeps the side pane.
 
 ## 3. Consequences
 
-`FileSearch` is added; `ComandoUi.showFile` resolves through it and hands a line-less text file to `openFile`. Every
-`Intent.OpenFile` without a line takes this route: the transcript's, the editor's, a tree view's file nodes.
+`FileSearch` is added; `PanelFiles.showFile` resolves through it and hands a line-less text file to `openFile`. Every
+`Intent.OpenFile` without a line takes this route: the transcript's, the editor's, a tree view's file nodes. Tested in
+`FileSearchTest` (a deeper folder, the first root and the newest, skipped folders, climbing and absolute paths) and off
+screen in `LinksUiTest` (`:app:uiTest`: the link followed as a double click follows it opens one panel, in front; a
+second follow opens no other; without the search the test fails).
 
 ## Amendments
 
@@ -36,7 +40,3 @@ folder nor a Files tab folder). Between the session's folder and the Files tab's
 the session worked in: the repository of each file its own tool calls named by full path (`file_path`, `notebook_path`,
 `path`), or that file's folder outside a repository, the latest first, at most 8, from its last 4 000 blocks
 (`WorkedIn`). Tested in `WorkedInTest`.
-
-Tested in `FileSearchTest` (a deeper folder, the first root and the newest, skipped folders, climbing and absolute
-paths) and off screen in `LinksUiTest` (`:app:uiTest`: the link followed as a double click follows it opens one panel,
-in front; a second follow opens no other; without the search the test fails).

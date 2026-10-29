@@ -20,7 +20,7 @@ import java.util.function.Predicate;
  */
 final class FocusOrigins {
 
-    /** The arrivals remembered, the latest. */
+    /** How many arrivals are remembered, the latest first. */
     static final int KEPT = 256;
 
     /**

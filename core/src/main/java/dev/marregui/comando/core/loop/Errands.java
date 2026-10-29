@@ -17,7 +17,9 @@ public final class Errands implements AutoCloseable {
 
     private final String owner;
     private final Set<Thread> running = ConcurrentHashMap.newKeySet();
-    /** Held while an errand is added and started, and while the close takes the ones to stop: it sees only started ones. */
+    /**
+     * Held while an errand is added and started, and while the close takes the ones to stop: it sees only started ones.
+     */
     private final Object lock = new Object();
     private boolean closed;
 

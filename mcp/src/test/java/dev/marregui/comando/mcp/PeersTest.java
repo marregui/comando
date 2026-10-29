@@ -223,8 +223,6 @@ class PeersTest {
         assertThat(Peers.Me.of("", "v").clientId()).isEqualTo("comando-main");
     }
 
-    // ---- the fixture
-
     private McpTools.Outcome call(Node n, String tool, String args) throws Exception {
         return call(n, "foreman", tool, args);
     }
@@ -278,7 +276,7 @@ class PeersTest {
     private record Node(Window window, Link link, Peers peers, McpTools tools, Path agents) {
     }
 
-    /** The window and the reducer as far as the tests need them: a new session with its panel, a prompt shown and counted. */
+    /** The window and reducer as far as the tests need them: a session with its panel, a prompt shown and counted. */
     private static final class Window implements IntentSink {
         final RecordingSink recorded = new RecordingSink();
         final AtomicReference<AppState> state = new AtomicReference<>(States.twoPanels());
@@ -312,7 +310,7 @@ class PeersTest {
         }
     }
 
-    /** A broker in memory: retained messages, last wills, and delivery to every matching subscription of a connected link. */
+    /** A broker in memory: retained messages, last wills, delivery to each matching subscription of a live link. */
     private static final class Bus {
         final Map<String, byte[]> retained = new LinkedHashMap<>();
         final List<Link> links = new CopyOnWriteArrayList<>();

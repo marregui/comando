@@ -13,7 +13,9 @@ public interface ClaudePort {
         send(name, text, origin, "");
     }
 
-    /** Sends {@code text}; a non-empty {@code preface} goes in front of it to Claude and is not shown on the user block. */
+    /**
+     * Sends {@code text}; a non-empty {@code preface} goes in front of it to Claude and is not shown on the user block.
+     */
     void send(String name, String text, String origin, String preface);
 
     void interrupt(String name);

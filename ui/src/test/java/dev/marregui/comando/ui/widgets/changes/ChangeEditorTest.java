@@ -90,8 +90,8 @@ class ChangeEditorTest {
         return on(e, x -> x.diff().right().getText());
     }
 
-    /// An edit marks the file edited and is compared again once typing pauses; saving writes the text and marks it saved,
-    /// and undo and redo move between the two texts.
+    /// An edit marks the file edited and is compared again once typing pauses; saving writes the text and marks it
+    /// saved, and undo and redo move between the two texts.
     @Test
     void anEditIsComparedAgainSavedAndUndoneAndRedone() throws Exception {
         ChangeEditor e = editor();
@@ -117,8 +117,8 @@ class ChangeEditorTest {
         assertThat(right(e)).isEqualTo("xa\nB\nc\n");
     }
 
-    /// A fresh read arriving while the side has unsaved edits leaves the edits on screen; after saving, a read of the saved
-    /// text keeps the undo history.
+    /// A fresh read arriving while the side has unsaved edits leaves the edits on screen; after saving, a read of the
+    /// saved text keeps the undo history.
     @Test
     void aReadWhileEditedIsLeftUnshownAndAReadOfTheSavedTextKeepsTheUndoHistory() throws Exception {
         ChangeEditor e = editor();
@@ -134,8 +134,8 @@ class ChangeEditorTest {
         assertThat(is(e, x -> x.diff().right().canUndo())).as("the read of what was saved keeps the history").isTrue();
     }
 
-    /// Rolling back a modified file writes HEAD's text without asking, sends `Unstage`, and a single undo brings back the
-    /// working-tree text.
+    /// Rolling back a modified file writes HEAD's text without asking, sends `Unstage`, and a single undo brings back
+    /// the working-tree text.
     @Test
     void rollingBackAChangedFileTakesHeadsTextAsOneEditThatUndoTakesBack() throws Exception {
         ChangeEditor e = editor();
@@ -233,8 +233,8 @@ class ChangeEditorTest {
         assertThat(is(e, x -> x.offered("remove"))).isTrue();
     }
 
-    /// An edit is written without asking within a second, the status goes from edited to saved, and the modified callback
-    /// reports true then false.
+    /// An edit is written without asking within a second, the status goes from edited to saved, and the modified
+    /// callback reports true then false.
     @Test
     void editsAreWrittenWithinASecondAndTheWorkingTreesSideSaysSo() throws Exception {
         ChangeEditor e = editor();

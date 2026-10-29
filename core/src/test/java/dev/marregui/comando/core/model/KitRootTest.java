@@ -11,7 +11,8 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [KitRoot] resolves the configuration root from an explicit directory, an own kit, a cloned kit, or the plain user directory.
+/// [KitRoot] resolves the configuration root from an explicit directory, an own kit, a cloned kit, or the plain user
+/// directory.
 ///
 /// - an explicit directory takes precedence over the user directory
 /// - an unreadable manifest counts as no kit
@@ -35,7 +36,8 @@ class KitRootTest {
         return Files.writeString(Files.createDirectories(dir).resolve(KitRoot.FILE), text);
     }
 
-    /// A non-blank explicit configuration directory wins over the user directory and loads its manifest only when its own manifest exists.
+    /// A non-blank explicit configuration directory wins over the user directory and loads its manifest only when its
+    /// own manifest exists.
     @Test
     void comandoStartedWithAConfigDirRunsOnItWithItsKitOrNone(@TempDir Path home) throws Exception {
         Path other = home.resolve("elsewhere");
@@ -52,7 +54,8 @@ class KitRootTest {
         assertThat(kit.userDir()).isEqualTo(home.resolve(".claude"));
     }
 
-    /// Resolution chooses the cloned kit when the own directory lacks one, then chooses the own kit when both manifests exist.
+    /// Resolution chooses the cloned kit when the own directory lacks one, then chooses the own kit when both manifests
+    /// exist.
     @Test
     void aKitInTheUsersOwnFolderComesFirstThenTheClonedKit(@TempDir Path home) throws Exception {
         Path user = home.resolve(".claude");
@@ -83,7 +86,8 @@ class KitRootTest {
         assertThat(none.name()).isEmpty();
     }
 
-    /// A malformed own manifest is skipped in favor of a readable clone, while reader failures leave the selected root without a kit.
+    /// A malformed own manifest is skipped in favour of a readable clone, while reader failures leave the selected root
+    /// without a kit.
     @Test
     void aKitJsonThatDoesNotReadCountsAsNone(@TempDir Path home) throws Exception {
         Path user = home.resolve(".claude");

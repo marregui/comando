@@ -32,10 +32,9 @@ final class InputGate {
     }
 
     /**
-     * Writes {@code text} now when the shell is ready and nothing waits before it, else queues it.
-     *
-     * @param lastOutputNanos when the shell last wrote, or {@link #NO_OUTPUT}
-     * @return whether text still waits, so the caller polls again
+     * Writes {@code text} now when the shell is ready and nothing waits before it, else queues it; {@code
+     * lastOutputNanos} is when the shell last wrote, or {@link #NO_OUTPUT}. Returns whether text still waits, so the
+     * caller polls again.
      */
     boolean send(String text, long nowNanos, long lastOutputNanos) {
         pending.addLast(text);

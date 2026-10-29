@@ -99,8 +99,8 @@ class TranscriptCanvasTest {
         return new Block.ToolCall(id, "Bash", "{\"command\":\"ls\"}", "ok", Block.ToolStatus.DONE, parent);
     }
 
-    /// A thinking block shows while it is the latest item of its list and is hidden once another item follows, at the top
-    /// level and inside a card, while every block stays counted.
+    /// A thinking block shows while it is the latest item of its list and is hidden once another item follows, at the
+    /// top level and inside a card, while every block stays counted.
     @Test
     void thinkingShowsUntilTheNextItemInItsListTakesItsPlace() {
         canvas.append(0, new Block.UserPrompt("go", "p", ""));
@@ -132,8 +132,8 @@ class TranscriptCanvasTest {
         paint(800, 300);
     }
 
-    /// The style outside bubbles and cards uses [Theme#TRANSCRIPT_TEXT] for text and quotes and is built once; a prompt and
-    /// a card paint none of it, an answer and its time do, and a note adds more.
+    /// The style outside bubbles and cards uses [Theme#TRANSCRIPT_TEXT] for text and quotes and is built once; a prompt
+    /// and a card paint none of it, an answer and its time do, and a note adds more.
     @Test
     void everyTextOutsideABubbleOrACardReadsInOneColour() {
         Style s = Style.of(0);
@@ -156,8 +156,8 @@ class TranscriptCanvasTest {
         assertThat(pixels(paint(800, 300), Theme.TRANSCRIPT_TEXT)).as("a note").isGreaterThan(answer);
     }
 
-    /// Outside cards headings and marks take the tint's body and table heads its highlight, bold is brighter; inside cards
-    /// they keep the text colour; a find match uses [Theme#FIND_MATCH]; h1 uses the shared heading scale.
+    /// Outside cards headings and marks take the tint's body and table heads its highlight, bold is brighter; inside
+    /// cards they keep the text colour; a find match uses [Theme#FIND_MATCH]; h1 uses the shared heading scale.
     @Test
     void anAnswersHeadingsMarksAndTableHeadsAreTintedElsewhereTheTextsColour() {
         Style s = Style.of(0);
@@ -196,8 +196,8 @@ class TranscriptCanvasTest {
         assertThat(((Items.TextItem) canvas.itemAt(7)).isReport()).as("a turn that ended on a tool call has none").isFalse();
     }
 
-    /// A report paints its bar in the current tint only, without lifting the ground towards it; after another tint and a
-    /// restyle it paints in the new tint only.
+    /// A report paints its bar in the current tint only, without lifting the ground towards it; after another tint and
+    /// a restyle it paints in the new tint only.
     @Test
     void choosingAnotherTintRepaintsTheReportInItOnTheTranscriptsGround() {
         canvas.append(0, new Block.UserPrompt("go", "p", ""));
@@ -226,8 +226,8 @@ class TranscriptCanvasTest {
         assertThat(canvas.contentHeight()).isGreaterThan(wide);
     }
 
-    /// After a width change the height is estimated within a factor of two; refining yields the same exact height as a full
-    /// layout at that width.
+    /// After a width change the height is estimated within a factor of two; refining yields the same exact height as a
+    /// full layout at that width.
     @Test
     void aWidthChangeLaysOutTheViewNowAndTheRestWhenIdle() {
         load(SyntheticSession.steps(10_000));
@@ -245,8 +245,8 @@ class TranscriptCanvasTest {
         assertThat(guessed).isBetween(exact / 2, exact * 2);
     }
 
-    /// A rebuilt view of 10 000 steps lays out fewer than half its items at first, the end when painted, and the rest when
-    /// idle, reaching the same height as laying out everything at once; the first guess is within a factor of two.
+    /// A rebuilt view of 10 000 steps lays out fewer than half its items at first, the end when painted, and the rest
+    /// when idle, reaching the same height as laying out everything at once; the first guess is within a factor of two.
     @Test
     void aRebuiltViewLaysOutWhatIsVisibleNowAndTheRestWhenIdle() {
         // a panel switching sessions rebuilds the view from the session's history: no block has been laid out yet
@@ -318,7 +318,8 @@ class TranscriptCanvasTest {
         assertThat(canvas.find("no such text anywhere", true)).isZero();
     }
 
-    /// Extending the query after rewinding keeps the current match at or after the one the reader was on, not the first.
+    /// Extending the query after rewinding keeps the current match at or after the one the reader was on, not the
+    /// first.
     @Test
     void typingOnInTheFindBarKeepsTheMatchUnderTheReader() {
         load(SyntheticSession.steps(10_000));
@@ -380,7 +381,8 @@ class TranscriptCanvasTest {
         assertThat(Rich.detab("1\tab\n\tx\tyz")).isEqualTo("1   ab\n    x   yz");
         assertThat(Rich.detab("no tabs")).isEqualTo("no tabs");
     }
-    /// A note link shows the hand cursor; a single click follows nothing, a double click follows it without selecting a word.
+    /// A note link shows the hand cursor; a single click follows nothing, a double click follows it without selecting a
+    /// word.
     @Test
     void aLinkInTextIsFollowedAtADoubleClickNotASingleOne() {
         canvas.append(0, new Block.AssistantText("m", 0, "Open [[project-current-lane]] now", false, ""));
@@ -407,8 +409,8 @@ class TranscriptCanvasTest {
         assertThat(canvas.selectionText()).as("the double click selects no word").isEmpty();
     }
 
-    /// A Read card links its whole path though the summary is clipped, and paths and addresses in a command, a prompt and
-    /// skill arguments are links; a double click on one follows it.
+    /// A Read card links its whole path though the summary is clipped, and paths and addresses in a command, a prompt
+    /// and skill arguments are links; a double click on one follows it.
     @Test
     void aToolCardsSummaryAndInputAreLinksADoubleClickFollows() {
         canvas.append(0, new Block.ToolCall("r", "Read", "{\"file_path\":\"/w/docs/very/long/folder/names/that/run/past/the/summary/limit/of/one/hundred/and/forty/characters/to/be/clipped/plan.md\"}",
@@ -443,7 +445,8 @@ class TranscriptCanvasTest {
         assertThat(opened).as("a double click on a path in a command opens it").containsExactly("comando-file:docs/adr/0108-links.md");
     }
 
-    /// [Rich#linked] links URLs, note links and Markdown links in a result, not plain words, and keeps the text as written.
+    /// [Rich#linked] links URLs, note links and Markdown links in a result, not plain words, and keeps the text as
+    /// written.
     @Test
     void aToolsResultShowsItsLinks() {
         Rich r = new Rich(new java.awt.Font(java.awt.Font.MONOSPACED, java.awt.Font.PLAIN, 12), Color.GRAY)

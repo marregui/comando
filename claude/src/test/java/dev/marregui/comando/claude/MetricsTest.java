@@ -18,11 +18,11 @@ import java.util.concurrent.atomic.AtomicLong;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [MetricsLog] persists live turn and delegated-task measurements while ignoring replayed history.
+/// [MetricsLog] keeps live turn and sub-agent measurements and none from replayed history.
 ///
-/// - Writes completed turn and delegated-task fields to JSON lines.
-/// - Measures background work through its completion notification.
-/// - Counts each stored message once when deriving delegated-task usage.
+/// - Writes a finished turn's and sub-agent's fields as JSON lines.
+/// - Measures a background sub-agent up to its task notification.
+/// - Counts each stored message once in a sub-agent's spend.
 /// - Leaves storage untouched when metrics are disabled.
 class MetricsTest {
 
@@ -45,8 +45,8 @@ class MetricsTest {
         return out;
     }
 
-    /// A live stream writes a delegated-task event and then a turn event with timing, model, usage, nested call count,
-    /// and error state; replaying equivalent history adds no current-time measurements.
+    /// A live stream writes an `agent` event, then a `turn` event with timing, model, usage, nested call count and
+    /// error state; replaying the same history writes nothing.
     @Test
     void aTurnAndASubagentLeaveTheirEventsAndAReplayNone() throws IOException {
         MetricsLog log = new MetricsLog(dir, JSON, now::get);
@@ -109,8 +109,8 @@ class MetricsTest {
         assertThat(lines()).hasSize(2);
     }
 
-    /// Background task `b1` remains unwritten at launch and receives its 600-second duration only at the later
-    /// completion notification, which marks it done.
+    /// Background sub-agent `b1` is not written at its launch; its task notification writes it, done, with its 600 s
+    /// duration.
     @Test
     void aBackgroundSubagentEndsAtItsTaskNotificationNotItsLaunch() throws IOException {
         MetricsLog log = new MetricsLog(dir, JSON, now::get);
@@ -132,8 +132,8 @@ class MetricsTest {
         });
     }
 
-    /// Repeated stored message `m1` contributes its usage once, while distinct `m2` adds its own tokens and model to
-    /// the derived spending summary despite a malformed trailing line.
+    /// A message stored on two lines (`m1`) counts once and `m2` adds its own tokens; a malformed last line is
+    /// skipped.
     @Test
     void aSubagentsSpendIsReadFromItsFileEachMessageOnce() throws IOException {
         Path file = dir.resolve("agent-x.jsonl");
@@ -150,15 +150,15 @@ class MetricsTest {
         assertThat(spend.path("models")).extracting(JsonNode::asString).containsExactly("claude-sonnet-5-5");
     }
 
-    /// The disabled metrics sink accepts a turn event without creating any file in the supplied temporary directory.
+    /// [MetricsLog#NONE] takes a turn event and writes no file.
     @Test
     void withoutADataRootNothingIsWritten() {
         MetricsLog.NONE.write(MetricsLog.NONE.event("turn"));
         assertThat(dir).isEmptyDirectory();
     }
 
-    /// [MetricsLog#lastContext] finds a conversation's last turn, newest file and line first, across days, and nothing for
-    /// an unknown conversation or a log with no folder.
+    /// [MetricsLog#lastContext] finds a conversation's last turn, newest file and line first, across days, and nothing
+    /// for an unknown conversation or a log with no folder.
     @Test
     void theLastContextOfAConversationIsItsNewestTurns() throws Exception {
         Path days = Files.createDirectories(dir.resolve("days"));

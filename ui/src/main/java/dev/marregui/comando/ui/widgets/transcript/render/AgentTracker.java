@@ -78,7 +78,7 @@ final class AgentTracker {
         track(card);
     }
 
-    /** The card {@code card} was appended inside {@code parent}: it counts in every card it sits in, up to the top level. */
+    /** {@code card} was appended inside {@code parent}: it counts in every card it sits in, up to the top level. */
     void nested(Items.ToolItem parent, Items.ToolItem card) {
         String label = Items.ToolItem.lastLabel(card.call());
         for (Item p = parent; p != null; p = parentOf.apply(p)) {
@@ -162,7 +162,7 @@ final class AgentTracker {
         return !seenTasks.contains(id) && card.launchedAt() >= 0 && now - card.launchedAt() < TranscriptCanvas.LAUNCH_GRACE_MILLIS;
     }
 
-    /** The session's open background tasks: a card whose result launched one reads as running until it leaves the list. */
+    /** The session's open background tasks: a card whose result launched one runs until it leaves the list. */
     void setBackgroundTasks(List<BackgroundTask> tasks) {
         Set<String> open = new HashSet<>();
         for (BackgroundTask t : tasks) {

@@ -15,7 +15,7 @@ class PanelTextsTitleTest {
     /// [PanelTexts#titleOf] drops `.md` from a panel file's name and keeps `.txt`.
     @Test
     void aFileOfThePanelsFolderIsTitledWithoutItsExtension() {
-        assertThat(PanelTexts.titleOf(Path.of("/home/u/.comando/panels/Ravenna plan.md"))).isEqualTo("Ravenna plan");
+        assertThat(PanelTexts.titleOf(Path.of("/home/u/.comando/panels/Release plan.md"))).isEqualTo("Release plan");
         assertThat(PanelTexts.titleOf(Path.of("/home/u/.comando/panels/notes.txt"))).isEqualTo("notes.txt");
     }
 

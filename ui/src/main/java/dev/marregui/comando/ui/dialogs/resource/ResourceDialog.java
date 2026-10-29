@@ -273,7 +273,7 @@ public final class ResourceDialog<S> {
         prepare.run();
         dialog.setTitle(title());
         if (!dialog.isVisible()) {
-            // placed on each opening: the main window may have moved, or restored its bounds, since the dialog was built
+            // placed at each opening: the main window may have moved, or restored its bounds, since the last
             dialog.setLocationRelativeTo(dialog.getOwner());
         }
         dialog.setVisible(true);
@@ -444,7 +444,7 @@ public final class ResourceDialog<S> {
                 say(Theme.MUTED, "");
                 showAdvice(true);
                 updateOpenClose();
-        retitle();
+                retitle();
                 return;
             }
         }
@@ -521,7 +521,7 @@ public final class ResourceDialog<S> {
             }
             Status current = editing.isEmpty() ? Status.CLOSED : config.statuses().apply(state).getOrDefault(editing, Status.CLOSED);
             if (!name.equals(editing) && !editing.isEmpty() && session && current != Status.CLOSED && current != Status.FAILED) {
-                // the application refuses this rename; saying "Saved" would leave the form on a name that does not exist
+                // the application refuses this rename; "Saved" would leave the form on a name that does not exist
                 say(Theme.DANGER, "Stop " + editing + " before renaming it");
                 return false;
             }
@@ -600,7 +600,7 @@ public final class ResourceDialog<S> {
                 : (saved ? "Saved and assigned " : "Assigned ") + editing + " to panel " + state.focusedPanel().title());
     }
 
-    /** Esc: answers an open question with its safe button; closes the dialog, asking first when the form has unsaved changes. */
+    /** Esc: an open question gets its safe answer; else the dialog closes, asking first about unsaved changes. */
     void escape() {
         if (confirmRow.isVisible()) {
             hideConfirm();
@@ -617,7 +617,7 @@ public final class ResourceDialog<S> {
         hide();
     }
 
-    /** The window's close button: an open question is answered with its safe button, then the dialog closes as with Esc. */
+    /** The window's close button: an open question gets its safe answer, then the dialog closes as with Esc. */
     void close() {
         hideConfirm();
         escape();
@@ -701,7 +701,10 @@ public final class ResourceDialog<S> {
         message.setToolTipText(text.isEmpty() ? null : Plain.text(text)); // the whole text when the line cuts it
     }
 
-    /** Shows the kind's warning about the form when it changed, or always when {@code always}; clears a warning that no longer holds. */
+    /**
+     * Shows the kind's warning about the form when it changed, or always when {@code always}; clears a warning that no
+     * longer holds.
+     */
     private void showAdvice(boolean always) {
         String now = config.kind().advice(read());
         if (now.equals(advice) && !always) {

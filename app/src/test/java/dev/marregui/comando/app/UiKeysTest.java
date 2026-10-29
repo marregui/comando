@@ -108,8 +108,8 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// The keyboard in a real window, with macOS's keys and with the other desktops', so CI on Linux checks that comando
-/// there works as on a Mac. Either set of keys is chosen with [Platform#KEYS_PROPERTY], so both run on any desktop. Needs
-/// a display: `./gradlew :app:uiTest` (on Linux under `xvfb-run`).
+/// there works as on a Mac. Either set of keys is chosen with [Platform#KEYS_PROPERTY], so both run on any desktop.
+/// Needs a display: `./gradlew :app:uiTest` (on Linux under `xvfb-run`).
 /// - each key is macOS's with Ctrl for ⌘, but for the few that would be another command's; no two commands share a key
 /// - in the terminal Ctrl with a letter reaches the shell, as ⌃ does on macOS, and the commands' keys still work
 /// - the editor's run keys run, and every text and the shortcuts table name this desktop's keys
@@ -250,9 +250,9 @@ class UiKeysTest {
     }
 
     /// A document no session works in, a file opened to read, takes the whole height: the lower area and its divider
-    /// hide. A lower tab asked for while it is in front (⌃1–⌃4, or Approvals coming forward for a request) shows the lower
-    /// area for that document from then on; a session's panel shows it at the height it had; another document opened
-    /// later hides it again (2026-10-29).
+    /// hide. A lower tab asked for while it is in front (⌃1–⌃4, or Approvals coming forward for a request) shows the
+    /// lower area for that document from then on; a session's panel shows it at the height it had; another document
+    /// opened later hides it again.
     @Test
     void aDocumentToReadTakesTheWholeHeightUntilTheLowerAreaIsAskedFor() throws Exception {
         Window w = open("mac");
@@ -304,10 +304,8 @@ class UiKeysTest {
         return keys;
     }
 
-    // ---- the key map
-
-    /// Neither key map gives two commands one key, both bind the same commands, Quit is Ctrl+Q off macOS, and every other
-    /// key differs from macOS's only by Ctrl for ⌘, except the moved ones, which are ⌃ keys on macOS.
+    /// Neither key map gives two commands one key, both bind the same commands, Quit is Ctrl+Q off macOS, and every
+    /// other key differs from macOS's only by Ctrl for ⌘, except the moved ones, which are ⌃ keys on macOS.
     @Test
     void theOtherDesktopsKeysAreMacOssWithCtrlForCmdButForTheMovedOnesAndNoTwoCommandsShareAKey() throws Exception {
         Map<String, KeyStroke> mac;
@@ -349,8 +347,6 @@ class UiKeysTest {
                 .collect(Collectors.groupingBy(Map.Entry::getValue, LinkedHashMap::new, Collectors.mapping(Map.Entry::getKey, Collectors.toList())));
         return byKey.values().stream().filter(ids -> ids.size() > 1).toList();
     }
-
-    // ---- the window
 
     /// Every menu path the first panel's welcome text names on a fresh data root starts with an item the menu bar has.
     @Test
@@ -403,14 +399,12 @@ class UiKeysTest {
         assertThat(onEdt(w.frame()::isShowing)).as("a real window, painted and given keys").isTrue();
     }
 
-    // ---- the terminal
-
     /** Ctrl with these letters is a command's key on the other desktops (⌘'s), and a shell's in a terminal. */
     private static final int[] SHELL_LETTERS = {KeyEvent.VK_W, KeyEvent.VK_E, KeyEvent.VK_B, KeyEvent.VK_T, KeyEvent.VK_J,
             KeyEvent.VK_O, KeyEvent.VK_A, KeyEvent.VK_F, KeyEvent.VK_K, KeyEvent.VK_U, KeyEvent.VK_L, KeyEvent.VK_C};
 
-    /// With either key set, Ctrl with each shell letter reaches the terminal, not comando: ^W and ^T change no panel, ^B
-    /// leaves the sidebar, ^E and ^F keep the keyboard in the terminal; the tab keys still switch tabs from there.
+    /// With either key set, Ctrl with each shell letter reaches the terminal, not comando: ^W and ^T change no panel,
+    /// ^B leaves the sidebar, ^E and ^F keep the keyboard in the terminal; the tab keys still switch tabs from there.
     @ParameterizedTest
     @ValueSource(strings = {"mac", "linux"})
     void inTheTerminalCtrlWithALetterReachesTheShellAndTheCommandsKeysStillWork(String keys) throws Exception {
@@ -448,8 +442,6 @@ class UiKeysTest {
         press(w, KeyEvent.VK_1, mac ? CTRL : ALT);
         await("the Session tab", () -> w.loop().state().lowerTab().kind() == LowerTab.Kind.SESSION, WAIT_MILLIS);
     }
-
-    // ---- the editor's run keys
 
     /// ⌘⏎ (Ctrl+Enter elsewhere) runs the block as one `RunText`; ⌃⏎ (Ctrl+Alt+Enter elsewhere) types the line into the
     /// shell and runs nothing more.
@@ -524,8 +516,6 @@ class UiKeysTest {
         });
     }
 
-    // ---- the shortcuts table
-
     /// The shortcuts table lists macOS glyphs such as `⌘⏎` and `⇧⌘P` with Mac keys, and names such as `Ctrl+Enter` and
     /// `Ctrl+Shift+P` with the other desktops' keys, never the other set.
     @ParameterizedTest
@@ -546,8 +536,6 @@ class UiKeysTest {
                     .doesNotContain("⌘", "⌃", "⌥");
         }
     }
-
-    // ---- texts naming keys
 
     /// Texts in the window that name a key use no ⌘, ⌃ or ⌥ glyph with the other desktops' keys, and no `Ctrl+` with
     /// macOS's.
@@ -573,8 +561,8 @@ class UiKeysTest {
         }
     }
 
-    /// Resting on a tab shows its card instead of a tooltip, read from the panel's text `SELECT 1;`; the card stays past the
-    /// grace once the pointer goes into it and closes when the pointer leaves it.
+    /// Resting on a tab shows its card instead of a tooltip, read from the panel's text `SELECT 1;`; the card stays
+    /// past the grace once the pointer goes into it and closes when the pointer leaves it.
     @Test
     void restingOnATabShowsItsCardWithTheTopicWhichClosesWhenThePointerLeavesIt() throws Exception {
         List<String> sources = new CopyOnWriteArrayList<>();
@@ -617,9 +605,9 @@ class UiKeysTest {
         assertThat(onEdt(card::isShowing)).as("off the card, it closes").isFalse();
     }
 
-    /// The theme swatch sits left of New panel with Graphite gold ticked by default; choosing Midnight blue sets the ground
-    /// and Electric blue tint, keeps them in `settings.json`, repaints the report, sidebar, editor and panels at once with
-    /// the editor's zoom kept, and the next window opens with it.
+    /// The theme swatch sits left of New panel with Graphite gold ticked by default; choosing Midnight blue sets the
+    /// ground and Electric blue tint, keeps them in `settings.json`, repaints the report, sidebar, editor and panels at
+    /// once with the editor's zoom kept, and the next window opens with it.
     @Test
     void theThemeIsChosenBesideNewPanelEveryPanelTakesItAndTheNextWindowKeepsIt(@TempDir Path home) throws Exception {
         windowHome = home;
@@ -770,8 +758,8 @@ class UiKeysTest {
     }
 
     /**
-     * The window painted once per label, half size, {@code cols} a row, each named: {@code choose} sets the window up for
-     * the label at its index, on the EDT (records 99, 103).
+     * The window painted once per label, half size, {@code cols} a row, each named: {@code choose} sets the window up
+     * for the label at its index, on the EDT (records 99, 103).
      */
     private static void paintSheet(Window w, int cols, String[] labels, IntConsumer choose, Path out) throws Exception {
         BufferedImage sheet = onEdt(() -> {
@@ -802,7 +790,9 @@ class UiKeysTest {
         ImageIO.write(sheet, "png", out.toFile());
     }
 
-    /** How many pixels of the canvas, painted as it stands, are {@code tint}'s highlight: the top of the report's bar. */
+    /**
+     * How many pixels of the canvas, painted as it stands, are {@code tint}'s highlight: the top of the report's bar.
+     */
     private static int tintPixels(TranscriptCanvas canvas, Tint tint) throws Exception {
         return onEdt(() -> {
             int width = 800;
@@ -887,8 +877,6 @@ class UiKeysTest {
             }
         }
     }
-
-    // ---- helpers
 
     private static KeyStroke withCtrlForCmd(KeyStroke k) {
         int m = k.getModifiers() & (InputEvent.SHIFT_DOWN_MASK | CTRL | ALT | META);

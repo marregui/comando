@@ -22,8 +22,8 @@ class InputGateTest {
     private final List<String> written = new ArrayList<>();
     private final InputGate gate = new InputGate(written::add);
 
-    /// Text queued before any output stays queued while output arrives and until [InputGate#SETTLE_NANOS] after the last
-    /// output, then is written in order; text sent to a ready shell is written at once.
+    /// Text queued before any output stays queued while output arrives and until [InputGate#SETTLE_NANOS] after the
+    /// last output, then is written in order; text sent to a ready shell is written at once.
     @Test
     void textSentBeforeTheShellIsReadyIsWrittenAfterItInOrder() {
         long t0 = 1_000 * MS;

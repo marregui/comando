@@ -41,8 +41,8 @@ class AgentStripTest {
                 Block.ToolStatus.RUNNING, "");
     }
 
-    /// Four running calls and two background tasks make six chips; at 1 200 px three to five fit on one line and the rest
-    /// are counted as `+N`; at 2 400 px all fit and the count is empty.
+    /// Four running calls and two background tasks make six chips; at 1 200 px three to five fit on one line and the
+    /// rest are counted as `+N`; at 2 400 px all fit and the count is empty.
     @Test
     void chipsThatDoNotFitOnTheLineAreCountedInALastChip() {
         TranscriptWidget widget = new TranscriptWidget(new WidgetContext(intent -> { }, new ActionRegistry()));

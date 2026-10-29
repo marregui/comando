@@ -21,8 +21,8 @@ class CommandKeysTest {
 
     private static final int CMD = InputEvent.META_DOWN_MASK;
 
-    /// [Keys#forward] runs a text field's select-all binding for ⌘A, typed or pressed; a component that reads keys itself, as
-    /// the terminal does, and no component both return false.
+    /// [Keys#forward] runs a text field's select-all binding for ⌘A, typed or pressed; a component that reads keys
+    /// itself, as the terminal does, and no component both return false.
     @Test
     void anEditKeyRunsTheFocusedComponentsOwnBindingAndPassesWhenThereIsNone() {
         JTextField field = new JTextField("hello");
@@ -36,7 +36,8 @@ class CommandKeysTest {
         assertThat(Keys.forward(null, selectAll, false)).isFalse();
     }
 
-    /// [Keys#markdown] writes a `Where | Command | Keys` table, escapes a `|` in a title, and leaves out a command with no key.
+    /// [Keys#markdown] writes a `Where | Command | Keys` table, escapes a `|` in a title, and leaves out a command with
+    /// no key.
     @Test
     void theKeyTableListsEveryCommandWithAKeyByMenu() {
         String md = Keys.markdown(List.of(

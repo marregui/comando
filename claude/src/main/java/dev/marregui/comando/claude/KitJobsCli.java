@@ -20,11 +20,11 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * The kit's scheduled jobs through the root's {@code install/kit.py} (record 117), which alone writes {@code
- * comando-kit.json}'s jobs and talks to the scheduler: {@link #read} asks {@code jobs --json}, {@link #save} hands it the
- * whole list ({@code jobs set}), {@link #run} starts one through the scheduler ({@code job run}), so a job never runs as
- * a child of comando, whose {@link Processes} would end it at its limit. Each call blocks up to {@link #LIMIT}: off the
- * EDT.
+ * The kit's scheduled jobs through the root's {@code install/kit.py} (record 117), which alone writes
+ * {@code comando-kit.json}'s jobs and talks to the scheduler: {@link #read} asks {@code jobs --json}, {@link #save}
+ * hands it the whole list ({@code jobs set}), {@link #run} starts one through the scheduler ({@code job run}), so a job
+ * never runs as a child of comando, whose {@link Processes} would end it at its limit. Each call blocks up to
+ * {@link #LIMIT}: off the EDT.
  */
 public final class KitJobsCli {
 
@@ -39,14 +39,14 @@ public final class KitJobsCli {
     /**
      * What {@code kit.py} answered.
      *
-     * @param exit 0 done; 1 done in part (a running job left as it was, a load that failed); 2 refused, nothing written;
-     *             3 an unexpected error, part may be done
+     * @param exit 0 done; 1 done in part (a running job left as it was, a load that failed); 2 refused, nothing
+     *             written; 3 an unexpected error, part may be done
      * @param text what it printed, standard output then standard error
      */
     public record Result(int exit, String text) {
     }
 
-    /** The jobs of the kit at {@code root}, run with {@code python3} ({@code python} on Windows) from comando's {@code PATH}. */
+    /** The jobs of the kit at {@code root}, through {@code python3} ({@code python} on Windows) on the PATH. */
     public KitJobsCli(Path root) {
         this(root, List.of(System.getProperty("os.name", "").toLowerCase(Locale.ROOT).startsWith("windows") ? "python" : "python3"));
     }
@@ -61,7 +61,7 @@ public final class KitJobsCli {
         return root.resolve("install").resolve("kit.py");
     }
 
-    /** The jobs as {@code kit.py} reports them; a {@link KitJobs} carrying the reason when it cannot be asked or answers no list. */
+    /** The jobs as {@code kit.py} reports them, or a {@link KitJobs} with the reason it gave no list. */
     public KitJobs read() {
         if (!Files.isRegularFile(script())) {
             return new KitJobs(true, List.of(), "the kit has no install/kit.py");

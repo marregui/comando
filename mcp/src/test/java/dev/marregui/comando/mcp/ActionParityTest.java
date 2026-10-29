@@ -17,7 +17,7 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// An agent has every action the user has (record 121): every kind of intent is classified once, and every intent the
+/// A session has every action the user has (record 121): every kind of intent is classified once, and every intent the
 /// window sends on a gesture is offered as a tool. A feature added to the window without its action fails here.
 class ActionParityTest {
 

@@ -4,8 +4,8 @@ import java.nio.file.Path;
 
 /**
  * The user's home folder in paths a person types or reads: {@code ~} and {@code ~/x} expanded, and a path under home
- * shortened back to {@code ~/x}; and Claude Code's folder, the kit root. The one place each is decided, so every field, tool and
- * label agrees.
+ * shortened back to {@code ~/x}; and Claude Code's folder, the kit root. The one place each is decided, so every field,
+ * tool and label agrees.
  */
 public final class HomeDir {
 
@@ -17,8 +17,8 @@ public final class HomeDir {
     }
 
     /**
-     * Claude Code's folder comando runs its sessions on: the {@link KitRoot#current kit root}. It holds the settings, the
-     * stored conversations ({@code projects}) and the plugins.
+     * Claude Code's folder comando runs its sessions on: the {@link KitRoot#current kit root}. It holds the settings,
+     * the stored conversations ({@code projects}) and the plugins.
      */
     public static Path claudeDir() {
         return KitRoot.current().dir();

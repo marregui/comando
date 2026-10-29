@@ -26,7 +26,8 @@ class ResultsViewTest {
 
     private static final String EMPTY = KeyText.of("Run SQL from the editor: select it, or put the caret in its block, and press ⌘⏎.");
 
-    /// After a running statement is replaced by no run, the tick keeps the empty-state text instead of the running text.
+    /// After a running statement is replaced by no run, the tick keeps the empty-state text instead of the running
+    /// text.
     @Test
     void theTickDoesNotPaintARunThePanelDoesNotHave() {
         onEdt(() -> {
@@ -54,8 +55,8 @@ class ResultsViewTest {
         });
     }
 
-    /// The tab's [Copyable] copies the error of a failed run and the grid's text for a completed one; the grid keeps its own
-    /// copy owner.
+    /// The tab's [Copyable] copies the error of a failed run and the grid's text for a completed one; the grid keeps
+    /// its own copy owner.
     @Test
     void theResultsTabCopiesTheErrorOfAFailedRun() {
         onEdt(() -> {

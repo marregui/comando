@@ -21,10 +21,11 @@ import java.util.Set;
 import java.util.TreeSet;
 
 /**
- * What the window keeps across restarts, in comando's {@link Settings} ({@code settings.json} in the data root, record
- * 106): its bounds and whether it was maximized, the dividers (the lower one per panel), the sidebar's state and tab, the side pane, the theme (its
- * ground and tint), Linear's site, the folder of the last export and the last Gradle tasks. The one place each key is
- * named; a method that changes a setting writes the file.
+ * What the window keeps across restarts, in comando's {@link Settings} ({@code settings.json} in the data root,
+ * record 106): its bounds and whether it was maximised, the dividers (the lower one per panel), the sidebar's state
+ * and tab, the side pane, the theme (its ground and tint), Linear's site, the folder of the last export, the last
+ * Gradle tasks and the outline's choice. The one place each key is named; a method that changes a setting writes the
+ * file.
  */
 final class WindowLayout {
 
@@ -51,8 +52,8 @@ final class WindowLayout {
 
     /**
      * Puts the window where it was, kept on a screen that still exists: a window saved on a detached display opens
-     * centred on the main one. Returns the height it opens at. Off screen, the window is undecorated, as macOS moves a
-     * titled window back onto a screen, and left of every screen.
+     * centred on the main one. Returns the height it opens at. Off screen, the window is undecorated, as macOS moves
+     * a titled window back onto a screen, and left of every screen.
      */
     int restoreBounds(JFrame frame) {
         int w = prefs.getInt("window.width", 1500);
@@ -98,16 +99,15 @@ final class WindowLayout {
         return best;
     }
 
-    /** Whether the window was maximized; never off screen, where maximized would put it on one. */
+    /** Whether the window was maximised; never off screen, where maximising would put it on one. */
     boolean maximized() {
         return !offScreen && prefs.getBoolean("window.maximized", false);
     }
 
     /**
-     * The sidebar tab in front when the window closed, saved as {@code sidebar.selected}. The keys before it are read
-     * until it is saved: {@code sidebar.front} held Sessions, Connections, Panels, Files; {@code sidebar.tab}, before the
-     * tabs took one row, Sessions, Panels, Connections, Files. The Panels tab is gone (record 91): it reads as Sessions,
-     * which lists the panels without a session.
+     * The sidebar tab in front when the window closed, saved as {@code sidebar.selected}; until it is, read from the
+     * older keys: {@code sidebar.front} (Sessions, Connections, Panels, Files), else {@code sidebar.tab} (Sessions,
+     * Panels, Connections, Files). Panels reads as Sessions, which lists the panels without a session (record 91).
      */
     int sidebarTab() {
         int selected = prefs.getInt("sidebar.selected", -1);
@@ -166,8 +166,8 @@ final class WindowLayout {
     }
 
     /**
-     * The theme chosen (record 103), from the ground and tint it keeps: a pair kept from before themes maps to the
-     * closest theme; the gold chosen before tints keeps its name (record 96). Graphite and gold until one is chosen.
+     * The theme chosen (record 103), from the ground and tint it keeps: a pair that makes no theme maps to the closest
+     * one, and the older key {@code theme.gold} is read as the tint (record 96). Graphite and gold until one is chosen.
      */
     NamedTheme theme() {
         Optional<Ground> ground = Optional.ofNullable(prefs.get("theme.ground", null)).map(Ground::named);
@@ -229,6 +229,7 @@ final class WindowLayout {
 
     void outlineShown(boolean shown) {
         prefs.putBoolean("editor.outline", shown);
+        prefs.flush();
     }
 
     /** Where the side pane's divider was; -1 when it never showed. */
@@ -237,7 +238,7 @@ final class WindowLayout {
     }
 
     /**
-     * Keeps the window's bounds, unless maximized, and what it shows. A divider of a hidden part is not kept:
+     * Keeps the window's bounds, unless maximised, and what it shows. A divider of a hidden part is not kept:
      * {@code sidebarDivider} and {@code sideDivider} are -1 then, and the last shown position stays.
      */
     void save(JFrame frame, Saved s) {

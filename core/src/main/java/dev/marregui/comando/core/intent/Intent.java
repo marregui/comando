@@ -23,8 +23,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Every change to the state is an intent, applied in order by the reducer on one thread. The UI,
- * the database adapter, the Claude adapter and the MCP server all send intents to the same queue.
+ * Every change to the state is an intent, applied in order by the reducer on one thread. Every module sends its
+ * intents to the one queue of the state loop.
  */
 public sealed interface Intent {
 
@@ -46,14 +46,20 @@ public sealed interface Intent {
     record ClosePanel(PanelId panel) implements Intent {
     }
 
-    /** Removes a panel, open or closed: it leaves the list, and a panel of comando's own loses its file. */
+    /**
+     * Removes a panel, open or closed: it leaves the list, and a panel of comando's own loses its file. A session's own
+     * panel goes with its session (record 88).
+     */
     record RemovePanel(PanelId panel) implements Intent {
     }
 
     record RenamePanel(PanelId panel, String title) implements Intent {
     }
 
-    /** Puts an open panel at {@code index} among the open ones, the others keeping their order; an index past either end is the end. */
+    /**
+     * Puts an open panel at {@code index} among the open ones, the others keeping their order; an index past either end
+     * is the end.
+     */
     record MovePanel(PanelId panel, int index) implements Intent {
     }
 
@@ -69,23 +75,27 @@ public sealed interface Intent {
     }
 
     /**
-     * Binds a session to the panel; an empty name unbinds (detaches). A session has at most one panel: a panel bound
-     * to it before, open or closed, loses the binding.
+     * Attaches a document panel to a session, or detaches it with an empty name; any number of documents may attach to
+     * one session. On a panel of comando's own it opens the session's own panel instead, as {@link OpenSession} does
+     * (record 88).
      */
     record BindSession(PanelId panel, String session) implements Intent {
     }
 
     /**
-     * Opens a session in a panel, as a file opens in an editor: the panel bound to it comes forward, reopened when
-     * closed; else {@code target} takes it when it has no session; else a new panel {@code newPanel}, titled after the
-     * session and bound to it and to {@code target}'s connection. The caller makes the new id, so the reducer stays deterministic.
+     * Opens a session's own panel, as a file opens in an editor: the panel comes forward, reopened when closed; else a
+     * panel of comando's own with no session and the session's name becomes it; else a new panel {@code newPanel},
+     * titled after the session and bound to it and to {@code target}'s connection. Another panel is never taken
+     * (record 88). The caller makes the new id, so the reducer stays deterministic.
      */
     record OpenSession(String session, PanelId target, PanelId newPanel) implements Intent {
     }
 
     // ---- running text
 
-    /** Runs text from a panel: SQL to its connection, anything else to its session; a null panel means the focused one. */
+    /**
+     * Runs text from a panel: SQL to its connection, anything else to its session; a null panel means the focused one.
+     */
     record RunText(PanelId panel, String text, Target target) implements Intent {
     }
 
@@ -198,7 +208,7 @@ public sealed interface Intent {
     record RemoveSession(String name) implements Intent {
     }
 
-    /** Adds sessions found in the catalogue; names already present are skipped. */
+    /** Adds sessions found in the catalogue; a name or a conversation already present is skipped. */
     record ImportSessions(List<SessionSpec> specs) implements Intent {
         public ImportSessions {
             specs = List.copyOf(specs);
@@ -252,8 +262,8 @@ public sealed interface Intent {
     }
 
     /**
-     * A message of the session's running turn ran at {@code model} and {@code effort}, as the session's transcript records
-     * it; {@code firstOfTurn} for the turn's first message, which runs at the session's own setting.
+     * A message of the session's running turn ran at {@code model} and {@code effort}, as the session's transcript
+     * records it; {@code firstOfTurn} for the turn's first message, which runs at the session's own setting.
      */
     record SessionRanAt(String name, String model, String effort, boolean firstOfTurn) implements Intent {
     }
@@ -331,7 +341,7 @@ public sealed interface Intent {
 
     // ---- views
 
-    /** Opens a view, or replaces an unpinned view with the same title from the same session. */
+    /** Opens a view, or replaces an unpinned view with the same title and placement from the same session. */
     record ShowView(String session, String title, ViewSpec spec, Placement placement) implements Intent {
     }
 
@@ -365,8 +375,9 @@ public sealed interface Intent {
     // ---- editor content from Claude
 
     /**
-     * A prompt to a session through its own panel, the one the window gives it (record 88): the text is appended to that
-     * panel and run there, as if typed. Resolved in the reducer, so a session created by the intent just before gets it.
+     * A prompt to a session through its own panel, the one the window gives it (record 88): the text is appended to
+     * that panel and run there, as if typed. Resolved in the reducer, so a session created by the intent just before
+     * gets it.
      *
      * @param from the session or client that sent it, announced like a session's write
      */
@@ -398,7 +409,10 @@ public sealed interface Intent {
 
     // ---- development tools
 
-    /** Runs Gradle tasks in the build of the panel's session; a null panel means the focused one. */
+    /**
+     * Runs Gradle tasks in the build that holds the working folder of the panel's session, else the home folder; a null
+     * panel means the focused one.
+     */
     record RunGradle(PanelId panel, String tasks) implements Intent {
     }
 
@@ -439,7 +453,10 @@ public sealed interface Intent {
     record FolderLoaded(FolderRoot folder, ViewSpec.TreeNode tree) implements Intent {
     }
 
-    /** The git repositories watched, each as read: those of the open Files tab folders, and of every folder while the Changes view is open. */
+    /**
+     * The git repositories watched, each as read: those of the open Files tab folders, and of every folder while the
+     * Changes view is open.
+     */
     record ReposLoaded(List<RepoStatus> repos) implements Intent {
         public ReposLoaded {
             repos = List.copyOf(repos);
@@ -475,14 +492,20 @@ public sealed interface Intent {
         }
     }
 
-    /** Moves files of the repository at {@code root} to the desktop's Trash; paths relative to it, a new file also unstaged. */
+    /**
+     * Moves files of the repository at {@code root} to the desktop's Trash; paths relative to it, a new file also
+     * unstaged.
+     */
     record RemoveFiles(String root, List<String> paths) implements Intent {
         public RemoveFiles {
             paths = List.copyOf(paths);
         }
     }
 
-    /** Takes {@code paths} of the repository at {@code root} out of the index, back to {@code HEAD}'s; the files stay as they are. */
+    /**
+     * Takes {@code paths} of the repository at {@code root} out of the index, back to {@code HEAD}'s; the files stay as
+     * they are.
+     */
     record Unstage(String root, List<String> paths) implements Intent {
         public Unstage {
             paths = List.copyOf(paths);
@@ -507,8 +530,8 @@ public sealed interface Intent {
 
         /**
          * A failure told twice: in comando's log, an error for an error and a warning otherwise, with the stack of
-         * {@code cause} when there is one; and as the notice {@code text}, a click on which opens the log at that entry.
-         * The time is read before the entry is written, as {@link Notice#log} needs.
+         * {@code cause} when there is one; and as the notice {@code text}, a click on which opens the log at that
+         * entry. The time is read before the entry is written, as {@link Notice#log} needs.
          */
         public static Notify logged(System.Logger log, Notice.Level level, String text, Throwable cause) {
             long at = System.currentTimeMillis();

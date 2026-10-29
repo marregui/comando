@@ -121,7 +121,7 @@ public final class DocImages {
 
     /** The front page: a query in the session's panel, a real turn that runs it and plots it beside the editor. */
     private static void hero(StateLoop loop, Path repo, Path out) throws Exception {
-        // the default permission mode, whatever the painter's own Claude Code sets: the turn's approvals are allowed above
+        // the default permission mode, whatever the painter's Claude Code sets: the turn's approvals are allowed above
         SessionSpec spec = SessionSpec.fresh(SESSION, repo.toString()).withModel("haiku");
         loop.dispatch(new Intent.SaveSession("", new SessionSpec(spec.name(), spec.workDir(), spec.model(), spec.effort(), "default",
                 spec.addDirs(), spec.budgetUsd(), spec.claudeSessionId(), spec.startMode(), spec.checkpoint(), spec.carried())));

@@ -243,8 +243,8 @@ class SessionCardUiTest {
     }
 
     /**
-     * Moves onto the row at {@code index} and clicks its ⓘ, at the row's right edge, which shows the row's card
-     * (2026-10-29: a click on the name only selects).
+     * Moves onto the row at {@code index} and clicks its ⓘ, at the row's right edge, which shows the row's card; a
+     * click on the name only selects.
      */
     private static void clickInfo(JList<?> list, int index) throws Exception {
         Point at = onEdt(() -> {

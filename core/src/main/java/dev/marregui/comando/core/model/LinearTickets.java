@@ -39,7 +39,10 @@ public final class LinearTickets {
     private LinearTickets() {
     }
 
-    /** {@code known} with the workspace and team keys of the Linear links in {@code text}; the last link's workspace wins. */
+    /**
+     * {@code known} with the workspace and team keys of the Linear links in {@code text}; the last link's workspace
+     * wins.
+     */
     public static Site learn(Site known, String text) {
         if (text.indexOf("linear.app/") < 0) {
             return known;
@@ -56,8 +59,8 @@ public final class LinearTickets {
     }
 
     /**
-     * The tickets {@code text} names, at most {@code max}: those of its last paragraph first, in the order written, then
-     * the others from the newest back; each once. None while {@code site} is not {@link Site#known()}.
+     * The tickets {@code text} names, at most {@code max}: those of its last paragraph first, in the order written,
+     * then the others from the newest back; each once. None while {@code site} is not {@link Site#known()}.
      */
     public static List<Ticket> in(String text, Site site, int max) {
         if (!site.known()) {

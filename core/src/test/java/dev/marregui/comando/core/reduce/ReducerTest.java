@@ -39,10 +39,12 @@ import static dev.marregui.comando.testkit.States.P1;
 import static dev.marregui.comando.testkit.States.P2;
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [Reducer] turns each intent into the next state and the effects to run: SQL runs, prompts and sessions, folders, notices.
+/// [Reducer] turns each intent into the next state and the effects to run: SQL runs, prompts and sessions, folders,
+/// notices.
 /// - SQL on a closed connection opens it first; a rerun cancels the previous run and drops its late events.
 /// - Runs of two panels are independent; cancel, progress, completion and failure set the run's status and notice.
-/// - Folders are read and watched by name in their order, added unless one has the name, and replaced by `folders.json` without writing it.
+/// - Folders are read and watched by name in their order, added unless one has the name, and replaced by `folders.json`
+///   without writing it.
 /// - Entries go to the Trash only from a deletable folder, never the folder itself or a path outside it.
 /// - A prompt on a closed session starts the session, then sends.
 class ReducerTest {
@@ -64,8 +66,8 @@ class ReducerTest {
 
     // ---- SQL runs
 
-    /// SQL on a closed connection emits OpenDb then ExecuteSql with request id 1, queues the run, marks the connection opening,
-    /// brings the results tab forward, and advances the next id to 2.
+    /// SQL on a closed connection emits OpenDb then ExecuteSql with request id 1, queues the run, marks the connection
+    /// opening, brings the results tab forward, and advances the next id to 2.
     @Test
     void sqlOnClosedConnectionOpensItThenExecutesWithAFreshId() {
         apply(new Intent.RunText(P1, "SELECT 1", Target.AUTO));
@@ -77,8 +79,8 @@ class ReducerTest {
         assertThat(state.nextId()).isEqualTo(2L);
     }
 
-    /// Running again in a panel cancels and releases the previous run, takes a new id, ignores the superseded run's late events,
-    /// and keeps the rerun's own notice instead of the late failure.
+    /// Running again in a panel cancels and releases the previous run, takes a new id, ignores the superseded run's
+    /// late events, and keeps the rerun's own notice instead of the late failure.
     @Test
     void rerunCancelsAndReleasesThePreviousRunAndDropsItsLateEvents() {
         apply(new Intent.RunText(P1, "SELECT 1", Target.AUTO));
@@ -98,8 +100,9 @@ class ReducerTest {
         assertThat(state.notice().text()).startsWith("Stopped the statement");
     }
 
-    /// Reading and watching folders by name emits them in configured order, dropping unknown names; none open watches none; a
-    /// loaded tree is shown unless it was read with since-edited settings or its folder was removed; the state is unchanged.
+    /// Reading and watching folders by name emits them in configured order, dropping unknown names; none open watches
+    /// none; a loaded tree is shown unless it was read with since-edited settings or its folder was removed; the state
+    /// is unchanged.
     @Test
     void foldersAreReadAndWatchedByNameInTheirOrderAndShownWithoutTouchingTheState() {
         FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
@@ -125,8 +128,8 @@ class ReducerTest {
         assertThat(state).isSameAs(before);
     }
 
-    /// A group of folders under one parent reads as a folder of its own, its group's name in capitals (record 118): watched
-    /// and browsed by that name, its tree shown; it is no configured folder, so the state is unchanged.
+    /// A group of folders under one parent reads as a folder of its own, its group's name in capitals (record 118):
+    /// watched and browsed by that name, its tree shown; it is no configured folder, so the state is unchanged.
     @Test
     void aGroupsRowIsReadAsAFolderOfItsOwn() {
         FolderRoot memory = new FolderRoot("Memory", "/b/MEMORY", "", List.of(), "memory", false, "", "Brain");
@@ -142,8 +145,8 @@ class ReducerTest {
         assertThat(state).isSameAs(before);
     }
 
-    /// A new folder goes after the others and is saved and watched; one whose name is taken is refused with an error notice
-    /// and nothing saved.
+    /// A new folder goes after the others and is saved and watched; one whose name is taken is refused with an error
+    /// notice and nothing saved.
     @Test
     void aFolderIsAddedAfterTheOthersAndSavedUnlessOneHasItsName() {
         FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
@@ -160,8 +163,8 @@ class ReducerTest {
         assertThat(state.notice().text()).isEqualTo("A folder called KB exists");
     }
 
-    /// Entries of a deletable folder are sent to the Trash; a folder not marked deletable, the folder itself, a path outside it
-    /// and an unknown folder each move nothing and say why.
+    /// Entries of a deletable folder are sent to the Trash; a folder not marked deletable, the folder itself, a path
+    /// outside it and an unknown folder each move nothing and say why.
     @Test
     void entriesGoToTheTrashOnlyFromADeletableFolderAndNeverTheFolderItselfOrAPathOutside() {
         FolderRoot pad = new FolderRoot("Scratchpad", "/s", "", List.of(), "scratchpad").withTrash("ALPHA.md");
@@ -188,8 +191,8 @@ class ReducerTest {
         assertThat(state.notice().text()).isEqualTo("No folder called Gone");
     }
 
-    /// A `folders.json` read again replaces the folders and reads their repositories without writing the file back; the same
-    /// folders change nothing.
+    /// A `folders.json` read again replaces the folders and reads their repositories without writing the file back; the
+    /// same folders change nothing.
     @Test
     void foldersJsonReadAgainReplacesTheFoldersAndWritesNothing() {
         FolderRoot kb = new FolderRoot("KB", "/kb", "ALPHA.md", List.of());
@@ -239,7 +242,8 @@ class ReducerTest {
                 .containsExactly(RunStatus.DONE, 250, true);
     }
 
-    /// A query that ran long notifies the desktop with the panel, row count and duration when it ends; a short one does not.
+    /// A query that ran long notifies the desktop with the panel, row count and duration when it ends; a short one does
+    /// not.
     @Test
     void aLongQueryNotifiesTheDesktopWhenItEnds() {
         apply(new Intent.RunText(P1, "SELECT x FROM long_sequence(10)", Target.AUTO));
@@ -303,8 +307,8 @@ class ReducerTest {
         assertThat(state.lowerTab()).isEqualTo(LowerTab.SESSION);
     }
 
-    /// A prompt run from a document panel attached to the session, while another panel has the focus, is sent but leaves the
-    /// lower tab as it was.
+    /// A prompt run from a document panel attached to the session, while another panel has the focus, is sent but
+    /// leaves the lower tab as it was.
     @Test
     void aPromptRunInAPanelTheUserIsNotLookingAtLeavesTheLowerPanelAlone() {
         // a document attached to the session
@@ -326,8 +330,8 @@ class ReducerTest {
         assertThat(state.session("work").orElseThrow().status()).isEqualTo(stopped).isNotEqualTo(Status.OPEN);
     }
 
-    /// A panel added with a title another holds in another case is numbered (`One 2`); title checks ignore case, and a closed
-    /// panel keeps its title taken.
+    /// A panel added with a title another holds in another case is numbered (`One 2`); title checks ignore case, and a
+    /// closed panel keeps its title taken.
     @Test
     void anAddedPanelNeverSharesATitleInAnyCase() {
         PanelId readme = new PanelId("readme");
@@ -341,8 +345,8 @@ class ReducerTest {
         assertThat(state.titleTaken("TWO")).as("a closed panel keeps its title").isTrue();
     }
 
-    /// Prompts from a session's own panel and from a document attached to it go to one session queue; the turn result clears
-    /// busy, records the context window and notifies the desktop that the turn finished.
+    /// Prompts from a session's own panel and from a document attached to it go to one session queue; the turn result
+    /// clears busy, records the context window and notifies the desktop that the turn finished.
     @Test
     void twoPanelsSharingASessionFeedOneQueue() {
         // its own panel and a document attached to it
@@ -360,9 +364,9 @@ class ReducerTest {
         assertThat(effects).containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
     }
 
-    /// A turn that hands work to a background agent finishes nothing and leaves the session waiting on it; when the agent
-    /// ends the session is returning, the reading turn it starts counts as busy, its end notifies once, and the extra result
-    /// after the report notifies nothing.
+    /// A turn that hands work to a background agent finishes nothing and leaves the session waiting on it; when the
+    /// agent ends the session is returning, the reading turn it starts counts as busy, its end notifies once, and the
+    /// extra result after the report notifies nothing.
     @Test
     void aSessionWaitsOnBackgroundWorkUntilItEndsAndTheTurnItStartsCountsAsRunning() {
         BackgroundTask agent = new BackgroundTask("a1", "local_agent", "review agent", 0L);
@@ -397,8 +401,8 @@ class ReducerTest {
         assertThat(effects).noneMatch(Effect.DesktopNotify.class::isInstance);
     }
 
-    /// A question answered while an older background build runs on is a finished turn of its own, notified, while the session
-    /// still waits on the build.
+    /// A question answered while an older background build runs on is a finished turn of its own, notified, while the
+    /// session still waits on the build.
     @Test
     void aLaterTurnThatEndsWhileOlderBackgroundWorkRunsOnIsFinished() {
         BackgroundTask build = new BackgroundTask("b1", "local_bash", "build in the background", 0L);
@@ -416,8 +420,8 @@ class ReducerTest {
         assertThat(effects).containsExactly(new Effect.DesktopNotify("work", "Turn finished"));
     }
 
-    /// A tool call inside a running turn leaves the pending count as it was, background tasks keep the time first heard of
-    /// and are named by count, and the process's exit ends them all.
+    /// A tool call inside a running turn leaves the pending count as it was, background tasks keep the time first heard
+    /// of and are named by count, and the process's exit ends them all.
     @Test
     void aCallInARunningTurnLeavesItsCountAndAnExitEndsTheBackgroundWork() {
         apply(new Intent.RunText(P1, "first", Target.CLAUDE));
@@ -441,10 +445,9 @@ class ReducerTest {
         assertThat(state.session("work").orElseThrow().isWaiting()).isFalse();
     }
 
-    /// The init event records the conversation id with start mode RESUME, opens the session and saves sessions once; the same
-    /// A turn's first message gives the session's own model and effort (a `/model` or `/effort` typed in the prompt shows);
-    /// its later messages give what the turn runs at (a skill's `effort` lasts the rest of the turn), which the turn's end
-    /// drops, leaving the session's own; the last activity's time is left as it was.
+    /// A turn's first message gives the session's own model and effort (a `/model` or `/effort` typed in the prompt
+    /// shows); its later messages give what the turn runs at (a skill's `effort` lasts the rest of the turn), which the
+    /// turn's end drops, leaving the session's own; the last activity's time is left as it was.
     @Test
     void whatATurnRunsAtShowsUntilItEndsAndItsFirstMessageGivesTheSessionsOwn() {
         apply(new Intent.StartSession("work"));
@@ -469,7 +472,8 @@ class ReducerTest {
                 .containsExactly("claude-sonnet-5-5", "low", "", "");
     }
 
-    /// init again saves nothing.
+    /// The init event records the conversation id with start mode RESUME, opens the session and saves sessions once;
+    /// the same init again saves nothing.
     @Test
     void initRecordsTheConversationIdSoTheNextStartResumes() {
         apply(new Intent.StartSession("work"));
@@ -487,8 +491,9 @@ class ReducerTest {
         assertThat(effects).isEmpty();
     }
 
-    /// A prompt to a session goes to its own panel, the one created with it, even when the user has focused another panel
-    /// (record 121: an agent's session_new with a first prompt); a session without an open panel gets an error notice.
+    /// A prompt to a session goes to its own panel, the one created with it, even when the user has focused another
+    /// panel (record 121: an agent's session_new with a first prompt); a session without an open panel gets an error
+    /// notice.
     @Test
     void aPromptToASessionGoesToItsOwnPanelWhateverIsFocused() {
         apply(new Intent.SaveSession("", SessionSpec.fresh("alpha", "/tmp").withCreatedBy("lead")));
@@ -556,7 +561,8 @@ class ReducerTest {
         assertThat(state.connection("local").orElseThrow().status()).isEqualTo(Status.CLOSED);
     }
 
-    /// A prompt to a session that is stopping emits nothing and says the session is stopping, so the text is not silently lost.
+    /// A prompt to a session that is stopping emits nothing and says the session is stopping, so the text is not
+    /// silently lost.
     @Test
     void aPromptToAStoppingSessionIsRefusedNotLost() {
         apply(new Intent.StartSession("work"));
@@ -580,7 +586,8 @@ class ReducerTest {
         assertThat(effects).contains(new Effect.ResolveApproval(a, new ApprovalDecision.Deny("session removed")));
     }
 
-    /// A turn that ends while background work still runs keeps every approval card, since that work may still be asking.
+    /// A turn that ends while background work still runs keeps every approval card, since that work may still be
+    /// asking.
     @Test
     void aTurnThatEndsWhileBackgroundWorkRunsKeepsEveryCard() {
         apply(new Intent.RunText(P1, "review the change in the background", Target.CLAUDE));
@@ -594,8 +601,8 @@ class ReducerTest {
         assertThat(effects).noneMatch(Effect.ResolveApproval.class::isInstance);
     }
 
-    /// A turn that ends with nothing queued denies its own cards with `the turn ended`, keeps a background task's card, and
-    /// keeps the cost and context tokens already known.
+    /// A turn that ends with nothing queued denies its own cards with `the turn ended`, keeps a background task's card,
+    /// and keeps the cost and context tokens already known.
     @Test
     void aTurnThatEndsWithNothingQueuedWithdrawsItsCardsAndKeepsKnownUsage() {
         apply(new Intent.StartSession("work"));
@@ -619,8 +626,8 @@ class ReducerTest {
         assertThat(state.session("work").orElseThrow().costUsd()).isEqualTo(0.55);
         assertThat(state.session("work").orElseThrow().contextTokens()).isEqualTo(31_000L);
 
-        // a model call mid-turn, or a stored conversation loaded, reports the context at once; an unknown window keeps the
-        // known one (record 120)
+        // a model call mid-turn, or a stored conversation loaded, reports the context at once; an unknown window keeps
+        // the known one (record 120)
         apply(new Intent.SessionContext("work", 45_000L, 0L));
         assertThat(state.session("work").orElseThrow().contextTokens()).isEqualTo(45_000L);
         assertThat(state.session("work").orElseThrow().contextWindow()).isEqualTo(200_000L);
@@ -631,8 +638,9 @@ class ReducerTest {
         assertThat(effects).isEmpty();
     }
 
-    /// A fresh start of a stopped session clears its conversation id, saves the spec with mode NEW before starting, and says
-    /// the previous conversation can be imported; a running session keeps its conversation; the next init resumes the new one.
+    /// A fresh start of a stopped session clears its conversation id, saves the spec with mode NEW before starting, and
+    /// says the previous conversation can be imported; a running session keeps its conversation; the next init resumes
+    /// the new one.
     @Test
     void aFreshStartLeavesTheConversationBehindAndSavesThatFirst() {
         apply(new Intent.StartSession("work"));
@@ -659,8 +667,8 @@ class ReducerTest {
         assertThat(state.session("work").orElseThrow().spec().startMode()).isEqualTo(StartMode.RESUME);
     }
 
-    /// A checkpoint sends the session's command as a prompt from its panel, counting a turn; a session with no panel says to
-    /// open one, a closed own panel still runs it, and an emptied command sends nothing.
+    /// A checkpoint sends the session's command as a prompt from its panel, counting a turn; a session with no panel
+    /// says to open one, a closed own panel still runs it, and an emptied command sends nothing.
     @Test
     void aCheckpointRunsTheSessionsCommandAsAPromptFromItsPanel() {
         apply(new Intent.StartSession("work"));
@@ -688,8 +696,9 @@ class ReducerTest {
         assertThat(effects).as("an emptied command sends nothing").isEmpty();
     }
 
-    /// A session becomes due its checkpoint once its context passes the threshold (61 %, not 50 %), stops being due when the
-    /// command is sent or it was already past at the checkpoint, and is due again when it crosses after a compaction.
+    /// A session becomes due its checkpoint once its context passes the threshold (61 %, not 50 %), stops being due
+    /// when the command is sent or it was already past at the checkpoint, and is due again when it crosses after a
+    /// compaction.
     @Test
     void aSessionIsDueItsCheckpointPastTheThresholdUntilTheCommandIsSent() {
         apply(new Intent.StartSession("work"));
@@ -718,8 +727,8 @@ class ReducerTest {
         assertThat(state.session("work").orElseThrow().reflection().due()).isFalse();
     }
 
-    /// [Reducer#isCheckpoint] matches the command alone or with arguments, padded; a longer word, the command inside text, and
-    /// an empty command do not match.
+    /// [Reducer#isCheckpoint] matches the command alone or with arguments, padded; a longer word, the command inside
+    /// text, and an empty command do not match.
     @Test
     void aCheckpointIsTheCommandAloneOrWithArguments() {
         assertThat(Reducer.isCheckpoint("/reflect", "/reflect")).isTrue();
@@ -729,8 +738,8 @@ class ReducerTest {
         assertThat(Reducer.isCheckpoint("/reflect", "")).isFalse();
     }
 
-    /// A session command such as `/compact` is sent as a prompt from the session's panel, counting a turn; a session with no
-    /// panel sends nothing and says to open one.
+    /// A session command such as `/compact` is sent as a prompt from the session's panel, counting a turn; a session
+    /// with no panel sends nothing and says to open one.
     @Test
     void aSessionCommandRunsAsAPromptFromTheSessionsPanel() {
         apply(new Intent.StartSession("work"));
@@ -745,8 +754,8 @@ class ReducerTest {
         assertThat(state.notice().text()).isEqualTo("Session old has no panel; open it to send /compact");
     }
 
-    /// After the conversation is cleared, the new conversation id is followed with RESUME, its reflection starts fresh, the
-    /// sessions are saved once, and the notice names the previous conversation as importable.
+    /// After the conversation is cleared, the new conversation id is followed with RESUME, its reflection starts fresh,
+    /// the sessions are saved once, and the notice names the previous conversation as importable.
     @Test
     void aClearedConversationIsFollowedSavedAndNamedAsImportable() {
         apply(new Intent.StartSession("work"));
@@ -766,9 +775,9 @@ class ReducerTest {
         assertThat(state.notice().text()).isEqualTo("Session work: new conversation; the previous one (conv-1) can be imported again");
     }
 
-    /// The checkpoint button clears the conversation after its turn, carrying the summary (the clear counts as a turn); the
-    /// summary survives into the new conversation, a command leaves it for the next prompt, and the next prompt sends it as a
-    /// preface once, after which prompts go plain.
+    /// The checkpoint button clears the conversation after its turn, carrying the summary (the clear counts as a turn);
+    /// the summary survives into the new conversation, a command leaves it for the next prompt, and the next prompt
+    /// sends it as a preface once, after which prompts go plain.
     @Test
     void theCheckpointButtonClearsTheConversationOnceItsTurnHasFinishedAndCarriesItsSummaryIntoTheNextPrompt() {
         String title = state.panel(P1).orElseThrow().title();
@@ -811,8 +820,8 @@ class ReducerTest {
         assertThat(effects).contains(new Effect.SendToClaude("work", "next", title));
     }
 
-    /// The conversation is kept when the user prompts after the checkpoint, when its turn fails or is interrupted, when it
-    /// gives no summary (saying so), when the command was typed, and when the process ends during it.
+    /// The conversation is kept when the user prompts after the checkpoint, when its turn fails or is interrupted, when
+    /// it gives no summary (saying so), when the command was typed, and when the process ends during it.
     @Test
     void theCheckpointKeepsTheConversationWhenTheUserGoesOnItFailsOrGivesNoSummary() {
         apply(new Intent.StartSession("work"));
@@ -863,8 +872,8 @@ class ReducerTest {
         assertThat(effects).contains(new Effect.ClearConversation("work", "the summary"));
     }
 
-    /// Saving the session form, which has no carried-summary field, keeps the carried summary while applying the edit; a
-    /// checkpoint before the next prompt has nothing new to clear and keeps the summary.
+    /// Saving the session form, which has no carried-summary field, keeps the carried summary while applying the edit;
+    /// a checkpoint before the next prompt has nothing new to clear and keeps the summary.
     @Test
     void aCarriedSummaryOutlivesTheSessionFormAndACheckpointBeforeTheNextPrompt() {
         apply(new Intent.StartSession("work"));
@@ -887,8 +896,8 @@ class ReducerTest {
         assertThat(state.session("work").orElseThrow().spec().carried()).isEqualTo("the summary");
     }
 
-    /// Ordering sessions puts the named ones first in the given order and the rest after them in their place, saving once;
-    /// the same order again saves nothing.
+    /// Ordering sessions puts the named ones first in the given order and the rest after them in their place, saving
+    /// once; the same order again saves nothing.
     @Test
     void sessionsAreOrderedAsToldTheRestKeepingTheirPlaceAfterThem() {
         apply(new Intent.SaveSession("", SessionSpec.fresh("alpha", "/a")));
@@ -993,7 +1002,8 @@ class ReducerTest {
         assertThat(state.session("work").orElseThrow().spec().model()).isEqualTo("sonnet");
     }
 
-    /// Importing conversations skips one whose name or conversation id is known, adds the rest, and loads their history.
+    /// Importing conversations skips one whose name or conversation id is known, adds the rest, and loads their
+    /// history.
     @Test
     void importSkipsKnownNamesAndConversationIds() {
         apply(new Intent.SaveSession("", SessionSpec.imported("old", "/tmp", "id-1")));
@@ -1035,8 +1045,8 @@ class ReducerTest {
         assertThat(state.connection("local").orElseThrow().status()).isEqualTo(Status.CLOSED);
     }
 
-    /// An opened connection loads its schema quietly; exploring loads it to show; exploring with no connection emits nothing
-    /// and warns.
+    /// An opened connection loads its schema quietly; exploring loads it to show; exploring with no connection emits
+    /// nothing and warns.
     @Test
     void anOpenedConnectionReadsItsSchemaAndExploringShowsIt() {
         apply(new Intent.OpenConnection("local"));
@@ -1067,8 +1077,8 @@ class ReducerTest {
         assertThat(run(P1).status()).isEqualTo(RunStatus.CANCELLED);
     }
 
-    /// An unchanged save keeps a connection's schema; removing it, pointing it elsewhere, or renaming it forgets the schema
-    /// under its name.
+    /// An unchanged save keeps a connection's schema; removing it, pointing it elsewhere, or renaming it forgets the
+    /// schema under its name.
     @Test
     void aConnectionRemovedRenamedOrPointedElsewhereHasItsSchemaForgottenAndAnUnchangedSaveKeepsIt() {
         apply(new Intent.SaveConnection("local", States.LOCAL));
@@ -1115,8 +1125,9 @@ class ReducerTest {
                 List.of(SessionState.closed(States.WORK), SessionState.closed(SessionSpec.fresh("edge", "/w/edge"))));
     }
 
-    /// Renaming a stopped session's own panel renames the session and forgets the old name, and renaming the session renames
-    /// its panel; a running session refuses with a notice, and a panel that is not a session's own keeps its title.
+    /// Renaming a stopped session's own panel renames the session and forgets the old name, and renaming the session
+    /// renames its panel; a running session refuses with a notice, and a panel that is not a session's own keeps its
+    /// title.
     @Test
     void renamingASessionsOwnPanelRenamesTheSessionAndTheOtherWayRoundOnlyWhileItIsStopped() {
         state = onePanelPerSession();
@@ -1166,8 +1177,8 @@ class ReducerTest {
         assertThat(state.panels()).hasSize(3);
     }
 
-    /// A moved panel takes its new index, the others keep their order, the focus stays and the order is saved; an index before
-    /// the start or past the end clamps, a panel already in place or an unknown panel saves nothing.
+    /// A moved panel takes its new index, the others keep their order, the focus stays and the order is saved; an index
+    /// before the start or past the end clamps, a panel already in place or an unknown panel saves nothing.
     @Test
     void aMovedPanelTakesItsNewPlaceTheOthersKeepTheirOrderAndTheOrderIsSaved() {
         PanelId p3 = new PanelId("p3");
@@ -1191,7 +1202,8 @@ class ReducerTest {
         assertThat(effects).as("an unknown panel moves nothing").isEmpty();
     }
 
-    /// Renaming a panel to another panel's title is refused with a notice and nothing saved; a panel may keep its own title.
+    /// Renaming a panel to another panel's title is refused with a notice and nothing saved; a panel may keep its own
+    /// title.
     @Test
     void aPanelIsNotRenamedToAnotherPanelsTitle() {
         String taken = state.panel(P2).orElseThrow().title();
@@ -1203,9 +1215,9 @@ class ReducerTest {
         assertThat(state.panel(P2).orElseThrow().title()).as("its own title is not taken").isEqualTo(taken);
     }
 
-    /// A session created under the name of a panel without a session makes that panel its own; a new session otherwise comes
-    /// with its own focused panel; a panel named like an existing session in another case is numbered, and a document's title
-    /// does not become a session.
+    /// A session created under the name of a panel without a session makes that panel its own; a new session otherwise
+    /// comes with its own focused panel; a panel named like an existing session in another case is numbered, and a
+    /// document's title does not become a session.
     @Test
     void aSessionCreatedWithAPanelsNameMakesThatPanelItsOwnAndNoPanelTakesASessionsName() {
         state = onePanelPerSession();
@@ -1232,8 +1244,8 @@ class ReducerTest {
         assertThat(state.session("plan.md")).isEmpty();
     }
 
-    /// Binding a panel of comando's own to a session opens the session's own panel instead; a session's own panel is never
-    /// detached; documents attach after the own panel and detach, the session staying.
+    /// Binding a panel of comando's own to a session opens the session's own panel instead; a session's own panel is
+    /// never detached; documents attach after the own panel and detach, the session staying.
     @Test
     void bindingAPanelOfComandosOwnOpensTheSessionsOwnPanelAndDocumentsAttachAndDetach() {
         state = onePanelPerSession();
@@ -1260,8 +1272,8 @@ class ReducerTest {
         assertThat(state.session("work")).isPresent();
     }
 
-    /// Closing a session's panel keeps it among the closed ones with its session; opening or binding the session reopens that
-    /// same panel and focuses it, giving no other panel the session.
+    /// Closing a session's panel keeps it among the closed ones with its session; opening or binding the session
+    /// reopens that same panel and focuses it, giving no other panel the session.
     @Test
     void aClosedPanelKeepsItsSessionAndOpeningTheSessionReopensIt() {
         state = onePanelPerSession();
@@ -1282,7 +1294,8 @@ class ReducerTest {
         assertThat(state.focused()).isEqualTo(P1);
     }
 
-    /// Removing the last open panel, a document, deletes it and leaves a new empty panel with the same connection, focused.
+    /// Removing the last open panel, a document, deletes it and leaves a new empty panel with the same connection,
+    /// focused.
     @Test
     void removingTheLastOpenPanelLeavesAnEmptyOneInItsPlace() {
         PanelId doc = new PanelId("doc");
@@ -1318,8 +1331,8 @@ class ReducerTest {
         assertThat(state.panel(new PanelId("p4")).orElseThrow().title()).isNotEqualTo("panel 3");
     }
 
-    /// A closed document is not kept and its file stays; removing a session's own panel removes the session and the panel's
-    /// file, saying so; removing a plain panel deletes its file and saves the rest.
+    /// A closed document is not kept and its file stays; removing a session's own panel removes the session and the
+    /// panel's file, saying so; removing a plain panel deletes its file and saves the rest.
     @Test
     void aDocumentClosesForGoodAndARemovedPanelLosesItsFile() {
         state = onePanelPerSession();
@@ -1342,7 +1355,8 @@ class ReducerTest {
         assertThat(effects).containsExactly(new Effect.DeletePanel(P2), new Effect.SavePanels(state.panels(), state.closed()));
     }
 
-    /// Closing the focused panel cancels and releases its run, forgets the panel and moves the focus to the remaining one.
+    /// Closing the focused panel cancels and releases its run, forgets the panel and moves the focus to the remaining
+    /// one.
     @Test
     void closingAPanelCancelsItsRunAndMovesFocus() {
         apply(new Intent.FocusPanel(P2));
@@ -1364,7 +1378,8 @@ class ReducerTest {
 
     // ---- approvals
 
-    /// An answered approval leaves the pending list and is resolved with the answer once; answering it again emits nothing.
+    /// An answered approval leaves the pending list and is resolved with the answer once; answering it again emits
+    /// nothing.
     @Test
     void answeredApprovalIsRemovedAndResolved() {
         Approval a = new Approval(3L, "work", ApprovalKind.QUESTION, "AskUserQuestion", "{}", "colour?", 1L);
@@ -1379,11 +1394,11 @@ class ReducerTest {
         assertThat(effects).isEmpty();
     }
 
-    /// An approval request brings the Approvals tab forward; while a card still waits it stays; answering the last brings the
-    /// Session tab forward on the asking session's first panel.
+    /// An approval request brings the Approvals tab forward; while a card still waits it stays; answering the last
+    /// brings the Session tab forward on the own panel of the session that asked.
     @Test
     void aRequestBringsTheApprovalsTabForwardAndAnsweringTheLastBringsTheSessionTabOnThePanelThatAsked() {
-        // both panels are bound to work; the user looks at another panel's place: the second
+        // the user is on the Results tab; while the cards wait the user focuses p2, which has no session
         apply(new Intent.SelectLowerTab(LowerTab.RESULTS));
         apply(new Intent.ApprovalRequested(new Approval(3L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)));
         assertThat(state.lowerTab()).as("a session asks: its card in front").isEqualTo(LowerTab.APPROVALS);
@@ -1397,7 +1412,8 @@ class ReducerTest {
         assertThat(state.focused()).as("the session's first panel").isEqualTo(P1);
     }
 
-    /// The last card answered while the user is on another tab leaves that tab, and a withdrawn card does not switch tabs.
+    /// The last card answered while the user is on another tab leaves that tab, and a withdrawn card does not switch
+    /// tabs.
     @Test
     void theLastCardAnsweredOrWithdrawnElsewhereLeavesTheTabsAlone() {
         apply(new Intent.ApprovalRequested(new Approval(3L, "work", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)));
@@ -1413,8 +1429,8 @@ class ReducerTest {
 
     // ---- views
 
-    /// A view with the same title from the same session replaces the earlier one in place, keeping the user's tab and raising
-    /// its version; a pinned view is not replaced, so a second one is added.
+    /// A view with the same title from the same session replaces the earlier one in place, keeping the user's tab and
+    /// raising its version; a pinned view is not replaced, so a second one is added.
     @Test
     void sameTitleFromSameSessionReplacesUnlessPinned() {
         ViewSpec first = new ViewSpec.Markdown("# one");
@@ -1436,7 +1452,8 @@ class ReducerTest {
         assertThat(state.views()).hasSize(2);
     }
 
-    /// A view the user asked for is brought forward again, while a refresh of it updates its content without moving the user.
+    /// A view the user asked for is brought forward again, while a refresh of it updates its content without moving the
+    /// user.
     @Test
     void theUsersOwnViewShowsAgainButARefreshDoesNotMoveTheUser() {
         apply(new Intent.ShowView("", "plot · one", new ViewSpec.Markdown("a"), Placement.LOWER));
@@ -1487,7 +1504,8 @@ class ReducerTest {
         return (ViewSpec.Console) state.views().stream().filter(v -> v.title().equals(title)).findFirst().orElseThrow().spec();
     }
 
-    /// A Gradle run starts in the session's folder and shows a running console view in front, which a failed finish marks failed.
+    /// A Gradle run starts in the session's folder and shows a running console view in front, which a failed finish
+    /// marks failed.
     @Test
     void gradleRunsInTheSessionDirectoryAndShowsAConsole() {
         apply(new Intent.RunGradle(null, " :db:test "));
@@ -1505,8 +1523,8 @@ class ReducerTest {
         assertThat(effects).containsExactly(new Effect.DesktopNotify("gradle :db:test", "failed in 20 s"));
     }
 
-    /// Running the same command again cancels and forgets the running one, and one console view, under a new run id for the
-    /// same panel, stays in front.
+    /// Running the same command again cancels and forgets the running one, and one console view, under a new run id for
+    /// the same panel, stays in front.
     @Test
     void rerunningACommandStopsAndReplacesTheRunningOne() {
         apply(new Intent.RunGradle(P1, "build"));

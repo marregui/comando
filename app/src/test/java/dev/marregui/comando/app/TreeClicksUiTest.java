@@ -53,8 +53,9 @@ class TreeClicksUiTest {
         return new ViewSpec.TreeNode(label, "", List.of(children));
     }
 
-    /// One click opens a folder; the second click of a double click leaves it, and the double click puts it back as before,
-    /// once only; two single clicks open and close it; a tree without one-click folders keeps a toggle click count of 2.
+    /// One click opens a folder; the second click of a double click leaves it, and the double click puts it back as
+    /// before, once only; two single clicks open and close it; a tree without one-click folders keeps a toggle click
+    /// count of 2.
     @Test
     void theFirstClickOpensOrClosesAFolderAndADoubleClickCanPutItBack() throws Exception {
         TreeView view = new TreeView();
@@ -85,9 +86,9 @@ class TreeClicksUiTest {
         assertThat(plain.tree().getToggleClickCount()).as("other trees keep the look's double click").isEqualTo(2);
     }
 
-    /// comando started on a temporary folder named as `CLAUDE_CONFIG_DIR` would name it puts the kit's Memory, KB and Skills
-    /// folders, with the kit's groups, before the user's own, saves them, shows the Brain group as one BRAIN row (record
-    /// 118), and the status bar has no kit label (record 119); no `claude` runs.
+    /// comando started on a temporary folder named as `CLAUDE_CONFIG_DIR` would name it puts the kit's Memory, KB and
+    /// Skills folders, with the kit's groups, before the user's own, saves them, shows the Brain group as one BRAIN row
+    /// (record 118), and the status bar has no kit label (record 119); no `claude` runs.
     @Test
     void theKitsFoldersOpenTheFilesTabOfAWindowStartedOnItsRoot(@TempDir Path home) throws Exception {
         Path root = home.resolve("comando-kit");
@@ -133,8 +134,9 @@ class TreeClicksUiTest {
     }
 
     /**
-     * The sidebar as it shows, the Files tab in front with its second row selected, painted in three tints side by side to
-     * {@code build/snapshots/sidebar.png} (records 98, 118): the BRAIN row, hairlines between groups, the selection in the tint.
+     * The sidebar as it shows, the Files tab in front with its second row selected, painted in three tints side by side
+     * to {@code build/snapshots/sidebar.png} (records 98, 118): the BRAIN row, hairlines between groups, the selection
+     * in the tint.
      */
     private static void paintSidebar() throws Exception {
         Tint[] tints = {Tint.TREASURE, Tint.SILVER, Tint.ELECTRIC_BLUE};

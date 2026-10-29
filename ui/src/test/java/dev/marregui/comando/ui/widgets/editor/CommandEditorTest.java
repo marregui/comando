@@ -36,8 +36,8 @@ class CommandEditorTest {
         });
     }
 
-    /// Running with the caret inside a block returns that block, selects nothing and tints it from its start; the next edit
-    /// clears the tint.
+    /// Running with the caret inside a block returns that block, selects nothing and tints it from its start; the next
+    /// edit clears the tint.
     @Test
     void runningABlockTintsItAndLeavesNothingSelected() {
         onEdt(() -> {
@@ -89,7 +89,8 @@ class CommandEditorTest {
         });
     }
 
-    /// With nothing run and a selection, an insert appends after the text instead of replacing the selection, which stays.
+    /// With nothing run and a selection, an insert appends after the text instead of replacing the selection, which
+    /// stays.
     @Test
     void anInsertReplacesNothingAndLeavesTheSelectionAlone() {
         onEdt(() -> {
@@ -97,7 +98,7 @@ class CommandEditorTest {
             e.load(TEXT);
             e.area().select(0, 9);
             e.insertAtCaret("\nSELECT 2;");
-            // Nothing ran from the editor: the insert appends, it no longer lands after the selection
+            // nothing ran from the editor: the insert appends at the end, not after the selection
             assertThat(e.text()).startsWith(TEXT).endsWith("SELECT 2;\n\n");
             assertThat(e.area().getSelectedText()).isEqualTo("SELECT 1;");
             e.unmount();
@@ -128,7 +129,7 @@ class CommandEditorTest {
             e.load(text);
             e.area().setCaretPosition(text.indexOf("nope"));
             String ran = e.runText();
-            // The database counts from 1: "nope" starts at the 15th character of the statement
+            // the database counts from 1: "nope" starts at the 15th character of the statement
             assertThat(e.markError(ran, ran.indexOf("nope") + 1)).isTrue();
             assertThat(e.errorStart()).isEqualTo(text.indexOf("nope"));
             e.area().insert(" ", 0);
@@ -138,7 +139,8 @@ class CommandEditorTest {
         });
     }
 
-    /// With the caret on the line under a prompt that ran, an insert goes after that line, which stays the user's to type on.
+    /// With the caret on the line under a prompt that ran, an insert goes after that line, which stays the user's to
+    /// type on.
     @Test
     void anInsertLeavesTheLineUnderTheRanBlockToTheUser() {
         onEdt(() -> {
@@ -210,8 +212,8 @@ class CommandEditorTest {
         });
     }
 
-    /// With the caret at the end, on a fresh line or at the end of the last line, an append goes after it and typing stays on
-    /// the user's line.
+    /// With the caret at the end, on a fresh line or at the end of the last line, an append goes after it and typing
+    /// stays on the user's line.
     @Test
     void aSessionsAppendAtTheCaretLeavesTheUsersLineToTheUser() {
         onEdt(() -> {
@@ -234,8 +236,8 @@ class CommandEditorTest {
         });
     }
 
-    /// After the user edits above the block that ran, an insert lands as a block right after that block, a second insert
-    /// after the first, and a forward selection keeps its mark and dot.
+    /// After the user edits above the block that ran, an insert lands as a block right after that block, a second
+    /// insert after the first, and a forward selection keeps its mark and dot.
     @Test
     void anInsertLandsAsABlockAfterTheBlockThatRanAndKeepsTheSelection() {
         onEdt(() -> {
@@ -243,7 +245,7 @@ class CommandEditorTest {
             e.load("Write a query for trades\n\nnotes below");
             e.area().setCaretPosition(5);
             e.runText();
-            e.area().insert("top\n\n", 0); // The user edits above the block that ran
+            e.area().insert("top\n\n", 0); // the user edits above the block that ran
             int from = e.text().indexOf("trades");
             e.area().setCaretPosition(from);
             e.area().moveCaretPosition(from + 6); // "trades" selected forwards, the caret at the block's end
@@ -260,8 +262,8 @@ class CommandEditorTest {
         });
     }
 
-    /// An insert after a block that ends the text is separated by a blank line, leaves the caret at the block's end, and a
-    /// second insert follows the first.
+    /// An insert after a block that ends the text is separated by a blank line, leaves the caret at the block's end,
+    /// and a second insert follows the first.
     @Test
     void anInsertAfterTheLastBlockIsABlockOfItsOwn() {
         onEdt(() -> {
@@ -308,7 +310,8 @@ class CommandEditorTest {
         });
     }
 
-    /// A position reported for a block of several statements counts from the failed statement, so nothing is underlined.
+    /// A position reported for a block of several statements counts from the failed statement, so nothing is
+    /// underlined.
     @Test
     void anErrorInABlockOfSeveralStatementsIsNotUnderlined() {
         onEdt(() -> {
@@ -323,8 +326,8 @@ class CommandEditorTest {
         });
     }
 
-    /// [CommandEditor#caretInSql] is true at the end of a SQL statement being typed only while a database is open, and false
-    /// after prose, including words that are also SQL keywords.
+    /// [CommandEditor#caretInSql] is true at the end of a SQL statement being typed only while a database is open, and
+    /// false after prose, including words that are also SQL keywords.
     @Test
     void completionOpensInSqlBeingTypedNotInProse() {
         onEdt(() -> {
@@ -365,8 +368,8 @@ class CommandEditorTest {
         return in;
     }
 
-    /// A reload keeps the caret, clamped to the new length, reports no change, and one undo restores the previous text and
-    /// is reported as the user's edit.
+    /// A reload keeps the caret, clamped to the new length, reports no change, and one undo restores the previous text
+    /// and is reported as the user's edit.
     @Test
     void aReloadFromTheFileKeepsTheCaretReportsNoChangeAndUndoesInOneStep() {
         onEdt(() -> {
@@ -388,8 +391,8 @@ class CommandEditorTest {
         });
     }
 
-    /// The panel style marks each block with where it runs; a Java style marks none and opens no SQL completion; the panel
-    /// style marks them again.
+    /// The panel style marks each block with where it runs; a Java style marks none and opens no SQL completion; the
+    /// panel style marks them again.
     @Test
     void aSourceFileIsColouredAsItsLanguageAndMarksNoTargets() {
         onEdt(() -> {

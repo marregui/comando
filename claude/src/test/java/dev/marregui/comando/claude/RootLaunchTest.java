@@ -77,8 +77,8 @@ class RootLaunchTest {
                 "{\"model\":\"haiku\",\"autoMemoryDirectory\":\"" + user.resolve("kit/BRAIN/MEMORY") + "\"}"));
     }
 
-    /// The upgrade session of a kit inside the user's folder removes configuration and memory settings so it uses that folder.
-    /// A different work directory and ordinary session retain the original launch unchanged.
+    /// The upgrade session of a kit inside the user's folder drops the configuration and memory settings, so it runs on
+    /// that folder; another work directory or another session keeps the root's launch.
     @Test
     void theSessionThatUpgradesAKitInsideTheUsersFolderRunsOnTheUsersOwnFolder(@TempDir Path tmp) {
         Path user = tmp.resolve(".claude");

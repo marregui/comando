@@ -59,11 +59,12 @@ it runs: ⌘⏎ or a click on the mark lets comando decide, ⌘⇧⏎ sends it t
 |---|---|
 | **One editor, two targets** | SQL and prompts in one Markdown file per panel, each block coloured as what it is (SQL only while the panel's database is open). SQL completion from the live schema. |
 | **Claude Code, headless** | One `claude -p` process per session: start, resume, fork, start fresh, compact, checkpoint (its summary carried into the next prompt), interrupt, stop. Model and effort per session. Stored conversations import from Claude Code's `projects/` folder. The checkpoint button sends `/reflect`, or the command set in the session's dialog, and turns purple at 60% of the context window. |
-| **A painted transcript** | Prompts, text, tool calls with their results, nested subagents, notes and turn ends, painted with Java2D: streaming a session of 8 turns and 41 tool calls, a frame takes 3.39 ms at the 99th percentile (`:ui:transcriptGate` fails above 16 ms). Thinking gives way to the answer; the answer that ends a turn is framed as a report. |
+| **A painted transcript** | Prompts, text, tool calls with their results, nested subagents, notes and turn ends, painted with Java2D: streaming the gate's recorded session, a frame takes 3.74 ms at the 99th percentile (`:ui:transcriptGate` fails above 16 ms). Thinking gives way to the answer; the answer that ends a turn is framed as a report. |
 | **Claude drives the window** | An MCP server inside the app: tables, plots, diffs, files, Markdown and trees on screen; text into the editor; SQL under a lexical policy (writes refused on production connections); the window's state. Sessions can prompt one another and read each other's transcripts. |
 | **Sessions at a glance** | Tab icons for working, waiting on background work, waiting for the user, failed and finished; the Dock bounces when the user is needed or something failed. The status bar shows the usage limits of the Claude plan and, with Codex installed, of the Codex plan; no spend is shown. |
 | **Databases** | PostgreSQL and QuestDB over the PostgreSQL wire protocol, with an embedded QuestDB one menu item away. One lane per connection, cancel within two seconds, results stored by column (up to 5 000 000 rows), plots and live plots, `EXPLAIN` trees, a schema explorer. |
 | **Documents and changes** | Chosen folders of Claude Code's folder (the kit, its brain) as trees in one tab, searchable by name and kept in sync while open; code repositories stay in the IDE. A double click opens a file in a panel: Markdown rendered (Mermaid diagrams drawn when `mmdc` is installed), source coloured by language. A folder row marks what is uncommitted; ⌘K shows the folders' uncommitted changes, and a file opens side by side against `HEAD`, to edit, roll back or remove. |
+| **Several instances** | Each instance has its own name, data root, kit and brain. Instances on one machine find each other through a local MQTT broker, the open-source HiveMQ Edge release comando downloads and runs on `127.0.0.1`, and one instance's session can ask another's a question. |
 | **Development tools** | A terminal per panel; Gradle runs with test results as a tree and failures sent to Claude. |
 
 <table>
@@ -112,8 +113,8 @@ comando's data stays in `~/.comando`: panels as Markdown files, connections, ses
 
 ## The kit
 
-A kit is a Claude Code setup in a git repository of its own, versioned by tags: instructions, settings, skills, a
-plugin and a `comando-kit.json` that comando reads. comando runs every session on the kit's folder when it finds one
+A kit is a Claude Code setup in a git repository of its own, versioned by tags: instructions, settings, skills, agents,
+hooks and a `comando-kit.json` that comando reads. comando runs every session on the kit's folder when it finds one
 (`~/.claude` with a `comando-kit.json`, or a clone in `~/.claude/comando-kit`), and on `~/.claude` without a kit
 otherwise. With a kit, the Files tab opens on its folders, its KIT row shows the kit's commit, **Upgrade the kit…** moves
 it to a newer tag, and **Back up the brain** and **Back up the kit** commit and push each, the commit saying what it adds.
@@ -148,8 +149,8 @@ JDK 25 and the Claude Code CLI.
 ## Built with
 
 Java 25 and Swing, FlatLaf, jsvg, RSyntaxTextArea and AutoComplete, JediTerm and pty4j, commonmark-java,
-java-diff-utils, Jackson, the PostgreSQL JDBC driver and QuestDB. Eight Gradle modules (core, testkit, db, claude, mcp,
-tools, ui, app): 51 655 lines of Java and 28 245 of tests. CI builds, tests and replays the window on Linux and macOS
+java-diff-utils, Jackson, the PostgreSQL JDBC driver, QuestDB and the HiveMQ MQTT client. Eight Gradle modules (core,
+testkit, db, claude, mcp, tools, ui, app): 62 296 lines of Java and 38 446 of tests. CI builds, tests and replays the window on Linux and macOS
 for every push to `main` and every pull request, except changes to documentation alone; a version tag builds the
 packages for macOS, Linux and Windows and publishes them as a release.
 
@@ -160,4 +161,4 @@ packages are unsigned.
 
 comando is under the [Apache License 2.0](LICENSE). Third-party components keep their licences: JediTerm (LGPL-3.0)
 and pty4j (EPL-1.0) for the terminal; FlatLaf, jsvg (MIT), RSyntaxTextArea and AutoComplete, commonmark-java,
-java-diff-utils, Jackson, SLF4J, the PostgreSQL JDBC driver and QuestDB.
+java-diff-utils, Jackson, SLF4J, the PostgreSQL JDBC driver, QuestDB, the HiveMQ MQTT client and HiveMQ Edge (Apache 2.0).

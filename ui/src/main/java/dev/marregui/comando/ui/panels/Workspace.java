@@ -125,7 +125,7 @@ public final class Workspace {
     private Consumer<PanelId> closer;
     /** Whether a panel's shell runs a program, which closing the panel would end; the shell tells. */
     private Predicate<PanelId> runsProgram = id -> false;
-    /** The tabs a menu's close is closing, which post no notice of their own, and the one notice said once they are gone. EDT only. */
+    /** The tabs a menu's close closes, which post no notice each, and the one notice once they are gone. EDT only. */
     private final Set<PanelId> bulkClosing = new HashSet<>();
     private String bulkSummary;
     /** Opens a file a panel's link names; the shell's own open. */
@@ -150,7 +150,7 @@ public final class Workspace {
     private Function<String, Transcript> transcripts = name -> null;
     /** Each card's topic as last read, by the card's key: its panel's id, or a headless session's key. EDT only. */
     private final Map<String, Topic> topicOf = new HashMap<>();
-    /** What each card's topic was last asked from; the same source is not asked again unless the user asks. EDT only. */
+    /** What each card's topic was last asked from; the same source is asked again only at the user's ask. EDT only. */
     private final Map<String, String> topicAsked = new HashMap<>();
     /**
      * Each session's conversation as last rendered: a new one (a checkpoint's clear, a fresh start) is about something
@@ -166,7 +166,7 @@ public final class Workspace {
     private final TabCard card = new TabCard(key -> readTopic(key, true));
     /** The tab the pointer rests on, whose card shows when the hover timer fires; -1 when none. */
     private int hoverIndex = -1;
-    /** The tab a mouse press landed on: no card for it until the pointer leaves it; -1 when none (2026-10-29). */
+    /** The tab a mouse press landed on: no card for it until the pointer leaves it; -1 when none. */
     private int pressedIndex = -1;
     private final Timer hover = new Timer(ToolTipManager.sharedInstance().getInitialDelay(), e -> showCard(hoverIndex));
     /** Runs when the pointer left the card's tab: the card closes unless the pointer reached it. */
@@ -303,7 +303,8 @@ public final class Workspace {
 
     /**
      * The menu of the tab at {@code index}: close it, the others, or the tabs to its right or its left, in the order
-     * shown. The tabs each item closes are taken as the menu opens, so a tab that closes while it is open changes nothing.
+     * shown. The tabs each item closes are taken as the menu opens, so a tab that closes while it is open changes
+     * nothing.
      */
     JPopupMenu tabMenu(int index) {
         PanelId clicked = ((EditorPanel) tabs.getComponentAt(index)).panel().id();
@@ -339,9 +340,9 @@ public final class Workspace {
     }
 
     /**
-     * Closes {@code ids} with {@code keep} in front, as their close buttons would, but without asking: a tab waiting for
-     * the user stays, so no question is hidden, and so does a tab whose shell runs a program, which closing would end.
-     * One notice, once the tabs are gone, says how many closed and what stayed, in place of a notice per tab.
+     * Closes {@code ids} with {@code keep} in front, as their close buttons would, but without asking: a tab waiting
+     * for the user stays, so no question is hidden, and so does a tab whose shell runs a program, which closing would
+     * end. One notice, once the tabs are gone, says how many closed and what stayed, in place of a notice per tab.
      */
     void closeTabs(PanelId keep, List<PanelId> ids) {
         intents.dispatch(new Intent.FocusPanel(keep));
@@ -504,7 +505,7 @@ public final class Workspace {
         attention = run;
     }
 
-    /** How the tabs' topics are read, and a session's transcript by name, which a session panel's topic is read from. */
+    /** How the tabs' topics are read, and a session's transcript by name, which a session panel's topic reads. */
     public void topics(TopicPort port, Function<String, Transcript> sessions) {
         topics = port;
         transcripts = sessions;
@@ -540,8 +541,8 @@ public final class Workspace {
     }
 
     /**
-     * The sidebar's session rows show the same card as the tabs: the card of the session's panel (the focused one when it
-     * is the session's, else its first), or, for a headless session, a card of its own, read from the end of its
+     * The sidebar's session rows show the same card as the tabs: the card of the session's panel (the focused one when
+     * it is the session's, else its first), or, for a headless session, a card of its own, read from the end of its
      * conversation. A connection's row shows a card of its facts, without a summary. Shown under {@code row}, a
      * rectangle of {@code over}.
      */
@@ -657,8 +658,8 @@ public final class Workspace {
     }
 
     /**
-     * The Linear tickets the panel's text names, the newest command's first; Linear's links in the text, and in the end of
-     * the panel's session's conversation, teach which ids are tickets and their addresses.
+     * The Linear tickets the panel's text names, the newest command's first; Linear's links in the text, and in the end
+     * of the panel's session's conversation, teach which ids are tickets and their addresses.
      */
     private List<LinearTickets.Ticket> tickets(PanelState p, EditorPanel view) {
         String text = view.textEnd(PANEL_TEXT_READ);
@@ -753,9 +754,9 @@ public final class Workspace {
     }
 
     /**
-     * A session panel's own text, its last paragraph first, with the session's last response and where the session works;
-     * when the text is blank, the end of the session's conversation. A panel without a session: the start of its own text with its file. Empty when
-     * there is nothing.
+     * A session panel's own text, its last paragraph first, with the session's last response and where the session
+     * works; when the text is blank, the end of the session's conversation. A panel without a session: the start of its
+     * own text with its file. Empty when there is nothing.
      */
     private String topicSource(PanelState p, EditorPanel view) {
         if (!p.session().isEmpty()) {
@@ -930,8 +931,8 @@ public final class Workspace {
     }
 
     /**
-     * The panel that holds {@code file} shows its text to edit: an open one now, one that opens or reopens at the render
-     * that shows it. Called on the EDT.
+     * The panel that holds {@code file} shows its text to edit: an open one now, one that opens or reopens at the
+     * render that shows it. Called on the EDT.
      */
     public void editWhenOpen(Path file) {
         for (Map.Entry<PanelId, EditorPanel> e : panels.entrySet()) {
@@ -944,8 +945,8 @@ public final class Workspace {
     }
 
     /**
-     * The panel that holds {@code file} scrolls its preview to the heading whose id is {@code heading}: an open one now,
-     * one that opens or reopens at the render that shows it. Called on the EDT.
+     * The panel that holds {@code file} scrolls its preview to the heading whose id is {@code heading}: an open one
+     * now, one that opens or reopens at the render that shows it. Called on the EDT.
      */
     public void headingWhenOpen(Path file, String heading) {
         for (Map.Entry<PanelId, EditorPanel> e : panels.entrySet()) {

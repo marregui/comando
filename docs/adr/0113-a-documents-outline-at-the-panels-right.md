@@ -6,10 +6,9 @@
 
 ## 1. Context
 
-Miguel: "a left panel that would offer a toc or a navigable view of the sections of a markdown document, so that I
-could double click there and have the panel scroll to that section. this should have its own icon in the editor's
-tools." An earlier spec from the Obsidian review (2026-10-18, never dispatched) put the outline in a sidebar tab
-following the focused panel; this record puts it in the panel, as asked.
+Miguel asked for a panel beside a Markdown document that lists its sections, where a double click scrolls the
+document to a section, from an icon of its own in the editor's tools. A design of 2026-10-18, never built, put the
+outline in a sidebar tab following the focused panel; this record puts it in the panel, as asked.
 
 ## 2. Decision
 
@@ -31,4 +30,5 @@ when it reads, and what is remembered.
 `Workspace.outline` are added. The outline does not follow the scroll (no mark on the section in view). Tested in
 `EditorPanelOutlineTest` (the sections and ids against the rendered page, front matter and code fences, read again
 after typing, the choice kept, a double click putting the line at the top, no outline for SQL) and off screen in
-`OutlineUiTest` (`:app:uiTest`: the button, the outline right of the page, then a double click scrolling the rendered page to a far heading).
+`OutlineUiTest` (`:app:uiTest`: the button, the outline right of the page, then a double click scrolling the rendered
+page to a far heading).

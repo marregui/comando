@@ -8,8 +8,9 @@ import java.awt.RenderingHints;
 import java.awt.geom.RoundRectangle2D;
 
 /**
- * A swatch of a ground, the one given or the one chosen at each paint: a rounded square of the ground, edged so it shows
- * on any other, with a bar of a tint down its left side, as a report lies on it: the theme's, else the tint chosen.
+ * A swatch of a ground, the one given or the one chosen at each paint: a rounded square of the ground, edged so it
+ * shows on any other, with a bar of a tint down its left side, as a report lies on it: the theme's, else the tint
+ * chosen.
  */
 public final class GroundIcon implements Icon {
 

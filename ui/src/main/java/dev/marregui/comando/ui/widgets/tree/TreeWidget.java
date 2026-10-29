@@ -34,7 +34,10 @@ public final class TreeWidget implements Widget<ViewSpec.Tree>, Copyable {
         Capabilities.mark(tree.component(), this);
     }
 
-    /** Links: {@code comando-file:} opens the file at the line; {@code comando-insert:} puts the text at the editor's caret. */
+    /**
+     * Links: {@code comando-file:} opens the file at the line; {@code comando-insert:} puts the text at the editor's
+     * caret.
+     */
     static final String INSERT = "comando-insert:";
 
     private static void open(WidgetContext context, ViewSpec.TreeNode n) {

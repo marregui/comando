@@ -56,7 +56,8 @@ class AgentStatusEdgesTest {
     /// A card that arrives done with no child blocks does not claim "0 tools".
     @Test
     void aSubagentCardReadFromAStoredConversationDoesNotClaimItCalledNoTools() {
-        // a stored conversation keeps a sub-agent's blocks in a file of its own: the card arrives done, with no children
+        // a stored conversation keeps a sub-agent's blocks in a file of its own: the card arrives done, with no
+        // children
         add(new Block.ToolCall("a1", "Agent", "{\"description\":\"survey\",\"prompt\":\"Do it.\"}", "Report.",
                 Block.ToolStatus.DONE, ""));
 
@@ -68,7 +69,8 @@ class AgentStatusEdgesTest {
     void theLatestToolsLabelNeverSplitsASurrogatePair() {
         add(new Block.ToolCall("a1", "Agent", "{\"description\":\"survey\",\"prompt\":\"Do it.\"}", "",
                 Block.ToolStatus.RUNNING, ""));
-        // "Bash " (5) + 53 characters puts an emoji's high surrogate at index 58, the last one a 60-character clip keeps
+        // "Bash " (5) + 53 characters puts an emoji's high surrogate at index 58, the last one a 60-character clip
+        // keeps
         String command = "x".repeat(53) + "😀" + "y".repeat(20);
         add(new Block.ToolCall("b1", "Bash", "{\"command\":\"" + command + "\"}", "", Block.ToolStatus.RUNNING, "a1"));
 
@@ -121,7 +123,7 @@ class AgentStatusEdgesTest {
         assertThat(canvas.cardStatus("a1")).as("never listed within the grace").startsWith("done");
     }
 
-    /// A launch whose agent the session already listed and dropped reads done at once.
+    /// A launch whose sub-agent the session already listed and dropped reads done at once.
     @Test
     void aBackgroundSubagentTheSessionAlreadyLetGoReadsDone() {
         canvas.setBackgroundTasks(List.of(new BackgroundTask("a58", "local_agent", "watch", 0L)));

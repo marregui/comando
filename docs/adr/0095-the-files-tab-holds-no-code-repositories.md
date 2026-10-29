@@ -42,5 +42,4 @@ rule, a name used once) and `StoreTest` (a file written without the key, an olde
 
 The four checkouts were taken out of the author's `folders.json` by hand on 2026-10-27. Another user's older file
 shows its repositories as folders outside `~/.claude` until they are taken out in the window. `Snapshot` no longer
-paints the repositories window; `DocImages` keeps its sample repository at `~/.claude/lane`, so `changes.png` and
-`diff.png` show `~/projects/lane` until `:app:docImages` runs again.
+paints the repositories window; `DocImages` keeps its sample repository at `~/.claude/lane`.

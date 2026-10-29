@@ -46,8 +46,9 @@ class CheckpointClearUiTest {
     Path home;
 
     /// After the checkpoint's turn the session has no pending turn, a new conversation id (`fake-2`) and the summary
-    /// carried; the Session tab shows the summary but neither the old turns nor `/reflect` and `/clear`; the panel keeps
-    /// its text; the next prompt goes out with "Context carried over" and the summary in front, which the tab never shows.
+    /// carried; the Session tab shows the summary but neither the old turns nor `/reflect` and `/clear`; the panel
+    /// keeps its text; the next prompt goes out with "Context carried over" and the summary in front, which the tab
+    /// never shows.
     @Test
     void theCheckpointButtonClearsTheConversationAndTheSessionTabToItsSummaryWhichGoesWithTheNextPrompt() throws Exception {
         Path stdin = home.resolve("stdin.jsonl");

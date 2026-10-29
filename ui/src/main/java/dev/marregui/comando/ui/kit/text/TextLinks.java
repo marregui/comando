@@ -8,9 +8,9 @@ import java.util.regex.Pattern;
 
 /**
  * The links in plain text, wherever comando shows text: web addresses ({@code https://…}), wiki-style links
- * ({@code [[name]]}, {@link NoteLinks}), {@code path:line} references and file paths ({@link SourceLinks}) and, in text that is not
- * Markdown already parsed, Markdown links ({@code [label](destination)}). One finder, so every surface sees the same
- * links.
+ * ({@code [[name]]}, {@link NoteLinks}), {@code path:line} references and file paths ({@link SourceLinks}) and, in
+ * text that is not Markdown already parsed, Markdown links ({@code [label](destination)}). One finder, so every
+ * surface sees the same links.
  */
 public final class TextLinks {
 
@@ -59,7 +59,7 @@ public final class TextLinks {
         for (SourceLinks.Ref r : SourceLinks.refs(text)) {
             found.add(new Ref(r.start(), r.end(), r.href(), text.subSequence(r.start(), r.end()).toString()));
         }
-        // the first to start wins; of two starting together, the longer: a web address inside a Markdown link is the link's
+        // the first to start wins; of two starting together, the longer: a web address in a Markdown link is the link's
         found.sort(Comparator.comparingInt(Ref::start).thenComparing(Comparator.comparingInt(Ref::end).reversed()));
         List<Ref> out = new ArrayList<>(found.size());
         int done = 0;

@@ -40,8 +40,8 @@ class StatusBarNoticeTest {
                 .contains("click for recent notices").doesNotContain("go there");
     }
 
-    /// [Notice#log] gives kind `log` and the offset as key, [Notice#panel] keeps a colon in its key, and [Notice#NONE] has
-    /// an empty kind and key.
+    /// [Notice#log] gives kind `log` and the offset as key, [Notice#panel] keeps a colon in its key, and [Notice#NONE]
+    /// has an empty kind and key.
     @Test
     void aNoticeNamesItsKindAndKey() {
         Notice n = new Notice(Notice.Level.WARN, "x", 1L, Notice.log(42L));

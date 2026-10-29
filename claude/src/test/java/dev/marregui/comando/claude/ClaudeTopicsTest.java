@@ -18,11 +18,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [ClaudeTopics] reads concise tab topics serially and normalizes each model response for display.
+/// [ClaudeTopics] reads tab topics one at a time and cleans each answer for display.
 ///
 /// - Cleans successful answers into a single capped line.
 /// - Explains malformed, empty, timed-out, and unavailable reads.
-/// - Queues one latest request per panel and prioritizes urgent requests.
+/// - Queues the latest request per panel and puts urgent requests first.
 /// - Stops pending and active work on close.
 class ClaudeTopicsTest {
 

@@ -8,7 +8,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * The kit's version as git gives it, and the newer releases its remote has: a release is a tag {@code vMAJOR.MINOR.PATCH}.
+ * The kit's version as git gives it, and the newer releases its remote has: a release is a tag
+ * {@code vMAJOR.MINOR.PATCH}.
  *
  * @param described what {@code git describe --tags --always} says of the root: a tag, a tag and the commits past it
  *                  ({@code v1.2.0-3-gabc1234}), or a commit; empty when the root is no git checkout

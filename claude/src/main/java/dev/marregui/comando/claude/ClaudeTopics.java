@@ -26,9 +26,9 @@ import java.util.function.Function;
 /**
  * Reads panels' topics with Haiku through Claude Code: {@code claude --safe-mode -p --model haiku} with no tools, no
  * thinking, a short system prompt and no saved session, the source on its input; the answer is one or two sentences
- * naming the repository, the task and its step. Measured on Claude Code 2.1.308 with
- * 2 000 characters in: a median of 2.0 s and US$0.0001–0.0003 a read. One thread reads every ask, one at a time, so however many panels ask,
- * comando runs at most one such process; the asks wait in one queue, at most one per panel.
+ * naming the repository, the task and its step. Measured on Claude Code 2.1.308 with 2 000 characters in: a median of
+ * 2.0 s and US$0.0001–0.0003 a read. One thread reads every ask, one at a time, so however many panels ask, comando
+ * runs at most one such process; the asks wait in one queue, at most one per panel.
  */
 public final class ClaudeTopics implements TopicPort, AutoCloseable {
 
@@ -142,7 +142,7 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
     /** The most of the command's answer kept: its JSON is a few kilobytes. */
     static final int MAX_OUT = 1 << 20;
 
-    /** The line of the command's JSON result, or why there is none. */
+    /** The topic in the command's JSON result, or why there is none. */
     static Topic parse(String output, long readAtMillis, ObjectMapper json) {
         JsonNode root;
         try {
@@ -182,7 +182,9 @@ public final class ClaudeTopics implements TopicPort, AutoCloseable {
         return s;
     }
 
-    /** Drops the asks still waiting and stops the reader; a read under way is stopped and reports nothing. Idempotent. */
+    /**
+     * Drops the asks still waiting and stops the reader; a read under way is stopped and reports nothing. Idempotent.
+     */
     @Override
     public void close() {
         synchronized (lock) {

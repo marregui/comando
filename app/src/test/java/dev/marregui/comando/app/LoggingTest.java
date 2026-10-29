@@ -17,7 +17,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 class LoggingTest {
 
     /// Uncaught worker and event-dispatch exceptions each reach the rotating application log with their thread names.
-    /// Both throws run after logging is configured in an isolated temporary directory.
     @Test
     void anExceptionNoCodeCaughtIsLoggedFromTheEventThreadAndFromAnyOther(@TempDir Path dir) throws Exception {
         Thread.UncaughtExceptionHandler before = Thread.getDefaultUncaughtExceptionHandler();

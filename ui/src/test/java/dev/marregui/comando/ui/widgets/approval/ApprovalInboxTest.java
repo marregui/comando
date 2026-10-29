@@ -43,7 +43,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a note with text denies with it; an empty note gives the primary answer; Escape returns to the card
 /// - a card's letters work from its viewer; arrows move between cards; a press on its text focuses it
 /// - after a card leaves, focus goes to the card in its place, or nowhere a key answers when the card was withdrawn
-/// - Always shows its rule and needs a second press within the window; a rule that may not be saved offers the session only
+/// - Always shows its rule and needs a second press within the window; a rule that may not be saved offers the session
+///   only
 /// - a question starts with no choice and shows descriptions as text; the other answer is multi-line and sent by button
 /// - a plan can be approved with edits accepted; the age ticks while cards wait; a statement card names its connection
 class ApprovalInboxTest {
@@ -91,7 +92,8 @@ class ApprovalInboxTest {
         return new Approval(id, "work", ApprovalKind.PLAN, "ExitPlanMode", "{\"plan\":\"1. do it\"}", "plan", T0);
     }
 
-    /// Shown again, the inbox scrolls to the oldest request at the top, unless the focus is in a card, when nothing moves.
+    /// Shown again, the inbox scrolls to the oldest request at the top, unless the focus is in a card, when nothing
+    /// moves.
     @Test
     void theInboxComesForwardAtItsTopUnlessTheKeyboardIsInACard() throws Exception {
         List<Approval> many = new ArrayList<>();
@@ -294,8 +296,8 @@ class ApprovalInboxTest {
 
     // ---- focus after a card leaves
 
-    /// After an answered card leaves, the focus goes to the card that took its place, or the one above when it was last;
-    /// the last card leaving takes no focus.
+    /// After an answered card leaves, the focus goes to the card that took its place, or the one above when it was
+    /// last; the last card leaving takes no focus.
     @Test
     void theFocusMovesToTheCardThatTookThePlaceOfTheAnsweredOne() {
         inbox.render(List.of(bash(1, "ls"), bash(2, "pwd"), bash(3, "id")));
@@ -317,8 +319,8 @@ class ApprovalInboxTest {
         assertThat(sent).hasSize(3);
     }
 
-    /// When the CLI withdraws a call while the user types in its note, the focus goes to the inbox itself, where the rest of
-    /// the typing, Enter included, answers no other card.
+    /// When the CLI withdraws a call while the user types in its note, the focus goes to the inbox itself, where the
+    /// rest of the typing, Enter included, answers no other card.
     @Test
     void aCardWithdrawnWhileTheUserTypesInItsNoteLeavesTheKeyboardWhereNoKeyAnswers() {
         inbox.render(List.of(bash(1, "ls"), bash(2, "rm -rf build")));
@@ -395,8 +397,8 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.ALWAYS));
     }
 
-    /// A rule longer than the card is wide: the confirmation wraps, and its buttons lie inside the card, whole, with the
-    /// card grown to hold them (2026-10-29: the buttons wrapped below a one-row confirmation and were clipped).
+    /// A rule longer than the card is wide: the confirmation wraps, and its buttons lie inside the card, whole, with
+    /// the card grown to hold them.
     @Test
     void aLongRulesConfirmationKeepsItsButtonsInsideTheCard() throws Exception {
         String command = "CLAUDE_CONFIG_DIR=/tmp/k python3 install/kit.py instance new Expert --slug expert --root /tmp/k "
@@ -488,8 +490,8 @@ class ApprovalInboxTest {
 
     // ---- questions and plans
 
-    /// A question's options start unselected, descriptions that look like HTML show as text, Enter without a choice asks for
-    /// one, and with a choice sends the answer.
+    /// A question's options start unselected, descriptions that look like HTML show as text, Enter without a choice
+    /// asks for one, and with a choice sends the answer.
     @Test
     void aQuestionStartsWithNoChoiceAndShowsEachDescriptionAsText() {
         inbox.render(List.of(question(1)));
@@ -534,8 +536,8 @@ class ApprovalInboxTest {
         assertThat(decision()).isEqualTo(new ApprovalDecision.Answer(Map.of("Which approach?", "a\nb")));
     }
 
-    /// The free answer is 120 characters wide and at least five lines high in [Theme#mono], never wider, and binds undo, redo,
-    /// copy, paste, cut and select all.
+    /// The free answer is 120 characters wide and at least five lines high in [Theme#mono], never wider, and binds
+    /// undo, redo, copy, paste, cut and select all.
     @Test
     void theOtherAnswerIs120CharactersWideInTheEditorsFontWithUndoRedoAndSelectAll() throws Exception {
         inbox.render(List.of(question(1)));

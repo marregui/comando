@@ -131,8 +131,8 @@ class ChangesWidgetTest {
         assertThat(ChangesWidget.build(List.of(), new HashMap<>()).children().getFirst().label()).isEqualTo(ChangesWidget.NO_REPOS);
     }
 
-    /// All ten rows come open; selecting a file sends `OpenChange` to follow it, and activating it sends `OpenChange` to
-    /// open it.
+    /// All ten rows come open; selecting a file sends `OpenChange` to follow it, and activating it sends `OpenChange`
+    /// to open it.
     @Test
     void everythingComesOpenAndAFileOpensItsComparison() {
         ChangesWidget w = widget();
@@ -147,8 +147,8 @@ class ChangesWidgetTest {
         assertThat(sent).containsExactly(new Intent.OpenChange("/w/edge", REPO.changes().getFirst(), ChangeAsk.OPEN));
     }
 
-    /// A new read keeps a closed group closed and the selection selected without sending an intent; after unmount, reads
-    /// no longer change the tree.
+    /// A new read keeps a closed group closed and the selection selected without sending an intent; after unmount,
+    /// reads no longer change the tree.
     @Test
     void aNewReadKeepsWhatTheUserClosedAndSelectedAndSendsNothing() {
         ChangesWidget w = widget();
@@ -169,8 +169,8 @@ class ChangesWidgetTest {
         assertThat(tree.getRowCount()).as("unmounted: no longer follows").isGreaterThan(1);
     }
 
-    /// A selected group stands for every file under it; the menu's roll back asks once and sends all files, cancel sends
-    /// nothing, and remove sends all; a single deleted file's menu offers compare and roll back but not remove.
+    /// A selected group stands for every file under it; the menu's roll back asks once and sends all files, cancel
+    /// sends nothing, and remove sends all; a single deleted file's menu offers compare and roll back but not remove.
     @Test
     void theSelectionsMenuRollsBackOrRemovesEveryFileInItAfterOneQuestion() {
         List<String> calls = new ArrayList<>();

@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [RepoChanges] holds the repositories' changed files for the file tree to mark.
-/// - A changed file is found by its normalized path, and every folder holding one inside the repository.
+/// - A changed file is found by its normalised path, and every folder holding one inside the repository.
 /// - Listeners hear only of a read that changed something, until stopped.
 class RepoChangesTest {
 
@@ -18,8 +18,9 @@ class RepoChangesTest {
         return new RepoStatus("/r", "main", List.of(changes), false, "");
     }
 
-    /// [RepoChanges#of] gives a file's kind for its path with `..` or nothing for an unchanged file; [RepoChanges#holdsChanges]
-    /// is true for each ancestor folder inside the repository and false for a clean folder or one above the repository.
+    /// [RepoChanges#of] gives a file's kind for its path with `..` or nothing for an unchanged file;
+    /// [RepoChanges#holdsChanges] is true for each ancestor folder inside the repository and false for a clean folder
+    /// or one above the repository.
     @Test
     void filesAndTheFoldersHoldingThemAreFoundByPath() {
         RepoChanges c = new RepoChanges();

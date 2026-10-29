@@ -39,7 +39,8 @@ class ReducerChangesTest {
         return state.views().stream().filter(v -> v.spec() instanceof ViewSpec.Changes).map(ViewState::id).findFirst().orElseThrow();
     }
 
-    /// Adding folders and opening or closing the Changes view emits `WatchRepos` with the current folders and active-view flag only when either changes.
+    /// Adding folders and opening or closing the Changes view emits `WatchRepos` with the current folders and
+    /// active-view flag only when either changes.
     @Test
     void everyFoldersRepositoriesAreWatchedOftenWhileTheChangesViewIsOpen() {
         FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
@@ -60,7 +61,8 @@ class ReducerChangesTest {
         assertThat(effects).containsExactly(new Effect.WatchRepos(List.of(kb, notes), false));
     }
 
-    /// Saving a distinct folder list persists it and describes a changed base, whereas duplicate names leave folders untouched with an error notice.
+    /// Saving a distinct folder list persists it and describes a changed base, whereas duplicate names leave folders
+    /// untouched with an error notice.
     @Test
     void theFoldersWindowsListReplacesTheFoldersAndIsSavedSayingWhenItReplacedAChangeMadeMeanwhile() {
         FolderRoot kb = new FolderRoot("KB", "/kb", "", List.of());
@@ -99,7 +101,8 @@ class ReducerChangesTest {
         assertThat(state).isSameAs(before);
     }
 
-    /// Rollback, removal, and unstage forward valid repository-relative paths, while empty, escaping, root, and relative-root requests are refused.
+    /// Rollback, removal, and unstage forward valid repository-relative paths, while empty, escaping, root, and
+    /// relative-root requests are refused.
     @Test
     void rollingBackRemovingAndUnstagingGoToTheToolsOnlyForPathsInsideTheRepository() {
         RepoStatus.FileChange a = new RepoStatus.FileChange("src/A.java", "", RepoStatus.Kind.MODIFIED);

@@ -8,13 +8,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [Classifier] routes an editor block to SQL or a prompt after applying markers, syntax shape, and prose safeguards.
 ///
-/// - recognized statement shapes select SQL
+/// - recognised statement shapes select SQL
 /// - prose, commands, and ambiguous punctuation select a prompt
 /// - marker lines override classification and are removed
 /// - comment-only blocks produce empty SQL
 class ClassifierTest {
 
-    /// SQL-shaped statements, including comments and quoted prose, select SQL; English requests, slash commands, and question-ended text select a prompt.
+    /// SQL-shaped statements, including comments and quoted prose, select SQL; English requests, slash commands, and
+    /// question-ended text select a prompt.
     @ParameterizedTest(name = "{0} -> {1}")
     @CsvSource(delimiter = '|', textBlock = """
             SELECT * FROM trades                                         | SQL
@@ -92,7 +93,8 @@ class ClassifierTest {
         assertThat(Classifier.classify("-- Welcome to comando.\n-- A block is a run of lines.").target()).isEqualTo(Target.SQL);
     }
 
-    /// CREATE, ALTER, DROP, and TRUNCATE after comments are schema changes, while row writes and identifier prefixes are not.
+    /// CREATE, ALTER, DROP, and TRUNCATE after comments are schema changes, while row writes and identifier prefixes
+    /// are not.
     @Test
     void ddlIsTheStatementsThatChangeTheSchema() {
         assertThat(Classifier.isDdl("-- make it\ncreate table t (x int)")).isTrue();

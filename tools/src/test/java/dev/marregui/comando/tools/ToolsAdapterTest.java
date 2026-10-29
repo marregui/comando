@@ -25,14 +25,17 @@ import java.util.stream.IntStream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [ToolsAdapter] runs Gradle and commands with their console, reads the watched folders' trees, and moves entries to the Trash.
+/// [ToolsAdapter] runs Gradle with its console, reads the watched folders' trees, and moves entries to the Trash.
 /// - Gradle runs in the build root and reports failed tests with their place; a run after close starts nothing.
 /// - Arguments split like a shell; a missing build is reported.
-/// - Cancel stops the whole process tree, even one that ignores SIGTERM; a child holding the output open does not keep the run going.
+/// - Cancel stops the whole process tree, even one that ignores SIGTERM; a child holding the output open does not keep
+///   the run going.
 /// - Each run reads the settings again; a console closed during its run is released when the run ends.
-/// - Folder trees are sent when read and when changed, order days, documents and the index first, and leave out hidden, build and excluded entries.
+/// - Folder trees are sent when read and when changed, ordered (the index first, folders, day folders by date, files),
+///   without hidden, build and excluded entries.
 /// - An unreadable folder or subfolder says so in its tree; a large, deep or linked folder is bounded and says so.
-/// - Entries go to the Trash and leave their lines in the nearest listing; nothing goes without a Trash or outside the folder.
+/// - Entries go to the Trash and leave their lines in the nearest listing; nothing goes without a Trash or outside the
+///   folder.
 class ToolsAdapterTest {
 
     private static final Duration WAIT = Duration.ofSeconds(20);
@@ -75,7 +78,8 @@ class ToolsAdapterTest {
         return dir;
     }
 
-    /// A run asked for after the adapter closed ends at once with `Not started: comando is closing` and no command line.
+    /// A run asked for after the adapter closed ends at once with `Not started: comando is closing` and no command
+    /// line.
     @Test
     void aRunAskedForAfterCloseStartsNoProcess(@TempDir Path dir) throws Exception {
         fakeBuild(dir);
@@ -87,8 +91,9 @@ class ToolsAdapterTest {
         assertThat(consoles.of(8L).text(0)).contains("Not started: comando is closing").doesNotContain("args:");
     }
 
-    /// A Gradle run with one failing test of two ends with exit code 1, `1 of 2 tests failed`, a suite tree whose failed test
-    /// carries its message and a link to its source line, and the quoted `--tests` argument passed without its quotes.
+    /// A Gradle run with one failing test of two ends with exit code 1, `1 of 2 tests failed`, a suite tree whose
+    /// failed test carries its message and a link to its source line, and the quoted `--tests` argument passed without
+    /// its quotes.
     @Test
     void gradleRunsInTheBuildRootAndReportsFailedTests(@TempDir Path dir) throws Exception {
         fakeBuild(dir);
@@ -124,8 +129,8 @@ class ToolsAdapterTest {
         }
     }
 
-    /// [Args#split] honours single and double quotes and backslash escapes, keeps an empty quoted argument, gives nothing for
-    /// blanks, and refuses an unclosed quote.
+    /// [Args#split] honours single and double quotes and backslash escapes, keeps an empty quoted argument, gives
+    /// nothing for blanks, and refuses an unclosed quote.
     @Test
     void argumentsSplitLikeAShell() {
         assertThat(Args.split("stalls --thread 'event-loop-*'")).containsExactly("stalls", "--thread", "event-loop-*");
@@ -201,8 +206,8 @@ class ToolsAdapterTest {
                 .isLessThan(Duration.ofSeconds(6));
     }
 
-    /// A script that exits while its child keeps the output open for 8 s ends with exit code 0 in under 6 s, its output and
-    /// exit code in the console.
+    /// A script that exits while its child keeps the output open for 8 s ends with exit code 0 in under 6 s, its output
+    /// and exit code in the console.
     @Test
     void aChildHoldingTheOutputOpenDoesNotKeepTheRunGoing(@TempDir Path dir) throws Exception {
         Path gradlew = dir.resolve("gradlew");
@@ -213,9 +218,9 @@ class ToolsAdapterTest {
         Intent.CommandFinished end = sink.await(Intent.CommandFinished.class, WAIT);
         assertThat(end.exitCode()).isZero();
         assertThat(Duration.ofNanos(System.nanoTime() - t0)).as("not the child's 8 s").isLessThan(Duration.ofSeconds(6));
-        // the notice shows when the reader is still waiting on the pipe; at the exit the JDK's process reaper drains and
-        // closes the pipe (on Linux and macOS alike) unless the reader is inside a read then, so which one happens is a
-        // matter of thread timing, and in the drained case the reader ends with nothing to report
+        // the notice shows when the reader is still waiting on the pipe; at the exit the JDK's process reaper drains
+        // and closes the pipe (on Linux and macOS alike) unless the reader is inside a read then, so which one happens
+        // is a matter of thread timing, and in the drained case the reader ends with nothing to report
         assertThat(consoles.of(8L).text(0)).contains("done", "Exit code 0");
     }
 
@@ -241,8 +246,8 @@ class ToolsAdapterTest {
                 .contains("serial " + dir + " build");
     }
 
-    /// A read sends every tree, unchanged ones too; a newly watched folder is read at once; unchanged polls send nothing and
-    /// an unwatched folder is not read; a folder watched with new settings is read with them at once.
+    /// A read sends every tree, unchanged ones too; a newly watched folder is read at once; unchanged polls send
+    /// nothing and an unwatched folder is not read; a folder watched with new settings is read with them at once.
     @Test
     void aReadSendsEveryTreeAndAWatchSendsAnOpenFolderOnlyWhenItChanged(@TempDir Path dir) throws Exception {
         FolderRoot a = folder("A", Files.createDirectories(dir.resolve("a")));
@@ -275,7 +280,8 @@ class ToolsAdapterTest {
         }
     }
 
-    /// A missing folder's tree holds one `✗ cannot be read: no such folder` node, reads as unreadable, and raises no notice.
+    /// A missing folder's tree holds one `✗ cannot be read: no such folder` node, reads as unreadable, and raises no
+    /// notice.
     @Test
     void aFolderThatCannotBeReadSaysSoInItsTreeWithoutANotice(@TempDir Path dir) throws Exception {
         adapter().readFolders(List.of(folder("Gone", dir.resolve("missing"))));
@@ -286,8 +292,8 @@ class ToolsAdapterTest {
         assertThat(sink.of(Intent.Notify.class)).as("no notice at every refresh").isEmpty();
     }
 
-    /// A scratchpad tree lists folders before files, day folders in date order, every level, files with a link to line 0
-    /// and folders without one, and leaves out hidden, build and excluded entries.
+    /// A scratchpad tree lists folders before files, day folders in date order, every level, files with a link to line
+    /// 0 and folders without one, and leaves out hidden, build and excluded entries.
     @Test
     void aFolderTreeOrdersDaysAndDocumentsAndLeavesOutHiddenBuildAndExcludedEntries(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("PLAN.md"), "# plan");
@@ -326,8 +332,8 @@ class ToolsAdapterTest {
         });
     }
 
-    /// Moving a file and then a folder to the Trash removes their lines from the nearest listing file, says how many lines
-    /// went, and leaves no temporary file beside the listing.
+    /// Moving a file and then a folder to the Trash removes their lines from the nearest listing file, says how many
+    /// lines went, and leaves no temporary file beside the listing.
     @Test
     void entriesGoToTheTrashAndLeaveTheirOwnLinesInTheNearestListingAndTheOpenFoldersShowIt(@TempDir Path dir, @TempDir Path bin) throws Exception {
         Path day = Files.createDirectories(dir.resolve("2026-10-18"));
@@ -368,8 +374,8 @@ class ToolsAdapterTest {
         }
     }
 
-    /// Without a Trash nothing is moved and nothing deleted; a missing entry, a path outside the folder, and an entry of a
-    /// folder not marked deletable are refused.
+    /// Without a Trash nothing is moved and nothing deleted; a missing entry, a path outside the folder, and an entry
+    /// of a folder not marked deletable are refused.
     @Test
     void nothingGoesWithoutATrashAndNeitherTheFolderNorAnythingOutsideItEverGoes(@TempDir Path dir, @TempDir Path bin) throws Exception {
         Path a = Files.writeString(dir.resolve("a.md"), "a");
@@ -393,8 +399,8 @@ class ToolsAdapterTest {
         assertThat(a).as("a folder not marked deletable").exists();
     }
 
-    /// When a day's listing goes to the Trash with its entries, the listing above is left as it was, and an entry the Trash
-    /// refuses is named while the others still go.
+    /// When a day's listing goes to the Trash with its entries, the listing above is left as it was, and an entry the
+    /// Trash refuses is named while the others still go.
     @Test
     void aListingThatGoesWithItsEntriesIsNotReplacedByOneAboveAndARefusedEntryDoesNotStopTheRest(@TempDir Path dir, @TempDir Path bin) throws Exception {
         Path day = Files.createDirectories(dir.resolve("2026-10-18"));
@@ -419,7 +425,8 @@ class ToolsAdapterTest {
         assertThat(dir.resolve("ALPHA.md")).as("the day's listing went too: the one above is not the day's").hasContent("- `2026-10-18/x.md`: listed above too\n");
     }
 
-    /// The folder's index file comes first at the top level only, then folders, then files; without an index, folders first.
+    /// The folder's index file comes first at the top level only, then folders, then files; without an index, folders
+    /// first.
     @Test
     void theIndexFileLeadsItsFolderThenFoldersThenFiles(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("feedback.md"), "f");
@@ -447,8 +454,8 @@ class ToolsAdapterTest {
         assertThat(tree.children().getLast().label()).isEqualTo(ViewSpec.TreeNode.MORE);
     }
 
-    /// A folder of very many names, shown or hidden, is listed only one past [FolderTree#MAX_LISTED] and ends with the more
-    /// marker.
+    /// A folder of very many names, shown or hidden, is listed only one past [FolderTree#MAX_LISTED] and ends with the
+    /// more marker.
     @Test
     void aFolderOfAMillionNamesIsListedOnlyUpToTheBoundShownOrHidden(@TempDir Path dir) throws Exception {
         for (String prefix : List.of("note", ".hidden")) {
@@ -483,8 +490,8 @@ class ToolsAdapterTest {
         assertThat(tree.children().get(1).children()).singleElement().extracting(ViewSpec.TreeNode::label).isEqualTo(ViewSpec.TreeNode.MORE);
     }
 
-    /// A subfolder without read permission shows `cannot be read` with a `permission denied` child, its siblings stand, and
-    /// the tree as a whole is not unreadable.
+    /// A subfolder without read permission shows `cannot be read` with a `permission denied` child, its siblings stand,
+    /// and the tree as a whole is not unreadable.
     @Test
     void aSubfolderThatCannotBeReadSaysSoAndTheRestStands(@TempDir Path dir) throws Exception {
         Files.writeString(dir.resolve("README.md"), "r");
@@ -502,7 +509,8 @@ class ToolsAdapterTest {
         }
     }
 
-    /// The folder at [FolderTree#MAX_DEPTH] is listed with the detail `not read: N levels deep` and only the more marker.
+    /// The folder at [FolderTree#MAX_DEPTH] is listed with the detail `not read: N levels deep` and only the more
+    /// marker.
     @Test
     void aFolderPastTheDepthBoundIsListedAndSaysItWasNotRead(@TempDir Path dir) throws Exception {
         Path deep = dir;

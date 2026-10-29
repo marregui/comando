@@ -23,7 +23,8 @@ import java.util.Map;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-/// [ResourceKind] implementations convert editable attributes to connection, folder, and session specifications with validated defaults.
+/// [ResourceKind] implementations convert editable attributes to connection, folder, and session specifications with
+/// validated defaults.
 ///
 /// - connection and session forms round-trip their values
 /// - folder paths and listing names are constrained to safe forms
@@ -46,7 +47,8 @@ class ResourceKindTest {
         assertThatThrownBy(() -> new ConnectionSpec("a", "h", 1, "d", "u", "p", false, "maybe")).hasMessageContaining("sslMode is one of");
     }
 
-    /// A deletable folder preserves its listing file and group, while listing files with separators or traversal are rejected.
+    /// A deletable folder preserves its listing file and group, while listing files with separators or traversal are
+    /// rejected.
     @Test
     void aFolderWhoseEntriesGoToTheTrashKeepsItsListingFileAndTheListingIsAFileName() {
         FolderRoot pad = new FolderRoot("Scratchpad", "/s", "", List.of(), "scratchpad").withTrash("ALPHA.md");
@@ -65,7 +67,8 @@ class ResourceKindTest {
         }
     }
 
-    /// Folder attributes round-trip exclusions and home paths, reject invalid names and paths, and retain only supported icons and in-folder indexes.
+    /// Folder attributes round-trip exclusions and home paths, reject invalid names and paths, and retain only
+    /// supported icons and in-folder indexes.
     @Test
     void folderRoundTripAndItsFormIsChecked() {
         FolderRoot spec = new FolderRoot("Plugin", "/Users/x/.claude/plugins/p", "README.md", List.of("tools", "bin"));
@@ -92,7 +95,8 @@ class ResourceKindTest {
                 .hasMessage("the icon must be one of folder, scratchpad, memory, knowledge, skills, plugin: rocket");
     }
 
-    /// Folder exclusions always include build output and compare configured names ignoring case, while defaults retain the root and index file.
+    /// Folder exclusions always include build output and compare configured names ignoring case, while defaults retain
+    /// the root and index file.
     @Test
     void aFolderLeavesOutBuildOutputAndItsOwnNamesIgnoringCase() {
         FolderRoot f = new FolderRoot("p", "/p", null, List.of("Tools"));
@@ -120,7 +124,8 @@ class ResourceKindTest {
         assertThat(SessionKind.INSTANCE.fromAttributes(Map.of("name", "s", "workDir", "/w", "budgetUsd", "0.5")).budgetUsd()).isEqualTo(0.5);
     }
 
-    /// Session attributes retain all explicit fields, preserve an empty checkpoint, and supply the legacy checkpoint default for null data.
+    /// Session attributes retain all explicit fields, preserve an empty checkpoint, and give the default checkpoint to
+    /// a stored session that has none.
     @Test
     void sessionRoundTrip() {
         SessionSpec spec = new SessionSpec("edge", "/Users/x/edge", "opus", "high", "acceptEdits",
@@ -133,7 +138,8 @@ class ResourceKindTest {
                 .as("a spec read from a file written before the field existed gets the default").isEqualTo("/reflect");
     }
 
-    /// Invalid numeric ports and a resume request without a stored conversation id report the corresponding form errors.
+    /// Invalid numeric ports and a resume request without a stored conversation id report the corresponding form
+    /// errors.
     @Test
     void invalidFormsExplainThemselves() {
         Map<String, String> attrs = ConnectionKind.INSTANCE.toAttributes(ConnectionSpec.questDbDefaults("x"));
@@ -156,7 +162,8 @@ class ResourceKindTest {
         assertThat(SessionKind.INSTANCE.fromAttributes(s).startMode()).isEqualTo(StartMode.RESUME);
     }
 
-    /// Only the model choice permits typed values; every other choice remains constrained while text attributes stay editable.
+    /// Only the model choice permits typed values; every other choice remains constrained while text attributes stay
+    /// editable.
     @Test
     void onlyTheModelAcceptsTypedValues() {
         assertThat(SessionKind.INSTANCE.attributes()).filteredOn(a -> a.kind() == Attribute.Kind.CHOICE)
@@ -188,7 +195,8 @@ class ResourceKindTest {
         assertThat(SessionKind.INSTANCE.advice(SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("n", "/tmp")))).isEmpty();
     }
 
-    /// A session removal question counts its open state, two pending approvals, home panel, attached document, and stored conversation.
+    /// A session removal question counts its open state, two pending approvals, home panel, attached document, and
+    /// stored conversation.
     @Test
     void removingASessionNamesWhatItStopsDeniesRemovesAndDetaches() {
         SessionSpec work = SessionSpec.imported("work", "/tmp", "id-1");
@@ -207,7 +215,8 @@ class ResourceKindTest {
         assertThat(SessionKind.INSTANCE.removalQuestion(idle, "new")).isEqualTo("Remove session new?");
     }
 
-    /// A connection removal question lists closing, unbinding, and password deletion, and both resource kinds map names to their notice subjects.
+    /// A connection removal question lists closing, unbinding, and password deletion, and both resource kinds map names
+    /// to their notice subjects.
     @Test
     void removingAConnectionNamesWhatItClosesUnbindsAndDeletes() {
         ConnectionSpec lab = new ConnectionSpec("lab", "h", 8812, "qdb", "admin", "s3cret", false, "prefer");

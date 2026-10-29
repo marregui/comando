@@ -6,9 +6,9 @@
 
 ## 1. Context
 
-[Record 98](0098-the-sidebars-look.md) put every panel of the window on one ground, `#121212`, set once in `Theme`.
-On 2026-10-27 Miguel asked to try other grounds that sit well with the tints ([record 96](0096-a-tint-chosen-in-actions.md)),
-applied everywhere when chosen, to decide by seeing them.
+[Record 98](0098-the-sidebars-look.md) put every panel of the window on one ground, `#121212`, set once in `Theme`. On
+2026-10-27 Miguel asked to try other grounds that sit well with the tints
+([record 96](0096-a-tint-chosen-in-actions.md)), applied everywhere when chosen, to decide by seeing them.
 
 ## 2. Decision
 

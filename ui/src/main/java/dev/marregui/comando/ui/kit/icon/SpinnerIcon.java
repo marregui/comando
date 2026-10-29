@@ -14,15 +14,14 @@ import java.awt.geom.Ellipse2D;
 import java.awt.geom.Rectangle2D;
 
 /**
- * The bar spinner of the original SQL client's {@code InfiniteSpinner}, as an icon: bars around a centre, the head in
- * the tint chosen and the bars behind it fading into the ground, turning clockwise one bar per {@link #advance()}; the
- * shades are read at each paint, so another theme shows at the next turn. The icon has no clock of its own; its
- * owner advances it on a timer and repaints where it is drawn, so one icon serves every place that spins, in step.
- * Not thread-safe: advanced and painted on the event thread.
+ * A bar wheel as an icon (record 42): bars around a centre, the head in the tint chosen and the bars behind it fading
+ * into the ground, turning clockwise one bar per {@link #advance()}; the shades are read at each paint, so another
+ * theme shows at the next turn. The icon has no clock of its own; its owner advances it on a timer and repaints where
+ * it is drawn, so one icon serves every place that spins, in step. Not thread-safe: advanced and painted on the EDT.
  */
 public final class SpinnerIcon implements Icon {
 
-    /** How long one bar's turn lasts, as the original's refresh: eight bars make one revolution in 640 ms. */
+    /** How long one bar's turn lasts: eight bars make one revolution in 640 ms. */
     public static final int STEP_MILLIS = 80;
 
     private static final int BAR_COUNT = 8;

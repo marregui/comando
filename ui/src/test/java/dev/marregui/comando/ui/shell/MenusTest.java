@@ -16,7 +16,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// [Menus] declares the menu bar, the corner buttons, their icons, tooltips and the areas of commands in no menu.
 /// - The bar is Edit then Help, flat, the palette then the help items.
 /// - The corner holds the shell, the plots, and the server and the Edge only when there are.
-/// - Every item and button has an icon that exists and a tooltip of at most 80 characters; no tooltip outlives its item.
+/// - Every item and button has an icon that exists and a tooltip of at most 80 characters; no tooltip outlives its
+///   item.
 /// - A command is in a menu or in an area, never both.
 /// - Separators sit only between entries.
 class MenusTest {
@@ -60,8 +61,9 @@ class MenusTest {
                 .as("one separator between the palette and the help").isEqualTo(1);
     }
 
-    /// [Menus#corner] groups terminal, plot, server and Edge buttons, the Edge's after the server's, and leaves the server
-    /// or the Edge group out when comando has none; [Menus#toggles] lists the same pairs for the Connections tab's menu.
+    /// [Menus#corner] groups terminal, plot, server and Edge buttons, the Edge's after the server's, and leaves the
+    /// server or the Edge group out when comando has none; [Menus#toggles] lists the same pairs for the Connections
+    /// tab's menu.
     @Test
     void theCornerHoldsTheShellThePlotsTheServerAndTheEdgeOnlyWhenThereAreSome() {
         assertThat(Menus.corner(true, true)).containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"),
@@ -95,8 +97,8 @@ class MenusTest {
         }
     }
 
-    /// No id is placed twice, [Menus#AREAS] holds no menu item, every corner command has an area, and sample commands map
-    /// to their areas.
+    /// No id is placed twice, [Menus#AREAS] holds no menu item, every corner command has an area, and sample commands
+    /// map to their areas.
     @Test
     void aCommandIsInAMenuOrInAnAreaNeverBoth() {
         List<String> placed = ids(Menus.bar());

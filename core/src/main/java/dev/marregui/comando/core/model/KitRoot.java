@@ -10,18 +10,18 @@ import java.util.Optional;
 
 /**
  * The Claude Code folder comando starts its sessions on, and the kit in it, when it has one. A kit is the setup of a
- * Claude Code folder, declared by the {@code comando-kit.json} at its top: its name, its brain (the folder holding memory,
- * knowledge base and scratchpad), the folders the Files tab shows, and what it needs outside the folder. comando reads
- * nothing else of a kit.
+ * Claude Code folder, declared by the {@code comando-kit.json} at its top: its name, its brain (the folder holding
+ * memory, knowledge base and scratchpad), the folders the Files tab shows, and what it needs outside the folder.
+ * comando reads nothing else of a kit.
  *
- * <p>The root is {@code CLAUDE_CONFIG_DIR} when comando itself was started with it; else {@code ~/.claude} when it holds
- * a {@code comando-kit.json}; else {@code ~/.claude/comando-kit} when that holds one; else {@code ~/.claude}, with no kit. A {@code
- * comando-kit.json} that does not read is logged and counts as none.</p>
+ * <p>The root is {@code CLAUDE_CONFIG_DIR} when comando itself was started with it; else {@code ~/.claude} when it
+ * holds a {@code comando-kit.json}; else {@code ~/.claude/comando-kit} when that holds one; else {@code ~/.claude},
+ * with no kit. A {@code comando-kit.json} that does not read is logged and counts as none.</p>
  *
  * @param dir     the root, absolute and normalised
  * @param kit     the kit's {@code comando-kit.json}, when the root has one that reads
- * @param userDir the user's own Claude Code folder, {@code ~/.claude}: a root elsewhere is passed to every {@code claude}
- *                comando starts, and the session that upgrades the kit runs on the user's own
+ * @param userDir the user's own Claude Code folder, {@code ~/.claude}: a root elsewhere is passed to every
+ *                {@code claude} comando starts, and the session that upgrades the kit runs on the user's own
  */
 public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
 
@@ -30,7 +30,9 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
     public static final String FILE = "comando-kit.json";
     /** The folder under {@code ~/.claude} a kit of someone else's is cloned into. */
     public static final String CLONE = "comando-kit";
-    /** The session that upgrades the kit: in the root, on the user's own Claude Code folder, so it can replace the kit. */
+    /**
+     * The session that upgrades the kit: in the root, on the user's own Claude Code folder, so it can replace the kit.
+     */
     public static final String UPGRADE_SESSION = "kit";
     /** Where the auto memory lives inside the brain. */
     public static final String MEMORY = "MEMORY";
@@ -113,8 +115,8 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
     }
 
     /**
-     * The root for comando as started: {@code configDir} is the {@code CLAUDE_CONFIG_DIR} comando was started with (null
-     * or blank when none), {@code home} the user's home folder.
+     * The root for comando as started: {@code configDir} is the {@code CLAUDE_CONFIG_DIR} comando was started with
+     * (null or blank when none), {@code home} the user's home folder.
      */
     public static KitRoot resolve(String configDir, Path home, Reader reader) {
         Path user = home.resolve(".claude");
@@ -160,7 +162,9 @@ public record KitRoot(Path dir, Optional<Manifest> kit, Path userDir) {
         current = root;
     }
 
-    /** Whether the root is the user's own {@code ~/.claude}, so a {@code claude} comando starts needs no other folder. */
+    /**
+     * Whether the root is the user's own {@code ~/.claude}, so a {@code claude} comando starts needs no other folder.
+     */
     public boolean own() {
         return dir.equals(userDir);
     }

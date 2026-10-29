@@ -26,13 +26,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [KitActions] upgrades the kit through the session in its root, offers the restarts it needs, and words the status
 /// bar's tip.
-/// - The upgrade makes the kit's session in the root and sends it the prompt; a session called `kit` elsewhere is not taken.
+/// - The upgrade makes the kit's session in the root and sends it the prompt; a session called `kit` elsewhere is not
+///   taken.
 /// - The upgrade has reported once the session took the prompt and finished, or stopped.
 /// - Sessions on the old kit are restarted once stopped, except the kit's own and busy ones.
 /// - A brain folder shown through a link is inside the brain.
 class KitActionsTest {
 
-    /// Each backup says, off the EDT, where it ran and what git did: the brain's what it pushed, the kit's why it failed.
+    /// Each backup says, off the EDT, where it ran and what git did: the brain's what it pushed, the kit's why it
+    /// failed.
     @Test
     void theBrainAndTheKitAreBackedUpEachSayingWhatHappened(@TempDir Path tmp) {
         KitActions kit = actions(new KitRoot(tmp.resolve("kit"), Optional.of(KIT), tmp));
@@ -85,8 +87,8 @@ class KitActionsTest {
         return AppState.initial(List.of(new PanelState(P, "p", "", "")), List.of(), List.of(sessions));
     }
 
-    /// With no `kit` session, [KitActions#send] saves one in the kit root, opens it and sends the upgrade prompt naming the
-    /// version and `INSTALL.md`.
+    /// With no `kit` session, [KitActions#send] saves one in the kit root, opens it and sends the upgrade prompt naming
+    /// the version and `INSTALL.md`.
     @Test
     void theUpgradeMakesTheKitsSessionInTheRootAndSendsItThePrompt(@TempDir Path tmp) {
         Path root = tmp.resolve(".claude/comando-kit");
@@ -101,8 +103,8 @@ class KitActionsTest {
                 + root.resolve("INSTALL.md") + " section Upgrade. Report what changed."));
     }
 
-    /// A `kit` session working in another folder gets a notice to rename or remove it and nothing else; one in the kit root
-    /// is reused without being saved again.
+    /// A `kit` session working in another folder gets a notice to rename or remove it and nothing else; one in the kit
+    /// root is reused without being saved again.
     @Test
     void aSessionCalledKitElsewhereIsNotTakenForTheKits(@TempDir Path tmp) {
         Path root = tmp.resolve(".claude/comando-kit");
@@ -118,8 +120,8 @@ class KitActionsTest {
         assertThat(sent).as("its own: reused").hasSize(2).noneMatch(i -> i instanceof Intent.SaveSession);
     }
 
-    /// [KitActions.Upgrade#next] stays sent with no session or an idle one before it took a turn, becomes running on a busy
-    /// session, and ends when the session is idle again or closed.
+    /// [KitActions.Upgrade#next] stays sent with no session or an idle one before it took a turn, becomes running on a
+    /// busy session, and ends when the session is idle again or closed.
     @Test
     void theUpgradeHasReportedOnceTheSessionTookThePromptAndFinished() {
         KitActions.Upgrade sent = new KitActions.Upgrade("v1.3.0", false);
@@ -153,7 +155,8 @@ class KitActionsTest {
         assertThat(sent).as("started once").containsExactly(new Intent.StopSession("a"), new Intent.StartSession("a"));
     }
 
-    /// [ComandoUi#inside] resolves a symbolic link into the brain as inside it, a real folder in it too, and a sibling not.
+    /// [ComandoUi#inside] resolves a symbolic link into the brain as inside it, a real folder in it too, and a sibling
+    /// not.
     @Test
     void aBrainFolderShownThroughALinkIsInsideTheBrain(@TempDir Path tmp) throws Exception {
         Path memory = Files.createDirectories(tmp.resolve("claude/BRAIN/MEMORY"));

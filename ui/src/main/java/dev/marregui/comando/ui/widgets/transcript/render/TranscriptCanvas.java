@@ -97,7 +97,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     private TextBox focusBox;
     private int focusChar;
     private String pressedLink;
-    /** The clicks of the press on {@link #pressedLink}: a link is followed at a double click, as everywhere in comando. */
+    /** The clicks of the press on {@link #pressedLink}: a double click follows a link, as everywhere in comando. */
     private int pressedClicks;
     /** Find: its matches, the current one, and the items it opened. */
     private final Finder finder = new Finder(new FindHost());
@@ -169,7 +169,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
     }
 
     /**
-     * Adds the block at transcript index {@code index}; a subagent's block goes inside its call's card, and a hook
+     * Adds the block at transcript index {@code index}; a sub-agent's block goes inside its call's card, and a hook
      * note right after another joins its group.
      */
     public void append(int index, Block b) {
@@ -278,7 +278,7 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         agents.setBackgroundTasks(tasks);
     }
 
-    /** Runs when the running sub-agents change with no block appended or replaced: a launch's grace ending, a task list. */
+    /** Runs when the running sub-agents change without a block change: a launch's grace ending, a task list. */
     public void onAgentsChanged(Runnable listener) {
         agents.onAgentsChanged(listener);
     }
@@ -313,7 +313,10 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         return card != null && card.isOpen();
     }
 
-    /** The top of the top-level item holding the card {@code toolUseId}; -1 when there is none or it has no position. For tests. */
+    /**
+     * The top of the top-level item holding the card {@code toolUseId}; -1 when there is none or it has no position.
+     * For tests.
+     */
     int topOf(String toolUseId) {
         Item item = agents.card(toolUseId);
         if (item == null) {
@@ -370,7 +373,10 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         return byIndex.size();
     }
 
-    /** The link at {@code (x, y)}, in a card's header or in its text, as a double click there follows; null when none; for tests. */
+    /**
+     * The link at {@code (x, y)}, in a card's header or in its text, as a double click there follows; null when none;
+     * for tests.
+     */
     String linkAt(int x, int y) {
         int i = firstAt(y);
         if (i < items.size() && y >= tops[i] && items.get(i).laidOut()) {
@@ -409,7 +415,10 @@ public final class TranscriptCanvas extends JComponent implements Scrollable, Ma
         agents.setWaiting(approvals);
     }
 
-    /** The status a card shows beside its title ({@code running · 12 s}, the wait for an approval); empty when done or unknown. */
+    /**
+     * The status a card shows beside its title ({@code running · 12 s}, the wait for an approval); empty when done or
+     * unknown.
+     */
     public String cardStatus(String toolUseId) {
         Items.ToolItem card = agents.card(toolUseId);
         return card == null ? "" : card.statusText(nowMillis());

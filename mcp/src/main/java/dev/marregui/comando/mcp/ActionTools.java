@@ -38,14 +38,17 @@ import java.util.function.Supplier;
 import java.util.stream.Stream;
 
 /**
- * The actions of the registry that are not among comando's first tools (record 121): their schemas, and performing them for
- * a caller. Two rules hold for every caller: an approval card is never answered by the session that raised it nor by one of
- * its creators, and a destructive action runs only for a caller the user granted it in the data root's {@code agents.json}.
- * Every act posts a notice naming the caller.
+ * The actions of the registry that are not among comando's first tools (record 121): their schemas, and performing them
+ * for a caller. Two rules hold for every caller: an approval card is never answered by the session that raised it nor
+ * by one of its creators, and a destructive action runs only for a caller the user granted it in the data root's
+ * {@code agents.json}. Every act posts a notice naming the caller.
  */
 final class ActionTools {
 
-    /** The grant that lets a caller run destructive actions, in {@code agents.json}: {@code {"grants": {"<caller>": ["destructive"]}}}. */
+    /**
+     * The grant that lets a caller run destructive actions, in {@code agents.json}:
+     * {@code {"grants": {"<caller>": ["destructive"]}}}.
+     */
     static final String DESTRUCTIVE = "destructive";
     private static final int CHAIN_LIMIT = 32;
 
@@ -111,7 +114,10 @@ final class ActionTools {
         return out;
     }
 
-    /** Performs action {@code tool} for {@code caller}; bad input is an {@link IllegalArgumentException} the caller turns into a tool error. */
+    /**
+     * Performs action {@code tool} for {@code caller}; bad input is an {@link IllegalArgumentException} the caller
+     * turns into a tool error.
+     */
     McpTools.Outcome run(String caller, String tool, JsonNode args) {
         Action action = Actions.byTool(tool).orElseThrow(() -> new IllegalArgumentException("unknown tool " + tool));
         if (action.kind() == Action.Kind.DESTRUCTIVE && !granted(caller, DESTRUCTIVE)) {
@@ -171,8 +177,6 @@ final class ActionTools {
         return done.startsWith("refused") ? McpTools.Outcome.fail(done) : McpTools.Outcome.ok(done);
     }
 
-    // ---- sessions
-
     private String sessionNew(String caller, AppState s, JsonNode args) {
         String name = name(args, "name");
         if (s.session(name).isPresent()) {
@@ -207,8 +211,8 @@ final class ActionTools {
     }
 
     /**
-     * Record 44's circuit breaker, kept: a stopped session is started again by the user or by the session that created it
-     * (directly or through others), never by an unrelated one.
+     * Record 44's circuit breaker, kept: a stopped session is started again by the user or by the session that created
+     * it (directly or through others), never by an unrelated one.
      */
     private String startable(String caller, AppState s, SessionState target, String what, Intent intent) {
         if (!creators(s, target.name()).contains(caller)) {
@@ -231,8 +235,6 @@ final class ActionTools {
         }
         return chain;
     }
-
-    // ---- approvals
 
     private String approvalAnswer(String caller, AppState s, JsonNode args) {
         long id = args.path("id").asLong(-1);
@@ -263,8 +265,6 @@ final class ActionTools {
         return send(new Intent.ApprovalAnswered(id, decision));
     }
 
-    // ---- connections
-
     private String connectionSave(AppState s, JsonNode args) {
         String previous = args.path("previous_name").asString("").strip();
         Optional<ConnectionState> old = previous.isEmpty() ? s.connection(name(args, "name")) : s.connection(previous);
@@ -274,8 +274,6 @@ final class ActionTools {
                 args.path("ssl_mode").asString("").strip());
         return send(new Intent.SaveConnection(old.isPresent() ? old.get().name() : previous, spec));
     }
-
-    // ---- panels and views
 
     private String panelAdd(AppState s, JsonNode args) {
         String title = args.path("title").asString("").strip();
@@ -302,8 +300,6 @@ final class ActionTools {
     private static boolean titled(AppState s, String title) {
         return Stream.concat(s.panels().stream(), s.closed().stream()).anyMatch(p -> p.title().equalsIgnoreCase(title));
     }
-
-    // ---- arguments and lookups
 
     private String send(Intent intent) {
         sink.dispatch(intent);
@@ -387,7 +383,7 @@ final class ActionTools {
         return s.sessions().stream().map(SessionState::name).toList().toString();
     }
 
-    /** Whether the user granted {@code caller} the grant {@code what} in {@code agents.json}; an unreadable file grants nothing. */
+    /** Whether {@code agents.json} grants {@code caller} the grant {@code what}; an unreadable file grants nothing. */
     boolean granted(String caller, String what) {
         Path file = agentsFile;
         if (file == null || !Files.isRegularFile(file)) {

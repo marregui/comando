@@ -13,11 +13,11 @@ import java.util.Map;
 import java.util.Optional;
 
 /**
- * What every {@code claude} comando starts gets from the kit root: {@code CLAUDE_CONFIG_DIR=<root>} when the root is not
- * the user's own {@code ~/.claude}, and, with a kit, {@code --settings} naming the brain's memory as {@code
- * autoMemoryDirectory}. The session that upgrades a kit at or inside the user's own folder is the one exception: it runs
- * on the user's own folder, so it can replace the kit. A root elsewhere is another instance's kit: its upgrade runs on
- * that root, so nothing of the instance reads or writes {@code ~/.claude}.
+ * What every {@code claude} comando starts gets from the kit root: {@code CLAUDE_CONFIG_DIR=<root>} when the root is
+ * not the user's own {@code ~/.claude}, and, with a kit, {@code --settings} naming the brain's memory as
+ * {@code autoMemoryDirectory}. The session that upgrades a kit at or inside the user's own folder is the one exception:
+ * it runs on the user's own folder, so it can replace the kit. A root elsewhere is another instance's kit: its upgrade
+ * runs on that root, so nothing of the instance reads or writes {@code ~/.claude}.
  */
 public final class RootLaunch {
 
@@ -60,7 +60,10 @@ public final class RootLaunch {
         return this;
     }
 
-    /** {@code argv} with the kit's settings merged into a {@code --settings} it already has, else added after the executable. */
+    /**
+     * {@code argv} with the kit's settings merged into a {@code --settings} it already has, else added after the
+     * executable.
+     */
     public List<String> argv(List<String> argv) {
         if (memory.isEmpty()) {
             return argv;

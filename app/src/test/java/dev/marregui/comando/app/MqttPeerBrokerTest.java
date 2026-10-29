@@ -58,7 +58,7 @@ class MqttPeerBrokerTest {
     }
 
     /// While the Edge is not running, following asks the question each time and never connects, and a publish fails at
-    /// once instead of waiting; closing twice is harmless.
+    /// once instead of waiting; a second close does nothing.
     @Test
     void withNoEdgeRunningItNeverConnectsAndAPublishFailsAtOnce() {
         AtomicInteger looked = new AtomicInteger();

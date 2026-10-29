@@ -9,8 +9,8 @@ import java.util.Objects;
  *
  * @param connection bound connection name, empty when none
  * @param session    bound session name, empty when none
- * @param document   true for a file opened from outside comando's panels folder (a document from the Files tab): closing it
- *                   drops it, while a panel of comando's own is kept, closed, until it is removed
+ * @param document   true for a file opened from outside comando's panels folder (a document from the Files tab):
+ *                   closing it drops it, while a panel of comando's own is kept, closed, until it is removed
  */
 public record PanelState(PanelId id, String title, String connection, String session, boolean document) {
 

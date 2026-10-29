@@ -12,8 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Text up to [OpenFiles#MAX_PANEL_BYTES] opens in a panel; binary or larger files do not.
 class OpenFileTest {
 
-    /// [OpenFiles#isText] accepts UTF-8 Markdown and a text file of exactly the limit, and refuses a PNG header with NUL
-    /// bytes and a file one byte over the limit.
+    /// [OpenFiles#isText] accepts UTF-8 Markdown and a text file of exactly the limit, and refuses a PNG header with
+    /// NUL bytes and a file one byte over the limit.
     @Test
     void textOpensInAPanelWhileBinaryOrLargeFilesShowInTheSidePane(@TempDir Path dir) throws Exception {
         assertThat(OpenFiles.isText(Files.writeString(dir.resolve("a.md"), "# text ✓"))).isTrue();

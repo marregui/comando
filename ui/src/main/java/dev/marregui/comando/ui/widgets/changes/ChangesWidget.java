@@ -38,15 +38,15 @@ import java.util.TreeMap;
 import java.util.function.Consumer;
 
 /**
- * What the Files tab's git repositories hold that their last commits do not, as IDEs show it before a commit: a row
- * per repository with its branch and its count (one repository only, or one folder of it, when the view says so), then
- * up to three groups, Changed, Untracked and Removed, each by folder (a chain of folders holding only one folder is one
- * row), its files named in git's colour for how they changed. A double
- * click or Enter on a file compares it with its {@code HEAD} version side by side; the menu of the selection rolls back
- * every file in it, or under a folder in it, to {@code HEAD}, or moves them to the Trash, after one question; moving the selection moves a
- * comparison already shown to the file selected. The view follows the repositories as they are read: every row is open
- * but those the user closed, known by their folders' path so a chain of folders that splits or joins stays as the
- * user left it, and the file selected stays selected.
+ * What the Files tab's git repositories hold that their last commits do not, as IDEs show it before a commit: a row per
+ * repository with its branch and its count (one repository only, or one folder of it, when the view says so), then up
+ * to three groups, Changed, Untracked and Removed, each by folder (a chain of folders holding only one folder is one
+ * row), its files named in git's colour for how they changed. A double click or Enter on a file compares it with its
+ * {@code HEAD} version side by side; the menu of the selection rolls back every file in it, or under a folder in it, to
+ * {@code HEAD}, or moves them to the Trash, after one question; moving the selection moves a comparison already shown
+ * to the file selected. The view follows the repositories as they are read: every row is open but those the user
+ * closed, known by their folders' path so a chain of folders that splits or joins stays as the user left it, and the
+ * file selected stays selected.
  */
 public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
 
@@ -229,8 +229,8 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
     }
 
     /**
-     * The rows of {@code repos}; each file's row is linked to its change in {@code targets}. A repository's row is named
-     * after its folder, or after its path when two watched repositories share a name.
+     * The rows of {@code repos}; each file's row is linked to its change in {@code targets}. A repository's row is
+     * named after its folder, or after its path when two watched repositories share a name.
      */
     static ViewSpec.TreeNode build(List<RepoStatus> repos, Map<String, Target> targets) {
         return build(repos, new ViewSpec.Changes(), targets);
@@ -413,7 +413,7 @@ public final class ChangesWidget implements Widget<ViewSpec.Changes>, Copyable {
         return menu;
     }
 
-    /** The files of the selection: each file's row, and every file under a selected folder's, group's or repository's row. */
+    /** The selection's files: each file's row, and every file under a selected folder, group or repository row. */
     List<Target> chosen() {
         TreePath[] selected = tree.tree().getSelectionPaths();
         Set<Target> out = new LinkedHashSet<>();

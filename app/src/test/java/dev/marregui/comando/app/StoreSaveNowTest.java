@@ -36,8 +36,8 @@ class StoreSaveNowTest {
         }
     }
 
-    /// With a non-empty directory where the panel's file goes, so the replacing move cannot remove it, the future completes
-    /// with a non-null reason.
+    /// With a non-empty directory where the panel's file goes, so the replacing move cannot remove it, the future
+    /// completes with a non-null reason.
     @Test
     void aFailedWriteCompletesWithTheReason() throws Exception {
         try (Store store = new Store(home)) {

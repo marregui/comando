@@ -15,8 +15,9 @@ public final class ClaudeCommand {
     }
 
     /**
-     * @param newSessionId the id to give a NEW session ({@code --session-id}); ignored for RESUME and FORK
-     * @param mcpConfig    the MCP config file naming comando's server, or null for none
+     * The arguments for {@code spec}. {@code newSessionId} names a new session ({@code --session-id}) and is ignored on
+     * a resume or fork. {@code mcpConfig} names comando's server, or is null for none; without it the session gets
+     * neither the approval tool nor {@code uiInstructions}.
      */
     public static List<String> of(String executable, SessionSpec spec, String newSessionId, Path mcpConfig, String uiInstructions) {
         List<String> a = new ArrayList<>();
@@ -29,7 +30,8 @@ public final class ClaudeCommand {
         a.add("--verbose");
         a.add("--include-partial-messages");
         a.add("--forward-subagent-text");
-        a.add("--include-hook-events"); // hook output beyond SessionStart (UserPromptSubmit, PreToolUse, ...) reaches the transcript
+        // hook output beyond SessionStart (UserPromptSubmit, PreToolUse, ...) reaches the transcript
+        a.add("--include-hook-events");
         switch (spec.startMode()) {
             case NEW -> {
                 a.add("--session-id");

@@ -54,8 +54,8 @@ final class AgentStrip extends JPanel {
     private long lastSecond = -1;
 
     /**
-     * @param reveal shows a running sub-agent's card in the transcript, by its call id: a chip's click
-     * @param open   opens the sub-agent's own tab in the lower panel, or brings it forward: a chip's double click
+     * A chip's click has {@code reveal} show the running sub-agent's card in the transcript, by its call id; its double
+     * click has {@code open} open the sub-agent's own tab in the lower panel, or bring it forward.
      */
     AgentStrip(Consumer<String> reveal, Consumer<String> open, LongSupplier clock) {
         super(null);

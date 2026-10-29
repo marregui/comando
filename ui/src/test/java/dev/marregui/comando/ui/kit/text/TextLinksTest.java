@@ -12,8 +12,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - [TextLinks#at] gives the link covering an index, end exclusive.
 class TextLinksTest {
 
-    /// A note, a URL and a `path:line` in one sentence come back in order; the note's span is its brackets and its label
-    /// its name.
+    /// A note, a URL and a `path:line` in one sentence come back in order; the note's span is its brackets and its
+    /// label its name.
     @Test
     void findsEveryKindOfLinkInOrder() {
         String text = "See [[feedback-verification-discipline]], https://example.org/a and core/Reducer.java:42.";
@@ -37,7 +37,8 @@ class TextLinksTest {
         assertThat(TextLinks.refs("[[ ]] and [[]]", false)).as("no name, no link").isEmpty();
     }
 
-    /// A closing bracket and period after a URL are dropped, a bracket pair inside it is kept, and a port stays part of it.
+    /// A closing bracket and period after a URL are dropped, a bracket pair inside it is kept, and a port stays part of
+    /// it.
     @Test
     void aWebAddressEndsBeforeThePunctuationAfterIt() {
         assertThat(TextLinks.refs("(see https://x.y/z).", false)).extracting(TextLinks.Ref::href).containsExactly("https://x.y/z");

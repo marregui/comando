@@ -16,7 +16,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// [MarkdownWidget] replaced by another document starts at its top; the same document refreshed keeps its place. Runs
-/// off the EDT and steps it with `invokeAndWait`, so the widget's `invokeLater` runs between steps as in the application.
+/// off the EDT and steps it with `invokeAndWait`, so the widget's `invokeLater` runs between steps as in the
+/// application.
 /// - another document in the same view starts at its top
 /// - the same document grown keeps the reader's place
 class SubagentViewRefreshTest {

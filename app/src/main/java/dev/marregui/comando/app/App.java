@@ -55,9 +55,10 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The ownership tree. Builds every part in dependency order and closes them in reverse, each once: this instance's
- * presence among the other instances and its link to the comando Edge, the tool runs, Claude's processes, the MCP server, the database lanes, the reducer, the intent log, the store (which
- * writes the panels last), the Edge this instance started, the embedded QuestDB, and last the window, which stays
- * up, greyed, until the rest has closed; quitting has already ended its shells and live plots.
+ * presence among the other instances and its link to the comando Edge, the tool runs, Claude's processes, the MCP
+ * server, the database lanes, the reducer, the intent log, the store (which writes the panels last), the Edge this
+ * instance started, the embedded QuestDB, and last the window, which stays up, greyed, until the rest has closed;
+ * quitting has already ended its shells and live plots.
  */
 public final class App implements AutoCloseable {
 
@@ -67,11 +68,13 @@ public final class App implements AutoCloseable {
     private final Deque<AutoCloseable> owned = new ArrayDeque<>();
     /** How often the Files tab's open folders are read for changes: often enough to follow a session writing. */
     static final Duration FOLDERS_EVERY = Duration.ofSeconds(5);
-    /** How often the status bar's plan usage is read; each read is one local {@code claude -p /usage}, about a second. */
+    /**
+     * How often the status bar's plan usage is read; each read is one local {@code claude -p /usage}, about a second.
+     */
     static final Duration PLAN_USAGE_EVERY = Duration.ofMinutes(5);
-    /** How often the kit's version and its remote's releases are read; never blocking anything. */
+    /** How often the kit's version and its remote's releases are read, on a strand of their own. */
     static final Duration KIT_EVERY = Duration.ofHours(6);
-    /** {@code -Dcomando.peers=false} leaves this instance off the comando Edge: the window's tests and picture tools set it. */
+    /** {@code -Dcomando.peers=false}, set by window tests and picture tools, keeps this instance off the Edge. */
     static final String PEERS_PROPERTY = "comando.peers";
     private final StateLoop loop;
     private final TranscriptRegistry transcripts;
@@ -138,7 +141,7 @@ public final class App implements AutoCloseable {
             try {
                 mcpTools = new McpTools(loop, loop::state, transcripts, db, new AuditLog(config.auditDir()), Clock.SYSTEM, APPROVAL_TIMEOUT);
                 mcpTools.readOnly(panel -> store.document(panel) && store.file(panel).map(PanelTexts::isLog).orElse(false));
-                // the user's grants to agents: who may run destructive actions (record 121)
+                // the user's grants to callers: who may run destructive actions (record 121)
                 mcpTools.agentsFile(config.home().resolve("agents.json"));
                 mcp = own(McpServer.start(mcpTools, 0, version));
             } catch (IOException e) {
@@ -187,13 +190,16 @@ public final class App implements AutoCloseable {
         }
     }
 
-    /** Starts the reducer, shows the window and loads stored conversations for display. */
+    /**
+     * Starts the reducer and the window, the folders' and the plans' reads, the stored conversations' loads, the
+     * version and kit checks, and the link to the other instances.
+     */
     public void start() {
         loop.start();
         ui.start();
-        // the Files tab's open folders stay in sync whether the tab shows or not; closed ones are not read
-        // every folder's repository, for the Files tab's git marks; the reducer says when the folders or the Changes view change
+        // every folder's repository, for the Files tab's git marks; the reducer says when folders or Changes change
         tools.watchRepos(loop.state().folders(), false);
+        // the Files tab's open folders stay in sync whether the tab shows or not; closed ones are not read
         tools.pollFolders(FOLDERS_EVERY);
         claude.watchPlanUsage(PLAN_USAGE_EVERY);
         List<SessionSpec> withHistory = loop.state().sessions().stream().map(SessionState::spec)
@@ -219,7 +225,7 @@ public final class App implements AutoCloseable {
         }
     }
 
-    /** Reads the kit's version and its remote's newer releases, and whether the brain can be backed up; the window shows them. */
+    /** Reads the kit's version, its remote's newer releases, and whether the brain can be backed up, for the window. */
     private void checkKit() {
         // an exception escaping a periodic task cancels every later run
         try {

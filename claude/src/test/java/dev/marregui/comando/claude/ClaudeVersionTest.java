@@ -42,8 +42,8 @@ class ClaudeVersionTest {
         assertThat(ClaudeVersion.check("/nonexistent/claude", RootLaunch.INHERIT)).contains("not found");
     }
 
-    /// A valid version emitted before a background child holds stdout open returns within seven seconds and remains
-    /// accepted, proving the checker does not wait indefinitely for pipe closure.
+    /// A version printed before a background child holds stdout open is read within 7 s: the check does not wait for
+    /// the pipe to close.
     @Test
     void aChildHoldingTheOutputOpenAfterTheExitDoesNotHoldTheCheck(@TempDir Path dir) throws IOException {
         Path script = dir.resolve("claude");

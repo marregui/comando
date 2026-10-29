@@ -12,7 +12,11 @@ import dev.marregui.comando.core.view.ViewSpec;
 
 import java.util.List;
 
-/** What the reducer asks of the UI beyond rendering the state: the editor text it owns, notifications. */
+/**
+ * What the reducer asks of the UI beyond rendering the state: the editor text the UI owns, desktop notifications, the
+ * window's layout, and what is shown without passing through the state (a file, a folder's tree, repositories, a
+ * change, the plan's usage).
+ */
 public interface UiPort {
 
     void editPanel(PanelId panel, String text, EditMode mode);

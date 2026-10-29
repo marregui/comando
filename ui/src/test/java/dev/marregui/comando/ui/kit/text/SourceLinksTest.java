@@ -23,8 +23,8 @@ class SourceLinksTest {
         assertThat(SourceLinks.line(first.href())).isEqualTo(118);
     }
 
-    /// Relative, absolute and `~` paths with a folder are found, line 0, the comma after one excluded; a bare file name,
-    /// a version pair, a scoped package and a path inside a URL are not.
+    /// Relative, absolute and `~` paths with a folder are found, line 0, the comma after one excluded; a bare file
+    /// name, a version pair, a scoped package and a path inside a URL are not.
     @Test
     void findsFilePathsWithoutALineWhenTheyNameAFolder() {
         String text = "cat docs/adr/0108-links.md, /tmp/build.log and ~/notes/a.md; Lane.java, e.g. 1.5/2.0, @types/node.d.ts";

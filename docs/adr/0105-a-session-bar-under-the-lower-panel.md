@@ -40,18 +40,17 @@ window's bar, as they cover every session.
 
 `SessionBar` (in `ui.panels`) renders the focused panel's session from the state; the shell puts it under the split of
 the panels and the lower panel and moves its elapsed time on the shell's tick. Its model and effort menus are the
-sidebar's (`SessionsSidebar.modelItems`, `effortItems`). `EditorPanel` keeps the connection and
-the editing controls; the session's helpers (`chipText`, `busyText`, `showsFresh`, `showsCheckpoint`, the checkpoint's
-icon and tooltip) moved to `SessionBar`, and the sidebar's rows and cards call them there. `StatusBar` lost its session
-and connection labels and `sessionText`.
+sidebar's (`SessionsSidebar.modelItems`, `effortItems`). `EditorPanel` keeps the connection and the editing controls;
+the session's helpers (`chipText`, `busyText`, `showsFresh`, `showsCheckpoint`, the checkpoint's icon and tooltip) moved
+to `SessionBar`, and the sidebar's rows and cards call them there. `StatusBar` lost its session and connection labels
+and `sessionText`.
 
 Tested in `SessionBarTest`: the bar follows the focus, a panel without a session shows only the chip, no compact button,
 the controls keep their places while the session works (mutation-checked with the activity back in the chip), model and
 effort menus check the session's own and dispatch the change, the context turns purple when the checkpoint is due
 (mutation-checked with the colour fixed), the checkpoint sits in the context's group, the chip's menu by the panel's
-kind, a name like HTML shown as text. `EditorPanelHeaderTest`: the
-header has no session control and keeps the connection. `CheckpointClearUiTest` clicks the session bar's Checkpoint.
-The README's pictures predate the bar until `:app:docImages` paints them again.
+kind, a name like HTML shown as text. `EditorPanelHeaderTest`: the header has no session control and keeps the
+connection. `CheckpointClearUiTest` clicks the session bar's Checkpoint.
 
 ## 4. Alternatives
 

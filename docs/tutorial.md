@@ -46,11 +46,11 @@ the sessions run on the kit, and the Files tab opens on its folders, its KIT row
 
 | Part | What it is |
 |---|---|
-| **Menu bar** | **Edit**, and **Help**: the palette; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
-| **Tab row's right end** | start or stop the shell, stop refreshing plots, start or stop the embedded QuestDB, the theme's swatch, **+** |
+| **Menu bar** | **Edit**, and **Help**: the palette; **Tutorial**, **Keyboard shortcuts**, **Markdown sheet**, **Show the log**, **Show the Edge's log**, **Show QuestDB's log**, **Reveal comando folder**. Everything else has a key, a button or a tab's menu |
+| **Tab row's right end** | start or stop the shell, stop refreshing plots, start or stop the embedded QuestDB, start or stop the comando Edge, the theme's swatch, **+** |
 | **Sidebar**, left | three tabs in one row, icons named by their tooltips: **Sessions**, **Connections**, **Files**. A right click on a tab opens its menu. ⌘B, or the `⋯` button, hides the sidebar to a thin rail; the rail's `⋯` brings it back at its width, and its tab icons bring it back at that tab |
 | **Panel tabs**, top | each tab is a panel: one editor with its own text. `+` or ⌘T adds one; drag a tab along the row to move it |
-| **Panel header** | at the right, first the panel's **connection**: a database icon in its state's colour (grey closed, blue open, amber on its way, red failed) whose click connects or disconnects, and its name, whose click binds another; then **Preview** (Markdown), **Run**, **Stop**, **Clear**; rest the pointer on one for what a click does |
+| **Panel header** | at the right, first the panel's **connection**: a database icon in its state's colour (grey closed, blue open, amber on its way, red failed) whose click connects or disconnects, and its name, whose click binds another; then **Outline** and **Preview** (Markdown), **Run**, **Stop**, **Locate**, **Clear**; rest the pointer on one for what a click does |
 | **Editor** | where you write SQL and prompts, mixed in one text |
 | **Lower tabs** | **Session** (the Claude transcript), **Approvals** (Claude's requests for permission), **Terminal** (a shell), **Results** (SQL output). Plots and kept results open more tabs here |
 | **Uncommitted changes**, right, ⌘K | what the Files tab's git repositories hold that their last commits do not ([§1.4](#14-uncommitted-changes)) |
@@ -70,8 +70,8 @@ does; the menus grey out what cannot run now.
 
 | Tab | Holds | Mouse |
 |---|---|---|
-| **Sessions** | Claude Code sessions, running first. A row is the session's state icon and its name. Under the sessions, while there is one, **Without a session** lists comando's own panels that belong to no session, open and closed | a click on the icon starts or stops the session; a click on the name shows its card (facts and a summary), which then follows the pointer onto other names until it closes; a right click opens its menu, which does the rest; drag a row to order the list yourself |
-| **Connections** | databases. A row is the connection's state icon (grey while closed, blue while connected) and its name, with a red **prod** for production; the name is in the accent colour while the focused panel uses it | a click on the icon connects or disconnects; a click on the name shows a card of its facts, without a summary; a double click binds the connection to the focused panel |
+| **Sessions** | Claude Code sessions, running first. A row is the session's state icon and its name. Under the sessions, while there is one, **Without a session** lists comando's own panels that belong to no session, open and closed | a click on the icon starts or stops the session; a click on the ⓘ at the row's right edge shows its card (facts and a summary), which then follows the pointer onto other names until it closes; a double click on the name opens its panel; a right click opens its menu, which does the rest; drag a row to order the list yourself |
+| **Connections** | databases. A row is the connection's state icon (grey while closed, blue while connected) and its name, with a red **prod** for production; the name is in the accent colour while the focused panel uses it | a click on the icon connects or disconnects; a click on the ⓘ shows a card of its facts, without a summary; a double click on the name binds the connection to the focused panel |
 | **Files** | the folders you choose: at first the kit's folders, or Claude Code's own folder without a kit. In a git repository, an arrow follows a changed file and each folder on the way down to it, until you commit; a dot follows a new file git does not track yet and each folder on the way down to it, until you open it; names keep one colour, red only for a conflict; what git ignores is left out. Every folder lies inside Claude Code's folder; code repositories are read in an IDE | one click opens or closes a folder; a double click opens a file in a panel, to read or edit; a folder's right click shows the changes inside it |
 
 The tabs' right-click menus:
@@ -79,8 +79,8 @@ The tabs' right-click menus:
 | Tab | Menu |
 |---|---|
 | **Sessions** | New session…, Import stored conversations…, sorting, a new panel or a closed one reopened |
-| **Connections** | New connection…, starting or stopping the embedded QuestDB |
-| **Files** | the window that adds, removes, reorders and sets the folders |
+| **Connections** | New connection…, starting or stopping the embedded QuestDB and the comando Edge |
+| **Files** | the window that adds, removes, reorders and sets the folders; with a kit, the Kit jobs window |
 
 ### 1.2 The panel tabs and their cards
 
@@ -96,15 +96,15 @@ A tab's icon says what its session is doing:
 
 The last three put a `●` before the title until you look; the question mark stays until you answer.
 
-Rest the pointer on a tab, or on a session's row in the **Sessions** tab, for its card: the name in the tint; the facts,
-each once (state and what it does, model and effort, context, folder and branch, conversation, Claude Code version,
-connection); the Linear tickets the panel's text names, once a `linear.app/<workspace>/issue/` link has shown which
-workspace to use, each opened in your browser by a double click; and under **Summary**, in the tint, one or two short
-sentences (at most 200 characters) Haiku wrote on what the panel is about. For a session's panel the summary reads the
-last paragraph you wrote there with the session's last response, the rest of the panel as context; for a document, what
-it says. The summary is written the first time the card shows, again when it shows after the panel's text or the
-session's last response changed, and when you press ↻; never on a timer. The card closes when the pointer leaves it, or
-leaves the tab without entering the card; ✕ or a click on the card closes it too.
+Rest the pointer on a tab, or click the ⓘ on a session's row in the **Sessions** tab, for its card: the name in the
+tint; the facts, each once (state and what it does, model and effort, context, folder and branch, conversation, Claude
+Code version, connection); the Linear tickets the panel's text names, once a `linear.app/<workspace>/issue/` link has
+shown which workspace to use, each opened in your browser by a double click; and under **Summary**, in the tint, one or
+two short sentences (at most 200 characters) Haiku wrote on what the panel is about. For a session's panel the summary
+reads the last paragraph you wrote there with the session's last response, the rest of the panel as context; for a
+document, what it says. The summary is written the first time the card shows, again when it shows after the panel's text
+or the session's last response changed, and when you press ↻; never on a timer. The card closes when the pointer leaves
+it, or leaves the tab without entering the card; ✕ or a click on the card closes it too.
 
 ### 1.3 The session bar
 
@@ -143,17 +143,17 @@ approval. Usage takes the warning colour at 75% of a window and the danger colou
 
 comando can run a QuestDB server for you, so you need nothing else installed.
 
-1. Press **⌘⇧P**, type `embedded`, and press **⏎** on **Start embedded QuestDB** (also the database button at the tab row's right end).
-   *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status bar after a few
-   seconds. **Stop embedded QuestDB**, in the same places, stops it. The server keeps its data in `~/.comando/questdb`
-   and listens on this machine only.
+1. Press **⌘⇧P**, type `embedded`, and press **⏎** on **Start embedded QuestDB** (also the database button at the tab
+   row's right end). *You should see* "QuestDB is up: PG wire on 8812, console on http://localhost:9000" in the status
+   bar after a few seconds. **Stop embedded QuestDB**, in the same places, stops it. The server keeps its data in
+   `~/.comando/questdb` and listens on this machine only.
 2. A new comando already has a connection, **local QuestDB**, bound to the panel. Make your own to learn the dialog:
    right-click the sidebar's **Connections** tab and choose **New connection…**. The dialog opens on a new connection
    with QuestDB's defaults: host `localhost`, port `8812`, database `qdb`, user `admin`, password `quest`. The keyboard
    is in **Name**, its default selected: type `tutorial` and change nothing else. Click **Assign to panel**: it saves
-   the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. In the dialog
-   **⏎** saves, **⌘⏎** saves and assigns, and **Esc** asks before it drops unsaved changes.
-   *You should see* `tutorial ▾` beside a grey database icon in the panel header, and **tutorial** in the sidebar with a grey database icon.
+   the new connection first, and the line above the buttons says so. Close the dialog with **Esc**. In the dialog **⏎**
+   saves, **⌘⏎** saves and assigns, and **Esc** asks before it drops unsaved changes. *You should see* `tutorial ▾`
+   beside a grey database icon in the panel header, and **tutorial** in the sidebar with a grey database icon.
 3. Click the database icon next to `tutorial` in the panel header.
    *You should see* the icon turn from grey to blue, and the sidebar's icon turn blue. If the
    connection fails, the status bar says why in red.
@@ -332,10 +332,10 @@ your Claude Code permission settings, which comando leaves as they are; a databa
    session's working directory and gives it the keyboard. Type `ls` and press **⏎**.
 2. Go back to the editor with **⌘E**. At the end, after an empty line, type `date` and press **⌃⏎**. The line under
    the caret is typed into the terminal and runs there; a shell still starting gets it once it is ready.
-3. Press **⌘T** for a second panel. It starts with the connection of the panel you were in and no session, as a
-   session has one panel, its own. Double-click `tutor` in the sidebar, and the **tutor** panel comes forward. With the
-   new panel in front, the session bar's chip offers **New session ‹its title›…**, which would make it a new session's own panel. Change the
-   new panel's connection from the chip in its header. **⌘1**…**⌘9** jump between panels.
+3. Press **⌘T** for a second panel. It starts with the connection of the panel you were in and no session, as a session
+   has one panel, its own. Double-click `tutor` in the sidebar, and the **tutor** panel comes forward. With the new
+   panel in front, the session bar's chip offers **New session ‹its title›…**, which would make it a new session's own
+   panel. Change the new panel's connection from the chip in its header. **⌘1**…**⌘9** jump between panels.
 4. Press **⌘W** to close the new panel, then **⌘⇧T**: it comes back with its text and bindings. A closed panel is kept,
    with its file, until you remove it: the Sessions tab lists it as closed under **Without a session**, and a double
    click there reopens it. comando asks before closing a panel only when its shell runs a program. Right-click a tab
@@ -343,7 +343,7 @@ your Claude Code permission settings, which comando leaves as they are; a databa
    and those whose shell runs a program.
 5. Press **⌘Q**. comando stops the session's process and the embedded QuestDB, and saves everything. If a query, a
    turn, a session's background work, a Gradle run or a shell job is running, it asks first. While it closes, the
-   window stays, greyed, titled "closing…".
+   window stays, greyed, its title followed by "— closing…".
 6. Start comando again, as in step 1.
    *You should see* your panels, their text and their bindings as you left them. Sessions come back stopped, with their
    transcripts, and the next prompt resumes the same conversation: type `What was the first question I asked you?` in

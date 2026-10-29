@@ -26,19 +26,19 @@ Miguel's machine two of five jobs had been installed by hand and differed from t
 | the plumbing | `Setup` gains `jobs`, `saveJobs`, `runJob`, called off the EDT by `JobActions`, as `KitActions` calls the kit's status and the brain's backup; `KitJobsCli` in `claude` runs `kit.py` through `Processes` and reads its JSON | the kit's other calls go this way; the jobs are no part of the session state |
 
 Miguel decided the manifest as the one record, `kit.py` as its one writer, the Kit group as the place, kit before
-comando, and weekday sets beside daily and weekly; Fable's revision of the plan made `kit.py` the job's runner (the
-scheduler's file holds only the schedule and `kit.py run <job>`, which reads the command, environment and log from the
-manifest when it starts, keeps a pid file as the running guard and a line per run), the row and the window, and Save as
-the one write. Claude decided how comando reaches it.
+comando, and weekday sets beside daily and weekly. Claude decided, in a revision of the plan, `kit.py` as the job's
+runner (the scheduler's file holds only the schedule and `kit.py run <job>`, which reads the command, environment and
+log from the manifest when it starts, keeps a pid file as the running guard and a line per run), the row and the window,
+Save as the one write, and how comando reaches it.
 
 ## 3. Consequences
 
 A change of command, arguments, environment or log needs no reload; a change of name or schedule, a pause or a removal
 does. If `comando-kit.json` is open with unsaved edits in a panel when the window saves, the panel's text wins and the
-saved one is set aside with a notice; the row then
-shows the jobs as pending until the window saves again or Apply pending changes runs. `kit.py`'s rules are checked a
-second time as typed (`KitJob.problems`); whether the program is an executable file is `kit.py`'s alone to say. Tests:
-`KitJobTest`, `KitJobsCliTest`, `FilesTabJobsTest`, `JobsEditorTest`, `JobActionsTest`; `kit.py`'s own in the kit's `install/test_kit.py`.
-Not built: icons by state in the window's list (its rows show running, and a failed or invalid job in red), and a test of
-the modal window itself. Known: a folder the user names `Jobs` after the Jobs row closes when the row's detail changes, as
-the tree keeps rows open by name.
+saved one is set aside with a notice; the row then shows the jobs as pending until the window saves again or Apply
+pending changes runs. `kit.py`'s rules are checked a second time as typed (`KitJob.problems`); whether the program is
+an executable file is `kit.py`'s alone to say. Tests: `KitJobTest`, `KitJobsCliTest`, `FilesTabJobsTest`,
+`JobsEditorTest`, `JobActionsTest`; `kit.py`'s own in the kit's `install/test_kit.py`. Not built: icons by state in the
+window's list (its rows show running, and a failed or invalid job in red), and a test of the modal window itself.
+Known: a folder the user names "Jobs" after the Jobs row closes when the row's detail changes, as the tree keeps rows
+open by name.

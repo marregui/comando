@@ -62,14 +62,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * About comando: its icon, name and tagline, the facts of this installation, a few links and the maker's line, worded by
- * {@code about.md} beside this class. The file's heading is the name, its first paragraph the tagline, its table the
+ * About comando: its icon, name and tagline, the facts of this installation, a few links and the maker's line, worded
+ * by {@code about.md} beside this class. The file's heading is the name, its first paragraph the tagline, its table the
  * facts, its paragraph of links the links and its last paragraph the maker's line; {@code {version}}, {@code {java}},
- * {@code {claude}}, {@code {system}}, {@code {home}} and {@code {year}} take this run's values, and a fact left empty is
- * not shown. A link to {@code comando:tutorial} or {@code comando:home} opens the tutorial or the data root.
+ * {@code {claude}}, {@code {system}}, {@code {home}} and {@code {year}} take this run's values, and a fact left empty
+ * is not shown. A link to {@code comando:tutorial} or {@code comando:home} opens the tutorial or the data root.
  * <p>
- * The window is drawn by hand: warm charcoal, a hairline in the tint, the name in Helvetica Neue Light, the tagline and the
- * maker's line in Charter italic, the facts' labels in spaced small capitals; Esc, ⌘W or a click elsewhere closes it.
+ * The window is drawn by hand: warm charcoal, a hairline in the tint, the name in Helvetica Neue Light, the tagline
+ * and the maker's line in Charter italic (Java's logical faces where those are missing), the facts' labels in spaced
+ * small capitals; Esc, ⌘W or a click elsewhere closes it.
  */
 final class About {
 
@@ -101,7 +102,7 @@ final class About {
         }
     }
 
-    /** {@code markdown} as About's content, its placeholders replaced by {@code values}; one not in them stays as written. */
+    /** {@code markdown} as About's content, its placeholders replaced by {@code values}; any other stays as written. */
     static Content parse(String markdown, Map<String, String> values) {
         String name = "";
         List<String> paragraphs = new ArrayList<>();

@@ -59,9 +59,9 @@ public final class AtomicFiles {
     }
 
     /**
-     * Gives {@code tmp} the permissions of the {@code target} it replaces: a temporary file is made readable by its owner
-     * alone, and the move would carry that onto a file another program or person reads (a listing in the user's folder).
-     * A new target keeps the temporary file's.
+     * Gives {@code tmp} the permissions of the {@code target} it replaces: a temporary file is made readable by its
+     * owner alone, and the move would carry that onto a file another program or person reads (a listing in the user's
+     * folder). A new target keeps the temporary file's.
      */
     private static void keepMode(Path target, Path tmp) throws IOException {
         if (Files.exists(target) && Files.getFileStore(tmp).supportsFileAttributeView(PosixFileAttributeView.class)) {

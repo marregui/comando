@@ -47,8 +47,8 @@ class PlanUsageReaderTest {
         return n.toString();
     }
 
-    /// Recognized session and weekly limit lines become ordered windows while surrounding prose is ignored.
-    /// The fixture includes the all-model and model-specific weekly forms.
+    /// Session and weekly limit lines become windows in their order; the prose around them is ignored. The fixture has
+    /// the all-models and the one-model weekly forms.
     @Test
     void eachLimitLineBecomesAWindowAndTheRestIsIgnored() {
         PlanUsage u = PlanUsageReader.parse(answer(MAX_PLAN, false), 7L, JSON);
@@ -102,8 +102,7 @@ class PlanUsageReaderTest {
         assertThat(u.problem()).isEqualTo("'claude -p /usage' did not answer within 300 ms");
     }
 
-    /// A missing local executable becomes a failed usage result with no thrown process exception.
-    /// The temporary directory supplies a path that cannot exist.
+    /// A missing executable gives a failed read, not an exception.
     @Test
     void aMissingExecutableIsAProblemNotAnException() {
         PlanUsage u = PlanUsageReader.read(dir.resolve("absent").toString(), RootLaunch.INHERIT, dir, JSON, Duration.ofSeconds(1));

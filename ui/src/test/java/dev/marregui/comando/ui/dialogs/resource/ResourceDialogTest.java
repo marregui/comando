@@ -72,8 +72,8 @@ class ResourceDialogTest {
         UIManager.setLookAndFeel(previous);
     }
 
-    /// [ResourceDialog#merge] keeps a field the user edited and takes a field the store changed while the form still holds
-    /// what was filled, so a started session's new id and start mode arrive.
+    /// [ResourceDialog#merge] keeps a field the user edited and takes a field the store changed while the form still
+    /// holds what was filled, so a started session's new id and start mode arrive.
     @Test
     void aStartedSessionsNewIdReachesTheFormAndTheUsersEditStays() {
         Map<String, String> filled = Map.of("name", "edge", "effort", "", "sessionId", "A", "startMode", "FORK");
@@ -95,8 +95,8 @@ class ResourceDialogTest {
 
     // ---- layout
 
-    /// Under FlatLaf, a fresh session, an imported session and a connection show all their action buttons at the default
-    /// size, and the dialog has no add, clone, remove or import buttons and no resource list.
+    /// Under FlatLaf, a fresh session, an imported session and a connection show all their action buttons at the
+    /// default size, and the dialog has no add, clone, remove or import buttons and no resource list.
     @Test
     void everyButtonIsVisibleAtTheDefaultSize() {
         ResourceDialog<SessionSpec> sessions = sessions(new RecordingSink());
@@ -168,8 +168,9 @@ class ResourceDialogTest {
                 List.of(SessionState.closed(SessionSpec.fresh("edge", "/tmp")), SessionState.closed(SessionSpec.fresh("lane2", "/var"))));
     }
 
-    /// With unsaved edits, opening another session, a new one or a copy asks first: Keep editing keeps the edits, Escape
-    /// keeps editing too, Discard opens the copy, and the question names `the new session` for an unsaved new form.
+    /// With unsaved edits, opening another session, a new one or a copy asks first: Keep editing keeps the edits,
+    /// Escape keeps editing too, Discard opens the copy, and the question names `the new session` for an unsaved new
+    /// form.
     @Test
     void openingOnAnotherResourceANewOneOrACopyAsksFirstWhenTheFormHasUnsavedChanges() {
         RecordingSink sink = new RecordingSink();
@@ -208,8 +209,8 @@ class ResourceDialogTest {
         assertThat(sink.intents()).isEmpty();
     }
 
-    /// The close button asks like Escape, Discard leaves a reopened dialog with the stored name, and a question already open
-    /// when close is clicked stays and sends nothing.
+    /// The close button asks like Escape, Discard leaves a reopened dialog with the stored name, and a question already
+    /// open when close is clicked stays and sends nothing.
     @Test
     void theCloseButtonAsksLikeEscSoAReopenedDialogHoldsNoUnsavedEdit() {
         RecordingSink sink = new RecordingSink();
@@ -236,8 +237,8 @@ class ResourceDialogTest {
         assertThat(sink.intents()).isEmpty();
     }
 
-    /// New opens `new session` titled New session, a clone is named `… copy` with the original's folder and is new until
-    /// saved, and an empty name opens a new form, sending no intent.
+    /// New opens `new session` titled New session, a clone is named `… copy` with the original's folder and is new
+    /// until saved, and an empty name opens a new form, sending no intent.
     @Test
     void newAndCloneOpenTheirOwnFormNotTheSelectedResource() {
         RecordingSink sink = new RecordingSink();
@@ -376,8 +377,8 @@ class ResourceDialogTest {
 
     // ---- choices and advice
 
-    /// Only the model combo is editable; the start mode shows only for an imported session, and choosing NEW there warns
-    /// that the stored conversation will not be continued, RESUME clearing it.
+    /// Only the model combo is editable; the start mode shows only for an imported session, and choosing NEW there
+    /// warns that the stored conversation will not be continued, RESUME clearing it.
     @Test
     void onlyTheModelTakesTypedValuesAndNewOnAStoredConversationWarns() {
         AppState s = AppState.initial(List.of(new PanelState(States.P1, "one", "", "")), List.of(),
@@ -400,8 +401,8 @@ class ResourceDialogTest {
 
     // ---- new session directory
 
-    /// [ResourceDialog#defaultDirectory] prefers the focused panel's session folder, then the last used, then `user.home`,
-    /// and a saved new session's folder becomes the next new form's.
+    /// [ResourceDialog#defaultDirectory] prefers the focused panel's session folder, then the last used, then
+    /// `user.home`, and a saved new session's folder becomes the next new form's.
     @Test
     void aNewSessionStartsInTheFocusedPanelsSessionDirectoryElseTheLastUsedElseHome() {
         AppState bound = States.twoPanels();
@@ -442,7 +443,10 @@ class ResourceDialogTest {
                 (s, name) -> new Intent.BindSession(s.focused(), name)), sink);
     }
 
-    /** The keys bound with {@link JComponent#registerKeyboardAction}: the look binds action names, that call binds actions. */
+    /**
+     * The keys bound with {@link JComponent#registerKeyboardAction}: the look binds action names, that call binds
+     * actions.
+     */
     private static List<KeyStroke> registered(JRootPane root) {
         InputMap map = root.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW);
         KeyStroke[] keys = map.keys();
@@ -561,8 +565,8 @@ class ResourceDialogTest {
         return one(d.content(), Container.class, c -> "confirm".equals(c.getName()));
     }
 
-    /// [ResourceDialog#chooserStart] takes the first non-blank entry of a path list; empty, separators only, or an invalid
-    /// path with a NUL start in `user.home`.
+    /// [ResourceDialog#chooserStart] takes the first non-blank entry of a path list; empty, separators only, or an
+    /// invalid path with a NUL start in `user.home`.
     @Test
     void theFolderChooserOpensOnTheFieldsFirstFolderOrHome() {
         String home = System.getProperty("user.home");

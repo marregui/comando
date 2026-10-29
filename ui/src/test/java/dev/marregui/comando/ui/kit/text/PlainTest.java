@@ -16,8 +16,8 @@ class PlainTest {
 
     private static final String HOSTILE = "<html><img src='http://127.0.0.1:9/x.png'>";
 
-    /// A label with an `<html><img>` text gets an HTML view (the control), while the same text through [Plain#text], set
-    /// on a guarded radio button, or set before the guard gets none, so no remote image is fetched.
+    /// A label with an `<html><img>` text gets an HTML view (the control), while the same text through [Plain#text],
+    /// set on a guarded radio button, or set before the guard gets none, so no remote image is fetched.
     @Test
     void swingRendersAnHtmlPrefixUnlessGuarded() {
         assertThat(new JLabel(HOSTILE).getClientProperty(BasicHTML.propertyKey)).as("control: Swing builds an HTML view").isNotNull();

@@ -24,7 +24,7 @@ enum TabStatus {
     DONE,
     /** A turn runs, or a query. */
     WORKING,
-    /** No turn runs, but background work the session started has not ended: an agent, a shell command. */
+    /** No turn runs, but background work the session started has not ended: a sub-agent, a shell command. */
     WAITING,
     /** A session is bound and has nothing going on. */
     IDLE,
@@ -42,8 +42,8 @@ enum TabStatus {
     }
 
     /**
-     * The status of {@code p}'s tab in {@code s}; {@code unread} says its last work ended while another tab was in front
-     * and the user has not looked since.
+     * The status of {@code p}'s tab in {@code s}; {@code unread} says its last work ended while another tab was in
+     * front and the user has not looked since.
      */
     static TabStatus of(PanelState p, AppState s, boolean unread) {
         Optional<SessionState> session = p.session().isEmpty() ? Optional.empty() : s.session(p.session());
@@ -68,15 +68,17 @@ enum TabStatus {
 
     /**
      * How long after background work returns its reading turn may take to make its first model call before the work
-     * counts as finished: a large context with a cold cache takes tens of seconds; a return that starts no turn is rare.
+     * counts as finished: a large context with a cold cache takes tens of seconds; a return that starts no turn is
+     * rare.
      */
     static final long REPORT_GRACE_MILLIS = 60_000;
 
     /**
-     * Whether work is going on at {@code nowMillis}, for the unread tracking: a change from true to false is an outcome to
-     * look at. Waiting on the background work the last turn started is work going on, and so is the moment background
-     * work returns until the turn that reads it starts (at most {@link #REPORT_GRACE_MILLIS}): the turn that handed it
-     * off is not the outcome. A later turn that ends while older work runs on is, and so is a hand-off turn that failed.
+     * Whether work is going on at {@code nowMillis}, for the unread tracking: a change from true to false is an outcome
+     * to look at. Waiting on the background work the last turn started is work going on, and so is the moment
+     * background work returns until the turn that reads it starts (at most {@link #REPORT_GRACE_MILLIS}): the turn that
+     * handed it off is not the outcome. A later turn that ends while older work runs on is, and so is a hand-off turn
+     * that failed.
      */
     static boolean active(PanelState p, AppState s, long nowMillis) {
         boolean session = !p.session().isEmpty() && s.session(p.session()).map(x -> x.isBusy()

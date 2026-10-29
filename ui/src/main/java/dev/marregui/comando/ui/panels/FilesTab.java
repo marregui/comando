@@ -71,30 +71,33 @@ import java.util.function.Function;
  * The sidebar's Files tab: the folders the user configured ({@link FolderRoot}) as a navigator of their folders and
  * files. A folder in no group is a top-level row; a group is one top-level row, its name in capitals (record 118): the
  * folder itself for a group of one, such as KIT, else the folder holding the group's folders, such as BRAIN, with them
- * inside it beside its other folders (no files, nothing hidden). A hairline parts one group's row from the next. A click selects; a double click (or Enter) opens a file in a panel, and a double click
- * opens or closes a folder; nothing opens a panel but a file asked for. Each kind of file has its icon, and a folder's
- * index file leads it, offered by name in its row's menu. Only the folders whose rows are open are read and kept in sync
+ * inside it beside its other folders (no files, nothing hidden). A hairline parts one group's row from the next. A
+ * click selects; a double click (or Enter) opens a file in a panel, and a double click opens or closes a folder;
+ * nothing opens a panel but a file asked for. Each kind of file has its icon, and a folder's index file leads it,
+ * offered by name in its row's menu. Only the folders whose rows are open are read and kept in sync
  * ({@link Intent.WatchFolders}), so a closed folder costs nothing; the tree follows them as the tools adapter reads
  * them, keeping what the user opened and selected, and the newest day folder is open at a folder's first read. A
  * folder's row has the icon it was configured with. In a git repository, what git ignores is left out; every name has
  * one colour, red only for a file in conflict, and how a file differs from {@code HEAD} is said by the marks after the
  * names leading down to it: the rising arrow for a change, the dot for a new file (record 98). A repository's top
- * folder has git's mark on its icon and, while the repository has changes, a rising arrow after its name; hovering it says its
- * branch and what it holds uncommitted. A double click on a top-level row opens the Changes view of what the repository
- * holding it changed inside it, or says there is nothing to see, and opens or closes nothing; a top-level row's menu
- * shows those changes and, from the window, backs the brain or the kit up, as the unit they are: the folders inside
- * offer neither (record 118). A changed file's menu compares it with {@code HEAD}. Every folder lies inside Claude Code's folder: the tab is no browser of code
- * repositories.
+ * folder has git's mark on its icon and, while the repository has changes, a rising arrow after its name; hovering it
+ * says its branch and what it holds uncommitted. A double click on a top-level row opens the Changes view of what the
+ * repository holding it changed inside it, or says there is nothing to see, and opens or closes nothing; a top-level
+ * row's menu shows those changes and, from the window, backs the brain or the kit up, as the unit they are: the folders
+ * inside offer neither (record 118). A changed file's menu compares it with {@code HEAD}. Every folder lies inside
+ * Claude Code's folder: the tab is no browser of code repositories.
  *
- * <p>With a kit, a Jobs row is the first inside the kit's row (record 118): the kit's scheduled jobs at a glance (record
- * 117), its detail what runs next, its marks a pending change (the dot) and a failed last run (the name in red); a double
- * click or its menu opens the window that edits them, and its menu applies a change the scheduler has not taken yet.
+ * <p>With a kit, a Jobs row is the first inside the kit's row (record 118): the kit's scheduled jobs at a glance
+ * (record 117), its detail what runs next, its marks a pending change (the dot) and a failed last run (the name in
+ * red); a double click or its menu opens the window that edits them, and its menu applies a change the scheduler has
+ * not taken yet.
  *
- * <p>The tab has no buttons, and a file's menu opens it, rendered or as text; the folders are configured in {@code
- * folders.json}, through the windows the tab's own menu opens. In a folder configured as deletable, the menu also moves the selected files and subfolders to the
- * Trash, after asking; that is the only thing the tab writes. The filter under the tree finds files and folders by name across every folder:
- * while it has text, a second tree shows the matches with the folders leading to them, and every folder is read once
- * so the closed ones are searched too. Clearing it (Esc) brings back the tree as the user left it.</p>
+ * <p>The tab has no buttons, and a file's menu opens it, rendered or as text; the folders are configured in
+ * {@code folders.json}, through the windows the tab's own menu opens. In a folder configured as deletable, the menu
+ * also moves the selected files and subfolders to the Trash, after asking; that is the only thing the tab writes. The
+ * filter under the tree finds files and folders by name across every folder: while it has text, a second tree shows the
+ * matches with the folders leading to them, and every folder is read once so the closed ones are searched too. Clearing
+ * it (Esc) brings back the tree as the user left it.</p>
  */
 final class FilesTab {
 
@@ -109,7 +112,7 @@ final class FilesTab {
     static final String CHANGED_FILE_TIP = "Differs from the last commit; right-click to compare with HEAD";
     /** Where a top-level row is in a node's path: under the tree's hidden root. A group's folders are one deeper. */
     static final int ROW = 1;
-    /** The kit's jobs' row: its name, the link that tells it from a folder's, the group whose row it leads, its icon. */
+    /** The kit's jobs' row: its name, the link that tells it from a folder's, the group whose row it leads, icon. */
     static final String JOBS = "Jobs";
     static final String JOBS_LINK = "comando-kit-jobs:";
     static final String JOBS_GROUP = "Kit";
@@ -179,7 +182,7 @@ final class FilesTab {
     private Set<String> foundRows = Set.of();
     /** The open folders as last sent in {@link Intent.WatchFolders}; the adapter starts watching none. */
     private List<String> watched = List.of();
-    /** True while code, not the user, expands rows: a restored row neither opens its index nor changes what is watched. */
+    /** True while code, not the user, expands rows: a restored row neither opens its index nor changes the watch. */
     private boolean restoring;
     private boolean built;
     /** The kit's jobs as last read; {@link KitJobs#NONE} hides their row. */
@@ -237,7 +240,8 @@ final class FilesTab {
             t.onActivate(this::activate);
             t.onMenu(this::menu);
             if (t.component() instanceof JScrollPane sp) {
-                // unlike the sidebar's lists: a name wider than the tab scrolls into view rather than being cut at the edge
+                // unlike the sidebar's lists: a name wider than the tab scrolls into view rather than being cut at the
+                // edge
                 sp.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
             }
         }
@@ -294,7 +298,7 @@ final class FilesTab {
         SidebarLook.ground(body);
         filter.setForeground(SidebarLook.TEXT);
         body.add(center, BorderLayout.CENTER);
-        body.add(bottom, BorderLayout.SOUTH); // under the tree (Miguel, 2026-10-19)
+        body.add(bottom, BorderLayout.SOUTH); // under the tree
     }
 
     /** The tree, the filter under it. */
@@ -371,8 +375,8 @@ final class FilesTab {
     /**
      * Shows {@code file} in the tree (record 119): the filter cleared, every row and folder on its way opened, whether
      * the user closed them or they were never read, and the file selected and scrolled into view. A folder not read yet
-     * is read first, and the walk goes on when its tree arrives. Says beside the tree when no folder of the tab shows the
-     * file. Opens no panel.
+     * is read first, and the walk goes on when its tree arrives. Says beside the tree when no folder of the tab shows
+     * the file. Opens no panel.
      */
     void reveal(Path file) {
         if (searching()) {
@@ -475,7 +479,7 @@ final class FilesTab {
         }
     }
 
-    /** The open folders' git repositories as read: the marks of a changed file, a new one and the folders leading to them. */
+    /** The open folders' git repositories as read: the marks of changed and new files and of the folders above them. */
     void showRepos(List<RepoStatus> repos) {
         List<RepoStatus> before = changes.repos();
         List<String> heads = before.stream().map(RepoStatus::head).toList();
@@ -549,9 +553,9 @@ final class FilesTab {
     }
 
     /**
-     * The colour of a node's name when it is not the names' one (record 98): red for a file in conflict, as an error is;
-     * none for anything else. How a file or folder differs from {@code HEAD} is said by the marks after its name, the
-     * arrow and the dot, not by its colour.
+     * The colour of a node's name when it is not the names' one (record 98): red for a file in conflict, as an error
+     * is; none for anything else. How a file or folder differs from {@code HEAD} is said by the marks after its name,
+     * the arrow and the dot, not by its colour.
      */
     Color colorOf(DefaultMutableTreeNode n) {
         if (isJobs(n)) {
@@ -619,8 +623,8 @@ final class FilesTab {
     }
 
     /**
-     * A folder's row double-clicked: the Changes view of what the repository holding it has changed inside it, all of it
-     * when the row is the repository's top folder, when there is any; else a word beside the row that there is none.
+     * A folder's row double-clicked: the Changes view of what the repository holding it has changed inside it, all of
+     * it when the row is the repository's top folder, when there is any; else a word beside the row that there is none.
      */
     private void openChanges(TreeView t, TreePath row) {
         String title = title(row);
@@ -718,7 +722,7 @@ final class FilesTab {
         return changed ? Icons.get(CHANGES_ICON) : fresh ? Icons.get(NEW_ICON) : null;
     }
 
-    /** What a top-level row inside a repository says on hover: the branch, and what it holds that the last commit does not. */
+    /** A top-level row's hover text in a repository: the branch, and what it holds that the last commit does not. */
     private Optional<String> rowTip(DefaultMutableTreeNode n) {
         if (!isTop(n) || isJobs(n)) {
             return Optional.empty();
@@ -757,7 +761,7 @@ final class FilesTab {
         return changesTip(r, r.changes(), "");
     }
 
-    /** {@code r}'s branch and its {@code changes}, counted by kind; {@code where} follows the count, " here" for a folder. */
+    /** {@code r}'s branch and {@code changes} by kind; {@code where} follows the count, " here" for a folder. */
     private static String changesTip(RepoStatus r, List<RepoStatus.FileChange> changes, String where) {
         if (!r.error().isEmpty()) {
             return Plain.text(Clip.keepStart("Git: cannot be read: " + r.error(), 80));
@@ -813,11 +817,12 @@ final class FilesTab {
     }
 
     /**
-     * The top-level rows (record 118): a folder in no group as its own row; a group's folders under one row, the group's
-     * name in capitals: the folder itself for a group of one, which leads with the Jobs row for the kit's group, else the
-     * folder holding them ({@link FolderRoot#groupRoots}), with them first, then its other folders, neither its files nor
-     * anything hidden. A group whose folders share no parent shows them as rows of their own. {@code kids} gives a
-     * folder's entries; with {@code keepEmpty} false, a row with none is left out, as the filter's tree wants.
+     * The top-level rows (record 118): a folder in no group as its own row; a group's folders under one row, the
+     * group's name in capitals: the folder itself for a group of one, which leads with the Jobs row for the kit's
+     * group, else the folder holding them ({@link FolderRoot#groupRoots}), with them first, then its other folders,
+     * neither its files nor anything hidden. A group whose folders share no parent shows them as rows of their own.
+     * {@code kids} gives a folder's entries; with {@code keepEmpty} false, a row with none is left out, as the filter's
+     * tree wants.
      */
     private List<ViewSpec.TreeNode> rows(Function<FolderRoot, List<ViewSpec.TreeNode>> kids, boolean keepEmpty) {
         List<FolderRoot> roots = FolderRoot.groupRoots(folders);
@@ -855,7 +860,7 @@ final class FilesTab {
         return rows;
     }
 
-    /** Adds {@code f}'s row holding {@code inside} to {@code rows}, unless it holds nothing and empty rows are left out. */
+    /** Adds {@code f}'s row holding {@code inside} to {@code rows}, unless it is empty and empty rows are left out. */
     private void add(List<ViewSpec.TreeNode> rows, FolderRoot f, List<ViewSpec.TreeNode> inside, boolean keepEmpty) {
         if (keepEmpty || !inside.isEmpty()) {
             rows.add(new ViewSpec.TreeNode(label(f), rowDetail(f), inside));
@@ -863,8 +868,8 @@ final class FilesTab {
     }
 
     /**
-     * A group's row (record 119): its name in capitals, no icon, its repository's commit for detail (and the kit's newer
-     * release), known by its link rather than by a path it no longer shows.
+     * A group's row (record 119): its name in capitals, no icon, its repository's commit for detail (and the kit's
+     * newer release), known by its link rather than by a path it no longer shows.
      */
     private void addGroup(List<ViewSpec.TreeNode> rows, FolderRoot f, List<ViewSpec.TreeNode> inside, boolean keepEmpty) {
         if (keepEmpty || !inside.isEmpty()) {
@@ -925,16 +930,16 @@ final class FilesTab {
     }
 
     /**
-     * The icon called {@code name}: a folder's along the tint's ramp, from the sidebar's family (record 98); a file's as
-     * its kind's colours have it.
+     * The icon called {@code name}: a folder's along the tint's ramp, from the sidebar's family (record 98); a file's
+     * as its kind's colours have it.
      */
     static Icon icon(String name) {
         return Icons.folder(name);
     }
 
     /**
-     * The separator above a top-level row (record 118): the hairline alone, an empty header, where a row of another group
-     * than the row above it begins; null for the first row, any other row and every node inside one.
+     * The separator above a top-level row (record 118): the hairline alone, an empty header, where a row of another
+     * group than the row above it begins; null for the first row, any other row and every node inside one.
      */
     String header(DefaultMutableTreeNode n) {
         if (!isTop(n) || !(n.getUserObject() instanceof ViewSpec.TreeNode node) || !(n.getParent() instanceof DefaultMutableTreeNode root)) {
@@ -988,7 +993,7 @@ final class FilesTab {
         }
     }
 
-    /** The row of the folder called {@code name}, a top-level one or a group's folder inside its row; null when none. */
+    /** The row of the folder called {@code name}, a top-level one or a group's folder inside its row; else null. */
     private TreePath folderRow(String name) {
         DefaultMutableTreeNode root = (DefaultMutableTreeNode) tree.tree().getModel().getRoot();
         for (int i = 0; i < root.getChildCount(); i++) {
@@ -1108,7 +1113,7 @@ final class FilesTab {
         return jobs;
     }
 
-    /** What the jobs' row and its menu do: open the window that edits the jobs; apply what the scheduler has not taken. */
+    /** What the jobs' row and its menu do: open the jobs' editing window; apply what the scheduler has not taken. */
     void onJobs(Runnable configure, Runnable apply) {
         configureJobs = configure;
         applyJobs = apply;
@@ -1122,7 +1127,7 @@ final class FilesTab {
         return n.getUserObject() instanceof ViewSpec.TreeNode node && isJobs(node);
     }
 
-    /** The jobs' row's detail: how many, then what runs now, or how many are paused and what runs next; or that they cannot be read. */
+    /** The jobs' row's detail: how many, then what runs now, or how many are paused and what runs next; or unread. */
     static String jobsDetail(KitJobs j) {
         if (!j.error().isEmpty()) {
             return "cannot be read";
@@ -1135,7 +1140,7 @@ final class FilesTab {
         return j.nextUp().map(e -> count + paused + " · next " + day(e.next())).orElse(count + paused);
     }
 
-    /** One line on the jobs' row, the most pressing first: unreadable, running, failed, pending, then what runs next. */
+    /** One line on the jobs' row, most pressing first: unreadable, running, failed, pending, then what runs next. */
     static String jobsTip(KitJobs j) {
         String tip;
         if (!j.error().isEmpty()) {
@@ -1169,7 +1174,7 @@ final class FilesTab {
         folderMenu = extra;
     }
 
-    /** Shows the changes inside the folder at {@code at}, of the repository holding it; off, saying so, when it has none. */
+    /** Shows the changes inside the folder at {@code at}, of the repository holding it; says so when there are none. */
     private void addChanges(JPopupMenu menu, TreePath at) {
         if (at == null) {
             return;
@@ -1230,7 +1235,7 @@ final class FilesTab {
         return Optional.of(Map.entry(folder, List.copyOf(paths)));
     }
 
-    /** A file's path from its link; a subfolder's from its folder, whose row is at {@code at}, and the names leading to it. */
+    /** A file's path from its link; a subfolder's from its folder, whose row is at {@code at}, and names under it. */
     private static Path pathOf(FolderRoot folder, TreePath p, int at, ViewSpec.TreeNode n) {
         if (n.link().startsWith(SourceLinks.SCHEME)) {
             return Path.of(SourceLinks.path(n.link()));
@@ -1330,7 +1335,7 @@ final class FilesTab {
         }
     }
 
-    /** {@code nodes} cut to those whose name matches {@code q} and the folders leading to them; a match keeps its entries. */
+    /** {@code nodes} cut to the name matches of {@code q} and the folders above them; a match keeps its entries. */
     static List<ViewSpec.TreeNode> matches(List<ViewSpec.TreeNode> nodes, String q) {
         List<ViewSpec.TreeNode> out = new ArrayList<>();
         for (ViewSpec.TreeNode n : nodes) {

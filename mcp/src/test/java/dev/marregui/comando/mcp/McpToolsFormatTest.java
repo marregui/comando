@@ -13,8 +13,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Rows that fit the budget retain their header and every value.
 class McpToolsFormatTest {
 
-    /// [McpTools#format] cuts a 10-megabyte cell at 64 kB, retains the first row only, and states that later rows
-    /// remain, so one pathological cell cannot exceed the response budget.
+    /// [McpTools#format] cuts a 10 MB cell at 64 kB, keeps the first row only, and says that later rows remain, so one
+    /// cell cannot exceed the response budget.
     @Test
     void oneHugeCellIsCutToTheBudgetNotPassedWhole() {
         String huge = "x".repeat(10 * 1024 * 1024);

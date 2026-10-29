@@ -60,7 +60,9 @@ public final class RepoChanges {
         return repos;
     }
 
-    /** How the file at {@code path} differs from {@code HEAD}; empty when it does not, or is in no watched repository. */
+    /**
+     * How the file at {@code path} differs from {@code HEAD}; empty when it does not or is in no watched repository.
+     */
     public Optional<RepoStatus.Kind> of(Path path) {
         return Optional.ofNullable(files.get(path.toAbsolutePath().normalize()));
     }
@@ -70,7 +72,7 @@ public final class RepoChanges {
         return folders.contains(path.toAbsolutePath().normalize());
     }
 
-    /** The repository whose top folder is {@code path}; empty when {@code path} is no repository's root, or none was read. */
+    /** The repository whose top folder is {@code path}; empty when it is no watched repository's root. */
     public Optional<RepoStatus> repoAt(Path path) {
         return Optional.ofNullable(roots.get(path.toAbsolutePath().normalize()));
     }

@@ -14,10 +14,10 @@ import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// Every key the ui module's code names in a string reaches the user through [dev.marregui.comando.ui.kit.format.KeyText],
-/// so a desktop other than macOS reads its own keys ("Ctrl+Shift+T", not "⌘⇧T"). A new string with a key written as macOS
-/// writes it fails here, on any desktop, unless its statement passes it through `KeyText.of` or it is one of the
-/// constants below, each read through `KeyText` where it is used.
+/// Every key the ui module's code names in a string reaches the user through
+/// [dev.marregui.comando.ui.kit.format.KeyText], so a desktop other than macOS reads its own keys ("Ctrl+Shift+T", not
+/// "⌘⇧T"). A new string with a key written as macOS writes it fails here, on any desktop, unless its statement passes
+/// it through `KeyText.of` or it is one of the constants below, each read through `KeyText` where it is used.
 /// - Every string literal in `src/main` naming ⌘, ⌃ or ⌥ goes through `KeyText.of` or is a listed constant.
 /// - The listed constants are translated where they are read.
 /// - The scanner finds literals and text blocks and skips comments.
@@ -31,7 +31,9 @@ class KeyTextUseTest {
             "widgets/transcript/render/Items.java", List.of("WAITING ="), // the tool card's status
             "kit/format/KeyText.java", List.of("MODIFIERS =")); // the translator's own glyphs
 
-    /** The keys the run chose ({@code -Dcomando.keys}), restored after each test, never cleared: later tests read them. */
+    /**
+     * The keys the run chose ({@code -Dcomando.keys}), restored after each test, never cleared: later tests read them.
+     */
     private final String keys = System.getProperty(Platform.KEYS_PROPERTY);
 
     @AfterEach
@@ -78,8 +80,8 @@ class KeyTextUseTest {
         assertThat(Keys.markdown(List.of())).doesNotContain("⌘", "⌃", "⌥").contains("Ctrl+Enter in the note");
     }
 
-    /// The scanner skips glyphs in line and block comments and a quote inside a char literal, finds a string, a `KeyText.of`
-    /// argument and a text block, and gives each its surrounding statement.
+    /// The scanner skips glyphs in line and block comments and a quote inside a char literal, finds a string, a
+    /// `KeyText.of` argument and a text block, and gives each its surrounding statement.
     @Test
     void theScannerFindsLiteralsAndSkipsComments() {
         Source s = Source.of("""
@@ -98,8 +100,8 @@ class KeyTextUseTest {
     }
 
     /**
-     * A Java file ({@code text}), the same with its comments and the contents of its literals blanked out ({@code code}),
-     * and the bounds of its string literals and text blocks.
+     * A Java file ({@code text}), the same with its comments and the contents of its literals blanked out ({@code
+     * code}), and the bounds of its string literals and text blocks.
      */
     private record Source(String text, String code, List<int[]> literals) {
 
@@ -156,7 +158,10 @@ class KeyTextUseTest {
             }
         }
 
-        /** The code of the statement around a literal: from the last {@code ; { }} before it to the first {@code ;} after it. */
+        /**
+         * The code of the statement around a literal: from the last {@code ; { }} before it to the first {@code ;}
+         * after it.
+         */
         String statementAround(int from, int to) {
             int start = from;
             while (start > 0 && ";{}".indexOf(code.charAt(start - 1)) < 0) {

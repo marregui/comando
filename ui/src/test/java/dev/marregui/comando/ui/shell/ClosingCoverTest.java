@@ -13,8 +13,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - It is focusable, listens to mouse, motion and wheel, and consumes every key event.
 class ClosingCoverTest {
 
-    /// The painted centre is neither transparent nor opaque, mouse listeners are installed, and pressed, typed and released
-    /// keys are each consumed.
+    /// The painted centre is neither transparent nor opaque, mouse listeners are installed, and pressed, typed and
+    /// released keys are each consumed.
     @Test
     void theCoverGreysTheWindowAndTakesEveryKeyAndClick() {
         ClosingCover cover = new ClosingCover();

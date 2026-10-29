@@ -58,7 +58,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     private final ScheduledExecutorService timer =
             Threads.timedStrand("claude-timer");
     private volatile boolean closed;
-    /** Reads the plan's usage limits; a thread of its own, as a read can take seconds. */
+    /** Reads the plans' usage limits; a thread of its own, as a read can take seconds. */
     private final ScheduledExecutorService planUsage =
             Threads.timedStrand("plan-usage");
     /** The last Codex read's problem, so that the same one is logged once; touched only on {@link #planUsage}. */
@@ -84,7 +84,9 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             + " min. The transcript link on its card follows it again.";
     static final String STOPPED_TOO_MANY = "Not updated any more: " + TAILS
             + " newer sub-agent views follow theirs. The transcript link on its card follows it again.";
-    /** Where the turns', sub-agents' and plan usage's metrics go (record 110); nothing until the app says. */
+    /**
+     * Where the turns', sub-agents' and plan usage's metrics go (record 110); none until {@link #metrics} sets them.
+     */
     private volatile MetricsLog metrics = MetricsLog.NONE;
 
     /** Keeps the metrics in {@code log}; called before the first session starts. */
@@ -174,7 +176,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         String branch = "";
         /** The last start failed and said so; a prompt sent after it adds no second error. Cleared by a start. */
         boolean startFailed;
-        /** A process of the session runs; read by the sub-agent thread, which follows only a running session's sub-agents. */
+        /** A process of the session runs; read by the sub-agent thread, which follows running sessions only. */
         volatile boolean live;
 
         Session(String name) {
@@ -210,7 +212,9 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
     }
 
-    /** The session, made on first use; one made during or after {@link #close} takes no task, so no process starts then. */
+    /**
+     * The session, made on first use; one made during or after {@link #close} takes no task, so no process starts then.
+     */
     private Session session(String name) {
         Session s = sessions.computeIfAbsent(name, Session::new);
         if (closed) {
@@ -218,8 +222,6 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
         return s;
     }
-
-    // ---- port
 
     @Override
     public void start(SessionSpec spec) {
@@ -245,8 +247,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             s.transcript.changed();
             if (s.current == null || !s.current.isAlive()) {
                 if (s.startFailed) {
-                    // the failed start already reported why, in the transcript and on the status bar: one error surface;
-                    // the prompt still says, plainly, that it went nowhere
+                    // the failed start already said why, in the transcript and on the status bar; this note only says
+                    // that the prompt went nowhere
                     s.mapper.note(Block.NoteKind.INFO, "Not sent: the session could not start (the reason is above)");
                     s.transcript.changed();
                     sink.dispatch(new Intent.SessionTurnEnded(name, 0, -1.0, -1L, 0L, true, "session could not start"));
@@ -263,8 +265,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
 
     /**
      * On the session's strand, so no line of the stream lands between the clear and the mapper forgetting where its
-     * blocks were. The {@code /clear} goes after the transcript shows what the checkpoint carried; its own note and turn
-     * end are not shown.
+     * blocks were. The {@code /clear} goes after the transcript shows what the checkpoint carried; its own note and
+     * turn end are not shown.
      */
     @Override
     public void clearConversation(String name, String carried) {
@@ -340,7 +342,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             }
             Path file = findTranscript(spec.claudeSessionId());
             if (file == null) {
-                // a conversation cleared by a checkpoint has no file until its first prompt; what it carries still shows
+                // a conversation a checkpoint cleared has no file until its first prompt; what it carries still shows
                 if (!spec.carried().isEmpty()) {
                     s.transcript.clear();
                     s.mapper.carried(spec.carried());
@@ -361,7 +363,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             }
             s.mapper.endHistory(); // its last turn's end, when it ended: its answer reads as the conclusion
             s.mapper.endRunningTools(); // a call the stored conversation never answered will not be answered now
-            s.mapper.reportContext(metrics.lastContext(spec.claudeSessionId())); // the session bar's context from the start
+            // the session bar's context from the start
+            s.mapper.reportContext(metrics.lastContext(spec.claudeSessionId()));
             s.mapper.note(Block.NoteKind.INFO, "Stored conversation " + spec.claudeSessionId() + " loaded; start the session to continue it");
             if (!spec.carried().isEmpty()) {
                 s.mapper.carried(spec.carried());
@@ -397,10 +400,10 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     }
 
     /**
-     * Shows the sub-agent's conversation as a lower view, then, while it runs, renders it again every
-     * {@link #TAIL_EVERY_MILLIS} the file grew. It stops when the stream says the sub-agent ended (its Agent call's
-     * result, or for a background one its task's notification), its meta file says it finished, the session stops, or
-     * the file has not grown for {@link #TAIL_IDLE_MILLIS}; the view's last line says which.
+     * Shows the sub-agent's conversation as a lower view, then, while it runs, renders it again each
+     * {@link #TAIL_EVERY_MILLIS} in which the file grew. It stops when the stream says the sub-agent ended (its Agent
+     * call's result, or for a background one its task's notification), its meta file says it finished, the session
+     * stops, or the file has not grown for {@link #TAIL_IDLE_MILLIS}; the view's last line says which.
      */
     @Override
     public void showSubagent(String name, String claudeSessionId, String toolUseId) {
@@ -562,8 +565,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
     }
 
     /**
-     * Reads the lines the sub-agent's file gained into its transcript; at the {@code end}, a tool call still running gets
-     * no result any more. False, after a notice, when the file cannot be read.
+     * Reads the lines the sub-agent's file gained into its transcript; at the {@code end}, a tool call still running
+     * gets no result any more. False, after a notice, when the file cannot be read.
      */
     private boolean readSubagent(Tail t, boolean end) {
         boolean cut = t.conversation.cut();
@@ -661,7 +664,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             s.live = true;
             s.startFailed = false;
             if (spec.startMode() == StartMode.NEW) {
-                // the Session tab shows one conversation: the new one starts empty, the old stays in Claude Code's files
+                // the Session tab shows one conversation: the new one starts empty, the old stays in its file
                 s.transcript.clear();
                 s.mapper.forgetBlocks();
             }
@@ -700,7 +703,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         }
     }
 
-    /** Runs on the strand after the process's last stdout line; ignores a process already replaced. */
+    /** Runs on the strand after the process's last stdout line; a process already replaced only adds its note. */
     private void onExit(Session s, Run run, int code) {
         deleteConfig(run);
         run.process.closeInput(); // ends the stdin writer of a process that exited on its own
@@ -755,8 +758,6 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             sink.dispatch(new Intent.SessionBranch(s.name, b));
         }
     }
-
-    // ---- helpers
 
     private String interruptRequest() {
         ObjectNode line = json.createObjectNode();
@@ -886,7 +887,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
         planUsage.shutdownNow();
         subagents.shutdownNow();
         try {
-            subagents.awaitTermination(2, TimeUnit.SECONDS); // a read that outlasts the wait sends nothing: it checks closed first
+            // a read that outlasts the wait sends nothing: it checks closed first
+            subagents.awaitTermination(2, TimeUnit.SECONDS);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         }

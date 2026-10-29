@@ -131,10 +131,8 @@ class McpServerTest {
         return result.path("content").path(0).path("text").asString();
     }
 
-    // ---- transport
-
-    /// No token or an unknown token answers 401, a known token from a foreign origin 403, the same from `localhost` 200, and
-    /// a revoked token 401.
+    /// No token or an unknown token answers 401, a known token from a foreign origin 403, the same from `localhost`
+    /// 200, and a revoked token 401.
     @Test
     void rejectsMissingOrUnknownTokensAndForeignOrigins() throws Exception {
         String ping = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}";
@@ -146,7 +144,8 @@ class McpServerTest {
         assertThat(post(ticket.token(), ping, null).statusCode()).isEqualTo(401);
     }
 
-    /// Revoking an old process's token after the session got a newer one leaves the newer token answering 200 and the old 401.
+    /// Revoking an old process's token after the session got a newer one leaves the newer token answering 200 and the
+    /// old 401.
     @Test
     void aLateRevocationOfAnOldProcessesTokenLeavesTheNewProcessWorking() throws Exception {
         String ping = "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"ping\"}";
@@ -157,8 +156,8 @@ class McpServerTest {
         assertThat(post(ticket.token(), ping, null).statusCode()).isEqualTo(401);
     }
 
-    /// Initialize answers protocol `2025-11-25` and server name `comando` (an unknown client version gets the server's),
-    /// `tools/list` names the tools, an unknown method answers -32601, and a notification answers 202.
+    /// Initialize answers protocol `2025-11-25` and server name `comando` (an unknown client version gets the
+    /// server's), `tools/list` names the tools, an unknown method answers -32601, and a notification answers 202.
     @Test
     void initializeListAndUnknownMethods() throws Exception {
         JsonNode init = rpc("initialize", "{\"protocolVersion\":\"2025-11-25\",\"capabilities\":{}}");
@@ -176,10 +175,8 @@ class McpServerTest {
         assertThat(post(ticket.token(), "{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}", null).statusCode()).isEqualTo(202);
     }
 
-    // ---- approvals
-
-    /// A Bash permission call raises a tool approval for the session summarised as its command; allowing it for the session
-    /// answers allow with the input unchanged and a session rule `git status:*`.
+    /// A Bash permission call raises a tool approval for the session summarised as its command; allowing it for the
+    /// session answers allow with the input unchanged and a session rule `git status:*`.
     @Test
     void bashApprovalForTheSessionAddsARuleForThatCommandPrefix() throws Exception {
         CompletableFuture<JsonNode> call = CompletableFuture.supplyAsync(() -> {
@@ -285,8 +282,6 @@ class McpServerTest {
         }
     }
 
-    // ---- UI tools
-
     /// The table tool answers without error and shows a lower-placement table view for the session, nulls as `null`.
     @Test
     void tableBecomesAViewIntent() throws Exception {
@@ -298,8 +293,8 @@ class McpServerTest {
         assertThat(show.spec()).isEqualTo(new ViewSpec.Table(List.of("a", "b"), List.of(List.of("1", "x"), List.of("2", "null"))));
     }
 
-    /// A table row of the wrong width, a plot with unequal x and y, and a path no file system can name are tool errors that
-    /// say why, and no view is shown.
+    /// A table row of the wrong width, a plot with unequal x and y, and a path no file system can name are tool errors
+    /// that say why, and no view is shown.
     @Test
     void invalidViewDataIsAToolErrorAndSendsNothing() throws Exception {
         JsonNode r = tool("ui_show_table", "{\"title\":\"bad\",\"columns\":[\"a\",\"b\"],\"rows\":[[1]]}");
@@ -322,8 +317,8 @@ class McpServerTest {
         assertThat(sink.of(Intent.EditPanel.class)).isEmpty();
     }
 
-    /// `ui_set_editor` replaces the text of the caller's own panel, `ui_insert` with a panel name targets that panel, and an
-    /// unknown panel name is an error.
+    /// `ui_set_editor` replaces the text of the caller's own panel, `ui_insert` with a panel name targets that panel,
+    /// and an unknown panel name is an error.
     @Test
     void editorToolsTargetTheCallersPanel() throws Exception {
         tool("ui_set_editor", "{\"text\":\"SELECT 1\"}");
@@ -344,7 +339,8 @@ class McpServerTest {
         return json.readTree(r.body()).path("result");
     }
 
-    /// A session bound to no panel gets a tool error for an edit or SQL without a panel name, and nothing is edited or run.
+    /// A session bound to no panel gets a tool error for an edit or SQL without a panel name, and nothing is edited or
+    /// run.
     @Test
     void aSessionWithoutAPanelMustNameOneAndNeverWritesIntoAnothersPanel() throws Exception {
         McpGateway.Ticket other = server.register("other");
@@ -357,7 +353,8 @@ class McpServerTest {
         assertThat(queries).isEmpty();
     }
 
-    /// A session whose panel is closed is told so by name for an edit, while its SQL still runs on that panel's connection.
+    /// A session whose panel is closed is told so by name for an edit, while its SQL still runs on that panel's
+    /// connection.
     @Test
     void aSessionWhosePanelIsClosedIsToldSoAndItsSqlUsesThatPanelsConnection() throws Exception {
         state.set(state.get().withClosed(List.of(new PanelState(new PanelId("p9"), "nine", "local", "other"))));
@@ -370,8 +367,8 @@ class McpServerTest {
         assertThat(queries).isNotEmpty();
     }
 
-    /// `ui_close_view` refuses a pinned view, another session's view, a non-numeric id and an unknown id, and closes only the
-    /// caller's unpinned view.
+    /// `ui_close_view` refuses a pinned view, another session's view, a non-numeric id and an unknown id, and closes
+    /// only the caller's unpinned view.
     @Test
     void closeViewClosesOnlyTheCallersUnpinnedViews() throws Exception {
         ViewSpec.Table t = new ViewSpec.Table(List.of("a"), List.of(List.of("1")));
@@ -404,8 +401,9 @@ class McpServerTest {
         assertThat(s.path("sessions").path(0).path("name").asString()).isEqualTo("work");
     }
 
-    /// `ui_set_layout` sends one SessionLayout naming the session, panel, lower tab and share; it says when focus waits for
-    /// the user to pause typing or is not needed, and refuses an unknown tab, a share out of range and an empty request.
+    /// `ui_set_layout` sends one SessionLayout naming the session, panel, lower tab and share; it says when focus waits
+    /// for the user to pause typing or is not needed, and refuses an unknown tab, a share out of range and an empty
+    /// request.
     @Test
     void layoutFocusesSelectsAndArranges() throws Exception {
         // work's own panel is one; two is a document attached to it
@@ -444,8 +442,9 @@ class McpServerTest {
         assertThat(sink.await(Intent.ShowView.class, WAIT).title()).isEqualTo("docs/README.md");
     }
 
-    /// A relative path resolves against the session's folder and Markdown renders in the side pane; at a line it is text; a
-    /// `~` path resolves under home; a binary file is said to be one; a folder or missing file is a tool error showing nothing.
+    /// A relative path resolves against the session's folder and Markdown renders in the side pane; at a line it is
+    /// text; a `~` path resolves under home; a binary file is said to be one; a folder or missing file is a tool error
+    /// showing nothing.
     @Test
     void anOpenedFileIsReadAsTheUsersClickReadsIt(@TempDir Path dir) throws Exception {
         Path docs = Files.createDirectories(dir.resolve("docs"));
@@ -488,10 +487,8 @@ class McpServerTest {
         assertThat(sink.of(Intent.ShowView.class)).isEmpty();
     }
 
-    // ---- database tools
-
-    /// A read-only query runs on the panel's connection without approval, answers its rows as text with a count, and shows
-    /// the result under the given title.
+    /// A read-only query runs on the panel's connection without approval, answers its rows as text with a count, and
+    /// shows the result under the given title.
     @Test
     void readOnlySqlRunsAtOnceOnThePanelsConnection() throws Exception {
         JsonNode r = tool("db_run_sql", "{\"sql\":\"SELECT x FROM t\",\"show\":true,\"title\":\"xs\"}");
@@ -501,7 +498,8 @@ class McpServerTest {
         assertThat(sink.of(Intent.ApprovalRequested.class)).isEmpty();
     }
 
-    /// A write raises an SQL-write approval; denying it with a reason answers a tool error carrying the reason, and nothing runs.
+    /// A write raises an SQL-write approval; denying it with a reason answers a tool error carrying the reason, and
+    /// nothing runs.
     @Test
     void writesNeedApprovalAndADenialRunsNothing() throws Exception {
         CompletableFuture<JsonNode> call = CompletableFuture.supplyAsync(() -> {
@@ -520,8 +518,8 @@ class McpServerTest {
         assertThat(queries).isEmpty();
     }
 
-    /// A write approved after its connection was pointed at another server runs on neither and says the connection changed
-    /// while the card was open.
+    /// A write approved after its connection was pointed at another server runs on neither and says the connection
+    /// changed while the card was open.
     @Test
     void aWriteApprovedAfterItsConnectionWasRepointedRunsNothing() throws Exception {
         CompletableFuture<JsonNode> call = CompletableFuture.supplyAsync(() -> {
@@ -576,8 +574,6 @@ class McpServerTest {
         assertThat(sink.of(Intent.ApprovalRequested.class)).isEmpty();
     }
 
-    // ---- sessions
-
     /** Panel two bound to a second session, "reviews", running. */
     private void reviewsInPanelTwo() {
         AppState s = state.get();
@@ -600,8 +596,8 @@ class McpServerTest {
         });
     }
 
-    /// `session_send` appends the prompt, headed with the sender, to the other session's panel and runs it there as a prompt,
-    /// with no approval card, and answers which panel and the block to read after.
+    /// `session_send` appends the prompt, headed with the sender, to the other session's panel and runs it there as a
+    /// prompt, with no approval card, and answers which panel and the block to read after.
     @Test
     void aPromptToAnotherSessionIsAddedToItsPanelAndRunThereHeadedWithTheSenderWithoutACard() throws Exception {
         reviewsInPanelTwo();
@@ -629,8 +625,8 @@ class McpServerTest {
         assertThat(sink.of(Intent.RunText.class)).as("nothing runs, so nothing starts the session").isEmpty();
     }
 
-    /// A prompt to the caller itself, to an unknown session (the answer names the known ones), to a session without an open
-    /// panel, or without text is refused, with no card.
+    /// A prompt to the caller itself, to an unknown session (the answer names the known ones), to a session without an
+    /// open panel, or without text is refused, with no card.
     @Test
     void promptsToItselfAnUnknownSessionOrOneWithoutAnOpenPanelAreRefused() throws Exception {
         reviewsInPanelTwo();
@@ -642,8 +638,8 @@ class McpServerTest {
         assertThat(sink.of(Intent.ApprovalRequested.class)).isEmpty();
     }
 
-    /// `session_read` shows the session's state and numbered blocks from the cursor, and the next cursor stops before a block
-    /// still running, so a later read shows it finished.
+    /// `session_read` shows the session's state and numbered blocks from the cursor, and the next cursor stops before a
+    /// block still running, so a later read shows it finished.
     @Test
     void readingASessionShowsNumberedBlocksAndTheCursorStopsAtABlockStillRunning() throws Exception {
         reviewsInPanelTwo();
@@ -671,8 +667,8 @@ class McpServerTest {
                 .doesNotContain("[1]");
     }
 
-    /// Without a cursor the last block is shown; a cursor past the end reads from block 0 and says it restarted; an unknown
-    /// session is an error.
+    /// Without a cursor the last block is shown; a cursor past the end reads from block 0 and says it restarted; an
+    /// unknown session is an error.
     @Test
     void withoutACursorTheEndIsShownAndACursorBeyondTheEndReadsFromTheStart() throws Exception {
         reviewsInPanelTwo();
@@ -687,8 +683,8 @@ class McpServerTest {
         assertThat(text(tool("session_read", "{\"session\":\"nope\"}"))).contains("no session 'nope'");
     }
 
-    /// A read with a wait on a busy session says it is still working after the wait, keeps waiting while the session stays
-    /// busy, and returns once its turn has ended, showing the turn-ended block.
+    /// A read with a wait on a busy session says it is still working after the wait, keeps waiting while the session
+    /// stays busy, and returns once its turn has ended, showing the turn-ended block.
     @Test
     void readingWithAWaitReturnsOnceTheSessionsTurnHasEndedOrSaysItIsStillWorking() throws Exception {
         reviewsInPanelTwo();

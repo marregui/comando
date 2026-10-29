@@ -94,10 +94,8 @@ class SubagentTailEdgesTest {
         return false;
     }
 
-    // ---- the cut, with CRLF lines
-
-    /// Rendering the last bytes of a CRLF file from just after a line's `\r\n`, from between its `\r` and `\n`, and from on
-    /// its `\r` each drops the cut line and keeps the following lines whole, under the "longer than" notice.
+    /// Rendering the last bytes of a CRLF file from just after a line's `\r\n`, from between its `\r` and `\n`, and
+    /// from on its `\r` each drops the cut line and keeps the following lines whole, under the "longer than" notice.
     @Test
     void aCutBetweenCrAndLfAndACutAfterCrLfKeepTheWholeLine() throws IOException {
         String first = text("FIRST");
@@ -117,8 +115,8 @@ class SubagentTailEdgesTest {
         assertThat(md3).doesNotContain("FIRST").contains("SECOND", "THIRD");
     }
 
-    /// A CRLF file rendered with a limit equal to its size has no notice and both lines; one byte under its size it starts
-    /// with the notice and keeps only the last line.
+    /// A CRLF file rendered with a limit equal to its size has no notice and both lines; one byte under its size it
+    /// starts with the notice and keeps only the last line.
     @Test
     void sizeAtTheLimitAndOneOverWithCrLf() throws IOException {
         String first = text("FIRST");
@@ -130,10 +128,8 @@ class SubagentTailEdgesTest {
         assertThat(SubagentFiles.render(f, size - 1, json)).startsWith("_The conversation is longer than").doesNotContain("FIRST").contains("LAST");
     }
 
-    // ---- the live flag across a stop and a restart
-
-    /// A sub-agent shown while its session is stopped is not followed (`followedSubagents()` is 0); shown again after the
-    /// session restarts, it is followed (1).
+    /// A sub-agent shown while its session is stopped is not followed (`followedSubagents()` is 0); shown again after
+    /// the session restarts, it is followed (1).
     @Test
     void aStoppedThenRestartedSessionIsFollowedAgainAndNotInBetween() throws Exception {
         live();
@@ -152,10 +148,9 @@ class SubagentTailEdgesTest {
         assertThat(adapter.followedSubagents()).as("restarted").isEqualTo(1);
     }
 
-    // ---- the title map's eviction
-
     /// A followed sub-agent re-opened between 256 other sub-agents keeps its tail; a later sub-agent with the same
-    /// description gets a different title, though the title map, which evicts by first insertion, has dropped the first's.
+    /// description gets a different title, though the title map, which evicts by first insertion, has dropped the
+    /// first's.
     @Test
     void aLiveTailsTitleIsNotGivenToAnotherSubagent() throws Exception {
         live();
@@ -176,10 +171,8 @@ class SubagentTailEdgesTest {
         assertThat(b.title()).as("B's title while A, titled '%s', is still followed", a.title()).isNotEqualTo(a.title());
     }
 
-    // ---- close while an open is under way
-
-    /// With the tail's thread blocked opening a FIFO past the 2 s wait, a `close()` followed by releasing the FIFO sends no
-    /// further intent, neither a late view nor a false failure, and the tail thread ends.
+    /// With the tail's thread blocked opening a FIFO past the 2 s wait, a `close()` followed by releasing the FIFO
+    /// sends no further intent, neither a late view nor a false failure, and the tail thread ends.
     @Test
     void anOpenUnderWayWhenCloseReturnsSendsNothingAfterward() throws Exception {
         live();

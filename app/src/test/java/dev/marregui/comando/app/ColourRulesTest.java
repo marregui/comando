@@ -13,7 +13,7 @@ import static com.tngtech.archunit.core.domain.JavaClass.Predicates.assignableTo
 import static com.tngtech.archunit.core.domain.properties.HasOwner.Predicates.With.owner;
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
-/// The theme color boundary permits color construction and constants only in `ui.kit.theme`.
+/// Colours are made and named only in `ui.kit.theme`.
 ///
 /// - rejects direct `Color` construction outside the theme
 /// - rejects references to predefined `Color` fields outside the theme

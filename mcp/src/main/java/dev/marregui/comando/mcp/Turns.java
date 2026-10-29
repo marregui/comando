@@ -9,7 +9,7 @@ import java.time.Duration;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-/** Waiting for a session to finish its turns: {@code session_read} with a wait, and an instance answering another's question. */
+/** Waits for a session's turns to end: {@code session_read} with a wait, and an answer to another instance. */
 final class Turns {
 
     private static final long POLL_MILLIS = 200;
@@ -20,8 +20,8 @@ final class Turns {
     /**
      * Waits until the session has blocks after {@code after}, none of them still streaming or running, and its turns
      * are over (a turn end last, or the session no longer running); false at the deadline or on an interrupt. A
-     * transcript shorter than the cursor was cleared since: the wait returns at once, rather than wait for blocks past
-     * a cursor that no longer applies.
+     * session that is gone, or a transcript shorter than the cursor (cleared since), returns at once: no block will
+     * come past a cursor that no longer applies.
      */
     static boolean awaitTurnEnd(Supplier<AppState> state, String session, Transcript t, int after, Duration within) {
         long deadline = System.nanoTime() + within.toNanos();
