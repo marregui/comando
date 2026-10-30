@@ -1,0 +1,16 @@
+{
+  "id": "ice_navy",
+  "label": "Ice and navy",
+  "mode": "light",
+  "twin": "midnight_blue",
+  "ground": {
+    "label": "Ice",
+    "color": "#EDF2F8"
+  },
+  "tint": {
+    "label": "Navy",
+    "highlight": "#0A2858",
+    "body": "#193F80",
+    "shade": "#3F68AA"
+  }
+}

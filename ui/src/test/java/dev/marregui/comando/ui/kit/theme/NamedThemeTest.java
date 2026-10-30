@@ -4,27 +4,32 @@ import org.junit.jupiter.api.Test;
 
 import java.awt.Color;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [NamedTheme] pairs a ground with a tint into the seven built-in themes the window offers.
-/// - Seven themes, six dark and paper, light, last; each on its own ground with its own command, the default first.
+/// [NamedTheme] pairs a ground with a tint into the twelve built-in themes the window offers.
+/// - Twelve themes, six dark then their six light twins; each on its own ground with its own command, the default first.
 /// - The theme chosen is the one the ground and tint make, or none.
 /// - A ground and tint kept from before themes map to the closest theme.
 class NamedThemeTest {
 
-    /// There are seven themes on seven grounds with distinct command ids, the first graphite with treasure and the last,
-    /// the one light theme, paper with ochre.
+    /// There are twelve themes on twelve grounds with distinct command ids, the first graphite with treasure; six are
+    /// dark and six light, each light one the twin of one dark one, in the dark ones' order, paper with ochre first.
     @Test
-    void sevenThemesEachOnItsOwnGroundTheDefaultFirst() {
-        assertThat(NamedTheme.values()).hasSize(7);
-        assertThat(Arrays.stream(NamedTheme.values()).map(t -> t.ground).distinct()).as("one theme per ground").hasSize(7);
-        assertThat(Arrays.stream(NamedTheme.values()).filter(t -> t.ground.light)).containsExactly(NamedTheme.PAPER_OCHRE);
-        assertThat(NamedTheme.PAPER_OCHRE.tint.light).isTrue();
+    void twelveThemesSixDarkAndTheirSixLightTwins() {
+        assertThat(NamedTheme.values()).hasSize(12);
+        assertThat(Arrays.stream(NamedTheme.values()).map(t -> t.ground).distinct()).as("one theme per ground").hasSize(12);
+        List<NamedTheme> dark = Arrays.stream(NamedTheme.values()).filter(t -> !t.ground.light).toList();
+        List<NamedTheme> light = Arrays.stream(NamedTheme.values()).filter(t -> t.ground.light).toList();
+        assertThat(dark).hasSize(6).allMatch(t -> t.twin.isEmpty() && !t.tint.light);
+        assertThat(light).hasSize(6).allMatch(t -> t.tint.light).first().isEqualTo(NamedTheme.PAPER_OCHRE);
+        assertThat(light).extracting(t -> t.twin.orElseThrow()).as("each dark theme's twin, in their order")
+                .containsExactlyElementsOf(dark.stream().map(t -> t.id).toList());
         assertThat(NamedTheme.values()[0]).as("the window's default")
                 .matches(t -> t.ground == Ground.GRAPHITE && t.tint == Tint.TREASURE);
-        assertThat(Arrays.stream(NamedTheme.values()).map(NamedTheme::commandId).distinct()).hasSize(7);
+        assertThat(Arrays.stream(NamedTheme.values()).map(NamedTheme::commandId).distinct()).hasSize(12);
     }
 
     /// [NamedTheme#chosen] is the default theme at start, empty for a pair no theme makes, and the matching theme once

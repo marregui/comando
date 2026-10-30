@@ -1,0 +1,16 @@
+{
+  "id": "fog_slate",
+  "label": "Fog and slate",
+  "mode": "light",
+  "twin": "slate_silver",
+  "ground": {
+    "label": "Fog",
+    "color": "#EEEFF2"
+  },
+  "tint": {
+    "label": "Slate ink",
+    "highlight": "#1E242C",
+    "body": "#3C4652",
+    "shade": "#67717F"
+  }
+}

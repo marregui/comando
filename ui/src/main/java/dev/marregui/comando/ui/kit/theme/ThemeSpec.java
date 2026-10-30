@@ -5,6 +5,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.awt.Color;
+import java.util.Optional;
 import java.util.regex.Pattern;
 
 /**
@@ -23,12 +24,13 @@ import java.util.regex.Pattern;
  * }</pre>
  *
  * The id is lower case letters, digits and underscores, and names the theme's command ({@code theme.graphite_gold});
- * the ground's and the tint's labels may be left out, and are then the theme's. The tint's steps run from the one
+ * the ground's and the tint's labels may be left out, and are then the theme's. {@code twin}, which may be left out,
+ * names the theme of the other mode it pairs with, which the chooser shows beside it (record 128). The tint's steps run from the one
  * that stands out most from the ground, the highlight, to the one that stands out least, the shade: pale to deep on a
  * dark ground, deep to pale on a light one.
  */
-record ThemeSpec(String id, String label, boolean light, String groundLabel, Color ground, String tintLabel, Color highlight,
-                 Color body, Color shade) {
+record ThemeSpec(String id, String label, boolean light, Optional<String> twin, String groundLabel, Color ground,
+                 String tintLabel, Color highlight, Color body, Color shade) {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern ID = Pattern.compile("[a-z0-9_]{1,40}");
@@ -54,9 +56,13 @@ record ThemeSpec(String id, String label, boolean light, String groundLabel, Col
         if (!mode.equals("dark") && !mode.equals("light")) {
             throw new IllegalArgumentException("\"mode\" must be \"dark\" or \"light\": " + mode);
         }
+        Optional<String> twin = Optional.ofNullable(root.get("twin")).map(v -> text(root, "twin", null));
+        if (twin.isPresent() && !ID.matcher(twin.get()).matches()) {
+            throw new IllegalArgumentException("\"twin\" must be another theme's id: " + twin.get());
+        }
         JsonNode ground = object(root, "ground");
         JsonNode tint = object(root, "tint");
-        return new ThemeSpec(id, label, mode.equals("light"), text(ground, "label", label), colour(ground, "ground.color"),
+        return new ThemeSpec(id, label, mode.equals("light"), twin, text(ground, "label", label), colour(ground, "ground.color"),
                 text(tint, "label", label), colour(tint, "tint.highlight"), colour(tint, "tint.body"), colour(tint, "tint.shade"));
     }
 

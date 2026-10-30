@@ -1,0 +1,16 @@
+{
+  "id": "mint_forest",
+  "label": "Mint and forest",
+  "mode": "light",
+  "twin": "evergreen_forest",
+  "ground": {
+    "label": "Mint paper",
+    "color": "#ECF4EF"
+  },
+  "tint": {
+    "label": "Forest",
+    "highlight": "#0B321C",
+    "body": "#16522F",
+    "shade": "#2F744C"
+  }
+}

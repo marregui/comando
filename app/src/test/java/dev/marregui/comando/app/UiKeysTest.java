@@ -56,9 +56,10 @@ import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
+import javax.swing.JDialog;
+import javax.swing.JButton;
 import javax.swing.JList;
 import javax.swing.JPanel;
-import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
 import javax.swing.KeyStroke;
@@ -639,15 +640,21 @@ class UiKeysTest {
                 swatch.doClick();
                 return null;
             });
-            // the menu shows in the frame or, heavyweight, in a window the frame owns
-            List<JRadioButtonMenuItem> items = await("the swatch's menu", () -> Stream.concat(Stream.of(w.frame()), Stream.of(w.frame().getOwnedWindows()))
-                    .map(win -> find(win, JRadioButtonMenuItem.class, i -> i.isShowing() && NamedTheme.MIDNIGHT_BLUE.label.equals(i.getText())).orElse(null))
-                    .filter(Objects::nonNull).findFirst()
-                    .map(i -> Stream.of(i.getParent().getComponents()).map(c -> (JRadioButtonMenuItem) c).toList()).orElse(null), WAIT_MILLIS);
-            assertThat(onEdt(() -> items.stream().map(AbstractButton::getText).toList())).containsExactly(
-                    Stream.of(NamedTheme.values()).map(t -> t.label).toArray(String[]::new));
-            assertThat(onEdt(() -> items.stream().filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
-                    .as("the theme chosen is ticked").containsExactly(NamedTheme.GRAPHITE_GOLD.label);
+            // the chooser opens in a window the frame owns: a card per theme, row by row a dark theme and its light twin
+            // (record 128)
+            List<JButton> cards = await("the theme chooser", () -> Stream.of(w.frame().getOwnedWindows())
+                    .filter(win -> win.isShowing() && win instanceof JDialog d && "Theme".equals(d.getTitle()))
+                    .findFirst().map(win -> all(win, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card"))
+                            .toList()).filter(l -> !l.isEmpty()).orElse(null), WAIT_MILLIS);
+            List<String> twins = new ArrayList<>();
+            for (NamedTheme dark : NamedTheme.builtIn().subList(0, 6)) {
+                twins.add(dark.label);
+                twins.add(NamedTheme.builtIn().stream().filter(t -> t.twin.map(dark.id::equals).orElse(false)).findFirst().orElseThrow().label);
+            }
+            assertThat(onEdt(() -> cards.stream().map(b -> b.getAccessibleContext().getAccessibleName()).toList())).containsExactlyElementsOf(twins);
+            assertThat(onEdt(() -> cards.stream().filter(b -> b.getToolTipText().endsWith("; the theme chosen"))
+                    .map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
+                    .as("the theme chosen is marked").containsExactly(NamedTheme.GRAPHITE_GOLD.label);
             assertThat(NamedTheme.chosen()).as("by default").contains(NamedTheme.GRAPHITE_GOLD);
 
             // a session bound to the panel, with a turn whose answer is its report, in the Session tab
@@ -673,11 +680,14 @@ class UiKeysTest {
                 return editor.getFont();
             });
 
-            JRadioButtonMenuItem midnight = items.get(NamedTheme.builtIn().indexOf(NamedTheme.MIDNIGHT_BLUE));
+            JButton midnight = cards.stream().filter(b -> NamedTheme.MIDNIGHT_BLUE.label.equals(b.getAccessibleContext().getAccessibleName()))
+                    .findFirst().orElseThrow();
             onEdt(() -> {
                 midnight.doClick();
                 return null;
             });
+            assertThat(onEdt(() -> Stream.of(w.frame().getOwnedWindows()).anyMatch(win -> win.isShowing() && win instanceof JDialog d
+                    && "Theme".equals(d.getTitle())))).as("the chooser closes on a choice").isFalse();
             assertThat(Theme.groundChosen()).isEqualTo(Ground.MIDNIGHT);
             assertThat(Theme.tint()).isEqualTo(Tint.ELECTRIC_BLUE);
             assertThat(hoverTip(swatch)).as("the tooltip follows").startsWith("Theme: " + NamedTheme.MIDNIGHT_BLUE.label + ";");
@@ -700,19 +710,20 @@ class UiKeysTest {
             assertThat(onEdt(() -> editor.getSyntaxScheme().getStyle(TokenTypes.COMMENT_DOCUMENTATION).font.getSize2D()))
                     .as("its scheme at the zoomed size").isEqualTo(zoomed.getSize2D());
 
-            // the swatch's menu again: it ticks the theme chosen
+            // the chooser again: it marks the theme chosen, in a new window
             onEdt(() -> {
                 swatch.doClick();
                 return null;
             });
-            // the menu shows in the frame or, heavyweight, in a window the frame owns
-            JRadioButtonMenuItem slate = await("the swatch's menu", () -> Stream.concat(Stream.of(w.frame()), Stream.of(w.frame().getOwnedWindows()))
-                    .map(win -> find(win, JRadioButtonMenuItem.class,
-                            i -> NamedTheme.SLATE_SILVER.label.equals(i.getText()) && !items.contains(i)).orElse(null))
-                    .filter(Objects::nonNull).findFirst().orElse(null), WAIT_MILLIS);
-            assertThat(onEdt(() -> Stream.of(slate.getParent().getComponents()).map(c -> (JRadioButtonMenuItem) c)
-                    .filter(AbstractButton::isSelected).map(AbstractButton::getText).toList()))
-                    .as("the swatch's menu ticks the theme chosen").containsExactly(NamedTheme.MIDNIGHT_BLUE.label);
+            List<JButton> again = await("the theme chooser again", () -> Stream.of(w.frame().getOwnedWindows())
+                    .filter(win -> win.isShowing() && win instanceof JDialog d && "Theme".equals(d.getTitle()))
+                    .findFirst().map(win -> all(win, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card"))
+                            .toList()).filter(l -> !l.isEmpty() && !cards.contains(l.getFirst())).orElse(null), WAIT_MILLIS);
+            assertThat(onEdt(() -> again.stream().filter(b -> b.getToolTipText().endsWith("; the theme chosen"))
+                    .map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
+                    .as("the chooser marks the theme chosen").containsExactly(NamedTheme.MIDNIGHT_BLUE.label);
+            JButton slate = again.stream().filter(b -> NamedTheme.SLATE_SILVER.label.equals(b.getAccessibleContext().getAccessibleName()))
+                    .findFirst().orElseThrow();
             onEdt(() -> {
                 slate.doClick();
                 return null;
@@ -932,6 +943,26 @@ class UiKeysTest {
 
     private static String screen(JediTermWidget term) {
         return onEdtUnchecked(() -> term.getTerminalTextBuffer().getScreenLines());
+    }
+
+    /** Every component of {@code type} under {@code root}, in the tree's order. */
+    private static <T extends Component> List<T> all(Container root, Class<T> type) {
+        return onEdtUnchecked(() -> {
+            List<T> out = new ArrayList<>();
+            collect(root, type, out);
+            return out;
+        });
+    }
+
+    private static <T extends Component> void collect(Component c, Class<T> type, List<T> out) {
+        if (type.isInstance(c)) {
+            out.add(type.cast(c));
+        }
+        if (c instanceof Container k) {
+            for (Component child : k.getComponents()) {
+                collect(child, type, out);
+            }
+        }
     }
 
     private static <T extends Component> Optional<T> find(Container root, Class<T> type) {

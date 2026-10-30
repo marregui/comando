@@ -2,6 +2,7 @@
   "id": "paper_ochre",
   "label": "Paper and ochre",
   "mode": "light",
+  "twin": "graphite_gold",
   "ground": {
     "label": "Paper",
     "color": "#F7F3EA"

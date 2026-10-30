@@ -21,7 +21,13 @@ public final class Tint {
     public static final Tint TROPICAL_FOREST = builtIn("TROPICAL_FOREST", "evergreen_forest");
     public static final Tint ELECTRIC_BLUE = builtIn("ELECTRIC_BLUE", "midnight_blue");
     public static final Tint OCHRE = builtIn("OCHRE", "paper_ochre");
-    private static final Tint[] BUILT_IN = {TREASURE, YELLOW, CHAMPAGNE, SILVER, TROPICAL_FOREST, ELECTRIC_BLUE, OCHRE};
+    public static final Tint BRONZE = builtIn("BRONZE", "cream_bronze");
+    public static final Tint DEEP_GOLD = builtIn("DEEP_GOLD", "lilac_gold");
+    public static final Tint NAVY = builtIn("NAVY", "ice_navy");
+    public static final Tint FOREST = builtIn("FOREST", "mint_forest");
+    public static final Tint SLATE_INK = builtIn("SLATE_INK", "fog_slate");
+    private static final Tint[] BUILT_IN = {TREASURE, YELLOW, CHAMPAGNE, SILVER, TROPICAL_FOREST, ELECTRIC_BLUE, OCHRE, BRONZE,
+            DEEP_GOLD, NAVY, FOREST, SLATE_INK};
 
     public final String label;
     public final Color highlight;

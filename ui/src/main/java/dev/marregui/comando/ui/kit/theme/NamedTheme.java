@@ -9,7 +9,7 @@ import java.util.Optional;
 /**
  * A curated theme (record 103): a ground and the tint that sits on it, chosen together from the swatch beside New
  * panel or the palette. The ground and the tint are not chosen apart. Each is a JSON file (record 126): the seven
- * built in (six dark, one light, record 127), then those read from the data root's {@code themes} folder at start,
+ * built in (six dark and their six light twins, records 127 and 128), then those read from the data root's {@code themes} folder at start,
  * which {@link #offer} adds after them.
  */
 public final class NamedTheme {
@@ -21,8 +21,13 @@ public final class NamedTheme {
     public static final NamedTheme EVERGREEN_FOREST = builtIn("evergreen_forest", Ground.EVERGREEN, Tint.TROPICAL_FOREST);
     public static final NamedTheme SLATE_SILVER = builtIn("slate_silver", Ground.SLATE, Tint.SILVER);
     public static final NamedTheme PAPER_OCHRE = builtIn("paper_ochre", Ground.PAPER, Tint.OCHRE);
+    public static final NamedTheme CREAM_BRONZE = builtIn("cream_bronze", Ground.CREAM, Tint.BRONZE);
+    public static final NamedTheme LILAC_GOLD = builtIn("lilac_gold", Ground.LILAC, Tint.DEEP_GOLD);
+    public static final NamedTheme ICE_NAVY = builtIn("ice_navy", Ground.ICE, Tint.NAVY);
+    public static final NamedTheme MINT_FOREST = builtIn("mint_forest", Ground.MINT, Tint.FOREST);
+    public static final NamedTheme FOG_SLATE = builtIn("fog_slate", Ground.FOG, Tint.SLATE_INK);
     private static final List<NamedTheme> BUILT_IN = List.of(GRAPHITE_GOLD, ESPRESSO_CHAMPAGNE, AUBERGINE_GOLD, MIDNIGHT_BLUE,
-            EVERGREEN_FOREST, SLATE_SILVER, PAPER_OCHRE);
+            EVERGREEN_FOREST, SLATE_SILVER, PAPER_OCHRE, CREAM_BRONZE, LILAC_GOLD, ICE_NAVY, MINT_FOREST, FOG_SLATE);
     /** The themes offered: the built-in ones, then the user's files read at start. */
     private static volatile List<NamedTheme> offered = BUILT_IN;
 
@@ -33,9 +38,12 @@ public final class NamedTheme {
     public final Tint tint;
     /** The user's file it was read from; empty for a built-in theme. */
     public final Optional<Path> file;
+    /** The id of the theme of the other mode this one pairs with, as its file names it (record 128). */
+    public final Optional<String> twin;
 
-    private NamedTheme(String id, String label, Ground ground, Tint tint, Optional<Path> file) {
+    private NamedTheme(String id, String label, Ground ground, Tint tint, Optional<Path> file, Optional<String> twin) {
         this.id = id;
+        this.twin = twin;
         this.label = label;
         this.ground = ground;
         this.tint = tint;
@@ -43,14 +51,16 @@ public final class NamedTheme {
     }
 
     private static NamedTheme builtIn(String id, Ground ground, Tint tint) {
-        return new NamedTheme(id, BuiltInThemes.spec(id).label(), ground, tint, Optional.empty());
+        ThemeSpec s = BuiltInThemes.spec(id);
+        return new NamedTheme(id, s.label(), ground, tint, Optional.empty(), s.twin());
     }
 
     /** The theme {@code spec} describes, read from {@code file}, with a ground and a tint of its own. */
     static NamedTheme fromFile(ThemeSpec spec, Path file) {
         String name = spec.id().toUpperCase(Locale.ROOT);
         return new NamedTheme(spec.id(), spec.label(), new Ground(name, spec.groundLabel(), spec.ground(), spec.light()),
-                new Tint(name, spec.tintLabel(), spec.highlight(), spec.body(), spec.shade(), spec.light()), Optional.of(file));
+                new Tint(name, spec.tintLabel(), spec.highlight(), spec.body(), spec.shade(), spec.light()), Optional.of(file),
+                spec.twin());
     }
 
     /** The command that chooses this theme: {@code theme.graphite_gold}. */
@@ -68,7 +78,7 @@ public final class NamedTheme {
         return offered.toArray(NamedTheme[]::new);
     }
 
-    /** The built-in themes, in the swatch's order: the six dark ones, then paper and ochre. */
+    /** The built-in themes, in the swatch's order: the six dark ones, then their light twins in the same order. */
     public static List<NamedTheme> builtIn() {
         return BUILT_IN;
     }

@@ -76,7 +76,8 @@ class TooltipTintTest {
             assertThat(Theme.ATTENTION).as("attention in " + t).isEqualTo(Tint.TREASURE.body);
         }
         assertThat(Tint.values()).extracting(t -> t.label).containsExactly(
-                "Treasure gold", "18k yellow gold", "Champagne gold", "Silver", "Tropical forest", "Electric blue", "Ochre");
+                "Treasure gold", "18k yellow gold", "Champagne gold", "Silver", "Tropical forest", "Electric blue", "Ochre",
+                "Champagne bronze", "Deep gold", "Navy", "Forest", "Slate ink");
     }
 
     /// On every ground the transcript's text and a card stand off it and every tint of its mode passes its contrast

@@ -1,0 +1,16 @@
+{
+  "id": "cream_bronze",
+  "label": "Cream and champagne bronze",
+  "mode": "light",
+  "twin": "espresso_champagne",
+  "ground": {
+    "label": "Cream",
+    "color": "#F3ECDD"
+  },
+  "tint": {
+    "label": "Champagne bronze",
+    "highlight": "#3A2A12",
+    "body": "#5A4426",
+    "shade": "#846B48"
+  }
+}

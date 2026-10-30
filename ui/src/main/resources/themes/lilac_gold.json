@@ -1,0 +1,16 @@
+{
+  "id": "lilac_gold",
+  "label": "Lilac and deep gold",
+  "mode": "light",
+  "twin": "aubergine_gold",
+  "ground": {
+    "label": "Lilac paper",
+    "color": "#F3EFF6"
+  },
+  "tint": {
+    "label": "Deep gold",
+    "highlight": "#3C2C00",
+    "body": "#5C470A",
+    "shade": "#86702C"
+  }
+}

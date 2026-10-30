@@ -17,7 +17,7 @@ final class BuiltInThemes {
 
     /** The built-in themes' ids, in the order the swatch's menu lists them. */
     static final List<String> IDS = List.of("graphite_gold", "espresso_champagne", "aubergine_gold", "midnight_blue",
-            "evergreen_forest", "slate_silver", "paper_ochre");
+            "evergreen_forest", "slate_silver", "paper_ochre", "cream_bronze", "lilac_gold", "ice_navy", "mint_forest", "fog_slate");
 
     private static final Map<String, ThemeSpec> SPECS = read();
 

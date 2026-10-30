@@ -26,8 +26,11 @@ class ThemeFilesTest {
     @Test
     void theBuiltInFilesGiveTheThemesAsBefore() {
         assertThat(NamedTheme.builtIn()).extracting(t -> t.id).containsExactly("graphite_gold", "espresso_champagne",
-                "aubergine_gold", "midnight_blue", "evergreen_forest", "slate_silver", "paper_ochre");
-        assertThat(NamedTheme.builtIn()).filteredOn(t -> t.ground.light).containsExactly(NamedTheme.PAPER_OCHRE);
+                "aubergine_gold", "midnight_blue", "evergreen_forest", "slate_silver", "paper_ochre", "cream_bronze", "lilac_gold",
+                "ice_navy", "mint_forest", "fog_slate");
+        assertThat(NamedTheme.builtIn()).filteredOn(t -> t.ground.light).hasSize(6).first().isEqualTo(NamedTheme.PAPER_OCHRE);
+        assertThat(NamedTheme.PAPER_OCHRE.twin).contains("graphite_gold");
+        assertThat(NamedTheme.ICE_NAVY.twin).contains("midnight_blue");
         assertThat(Theme.hex(Ground.PAPER.color)).isEqualTo("#f7f3ea");
         assertThat(Theme.hex(Tint.OCHRE.body)).isEqualTo("#5e4210");
         assertThat(NamedTheme.GRAPHITE_GOLD.label).isEqualTo("Graphite and gold");
@@ -70,8 +73,8 @@ class ThemeFilesTest {
         assertThat(pine.commandId()).isEqualTo("theme.pine");
         try {
             NamedTheme.offer(read.themes());
-            assertThat(NamedTheme.values()).hasSize(10);
-            assertThat(NamedTheme.values()[7]).isSameAs(pine);
+            assertThat(NamedTheme.values()).hasSize(15);
+            assertThat(NamedTheme.values()[12]).isSameAs(pine);
             assertThat(NamedTheme.withId("ink_rose")).contains(read.themes().get(1));
             assertThat(Ground.find("PINE")).contains(pine.ground);
             assertThat(Tint.named("INK_ROSE")).isSameAs(read.themes().get(1).tint);
@@ -79,7 +82,7 @@ class ThemeFilesTest {
         } finally {
             NamedTheme.offer(List.of());
         }
-        assertThat(NamedTheme.values()).hasSize(7);
+        assertThat(NamedTheme.values()).hasSize(12);
         assertThat(Ground.find("PINE")).isEmpty();
     }
 

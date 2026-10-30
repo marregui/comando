@@ -147,4 +147,5 @@ row and its record differ, or when a record has no row.
 | [124](0124-the-sidebar-shows-the-instances.md) | The sidebar shows the instances: an Instances tab, a role and a kit in the presence | 2026-10-30 | Miguel and Claude | accepted; built; amended the same day (§4) |
 | [125](0125-the-session-dialog-asks-what-matters.md) | The session dialog asks what matters first and names its defaults | 2026-10-30 | Miguel and Claude | accepted; §2 built, §3 proposed for the packaging work |
 | [126](0126-themes-are-json-files.md) | Themes are JSON files: six built in, the user's from the data root | 2026-10-30 | Miguel and Claude | accepted; built; `mode: light` built by [record 127](0127-light-themes.md) |
-| [127](0127-light-themes.md) | Light themes: a mode per theme, Paper and ochre built in | 2026-10-30 | Miguel and Claude | accepted; built |
+| [127](0127-light-themes.md) | Light themes: a mode per theme, Paper and ochre built in | 2026-10-30 | Miguel and Claude | accepted; built; five more light themes and the chooser by [record 128](0128-a-chooser-of-twelve-themes.md) |
+| [128](0128-a-chooser-of-twelve-themes.md) | A chooser of twelve themes: six dark, their six light twins, drawn as cards | 2026-10-30 | Miguel and Claude | accepted; built |

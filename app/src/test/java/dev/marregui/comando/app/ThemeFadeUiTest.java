@@ -16,9 +16,7 @@ import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.JLayeredPane;
-import javax.swing.JRadioButtonMenuItem;
 import javax.swing.JTabbedPane;
-import javax.swing.MenuSelectionManager;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 import java.awt.Color;
@@ -76,7 +74,6 @@ class ThemeFadeUiTest {
             assertThat(onEdt(ThemeFadeUiTest::fading)).as("the theme chosen already: no fade").isFalse();
         } finally {
             onEdt(() -> {
-                MenuSelectionManager.defaultManager().clearSelectedPath();
                 Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
                 return null;
             });
@@ -84,7 +81,7 @@ class ThemeFadeUiTest {
         }
     }
 
-    /// A theme file in the data root's `themes` folder is offered after the seven built in, by its label, and chosen
+    /// A theme file in the data root's `themes` folder is offered after the twelve built in, by its label, and chosen
     /// from the swatch it applies its own ground and tint and is kept by its id; a broken file beside it is left out
     /// with a notice that names it.
     @Test
@@ -104,7 +101,7 @@ class ThemeFadeUiTest {
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
             Awaitility.await("the notice for the broken file").atMost(WAIT).until(() -> loop.state().notices().stream()
                     .anyMatch(n -> n.text().startsWith("Theme file left out: broken.json: not JSON")));
-            assertThat(NamedTheme.values()).extracting(t -> t.label).hasSize(8).last().isEqualTo("Ink and rose");
+            assertThat(NamedTheme.values()).extracting(t -> t.label).hasSize(13).last().isEqualTo("Ink and rose");
 
             pick(NamedTheme.withId("ink_rose").orElseThrow());
             assertThat(onEdt(() -> Theme.groundChosen().name() + "/" + Theme.tint().name())).isEqualTo("INK_ROSE/INK_ROSE");
@@ -113,7 +110,6 @@ class ThemeFadeUiTest {
                     .matches("(?s).*\"theme\\.id\"\\s*:\\s*\"ink_rose\".*"));
         } finally {
             onEdt(() -> {
-                MenuSelectionManager.defaultManager().clearSelectedPath();
                 Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
                 return null;
             });
@@ -151,7 +147,6 @@ class ThemeFadeUiTest {
             assertThat(onEdt(() -> frame().getRootPane().getClientProperty("apple.awt.windowAppearance"))).isEqualTo("NSAppearanceNameDarkAqua");
         } finally {
             onEdt(() -> {
-                MenuSelectionManager.defaultManager().clearSelectedPath();
                 Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
                 return null;
             });
@@ -194,7 +189,6 @@ class ThemeFadeUiTest {
             }
         } finally {
             onEdt(() -> {
-                MenuSelectionManager.defaultManager().clearSelectedPath();
                 Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
                 return null;
             });
@@ -243,7 +237,6 @@ class ThemeFadeUiTest {
             }
         } finally {
             onEdt(() -> {
-                MenuSelectionManager.defaultManager().clearSelectedPath();
                 Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
                 return null;
             });
@@ -326,7 +319,7 @@ class ThemeFadeUiTest {
         });
     }
 
-    /** Opens the swatch's menu, as a click does, and clicks {@code theme}'s entry. */
+    /** Opens the theme chooser from the swatch, as a click does, and clicks {@code theme}'s card. */
     private static void pick(NamedTheme theme) throws Exception {
         onEdt(() -> {
             JButton swatch = find(frame(), JButton.class, b -> "Choose the theme".equals(b.getAccessibleContext().getAccessibleName()));
@@ -335,12 +328,21 @@ class ThemeFadeUiTest {
             return null;
         });
         onEdt(() -> {
-            JRadioButtonMenuItem item = null;
-            for (Window w : Window.getWindows()) {
-                item = item != null ? item : find(w, JRadioButtonMenuItem.class, i -> i.isShowing() && i.getText().equals(theme.label));
+            JButton card = null;
+            for (Window w : frame().getOwnedWindows()) {
+                card = card != null ? card : find(w, JButton.class, b -> b.isShowing() && theme.label.equals(b.getAccessibleContext().getAccessibleName()));
             }
-            assertThat(item).as("the menu's entry for " + theme.label).isNotNull();
-            item.doClick(0);
+            assertThat(card).as("the chooser's card for " + theme.label).isNotNull();
+            String shot = System.getProperty("comando.lightShot");
+            if (shot != null) {
+                Window chooser = SwingUtilities.getWindowAncestor(card);
+                BufferedImage img = new BufferedImage(chooser.getWidth(), chooser.getHeight(), BufferedImage.TYPE_INT_RGB);
+                Graphics2D g = img.createGraphics();
+                chooser.paint(g);
+                g.dispose();
+                ImageIO.write(img, "png", Path.of(shot.replace(".png", "-chooser.png")).toFile());
+            }
+            card.doClick(0);
             return null;
         });
     }

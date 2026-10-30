@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-30 | accepted; built | Miguel and Claude |
+| 2026-10-30 | accepted; built; five more light themes and the chooser by [record 128](0128-a-chooser-of-twelve-themes.md) | Miguel and Claude |
 
 ## 1. Context
 

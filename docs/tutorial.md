@@ -141,7 +141,9 @@ approval. Usage takes the warning colour at 75% of a window and the danger colou
 
 ### 1.6 Themes of your own
 
-The swatch at the tab row's right end lists seven themes: six dark and one light, Paper and ochre. To add one, put a JSON file in the `themes` folder of
+The swatch at the tab row's right end opens the theme chooser: twelve themes, six dark in one column and their six
+light twins beside them, each drawn small in its own colours; click one, or press ⏎ on it, to choose it, and Esc to
+close. To add one, put a JSON file in the `themes` folder of
 comando's data root (`~/.comando/themes/`; **Help ▸ Reveal comando folder** opens the root) and start comando again:
 
 ```json
@@ -159,10 +161,11 @@ comando's data root (`~/.comando/themes/`; **Help ▸ Reveal comando folder** op
 | `id` | lower case letters, digits and underscores; it names the theme's command (`theme.ink_rose`) and keeps your choice across restarts |
 | `label` | the name in the swatch's menu and the palette |
 | `mode` | `dark`, or `light` for a pale ground under dark text: the window takes the light look, and its syntax, terminal and plot colours are drawn dark enough to read |
+| `twin` | optional: the id of the theme of the other mode it pairs with; the chooser shows the two on one row |
 | `ground` | the background of every panel; its `label` may be left out |
 | `tint` | the accent in three steps, from the one that stands out most from the ground, the `highlight`, through the `body`, to the `shade`, as on polished metal: pale to deep on a dark ground, deep to pale on a light one; its `label` may be left out |
 
-*You should see* the theme after the six, with its swatch. comando reads the files only at start. A file that is not
+*You should see* the theme in the chooser, beside its twin or below the built-in ones. comando reads the files only at start. A file that is not
 valid, repeats an id, or would make text hard to read (the tint's body below 7.5:1 on the ground, for one) is left
 out, and the status bar names the file and the reason. The seven built-in themes are files of the same shape inside
 the app.
