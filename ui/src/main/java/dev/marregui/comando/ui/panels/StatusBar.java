@@ -11,6 +11,7 @@ import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
+import dev.marregui.comando.ui.kit.text.Tooltips;
 import dev.marregui.comando.ui.kit.text.Plain;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -41,7 +42,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.regex.Pattern;
 
 /**
  * The window's status: the standing notice on the left, which takes the user to what it is about when clicked and opens
@@ -252,7 +252,7 @@ public final class StatusBar {
                 if (!selected) {
                     c.setForeground(color(n.level()));
                 }
-                c.setToolTipText(wrapped(KeyText.of(n.text()) + (targets.of(n).isPresent()
+                c.setToolTipText(Tooltips.wrapped(KeyText.of(n.text()) + (targets.of(n).isPresent()
                         ? " · click to go there, right-click to copy" : " · right-click to copy")));
                 return c;
             }
@@ -315,21 +315,6 @@ public final class StatusBar {
         menu.show(notice, 0, -menu.getPreferredSize().height);
     }
 
-    /** Characters on a tooltip line before it wraps, about the 520 px the wrapping width allows. */
-    private static final int LINE = 70;
-    private static final Pattern LONG_WORD = Pattern.compile("\\S{" + LINE + "}(?=\\S)");
-
-    /**
-     * A tooltip that keeps line breaks and wraps a long text at a readable width, while a short one stays as wide as
-     * its text; a word longer than a line (a path) is broken, as Swing's HTML never breaks inside a word. The text is
-     * escaped, so nothing in it is markup (a notice can hold text from a database or from Claude).
-     */
-    static String wrapped(String text) {
-        String broken = LONG_WORD.matcher(text).replaceAll("$0\n");
-        String body = MarkdownHtml.escape(broken).replace("\n", "<br>");
-        boolean wraps = broken.lines().anyMatch(l -> l.length() > LINE);
-        return wraps ? "<html><div style='width:520px'>" + body + "</div></html>" : "<html>" + body + "</html>";
-    }
 
     /** The notice with its time and its whole text, for the tooltip. */
     static String fullLine(Notice n) {
@@ -362,7 +347,7 @@ public final class StatusBar {
         history = s.notices();
         notice.setText(n.text().isEmpty() ? " " : Plain.text(KeyText.of(n.text())));
         notice.setToolTipText(n.text().isEmpty() ? (history.isEmpty() ? null : "Recent notices")
-                : wrapped(fullLine(n) + (targets.of(n).isPresent()
+                : Tooltips.wrapped(fullLine(n) + (targets.of(n).isPresent()
                 ? " · click to go there, right-click for recent notices" : " · click for recent notices")));
         notice.setForeground(color(n.level()));
         notice.setIcon(n.text().isEmpty() ? null : Icons.get(icon(n.level()), 14));

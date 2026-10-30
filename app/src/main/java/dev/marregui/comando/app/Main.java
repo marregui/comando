@@ -73,6 +73,22 @@ public final class Main {
         }
     }
 
+    /**
+     * What the instance is for, from its data root's {@code instance.json} ({@code {"role": "comando specialist"}}), or
+     * empty when the file is missing, unreadable or says nothing; other instances show it in their Instances tab.
+     */
+    static String roleFile(Path home) {
+        Path file = home.resolve(InstanceName.FILE);
+        if (!Files.isRegularFile(file)) {
+            return "";
+        }
+        try {
+            return JsonFile.JSON.readTree(file.toFile()).path("role").asString("").strip();
+        } catch (JacksonException e) {
+            return "";
+        }
+    }
+
     /** What a second instance says: the first may be closing, its window already gone, while it holds the lock. */
     static String lockedMessage(Path home) {
         return "comando is already running on " + home + ", or still closing; switch to its window, or try again in a few seconds.";

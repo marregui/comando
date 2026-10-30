@@ -589,6 +589,12 @@ public final class McpTools {
             n.put("placement", v.placement().name().toLowerCase(Locale.ROOT));
             n.put("pinned", v.pinned());
         }
+        // the other comando instances on the comando Edge (record 124)
+        ObjectNode instances = root.putObject("instances");
+        instances.put("connected", s.instances().connected());
+        ArrayNode others = instances.putArray("others");
+        s.instances().others().forEach(o -> others.addObject().put("name", o.name()).put("instance", o.slug()).put("role", o.role())
+                .put("version", o.version()).put("busy", o.busy()).put("denied", s.instances().denied().contains(o.slug())));
         ArrayNode servers = root.putArray("servers");
         for (ServerSwitch x : actions.servers()) {
             servers.addObject().put("name", x.name().toLowerCase(Locale.ROOT)).put("running", x.isRunning()).put("status", x.status());

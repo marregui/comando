@@ -21,6 +21,7 @@ import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.reduce.Reducer;
+import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.AppState;
@@ -43,9 +44,14 @@ import dev.marregui.comando.ui.kit.desktop.DesktopTrash;
 import dev.marregui.comando.ui.kit.text.LocalImages;
 import dev.marregui.comando.ui.kit.text.MermaidDiagrams;
 import dev.marregui.comando.ui.shell.ComandoUi;
+import dev.marregui.comando.ui.shell.Setup;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.JsonNode;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -101,6 +107,8 @@ public final class App implements AutoCloseable {
             // what reads HomeDir.claudeDir without being handed the root reads this one, until this closes
             KitRoot before = KitRoot.current();
             KitRoot.use(root);
+            // the New session dialog names the kit's defaults beside Model, Effort and Permission mode (record 125)
+            SessionKind.INSTANCE.defaults(sessionDefaults(root.dir()));
             own(() -> KitRoot.use(before));
             own(kitCheck::shutdownNow);
             KitGit git = own(new KitGit());
@@ -128,6 +136,13 @@ public final class App implements AutoCloseable {
             if (log != null) {
                 loop.addObserver(log);
             }
+            // the New session dialog shows the model Claude Code picks for a session that names none (record 125)
+            loop.addObserver(intent -> {
+                if (intent instanceof Intent.SessionInit i && !i.info().model().isBlank()
+                        && loop.state().session(i.name()).map(x -> x.spec().model().isEmpty()).orElse(false)) {
+                    SessionKind.INSTANCE.cliModel(i.info().model());
+                }
+            });
 
             DbAdapter db = own(new DbAdapter(loop, results, schemas, DbSettings.DEFAULTS));
             // the previews draw Mermaid diagrams with mmdc into a cache, once per diagram text
@@ -167,11 +182,13 @@ public final class App implements AutoCloseable {
             // the instances consult each other through the comando Edge while it runs, whichever instance started it
             // (record 123); this instance's presence is cleared, and its link closed, before the Edge stops
             if (Boolean.parseBoolean(System.getProperty(PEERS_PROPERTY, "true"))) {
-                Peers.Me me = Peers.Me.of(InstanceName.current(), version);
+                Peers.Me me = Peers.Me.of(InstanceName.current(), version, Main.roleFile(config.home()));
                 peerBroker = own(new MqttPeerBroker(me.clientId(), EmbeddedEdge.Ports.DEFAULT.mqtt(), edge::running));
                 // a consult session is made where a new session is: the home folder
                 peers = own(new Peers(peerBroker, me, loop, loop::state, transcripts, HomeDir.home(), config.home().resolve("agents.json")));
                 mcpTools.peers(peers);
+                // the sidebar's Instances tab asks and refuses through it (record 124)
+                ui.instances(peers);
             } else {
                 peerBroker = null;
                 peers = null;
@@ -227,11 +244,35 @@ public final class App implements AutoCloseable {
         }
     }
 
+    /**
+     * What a session gets when it names no model, effort or permission mode: the root's {@code settings.json}
+     * ({@code model}, {@code effortLevel}, {@code permissions.defaultMode}); none when it is missing or unreadable.
+     */
+    static SessionKind.Defaults sessionDefaults(Path root) {
+        Path file = root.resolve("settings.json");
+        if (!Files.isRegularFile(file)) {
+            return SessionKind.Defaults.NONE;
+        }
+        try {
+            JsonNode s = JsonFile.JSON.readTree(file.toFile());
+            return new SessionKind.Defaults(s.path("model").asString(""), s.path("effortLevel").asString(""),
+                    s.path("permissions").path("defaultMode").asString(""));
+        } catch (JacksonException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot read the kit's settings [file=" + file + ", cause=" + e.getMessage() + ']');
+            return SessionKind.Defaults.NONE;
+        }
+    }
+
     /** Reads the kit's version, its remote's newer releases, and whether the brain can be backed up, for the window. */
     private void checkKit() {
         // an exception escaping a periodic task cancels every later run
         try {
-            ui.kitStatus(setup.status());
+            Setup.Status status = setup.status();
+            ui.kitStatus(status);
+            if (peers != null) {
+                // the kit's commit travels in this instance's presence
+                peers.kit(status.version().described());
+            }
         } catch (RuntimeException e) {
             LOG.log(System.Logger.Level.WARNING, "cannot read the kit's version", e);
         }

@@ -8,13 +8,16 @@ import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
+import dev.marregui.comando.core.state.InstancesState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionInfo;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.testkit.States;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
@@ -89,17 +92,17 @@ class SessionsSidebarTest {
         UIManager.setLookAndFeel(previous);
     }
 
-    /// The Sessions, Connections and Files tabs sit in one row as icons named by tooltip, packed under 160 px, with no
-    /// Panels tab; the hide button is on every tab, hiding leaves a 16–40 px rail whose buttons show the sidebar, at a
+    /// The Sessions, Connections, Files and Instances tabs sit in one row as icons named by tooltip, packed under
+    /// 200 px, with no Panels tab; the hide button is on every tab, hiding leaves a 16–40 px rail whose buttons show the sidebar, at a
     /// given tab for the per-tab ones.
     @Test
-    void theColumnIsThreeTabsInOneRowAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
+    void theColumnIsFourTabsInOneRowAndHidesToARailWhoseButtonTogglesItBack() throws Exception {
         AtomicInteger toggles = new AtomicInteger();
         SessionsSidebar[] s = new SessionsSidebar[1];
         SwingUtilities.invokeAndWait(() -> s[0] = new SessionsSidebar(intent -> {
         }, NO_DIALOGS, toggles::incrementAndGet));
         SessionsSidebar sidebar = s[0];
-        List<String> order = List.of("Sessions", "Connections", "Files");
+        List<String> order = List.of("Sessions", "Connections", "Files", "Instances");
         Map<String, Rectangle> at = new HashMap<>();
         Map<String, String> text = new HashMap<>();
         SwingUtilities.invokeAndWait(() -> {
@@ -118,7 +121,8 @@ class SessionsSidebarTest {
         assertThat(text.values()).as("icons alone").containsOnly("");
         assertThat(header(sidebar, "Files").getClientProperty("JButton.buttonType")).as("drawn as a tab").isEqualTo("tab");
         assertThat(header(sidebar, "Files").getIcon()).as("the Files tab's own mark, not the tree's folder").isSameAs(Icons.get("files"));
-        assertThat(at.get("Files").x + at.get("Files").width).as("packed: three icons in a narrow sidebar").isLessThan(160);
+        assertThat(header(sidebar, "Instances").getIcon()).as("the Instances tab's mark").isSameAs(Icons.get("instances"));
+        assertThat(at.get("Instances").x + at.get("Instances").width).as("packed: four icons in a narrow sidebar").isLessThan(200);
         for (String t : order) {
             JToggleButton h = header(sidebar, t);
             assertThat(h.getToolTipText()).as(t + " is named by its tooltip").startsWith(t + ": ").hasSizeLessThanOrEqualTo(80);
@@ -127,7 +131,7 @@ class SessionsSidebarTest {
 
         assertThat(search(sidebar.component(), JToggleButton.class, b -> "Panels".equals(b.getAccessibleContext().getAccessibleName())))
                 .as("no Panels tab: a session and its panel are one row (record 91)").isNull();
-        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES}) {
+        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES, SessionsSidebar.INSTANCES}) {
             SwingUtilities.invokeAndWait(() -> sidebar.selectTab(tab));
             assertThat(sidebar.selectedTab()).isEqualTo(tab);
         }
@@ -138,7 +142,7 @@ class SessionsSidebarTest {
         AbstractButton show = button(sidebar.component(), KeyText.of("Show the sidebar (⌘B)"));
         assertThat(sidebar.isShown()).isTrue();
         assertThat(shows(show, sidebar.component())).as("no rail beside the tabs").isFalse();
-        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES}) {
+        for (int tab : new int[] {SessionsSidebar.SESSIONS, SessionsSidebar.CONNECTIONS, SessionsSidebar.FILES, SessionsSidebar.INSTANCES}) {
             SwingUtilities.invokeAndWait(() -> sidebar.selectTab(tab));
             assertThat(shows(hide, sidebar.component())).as("the hide button on every tab").isTrue();
         }
@@ -155,7 +159,7 @@ class SessionsSidebarTest {
         show.doClick();
         assertThat(toggles).hasValue(2);
         // a tab's button on the rail shows the sidebar at that tab
-        for (String t : List.of("Sessions", "Connections", "Files")) {
+        for (String t : List.of("Sessions", "Connections", "Files", "Instances")) {
             assertThat(shows(button(sidebar.component(), "Show the sidebar at " + t), sidebar.component())).as(t + " on the rail").isTrue();
         }
         AbstractButton files = button(sidebar.component(), "Show the sidebar at Files");
@@ -1102,6 +1106,85 @@ class SessionsSidebarTest {
             }
         }
         return false;
+    }
+
+    /// The Instances tab lists this instance and the others from the state, with their sessions; an instance's menu asks
+    /// and refuses through the port, this instance's own row only copies its id; a question asked opens its reply in a
+    /// side view, a question answered opens the session that answered it here; the questions list shows the newest first.
+    @Test
+    void theInstancesTabListsTheInstancesAndActsThroughItsPort() throws Exception {
+        List<Intent> intents = new CopyOnWriteArrayList<>();
+        List<String> acts = new CopyOnWriteArrayList<>();
+        InstancesPort port = new InstancesPort() {
+            @Override
+            public void ask(String instance, String text) {
+                acts.add("ask " + instance + " " + text);
+            }
+
+            @Override
+            public void deny(String instance, boolean denied) {
+                acts.add("deny " + instance + " " + denied);
+            }
+        };
+        InstancesState.Instance me = new InstancesState.Instance("main", "comando", "2.0.0", "", "a710bbf", false, "2026-10-30T07:00:00Z",
+                List.of(new InstancesState.Member("work", true)));
+        InstancesState.Instance expert = new InstancesState.Instance("comando-expert", "Comando Expert", "1.9.0", "comando specialist",
+                "17be4f5", true, "2026-10-30T07:30:00Z", List.of(new InstancesState.Member("consult-main", true)));
+        InstancesState.Consult asked = new InstancesState.Consult("1", InstancesState.Direction.ASKED, "comando-expert", "Comando Expert", "",
+                "what is X?", InstancesState.Status.OK, 1_000, 3_000, "X is a broker.");
+        InstancesState.Consult answered = new InstancesState.Consult("2", InstancesState.Direction.ANSWERED, "comando-expert", "Comando Expert",
+                "consult-comando-expert", "and Y?", InstancesState.Status.WAITING, 2_000, 0, "");
+        AppState s = States.twoPanels().withSessions(List.of(SessionState.closed(SessionSpec.fresh("consult-comando-expert", "/tmp"))))
+                .withInstances(new InstancesState(true, me, List.of(expert), List.of(asked, answered), List.of()));
+        InstancesTab[] t = new InstancesTab[1];
+        SwingUtilities.invokeAndWait(() -> {
+            t[0] = new InstancesTab(intents::add, () -> port);
+            t[0].render(s);
+        });
+        InstancesTab tab = t[0];
+
+        JTree tree = find(tab.component(), JTree.class, x -> true);
+        Object root = tree.getModel().getRoot();
+        assertThat(tree.getModel().getChildCount(root)).as("this instance, then the other").isEqualTo(2);
+        Object other = tree.getModel().getChild(root, 1);
+        assertThat(tree.getModel().getChildCount(other)).as("its sessions under it").isEqualTo(1);
+        assertThat(InstancesTab.line(me, true, "2.0.0")).isEqualTo("comando (this one)");
+        assertThat(InstancesTab.line(expert, false, "2.0.0")).as("its role, and its version as it differs")
+                .isEqualTo("Comando Expert · comando specialist · comando 1.9.0");
+        assertThat(InstancesTab.tip(expert, false, "2.0.0", false)).contains("kit 17be4f5", "(this one runs 2.0.0)");
+        assertThat(InstancesTab.line(asked, 5_000)).isEqualTo("→ Comando Expert · you · answered · 2 s — what is X?");
+
+        List<String> items = new ArrayList<>();
+        List<String> own = new ArrayList<>();
+        SwingUtilities.invokeAndWait(() -> {
+            JPopupMenu menu = tab.menuFor(new InstancesTab.Row(expert, null, false));
+            for (Component c : menu.getComponents()) {
+                items.add(c instanceof JMenuItem m ? m.getText() : "—");
+            }
+            ((JMenuItem) menu.getComponent(1)).doClick();
+            for (Component c : tab.menuFor(new InstancesTab.Row(me, null, true)).getComponents()) {
+                own.add(c instanceof JMenuItem m ? m.getText() : "—");
+            }
+        });
+        assertThat(items).containsExactly("Ask Comando Expert…", "Refuse questions from Comando Expert", "—",
+                "Copy the instance id (comando-expert)");
+        assertThat(own).containsExactly("Copy the instance id (main)");
+        assertThat(acts).containsExactly("deny comando-expert true");
+
+        @SuppressWarnings("unchecked")
+        JList<InstancesState.Consult> list = find(tab.component(), JList.class, x -> true);
+        assertThat(list.getModel().getElementAt(0)).as("newest first").isEqualTo(answered);
+        SwingUtilities.invokeAndWait(() -> {
+            tab.open(asked);
+            tab.open(answered);
+        });
+        assertThat(intents).filteredOn(Intent.ShowView.class::isInstance).singleElement().satisfies(i -> {
+            Intent.ShowView v = (Intent.ShowView) i;
+            assertThat(v.title()).isEqualTo("Question to Comando Expert");
+            assertThat(((ViewSpec.Markdown) v.spec()).markdown()).contains("what is X?", "X is a broker.");
+        });
+        assertThat(intents).filteredOn(Intent.OpenSession.class::isInstance).extracting(i -> ((Intent.OpenSession) i).session())
+                .containsExactly("consult-comando-expert");
     }
 
     private static AbstractButton button(Component root, String name) {

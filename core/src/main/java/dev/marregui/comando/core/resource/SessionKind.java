@@ -1,6 +1,8 @@
 package dev.marregui.comando.core.resource;
 
 import dev.marregui.comando.core.model.HomeDir;
+import dev.marregui.comando.core.model.InstanceName;
+import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.model.Status;
@@ -10,33 +12,115 @@ import dev.marregui.comando.core.state.SessionState;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
-/** Claude Code sessions as a resource kind. */
+/**
+ * Claude Code sessions as a resource kind. The dialog asks first the session's name, what it is for, then which
+ * conversation it continues and how Claude runs, each default shown in its choice with where it comes from; the folder
+ * it runs in, the extra folders and the checkpoint prompt are under More, as most sessions keep the kit's folder. The budget is not asked: it only binds
+ * on API billing, and a stored one is kept.
+ */
 public final class SessionKind implements ResourceKind<SessionSpec> {
 
     public static final SessionKind INSTANCE = new SessionKind();
 
-    private static final List<Attribute> ATTRIBUTES = List.of(
-            Attribute.of("name", "Name", Attribute.Kind.TEXT, true, "unique; also the CLI's --name"),
-            Attribute.of("workDir", "Working directory", Attribute.Kind.DIRECTORY, true, "the CLI runs here"),
-            Attribute.openChoice("model", "Model", orDefault(SessionSpec.MODELS), "empty: the CLI's default; a full model id also works"),
-            Attribute.choice("effort", "Effort", orDefault(SessionSpec.EFFORTS), "empty: the CLI's default"),
-            Attribute.choice("permissionMode", "Permission mode",
-                    List.of("", "default", "acceptEdits", "plan", "auto", "dontAsk"), "empty: the CLI's default"),
-            Attribute.of("addDirs", "Extra directories", Attribute.Kind.DIRECTORIES, false, "--add-dir, separated by " + File.pathSeparator),
-            Attribute.of("budgetUsd", "Budget (USD)", Attribute.Kind.DECIMAL, false, "--max-budget-usd per process; 0 for none"),
-            Attribute.of("checkpoint", "Checkpoint command", Attribute.Kind.TEXT, false,
-                    "the prompt the Checkpoint button sends; empty hides the button"),
-            Attribute.of("claudeSessionId", "Claude session id", Attribute.Kind.TEXT, false, "set after the first start; empty for a new session")
-                    .inAdvanced(),
-            Attribute.choice("startMode", "Next start", List.of("NEW", "RESUME", "FORK"),
-                    "RESUME continues the stored conversation; FORK copies it").inAdvanced());
+    /** The permission modes the CLI takes ({@code --permission-mode}), with what each does. */
+    static final Map<String, String> PERMISSION_MODES = permissionModes();
+
+    /**
+     * What a session gets when it names no model, effort or permission mode: the kit's {@code settings.json}
+     * ({@code model}, {@code effortLevel}, {@code permissions.defaultMode}), as the application read it; empty for
+     * what it names none of.
+     */
+    public record Defaults(String model, String effort, String permissionMode) {
+
+        public static final Defaults NONE = new Defaults("", "", "");
+
+        public Defaults {
+            model = model == null ? "" : model.strip();
+            effort = effort == null ? "" : effort.strip();
+            permissionMode = permissionMode == null ? "" : permissionMode.strip();
+        }
+    }
+
+    private volatile Defaults defaults = Defaults.NONE;
+    /** The model Claude Code chose for a session that named none, as a session's start reported it; empty until then. */
+    private volatile String cliModel = "";
 
     private SessionKind() {
+    }
+
+    /** The kit's defaults, which the dialog names beside Model, Effort and Permission mode. */
+    public void defaults(Defaults d) {
+        defaults = Objects.requireNonNullElse(d, Defaults.NONE);
+    }
+
+    /** The model Claude Code runs a session on when neither the session nor the kit names one, once a start said it. */
+    public void cliModel(String model) {
+        cliModel = model == null ? "" : model.strip();
+    }
+
+    static List<Attribute> attributes(Defaults d, String cliModel) {
+        String model = !d.model().isEmpty() ? d.model() + " · the kit's default"
+                : cliModel.isEmpty() ? "Claude Code's default" : cliModel + " · Claude Code's default";
+        String effort = d.effort().isEmpty() ? "Claude Code's default" : d.effort() + " · the kit's default";
+        String permission = d.permissionMode().isEmpty() ? "default · asks before each tool"
+                : d.permissionMode() + " · the kit's default: " + PERMISSION_MODES.getOrDefault(d.permissionMode(), "as the CLI defines");
+        String follows = "the default follows the kit; a choice here holds for this session";
+        return List.of(
+                Attribute.of("name", "Name", Attribute.Kind.TEXT, true, "what this session is for: it names its panel and its ongoing conversation")
+                        .about("A session is one ongoing line of work: you stop it, resume it, checkpoint it. Its name is how you find it again, "
+                                + "in its panel, the sidebar and Claude Code. Name it by purpose: edge-release, reviews."),
+                Attribute.choice("startMode", "Conversation", List.of("NEW", "RESUME", "FORK"),
+                                "NEW starts empty; RESUME continues the stored one; FORK copies it")
+                        .about("Which conversation the next start opens. NEW: an empty one. RESUME: the stored one, where it left off. "
+                                + "FORK: a copy of it, so the original stays as it was."),
+                Attribute.of("claudeSessionId", "Stored conversation", Attribute.Kind.TEXT, false,
+                                "set after the first start, or by Sessions ▸ Import…")
+                        .about("The Claude Code conversation the session continues. comando sets it at the first start; Sessions ▸ Import… "
+                                + "sets it from a stored one."),
+                Attribute.openChoice("model", "Model", orDefault(SessionSpec.MODELS), follows)
+                        .about("The Claude model the session uses. The default follows the kit's settings.json, so a later change there "
+                                + "reaches the session; a model picked here holds for this session.")
+                        .whenEmpty(model),
+                Attribute.choice("effort", "Effort", orDefault(SessionSpec.EFFORTS), follows)
+                        .about("How much the model thinks before answering: higher is slower and more thorough. The default follows the kit's "
+                                + "settings.json; the effort chip changes it while the session runs.")
+                        .whenEmpty(effort),
+                Attribute.choice("permissionMode", "Permission mode", orDefault(List.copyOf(PERMISSION_MODES.keySet())), follows)
+                        .about("Whether Claude asks before running a tool. default asks each time, acceptEdits edits without asking, plan "
+                                + "only plans, bypassPermissions never asks. The default follows the kit's settings.json.")
+                        .whenEmpty(permission),
+                Attribute.of("workDir", "Working directory", Attribute.Kind.DIRECTORY, true,
+                                "this folder's CLAUDE.md and git branch; the kit's by default")
+                        .about("The folder the session starts in: its CLAUDE.md, git branch and stored conversation come from there. "
+                                + "Keep the kit's unless the session needs a project's own CLAUDE.md and branch.")
+                        .inAdvanced(),
+                Attribute.of("addDirs", "Extra folders", Attribute.Kind.DIRECTORIES, false,
+                                "other folders Claude may read and change; separated by " + File.pathSeparator)
+                        .about("Other folders Claude may read and change without asking path by path.")
+                        .inAdvanced(),
+                Attribute.of("checkpoint", "Checkpoint prompt", Attribute.Kind.TEXT, false,
+                                "what Checkpoint sends before a fresh conversation; empty hides the button")
+                        .about("What the Checkpoint button sends, the kit's /reflect by default; then comando carries the summary into a "
+                                + "fresh conversation, so a long session starts light again.")
+                        .inAdvanced());
+    }
+
+    private static Map<String, String> permissionModes() {
+        Map<String, String> m = new LinkedHashMap<>();
+        m.put("default", "asks before each tool");
+        m.put("acceptEdits", "edits files without asking and asks for the rest");
+        m.put("plan", "plans only and changes nothing");
+        m.put("auto", "decides when to ask");
+        m.put("dontAsk", "refuses what the settings do not allow, without asking");
+        m.put("bypassPermissions", "runs every tool unasked");
+        return Collections.unmodifiableMap(m);
     }
 
     /** The choices with the empty one, the CLI's default, first. */
@@ -54,7 +138,22 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
 
     @Override
     public List<Attribute> attributes() {
-        return ATTRIBUTES;
+        return attributes(defaults, cliModel);
+    }
+
+    /** The section More's name: what it holds is set once and seldom changed, not advanced. */
+    @Override
+    public String advancedLabel() {
+        return "More";
+    }
+
+    /** Where every session of this comando runs: its kit, brain and instance, which a session does not choose. */
+    @Override
+    public String context() {
+        KitRoot root = KitRoot.current();
+        String brain = root.brain().map(b -> " · brain " + HomeDir.shorten(b.toString())).orElse("");
+        return "Runs on " + (root.kit().isPresent() ? "kit " : "folder ") + HomeDir.shorten(root.dir().toString()) + brain
+                + " · instance " + InstanceName.display(InstanceName.current());
     }
 
     @Override
@@ -113,10 +212,10 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
         try {
             m = StartMode.valueOf(mode.toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Next start must be NEW, RESUME or FORK", e);
+            throw new IllegalArgumentException("Conversation must be NEW, RESUME or FORK", e);
         }
         if (m != StartMode.NEW && id.isEmpty()) {
-            throw new IllegalArgumentException("Next start " + m + " needs a Claude session id; choose NEW for a new conversation");
+            throw new IllegalArgumentException("Conversation " + m + " needs a stored conversation; choose NEW for an empty one");
         }
         return m;
     }
@@ -142,9 +241,10 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                 s.claudeSessionId(), StartMode.FORK, s.checkpoint(), s.carried());
     }
 
+    /** A new session runs in the kit's folder, as the user's sessions do; the user's home without a root. */
     @Override
     public SessionSpec template(String name) {
-        return SessionSpec.fresh(name, HomeDir.home());
+        return SessionSpec.fresh(name, KitRoot.current().dir().toString());
     }
 
     @Override
@@ -182,7 +282,9 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
 
     @Override
     public boolean showAdvanced(Map<String, String> values) {
-        return !values.getOrDefault("claudeSessionId", "").isBlank();
+        String dir = values.getOrDefault("workDir", "").strip();
+        return !dir.isEmpty() && !KitRoot.current().isRoot(HomeDir.expand(dir)) || !values.getOrDefault("addDirs", "").isBlank()
+                || !values.getOrDefault("checkpoint", SessionSpec.DEFAULT_CHECKPOINT).equals(SessionSpec.DEFAULT_CHECKPOINT);
     }
 
     @Override

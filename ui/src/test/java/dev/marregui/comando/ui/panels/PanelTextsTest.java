@@ -8,6 +8,7 @@ import dev.marregui.comando.core.state.Reflection;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.state.SqlRun;
 import dev.marregui.comando.testkit.States;
+import dev.marregui.comando.ui.kit.text.Tooltips;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
@@ -128,12 +129,12 @@ class PanelTextsTest {
     /// at a fixed width, and a word longer than a line breaks every 70 characters.
     @Test
     void theTooltipWrapsOnlyALongNotice() {
-        assertThat(StatusBar.wrapped("Query finished")).isEqualTo("<html>Query finished</html>");
-        assertThat(StatusBar.wrapped("a <b>\nc")).isEqualTo("<html>a &lt;b&gt;<br>c</html>");
+        assertThat(Tooltips.wrapped("Query finished")).isEqualTo("<html>Query finished</html>");
+        assertThat(Tooltips.wrapped("a <b>\nc")).isEqualTo("<html>a &lt;b&gt;<br>c</html>");
         String prose = "word ".repeat(30).strip();
-        assertThat(StatusBar.wrapped(prose)).startsWith("<html><div style='width:520px'>");
+        assertThat(Tooltips.wrapped(prose)).startsWith("<html><div style='width:520px'>");
         String path = "/" + "p".repeat(150);
-        assertThat(StatusBar.wrapped(path)).doesNotContain("width").isEqualTo("<html>/" + "p".repeat(69) + "<br>" + "p".repeat(70)
+        assertThat(Tooltips.wrapped(path)).doesNotContain("width").isEqualTo("<html>/" + "p".repeat(69) + "<br>" + "p".repeat(70)
                 + "<br>" + "p".repeat(11) + "</html>");
     }
 }

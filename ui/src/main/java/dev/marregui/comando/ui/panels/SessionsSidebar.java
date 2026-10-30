@@ -7,6 +7,7 @@ import dev.marregui.comando.core.model.KitJobs;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.resource.ConnectionKind;
 import dev.marregui.comando.core.resource.SessionKind;
@@ -73,6 +74,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 
 /**
@@ -201,8 +203,12 @@ public final class SessionsSidebar {
     public static final int SESSIONS = 0;
     public static final int CONNECTIONS = 1;
     public static final int FILES = 2;
+    public static final int INSTANCES = 3;
 
     private final ResourceActions<SessionState> sessionActions;
+    /** The Instances tab (record 124) and what it acts through, set by the window once it has it. */
+    private final InstancesTab instances;
+    private volatile InstancesPort instancesPort = InstancesPort.NONE;
     private final ResourceActions<ConnectionState> connectionActions;
     private final PanelsWithoutSession loosePanels;
     /** The panels' texts, which a session's menu has the session rewrite. */
@@ -435,6 +441,7 @@ public final class SessionsSidebar {
             }
         });
         files = new FilesTab(intents, dialogs::openFile, dialogs::editFile, questions);
+        instances = new InstancesTab(intents, () -> instancesPort);
         sessionActions = new ResourceActions<>(sessions,
                 ResourceActions.Rows.of(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop", () -> state),
                 dialogs.sessions(), name -> intents.dispatch(new Intent.RemoveSession(name)), questions);
@@ -454,6 +461,7 @@ public final class SessionsSidebar {
         SidebarLook.list(connections);
         tabs.add("Files", "files", "your folders and their git changes; double-click a file to open it",
                 section(files.component()));
+        tabs.add("Instances", "instances", "the comando instances on the Edge and the questions between them", instances.component());
         tabs.trailing(ToolButton.of("more", KeyText.of("Hide the sidebar (⌘B)"), toggle));
         tabs.onMenu((tab, e) -> tabMenu(tab).show(e.getComponent(), e.getX(), e.getY()));
         rail = new JPanel(new BorderLayout());
@@ -464,7 +472,7 @@ public final class SessionsSidebar {
         railButtons.setLayout(new BoxLayout(railButtons, BoxLayout.Y_AXIS));
         railButtons.setOpaque(false);
         railButtons.add(ToolButton.of("more", KeyText.of("Show the sidebar (⌘B)"), toggle));
-        String[][] railTabs = {{"Sessions", "session"}, {"Connections", "database"}, {"Files", "files"}};
+        String[][] railTabs = {{"Sessions", "session"}, {"Connections", "database"}, {"Files", "files"}, {"Instances", "instances"}};
         for (int i = 0; i < railTabs.length; i++) {
             int tab = i;
             railButtons.add(Box.createVerticalStrut(Theme.SPACE_XS));
@@ -496,7 +504,7 @@ public final class SessionsSidebar {
         root.repaint();
     }
 
-    /** The tab in front: {@link #SESSIONS}, {@link #CONNECTIONS} or {@link #FILES}. */
+    /** The tab in front: {@link #SESSIONS}, {@link #CONNECTIONS}, {@link #FILES} or {@link #INSTANCES}. */
     public int selectedTab() {
         return tabs.selectedIndex();
     }
@@ -630,6 +638,31 @@ public final class SessionsSidebar {
         sync(connectionModel, s.connections(), connections);
         loosePanels.render(s);
         files.render(s);
+        instances.render(s);
+    }
+
+    /**
+     * What the Instances tab acts through: the other instances ({@code port}) and the comando Edge's toggle, which it
+     * offers to start while the Edge is down.
+     */
+    public void instances(InstancesPort port, BooleanSupplier edgeRunning, BooleanSupplier edgeBusy, Runnable startEdge) {
+        instancesPort = port == null ? InstancesPort.NONE : port;
+        instances.edge(new InstancesTab.Edge() {
+            @Override
+            public boolean running() {
+                return edgeRunning.getAsBoolean();
+            }
+
+            @Override
+            public boolean busy() {
+                return edgeBusy.getAsBoolean();
+            }
+
+            @Override
+            public void start() {
+                startEdge.run();
+            }
+        });
     }
 
     private static final String SORT_TIP = "Sort: running first, then by name";

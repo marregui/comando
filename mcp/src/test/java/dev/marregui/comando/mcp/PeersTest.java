@@ -6,6 +6,7 @@ import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.InstancesState;
 import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.Block;
@@ -17,6 +18,7 @@ import dev.marregui.comando.testkit.States;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.nio.file.Files;
@@ -223,6 +225,81 @@ class PeersTest {
         assertThat(Peers.Me.of("", "v").clientId()).isEqualTo("comando-main");
     }
 
+    /// The window learns the instances from their presences (record 124): each other instance with its role and kit,
+    /// this one's own, and whether it is connected; one that leaves is gone from the next state.
+    @Test
+    void theWindowSeesTheInstancesWithTheirRoleAndKitAndThisOnesLink() throws Exception {
+        Node main = node("", Peers.ANSWER_WITHIN);
+        Node b = node("b", "comando specialist", Peers.ANSWER_WITHIN);
+        b.peers.kit("a710bbf");
+        b.peers.tick();
+        InstancesState seen = main.window.recorded.await(Intent.InstancesChanged.class,
+                i -> i.instances().others().stream().anyMatch(o -> o.kit().equals("a710bbf")), WAIT).instances();
+        assertThat(seen.connected()).isTrue();
+        assertThat(seen.self().slug()).isEqualTo("main");
+        assertThat(seen.others()).singleElement().satisfies(o -> {
+            assertThat(o.slug()).isEqualTo("b");
+            assertThat(o.role()).isEqualTo("comando specialist");
+            assertThat(o.version()).isEqualTo("2.0.0");
+            assertThat(o.sessions()).extracting(InstancesState.Member::name).containsExactly("work");
+        });
+
+        b.peers.close();
+        main.window.recorded.await(Intent.InstancesChanged.class, i -> i.instances().others().isEmpty(), WAIT);
+        main.link.die();
+        main.peers.tick();
+        main.window.recorded.await(Intent.InstancesChanged.class, i -> !i.instances().connected(), WAIT);
+    }
+
+    /// Every question is in the state on both sides: the asker's, waiting, then answered with the reply's text; the
+    /// answering instance's, naming the session that answered it. A question asked from the tab has no session.
+    @Test
+    void theQuestionsAskedAndAnsweredAreKeptWithTheirReplies() throws Exception {
+        Node main = node("", Peers.ANSWER_WITHIN);
+        Node b = node("b", Peers.ANSWER_WITHIN);
+        main.peers.ask("b", "what is X?");
+        b.window.recorded.await(Intent.PromptSession.class, WAIT);
+        InstancesState waiting = main.window.recorded.await(Intent.InstancesChanged.class, i -> !i.instances().consults().isEmpty(), WAIT).instances();
+        assertThat(waiting.consults()).singleElement().satisfies(c -> {
+            assertThat(c.direction()).isEqualTo(InstancesState.Direction.ASKED);
+            assertThat(c.status()).isEqualTo(InstancesState.Status.WAITING);
+            assertThat(c.session()).as("asked from the tab").isEmpty();
+            assertThat(c.question()).isEqualTo("what is X?");
+        });
+        assertThat(b.window.recorded.of(Intent.PromptSession.class).getFirst().text()).as("no session in the header")
+                .isEqualTo("[from instance comando]\nwhat is X?");
+
+        b.window.turn("consult-main", "X is a broker.");
+        InstancesState.Consult asked = main.window.recorded.await(Intent.InstancesChanged.class,
+                i -> i.instances().consults().stream().anyMatch(c -> c.status() == InstancesState.Status.OK), WAIT).instances().consults().getFirst();
+        assertThat(asked.reply()).isEqualTo("X is a broker.");
+        assertThat(asked.endedAt()).isGreaterThanOrEqualTo(asked.askedAt());
+        InstancesState.Consult answered = b.window.recorded.await(Intent.InstancesChanged.class,
+                i -> i.instances().consults().stream().anyMatch(c -> c.status() == InstancesState.Status.OK), WAIT).instances().consults().getFirst();
+        assertThat(answered.direction()).isEqualTo(InstancesState.Direction.ANSWERED);
+        assertThat(answered.session()).isEqualTo("consult-main");
+        assertThat(main.window.recorded.of(Intent.Notify.class)).anyMatch(n -> n.text().startsWith("reply from comando · b"));
+    }
+
+    /// Refusing from the tab writes `agents.json`'s `peers.deny`, keeping its grants; the next question from that
+    /// instance is refused, and the state lists it as refused until the user takes it back.
+    @Test
+    void refusingAnInstanceWritesAgentsJsonKeepsTheGrantsAndRefusesItsQuestions() throws Exception {
+        Node main = node("", Peers.ANSWER_WITHIN);
+        Node b = node("b", Peers.ANSWER_WITHIN);
+        Files.writeString(b.agents, "{\"grants\": {\"foreman\": [\"destructive\"]}}");
+        b.peers.deny("main", true);
+        JsonNode written = json.readTree(Files.readString(b.agents));
+        assertThat(written.path("grants").path("foreman").get(0).asString()).isEqualTo("destructive");
+        assertThat(written.path("peers").path("deny").get(0).asString()).isEqualTo("main");
+        b.window.recorded.await(Intent.InstancesChanged.class, i -> i.instances().denied().contains("main"), WAIT);
+        assertThat(call(main, "instance_ask", "{\"instance\":\"b\",\"text\":\"what is X?\",\"wait_seconds\":10}").text()).startsWith("refused:");
+
+        b.peers.deny("main", false);
+        assertThat(json.readTree(Files.readString(b.agents)).path("peers").path("deny").isEmpty()).isTrue();
+        b.window.recorded.await(Intent.InstancesChanged.class, i -> i.instances().denied().isEmpty(), WAIT);
+    }
+
     private McpTools.Outcome call(Node n, String tool, String args) throws Exception {
         return call(n, "foreman", tool, args);
     }
@@ -242,10 +319,14 @@ class PeersTest {
     }
 
     private Node node(String name, Duration answerWithin) throws Exception {
+        return node(name, "", answerWithin);
+    }
+
+    private Node node(String name, String role, Duration answerWithin) throws Exception {
         Path home = Files.createDirectories(dir.resolve(name.isEmpty() ? "main" : name));
         Window window = new Window();
         Link link = new Link(bus);
-        Peers peers = new Peers(link, Peers.Me.of(name, "2.0.0"), window, window.state::get, window.transcripts, home.toString(),
+        Peers peers = new Peers(link, Peers.Me.of(name, "2.0.0", role), window, window.state::get, window.transcripts, home.toString(),
                 home.resolve("agents.json"), answerWithin);
         McpTools tools = new McpTools(window, window.state::get, window.transcripts, null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
         tools.peers(peers);

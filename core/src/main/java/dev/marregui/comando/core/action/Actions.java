@@ -37,7 +37,7 @@ public final class Actions {
                             Arg.optional("model", Type.STRING, "empty: the CLI's default").among(withDefault(SessionSpec.MODELS)),
                             Arg.optional("effort", Type.STRING, "empty: the CLI's default").among(withDefault(SessionSpec.EFFORTS)),
                             Arg.optional("permission_mode", Type.STRING, "empty: the CLI's default")
-                                    .among(List.of("", "default", "acceptEdits", "plan", "auto", "dontAsk")),
+                                    .among(List.of("", "default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions")),
                             Arg.optional("add_dirs", Type.STRINGS, "extra directories, --add-dir"),
                             Arg.optional("checkpoint", Type.STRING, "the prompt the Checkpoint button sends; default /reflect"),
                             Arg.optional("prompt", Type.STRING, "a first prompt: the session starts and runs it")),
@@ -197,7 +197,8 @@ public final class Actions {
             Intent.SessionStarted.class, Intent.SessionRanAt.class, Intent.SessionInit.class, Intent.SessionActivity.class,
             Intent.SessionTasksChanged.class, Intent.SessionTurnRunning.class, Intent.SessionTurnEnded.class, Intent.SessionExited.class,
             Intent.SessionBranch.class, Intent.SessionContext.class, Intent.CommandFinished.class, Intent.FolderLoaded.class,
-            Intent.ReposLoaded.class, Intent.ChangeRead.class, Intent.PlanUsageRead.class);
+            Intent.ReposLoaded.class, Intent.ChangeRead.class, Intent.PlanUsageRead.class,
+            Intent.InstancesChanged.class);
 
     /** Intents the window sends by itself, not on a gesture, with the reason. */
     public static final Map<Class<? extends Intent>, String> WINDOW = Map.of(

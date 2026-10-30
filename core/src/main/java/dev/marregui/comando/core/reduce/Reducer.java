@@ -167,6 +167,7 @@ public final class Reducer {
             case Intent.SelectLowerTab i -> ViewRules.selectLowerTab(s, i);
             case Intent.Arrange i -> ViewRules.arrange(s, i);
             case Intent.PlanUsageRead i -> ViewRules.planUsageRead(s, i);
+            case Intent.InstancesChanged i -> Transition.of(s.withInstances(i.instances()));
             case Intent.RunGradle i -> ViewRules.runGradle(clock, s, i);
             case Intent.CommandFinished i -> ViewRules.commandFinished(s, i);
             case Intent.CancelCommand i -> ViewRules.cancelCommand(s, i);

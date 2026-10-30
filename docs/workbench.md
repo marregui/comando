@@ -29,7 +29,11 @@ their own, Configure ~/.claude folders, which keeps them in `folders.json` ([§5
 
 `ResourceDialog` edits one resource: stored, new, or an unsaved copy
 ([record 40](adr/0040-one-resource-per-dialog-and-two-tab-rows.md)). The form is generated from the kind's attributes,
-with a hint under each field; fields set rarely sit under "▸ Advanced". ⏎ saves. ⌘⏎ saves and then binds a connection
+with a hint under each field; fields set rarely sit under "▸ Advanced" ("▸ More" for a session). A session's form asks
+first its name, what it is for, then which conversation it continues and how Claude runs, each empty choice showing the
+default it stands for (the kit's `settings.json`, or Claude Code's), every field with an ⓘ that explains it, says above the form which kit, brain and instance every session runs on, starts a new
+session in the kit's folder, and asks no budget ([record 125](adr/0125-the-session-dialog-asks-what-matters.md)). Save and ⏎ save the form and close
+the dialog; a form they refuse stays open with the reason. ⌘⏎ saves and then binds a connection
 to the focused panel, or brings a session's own panel forward (the button reads Assign to panel for a connection, Open
 its panel for a session). Esc or the close button asks before dropping unsaved changes. Connect or Start, and the
 Assign or Open button save a changed form first; Test tries the form as typed, without saving it. Their outcome shows
@@ -168,9 +172,10 @@ Any number of document panels may be attached to a session
 
 ### 1.3 The sidebar
 
-Three tabs in one row, each an icon named by its tooltip: Sessions, Connections, Files; the tab in front is kept across
-restarts ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md),
-[record 91](adr/0091-the-panels-tab-folds-into-the-sessions-tab.md)). A right click on a tab selects it and opens its
+Four tabs in one row, each an icon named by its tooltip: Sessions, Connections, Files, Instances; the tab in front is
+kept across restarts ([record 70](adr/0070-the-sidebars-tabs-in-one-row-with-a-menu-each.md),
+[record 91](adr/0091-the-panels-tab-folds-into-the-sessions-tab.md),
+[record 124](adr/0124-the-sidebar-shows-the-instances.md)). A right click on a tab selects it and opens its
 menu: the tab's own actions, then the window's commands for it with their keys. Every panel of the window, the sidebar
 included, lies on one ground set once (`Theme.ground()`, the theme's); names are in the transcript's ivory; the folders'
 icons are outlines in one grey ink, told apart by their shape; the tint chosen draws the hairline between groups, the
@@ -182,6 +187,7 @@ left edge ([record 98](adr/0098-the-sidebars-look.md), [record 100](adr/0100-a-t
 | Sessions | New session…, Import stored conversations…, Sort: running first, then by name (on only after a drag ordered the rows by hand); New panel, Reopen closed panel |
 | Connections | New connection…; Start embedded QuestDB, Stop embedded QuestDB; Start the comando Edge, Stop the comando Edge |
 | Files | Configure ~/.claude folders ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)); Configure kit jobs, with a kit ([§7.6](#76-scheduled-jobs)) |
+| Instances | the window's commands only; an instance's own menu asks it, refuses its questions, copies its id |
 
 No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)): a row's menu edits,
 clones and removes it (`ResourceActions`). Removing something in use asks **Stop and remove**, **Disconnect and remove**
@@ -190,6 +196,13 @@ or **Close and remove**, or **Leave it** ([record 37](adr/0037-session-actions-a
 icon per tab under it shows the sidebar at that tab. A name wider than the sidebar scrolls sideways into view, in every
 tab: the sessions, the panels without a session, the connections and the Files tree show a horizontal scroll bar while
 a row is wider than the tab, and none while every row fits.
+
+The Instances tab ([record 124](adr/0124-the-sidebar-shows-the-instances.md)) shows the comando Edge's link (connected
+as this instance, connecting, or not running with **Start the Edge**), the instances on it as a tree (this one first,
+then the others, each with a busy dot, its role from its `instance.json`, its version when it differs, its sessions
+under it; the tooltip adds its id, kit and uptime), and the questions asked and answered since start, newest first. A
+double click on an instance asks it a question, as the user; on a question asked, it shows the question and reply in a
+side view; on a question answered, it opens the session here that answered it.
 
 **A session row** is one line: the state icon and the name
 ([record 90](adr/0090-a-session-row-is-its-icon-and-name.md)). The icon, which a click starts or stops, is

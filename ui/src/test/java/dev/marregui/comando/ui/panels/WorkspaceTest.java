@@ -772,7 +772,7 @@ class WorkspaceTest {
                 l.mouseExited(mouse(w[0].component(), MouseEvent.MOUSE_EXITED, 1, 1));
             }
             card.component().dispatchEvent(mouse(card.component(), MouseEvent.MOUSE_ENTERED, 5, 5));
-            w[0].closeCardIfLeft();
+            card.closeIfLeft();
         });
         assertThat(w[0].cardShown()).as("the pointer reached it").isEqualTo(P);
         SwingUtilities.invokeAndWait(() -> card.topicArea().dispatchEvent(mouse(card.topicArea(), MouseEvent.MOUSE_EXITED, 3, 3)));

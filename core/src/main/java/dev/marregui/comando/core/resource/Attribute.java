@@ -9,10 +9,13 @@ import java.util.Objects;
  *
  * @param hint     shown under the field
  * @param editable for a choice: whether the user may type a value that is not in {@code choices}
- * @param advanced shown in the form's collapsed "Advanced" section: values the application usually sets
+ * @param advanced  shown in the form's collapsed "Advanced" section: values the application usually sets
+ * @param about     what the attribute means and does, at length: the ⓘ beside its label shows it; empty for none
+ * @param whenEmpty for a choice: what its empty value means, shown in its place (the default it stands for); empty
+ *                  to show a blank
  */
 public record Attribute(String key, String label, Kind kind, List<String> choices, boolean required, String hint,
-                        boolean editable, boolean advanced) {
+                        boolean editable, boolean advanced, String about, String whenEmpty) {
 
     public enum Kind { TEXT, SECRET, INTEGER, DECIMAL, BOOLEAN, CHOICE, DIRECTORY, DIRECTORIES }
 
@@ -22,10 +25,12 @@ public record Attribute(String key, String label, Kind kind, List<String> choice
         Objects.requireNonNull(kind, "kind");
         choices = List.copyOf(choices);
         Objects.requireNonNull(hint, "hint");
+        about = about == null ? "" : about;
+        whenEmpty = whenEmpty == null ? "" : whenEmpty;
     }
 
     public Attribute(String key, String label, Kind kind, List<String> choices, boolean required, String hint) {
-        this(key, label, kind, choices, required, hint, kind != Kind.CHOICE, false);
+        this(key, label, kind, choices, required, hint, kind != Kind.CHOICE, false, "", "");
     }
 
     public static Attribute of(String key, String label, Kind kind, boolean required, String hint) {
@@ -34,16 +39,26 @@ public record Attribute(String key, String label, Kind kind, List<String> choice
 
     /** A choice the user picks from the list only. */
     public static Attribute choice(String key, String label, List<String> choices, String hint) {
-        return new Attribute(key, label, Kind.CHOICE, choices, false, hint, false, false);
+        return new Attribute(key, label, Kind.CHOICE, choices, false, hint, false, false, "", "");
     }
 
     /** A choice whose list holds suggestions: the user may also type another value. */
     public static Attribute openChoice(String key, String label, List<String> choices, String hint) {
-        return new Attribute(key, label, Kind.CHOICE, choices, false, hint, true, false);
+        return new Attribute(key, label, Kind.CHOICE, choices, false, hint, true, false, "", "");
     }
 
     /** The same attribute in the form's "Advanced" section. */
     public Attribute inAdvanced() {
-        return new Attribute(key, label, kind, choices, required, hint, editable, true);
+        return new Attribute(key, label, kind, choices, required, hint, editable, true, about, whenEmpty);
+    }
+
+    /** The same attribute with {@code text} behind the ⓘ beside its label. */
+    public Attribute about(String text) {
+        return new Attribute(key, label, kind, choices, required, hint, editable, advanced, text, whenEmpty);
+    }
+
+    /** The same choice showing {@code text} for its empty value: the default an empty value stands for. */
+    public Attribute whenEmpty(String text) {
+        return new Attribute(key, label, kind, choices, required, hint, editable, advanced, about, text);
     }
 }

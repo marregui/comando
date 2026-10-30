@@ -5,6 +5,7 @@ import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.FolderRoot;
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.model.Status;
@@ -149,7 +150,7 @@ class ResourceKindTest {
         Map<String, String> s = SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("s", "/tmp"));
         s.put("startMode", "RESUME");
         assertThatThrownBy(() -> SessionKind.INSTANCE.fromAttributes(s))
-                .hasMessage("Next start RESUME needs a Claude session id; choose NEW for a new conversation");
+                .hasMessage("Conversation RESUME needs a stored conversation; choose NEW for an empty one");
     }
 
     /// Start modes accept case-insensitive known choices and reject names outside NEW, RESUME, and FORK.
@@ -157,7 +158,7 @@ class ResourceKindTest {
     void aStartModeOutsideTheChoicesNamesTheChoices() {
         Map<String, String> s = SessionKind.INSTANCE.toAttributes(SessionSpec.imported("s", "/tmp", "id-1"));
         s.put("startMode", "new conversation");
-        assertThatThrownBy(() -> SessionKind.INSTANCE.fromAttributes(s)).hasMessage("Next start must be NEW, RESUME or FORK");
+        assertThatThrownBy(() -> SessionKind.INSTANCE.fromAttributes(s)).hasMessage("Conversation must be NEW, RESUME or FORK");
         s.put("startMode", "resume");
         assertThat(SessionKind.INSTANCE.fromAttributes(s).startMode()).isEqualTo(StartMode.RESUME);
     }
@@ -168,20 +169,24 @@ class ResourceKindTest {
     void onlyTheModelAcceptsTypedValues() {
         assertThat(SessionKind.INSTANCE.attributes()).filteredOn(a -> a.kind() == Attribute.Kind.CHOICE)
                 .extracting(Attribute::key, Attribute::editable)
-                .containsExactly(Tuple.tuple("model", true), Tuple.tuple("effort", false),
-                        Tuple.tuple("permissionMode", false), Tuple.tuple("startMode", false));
+                .containsExactly(Tuple.tuple("startMode", false), Tuple.tuple("model", true), Tuple.tuple("effort", false),
+                        Tuple.tuple("permissionMode", false));
         assertThat(ConnectionKind.INSTANCE.attributes()).filteredOn(a -> a.kind() == Attribute.Kind.CHOICE)
                 .allMatch(a -> !a.editable());
         assertThat(Attribute.of("x", "X", Attribute.Kind.TEXT, false, "").editable()).isTrue();
     }
 
-    /// Stored conversation fields are advanced and open only when a conversation id is present.
+    /// The conversation comes first; More holds the folder, the extra folders and the checkpoint prompt, and opens
+    /// only when one of them differs from a new session's: a folder other than the kit's, extra folders, another prompt.
     @Test
-    void theConversationFieldsAreAdvancedAndOpenWhenAnIdIsSet() {
+    void moreHoldsTheFoldersAndThePromptAndOpensWhenOneDiffers() {
         assertThat(SessionKind.INSTANCE.attributes()).filteredOn(Attribute::advanced).extracting(Attribute::key)
-                .containsExactly("claudeSessionId", "startMode");
-        assertThat(SessionKind.INSTANCE.showAdvanced(SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("s", "/tmp")))).isFalse();
-        assertThat(SessionKind.INSTANCE.showAdvanced(SessionKind.INSTANCE.toAttributes(SessionSpec.imported("s", "/tmp", "id-1")))).isTrue();
+                .containsExactly("workDir", "addDirs", "checkpoint");
+        String kit = KitRoot.current().dir().toString();
+        assertThat(SessionKind.INSTANCE.showAdvanced(SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("s", kit)))).isFalse();
+        assertThat(SessionKind.INSTANCE.showAdvanced(SessionKind.INSTANCE.toAttributes(SessionSpec.imported("s", kit, "id-1")))).isFalse();
+        assertThat(SessionKind.INSTANCE.showAdvanced(SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("s", "/elsewhere")))).isTrue();
+        assertThat(SessionKind.INSTANCE.showAdvanced(SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("s", kit).withCheckpoint("/compact")))).isTrue();
         assertThat(ConnectionKind.INSTANCE.attributes()).noneMatch(Attribute::advanced);
     }
 

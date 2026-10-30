@@ -12,6 +12,7 @@ import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.state.BackgroundTask;
+import dev.marregui.comando.core.state.InstancesState;
 import dev.marregui.comando.core.state.LowerTab;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionInfo;
@@ -510,6 +511,10 @@ public sealed interface Intent {
         public Unstage {
             paths = List.copyOf(paths);
         }
+    }
+
+    /** The comando instances on the comando Edge and the questions between them, read again after any change (record 124). */
+    record InstancesChanged(InstancesState instances) implements Intent {
     }
 
     /** The plan's usage limits as read from Claude Code, every few minutes. */

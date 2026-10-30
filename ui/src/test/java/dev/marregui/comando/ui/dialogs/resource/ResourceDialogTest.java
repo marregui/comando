@@ -3,9 +3,12 @@ package dev.marregui.comando.ui.dialogs.resource;
 import com.formdev.flatlaf.FlatDarkLaf;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.ConnectionSpec;
+import dev.marregui.comando.core.model.KitRoot;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.resource.Attribute;
 import dev.marregui.comando.core.resource.ConnectionKind;
 import dev.marregui.comando.core.resource.SessionKind;
 import dev.marregui.comando.core.state.AppState;
@@ -20,6 +23,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import javax.swing.AbstractButton;
 import javax.swing.InputMap;
@@ -29,8 +33,10 @@ import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JRootPane;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
+import javax.swing.ListCellRenderer;
 import javax.swing.LookAndFeel;
 import javax.swing.UIManager;
 import java.awt.Component;
@@ -180,13 +186,13 @@ class ResourceDialogTest {
         AppState s = twoSessions();
         d.prepare(s, "edge");
         combo(d, "model").setSelectedItem("opus");
-        text(d, "budgetUsd").setText("2");
+        text(d, "checkpoint").setText("/compact");
 
         d.prepare(s, "lane2");
         assertThat(label(confirmRow(d)).getText()).isEqualTo("Discard changes to edge?");
         assertThat(text(d, "name").getText()).isEqualTo("edge");
         click(d, "Keep editing", confirmRow(d));
-        assertThat(text(d, "budgetUsd").getText()).isEqualTo("2");
+        assertThat(text(d, "checkpoint").getText()).isEqualTo("/compact");
         assertThat(combo(d, "model").getSelectedItem()).isEqualTo("opus");
         assertThat(d.isDirty()).isTrue();
 
@@ -268,10 +274,10 @@ class ResourceDialogTest {
         ResourceDialog<SessionSpec> d = sessions(new RecordingSink());
         AppState s = twoSessions();
         d.prepare(s, "edge");
-        text(d, "budgetUsd").setText("2");
+        text(d, "checkpoint").setText("/compact");
         d.prepare(s, "edge");
         assertThat(confirmRow(d).isVisible()).isFalse();
-        assertThat(text(d, "budgetUsd").getText()).isEqualTo("2");
+        assertThat(text(d, "checkpoint").getText()).isEqualTo("/compact");
     }
 
     // ---- save, assign, open
@@ -295,16 +301,16 @@ class ResourceDialogTest {
         assertThat(message(d).getText()).isEqualTo("Saved and opened fresh in its own panel");
     }
 
-    /// A budget that is not a number sends nothing and shows the reason in the danger colour.
+    /// RESUME without a stored conversation sends nothing and shows the reason in the danger colour.
     @Test
     void assignOnAnInvalidFormSaysWhyAndDoesNothing() {
         RecordingSink sink = new RecordingSink();
         ResourceDialog<SessionSpec> d = sessions(sink);
         d.prepare(States.twoPanels(), "work");
-        text(d, "budgetUsd").setText("abc");
+        combo(d, "startMode").setSelectedItem("RESUME");
         click(d, "Open its panel");
         assertThat(sink.intents()).isEmpty();
-        assertThat(message(d).getText()).isEqualTo("budget is not a number: abc");
+        assertThat(message(d).getText()).isEqualTo("Conversation RESUME needs a stored conversation; choose NEW for an empty one");
         assertThat(message(d).getForeground()).isEqualTo(Theme.DANGER);
     }
 
@@ -377,8 +383,8 @@ class ResourceDialogTest {
 
     // ---- choices and advice
 
-    /// Only the model combo is editable; the start mode shows only for an imported session, and choosing NEW there
-    /// warns that the stored conversation will not be continued, RESUME clearing it.
+    /// Only the model combo is editable; the conversation shows first for every session, and choosing NEW on an
+    /// imported one warns that the stored conversation will not be continued, RESUME clearing it.
     @Test
     void onlyTheModelTakesTypedValuesAndNewOnAStoredConversationWarns() {
         AppState s = AppState.initial(List.of(new PanelState(States.P1, "one", "", "")), List.of(),
@@ -389,7 +395,7 @@ class ResourceDialogTest {
         assertThat(combo(d, "effort").isEditable()).isFalse();
         assertThat(combo(d, "permissionMode").isEditable()).isFalse();
         assertThat(combo(d, "startMode").isEditable()).isFalse();
-        assertThat(isShownIn(combo(d, "startMode"), d.content())).isFalse();
+        assertThat(isShownIn(combo(d, "startMode"), d.content())).isTrue();
 
         d.prepare(s, "imp");
         assertThat(isShownIn(combo(d, "startMode"), d.content())).isTrue();
@@ -401,28 +407,90 @@ class ResourceDialogTest {
 
     // ---- new session directory
 
-    /// [ResourceDialog#defaultDirectory] prefers the focused panel's session folder, then the last used, then
-    /// `user.home`, and a saved new session's folder becomes the next new form's.
+    /// A new session starts in the kit's folder, as the user's sessions do, with More folded (record 125). The form
+    /// asks the name first; each empty choice shows the default it stands for, the kit's or Claude Code's model once a
+    /// start reported it; a label with more to say carries the ⓘ and its text; the dialog says where every session
+    /// runs, asks no budget, and an edit keeps a stored budget.
     @Test
-    void aNewSessionStartsInTheFocusedPanelsSessionDirectoryElseTheLastUsedElseHome() {
-        AppState bound = States.twoPanels();
-        ResourceDialog<SessionSpec> d = sessions(new RecordingSink());
-        d.prepareNew(bound);
-        assertThat(text(d, "workDir").getText()).isEqualTo("/tmp");
+    void aNewSessionStartsInTheKitsFolderAndTheFormSaysWhatItsDefaultsAre(@TempDir Path kit) {
+        KitRoot before = KitRoot.current();
+        KitRoot.use(KitRoot.plain(kit));
+        SessionKind.INSTANCE.defaults(new SessionKind.Defaults("", "medium", "bypassPermissions"));
+        SessionKind.INSTANCE.cliModel("claude-opus-5-5");
+        try {
+            RecordingSink sink = new RecordingSink();
+            ResourceDialog<SessionSpec> d = sessions(sink);
+            d.prepareNew(States.twoPanels());
+            assertThat(text(d, "workDir").getText()).isEqualTo(kit.toString());
+            assertThat(isShownIn(text(d, "workDir"), d.content())).as("More folded: the kit's folder needs no look").isFalse();
+            assertThat(one(d.content(), JLabel.class, l -> "context".equals(l.getName())).getText()).startsWith("Runs on folder ")
+                    .contains("instance ");
+            List<String> order = SessionKind.INSTANCE.attributes().stream().map(Attribute::key).toList();
+            assertThat(order.subList(0, 3)).as("the name first, then the conversation").containsExactly("name", "startMode", "claudeSessionId");
+            assertThat(shown(combo(d, "effort"))).isEqualTo("medium · the kit's default");
+            assertThat(shown(combo(d, "permissionMode"))).isEqualTo("bypassPermissions · the kit's default: runs every tool unasked");
+            assertThat(combo(d, "model").getClientProperty("JTextField.placeholderText")).as("an open choice shows it while empty")
+                    .isEqualTo("claude-opus-5-5 · Claude Code's default");
+            JLabel name = one(d.content(), JLabel.class, l -> "about:name".equals(l.getName()));
+            assertThat(name.getIcon()).as("the ⓘ").isNotNull();
+            JRootPane pane = new JRootPane();
+            pane.getContentPane().add(d.content());
+            pane.setSize(900, 700);
+            layout(pane);
+            Attribute about = SessionKind.INSTANCE.attributes().getFirst();
+            d.explain(name, about);
+            assertThat(d.explainer().shown()).as("a click on the ⓘ shows the card").isEqualTo("name");
+            assertThat(one(pane.getLayeredPane(), JTextArea.class, t -> "tab-card-topic".equals(t.getName())).getText())
+                    .startsWith("A session is one ongoing line of work");
+            d.explain(name, about);
+            assertThat(d.explainer().shown()).as("a second click closes it").isNull();
+            assertThat(all(d.content(), JTextField.class, t -> "budgetUsd".equals(t.getName()))).as("no budget asked").isEmpty();
 
-        AppState unbound = AppState.initial(List.of(new PanelState(new PanelId("p9"), "nine", "", "")), List.of(),
-                List.of(SessionState.closed(SessionSpec.fresh("work", "/tmp"))));
-        assertThat(ResourceDialog.defaultDirectory(unbound, "")).isEqualTo(System.getProperty("user.home"));
-        assertThat(ResourceDialog.defaultDirectory(unbound, "/srv/last")).isEqualTo("/srv/last");
-        assertThat(ResourceDialog.defaultDirectory(bound, "/srv/last")).isEqualTo("/tmp");
+            AppState budgeted = States.twoPanels().withSessions(List.of(SessionState.closed(new SessionSpec("api", kit.toString(), "", "", "",
+                    List.of(), 2.5, "", StartMode.NEW, SessionSpec.DEFAULT_CHECKPOINT, ""))));
+            d.prepare(budgeted, "api");
+            combo(d, "effort").setSelectedItem("high");
+            click(d, "Save");
+            assertThat(sink.of(Intent.SaveSession.class).getLast().spec().budgetUsd()).as("a stored budget is kept").isEqualTo(2.5);
+        } finally {
+            SessionKind.INSTANCE.defaults(SessionKind.Defaults.NONE);
+            SessionKind.INSTANCE.cliModel("");
+            KitRoot.use(before);
+        }
+    }
 
-        ResourceDialog<SessionSpec> e = sessions(new RecordingSink());
-        e.prepareNew(unbound);
-        text(e, "name").setText("x");
-        text(e, "workDir").setText("/opt/proj");
-        click(e, "Save");
-        e.prepareNew(unbound);
-        assertThat(text(e, "workDir").getText()).isEqualTo("/opt/proj");
+    /// Save closes the dialog once the form is saved, the ⓘ's card with it; a form Save refuses stays open, card and
+    /// all, with the reason. (The tests run headless, without the window: the card is what shows the close.)
+    @Test
+    void saveClosesTheDialogOnceSavedAndKeepsARefusedFormOpen() {
+        RecordingSink sink = new RecordingSink();
+        ResourceDialog<SessionSpec> d = sessions(sink);
+        JRootPane pane = new JRootPane();
+        pane.getContentPane().add(d.content());
+        pane.setSize(900, 700);
+        layout(pane);
+        d.prepare(States.twoPanels(), "work");
+        JLabel name = one(d.content(), JLabel.class, l -> "about:name".equals(l.getName()));
+        Attribute about = SessionKind.INSTANCE.attributes().getFirst();
+
+        d.explain(name, about);
+        combo(d, "startMode").setSelectedItem("RESUME");
+        click(d, "Save");
+        assertThat(sink.of(Intent.SaveSession.class)).as("refused: nothing saved").isEmpty();
+        assertThat(d.explainer().shown()).as("a refused form stays open").isEqualTo("name");
+
+        combo(d, "startMode").setSelectedItem("NEW");
+        click(d, "Save");
+        assertThat(sink.of(Intent.SaveSession.class)).hasSize(1);
+        assertThat(d.explainer().shown()).as("saved: the dialog closes, its card with it").isNull();
+    }
+
+    /// What a combo shows for its selected value, as its renderer draws it.
+    private static String shown(JComboBox<String> c) {
+        @SuppressWarnings("unchecked")
+        ListCellRenderer<Object> r = (ListCellRenderer<Object>) (ListCellRenderer<?>) c.getRenderer();
+        Component drawn = r.getListCellRendererComponent(new JList<>(), c.getSelectedItem(), -1, false, false);
+        return ((JLabel) drawn).getText();
     }
 
     // ---- helpers

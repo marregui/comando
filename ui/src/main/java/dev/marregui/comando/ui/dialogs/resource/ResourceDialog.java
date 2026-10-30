@@ -7,13 +7,14 @@ import dev.marregui.comando.core.resource.Attribute;
 import dev.marregui.comando.core.resource.ResourceKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
-import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.text.Tooltips;
+import dev.marregui.comando.ui.panels.TabCard;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.BorderFactory;
@@ -23,13 +24,16 @@ import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
+import javax.swing.Icon;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JPasswordField;
 import javax.swing.JRootPane;
 import javax.swing.JScrollPane;
 import javax.swing.JTextField;
 import javax.swing.KeyStroke;
+import javax.swing.ListCellRenderer;
 import javax.swing.Scrollable;
 import javax.swing.WindowConstants;
 import javax.swing.event.DocumentEvent;
@@ -37,6 +41,8 @@ import javax.swing.event.DocumentListener;
 import javax.swing.text.JTextComponent;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.GridBagConstraints;
@@ -45,6 +51,8 @@ import java.awt.Insets;
 import java.awt.Rectangle;
 import java.awt.Window;
 import java.awt.event.KeyEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
@@ -91,6 +99,11 @@ public final class ResourceDialog<S> {
             Function<String, Intent> close,
             BiFunction<AppState, String, Intent> assign) {
     }
+
+    /** The ⓘ after a label whose attribute says more; the sidebar's rows use the same mark. */
+    private static final Icon INFO = Icons.get("info", 12);
+    /** The explanation behind a label's ⓘ: the sidebar's card, in its explaining form. */
+    private final TabCard explainer = new TabCard();
 
     private final Config<S> config;
     private final IntentSink intents;
@@ -200,6 +213,15 @@ public final class ResourceDialog<S> {
         JPanel right = new JPanel(new BorderLayout(0, Theme.GAP));
         right.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
         right.add(formScroll, BorderLayout.CENTER);
+        String context = config.kind().context();
+        if (!context.isEmpty()) {
+            // what holds for every resource of the kind, which the form does not ask: where a session runs
+            JLabel line = Plain.only(new JLabel(context));
+            line.setName("context");
+            line.setToolTipText(context);
+            line.setForeground(Theme.MUTED);
+            right.add(line, BorderLayout.NORTH);
+        }
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, Theme.GAP, 0));
         if (config.test() != null) {
             actions.add(button("Test", "check", "Try the values without saving them", this::testForm));
@@ -218,7 +240,7 @@ public final class ResourceDialog<S> {
                             : "Save if changed, then bind it to the focused panel (⌘⏎)"),
                     this::assign));
         }
-        save = button("Save", "check", "Save the form (⏎)", this::save);
+        save = button("Save", "check", "Save the form and close (⏎)", this::saveAndClose);
         save.putClientProperty("JButton.buttonType", "default");
         actions.add(save);
         JPanel south = new JPanel(new BorderLayout(0, Theme.GAP));
@@ -458,13 +480,8 @@ public final class ResourceDialog<S> {
         hideConfirm();
         unwatch();
         editing = "";
+        // the kind's template says where a new one starts: a session in the kit's folder (record 125)
         Map<String, String> values = config.kind().toAttributes(config.kind().template(name));
-        for (Attribute a : config.kind().attributes()) {
-            if (a.kind() == Attribute.Kind.DIRECTORY && state != null) {
-                values.put(a.key(), defaultDirectory(state, lastDirectory));
-                break;
-            }
-        }
         filled = values;
         fill(values);
         setAdvancedOpen(config.kind().showAdvanced(values));
@@ -474,24 +491,11 @@ public final class ResourceDialog<S> {
         retitle();
         // a new resource is named first: the keyboard goes to the first field, its default selected to type over;
         // later, as the dialog may only now be opening
-        JComponent first = fields.values().iterator().next();
+        JComponent first = fields.values().stream().filter(JTextComponent.class::isInstance).findFirst().orElse(fields.values().iterator().next());
         if (first instanceof JTextComponent t) {
             t.selectAll();
         }
         Edt.later(first::requestFocusInWindow);
-    }
-
-    /**
-     * Where a new resource's directory starts: the working directory of the focused panel's session, else
-     * the directory used last in this dialog, else the home directory.
-     */
-    static String defaultDirectory(AppState s, String last) {
-        String panelSession = s.focusedPanel().session();
-        String dir = s.session(panelSession).map(SessionState::spec).map(x -> x.workDir()).orElse("");
-        if (!dir.isBlank()) {
-            return dir;
-        }
-        return last.isBlank() ? System.getProperty("user.home") : last;
     }
 
     private void cloneOf(String of) {
@@ -508,6 +512,13 @@ public final class ResourceDialog<S> {
         say(Theme.MUTED, "Clone of " + config.kind().nameOf(spec) + "; Save adds it.");
         updateOpenClose();
         retitle();
+    }
+
+    /** Save and ⏎: the form saved, the dialog closes; an invalid or refused form stays open with the reason. */
+    private void saveAndClose() {
+        if (save()) {
+            hide();
+        }
     }
 
     /** Saves the form; false, with the reason in the message, when it is invalid or refused. */
@@ -628,6 +639,7 @@ public final class ResourceDialog<S> {
      * changes; else asks first. Discard runs it; Keep editing (or Esc, or any other button) cancels it.
      */
     private void replacingForm(Runnable replace) {
+        explainer.hide();
         if (!isDirty()) {
             replace.run();
             return;
@@ -640,6 +652,7 @@ public final class ResourceDialog<S> {
     }
 
     private void hide() {
+        explainer.hide();
         if (dialog != null) {
             dialog.setVisible(false);
         }
@@ -691,7 +704,7 @@ public final class ResourceDialog<S> {
             return;
         }
         advanced.setVisible(open);
-        advancedToggle.setText((open ? "▾ " : "▸ ") + "Advanced");
+        advancedToggle.setText((open ? "▾ " : "▸ ") + config.kind().advancedLabel());
         content.revalidate();
     }
 
@@ -750,7 +763,10 @@ public final class ResourceDialog<S> {
                 String v = values.getOrDefault(a.key(), "");
                 switch (f) {
                     case JCheckBox c -> c.setSelected(Boolean.parseBoolean(v));
-                    case JComboBox<?> c -> select(c, v);
+                    case JComboBox<?> c -> {
+                        showEmpty(c, a);
+                        select(c, v);
+                    }
                     case JTextField t -> {
                         if (!t.getText().equals(v)) {
                             t.setText(v); // unchanged fields keep their caret
@@ -776,8 +792,9 @@ public final class ResourceDialog<S> {
         c.setSelectedItem(v);
     }
 
+    /** The form's values, over those it was filled with: a value the form does not show (a session's budget) is kept. */
     private Map<String, String> read() {
-        Map<String, String> m = new LinkedHashMap<>();
+        Map<String, String> m = new LinkedHashMap<>(filled);
         for (Attribute a : config.kind().attributes()) {
             JComponent f = fields.get(a.key());
             m.put(a.key(), switch (f) {
@@ -798,6 +815,8 @@ public final class ResourceDialog<S> {
             case CHOICE -> {
                 JComboBox<String> c = new JComboBox<>(a.choices().toArray(String[]::new));
                 c.setEditable(a.editable());
+                c.setRenderer(new EmptyAs(c));
+                showEmpty(c, a);
                 c.addActionListener(e -> formChanged());
                 yield c;
             }
@@ -824,14 +843,98 @@ public final class ResourceDialog<S> {
         f.setName(a.key());
         f.getAccessibleContext().setAccessibleName(a.label());
         if (!a.hint().isEmpty()) {
-            f.setToolTipText(a.hint());
-            f.getAccessibleContext().setAccessibleDescription(a.hint());
+            f.setToolTipText(Tooltips.wrapped(a.hint()));
+            f.getAccessibleContext().setAccessibleDescription(a.about().isEmpty() ? a.hint() : a.about());
         }
         return f;
     }
 
-    /** A label, the field and, under it, the hint in a muted line; returns the next free row. */
-    private static int addRow(JPanel panel, int row, Attribute a, JComponent cell) {
+    /**
+     * The ⓘ after {@code label}: a click shows {@code a}'s explanation in the sidebar's card under the label, a second
+     * click closes it, and so does the pointer drifting off the label without reaching the card, or the card's close
+     * button (record 125).
+     */
+    private void explains(JLabel label, Attribute a) {
+        label.setIcon(INFO);
+        label.setHorizontalTextPosition(JLabel.LEADING);
+        label.setIconTextGap(4);
+        label.setName("about:" + a.key());
+        label.setToolTipText("What is " + a.label() + "? Click the ⓘ");
+        label.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        label.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                explain(label, a);
+            }
+
+            @Override
+            public void mouseEntered(MouseEvent e) {
+                if (a.key().equals(explainer.shown())) {
+                    explainer.stay();
+                }
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                explainer.left();
+            }
+        });
+    }
+
+    /** The card behind the labels' ⓘ; for tests. */
+    TabCard explainer() {
+        return explainer;
+    }
+
+    /** Shows {@code a}'s explanation under {@code label}, or closes it when it is the one shown. */
+    void explain(JLabel label, Attribute a) {
+        if (a.key().equals(explainer.shown())) {
+            explainer.hide();
+        } else {
+            explainer.explain(a.key(), label, new Rectangle(0, 0, label.getWidth(), label.getHeight()), a.label(), a.about());
+        }
+    }
+
+    /**
+     * What the empty value of {@code a} stands for, in its place: the list's empty row, and the field of an open choice
+     * while nothing is typed. Set again at each fill, as the default may have changed since (the CLI's model, read
+     * from a session's start).
+     */
+    private static void showEmpty(JComboBox<?> c, Attribute a) {
+        c.putClientProperty(EmptyAs.KEY, a.whenEmpty());
+        c.putClientProperty("JTextField.placeholderText", a.whenEmpty().isEmpty() ? null : a.whenEmpty());
+        c.repaint();
+    }
+
+    /** A choice's renderer that draws the empty value as what it stands for, muted, instead of a blank row. */
+    private static final class EmptyAs implements ListCellRenderer<Object> {
+        static final String KEY = "comando.whenEmpty";
+        private final JComboBox<?> owner;
+        private final ListCellRenderer<Object> base;
+
+        @SuppressWarnings("unchecked")
+        EmptyAs(JComboBox<?> owner) {
+            this.owner = owner;
+            this.base = (ListCellRenderer<Object>) owner.getRenderer();
+        }
+
+        @Override
+        public Component getListCellRendererComponent(JList<?> list, Object value, int index, boolean selected, boolean focus) {
+            String empty = owner.getClientProperty(KEY) instanceof String t ? t : "";
+            boolean stands = (value == null || value.toString().isEmpty()) && !empty.isEmpty();
+            Component c = base.getListCellRendererComponent(list, stands ? empty : value, index, selected, focus);
+            if (stands && !selected) {
+                c.setForeground(Theme.MUTED);
+            }
+            return c;
+        }
+    }
+
+    /**
+     * A label, with the ⓘ after it when the attribute says more, the field and, under it, the hint in a muted line;
+     * returns the next free row.
+     */
+    private int addRow(JPanel panel, int row, Attribute a, JComponent cell) {
         GridBagConstraints g = new GridBagConstraints();
         g.gridx = 0;
         g.gridy = row;
@@ -839,6 +942,9 @@ public final class ResourceDialog<S> {
         g.insets = new Insets(3, 3, 0, 3);
         JLabel label = new JLabel(a.label());
         label.setLabelFor(cell);
+        if (!a.about().isEmpty()) {
+            explains(label, a);
+        }
         panel.add(label, g);
         g.gridx = 1;
         g.anchor = GridBagConstraints.LINE_START;

@@ -43,6 +43,16 @@ public interface ResourceKind<S> {
     /** The question asked before removing {@code name}, naming what the removal does in state {@code s}. */
     String removalQuestion(AppState s, String name);
 
+    /** The name of the section the dialog folds its {@link Attribute#advanced()} attributes into. */
+    default String advancedLabel() {
+        return "Advanced";
+    }
+
+    /** A line the dialog shows above the form: what holds for every resource of the kind; empty for none. */
+    default String context() {
+        return "";
+    }
+
     /** Whether a form holding {@code values} opens its "Advanced" section. */
     default boolean showAdvanced(Map<String, String> values) {
         return false;

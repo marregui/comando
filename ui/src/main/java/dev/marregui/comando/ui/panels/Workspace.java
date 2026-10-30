@@ -82,7 +82,7 @@ import java.util.stream.Collectors;
  * panel's topic, a few sentences Haiku wrote on what the panel is about. A topic is read when its card first shows,
  * again when the card shows after what it is read from changed, and whenever the card's button asks; never on a timer.
  * The card closes when the pointer leaves it, or leaves the tab without reaching the card within
- * {@link #LEAVE_GRACE_MILLIS}.</p>
+ * {@link TabCard#LEAVE_GRACE_MILLIS}.</p>
  */
 public final class Workspace {
 
@@ -92,8 +92,6 @@ public final class Workspace {
 
     static final int CLOSED_KEPT = 10;
     static final int TITLE_CHARS = 32;
-    /** How long the pointer has from leaving a tab to reaching its card below before the card closes. */
-    static final int LEAVE_GRACE_MILLIS = 500;
     /** How much of the end of a panel's text its topic and tickets are read from. */
     static final int PANEL_TEXT_READ = 4 * TopicSource.MAX_CHARS;
     /** At most this many tickets show on a card. */
@@ -169,8 +167,6 @@ public final class Workspace {
     /** The tab a mouse press landed on: no card for it until the pointer leaves it; -1 when none. */
     private int pressedIndex = -1;
     private final Timer hover = new Timer(ToolTipManager.sharedInstance().getInitialDelay(), e -> showCard(hoverIndex));
-    /** Runs when the pointer left the card's tab: the card closes unless the pointer reached it. */
-    private final Timer leave = new Timer(LEAVE_GRACE_MILLIS, e -> closeCardIfLeft());
     /** Linear's workspace and team keys as learnt so far, and where they are kept. */
     private LinearTickets.Site site = LinearTickets.Site.NONE;
     private Consumer<LinearTickets.Site> keepSite = s -> { };
@@ -224,8 +220,7 @@ public final class Workspace {
         // a dragged tab moves its panel; the render that follows puts the tabs in the state's order
         tabs.onMove((from, to) -> intents.dispatch(new Intent.MovePanel(((EditorPanel) tabs.getComponentAt(from)).panel().id(), to)));
         hover.setRepeats(false);
-        leave.setRepeats(false);
-        card.onPointerIn(leave::stop);
+        card.onPointerIn(card::stay);
         tabs.addComponentListener(new ComponentAdapter() {
             @Override
             public void componentResized(ComponentEvent e) {
@@ -248,9 +243,9 @@ public final class Workspace {
                 }
                 // off the tab whose card shows, the card closes unless the pointer goes on into it
                 if (card.shown() != null && (i < 0 || !(tabs.getComponentAt(i) instanceof EditorPanel v) || !v.panel().id().value().equals(card.shown()))) {
-                    leave.restart();
+                    card.left();
                 } else {
-                    leave.stop();
+                    card.stay();
                 }
             }
         });
@@ -262,7 +257,7 @@ public final class Workspace {
                 pressedIndex = -1;
                 hover.stop();
                 if (card.shown() != null) {
-                    leave.restart();
+                    card.left();
                 }
             }
 
@@ -273,7 +268,7 @@ public final class Workspace {
                 pressedIndex = tabs.indexAtLocation(e.getX(), e.getY());
                 hover.stop();
                 if (card.shown() != null && card.over() == tabs) {
-                    leave.stop();
+                    card.stay();
                     card.hide();
                 }
                 popup(e);
@@ -533,7 +528,7 @@ public final class Workspace {
             return;
         }
         // shown first, so its read goes ahead of the other tabs'
-        leave.stop();
+        card.stay();
         card.show(id.value(), tabs, r, factsOf(id.value()), "", false, false);
         card.tickets(tickets(view.panel(), view));
         readTopic(id.value(), false);
@@ -571,7 +566,7 @@ public final class Workspace {
             @Override
             public void left() {
                 if (card.shown() != null) {
-                    leave.restart();
+                    card.left();
                 }
             }
 
@@ -592,7 +587,7 @@ public final class Workspace {
         if (shown == null || shown.session(session).isEmpty()) {
             return;
         }
-        leave.stop();
+        card.stay();
         Optional<EditorPanel> view = sessionPanel(session);
         String key = view.map(v -> v.panel().id().value()).orElse(SESSION_KEY + session);
         card.show(key, over, row, beside, factsOf(key), "", false, false);
@@ -605,7 +600,7 @@ public final class Workspace {
         if (shown == null || shown.connection(connection).isEmpty()) {
             return;
         }
-        leave.stop();
+        card.stay();
         String key = CONNECTION_KEY + connection;
         card.showFacts(key, over, row, beside, factsOf(key));
     }
@@ -642,13 +637,6 @@ public final class Workspace {
         String doing = panel.map(p -> TabStatus.describe(p, shown, statuses.getOrDefault(id, TabStatus.NONE), now)).orElse("");
         String file = texts.file(id).map(f -> Labels.shortPath(f.toString())).orElse("");
         return CardFacts.of(panel, session, doing, file, now, newest);
-    }
-
-    /** The pointer left the card's tab and did not reach the card: it closes. */
-    void closeCardIfLeft() {
-        if (!card.pointerIn()) {
-            card.hide();
-        }
     }
 
     /** Where Linear's tickets are found: learnt so far, kept by {@code keep} as more is learnt. */

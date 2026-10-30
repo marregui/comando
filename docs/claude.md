@@ -111,7 +111,7 @@ of text and shown to 400 lines.
 
 - **Import.** The session catalogue reads `<root>/projects/*/*.jsonl` (the first 64 kB for the directory and branch;
   the last 256 kB for the title, the last prompt and the latest branch) and lists the newest 500 first. An imported
-  session's next start is a fork; its dialog's "Next start" can be set to resume, which is safe only when no terminal
+  session's next start is a fork; its dialog's "Conversation" can be set to resume, which is safe only when no terminal
   holds the conversation (comando does not check).
 - **History.** A session with a conversation id shows its stored transcript without starting a process. After a
   restart every session comes back closed with its transcript; nothing is sent until the user sends something, and the
@@ -220,7 +220,9 @@ sends for the same gesture:
   `timeout` when the turn has not ended within 600 s, `error` otherwise. A brainstorm has no tool of its own: a session
   asks each instance in turn and passes the others' answers on, as `instance_ask`'s description says.
 - **What an agent sees.** `ui_get_state` adds each session's model, effort and creator, the closed panels, the pending
-  approval cards (id, session, kind, tool, summary) and the Files tab's folders.
+  approval cards (id, session, kind, tool, summary), the Files tab's folders, the local servers and the other instances
+  on the comando Edge (`instances`: connected, and each one's name, id, role, version, busy and whether it is refused;
+  [record 124](adr/0124-the-sidebar-shows-the-instances.md)).
 
 - **Scope.** Without `panel`, the editor tools write to the focused panel when it is bound to the calling session, else
   to the session's own panel, else to a document attached to it. A session with no panel open gets a tool error that

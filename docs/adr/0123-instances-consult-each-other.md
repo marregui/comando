@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-29 | accepted; built on one machine, without per-instance credentials | Miguel and Claude |
+| 2026-10-29 | accepted; built on one machine, without per-instance credentials; presence amended by [record 124](0124-the-sidebar-shows-the-instances.md) | Miguel and Claude |
 
 ## 1. Context
 
@@ -16,7 +16,7 @@ the topic layout; this record builds the part one machine needs, all of it at on
 | Question | Rule |
 |---|---|
 | connection | each instance connects to the comando Edge (`127.0.0.1:18883`, MQTT 5) whenever the registry `~/.comando-edge.json` names a live Edge, whichever instance started it; it reconnects when the Edge comes back; client id `comando-<slug>`, or the slug alone when it is `comando` or starts with `comando-` (`comando-expert`, `Peers.Me.clientId`) |
-| presence | `comando/v1/local/instance/<slug>/presence`, retained: name, slug, version, its sessions, busy, started; a last will with an empty retained payload clears it when the instance dies; cleared on close |
+| presence | `comando/v1/local/instance/<slug>/presence`, retained: name, slug, version, its sessions, busy, started (and, since [record 124](0124-the-sidebar-shows-the-instances.md), role and kit); a last will with an empty retained payload clears it when the instance dies; cleared on close |
 | ask | MCP tool `instance_ask {instance, text, wait_seconds}`: publishes to `…/<peer>/inbox` with the MQTT 5 response topic `…/<me>/reply` and correlation data; waits up to `wait_seconds` (≤ 600) for the reply, else returns an id for `instance_reply {id, wait_seconds}` |
 | answering | the peer prompts its session `consult-<asker slug>` (created on the first ask, in its own default folder, created by `peer:<slug>`, started) through its panel, headed `[from instance <name> · session <s>]`, so its user sees the question; when that turn ends it replies with the turn's text. Busy: the prompt waits its turn, as `session_send`'s does |
 | who may ask | a peer may read presence and prompt by default (record 122 §2.4, trust); the data root's `agents.json` `{"peers": {"deny": ["<slug>"]}}` refuses a peer (reply `refused`) |

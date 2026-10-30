@@ -3,11 +3,14 @@ package dev.marregui.comando.mcp;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.state.AppState;
+import dev.marregui.comando.core.state.InstancesState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.Block;
@@ -24,9 +27,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -50,8 +55,12 @@ import java.util.function.Supplier;
  * the question, and replies with Claude's text in the turn that answers it. Only the text a session chose to send and
  * the reply's text travel, never a brain's or a kit's files. A peer the user listed in the data root's
  * {@code agents.json} ({@code {"peers": {"deny": ["<id>"]}}}) is refused.
+ * <p>
+ * The instances, this one's connection and the questions asked and answered reach the window as
+ * {@link Intent.InstancesChanged} after each change (record 124), and the user asks and refuses from the Instances tab
+ * through {@link InstancesPort}.
  */
-public final class Peers implements AutoCloseable {
+public final class Peers implements AutoCloseable, InstancesPort {
 
     private static final System.Logger LOG = System.getLogger(Peers.class.getName());
     /**
@@ -73,18 +82,34 @@ public final class Peers implements AutoCloseable {
     private static final Duration SEND_WITHIN = Duration.ofSeconds(10);
     private static final Duration CLEAR_WITHIN = Duration.ofSeconds(2);
     private static final long POLL_MILLIS = 200;
+    /** How much of a question the Instances tab keeps. */
+    static final int QUESTION_CHARS = 4_000;
     /** How long a new consult session may take to appear in the state after it was asked for. */
     private static final Duration MAKE_WITHIN = Duration.ofSeconds(5);
     static final String EDGE_DOWN = "this instance is not connected to the comando Edge, so it reaches no other instance: start the Edge with "
             + "its toggle at the top of the workspace, right of QuestDB's, in any comando instance; presence resumes within seconds once it runs";
 
-    /** This instance: its name as the Dock shows it, its id in the topics, its version. */
-    public record Me(String name, String slug, String version) {
+    /** This instance: its name as the Dock shows it, its id in the topics, its version, what it is for. */
+    public record Me(String name, String slug, String version, String role) {
+
+        public Me {
+            role = role == null ? "" : role.strip();
+        }
+
+        public Me(String name, String slug, String version) {
+            this(name, slug, version, "");
+        }
+
         /**
-         * The instance named {@code instanceName} ({@link InstanceName}; empty for the main one), at {@code version}.
+         * The instance named {@code instanceName} ({@link InstanceName}; empty for the main one), at {@code version},
+         * for {@code role} (its {@code instance.json}'s, or empty).
          */
+        public static Me of(String instanceName, String version, String role) {
+            return new Me(InstanceName.display(instanceName), Peers.slug(instanceName), version, role);
+        }
+
         public static Me of(String instanceName, String version) {
-            return new Me(InstanceName.display(instanceName), Peers.slug(instanceName), version);
+            return of(instanceName, version, "");
         }
 
         /**
@@ -97,7 +122,7 @@ public final class Peers implements AutoCloseable {
     }
 
     /** Another instance, as its presence says. */
-    record Peer(String slug, String name, String version, boolean busy, String started, List<Session> sessions) {
+    record Peer(String slug, String name, String version, String role, String kit, boolean busy, String started, List<Session> sessions) {
     }
 
     record Session(String name, boolean busy) {
@@ -123,6 +148,12 @@ public final class Peers implements AutoCloseable {
     private final ObjectMapper json = new ObjectMapper();
     private final Map<String, Peer> peers = new ConcurrentHashMap<>();
     private final Map<String, Asked> asked = new ConcurrentHashMap<>();
+    /** The questions asked and answered, oldest first, at most {@link InstancesState#CONSULTS}; guarded by itself. */
+    private final Deque<InstancesState.Consult> consults = new ArrayDeque<>();
+    /** The state last sent to the window; guarded by {@link #consults}. */
+    private InstancesState lastShown;
+    /** The kit's commit, as the window last read it; part of the presence. */
+    private volatile String kit = "";
     /** The prompt blocks answers are waiting on, so two equal questions in flight wait on a block each. */
     private final Set<Block> claimed = Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<>()));
     private final ScheduledExecutorService ticks = Threads.timedStrand("peers");
@@ -195,10 +226,16 @@ public final class Peers implements AutoCloseable {
         tick();
     }
 
-    /** Publishes presence when it changed since it was last sent. */
+    /** The kit's commit or description ({@code git describe}), sent in the presence from the next tick on. */
+    public void kit(String described) {
+        kit = described == null ? "" : described.strip();
+    }
+
+    /** Publishes presence when it changed since it was last sent, and tells the window what changed. */
     void tick() {
         // an exception escaping a periodic task cancels every later run
         try {
+            show();
             if (closed || !broker.connected()) {
                 return;
             }
@@ -225,6 +262,8 @@ public final class Peers implements AutoCloseable {
         p.put("name", me.name());
         p.put("slug", me.slug());
         p.put("version", me.version());
+        p.put("role", me.role());
+        p.put("kit", kit);
         p.put("started", started);
         AppState s = state.get();
         p.put("busy", s.sessions().stream().anyMatch(SessionState::isBusy));
@@ -248,14 +287,16 @@ public final class Peers implements AutoCloseable {
                     a.reply().complete(new Reply(ERROR, name + " left the comando Edge before it replied", name, ""));
                 }
             });
+            show();
             return;
         }
         try {
             JsonNode p = json.readTree(m.payload());
             List<Session> sessions = new ArrayList<>();
             p.path("sessions").forEach(x -> sessions.add(new Session(x.path("name").asString(""), x.path("busy").asBoolean(false))));
-            peers.put(slug, new Peer(slug, p.path("name").asString(slug), p.path("version").asString(""), p.path("busy").asBoolean(false),
-                    p.path("started").asString(""), List.copyOf(sessions)));
+            peers.put(slug, new Peer(slug, p.path("name").asString(slug), p.path("version").asString(""), p.path("role").asString(""),
+                    p.path("kit").asString(""), p.path("busy").asBoolean(false), p.path("started").asString(""), List.copyOf(sessions)));
+            show();
         } catch (RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "unreadable presence [instance=" + slug + ", cause=" + e.getMessage() + ']');
         }
@@ -278,14 +319,19 @@ public final class Peers implements AutoCloseable {
             return;
         }
         String from = slug(q.path("from").asString(""));
+        String fromName = q.path("name").asString(from);
+        String id = UUID.randomUUID().toString();
+        record(new InstancesState.Consult(id, InstancesState.Direction.ANSWERED, from, fromName, CONSULT + from,
+                McpTools.clip(q.path("text").asString(""), QUESTION_CHARS), InstancesState.Status.WAITING, System.currentTimeMillis(), 0, ""));
         errands.start("peer-answer", () -> {
             Reply r;
             try {
-                r = answer(from, q.path("name").asString(from), q.path("session").asString(""), q.path("text").asString(""));
+                r = answer(from, fromName, q.path("session").asString(""), q.path("text").asString(""));
             } catch (RuntimeException e) {
                 LOG.log(System.Logger.Level.WARNING, "a question failed [instance=" + from + ']', e);
                 r = new Reply(ERROR, me.name() + " could not answer: " + e.getMessage(), me.name(), CONSULT + from);
             }
+            ended(id, r);
             send(m.responseTopic(), m.correlation(), r);
         });
     }
@@ -500,6 +546,10 @@ public final class Peers implements AutoCloseable {
         String id = UUID.randomUUID().toString();
         Asked a = new Asked(p.slug(), p.name(), new CompletableFuture<>());
         asked.put(id, a);
+        record(new InstancesState.Consult(id, InstancesState.Direction.ASKED, p.slug(), p.name(), caller, McpTools.clip(text, QUESTION_CHARS),
+                InstancesState.Status.WAITING, System.currentTimeMillis(), 0, ""));
+        a.reply().whenComplete((r, e) -> ended(id, r != null ? r : new Reply(ERROR, e == null ? "no reply" : String.valueOf(e.getMessage()),
+                p.name(), "")));
         ObjectNode q = json.createObjectNode();
         q.put("from", me.slug());
         q.put("name", me.name());
@@ -510,9 +560,12 @@ public final class Peers implements AutoCloseable {
                     id.getBytes(StandardCharsets.UTF_8)).get(SEND_WITHIN.toMillis(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException | TimeoutException e) {
             asked.remove(id);
-            return McpTools.Outcome.fail("the question did not reach " + p.name() + ": " + (e.getCause() == null ? e : e.getCause()).getMessage());
+            String why = "the question did not reach " + p.name() + ": " + (e.getCause() == null ? e : e.getCause()).getMessage();
+            a.reply().complete(new Reply(ERROR, why, p.name(), ""));
+            return McpTools.Outcome.fail(why);
         } catch (InterruptedException e) {
             asked.remove(id);
+            a.reply().complete(new Reply(ERROR, "interrupted before the question was sent", p.name(), ""));
             Thread.currentThread().interrupt();
             return McpTools.Outcome.fail("interrupted before the question was sent");
         }
@@ -558,6 +611,132 @@ public final class Peers implements AutoCloseable {
 
     private static int waitSeconds(JsonNode args) {
         return Math.max(0, Math.min(args.path("wait_seconds").asInt(DEFAULT_WAIT_SECONDS), McpTools.MAX_WAIT_SECONDS));
+    }
+
+    // ---- the window: the Instances tab (record 124)
+
+    /** Asks from the Instances tab: as the user, from no session, on a thread of its own; a notice says how it ended. */
+    @Override
+    public void ask(String instance, String text) {
+        ObjectNode args = json.createObjectNode();
+        args.put("instance", instance == null ? "" : instance);
+        args.put("text", text == null ? "" : text);
+        args.put("wait_seconds", McpTools.MAX_WAIT_SECONDS);
+        errands.start("peer-ask", () -> {
+            McpTools.Outcome out = ask("", args);
+            String first = out.text().lines().findFirst().orElse("");
+            sink.dispatch(new Intent.Notify(out.error() ? Notice.Level.WARN : Notice.Level.INFO,
+                    (out.error() ? "Question to " + instance + ": " : "") + McpTools.clip(first, 200) + " (the Instances tab has it)", false));
+        });
+    }
+
+    /** Refuses, or stops refusing, {@code instance}: rewrites {@code agents.json}'s {@code peers.deny}, keeping the rest. */
+    @Override
+    public void deny(String instance, boolean denied) {
+        String who = slug(instance);
+        try {
+            setDenied(who, denied);
+            sink.dispatch(new Intent.Notify(Notice.Level.INFO, denied ? "Questions from " + who + " are refused now"
+                    : "Questions from " + who + " are taken again", false));
+        } catch (IOException | RuntimeException e) {
+            sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot change " + agentsFile + ": " + e.getMessage(), e));
+        }
+        show();
+    }
+
+    /** {@code agents.json} with {@code who} in, or out of, {@code peers.deny}; the other keys as they were. */
+    synchronized void setDenied(String who, boolean denied) throws IOException {
+        if (agentsFile == null) {
+            throw new IOException("this instance has no agents.json");
+        }
+        ObjectNode root = Files.isRegularFile(agentsFile) && json.readTree(Files.readString(agentsFile)) instanceof ObjectNode o
+                ? o : json.createObjectNode();
+        ObjectNode peersNode = root.path("peers") instanceof ObjectNode o ? o : root.putObject("peers");
+        List<String> list = new ArrayList<>();
+        peersNode.path("deny").forEach(d -> {
+            String s = slug(d.asString(""));
+            if (!s.equals(who) && !list.contains(s)) {
+                list.add(s);
+            }
+        });
+        if (denied) {
+            list.add(who);
+        }
+        ArrayNode deny = peersNode.putArray("deny");
+        list.forEach(deny::add);
+        AtomicFiles.writeString(agentsFile, json.writerWithDefaultPrettyPrinter().writeValueAsString(root) + "\n");
+    }
+
+    /** The instances {@code agents.json} refuses; none when it is missing or unreadable. */
+    private List<String> denied() {
+        if (agentsFile == null || !Files.isRegularFile(agentsFile)) {
+            return List.of();
+        }
+        try {
+            List<String> out = new ArrayList<>();
+            json.readTree(Files.readString(agentsFile)).path("peers").path("deny").forEach(d -> out.add(slug(d.asString(""))));
+            return out;
+        } catch (IOException | RuntimeException e) {
+            return List.of();
+        }
+    }
+
+    private void record(InstancesState.Consult c) {
+        synchronized (consults) {
+            consults.addLast(c);
+            while (consults.size() > InstancesState.CONSULTS) {
+                consults.removeFirst();
+            }
+        }
+        show();
+    }
+
+    private void ended(String id, Reply r) {
+        InstancesState.Status status = switch (r.status()) {
+            case OK -> InstancesState.Status.OK;
+            case REFUSED -> InstancesState.Status.REFUSED;
+            case TIMEOUT -> InstancesState.Status.TIMEOUT;
+            default -> InstancesState.Status.ERROR;
+        };
+        synchronized (consults) {
+            List<InstancesState.Consult> all = new ArrayList<>(consults);
+            consults.clear();
+            for (InstancesState.Consult c : all) {
+                consults.addLast(c.id().equals(id) && c.status() == InstancesState.Status.WAITING
+                        ? c.ended(status, McpTools.clip(r.text(), McpTools.MAX_RESULT_CHARS), System.currentTimeMillis()) : c);
+            }
+        }
+        show();
+    }
+
+    /** The instances and questions as the window shows them now. */
+    InstancesState instances() {
+        List<InstancesState.Instance> others = others().stream().map(p -> new InstancesState.Instance(p.slug(), p.name(), p.version(), p.role(),
+                p.kit(), p.busy(), p.started(), p.sessions().stream().map(x -> new InstancesState.Member(x.name(), x.busy())).toList())).toList();
+        AppState s = state.get();
+        InstancesState.Instance self = new InstancesState.Instance(me.slug(), me.name(), me.version(), me.role(), kit,
+                s.sessions().stream().anyMatch(SessionState::isBusy), started,
+                s.sessions().stream().map(x -> new InstancesState.Member(x.name(), x.isBusy())).toList());
+        List<InstancesState.Consult> list;
+        synchronized (consults) {
+            list = List.copyOf(consults);
+        }
+        return new InstancesState(!closed && broker.connected(), self, others, list, denied());
+    }
+
+    /** Tells the window, when what it shows of the instances changed since it was last told. */
+    void show() {
+        if (closed) {
+            return;
+        }
+        synchronized (consults) {
+            InstancesState now = instances();
+            if (now.equals(lastShown)) {
+                return;
+            }
+            lastShown = now;
+            sink.dispatch(new Intent.InstancesChanged(now));
+        }
     }
 
     private List<Peer> others() {

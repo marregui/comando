@@ -14,6 +14,7 @@ import dev.marregui.comando.core.model.PlanUsage;
 import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
+import dev.marregui.comando.core.port.InstancesPort;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.TopicPort;
 import dev.marregui.comando.core.port.UiPort;
@@ -143,6 +144,8 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private final Dependencies deps;
     /** Reads the tabs' topics; the build hands it to the workspace. */
     private volatile TopicPort topics = TopicPort.NONE;
+    /** The other comando instances, for the sidebar's Instances tab. */
+    private volatile InstancesPort instances = InstancesPort.NONE;
     private final HelpActions help;
     private final KitActions kit;
     /** The kit's scheduled jobs: the Files tab's Jobs row and the window that edits them. */
@@ -225,6 +228,11 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     /** How the tabs' cards read each panel's topic; set before {@link #start()}. None by default. */
     public void topics(TopicPort port) {
         topics = port;
+    }
+
+    /** What the Instances tab acts through (record 124); set before {@link #start}, as the build reads it. */
+    public void instances(InstancesPort port) {
+        instances = port == null ? InstancesPort.NONE : port;
     }
 
     private void build() {
@@ -365,6 +373,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
             }
         });
         sidebar.onFolderMenu(menus::folderMenu);
+        ServerToggle edge = deps.edge();
+        sidebar.instances(instances, () -> edge != null && edge.isRunning(), () -> edge != null && edge.busy(), () -> {
+            if (edge != null && !edge.isRunning() && !edge.busy()) {
+                edge.toggle();
+            }
+        });
         jobs.attach(sidebar);
         FindBar findBar = new FindBar();
         parts = new ShellParts(frame, workspace, lower, side, sidebar, status, sessionBar, findBar, diffWindow, livePlots);

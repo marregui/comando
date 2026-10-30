@@ -29,6 +29,7 @@ import javax.swing.JPanel;
 import javax.swing.JRootPane;
 import javax.swing.JTextArea;
 import javax.swing.SwingUtilities;
+import javax.swing.Timer;
 import javax.swing.UIManager;
 import java.awt.Component;
 import java.awt.Container;
@@ -64,9 +65,16 @@ import java.util.function.Consumer;
  * link) and at its close button. It floats in the window's popup layer under the tab or row it describes and stays
  * until it is closed or clicked, or until another card takes its place; the window moves it with itself. A card is
  * known by a key: its panel's, a headless session's, or a connection's. A connection's card is its title and facts
- * alone: no summary, no tickets, no buttons (record 92). EDT only.
+ * alone: no summary, no tickets, no buttons (record 92). An explanation's card, a dialog field's ⓘ (record 125), is
+ * its title, "What it is" and a short text, with the close button and no re-reading. Once the pointer leaves what the
+ * card hangs under, the card waits {@link #LEAVE_GRACE_MILLIS} for the pointer to reach it, then closes. EDT only.
  */
-final class TabCard {
+public final class TabCard {
+
+    /** How long a card waits, after the pointer left what it hangs under, for the pointer to reach it. */
+    public static final int LEAVE_GRACE_MILLIS = 500;
+    private static final String SUMMARY = "Summary";
+    private static final String EXPLAINED = "What it is";
 
     static final int MAX_WIDTH = 640;
     /** The summary's width: about 70 characters a line, so a summary of 300 takes four lines at most. */
@@ -146,6 +154,8 @@ final class TabCard {
     private boolean summarised = true;
     private String shown;
     private JLayeredPane layer;
+    /** Runs once the pointer left what the card hangs under: the card closes unless the pointer reached it. */
+    private final Timer leave = new Timer(LEAVE_GRACE_MILLIS, e -> closeIfLeft());
     /** Where the card's top left corner goes, in the tabs' coordinates: under the tab, at its left edge. */
     private Point anchor;
     private JComponent tabs;
@@ -155,7 +165,13 @@ final class TabCard {
      */
     private Point besideAt;
 
+    /** A card without a summary to read again: an explanation's. */
+    public TabCard() {
+        this(key -> { });
+    }
+
     TabCard(Consumer<String> onRefresh) {
+        leave.setRepeats(false);
         card.setName("tab-card");
         card.setLayout(new BoxLayout(card, BoxLayout.Y_AXIS));
         card.setOpaque(true);
@@ -172,7 +188,7 @@ final class TabCard {
         facts.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_S, 0, 0, 0));
         facts.setVisible(false);
         // the report's second heading, a step above the text
-        heading = new TintTitle("Summary", Theme.TextSize.SUBTITLE.pt);
+        heading = new TintTitle(SUMMARY, Theme.TextSize.SUBTITLE.pt);
         heading.setName("tab-card-heading");
         topic.setFont(Theme.font(font, Theme.TextSize.BODY));
         topic.setName("tab-card-topic");
@@ -465,21 +481,54 @@ final class TabCard {
      * otherwise, or when {@code beside} is negative.
      */
     void show(String key, JComponent over, Rectangle row, int beside, CardFacts head, String topicText, boolean muted, boolean reading) {
-        summarised(true);
+        summarised(true, SUMMARY);
         open(key, over, row, beside, head, topicText, muted, reading);
     }
 
     /** As {@link #show}, a card of its title and facts alone: a connection's. Its tickets are cleared. */
     void showFacts(String key, JComponent over, Rectangle row, int beside, CardFacts head) {
-        summarised(false);
+        summarised(false, SUMMARY);
         tickets(List.of());
         agents(List.of(), id -> { });
         open(key, over, row, beside, head, "", false, false);
     }
 
-    private void summarised(boolean on) {
+    /**
+     * A card that explains {@code name} in {@code text} under {@code anchor}, a rectangle of {@code over}: its title,
+     * "What it is", the text and the close button; no facts, no tickets, nothing to read again.
+     */
+    public void explain(String key, JComponent over, Rectangle anchor, String name, String text) {
+        summarised(true, EXPLAINED);
+        tickets(List.of());
+        agents(List.of(), id -> { });
+        open(key, over, anchor, -1, new CardFacts(name, List.of()), text, false, false);
+    }
+
+    /** The pointer left what the card hangs under: it closes after {@link #LEAVE_GRACE_MILLIS} unless it reached the card. */
+    public void left() {
+        if (shown != null) {
+            leave.restart();
+        }
+    }
+
+    /** The pointer is back on what the card hangs under: it stays. */
+    public void stay() {
+        leave.stop();
+    }
+
+    /** The pointer left what the card hangs under and did not reach the card: it closes. */
+    void closeIfLeft() {
+        if (!pointerIn) {
+            hide();
+        }
+    }
+
+    /** Shows the summary's parts or hides them; {@code title} heads the text, and only a summary is read again. */
+    private void summarised(boolean on, String title) {
         summarised = on;
         summaryParts.forEach(c -> c.setVisible(on));
+        heading.setText(title);
+        refresh.setVisible(on && SUMMARY.equals(title));
     }
 
     /** Whether the card shown has a summary; for tests. */
@@ -497,6 +546,7 @@ final class TabCard {
             layer = root.getLayeredPane();
         }
         shown = key;
+        leave.stop();
         // the card hears the tint only while shown, so a closed window's card holds no listener
         if (stopHearingTint == null) {
             paintTint();
@@ -643,7 +693,7 @@ final class TabCard {
         area.setMaximumSize(new Dimension(width, height));
     }
 
-    void hide() {
+    public void hide() {
         hide(null);
     }
 
@@ -654,6 +704,7 @@ final class TabCard {
         }
         shown = null;
         pointerIn = false;
+        leave.stop();
         if (stopHearingTint != null) {
             stopHearingTint.run();
             stopHearingTint = null;
@@ -666,8 +717,8 @@ final class TabCard {
         onHidden.accept(tabs, at);
     }
 
-    /** The key of the card shown: its panel's, or a headless session's; null when none shows. */
-    String shown() {
+    /** The key of the card shown: its panel's, a headless session's, or an explanation's; null when none shows. */
+    public String shown() {
         return shown;
     }
 
