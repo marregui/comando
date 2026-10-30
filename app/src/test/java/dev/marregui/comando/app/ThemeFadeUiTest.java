@@ -14,6 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
 import javax.imageio.ImageIO;
 import javax.swing.JButton;
 import javax.swing.JComponent;
+import javax.swing.JDialog;
 import javax.swing.JFrame;
 import javax.swing.JLayeredPane;
 import javax.swing.JTabbedPane;
@@ -170,8 +171,9 @@ class ThemeFadeUiTest {
             Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
             Awaitility.await("laid out").atMost(WAIT).until(() -> onEdt(() -> frame().getHeight()) > 400);
             for (NamedTheme t : new NamedTheme[]{NamedTheme.PAPER_OCHRE, NamedTheme.GRAPHITE_GOLD}) {
-                pick(t);
-                Thread.sleep(250);
+                // the switch turns the window to the twin: its knob slides, then the fade runs
+                flip(t.ground.light);
+                Thread.sleep(250 + 160);
                 assertThat(onEdt(ThemeFadeUiTest::fading)).as("halfway, to " + t.label).isTrue();
                 Component[] layer = onEdt(() -> frame().getLayeredPane().getComponentsInLayer(FADE_LAYER));
                 assertThat(layer).as("one picture over the window").hasSize(1)
@@ -180,6 +182,8 @@ class ThemeFadeUiTest {
                 assertThat(end).as("the picture of the new theme, taken").isNotNull();
                 Awaitility.await("the fade ends").atMost(Duration.ofSeconds(2)).until(() -> !onEdt(ThemeFadeUiTest::fading));
                 BufferedImage live = onEdt(() -> shoot(frame()));
+                closeChooser();
+                assertThat(onEdt(Theme::groundChosen)).as("the twin chosen by the switch").isEqualTo(t.ground);
                 String shot = System.getProperty("comando.lightShot");
                 if (shot != null) {
                     ImageIO.write(end, "png", Path.of(shot.replace(".png", "-end-" + t.id + ".png")).toFile());
@@ -319,7 +323,10 @@ class ThemeFadeUiTest {
         });
     }
 
-    /** Opens the theme chooser from the swatch, as a click does, and clicks {@code theme}'s card. */
+    /**
+     * Opens the theme chooser from the swatch, as a click does, clicks {@code theme}'s card, and closes the chooser
+     * with Esc, as the user does once done trying.
+     */
     private static void pick(NamedTheme theme) throws Exception {
         onEdt(() -> {
             JButton swatch = find(frame(), JButton.class, b -> "Choose the theme".equals(b.getAccessibleContext().getAccessibleName()));
@@ -327,6 +334,17 @@ class ThemeFadeUiTest {
             swatch.doClick(0);
             return null;
         });
+        // the chooser shows one mode's themes: the switch to the theme's mode first, which slides, then turns the window
+        onEdt(() -> {
+            for (Window w : frame().getOwnedWindows()) {
+                if (w.isShowing() && w instanceof JDialog d && "Theme".equals(d.getTitle())) {
+                    d.getRootPane().getActionMap().get(theme.ground.light ? "light" : "dark").actionPerformed(null);
+                }
+            }
+            return null;
+        });
+        Awaitility.await("the switch at the theme's mode").atMost(WAIT).until(() -> onEdt(Theme::light) == theme.ground.light);
+        Awaitility.await("the fade of the switch ends").atMost(Duration.ofSeconds(2)).until(() -> !onEdt(ThemeFadeUiTest::fading));
         onEdt(() -> {
             JButton card = null;
             for (Window w : frame().getOwnedWindows()) {
@@ -336,13 +354,47 @@ class ThemeFadeUiTest {
             String shot = System.getProperty("comando.lightShot");
             if (shot != null) {
                 Window chooser = SwingUtilities.getWindowAncestor(card);
+                chooser.validate();
                 BufferedImage img = new BufferedImage(chooser.getWidth(), chooser.getHeight(), BufferedImage.TYPE_INT_RGB);
                 Graphics2D g = img.createGraphics();
                 chooser.paint(g);
                 g.dispose();
-                ImageIO.write(img, "png", Path.of(shot.replace(".png", "-chooser.png")).toFile());
+                ImageIO.write(img, "png", Path.of(shot.replace(".png", "-chooser-" + theme.id + ".png")).toFile());
             }
+            // the cards are made again after a choice: the window first
+            JDialog chooser = (JDialog) SwingUtilities.getWindowAncestor(card);
             card.doClick(0);
+            assertThat(chooser.isShowing()).as("open after a choice, to try the next").isTrue();
+            chooser.getRootPane().getActionMap().get("close").actionPerformed(null);
+            return null;
+        });
+    }
+
+    /** Opens the theme chooser from the swatch and flips its switch to {@code light}, without waiting. */
+    private static void flip(boolean light) throws Exception {
+        onEdt(() -> {
+            JButton swatch = find(frame(), JButton.class, b -> "Choose the theme".equals(b.getAccessibleContext().getAccessibleName()));
+            swatch.doClick(0);
+            return null;
+        });
+        onEdt(() -> {
+            for (Window w : frame().getOwnedWindows()) {
+                if (w.isShowing() && w instanceof JDialog d && "Theme".equals(d.getTitle())) {
+                    d.getRootPane().getActionMap().get(light ? "light" : "dark").actionPerformed(null);
+                }
+            }
+            return null;
+        });
+    }
+
+    /** Closes the theme chooser with Esc, as the user does once done trying. */
+    private static void closeChooser() throws Exception {
+        onEdt(() -> {
+            for (Window w : frame().getOwnedWindows()) {
+                if (w.isShowing() && w instanceof JDialog d && "Theme".equals(d.getTitle())) {
+                    d.getRootPane().getActionMap().get("close").actionPerformed(null);
+                }
+            }
             return null;
         });
     }

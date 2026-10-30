@@ -70,6 +70,7 @@ import javax.swing.ToolTipManager;
 import javax.swing.UIManager;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Point;
 import java.awt.Container;
 import java.awt.Font;
 import java.awt.Frame;
@@ -640,21 +641,50 @@ class UiKeysTest {
                 swatch.doClick();
                 return null;
             });
-            // the chooser opens in a window the frame owns: a card per theme, row by row a dark theme and its light twin
+            // the chooser opens under the swatch, right-aligned with it, on the dark themes, the mode of the theme chosen;
+            // the toggle turns the window to the twin of the theme chosen and each card into its twin in the same place
             // (record 128)
-            List<JButton> cards = await("the theme chooser", () -> Stream.of(w.frame().getOwnedWindows())
+            JDialog chooser = await("the theme chooser", () -> Stream.of(w.frame().getOwnedWindows())
                     .filter(win -> win.isShowing() && win instanceof JDialog d && "Theme".equals(d.getTitle()))
-                    .findFirst().map(win -> all(win, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card"))
-                            .toList()).filter(l -> !l.isEmpty()).orElse(null), WAIT_MILLIS);
-            List<String> twins = new ArrayList<>();
-            for (NamedTheme dark : NamedTheme.builtIn().subList(0, 6)) {
-                twins.add(dark.label);
-                twins.add(NamedTheme.builtIn().stream().filter(t -> t.twin.map(dark.id::equals).orElse(false)).findFirst().orElseThrow().label);
-            }
-            assertThat(onEdt(() -> cards.stream().map(b -> b.getAccessibleContext().getAccessibleName()).toList())).containsExactlyElementsOf(twins);
+                    .map(win -> (JDialog) win).findFirst().orElse(null), WAIT_MILLIS);
+            assertThat(onEdt(() -> {
+                Point s = swatch.getLocationOnScreen();
+                Rectangle at = chooser.getBounds();
+                return List.of(at.x + at.width - (s.x + swatch.getWidth()), at.y - (s.y + swatch.getHeight()));
+            })).as("under the swatch, its right edge on the swatch's").containsExactly(0, Theme.SPACE_XS);
+            List<JButton> cards = onEdt(() -> all(chooser, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card")).toList());
+            List<NamedTheme> darkOnes = NamedTheme.builtIn().stream().filter(t -> !t.ground.light).toList();
+            assertThat(onEdt(() -> cards.stream().map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
+                    .as("the dark themes").containsExactlyElementsOf(darkOnes.stream().map(t -> t.label).toList());
             assertThat(onEdt(() -> cards.stream().filter(b -> b.getToolTipText().endsWith("; the theme chosen"))
                     .map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
                     .as("the theme chosen is marked").containsExactly(NamedTheme.GRAPHITE_GOLD.label);
+            JComponent modeSwitch = find(chooser, JComponent.class, c -> "Dark or light".equals(c.getAccessibleContext().getAccessibleName())).orElseThrow();
+            assertThat(onEdt(() -> modeSwitch.getAccessibleContext().getAccessibleDescription())).as("the switch starts at the theme chosen's mode")
+                    .isEqualTo("Dark");
+            // L, as a click on the switch: the knob slides, then the window turns to the twin
+            onEdt(() -> {
+                chooser.getRootPane().getActionMap().get("light").actionPerformed(null);
+                return null;
+            });
+            assertThat(onEdt(() -> modeSwitch.getAccessibleContext().getAccessibleDescription())).isEqualTo("Light");
+            await("the window turned light", () -> Theme.light() ? Boolean.TRUE : null, WAIT_MILLIS);
+            List<String> twins = darkOnes.stream().map(d -> NamedTheme.builtIn().stream().filter(t -> t.twin.map(d.id::equals).orElse(false))
+                    .findFirst().orElseThrow().label).toList();
+            assertThat(onEdt(() -> all(chooser, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card"))
+                    .map(b -> b.getAccessibleContext().getAccessibleName()).toList())).as("each slot's twin").containsExactlyElementsOf(twins);
+            // the toggle turns the whole window to the twin of the theme chosen, the chooser open on it
+            assertThat(onEdt(Theme::groundChosen)).as("the twin of graphite and gold, chosen").isEqualTo(Ground.PAPER);
+            assertThat(onEdt(() -> UIManager.getColor("Panel.background"))).isEqualTo(Ground.PAPER.color);
+            assertThat(onEdt(chooser::isShowing)).as("the chooser stays open").isTrue();
+            assertThat(onEdt(() -> all(chooser, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card")
+                            && b.getToolTipText().endsWith("; the theme chosen")).map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
+                    .as("the twin marked").containsExactly(NamedTheme.PAPER_OCHRE.label);
+            onEdt(() -> {
+                chooser.getRootPane().getActionMap().get("dark").actionPerformed(null);
+                return null;
+            });
+            await("back to graphite and gold", () -> Theme.groundChosen() == Ground.GRAPHITE ? Boolean.TRUE : null, WAIT_MILLIS);
             assertThat(NamedTheme.chosen()).as("by default").contains(NamedTheme.GRAPHITE_GOLD);
 
             // a session bound to the panel, with a turn whose answer is its report, in the Session tab
@@ -680,14 +710,22 @@ class UiKeysTest {
                 return editor.getFont();
             });
 
-            JButton midnight = cards.stream().filter(b -> NamedTheme.MIDNIGHT_BLUE.label.equals(b.getAccessibleContext().getAccessibleName()))
-                    .findFirst().orElseThrow();
+            JButton midnight = onEdt(() -> all(chooser, JButton.class).stream()
+                    .filter(b -> NamedTheme.MIDNIGHT_BLUE.label.equals(b.getAccessibleContext().getAccessibleName())).findFirst().orElseThrow());
             onEdt(() -> {
                 midnight.doClick();
                 return null;
             });
-            assertThat(onEdt(() -> Stream.of(w.frame().getOwnedWindows()).anyMatch(win -> win.isShowing() && win instanceof JDialog d
-                    && "Theme".equals(d.getTitle())))).as("the chooser closes on a choice").isFalse();
+            // the theme is the window's at once, and the chooser stays open to try the next, the ring on it
+            assertThat(onEdt(chooser::isShowing)).as("the chooser stays open on a choice").isTrue();
+            assertThat(onEdt(() -> all(chooser, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card")
+                            && b.getToolTipText().endsWith("; the theme chosen")).map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
+                    .as("the theme just chosen marked").containsExactly(NamedTheme.MIDNIGHT_BLUE.label);
+            onEdt(() -> {
+                chooser.getRootPane().getActionMap().get("close").actionPerformed(null);
+                return null;
+            });
+            assertThat(onEdt(chooser::isShowing)).as("Esc closes it, the last choice kept").isFalse();
             assertThat(Theme.groundChosen()).isEqualTo(Ground.MIDNIGHT);
             assertThat(Theme.tint()).isEqualTo(Tint.ELECTRIC_BLUE);
             assertThat(hoverTip(swatch)).as("the tooltip follows").startsWith("Theme: " + NamedTheme.MIDNIGHT_BLUE.label + ";");
@@ -718,14 +756,17 @@ class UiKeysTest {
             List<JButton> again = await("the theme chooser again", () -> Stream.of(w.frame().getOwnedWindows())
                     .filter(win -> win.isShowing() && win instanceof JDialog d && "Theme".equals(d.getTitle()))
                     .findFirst().map(win -> all(win, JButton.class).stream().filter(b -> b.getClass().getName().endsWith("ThemeChooser$Card"))
-                            .toList()).filter(l -> !l.isEmpty() && !cards.contains(l.getFirst())).orElse(null), WAIT_MILLIS);
+                            .toList()).filter(l -> !l.isEmpty() && SwingUtilities.getWindowAncestor(l.getFirst()) != chooser).orElse(null), WAIT_MILLIS);
             assertThat(onEdt(() -> again.stream().filter(b -> b.getToolTipText().endsWith("; the theme chosen"))
                     .map(b -> b.getAccessibleContext().getAccessibleName()).toList()))
                     .as("the chooser marks the theme chosen").containsExactly(NamedTheme.MIDNIGHT_BLUE.label);
             JButton slate = again.stream().filter(b -> NamedTheme.SLATE_SILVER.label.equals(b.getAccessibleContext().getAccessibleName()))
                     .findFirst().orElseThrow();
             onEdt(() -> {
+                // the cards are made again after a choice: the window first
+                java.awt.Window again2 = SwingUtilities.getWindowAncestor(slate);
                 slate.doClick();
+                again2.dispose();
                 return null;
             });
             assertThat(NamedTheme.chosen()).contains(NamedTheme.SLATE_SILVER);

@@ -146,9 +146,14 @@ Any number of document panels may be attached to a session
   the Session tab once the turn has ended, while the conversation goes on
   ([record 104](adr/0104-the-theme-beside-new-panel.md)).
 - **The theme's swatch**, the theme's ground with a bar of its tint, sits at the top right, left of New panel; its
-  tooltip names the theme, and a click opens the theme chooser: a window of cards, each theme drawn small in its own
-  colours, the six dark built in in one column and their six light twins beside them, the user's below; a click or ⏎
-  chooses, Esc closes ([record 128](adr/0128-a-chooser-of-twelve-themes.md)); the palette has them too ([record 104](adr/0104-the-theme-beside-new-panel.md), [record 114](adr/0114-help-menu-and-corner-buttons.md)).
+  tooltip names the theme, and a click opens the theme chooser under it: a Dark | Light toggle over a grid of that
+  mode's cards, three to a row, each theme drawn small in its own colours, each light theme in its dark twin's place,
+  the user's after; the toggle (D, L) turns the window to the twin of the theme chosen and leaves the chooser open on
+  the other mode; a click or ⏎ gives the window that theme and leaves the chooser open to try the next, the last
+  kept; the arrows move; Esc, a click elsewhere or the swatch again closes
+  ([record 128](adr/0128-a-chooser-of-twelve-themes.md)); the switch is a pill with a knob of polished metal, a moon
+  on it in dark and a sun in light, and the ✕ at the top right closes; the button's icon is a gilded square split
+  between the ground chosen and its twin's; the palette has them too ([record 104](adr/0104-the-theme-beside-new-panel.md), [record 114](adr/0114-help-menu-and-corner-buttons.md)).
   Each theme is a JSON file; the user's are read from the data root's `themes` folder at start, and a file that is
   not valid or reads below a contrast floor is left out with a notice
   ([record 126](adr/0126-themes-are-json-files.md); the format in the tutorial, §1.6). A light theme puts the window on

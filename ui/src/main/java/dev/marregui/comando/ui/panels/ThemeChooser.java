@@ -1,29 +1,35 @@
 package dev.marregui.comando.ui.panels;
 
+import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.theme.ThemePreview;
 
 import javax.swing.AbstractAction;
 import javax.swing.BorderFactory;
+import javax.swing.Box;
 import javax.swing.JButton;
 import javax.swing.JComponent;
 import javax.swing.JDialog;
-import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.KeyStroke;
-import javax.swing.SwingConstants;
-import javax.swing.WindowConstants;
+import javax.swing.ScrollPaneConstants;
 import java.awt.BasicStroke;
+import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Dimension;
+import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.FontMetrics;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
-import java.awt.GridBagConstraints;
-import java.awt.GridBagLayout;
+import java.awt.GraphicsDevice;
+import java.awt.GraphicsEnvironment;
+import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.Point;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.Window;
@@ -40,12 +46,16 @@ import java.util.Set;
 import java.util.function.Consumer;
 
 /**
- * The theme chooser (record 128): a window of cards, the dark themes in one column and the light in the other, each
- * light theme on the row of the dark one it is the twin of; themes without a twin, the user's files among them, below.
- * Each card draws its theme small in its own colours ({@link ThemePreview}) over its name; the theme chosen has a ring
- * in its tint. A click, or ⏎ on the card with the keyboard, chooses the theme and closes the window; Esc, or the
- * window losing the focus, closes it with the theme as it was. The window only shows themes: the window behind
- * changes when one is chosen. EDT only.
+ * The theme chooser (record 128): a popover under the swatch that opened it, right-aligned with it, with a Dark | Light
+ * toggle over a grid of cards of that mode's themes, three to a row, scrolling past four rows. Each light theme lies in
+ * the slot of the dark one it is the twin of, so flipping the toggle turns each card into its twin in place; the
+ * themes no twin pairs, the user's files among them, follow. The toggle is a switch of polished metal, a moon on its
+ * knob in dark and a sun in light ({@link ModeSwitch}). Each card draws its theme small in its own colours
+ * ({@link ThemePreview}) over its name; the theme chosen has a ring in its tint. The toggle starts at the mode of the
+ * theme chosen; flipping it turns the whole window to the other mode, the twin of the theme chosen, and the chooser
+ * stays open on that mode's cards. A click, or ⏎ on a card, chooses its theme for the whole window and leaves the
+ * chooser open to try the next; the theme last chosen is the one kept. The arrows move between cards, D and L flip the
+ * toggle; the ✕ at the top right, Esc, a click elsewhere or the swatch again closes. EDT only.
  */
 public final class ThemeChooser {
 
@@ -53,75 +63,83 @@ public final class ThemeChooser {
     /** A card's preview, in points. */
     static final int PREVIEW_W = 188;
     static final int PREVIEW_H = 96;
+    /** Cards to a row, and the rows shown before the grid scrolls. */
+    static final int COLUMNS = 3;
+    static final int ROWS_SHOWN = 4;
 
     private final JDialog dialog;
+    private final JPanel grid = new JPanel(new GridLayout(0, COLUMNS, Theme.SPACE_M, Theme.SPACE_M));
+    private final ModeSwitch mode;
+    private final Consumer<NamedTheme> chosen;
     private final List<Card> cards = new ArrayList<>();
+    /** When a chooser last closed by losing the focus. */
+    private static long closedNanos = Long.MIN_VALUE / 2;
+    /** How soon after closing that way a click on the swatch is the click that closed it. */
+    private static final long CLICK_NANOS = 300_000_000L;
+    /** The mode whose cards the grid shows. */
+    private boolean shownLight;
 
     private ThemeChooser(Window owner, Consumer<NamedTheme> chosen) {
+        this.chosen = chosen;
         dialog = new JDialog(owner, TITLE);
-        dialog.setDefaultCloseOperation(WindowConstants.DISPOSE_ON_CLOSE);
-        Optional<NamedTheme> now = NamedTheme.chosen();
-        JPanel grid = new JPanel(new GridBagLayout());
-        grid.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
-        GridBagConstraints at = new GridBagConstraints();
-        at.insets = new Insets(Theme.SPACE_XS, Theme.SPACE_S, Theme.SPACE_XS, Theme.SPACE_S);
-        at.gridy = 0;
-        for (String head : new String[]{"Dark", "Light"}) {
-            JLabel l = new JLabel(head, SwingConstants.LEFT);
-            l.setFont(Theme.font(l.getFont(), Theme.TextSize.SUBTITLE).deriveFont(Font.BOLD));
-            at.gridx = head.equals("Dark") ? 0 : 1;
-            at.anchor = GridBagConstraints.WEST;
-            grid.add(l, at);
-        }
-        for (NamedTheme[] row : rows(List.of(NamedTheme.values()))) {
-            at.gridy++;
-            for (int col = 0; col < 2; col++) {
-                at.gridx = col;
-                if (row[col] == null) {
-                    grid.add(new JLabel(), at);
-                    continue;
-                }
-                NamedTheme t = row[col];
-                Card card = new Card(t, now.map(n -> n == t).orElse(false));
-                card.addActionListener(e -> {
-                    dialog.dispose();
-                    chosen.accept(t);
-                });
-                cards.add(card);
-                grid.add(card, at);
-            }
-        }
-        JScrollPane scroll = new JScrollPane(grid);
+        dialog.setUndecorated(true);
+        dialog.setModal(false);
+        boolean lightNow = Theme.light();
+        mode = new ModeSwitch(lightNow);
+        mode.onChange(this::flip);
+        JPanel toggle = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        toggle.add(mode);
+        // the close button at the top right, as a card's; the theme last chosen stays
+        JButton close = new JButton(Icons.get("close"));
+        close.putClientProperty("JButton.buttonType", "toolBarButton");
+        close.setFocusable(false);
+        close.setToolTipText("Close (Esc); the theme last chosen stays");
+        close.getAccessibleContext().setAccessibleName("Close the theme chooser");
+        close.addActionListener(e -> dialog.dispose());
+        JPanel top = new JPanel(new BorderLayout());
+        // a spacer as wide as the button on the left keeps the toggle in the middle
+        top.add(Box.createHorizontalStrut(close.getPreferredSize().width), BorderLayout.WEST);
+        top.add(toggle, BorderLayout.CENTER);
+        top.add(close, BorderLayout.EAST);
+        grid.setBorder(BorderFactory.createEmptyBorder(Theme.SPACE_XS, Theme.SPACE_XS, Theme.SPACE_XS, Theme.SPACE_XS));
+        JScrollPane scroll = new JScrollPane(grid, ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+                ScrollPaneConstants.HORIZONTAL_SCROLLBAR_NEVER);
         scroll.setBorder(BorderFactory.createEmptyBorder());
         scroll.getVerticalScrollBar().setUnitIncrement(PREVIEW_H / 4);
-        dialog.setContentPane(scroll);
-        JComponent pane = dialog.getRootPane();
-        pane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), "close");
-        pane.getActionMap().put("close", new AbstractAction() {
-            @Override
-            public void actionPerformed(ActionEvent e) {
-                dialog.dispose();
-            }
-        });
+        JPanel content = new JPanel(new BorderLayout(0, Theme.GAP));
+        content.setBorder(BorderFactory.createCompoundBorder(BorderFactory.createLineBorder(Theme.CARD_BORDER),
+                BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD)));
+        content.add(top, BorderLayout.NORTH);
+        content.add(scroll, BorderLayout.CENTER);
+        dialog.setContentPane(content);
+        keys(dialog.getRootPane());
         dialog.addWindowListener(new WindowAdapter() {
             @Override
             public void windowDeactivated(WindowEvent e) {
+                // a click elsewhere: the swatch's own click, which deactivates it first, must not open it again
+                closedNanos = System.nanoTime();
                 dialog.dispose();
             }
         });
+        show(lightNow);
+        // as wide as three cards, as tall as four rows of them and the toggle; the grid scrolls past that
+        Dimension card = cards.isEmpty() ? new Dimension(PREVIEW_W, PREVIEW_H) : cards.getFirst().getPreferredSize();
+        Insets in = grid.getInsets();
+        int rows = Math.min(ROWS_SHOWN, Math.max(1, (slots(List.of(NamedTheme.values()), false).size() + COLUMNS - 1) / COLUMNS));
+        scroll.getViewport().setPreferredSize(new Dimension(COLUMNS * card.width + (COLUMNS - 1) * Theme.SPACE_M + in.left + in.right,
+                rows * card.height + (rows - 1) * Theme.SPACE_M + in.top + in.bottom));
         dialog.pack();
-        // never taller than most of the screen: the cards scroll
-        int most = (int) (Toolkit.getDefaultToolkit().getScreenSize().height * 0.85);
-        if (dialog.getHeight() > most) {
-            dialog.setSize(new Dimension(dialog.getWidth() + scroll.getVerticalScrollBar().getPreferredSize().width, most));
-        }
-        dialog.setLocationRelativeTo(owner);
-        cards.stream().filter(c -> c.chosen).findFirst().or(() -> cards.stream().findFirst()).ifPresent(Card::requestFocusInWindow);
     }
 
-    /** Opens the chooser over {@code owner}; {@code chosen} hears the theme picked, after the window closes. */
-    public static ThemeChooser show(Window owner, Consumer<NamedTheme> chosen) {
-        ThemeChooser c = new ThemeChooser(owner, chosen);
+    /**
+     * Opens the chooser under {@code anchor}, right-aligned with it; {@code chosen} hears the theme picked, after the
+     * window closes.
+     */
+    public static ThemeChooser show(Component anchor, Consumer<NamedTheme> chosen) {
+        ThemeChooser c = new ThemeChooser(javax.swing.SwingUtilities.getWindowAncestor(anchor), chosen);
+        Point at = anchor.getLocationOnScreen();
+        Rectangle anchorOnScreen = new Rectangle(at, anchor.getSize());
+        c.dialog.setLocation(place(anchorOnScreen, c.dialog.getSize(), screenOf(at)));
         c.dialog.setVisible(true);
         return c;
     }
@@ -130,35 +148,169 @@ public final class ThemeChooser {
         return dialog;
     }
 
+    /** Whether the chooser is open. */
+    boolean open() {
+        return dialog.isShowing();
+    }
+
+    /** Closes the chooser; the theme last chosen in it stays. */
+    void close() {
+        dialog.dispose();
+    }
+
+    /** Whether a chooser closed by losing the focus just now: the swatch's click that took the focus. */
+    static boolean justClosed() {
+        return System.nanoTime() - closedNanos < CLICK_NANOS;
+    }
+
     /**
-     * The chooser's rows, {dark, light}, either may be null: each dark theme in order with the light theme whose twin
-     * it is, then each light theme no dark one claimed, in order.
+     * Where a popover of {@code size} goes for {@code anchor}: under it, its right edge on the anchor's, kept on
+     * {@code screen} when the anchor is on one; on no screen, as a window off every screen is, it is left where it
+     * falls, so that it never shows on a screen the anchor is not on.
      */
-    static List<NamedTheme[]> rows(List<NamedTheme> themes) {
-        List<NamedTheme[]> rows = new ArrayList<>();
-        Set<NamedTheme> placed = new HashSet<>();
-        for (NamedTheme dark : themes) {
-            if (dark.ground.light) {
+    static Point place(Rectangle anchor, Dimension size, Optional<Rectangle> screen) {
+        int x = anchor.x + anchor.width - size.width;
+        int y = anchor.y + anchor.height + Theme.SPACE_XS;
+        if (screen.isPresent()) {
+            Rectangle s = screen.get();
+            x = Math.max(s.x, Math.min(x, s.x + s.width - size.width));
+            if (y + size.height > s.y + s.height) {
+                // no room below: above the anchor instead
+                y = Math.max(s.y, anchor.y - Theme.SPACE_XS - size.height);
+            }
+        }
+        return new Point(x, y);
+    }
+
+    /** The usable bounds of the screen {@code p} is on, less the menu bar and the Dock; empty when it is on none. */
+    private static Optional<Rectangle> screenOf(Point p) {
+        for (GraphicsDevice d : GraphicsEnvironment.getLocalGraphicsEnvironment().getScreenDevices()) {
+            Rectangle b = d.getDefaultConfiguration().getBounds();
+            if (b.contains(p)) {
+                Insets in = Toolkit.getDefaultToolkit().getScreenInsets(d.getDefaultConfiguration());
+                return Optional.of(new Rectangle(b.x + in.left, b.y + in.top, b.width - in.left - in.right, b.height - in.top - in.bottom));
+            }
+        }
+        return Optional.empty();
+    }
+
+    /**
+     * The cards of one mode, in their slots: the pairs first, each theme of the mode at its pair's index, so that a
+     * dark theme and its twin share a slot; then the themes of the mode no pair holds, in order.
+     */
+    static List<NamedTheme> slots(List<NamedTheme> themes, boolean onLight) {
+        List<NamedTheme> paired = new ArrayList<>();
+        List<NamedTheme> alone = new ArrayList<>();
+        Set<NamedTheme> taken = new HashSet<>();
+        for (NamedTheme d : themes) {
+            if (d.ground.light) {
                 continue;
             }
-            NamedTheme twin = themes.stream().filter(t -> t.ground.light && !placed.contains(t) && t.twin.map(dark.id::equals).orElse(false))
-                    .findFirst().orElse(null);
-            if (twin != null) {
-                placed.add(twin);
-            }
-            rows.add(new NamedTheme[]{dark, twin});
-        }
-        for (NamedTheme light : themes) {
-            if (light.ground.light && !placed.contains(light)) {
-                rows.add(new NamedTheme[]{null, light});
+            Optional<NamedTheme> twin = themes.stream().filter(t -> t.ground.light && !taken.contains(t)
+                    && t.twin.map(d.id::equals).orElse(false)).findFirst();
+            if (twin.isPresent()) {
+                taken.add(twin.get());
+                paired.add(onLight ? twin.get() : d);
+            } else if (!onLight) {
+                alone.add(d);
             }
         }
-        return rows;
+        if (onLight) {
+            themes.stream().filter(t -> t.ground.light && !taken.contains(t)).forEach(alone::add);
+        }
+        paired.addAll(alone);
+        return paired;
+    }
+
+    /**
+     * Turns the whole window to the mode: the theme in the slot of the theme chosen, its twin, is chosen, with the fade,
+     * and the grid shows the mode's cards; the chooser stays open. A theme chosen in no slot, or a slot the mode leaves
+     * empty, takes the mode's first theme. The mode shown already changes nothing.
+     */
+    private void flip(boolean onLight) {
+        if (shownLight == onLight) {
+            return;
+        }
+        flipped(List.of(NamedTheme.values()), NamedTheme.chosen(), onLight).ifPresent(chosen);
+        show(onLight);
+    }
+
+    /**
+     * The theme of the mode {@code onLight} in the slot {@code now} holds in the other: its twin; the mode's first
+     * theme when {@code now} is in no slot or the mode leaves that slot empty; none when the mode has no theme.
+     */
+    static Optional<NamedTheme> flipped(List<NamedTheme> themes, Optional<NamedTheme> now, boolean onLight) {
+        List<NamedTheme> to = slots(themes, onLight);
+        if (to.isEmpty()) {
+            return Optional.empty();
+        }
+        int slot = now.map(slots(themes, !onLight)::indexOf).orElse(-1);
+        return Optional.of(slot >= 0 && slot < to.size() ? to.get(slot) : to.getFirst());
+    }
+
+    /** Fills the grid with the cards of the mode, the focus on the card in the slot it was in, or the theme chosen. */
+    private void show(boolean onLight) {
+        shownLight = onLight;
+        int slot = cards.stream().filter(Component::isFocusOwner).findFirst().map(cards::indexOf).orElse(-1);
+        cards.clear();
+        grid.removeAll();
+        Optional<NamedTheme> now = NamedTheme.chosen();
+        for (NamedTheme t : slots(List.of(NamedTheme.values()), onLight)) {
+            Card card = new Card(t, now.map(n -> n == t).orElse(false));
+            card.addActionListener(e -> {
+                chosen.accept(t);
+                // the chooser stays open to try the next: the cards again, the ring on the theme just chosen
+                show(shownLight);
+            });
+            cards.add(card);
+            grid.add(card);
+        }
+        grid.revalidate();
+        grid.repaint();
+        Card focus = slot >= 0 && slot < cards.size() ? cards.get(slot)
+                : cards.stream().filter(c -> c.chosen).findFirst().orElse(cards.isEmpty() ? null : cards.getFirst());
+        if (focus != null) {
+            focus.requestFocusInWindow();
+        }
+    }
+
+    /** Esc closes; D and L flip the toggle; the arrows move between cards; ⏎ chooses the card with the focus. */
+    private void keys(JComponent pane) {
+        bind(pane, KeyEvent.VK_ESCAPE, "close", dialog::dispose);
+        bind(pane, KeyEvent.VK_D, "dark", () -> mode.go(false));
+        bind(pane, KeyEvent.VK_L, "light", () -> mode.go(true));
+        bind(pane, KeyEvent.VK_LEFT, "left", () -> move(-1));
+        bind(pane, KeyEvent.VK_RIGHT, "right", () -> move(1));
+        bind(pane, KeyEvent.VK_UP, "up", () -> move(-COLUMNS));
+        bind(pane, KeyEvent.VK_DOWN, "down", () -> move(COLUMNS));
+        bind(pane, KeyEvent.VK_ENTER, "choose", () -> cards.stream().filter(Component::isFocusOwner).findFirst().ifPresent(Card::doClick));
+    }
+
+    private static void bind(JComponent pane, int key, String name, Runnable r) {
+        pane.getInputMap(JComponent.WHEN_IN_FOCUSED_WINDOW).put(KeyStroke.getKeyStroke(key, 0), name);
+        pane.getActionMap().put(name, new AbstractAction() {
+            @Override
+            public void actionPerformed(ActionEvent e) {
+                r.run();
+            }
+        });
+    }
+
+    private void move(int by) {
+        int at = cards.stream().filter(Component::isFocusOwner).findFirst().map(cards::indexOf).orElse(-1);
+        int to = at < 0 ? 0 : Math.clamp(at + by, 0, cards.size() - 1);
+        if (to < cards.size()) {
+            Card c = cards.get(to);
+            c.requestFocusInWindow();
+            c.scrollRectToVisible(new Rectangle(c.getSize()));
+        }
     }
 
     /** One theme's card: its preview over its name, a ring in its tint when it is the theme chosen. */
     static final class Card extends JButton {
 
+        /** The ring's room round the preview. */
+        private static final int RING = 3;
         final NamedTheme theme;
         final boolean chosen;
 
@@ -175,9 +327,6 @@ public final class ThemeChooser {
             FontMetrics m = getFontMetrics(getFont());
             setPreferredSize(new Dimension(PREVIEW_W + 2 * RING, PREVIEW_H + 2 * RING + Theme.SPACE_XS + m.getHeight()));
         }
-
-        /** The ring's room round the preview. */
-        private static final int RING = 3;
 
         @Override
         protected void paintComponent(Graphics g0) {
