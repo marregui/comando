@@ -1,0 +1,15 @@
+{
+  "id": "paper_ochre",
+  "label": "Paper and ochre",
+  "mode": "light",
+  "ground": {
+    "label": "Paper",
+    "color": "#F7F3EA"
+  },
+  "tint": {
+    "label": "Ochre",
+    "highlight": "#3D2900",
+    "body": "#5E4210",
+    "shade": "#8A6524"
+  }
+}

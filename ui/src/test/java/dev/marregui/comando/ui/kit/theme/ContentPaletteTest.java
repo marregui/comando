@@ -3,6 +3,8 @@ package dev.marregui.comando.ui.kit.theme;
 import org.junit.jupiter.api.Test;
 
 import java.awt.Color;
+import java.util.List;
+import java.util.Arrays;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.within;
@@ -45,12 +47,12 @@ class ContentPaletteTest {
         assertThat(ContentPalette.turn(29)).isEqualTo(-1);
     }
 
-    /// For every tint and ground, ink, keywords, comments and categories pass their WCAG contrast floors, and each
-    /// category is apart in Oklch from the keyword, the ink and every other category.
+    /// For every tint and ground of its mode, dark or light, ink, keywords, comments and categories pass their WCAG
+    /// contrast floors, and each category is apart in Oklch from the keyword, the ink and every other category.
     @Test
     void syntaxIsLegibleOnEveryGroundAndEachCategoryStandsApart() {
         for (Tint t : Tint.values()) {
-            for (Ground g : Ground.values()) {
+            for (Ground g : grounds(t)) {
                 ContentPalette p = ContentPalette.of(t, g);
                 String at = t + " on " + g;
                 assertThat(contrast(p.ink, g.color)).as("ink, " + at).isGreaterThan(12);
@@ -73,11 +75,12 @@ class ContentPaletteTest {
         }
     }
 
-    /// On graphite each category is within 32° of its customary hue and, for a chromatic tint, at least 28° from it.
+    /// On graphite, or paper for a light tint, each category is within 32° of its customary hue and, for a chromatic
+    /// tint, at least 28° from it.
     @Test
     void everyCategoryStaysNearItsCustomaryHueAndAwayFromTheTints() {
         for (Tint t : Tint.values()) {
-            ContentPalette p = ContentPalette.of(t, Ground.GRAPHITE);
+            ContentPalette p = ContentPalette.of(t, home(t));
             double[] tint = Oklch.lch(t.body);
             Color[] cats = p.categories();
             for (int i = 0; i < cats.length; i++) {
@@ -108,7 +111,7 @@ class ContentPaletteTest {
     @Test
     void theEditorsSelectionDiffsAndCodeKeepTheirTextLegible() {
         for (Tint t : Tint.values()) {
-            for (Ground g : Ground.values()) {
+            for (Ground g : grounds(t)) {
                 ContentPalette p = ContentPalette.of(t, g);
                 String at = t + " on " + g;
                 assertThat(contrast(p.ink, p.selection)).as("selected text, " + at).isGreaterThan(4.5);
@@ -130,28 +133,31 @@ class ContentPaletteTest {
         String[] names = {"red", "green", "yellow", "blue", "magenta", "cyan"};
         double[] hues = {25, 145, 95, 255, 330, 200};
         for (Ground g : Ground.values()) {
-            ContentPalette p = ContentPalette.of(Tint.TREASURE, g);
+            ContentPalette p = ContentPalette.of(g.light ? Tint.OCHRE : Tint.TREASURE, g);
             for (int i = 0; i < names.length; i++) {
                 assertThat(contrast(p.ansi(1 + i), g.color)).as(names[i] + " on " + g).isGreaterThan(5);
                 assertThat(contrast(p.ansi(9 + i), g.color)).as("bright " + names[i] + " on " + g).isGreaterThan(8);
                 assertThat(Oklch.hueGap(Oklch.lch(p.ansi(1 + i))[2], hues[i])).as(names[i] + "'s hue").isLessThan(6);
             }
-            assertThat(contrast(p.ansi(7), g.color)).as("white on " + g).isGreaterThan(8);
+            // the colour at the ink's end reads: white on a dark ground, black on a light one
+            assertThat(contrast(p.ansi(g.light ? 0 : 7), g.color)).as("the ink's end on " + g).isGreaterThan(8);
             assertThat(contrast(p.ansi(8), g.color)).as("bright black on " + g).isGreaterThan(3);
         }
         assertThat(ContentPalette.of(Tint.SILVER, Ground.SLATE).ansi(1)).as("a tint leaves red red")
                 .isEqualTo(ContentPalette.of(Tint.TREASURE, Ground.SLATE).ansi(1));
     }
 
-    /// Series 0 is the tint's body, the series repeat after their count, and each reads on graphite and stands apart.
+    /// Series 0 is the tint's body, the series repeat after their count, and each reads on graphite, or paper for a
+    /// light tint, and stands apart.
     @Test
     void plotSeriesStartAtTheTintAndStayApart() {
         for (Tint t : Tint.values()) {
-            ContentPalette p = ContentPalette.of(t, Ground.GRAPHITE);
+            Ground home = home(t);
+            ContentPalette p = ContentPalette.of(t, home);
             assertThat(p.series(0)).isEqualTo(t.body);
             assertThat(p.series(p.seriesCount())).as("they repeat").isEqualTo(p.series(0));
             for (int i = 0; i < p.seriesCount(); i++) {
-                assertThat(contrast(p.series(i), Ground.GRAPHITE.color)).as("series " + i + " in " + t).isGreaterThan(5);
+                assertThat(contrast(p.series(i), home.color)).as("series " + i + " in " + t).isGreaterThan(5);
                 for (int j = i + 1; j < p.seriesCount(); j++) {
                     assertThat(Oklch.distance(p.series(i), p.series(j))).as("series " + i + " vs " + j + " in " + t)
                             .isGreaterThan(0.07);
@@ -174,6 +180,16 @@ class ContentPaletteTest {
             Theme.tint(Tint.TREASURE);
             Theme.ground(Ground.GRAPHITE);
         }
+    }
+
+    /** The grounds of {@code t}'s mode: the dark ones for a dark tint, paper for a light one. */
+    private static List<Ground> grounds(Tint t) {
+        return Arrays.stream(Ground.values()).filter(g -> g.light == t.light).toList();
+    }
+
+    /** The ground a tint is tested on alone: graphite, or paper for a light tint. */
+    private static Ground home(Tint t) {
+        return t.light ? Ground.PAPER : Ground.GRAPHITE;
     }
 
     /** WCAG's contrast ratio of {@code a} over {@code b}. */

@@ -19,12 +19,19 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>The terminal's sixteen colours keep their names' hues, since programs mean red by red; diffs lay green and red
  * over the ground; plot series start at the tint and go round the wheel.
+ *
+ * <p>On a light ground (record 127) the same hues are drawn dark enough to read on it: the ink is the transcript's
+ * dark text, the categories, the terminal's colours, plot series and inline code take a low lightness, and the
+ * terminal's black and white swap ends, black the near-ink and white the near-ground.
  */
 public final class ContentPalette {
 
-    /** The lightness and chroma of the syntax categories. */
+    /** The lightness and chroma of the syntax categories; on a light ground, the ones that read and stay apart there. */
     private static final double SYNTAX_L = 0.76;
+    private static final double SYNTAX_L_LIGHT = 0.4;
+    private static final double SYNTAX_C_LIGHT = 0.14;
     private static final double SYNTAX_C = 0.11;
+    private static final double SYNTAX_STEP_LIGHT = 0.03;
     /** Below this chroma a tint's hue is noise. */
     private static final double HUELESS = 0.04;
     /** The categories' customary hues: annotation, number, string, regex, type, variable. */
@@ -80,6 +87,9 @@ public final class ContentPalette {
 
     private ContentPalette(Tint tint, Ground ground) {
         Color g = ground.color;
+        boolean light = ground.light;
+        double syntaxL = light ? SYNTAX_L_LIGHT : SYNTAX_L;
+        double syntaxC = light ? SYNTAX_C_LIGHT : SYNTAX_C;
         double[] t = Oklch.lch(tint.body);
         double turn = t[1] < HUELESS ? 0 : turn(t[2]);
         double[] hue = new double[CUSTOM.length];
@@ -87,23 +97,28 @@ public final class ContentPalette {
             hue[i] = (CUSTOM[i] + turn + 360) % 360;
         }
 
-        ink = Theme.TRANSCRIPT_TEXT;
-        keyword = tint.body;
-        annotation = Oklch.of(SYNTAX_L, SYNTAX_C, hue[0]);
-        number = Oklch.of(SYNTAX_L, SYNTAX_C, hue[1]);
-        string = Oklch.of(SYNTAX_L, SYNTAX_C, hue[2]);
-        regex = Oklch.of(SYNTAX_L, SYNTAX_C, hue[3]);
-        type = Oklch.of(SYNTAX_L, SYNTAX_C, hue[4]);
-        variable = Oklch.of(SYNTAX_L, SYNTAX_C, hue[5]);
-        comment = Theme.MUTED;
-        commentTag = Tint.over(Theme.MUTED, tint.body, 0.45f);
-        error = Theme.DANGER;
+        ink = Theme.fixed(Theme.TRANSCRIPT_TEXT, light);
+        // keywords a step apart from the categories in lightness, as on a dark ground: the deepest step on a light one
+        keyword = light ? tint.highlight : tint.body;
+        // on a light ground the dark end of the gamut holds less chroma, so neighbouring hues alternate a step in
+        // lightness to stay apart
+        double step = light ? SYNTAX_STEP_LIGHT : 0;
+        annotation = Oklch.of(syntaxL - step, syntaxC, hue[0]);
+        number = Oklch.of(syntaxL + step, syntaxC, hue[1]);
+        string = Oklch.of(syntaxL - step, syntaxC, hue[2]);
+        regex = Oklch.of(syntaxL + step, syntaxC, hue[3]);
+        type = Oklch.of(syntaxL - step, syntaxC, hue[4]);
+        variable = Oklch.of(syntaxL + step, syntaxC, hue[5]);
+        Color muted = Theme.fixed(Theme.MUTED, light);
+        comment = muted;
+        commentTag = Tint.over(muted, tint.body, 0.45f);
+        error = Theme.fixed(Theme.DANGER, light);
 
         caret = ink;
         selection = Tint.over(g, tint.shade, 0.45f);
         currentLine = Tint.over(g, ink, 0.05f);
         guide = Tint.over(g, ink, 0.12f);
-        lineNumber = Tint.over(g, ink, 0.32f);
+        lineNumber = Tint.over(g, ink, light ? 0.40f : 0.32f);
         currentLineNumber = Tint.over(g, ink, 0.72f);
         bracket = Tint.over(g, tint.shade, 0.32f);
         occurrence = Tint.over(g, ink, 0.12f);
@@ -122,22 +137,24 @@ public final class ContentPalette {
 
         double[] names = {25, 145, 95, 255, 330, 200};
         ansi = new Color[16];
-        ansi[0] = Tint.over(g, ink, 0.25f);
-        ansi[8] = Tint.over(g, ink, 0.50f);
-        ansi[7] = Tint.over(g, ink, 0.80f);
-        ansi[15] = Theme.ANSWER_STRONG;
+        // black and white at the ends of the ground-to-ink line: black near the ground on a dark one, near the ink on a
+        // light one, as a terminal's black is the colour of its ground
+        ansi[0] = Tint.over(g, ink, light ? 0.92f : 0.25f);
+        ansi[8] = Tint.over(g, ink, light ? 0.56f : 0.50f);
+        ansi[7] = Tint.over(g, ink, light ? 0.25f : 0.80f);
+        ansi[15] = light ? Tint.over(g, ink, 0.12f) : Theme.fixed(Theme.ANSWER_STRONG, false);
         for (int i = 0; i < names.length; i++) {
-            ansi[1 + i] = Oklch.of(0.70, 0.14, names[i]);
-            ansi[9 + i] = Oklch.of(0.82, 0.11, names[i]);
+            ansi[1 + i] = Oklch.of(light ? 0.47 : 0.70, 0.14, names[i]);
+            ansi[9 + i] = Oklch.of(light ? 0.38 : 0.82, 0.11, names[i]);
         }
 
         series = new Color[8];
         series[0] = tint.body;
         for (int i = 1; i < series.length; i++) {
-            series[i] = Oklch.of(0.72, 0.13, (t[2] + 45.0 * i) % 360);
+            series[i] = Oklch.of(light ? 0.50 : 0.72, 0.13, (t[2] + 45.0 * i) % 360);
         }
 
-        code = Oklch.of(0.82, 0.06, hue[3]);
+        code = Oklch.of(light ? 0.38 : 0.82, 0.06, hue[3]);
         codeInlineGround = Tint.over(g, ink, 0.08f);
         codeGround = Tint.over(g, ink, 0.05f);
     }

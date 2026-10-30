@@ -1,6 +1,5 @@
 package dev.marregui.comando.ui.shell;
 
-import com.formdev.flatlaf.extras.FlatAnimatedLafChange;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.state.AppState;
@@ -15,6 +14,7 @@ import dev.marregui.comando.ui.kit.theme.Theme;
 import javax.swing.BorderFactory;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
+import javax.swing.RootPaneContainer;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
 import java.awt.AWTEvent;
@@ -26,6 +26,7 @@ import java.awt.event.AWTEventListener;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.awt.event.KeyEvent;
+import java.awt.event.WindowEvent;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -77,6 +78,14 @@ final class LayoutKeeper {
     /** When the user last pressed a key in the window; a session's layout change waits until typing pauses. */
     private long lastKeyNanos;
     private final AWTEventListener keyClock;
+    /** Puts each window opened in the mode of the theme chosen, as {@link #paintIn} puts those already open. */
+    private final AWTEventListener windowLook = e -> {
+        if (e.getID() == WindowEvent.WINDOW_OPENED && e.getSource() instanceof Window w) {
+            appearance(w);
+        }
+    };
+    /** The client property macOS reads for a window's title bar, its own appearance rather than the application's. */
+    static final String WINDOW_APPEARANCE = "apple.awt.windowAppearance";
 
     LayoutKeeper(ComandoUi.Dependencies deps, WindowLayout windowLayout, ShellParts parts, Runnable render) {
         this.deps = deps;
@@ -122,6 +131,7 @@ final class LayoutKeeper {
     /** Starts the clock of the user's keys in the window, which a session's arrangement waits on. */
     void watchKeys() {
         Toolkit.getDefaultToolkit().addAWTEventListener(keyClock, AWTEvent.KEY_EVENT_MASK);
+        Toolkit.getDefaultToolkit().addAWTEventListener(windowLook, AWTEvent.WINDOW_EVENT_MASK);
     }
 
     /** Saves the layout a second after the window last moved or changed size. */
@@ -145,6 +155,7 @@ final class LayoutKeeper {
     void stop() {
         layoutSaver.stop();
         Toolkit.getDefaultToolkit().removeAWTEventListener(keyClock);
+        Toolkit.getDefaultToolkit().removeAWTEventListener(windowLook);
     }
 
     /**
@@ -159,34 +170,53 @@ final class LayoutKeeper {
      * tab, About) read it as they repaint.
      */
     static void paintIn(NamedTheme theme) {
+        recolour(theme);
+        titleBars();
+    }
+
+    /** Every window in {@code theme}, but for its title bar. */
+    private static void recolour(NamedTheme theme) {
         Theme.choose(theme.ground, theme.tint);
         for (Window w : Window.getWindows()) {
             w.repaint();
         }
     }
 
+    /** Every window's title bar in the mode of the theme chosen. */
+    private static void titleBars() {
+        for (Window w : Window.getWindows()) {
+            appearance(w);
+        }
+    }
+
+    /**
+     * {@code w}'s title bar in the mode of the theme chosen (record 127): light over a light theme, dark over a dark
+     * one. The application starts dark, which its menus and the native file dialogs keep; each window takes its own.
+     */
+    static void appearance(Window w) {
+        if (w instanceof RootPaneContainer r) {
+            r.getRootPane().putClientProperty(WINDOW_APPEARANCE, Theme.light() ? "NSAppearanceNameAqua" : "NSAppearanceNameDarkAqua");
+        }
+    }
+
     /**
      * Every window in {@code theme}, faded in over what they showed for {@link #THEME_FADE_MILLIS}: a picture of each
-     * shown window is taken, the theme applied and {@code recolour} run, the windows laid out again and pictured, and
-     * the old picture fades over the new. All in one event, so no frame shows the new theme before the fade starts.
-     * The theme chosen already is applied without a fade. EDT only.
+     * shown window is laid over it, the theme applied and {@code recolour} run underneath, and it fades into a picture
+     * of the window in the new theme ({@link ThemeFade}). The title bars, which macOS draws and no picture covers,
+     * change mode halfway, when the window is midway between the two themes, rather than at the start, when it still
+     * shows the theme before. The theme chosen already is applied without a fade. EDT only.
      */
     static void fadeTo(NamedTheme theme, Runnable recolour) {
         boolean change = Theme.groundChosen() != theme.ground || Theme.tint() != theme.tint;
+        Runnable apply = () -> {
+            recolour(theme);
+            recolour.run();
+        };
         if (change) {
-            FlatAnimatedLafChange.duration = THEME_FADE_MILLIS;
-            FlatAnimatedLafChange.showSnapshot();
-        }
-        paintIn(theme);
-        recolour.run();
-        if (change) {
-            // the new picture is painted at once, so the layout the theme changed must be done first
-            for (Window w : Window.getWindows()) {
-                if (w.isShowing()) {
-                    w.validate();
-                }
-            }
-            FlatAnimatedLafChange.hideSnapshotWithAnimation();
+            ThemeFade.run(apply, THEME_FADE_MILLIS, LayoutKeeper::titleBars);
+        } else {
+            apply.run();
+            titleBars();
         }
     }
 

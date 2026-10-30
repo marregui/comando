@@ -141,7 +141,7 @@ approval. Usage takes the warning colour at 75% of a window and the danger colou
 
 ### 1.6 Themes of your own
 
-The swatch at the tab row's right end lists six themes. To add one, put a JSON file in the `themes` folder of
+The swatch at the tab row's right end lists seven themes: six dark and one light, Paper and ochre. To add one, put a JSON file in the `themes` folder of
 comando's data root (`~/.comando/themes/`; **Help ▸ Reveal comando folder** opens the root) and start comando again:
 
 ```json
@@ -158,14 +158,14 @@ comando's data root (`~/.comando/themes/`; **Help ▸ Reveal comando folder** op
 |---|---|
 | `id` | lower case letters, digits and underscores; it names the theme's command (`theme.ink_rose`) and keeps your choice across restarts |
 | `label` | the name in the swatch's menu and the palette |
-| `mode` | `dark`, the only mode for now |
+| `mode` | `dark`, or `light` for a pale ground under dark text: the window takes the light look, and its syntax, terminal and plot colours are drawn dark enough to read |
 | `ground` | the background of every panel; its `label` may be left out |
-| `tint` | the accent: a pale `highlight`, the `body` and a darker `shade`, as on polished metal; its `label` may be left out |
+| `tint` | the accent in three steps, from the one that stands out most from the ground, the `highlight`, through the `body`, to the `shade`, as on polished metal: pale to deep on a dark ground, deep to pale on a light one; its `label` may be left out |
 
 *You should see* the theme after the six, with its swatch. comando reads the files only at start. A file that is not
 valid, repeats an id, or would make text hard to read (the tint's body below 7.5:1 on the ground, for one) is left
-out, and the status bar names the file and the reason. The six built-in themes are files of the same shape inside the
-app.
+out, and the status bar names the file and the reason. The seven built-in themes are files of the same shape inside
+the app.
 
 ## 2. A database
 

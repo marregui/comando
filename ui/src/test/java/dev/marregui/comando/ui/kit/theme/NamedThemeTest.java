@@ -8,20 +8,23 @@ import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/// [NamedTheme] pairs a ground with a tint into the six themes the window offers.
-/// - Six themes, each on its own ground with its own command, the default first.
+/// [NamedTheme] pairs a ground with a tint into the seven built-in themes the window offers.
+/// - Seven themes, six dark and paper, light, last; each on its own ground with its own command, the default first.
 /// - The theme chosen is the one the ground and tint make, or none.
 /// - A ground and tint kept from before themes map to the closest theme.
 class NamedThemeTest {
 
-    /// There are six themes on six grounds with distinct command ids, and the first is graphite with treasure.
+    /// There are seven themes on seven grounds with distinct command ids, the first graphite with treasure and the last,
+    /// the one light theme, paper with ochre.
     @Test
-    void sixThemesEachOnItsOwnGroundTheDefaultFirst() {
-        assertThat(NamedTheme.values()).hasSize(6);
-        assertThat(Arrays.stream(NamedTheme.values()).map(t -> t.ground).distinct()).as("one theme per ground").hasSize(6);
+    void sevenThemesEachOnItsOwnGroundTheDefaultFirst() {
+        assertThat(NamedTheme.values()).hasSize(7);
+        assertThat(Arrays.stream(NamedTheme.values()).map(t -> t.ground).distinct()).as("one theme per ground").hasSize(7);
+        assertThat(Arrays.stream(NamedTheme.values()).filter(t -> t.ground.light)).containsExactly(NamedTheme.PAPER_OCHRE);
+        assertThat(NamedTheme.PAPER_OCHRE.tint.light).isTrue();
         assertThat(NamedTheme.values()[0]).as("the window's default")
                 .matches(t -> t.ground == Ground.GRAPHITE && t.tint == Tint.TREASURE);
-        assertThat(Arrays.stream(NamedTheme.values()).map(NamedTheme::commandId).distinct()).hasSize(6);
+        assertThat(Arrays.stream(NamedTheme.values()).map(NamedTheme::commandId).distinct()).hasSize(7);
     }
 
     /// [NamedTheme#chosen] is the default theme at start, empty for a pair no theme makes, and the matching theme once

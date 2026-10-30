@@ -43,6 +43,26 @@ mutation-checked with the old shades put back) and its hourglass check. Sheets: 
 and feel up again and ran every tint listener, so the window was rebuilt twice and could show the new ground in the old
 tint; and the change was instant, which left the eye adapted to the old ground's hue. Now `Theme.choose` sets both and
 rebuilds once, and `LayoutKeeper.fadeTo` lays a picture of the windows as they were over them and fades it out over
-500 ms (FlatLaf's `FlatAnimatedLafChange`, 160 ms by default); the theme chosen already is applied without a fade, and
+500 ms (first FlatLaf's `FlatAnimatedLafChange`, 160 ms by default; replaced the same day, below); the theme chosen already is applied without a fade, and
 the theme restored at start is not faded. Miguel asked ("a hue or a cloud in the user's eyesight when the transition is
 done"); tested in `ThemeChoiceTest` and `ThemeFadeUiTest`.
+
+2026-10-30, later: the fade is comando's own (`ThemeFade`). FlatLaf's crossed from the picture of the theme before to
+a second picture taken at once after the change, before the window had finished laying out and painting in the new
+theme; when the pictures went, what it finished afterwards appeared with a jump, so the old ground seemed to linger and
+then repaint (Miguel: "the background of the previous theme seems to linger and then repaints to what should be";
+measured off screen: 2.7 % of the pixels differed between that second picture and the window after it, the panel's
+header and the plan's usage among them). Now only the picture of the theme before is taken; it is laid over each
+window, the theme is applied underneath, and it fades out over the live window, which repaints in the new theme as it
+would without a fade. Tested in `ThemeFadeUiTest`: halfway through, one picture lies over the window and the window
+under it paints as it does after the fade, within 0.5 % of the pixels, to Paper and ochre and back.
+
+2026-10-30, later still: the fade blends two pictures. Fading the old picture over the live window repainted the whole
+window at every frame (8 to 15 ms each in a nearly empty window, measured off screen, more with a transcript), and the
+change between dark and light flickered (Miguel: "feels as if the electric current had a micro interruption"). Now the
+old picture covers the window, opaque, while the theme is applied; two turns of the event queue later, once the window
+has done what the change left for later, a picture of it in the new theme is taken and the old one fades into it; each
+frame draws the two pictures alone (0.2 to 6.5 ms). The pictures are images in memory at the screen's scale, which the
+screen cannot discard mid-fade as it can a volatile one. macOS's title bars, which no picture covers, change mode
+halfway through the fade rather than at its start. Tested in `ThemeFadeUiTest`: halfway, one opaque picture lies over
+the window, and the picture of the new theme is the window as it paints after the fade, within 0.5 % of the pixels.

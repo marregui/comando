@@ -18,8 +18,8 @@ public final class ThemeRules {
     public static List<String> problems(Ground ground, Tint tint) {
         List<String> out = new ArrayList<>();
         Color g = ground.color;
-        floor(out, "the transcript's text on the ground", Theme.TRANSCRIPT_TEXT, g, 12);
-        floor(out, "a card on the ground", Tint.over(g, Color.WHITE, 0.115f), g, 1.2);
+        floor(out, "the transcript's text on the ground", Theme.fixed(Theme.TRANSCRIPT_TEXT, ground.light), g, 12);
+        floor(out, "a card on the ground", ((OnGround) Theme.CARD).on(ground), g, 1.2);
         floor(out, "the tint's body on the ground", tint.body, g, 7.5);
         floor(out, "the tint's shade on the ground", tint.shade, g, 4);
         floor(out, "the tint's highlight on a table's head", tint.highlight, Tint.over(g, tint.shade, 0.22f), 7);

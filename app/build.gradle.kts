@@ -134,6 +134,8 @@ val uiTest = tasks.register<Test>("uiTest") {
     forkEvery = 1
     systemProperty("java.awt.headless", "false")
     systemProperty("comando.uiTests", "true")
+    // ThemeFadeUiTest writes the window in the light theme to this PNG when it is given: -Pcomando.lightShot=<file>
+    providers.gradleProperty("comando.lightShot").orNull?.let { systemProperty("comando.lightShot", it) }
     // the windows open on no screen, without a Dock icon, and never take the desktop's focus
     systemProperty("comando.offScreen", "true")
     systemProperty("apple.awt.UIElement", "true")

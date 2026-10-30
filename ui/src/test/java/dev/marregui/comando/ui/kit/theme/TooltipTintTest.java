@@ -60,11 +60,15 @@ class TooltipTintTest {
         assertThat(heard).as("the same tint again is no change").containsExactly("YELLOW");
     }
 
-    /// Each tint's body, shade and table head pass their contrast floors on the default ground, [Theme#ATTENTION] stays
-    /// treasure's body under each tint, and the tints' labels are fixed in order.
+    /// Each dark tint's body, shade and table head pass their contrast floors on the default ground, [Theme#ATTENTION]
+    /// stays treasure's body under each tint, and the tints' labels are fixed in order.
     @Test
     void everyTintReadsOnTheTranscriptsGroundAndAttentionStaysTreasureGold() {
         for (Tint t : Tint.values()) {
+            if (t.light) {
+                // a light tint reads on paper, as everyTintReadsOnEveryGround… checks
+                continue;
+            }
             assertThat(contrast(t.body, Theme.ground())).as(t + "'s body").isGreaterThan(8);
             assertThat(contrast(t.shade, Theme.ground())).as(t + "'s shade").isGreaterThan(4.5);
             assertThat(contrast(t.highlight, t.tableHeadGround())).as(t + "'s table head").isGreaterThan(7);
@@ -72,18 +76,22 @@ class TooltipTintTest {
             assertThat(Theme.ATTENTION).as("attention in " + t).isEqualTo(Tint.TREASURE.body);
         }
         assertThat(Tint.values()).extracting(t -> t.label).containsExactly(
-                "Treasure gold", "18k yellow gold", "Champagne gold", "Silver", "Tropical forest", "Electric blue");
+                "Treasure gold", "18k yellow gold", "Champagne gold", "Silver", "Tropical forest", "Electric blue", "Ochre");
     }
 
-    /// On every ground the ivory text and a card stand off it and every tint passes its contrast floors, [Ground#named]
+    /// On every ground the transcript's text and a card stand off it and every tint of its mode passes its contrast
+    /// floors, [Ground#named]
     /// falls back to graphite, and choosing a ground moves [Theme#ground] and the table-head band and notifies tint
     /// listeners.
     @Test
     void everyTintReadsOnEveryGroundAndAGroundChosenWithoutTheLookIsOnlyKept() {
         for (Ground g : Ground.values()) {
-            assertThat(contrast(Theme.TRANSCRIPT_TEXT, g.color)).as("ivory on " + g).isGreaterThan(12);
-            assertThat(contrast(Theme.CARD, g.color)).as("a card stands off " + g).isGreaterThan(1.2);
+            assertThat(contrast(Theme.fixed(Theme.TRANSCRIPT_TEXT, g.light), g.color)).as("the text on " + g).isGreaterThan(12);
+            assertThat(contrast(((OnGround) Theme.CARD).on(g), g.color)).as("a card stands off " + g).isGreaterThan(1.2);
             for (Tint t : Tint.values()) {
+                if (t.light != g.light) {
+                    continue;
+                }
                 assertThat(contrast(t.body, g.color)).as(t + "'s body on " + g).isGreaterThan(7.5);
                 assertThat(contrast(t.shade, g.color)).as(t + "'s shade on " + g).isGreaterThan(4);
             }

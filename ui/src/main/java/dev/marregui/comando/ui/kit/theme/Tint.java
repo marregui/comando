@@ -20,16 +20,20 @@ public final class Tint {
     public static final Tint SILVER = builtIn("SILVER", "slate_silver");
     public static final Tint TROPICAL_FOREST = builtIn("TROPICAL_FOREST", "evergreen_forest");
     public static final Tint ELECTRIC_BLUE = builtIn("ELECTRIC_BLUE", "midnight_blue");
-    private static final Tint[] BUILT_IN = {TREASURE, YELLOW, CHAMPAGNE, SILVER, TROPICAL_FOREST, ELECTRIC_BLUE};
+    public static final Tint OCHRE = builtIn("OCHRE", "paper_ochre");
+    private static final Tint[] BUILT_IN = {TREASURE, YELLOW, CHAMPAGNE, SILVER, TROPICAL_FOREST, ELECTRIC_BLUE, OCHRE};
 
     public final String label;
     public final Color highlight;
     public final Color body;
     public final Color shade;
+    /** Whether the tint is made for a light ground: deep steps on a pale one (record 127). */
+    public final boolean light;
     private final String name;
 
-    Tint(String name, String label, Color highlight, Color body, Color shade) {
+    Tint(String name, String label, Color highlight, Color body, Color shade, boolean light) {
         this.name = name;
+        this.light = light;
         this.label = label;
         this.highlight = highlight;
         this.body = body;
@@ -38,7 +42,7 @@ public final class Tint {
 
     private static Tint builtIn(String name, String theme) {
         ThemeSpec s = BuiltInThemes.spec(theme);
-        return new Tint(name, s.tintLabel(), s.highlight(), s.body(), s.shade());
+        return new Tint(name, s.tintLabel(), s.highlight(), s.body(), s.shade(), s.light());
     }
 
     /** The tint's name, kept in the preferences: {@code TREASURE}, or a theme file's id in capitals. */

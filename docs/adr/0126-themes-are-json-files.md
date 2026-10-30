@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-30 | accepted; built for dark themes; light themes (`mode: light`) are the next step | Miguel and Claude |
+| 2026-10-30 | accepted; built; `mode: light` built by [record 127](0127-light-themes.md) | Miguel and Claude |
 
 ## 1. Context
 

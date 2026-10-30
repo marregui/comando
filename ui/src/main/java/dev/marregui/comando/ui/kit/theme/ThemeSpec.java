@@ -8,8 +8,8 @@ import java.awt.Color;
 import java.util.regex.Pattern;
 
 /**
- * A theme as its JSON file gives it, before it is checked for reading (record 126): an id, a label, the mode, the
- * ground and the tint's three steps. The six built in and every file in the data root's {@code themes} folder have
+ * A theme as its JSON file gives it, before it is checked for reading (record 126): an id, a label, the mode (dark, the
+ * default, or light: a pale ground under dark text, record 127), the ground and the tint's three steps. The six built in and every file in the data root's {@code themes} folder have
  * this shape:
  *
  * <pre>{@code
@@ -23,10 +23,12 @@ import java.util.regex.Pattern;
  * }</pre>
  *
  * The id is lower case letters, digits and underscores, and names the theme's command ({@code theme.graphite_gold});
- * the ground's and the tint's labels may be left out, and are then the theme's.
+ * the ground's and the tint's labels may be left out, and are then the theme's. The tint's steps run from the one
+ * that stands out most from the ground, the highlight, to the one that stands out least, the shade: pale to deep on a
+ * dark ground, deep to pale on a light one.
  */
-record ThemeSpec(String id, String label, String groundLabel, Color ground, String tintLabel, Color highlight, Color body,
-                 Color shade) {
+record ThemeSpec(String id, String label, boolean light, String groundLabel, Color ground, String tintLabel, Color highlight,
+                 Color body, Color shade) {
 
     private static final ObjectMapper JSON = new ObjectMapper();
     private static final Pattern ID = Pattern.compile("[a-z0-9_]{1,40}");
@@ -49,15 +51,12 @@ record ThemeSpec(String id, String label, String groundLabel, Color ground, Stri
         }
         String label = text(root, "label", null);
         String mode = text(root, "mode", "dark");
-        if (mode.equals("light")) {
-            throw new IllegalArgumentException("light themes are not offered yet");
-        }
-        if (!mode.equals("dark")) {
-            throw new IllegalArgumentException("\"mode\" must be \"dark\": " + mode);
+        if (!mode.equals("dark") && !mode.equals("light")) {
+            throw new IllegalArgumentException("\"mode\" must be \"dark\" or \"light\": " + mode);
         }
         JsonNode ground = object(root, "ground");
         JsonNode tint = object(root, "tint");
-        return new ThemeSpec(id, label, text(ground, "label", label), colour(ground, "ground.color"),
+        return new ThemeSpec(id, label, mode.equals("light"), text(ground, "label", label), colour(ground, "ground.color"),
                 text(tint, "label", label), colour(tint, "tint.highlight"), colour(tint, "tint.body"), colour(tint, "tint.shade"));
     }
 

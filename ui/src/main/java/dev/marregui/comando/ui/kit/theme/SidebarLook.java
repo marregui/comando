@@ -6,14 +6,13 @@ import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JScrollPane;
 import javax.swing.JTree;
-import javax.swing.event.AncestorEvent;
-import javax.swing.event.AncestorListener;
 import javax.swing.plaf.ColorUIResource;
 import java.awt.Color;
 import java.awt.Font;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Rectangle;
+import java.awt.event.HierarchyEvent;
 import java.awt.font.TextAttribute;
 import java.util.Locale;
 import java.util.Map;
@@ -113,28 +112,25 @@ public final class SidebarLook {
         return Theme.font(base, Theme.TextSize.CAPTION).deriveFont(Font.BOLD).deriveFont(Map.of(TextAttribute.TRACKING, 0.12f));
     }
 
-    /** Runs {@code apply} now and each time another tint is chosen, while {@code c} is in a window. */
+    /**
+     * Runs {@code apply} now and each time another tint is chosen, while {@code c} is in a window, shown or not, as
+     * {@code addNotify} and {@code removeNotify} bound it: a component in a tab behind takes a theme chosen with the
+     * rest, so the first frame that shows it is in that theme. Listening only while shown, as an ancestor listener
+     * does, left it in the theme before until a later event after its tab came forward: one frame of the old ground,
+     * a blink (record 127).
+     */
     public static void whileShown(JComponent c, Runnable apply) {
         apply.run();
-        c.addAncestorListener(new AncestorListener() {
-            private Runnable stop = () -> { };
-
-            @Override
-            public void ancestorAdded(AncestorEvent e) {
-                stop.run();
+        Runnable[] stop = {c.isDisplayable() ? Theme.onTint(apply) : () -> { }};
+        c.addHierarchyListener(e -> {
+            if ((e.getChangeFlags() & HierarchyEvent.DISPLAYABILITY_CHANGED) == 0) {
+                return;
+            }
+            stop[0].run();
+            stop[0] = () -> { };
+            if (c.isDisplayable()) {
                 apply.run();
-                stop = Theme.onTint(apply);
-            }
-
-            @Override
-            public void ancestorRemoved(AncestorEvent e) {
-                stop.run();
-                stop = () -> { };
-            }
-
-            @Override
-            public void ancestorMoved(AncestorEvent e) {
-                // nothing moves with the tint
+                stop[0] = Theme.onTint(apply);
             }
         });
     }

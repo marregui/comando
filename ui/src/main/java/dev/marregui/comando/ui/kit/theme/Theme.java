@@ -2,7 +2,9 @@ package dev.marregui.comando.ui.kit.theme;
 
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatLaf;
+import com.formdev.flatlaf.FlatLightLaf;
 import com.formdev.flatlaf.themes.FlatMacDarkLaf;
+import com.formdev.flatlaf.themes.FlatMacLightLaf;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 
 import javax.swing.UIManager;
@@ -26,61 +28,63 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * nothing else; the tint for structure, the selection, focus and the tab in front; {@link #ATTENTION} what needs the
  * user; {@link #DANGER} what is broken), the component map (each widget naming roles), and the content palettes derived
  * from them (syntax, terminal, diff, plots). Widgets take colours, fonts and spacing from here, never from literals:
- * {@code ColourRulesTest} fails any class outside this package that makes or names a {@code Color}.
+ * {@code ColourRulesTest} fails any class outside this package that makes or names a {@code Color}. A colour of the
+ * palette that a light ground cannot take as it is has a second value for one, read at each paint ({@code ByMode},
+ * {@code OnGround}; record 127): dark text, a darker step for a surface, deeper status colours.
  */
 public final class Theme {
 
     // colours
     /** A link, and nothing else: the tint marks structure, the selection and focus (record 100). */
-    public static final Color LINK = new Color(0x389FD6);
+    public static final Color LINK = new ByMode(0x389FD6, 0x1A62A0);
     /** Information inside content: a diff's hunk header, a shell command in a tool card. */
-    public static final Color INFO = new Color(0x389FD6);
-    public static final Color CLAUDE = new Color(0xD97757);
-    public static final Color OK = new Color(0x59A869);
-    public static final Color DANGER = new Color(0xDB5860);
-    public static final Color MUTED = new Color(0x8C8C8C);
+    public static final Color INFO = new ByMode(0x389FD6, 0x1A62A0);
+    public static final Color CLAUDE = new ByMode(0xD97757, 0xB8532F);
+    public static final Color OK = new ByMode(0x59A869, 0x2E7D3E);
+    public static final Color DANGER = new ByMode(0xDB5860, 0xB3261E);
+    public static final Color MUTED = new ByMode(0x8C8C8C, 0x6B6B6B);
     /** Secondary text on list and card backgrounds, where MUTED falls short of 4.5:1 contrast. */
-    public static final Color MUTED_STRONG = new Color(0xA8A8A8);
-    public static final Color THINKING = new Color(0xB99BF8);
+    public static final Color MUTED_STRONG = new ByMode(0xA8A8A8, 0x555555);
+    public static final Color THINKING = new ByMode(0xB99BF8, 0x6B4FBF);
     /** A file's name as git sees it, against {@code HEAD}: changed, new, gone, untracked, in conflict. */
-    public static final Color VCS_MODIFIED = new Color(0x6897BB);
-    public static final Color VCS_ADDED = new Color(0x629755);
-    public static final Color VCS_DELETED = new Color(0x8C8C8C);
-    public static final Color VCS_CONFLICTED = new Color(0xE0525C);
+    public static final Color VCS_MODIFIED = new ByMode(0x6897BB, 0x2F6DA8);
+    public static final Color VCS_ADDED = new ByMode(0x629755, 0x3F7A34);
+    public static final Color VCS_DELETED = new ByMode(0x8C8C8C, 0x6B6B6B);
+    public static final Color VCS_CONFLICTED = new ByMode(0xE0525C, 0xB3261E);
     /**
      * The surfaces: a card, its border, the prompt's bubble, laid over the ground chosen and following it (record 103);
      * on Graphite #2D2D2D, #3C3C3C and #2E3A4A.
      */
-    public static final Color CARD = new OnGround(Color.WHITE, 0.115f);
-    public static final Color CARD_BORDER = new OnGround(Color.WHITE, 0.177f);
-    public static final Color USER_BUBBLE = new OnGround(new Color(0x4A6282), 0.5f);
+    public static final Color CARD = new OnGround(Color.WHITE, 0.115f, Color.BLACK, 0.09f);
+    public static final Color CARD_BORDER = new OnGround(Color.WHITE, 0.177f, Color.BLACK, 0.17f);
+    public static final Color USER_BUBBLE = new OnGround(new Color(0x4A6282), 0.5f, new Color(0x4A6282), 0.16f);
     /**
      * Every text of the transcript outside a bubble or a card: a warm ivory, low in saturation for long reading, so
      * that the tint of its headings and marks stands apart from it.
      */
-    public static final Color TRANSCRIPT_TEXT = new Color(0xE2DCCD);
+    public static final Color TRANSCRIPT_TEXT = new ByMode(0xE2DCCD, 0x2B2620);
     /** Bold text in Claude's answers and rendered pages: brighter than {@link #TRANSCRIPT_TEXT}. */
-    public static final Color ANSWER_STRONG = new Color(0xFAF7F0);
+    public static final Color ANSWER_STRONG = new ByMode(0xFAF7F0, 0x12100C);
     /** Inline code elsewhere in the transcript (a bubble, a card), in the text's colour. */
-    public static final Color INLINE_CODE_GROUND = new OnGround(Color.WHITE, 0.165f);
+    public static final Color INLINE_CODE_GROUND = new OnGround(Color.WHITE, 0.165f, Color.BLACK, 0.08f);
     /** Selected text in the transcript. */
-    public static final Color SELECTION = new Color(0x214283);
+    public static final Color SELECTION = new ByMode(0x214283, 0xBCD3F2);
     /**
      * A find match and the current one: violet, apart from the tint (structure), the selection's blue, the diff's green
      * and red, and the attention's gold; a match is data, not structure (record 96). Ivory reads at 7.8:1 and 4.9:1.
      */
-    public static final Color FIND_MATCH = new Color(0x4A3560);
-    public static final Color FIND_CURRENT = new Color(0x6F4C91);
+    public static final Color FIND_MATCH = new ByMode(0x4A3560, 0xE3D4F2);
+    public static final Color FIND_CURRENT = new ByMode(0x6F4C91, 0xC9A8EA);
     /** The rules of a table in the transcript. */
-    public static final Color TABLE_RULE = new OnGround(Color.WHITE, 0.253f);
+    public static final Color TABLE_RULE = new OnGround(Color.WHITE, 0.253f, Color.BLACK, 0.2f);
     /** Text where the look and feel names no label colour. */
-    public static final Color TEXT_FALLBACK = new Color(0xDFE1E5);
+    public static final Color TEXT_FALLBACK = new ByMode(0xDFE1E5, 0x2B2B2B);
     /**
      * A state that asks to be looked at (an approval waiting, a session opening, an edit not saved yet, the flash on
      * what a click brought into view, the SVGs' amber): Treasure gold's body in every tint, a status colour as
-     * {@link #DANGER} is (record 96).
+     * {@link #DANGER} is (record 96); on a light ground a deep gold, which reads there (record 127).
      */
-    public static final Color ATTENTION = Tint.TREASURE.body;
+    public static final Color ATTENTION = new ByMode(Tint.TREASURE.body.getRGB() & 0xFFFFFF, 0x8A6300);
     /** A window's ground that lets the desktop through: an undecorated card with the system's shadow. */
     public static final Color CLEAR = new Color(0, 0, 0, 0);
     /** A shadow's ink: an icon's shape filled with it casts the shadow under it. */
@@ -209,11 +213,17 @@ public final class Theme {
                 Map.entry("EditorPane.background", g), Map.entry("TextPane.background", g),
                 Map.entry("Viewport.background", g), Map.entry("Component.focusedBorderColor", focus),
                 Map.entry("Component.focusColor", focus), Map.entry("TabbedPane.underlineColor", focus)));
-        boolean ok = Platform.isMac() ? FlatMacDarkLaf.setup() : FlatDarkLaf.setup();
+        // a light ground takes the light look and feel, whose controls, borders and text are drawn for it (record 127)
+        boolean ok = ground.light ? (Platform.isMac() ? FlatMacLightLaf.setup() : FlatLightLaf.setup())
+                : Platform.isMac() ? FlatMacDarkLaf.setup() : FlatDarkLaf.setup();
         if (!ok) {
-            FlatDarkLaf.setup();
+            if (ground.light) {
+                FlatLightLaf.setup();
+            } else {
+                FlatDarkLaf.setup();
+            }
         }
-        // tooltips read as a report: the panels' ground, a bar of the tint down the left edge, the transcript's ivory
+        // tooltips read as a report: the panels' ground, a bar of the tint down the left edge, the transcript's text
         UIManager.put("ToolTip.background", new ColorUIResource(ground.color));
         UIManager.put("ToolTip.foreground", new ColorUIResource(TRANSCRIPT_TEXT));
         UIManager.put("ToolTip.border", new TintBarBorder());
@@ -230,6 +240,19 @@ public final class Theme {
     /** The ground chosen. */
     public static Ground groundChosen() {
         return ground;
+    }
+
+    /**
+     * {@code c} as it is on a light ground or a dark one, whichever ground is chosen: what a palette made for a ground
+     * other than the one chosen keeps (record 127).
+     */
+    static Color fixed(Color c, boolean onLight) {
+        return c instanceof ByMode m ? m.in(onLight) : c;
+    }
+
+    /** Whether the theme chosen is light: a pale ground under dark text (record 127). */
+    public static boolean light() {
+        return ground.light;
     }
 
     /**

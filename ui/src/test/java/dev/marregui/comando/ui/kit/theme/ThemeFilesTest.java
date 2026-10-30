@@ -11,21 +11,25 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /// Themes are JSON files (record 126): the six built in, and the user's, read from a folder at start.
-/// - The built-in files give the six themes their colours as before, and each reads above every floor.
+/// - The built-in files give the six dark themes their colours as before, paper and ochre its light ones, and each
+///   reads above every floor.
 /// - A user's file is offered after the built-in ones, with a ground and tint of its own, in the order of the names.
-/// - A file that does not parse, names a bad id or colour, repeats an id, asks for a light mode or reads below a floor
+/// - A file that does not parse, names a bad id, mode or colour, repeats an id, or reads below a floor, dark or light,
 ///   is left out, with one line naming the file and why.
 class ThemeFilesTest {
 
     @TempDir
     Path folder;
 
-    /// The built-in files give the colours the enums had, the labels in the swatch's order, and every built-in theme
-    /// reads above every floor of [ThemeRules].
+    /// The built-in files give the colours the enums had, the labels in the swatch's order, paper and ochre last and
+    /// light, and every built-in theme reads above every floor of [ThemeRules].
     @Test
-    void theBuiltInFilesGiveTheSixThemesAsBefore() {
+    void theBuiltInFilesGiveTheThemesAsBefore() {
         assertThat(NamedTheme.builtIn()).extracting(t -> t.id).containsExactly("graphite_gold", "espresso_champagne",
-                "aubergine_gold", "midnight_blue", "evergreen_forest", "slate_silver");
+                "aubergine_gold", "midnight_blue", "evergreen_forest", "slate_silver", "paper_ochre");
+        assertThat(NamedTheme.builtIn()).filteredOn(t -> t.ground.light).containsExactly(NamedTheme.PAPER_OCHRE);
+        assertThat(Theme.hex(Ground.PAPER.color)).isEqualTo("#f7f3ea");
+        assertThat(Theme.hex(Tint.OCHRE.body)).isEqualTo("#5e4210");
         assertThat(NamedTheme.GRAPHITE_GOLD.label).isEqualTo("Graphite and gold");
         assertThat(Theme.hex(Ground.GRAPHITE.color)).isEqualTo("#121212");
         assertThat(Theme.hex(Ground.MIDNIGHT.color)).isEqualTo("#0d1220");
@@ -49,10 +53,14 @@ class ThemeFilesTest {
                 {"id": "pine", "label": "Pine", "ground": {"color": "#0C1511"},
                  "tint": {"highlight": "#CFF5DC", "body": "#62CC94", "shade": "#339966"}}
                 """);
+        write("c.json", theme("parchment", "Parchment", "#F4EFE4", "#3D2900", "#5E4210", "#8A6524").replace("\"dark\"", "\"light\""));
         Files.writeString(folder.resolve("notes.txt"), "not a theme");
         ThemeFiles.Read read = ThemeFiles.read(folder);
         assertThat(read.problems()).isEmpty();
-        assertThat(read.themes()).extracting(t -> t.id).containsExactly("pine", "ink_rose");
+        assertThat(read.themes()).extracting(t -> t.id).containsExactly("pine", "ink_rose", "parchment");
+        assertThat(read.themes().get(2).ground.light).as("a light file's ground and tint are light").isTrue();
+        assertThat(read.themes().get(2).tint.light).isTrue();
+        assertThat(read.themes().getFirst().ground.light).isFalse();
         NamedTheme pine = read.themes().getFirst();
         assertThat(pine.ground.label).as("the ground's label left out").isEqualTo("Pine");
         assertThat(pine.tint.label).isEqualTo("Pine");
@@ -62,8 +70,8 @@ class ThemeFilesTest {
         assertThat(pine.commandId()).isEqualTo("theme.pine");
         try {
             NamedTheme.offer(read.themes());
-            assertThat(NamedTheme.values()).hasSize(8);
-            assertThat(NamedTheme.values()[6]).isSameAs(pine);
+            assertThat(NamedTheme.values()).hasSize(10);
+            assertThat(NamedTheme.values()[7]).isSameAs(pine);
             assertThat(NamedTheme.withId("ink_rose")).contains(read.themes().get(1));
             assertThat(Ground.find("PINE")).contains(pine.ground);
             assertThat(Tint.named("INK_ROSE")).isSameAs(read.themes().get(1).tint);
@@ -71,7 +79,7 @@ class ThemeFilesTest {
         } finally {
             NamedTheme.offer(List.of());
         }
-        assertThat(NamedTheme.values()).hasSize(6);
+        assertThat(NamedTheme.values()).hasSize(7);
         assertThat(Ground.find("PINE")).isEmpty();
     }
 
@@ -94,7 +102,8 @@ class ThemeFilesTest {
         assertThat(read.problems().get(1)).isEqualTo("2-id.json: \"id\" must be lower case letters, digits and underscores: Bad Id");
         assertThat(read.problems().get(2)).isEqualTo("3-colour.json: \"ground.color\" must be a colour written #RRGGBB");
         assertThat(read.problems().get(3)).isEqualTo("4-builtin.json: the id graphite_gold is another theme's");
-        assertThat(read.problems().get(4)).isEqualTo("5-light.json: light themes are not offered yet");
+        assertThat(read.problems().get(4)).as("a light theme's tint too pale for its ground")
+                .startsWith("5-light.json: the tint's body on the ground reads at 5.6:1, below 7.5:1");
         assertThat(read.problems().get(5)).startsWith("6-dim.json: the tint's body on the ground reads at ").contains("below 7.5:1")
                 .contains("more)");
         assertThat(read.problems().get(6)).isEqualTo("8-again.json: the id good is another theme's");
