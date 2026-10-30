@@ -202,9 +202,13 @@ public final class Theme {
      */
     private static void setUpLook() {
         String g = hex(ground.color);
-        FlatLaf.setGlobalExtraDefaults(Map.of("@background", g, "List.background", g, "Tree.background", g,
-                "Table.background", g, "TextArea.background", g, "EditorPane.background", g,
-                "TextPane.background", g, "Viewport.background", g));
+        String focus = hex(tint.body);
+        // focus is marked in the tint, as everything that says where the user is (record 100), not the system accent
+        FlatLaf.setGlobalExtraDefaults(Map.ofEntries(Map.entry("@background", g), Map.entry("List.background", g),
+                Map.entry("Tree.background", g), Map.entry("Table.background", g), Map.entry("TextArea.background", g),
+                Map.entry("EditorPane.background", g), Map.entry("TextPane.background", g),
+                Map.entry("Viewport.background", g), Map.entry("Component.focusedBorderColor", focus),
+                Map.entry("Component.focusColor", focus), Map.entry("TabbedPane.underlineColor", focus)));
         boolean ok = Platform.isMac() ? FlatMacDarkLaf.setup() : FlatDarkLaf.setup();
         if (!ok) {
             FlatDarkLaf.setup();
@@ -325,14 +329,20 @@ public final class Theme {
     }
 
     /**
-     * Chooses the tint: everything listening ({@link #onTint}) lays itself out or recolours in it at once; what reads
-     * {@link #tint()} as it paints, the tooltips' bar among them, takes it at its next paint. EDT only.
+     * Chooses the tint: the look and feel is set up again so its focus marks take it, then everything listening
+     * ({@link #onTint}) lays itself out or recolours in it; what reads {@link #tint()} as it paints, the tooltips' bar and
+     * the focus ring among them, takes it at its next paint. EDT only.
      */
     public static void tint(Tint chosen) {
         if (tint == chosen) {
             return;
         }
         tint = chosen;
+        if (UIManager.getLookAndFeel() instanceof FlatLaf) {
+            // the look and feel's own focus marks take the tint only from its defaults
+            setUpLook();
+            FlatLaf.updateUI();
+        }
         for (Runnable r : TINT_LISTENERS) {
             r.run();
         }

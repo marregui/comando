@@ -192,7 +192,7 @@ public final class EditorPanel extends JPanel {
             layOutBody();
         });
         outline.onOpen(this::goTo);
-        split.setBorder(null);
+        split.setBorder(BorderFactory.createEmptyBorder());
         split.setContinuousLayout(true);
         // the outline at the right, beside the tools' button that shows it; a wider panel widens the text
         split.setResizeWeight(1);

@@ -3,6 +3,7 @@ package dev.marregui.comando.ui.kit.tree;
 import com.formdev.flatlaf.ui.FlatTreeUI;
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.theme.Tint;
@@ -237,7 +238,7 @@ public final class TreeView {
             }
         });
         ToolTipManager.sharedInstance().registerComponent(tree);
-        scroll.setBorder(null);
+        FocusRing.install(scroll);
     }
 
     /** The look's tree, which centres a row's open-and-close mark on the row below its header's space, not on both. */

@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.widgets.markdown;
 
 import dev.marregui.comando.core.view.ViewSpec;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
+import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
@@ -25,7 +26,7 @@ public final class MarkdownWidget implements Widget<ViewSpec.Markdown>, Copyable
 
     public MarkdownWidget() {
         pane.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
-        scroll.setBorder(null);
+        FocusRing.install(scroll);
         Capabilities.mark(scroll, this);
     }
 

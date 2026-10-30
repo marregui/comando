@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.widgets.table;
 
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.capability.Capabilities;
 import dev.marregui.comando.ui.widget.capability.Copyable;
@@ -68,7 +69,7 @@ public final class GridTable implements Searchable, Copyable, Exportable {
                 }
             }
         });
-        scroll.setBorder(null);
+        FocusRing.install(scroll);
         Capabilities.mark(scroll, this);
     }
 

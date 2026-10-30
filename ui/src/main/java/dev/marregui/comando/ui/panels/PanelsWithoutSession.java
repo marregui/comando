@@ -10,6 +10,7 @@ import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -144,7 +145,7 @@ final class PanelsWithoutSession {
         JScrollPane scroll = new JScrollPane(list);
         // a name wider than the sidebar scrolls into view, as in the sessions and connections lists above it
         scroll.setHorizontalScrollBarPolicy(JScrollPane.HORIZONTAL_SCROLLBAR_AS_NEEDED);
-        scroll.setBorder(null);
+        FocusRing.install(scroll);
         SidebarLook.list(list);
         SidebarLook.ground(scroll);
         SidebarLook.ground(section);

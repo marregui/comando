@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.kit.text;
 
+import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
 import javax.swing.BorderFactory;
@@ -19,7 +20,7 @@ public final class RenderedMarkdown {
 
     public RenderedMarkdown() {
         pane.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD * 2, Theme.PAD, Theme.PAD * 2));
-        scroll.setBorder(null);
+        FocusRing.install(scroll);
     }
 
     public JComponent component() {

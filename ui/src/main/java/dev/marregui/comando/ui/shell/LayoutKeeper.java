@@ -12,6 +12,7 @@ import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.kit.theme.Tint;
 
+import javax.swing.BorderFactory;
 import javax.swing.JPanel;
 import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
@@ -91,10 +92,10 @@ final class LayoutKeeper {
         top.add(parts.workspace().component(), BorderLayout.CENTER);
         editorAndSide = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT);
         editorAndSide.setResizeWeight(0.55);
-        editorAndSide.setBorder(null);
+        editorAndSide.setBorder(BorderFactory.createEmptyBorder());
         vertical = new JSplitPane(JSplitPane.VERTICAL_SPLIT, top, parts.lower().component());
         vertical.setResizeWeight(0.45);
-        vertical.setBorder(null);
+        vertical.setBorder(BorderFactory.createEmptyBorder());
         verticalDividerSize = vertical.getDividerSize();
         // a move of the divider, by the user, an arrangement or the window's resize, is the panel in front's
         vertical.addPropertyChangeListener(JSplitPane.DIVIDER_LOCATION_PROPERTY, e -> {
@@ -109,7 +110,7 @@ final class LayoutKeeper {
         column.add(vertical, BorderLayout.CENTER);
         column.add(parts.sessionBar().component(), BorderLayout.SOUTH);
         outer = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, parts.sidebar().component(), column);
-        outer.setBorder(null);
+        outer.setBorder(BorderFactory.createEmptyBorder());
         outerDividerSize = outer.getDividerSize();
     }
 

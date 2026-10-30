@@ -173,7 +173,7 @@ public final class ResourceDialog<S> {
         g.fill = GridBagConstraints.BOTH;
         form.add(new JPanel(), g);
         JScrollPane formScroll = new JScrollPane(form, JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
-        formScroll.setBorder(null);
+        formScroll.setBorder(BorderFactory.createEmptyBorder());
         formScroll.getVerticalScrollBar().setUnitIncrement(16);
 
         message.setText(" ");

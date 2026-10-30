@@ -96,7 +96,7 @@ public final class ConsoleWidget implements Widget<ViewSpec.Console>, Searchable
             }
         });
         split.setResizeWeight(0.62);
-        split.setBorder(null);
+        split.setBorder(BorderFactory.createEmptyBorder());
         root.add(header, BorderLayout.NORTH);
         root.add(scroll, BorderLayout.CENTER);
         Capabilities.mark(root, this);

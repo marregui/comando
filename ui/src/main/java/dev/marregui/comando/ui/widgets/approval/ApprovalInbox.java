@@ -18,6 +18,7 @@ import dev.marregui.comando.ui.kit.text.Editors;
 import dev.marregui.comando.ui.kit.text.HtmlPane;
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import dev.marregui.comando.ui.widget.Widget;
 import dev.marregui.comando.ui.widget.WidgetContext;
@@ -153,7 +154,7 @@ public final class ApprovalInbox implements Widget<List<Approval>> {
         list.setFocusable(true);
         list.setLayout(new BoxLayout(list, BoxLayout.Y_AXIS));
         list.setBorder(BorderFactory.createEmptyBorder(Theme.PAD, Theme.PAD, Theme.PAD, Theme.PAD));
-        scroll.setBorder(null);
+        FocusRing.install(scroll);
         scroll.getVerticalScrollBar().setUnitIncrement(24);
         overlay.showEmpty(EMPTY);
     }

@@ -62,7 +62,7 @@ public final class Overlay extends JPanel {
         JPanel errorPanel = new JPanel(new BorderLayout());
         errorPanel.add(errorIcon, BorderLayout.WEST);
         JScrollPane errorScroll = new JScrollPane(error);
-        errorScroll.setBorder(null);
+        errorScroll.setBorder(BorderFactory.createEmptyBorder());
         errorPanel.add(errorScroll, BorderLayout.CENTER);
         add(content, CONTENT);
         add(centered, MESSAGE);

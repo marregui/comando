@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.panels;
 
 import dev.marregui.comando.ui.kit.text.MarkdownHtml;
 import dev.marregui.comando.ui.kit.text.Plain;
+import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
 import dev.marregui.comando.ui.kit.theme.Theme;
 
@@ -86,7 +87,7 @@ final class OutlinePane {
         empty.setBorder(BorderFactory.createEmptyBorder(Theme.GAP, Theme.GAP, Theme.GAP, Theme.GAP));
         empty.setVerticalAlignment(JLabel.TOP);
         JScrollPane scroll = new JScrollPane(list);
-        scroll.setBorder(null);
+        FocusRing.install(scroll);
         SidebarLook.list(list);
         SidebarLook.ground(scroll);
         SidebarLook.ground(root);

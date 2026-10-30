@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.kit.text;
 
 import dev.marregui.comando.ui.kit.desktop.Platform;
+import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.RSyntaxUtilities;
@@ -166,7 +167,7 @@ public final class Editors {
     public static RTextScrollPane scroll(RSyntaxTextArea area, boolean lineNumbers) {
         RTextScrollPane sp = new RTextScrollPane(area, lineNumbers);
         sp.setFoldIndicatorEnabled(false);
-        sp.setBorder(null);
+        FocusRing.install(sp);
         sp.getGutter().setLineNumberFont(Theme.font(Theme.mono(), Theme.TextSize.SMALL));
         return sp;
     }
