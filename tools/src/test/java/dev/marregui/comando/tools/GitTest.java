@@ -162,6 +162,19 @@ class GitTest {
         assertThat(Git.repos(root.resolve("c"))).isEmpty();
     }
 
+    /// [Git#repos] checks a `.git` entry following links, the form of `Files.exists` that throws nothing inside the
+    /// JDK for an absent path (it runs on every poll; the form without links threw a `NoSuchFileException` per absent
+    /// entry, about two a second on an idle comando). So a `.git` link to nothing is not a repository, above the folder
+    /// or inside it.
+    @Test
+    void aGitLinkToNothingIsNotARepository(@TempDir Path dir) throws Exception {
+        final Path root = dir.toRealPath();
+        Files.createDirectories(root.resolve("a/sub"));
+        Files.createSymbolicLink(root.resolve("a/.git"), root.resolve("missing"));
+        assertThat(Git.repos(root.resolve("a/sub"))).isEmpty();
+        assertThat(Git.repos(root)).isEmpty();
+    }
+
     /// Porcelain v2 output with ordinary, renamed, unmerged, untracked and ignored records gives the branch, the
     /// commit, each change with its kind and old path, the ignored paths, and no truncation.
     @Test

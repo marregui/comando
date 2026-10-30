@@ -66,12 +66,15 @@ final class Git implements AutoCloseable {
 
     /**
      * The repositories {@code folder} belongs to: the one that holds it, else those directly inside it, by name. A
-     * repository is a folder with a {@code .git} entry (a folder, or a file for a worktree or a submodule).
+     * repository is a folder with a {@code .git} entry (a folder, or a file for a worktree or a submodule). The
+     * entry is checked following links, the one form of {@link Files#exists} that does not throw inside the JDK for an
+     * absent path: this runs on every poll, and the form without links threw a {@code NoSuchFileException} per
+     * absent entry, about two a second on an idle comando (jfrq-live, 2026-10-29).
      */
     static List<Path> repos(Path folder) {
         Path start = folder.toAbsolutePath().normalize();
         for (Path p = start; p != null; p = p.getParent()) {
-            if (Files.exists(p.resolve(".git"), LinkOption.NOFOLLOW_LINKS)) {
+            if (Files.exists(p.resolve(".git"))) {
                 return List.of(p);
             }
         }
@@ -79,7 +82,7 @@ final class Git implements AutoCloseable {
             return List.of();
         }
         try (Stream<Path> list = Files.list(start)) {
-            return list.filter(p -> Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS) && Files.exists(p.resolve(".git"), LinkOption.NOFOLLOW_LINKS))
+            return list.filter(p -> Files.isDirectory(p, LinkOption.NOFOLLOW_LINKS) && Files.exists(p.resolve(".git")))
                     .sorted(Comparator.comparing(Path::toString)).limit(MAX_REPOS).toList();
         } catch (IOException | UncheckedIOException e) {
             return List.of();
