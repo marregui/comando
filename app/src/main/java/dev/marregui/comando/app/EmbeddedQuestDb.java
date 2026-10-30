@@ -3,6 +3,7 @@ package dev.marregui.comando.app;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.ui.shell.ServerToggle;
 import io.questdb.Bootstrap;
@@ -28,7 +29,7 @@ import java.util.stream.Stream;
  * ILP 9009), reachable from this machine only: QuestDB binds every interface by default and its default login is
  * public. The settings go through QuestDB's environment overrides, so the user's {@code server.conf} stays as it is.
  */
-final class EmbeddedQuestDb implements ServerToggle, AutoCloseable {
+final class EmbeddedQuestDb implements ServerToggle, ServerSwitch, AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(EmbeddedQuestDb.class.getName());
 
@@ -107,14 +108,47 @@ final class EmbeddedQuestDb implements ServerToggle, AutoCloseable {
         }
         errands.start("questdb-toggle", () -> {
             try {
-                flip();
+                flip(null);
             } finally {
                 busy.set(false);
             }
         });
     }
 
-    private synchronized void flip() {
+    /** Nothing to add: QuestDB runs in this instance or not at all. */
+    @Override
+    public String status() {
+        return ServerToggle.super.status();
+    }
+
+    /** An agent's start or stop (record 121); the start or stop re-checks under the monitor. */
+    @Override
+    public String want(boolean up) {
+        if (up == (server != null)) {
+            return up ? "QuestDB is up already: PG wire on 8812, console on http://localhost:9000" : "QuestDB is not running";
+        }
+        if (!busy.compareAndSet(false, true)) {
+            return (server == null ? "QuestDB is starting" : "QuestDB is stopping") + "; try again when that ends";
+        }
+        Thread t = errands.start(up ? "questdb-start" : "questdb-stop", () -> {
+            try {
+                flip(up);
+            } finally {
+                busy.set(false);
+            }
+        });
+        if (t == null) {
+            busy.set(false);
+            return "refused: comando is closing";
+        }
+        return (up ? "starting" : "stopping") + " QuestDB; the outcome comes as a notice, and ui_get_state's servers show it";
+    }
+
+    /** Starts a stopped server or stops a running one; {@code want}, when given, is the only direction it may go. */
+    private synchronized void flip(Boolean want) {
+        if (want != null && want == (server != null)) {
+            return;
+        }
         if (server == null) {
             try {
                 server = start();

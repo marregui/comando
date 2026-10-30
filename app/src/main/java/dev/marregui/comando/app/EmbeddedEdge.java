@@ -5,6 +5,7 @@ import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.model.AtomicFiles;
 import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.ui.shell.ServerToggle;
 import org.w3c.dom.Document;
@@ -74,7 +75,7 @@ import java.util.zip.ZipFile;
  * The distribution is the open-source HiveMQ Edge release comando pins ({@link #RELEASE}), downloaded once into {@code
  * edge/dist} and checked against its published SHA-256, unless the user names a zip of their own.
  */
-final class EmbeddedEdge implements ServerToggle, AutoCloseable {
+final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
 
     private static final System.Logger LOG = System.getLogger(EmbeddedEdge.class.getName());
 
@@ -243,7 +244,7 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
         }
         Thread t = errands.start("edge-toggle", () -> {
             try {
-                flip();
+                flip(null);
             } finally {
                 busy.set(false);
             }
@@ -253,7 +254,42 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
         }
     }
 
-    private synchronized void flip() {
+    /**
+     * An agent's start or stop (record 121): the registry is read now, so the answer says whether there is anything to
+     * do, and the start or stop re-checks under the monitor, so a change meanwhile turns it into nothing.
+     */
+    @Override
+    public String want(boolean up) {
+        boolean live = running();
+        Entry e = seen;
+        if (up && live) {
+            return "the Edge already runs" + (e != null && !owner.equals(e.owner()) ? ", " + startedBy(e) : "");
+        }
+        if (!up && !live) {
+            return "the Edge is not running";
+        }
+        if (!up && e != null && !owner.equals(e.owner())) {
+            return "refused: the Edge was " + startedBy(e) + ", and only that comando stops it";
+        }
+        if (!busy.compareAndSet(false, true)) {
+            return "the Edge is " + (doing.isEmpty() ? "busy" : doing) + "; try again when that ends";
+        }
+        Thread t = errands.start(up ? "edge-start" : "edge-stop", () -> {
+            try {
+                flip(up);
+            } finally {
+                busy.set(false);
+            }
+        });
+        if (t == null) {
+            busy.set(false);
+            return "refused: comando is closing";
+        }
+        return (up ? "starting" : "stopping") + " the Edge; the outcome comes as a notice, and ui_get_state's servers show it";
+    }
+
+    /** Starts or stops as the registry finds it; {@code want}, when given, is the only direction it may go. */
+    private synchronized void flip(Boolean want) {
         Entry e;
         try {
             e = read();
@@ -267,6 +303,12 @@ final class EmbeddedEdge implements ServerToggle, AutoCloseable {
             LOG.log(System.Logger.Level.INFO, "stale Edge registry removed [pid=" + e.pid() + ", owner=" + e.owner() + ']');
             remove(e);
             e = null;
+        }
+        if (want != null && want != (e == null)) {
+            // what the agent asked for holds already: running when it wanted a start, gone when it wanted a stop
+            running = e != null;
+            checkedAt = System.nanoTime();
+            return;
         }
         try {
             if (e == null) {

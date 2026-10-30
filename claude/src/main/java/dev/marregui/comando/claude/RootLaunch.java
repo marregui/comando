@@ -18,16 +18,21 @@ import java.util.Optional;
  * {@code autoMemoryDirectory}. The session that upgrades a kit at or inside the user's own folder is the one exception:
  * it runs on the user's own folder, so it can replace the kit. A root elsewhere is another instance's kit: its upgrade
  * runs on that root, so nothing of the instance reads or writes {@code ~/.claude}.
+ * <p>
+ * A session an agent made ({@code SessionSpec.createdBy}) also gets {@code COMANDO_CREATED_BY=<creator>}, so a kit's
+ * hooks can tell it from a person's session and leave out what only a person needs; every other process has the
+ * variable taken out, so none inherits it from the shell that started comando.
  */
 public final class RootLaunch {
 
     static final String CONFIG_DIR = "CLAUDE_CONFIG_DIR";
     static final String SETTINGS = "--settings";
     static final String MEMORY_SETTING = "autoMemoryDirectory";
+    static final String CREATED_BY = "COMANDO_CREATED_BY";
     private static final ObjectMapper JSON = new ObjectMapper();
 
     /** The environment comando was started with, and no settings: tests, and tools started without a root. */
-    public static final RootLaunch INHERIT = new RootLaunch(null, Optional.empty(), false, Optional.empty());
+    public static final RootLaunch INHERIT = new RootLaunch(null, Optional.empty(), false, Optional.empty(), "");
 
     /** The root sessions run on, when it is not the user's own folder; null for none. */
     private final Path configDir;
@@ -35,17 +40,20 @@ public final class RootLaunch {
     /** Whether {@code CLAUDE_CONFIG_DIR} is taken out, so {@code claude} uses the user's own folder. */
     private final boolean usersOwn;
     private final Optional<Path> memory;
+    /** The agent that made the session, or empty for a person's session and every other process. */
+    private final String createdBy;
 
-    private RootLaunch(Path configDir, Optional<KitRoot> root, boolean usersOwn, Optional<Path> memory) {
+    private RootLaunch(Path configDir, Optional<KitRoot> root, boolean usersOwn, Optional<Path> memory, String createdBy) {
         this.configDir = configDir;
         this.root = root;
         this.usersOwn = usersOwn;
         this.memory = memory;
+        this.createdBy = createdBy;
     }
 
     /** Every {@code claude} on {@code root}. */
     public static RootLaunch on(KitRoot root) {
-        return new RootLaunch(root.own() ? null : root.dir(), Optional.of(root), false, root.memory());
+        return new RootLaunch(root.own() ? null : root.dir(), Optional.of(root), false, root.memory(), "");
     }
 
     /**
@@ -55,9 +63,15 @@ public final class RootLaunch {
     public RootLaunch forSession(String name, String workDir) {
         if (root.isPresent() && name.equals(KitRoot.UPGRADE_SESSION) && root.get().isRoot(workDir)
                 && root.get().dir().startsWith(root.get().userDir())) {
-            return new RootLaunch(null, root, true, Optional.empty());
+            return new RootLaunch(null, root, true, Optional.empty(), createdBy);
         }
         return this;
+    }
+
+    /** This launch for a session {@code createdBy} made, an agent's name; empty for a person's session. */
+    public RootLaunch madeBy(String createdBy) {
+        String by = createdBy == null ? "" : createdBy.strip();
+        return by.equals(this.createdBy) ? this : new RootLaunch(configDir, root, usersOwn, memory, by);
     }
 
     /**
@@ -96,18 +110,27 @@ public final class RootLaunch {
         return settings.toString();
     }
 
-    /** Sets the process's environment: the root's folder, or the user's own for the upgrade. */
+    /** Sets the process's environment: the root's folder, or the user's own for the upgrade; the session's maker. */
     public void environment(Map<String, String> env) {
         if (usersOwn) {
             env.remove(CONFIG_DIR);
         } else if (configDir != null) {
             env.put(CONFIG_DIR, configDir.toString());
         }
+        if (createdBy.isEmpty()) {
+            env.remove(CREATED_BY);
+        } else {
+            env.put(CREATED_BY, createdBy);
+        }
     }
 
-    /** The environment's changes, for the log and tests: {@code CLAUDE_CONFIG_DIR=<root>}, its removal, or none. */
+    /**
+     * The environment's changes, for the log and tests: {@code CLAUDE_CONFIG_DIR=<root>}, its removal, or none; then
+     * {@code COMANDO_CREATED_BY=<creator>} for an agent's session.
+     */
     @Override
     public String toString() {
-        return usersOwn ? "-" + CONFIG_DIR : configDir != null ? CONFIG_DIR + '=' + configDir : "inherit";
+        String dir = usersOwn ? "-" + CONFIG_DIR : configDir != null ? CONFIG_DIR + '=' + configDir : "inherit";
+        return createdBy.isEmpty() ? dir : dir + ' ' + CREATED_BY + '=' + createdBy;
     }
 }

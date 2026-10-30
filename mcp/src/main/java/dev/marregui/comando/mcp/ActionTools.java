@@ -12,6 +12,7 @@ import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.port.IntentSink;
+import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.Notice;
@@ -41,7 +42,7 @@ import java.util.stream.Stream;
  * The actions of the registry that are not among comando's first tools (record 121): their schemas, and performing them
  * for a caller. Two rules hold for every caller: an approval card is never answered by the session that raised it nor
  * by one of its creators, and a destructive action runs only for a caller the user granted it in the data root's
- * {@code agents.json}. Every act posts a notice naming the caller.
+ * {@code agents.json}, or, on a session, for one of that session's creators. Every act posts a notice naming the caller.
  */
 final class ActionTools {
 
@@ -56,6 +57,7 @@ final class ActionTools {
     private final Supplier<AppState> state;
     private final ObjectMapper json = new ObjectMapper();
     private volatile Path agentsFile;
+    private volatile List<ServerSwitch> servers = List.of();
 
     ActionTools(IntentSink sink, Supplier<AppState> state) {
         this.sink = sink;
@@ -65,6 +67,16 @@ final class ActionTools {
     /** Where the user's grants live; without one no caller holds a grant. */
     void agentsFile(Path file) {
         this.agentsFile = file;
+    }
+
+    /** The servers {@code server_start} and {@code server_stop} reach; none until the application sets them. */
+    void servers(List<ServerSwitch> servers) {
+        this.servers = List.copyOf(servers);
+    }
+
+    /** The servers, for the state's {@code servers}. */
+    List<ServerSwitch> servers() {
+        return servers;
     }
 
     /** Whether {@code tool} is one of the actions this class performs. */
@@ -82,7 +94,8 @@ final class ActionTools {
             ObjectNode d = out.addObject();
             d.put("name", a.tool());
             d.put("description", a.description() + (a.kind() == Action.Kind.DESTRUCTIVE
-                    ? " Destructive: runs only if the user granted this caller \"destructive\" in agents.json." : ""));
+                    ? " Destructive: runs only if the user granted this caller \"destructive\" in agents.json"
+                    + (onSession(a) ? ", or this caller created the session." : ".") : ""));
             ObjectNode schema = d.putObject("inputSchema");
             schema.put("type", "object");
             ObjectNode props = schema.putObject("properties");
@@ -120,11 +133,12 @@ final class ActionTools {
      */
     McpTools.Outcome run(String caller, String tool, JsonNode args) {
         Action action = Actions.byTool(tool).orElseThrow(() -> new IllegalArgumentException("unknown tool " + tool));
-        if (action.kind() == Action.Kind.DESTRUCTIVE && !granted(caller, DESTRUCTIVE)) {
-            return McpTools.Outcome.fail(tool + " is destructive: the user has not granted " + caller + " \"destructive\" (agents.json in comando's "
-                    + "data root, {\"grants\": {\"" + caller + "\": [\"destructive\"]}}); ask the user to do it or to grant it");
-        }
         AppState s = state.get();
+        if (action.kind() == Action.Kind.DESTRUCTIVE && !granted(caller, DESTRUCTIVE) && !created(caller, action, s, args)) {
+            return McpTools.Outcome.fail(tool + " is destructive: the user has not granted " + caller + " \"destructive\" (agents.json in comando's "
+                    + "data root, {\"grants\": {\"" + caller + "\": [\"destructive\"]}})" + (onSession(action) ? " and " + caller
+                    + " did not create the session" : "") + "; ask the user to do it or to grant it");
+        }
         String done = switch (tool) {
             case "session_new" -> sessionNew(caller, s, args);
             case "session_edit" -> sessionEdit(s, args);
@@ -167,6 +181,8 @@ final class ActionTools {
             case "notice_dismiss" -> send(new Intent.DismissNotice());
             case "gradle_run" -> send(new Intent.RunGradle(panel(s, args, false).id(), text(args, "tasks")));
             case "command_cancel" -> send(new Intent.CancelCommand(args.path("run_id").asLong(0)));
+            case "server_start" -> server(args).want(true);
+            case "server_stop" -> server(args).want(false);
             case "folders_browse" -> send(new Intent.BrowseFolders(args.has("names") ? strings(args, "names")
                     : s.folders().stream().map(f -> f.name()).toList()));
             default -> throw new IllegalArgumentException(tool + " has no runner yet");
@@ -208,6 +224,27 @@ final class ActionTools {
                 args.has("add_dirs") ? strings(args, "add_dirs") : old.addDirs(), old.budgetUsd(), old.claudeSessionId(), old.startMode(),
                 args.has("checkpoint") ? args.path("checkpoint").asString("") : old.checkpoint(), old.carried(), old.createdBy());
         return send(new Intent.SaveSession(old.name(), spec));
+    }
+
+    /** Whether the action works on one session, named by its {@code session} argument. */
+    private static boolean onSession(Action a) {
+        return a.area().equals("session") && a.args().stream().anyMatch(x -> x.name().equals("session"));
+    }
+
+    /**
+     * Whether {@code caller} created, directly or through others, the session a session action names: the creator of a
+     * session may clear or remove it without a grant, as it may start it again (record 44).
+     */
+    private static boolean created(String caller, Action a, AppState s, JsonNode args) {
+        String name = args.path("session").asString("").strip();
+        return onSession(a) && !name.isEmpty() && s.session(name).isPresent() && creators(s, name).contains(caller);
+    }
+
+    private ServerSwitch server(JsonNode args) {
+        String name = text(args, "server");
+        return servers.stream().filter(x -> x.name().equalsIgnoreCase(name)).findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("no server '" + name + "'; servers: "
+                        + servers.stream().map(x -> x.name().toLowerCase(Locale.ROOT)).toList()));
     }
 
     /**

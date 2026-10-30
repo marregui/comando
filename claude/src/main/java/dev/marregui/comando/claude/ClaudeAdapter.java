@@ -653,7 +653,7 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             return;
         }
         try {
-            RootLaunch launch = settings.launch().forSession(spec.name(), spec.workDir());
+            RootLaunch launch = settings.launch().forSession(spec.name(), spec.workDir()).madeBy(spec.createdBy());
             var argv = launch.argv(ClaudeCommand.of(settings.executable(), spec, newId, run.mcpConfig, settings.uiInstructions()));
             s.workDir = workDir;
             s.mapper.resetStreams();

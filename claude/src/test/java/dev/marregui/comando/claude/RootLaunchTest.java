@@ -112,6 +112,22 @@ class RootLaunchTest {
         assertThat(upgrade.toString()).isEqualTo("CLAUDE_CONFIG_DIR=" + root);
     }
 
+    /// A session an agent made carries its maker in `COMANDO_CREATED_BY`, for the kit's hooks; a person's session and
+    /// every other process have the variable taken out, so none inherits it from the shell that started comando.
+    @Test
+    void anAgentsSessionCarriesItsMakerAndNoOtherProcessInheritsIt(@TempDir Path tmp) {
+        Path user = tmp.resolve(".claude");
+        RootLaunch launch = RootLaunch.on(new KitRoot(Path.of("/kits/b"), Optional.of(KIT), user));
+        RootLaunch made = launch.madeBy("consult-main");
+
+        assertThat(env(made, Map.of())).containsEntry("COMANDO_CREATED_BY", "consult-main").containsEntry("CLAUDE_CONFIG_DIR", "/kits/b");
+        assertThat(made.toString()).isEqualTo("CLAUDE_CONFIG_DIR=/kits/b COMANDO_CREATED_BY=consult-main");
+        assertThat(env(launch, Map.of("COMANDO_CREATED_BY", "inherited"))).as("a person's session").doesNotContainKey("COMANDO_CREATED_BY");
+        assertThat(env(RootLaunch.INHERIT, Map.of("COMANDO_CREATED_BY", "inherited"))).as("any other process").doesNotContainKey("COMANDO_CREATED_BY");
+        assertThat(launch.madeBy("")).as("no maker: the same launch").isSameAs(launch);
+        assertThat(made.madeBy(" consult-main ")).isSameAs(made);
+    }
+
     /// A started session process receives the selected root through its environment.
     /// The child shell prints the configuration variable after the process callback signals exit.
     @Test

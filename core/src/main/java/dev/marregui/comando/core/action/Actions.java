@@ -23,6 +23,8 @@ public final class Actions {
 
     private static final Arg SESSION = Arg.required("session", Type.STRING, "the session's name");
     private static final Arg PANEL = Arg.required("panel", Type.STRING, "the panel's title or id");
+    private static final Arg SERVER = Arg.required("server", Type.STRING, "edge: the comando Edge; questdb: the embedded QuestDB")
+            .among(List.of("edge", "questdb"));
 
     /** Every action, in the order the tools are listed. */
     public static final List<Action> ALL = List.of(
@@ -73,9 +75,11 @@ public final class Actions {
                     List.of(Arg.required("name", Type.STRING, ""), Arg.required("work_dir", Type.STRING, ""),
                             Arg.required("conversation", Type.STRING, "the stored conversation's session id")),
                     Set.of(Intent.ImportSessions.class)),
-            new Action("session_clear", Kind.DESTRUCTIVE, "Clears a session's transcript in the window, as Clear does.",
+            new Action("session_clear", Kind.DESTRUCTIVE, "Clears a session's transcript in the window, as Clear does. Also runs for the session's creator.",
                     List.of(SESSION), Set.of(Intent.ClearTranscript.class)),
-            new Action("session_remove", Kind.DESTRUCTIVE, "Removes a session from comando, as Remove does; its stored conversation stays on disk.",
+            new Action("session_remove", Kind.DESTRUCTIVE,
+                    "Removes a session from comando, as Remove does; its stored conversation stays on disk. Also runs for the session's creator, "
+                            + "so a caller cleans up the sessions it made.",
                     List.of(SESSION), Set.of(Intent.RemoveSession.class)),
             new Action("session_send", Kind.ACT, "Prompts another running session through its panel (record 44).",
                     List.of(SESSION, Arg.required("text", Type.STRING, "")), Set.of(Intent.EditPanel.class, Intent.RunText.class)),
@@ -162,6 +166,16 @@ public final class Actions {
             // ---- databases
             new Action("db_run_sql", Kind.ACT, "Runs SQL on a connection under the SQL policy.", List.of(), Set.of(Intent.RunText.class)),
             new Action("db_describe", Kind.READ, "A table's columns and types.", List.of(), Set.of()),
+
+            // ---- servers: the toggles at the top of the workspace, which call the server and send no intent
+            new Action("server_start", Kind.ACT,
+                    "Starts a local server, as its toggle at the top of the workspace does: the comando Edge (one per machine, the instances' link) "
+                            + "or the embedded QuestDB. Answers at once; the outcome comes as a notice, and ui_get_state's servers show it.",
+                    List.of(SERVER), Set.of()),
+            new Action("server_stop", Kind.ACT,
+                    "Stops a local server this instance started, as its toggle does; an Edge another instance started is refused. "
+                            + "Stopping the Edge ends every instance's consults.",
+                    List.of(SERVER), Set.of()),
 
             // ---- commands and folders
             new Action("gradle_run", Kind.ACT, "Runs Gradle tasks for a panel's folder, as Run Gradle does; the run shows in its own log panel.",

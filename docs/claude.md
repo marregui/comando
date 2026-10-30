@@ -37,6 +37,9 @@ claude -p --input-format stream-json --output-format stream-json --verbose \
   [Workbench §7.1](workbench.md#71-the-root)). The session named `kit` that upgrades the kit runs on the user's own
   `~/.claude` instead when the root is `~/.claude` or inside it; a sibling kit such as `~/.claude_b` keeps its own root
   ([record 122](adr/0122-instances-name-kit-brain-data-root-edge.md)).
+- **An agent's session.** A session with a creator (`createdBy`) runs with `COMANDO_CREATED_BY=<creator>`, so a kit's
+  hooks can tell it from a person's; every other process has the variable taken out
+  ([record 121](adr/0121-an-agent-has-every-action-the-user-has.md)).
 - **MCP configuration.** One file per running process under `run/` in the data root, mode `0600` from creation, named
   after the session and a random UUID. It names comando's server, the process's bearer token, and `"timeout": 3600000`,
   which lets an approval card wait up to 55 minutes. Deleted when the process exits; files a killed comando left are
@@ -188,6 +191,7 @@ sends for the same gesture:
 | approvals | `approval_answer` (allow with a scope, deny with a message, or answer an AskUserQuestion card) |
 | connections | `connection_save`, `connection_test`, `connection_open`, `connection_close`, `connection_schema`, `connection_remove`* |
 | views and the window | `view_pin`, `view_close`, `notice_dismiss` |
+| servers | `server_start`, `server_stop` (`edge` or `questdb`: what the toggles at the top of the workspace do; a server already in the state asked for is left alone, an Edge another instance started is not stopped; `ui_get_state` lists `servers`) |
 | commands and folders | `gradle_run`, `command_cancel`, `folders_browse` |
 
 - **Creator.** A session made by `session_new` or `session_import` records its caller in `createdBy` (`sessions.json`;
@@ -198,7 +202,8 @@ sends for the same gesture:
 - **Rule 1.** `approval_answer` refuses a card raised by the caller, or by a session the caller created, directly or
   through others.
 - **Rule 2.** A destructive tool (marked * above) runs only for a caller the user granted it in the data root's
-  `agents.json`, `{"grants": {"<caller>": ["destructive"]}}`, read at each call.
+  `agents.json`, `{"grants": {"<caller>": ["destructive"]}}`, read at each call; `session_clear` and `session_remove`
+  also run for the session's creator, directly or through others, so a caller cleans up the sessions it made.
 - **Start rule.** `session_start` and `session_fresh` run only for the session's creator; stopping and interrupting are
   open to every caller ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)'s breaker, amended).
 - **Notice.** Every act names its caller in the status bar (`foreman: session new — …`).

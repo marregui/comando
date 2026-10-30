@@ -14,6 +14,7 @@ import dev.marregui.comando.core.model.PermissionRules;
 import dev.marregui.comando.core.port.Clock;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.QueryPort;
+import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.LowerTab;
@@ -139,6 +140,11 @@ public final class McpTools {
     /** The data root's {@code agents.json}, where the user grants callers destructive actions (record 121, rule 2). */
     public void agentsFile(Path file) {
         actions.agentsFile(file);
+    }
+
+    /** The local servers agents start and stop as the toggles do (record 121); the application sets them once. */
+    public void servers(List<ServerSwitch> servers) {
+        actions.servers(servers);
     }
 
     /** The other comando instances this one consults and answers (record 123); the application sets it once. */
@@ -582,6 +588,10 @@ public final class McpTools {
             n.put("type", v.spec().type());
             n.put("placement", v.placement().name().toLowerCase(Locale.ROOT));
             n.put("pinned", v.pinned());
+        }
+        ArrayNode servers = root.putArray("servers");
+        for (ServerSwitch x : actions.servers()) {
+            servers.addObject().put("name", x.name().toLowerCase(Locale.ROOT)).put("running", x.isRunning()).put("status", x.status());
         }
         root.put("lowerTab", s.lowerTab().kind().name().toLowerCase(Locale.ROOT));
         try {

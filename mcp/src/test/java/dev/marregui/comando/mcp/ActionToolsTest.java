@@ -9,6 +9,7 @@ import dev.marregui.comando.core.model.ApprovalKind;
 import dev.marregui.comando.core.model.SessionSpec;
 import dev.marregui.comando.core.model.Status;
 import dev.marregui.comando.core.port.QueryPort;
+import dev.marregui.comando.core.port.ServerSwitch;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
@@ -107,17 +108,50 @@ class ActionToolsTest {
         assertThat(sink.of(Intent.ApprovalAnswered.class).get(1).decision()).isEqualTo(new ApprovalDecision.Allow(ApprovalDecision.Scope.SESSION));
     }
 
-    /// Rule 2: a destructive action such as `session_remove` is refused until `agents.json` grants it to the caller,
-    /// then runs for that caller only.
+    /// Rule 2: a destructive action such as `session_remove` on a session the caller did not create is refused until
+    /// `agents.json` grants it to the caller, then runs for that caller only.
     @Test
     void aDestructiveActionRunsOnlyForACallerTheUserGrantedItRule2() throws Exception {
-        McpTools.Outcome refused = call("foreman", "session_remove", "{\"session\":\"mine\"}");
+        McpTools.Outcome refused = call("foreman", "session_remove", "{\"session\":\"users\"}");
         assertThat(refused.error()).isTrue();
-        assertThat(refused.text()).contains("agents.json");
+        assertThat(refused.text()).contains("agents.json").contains("did not create");
         Files.writeString(home.resolve("agents.json"), "{\"grants\": {\"foreman\": [\"destructive\"]}}");
-        assertThat(call("foreman", "session_remove", "{\"session\":\"mine\"}").error()).isFalse();
-        assertThat(call("users", "session_remove", "{\"session\":\"mine\"}").error()).as("another caller").isTrue();
-        assertThat(sink.of(Intent.RemoveSession.class)).extracting(Intent.RemoveSession::name).containsExactly("mine");
+        assertThat(call("foreman", "session_remove", "{\"session\":\"users\"}").error()).isFalse();
+        assertThat(call("mine", "session_remove", "{\"session\":\"users\"}").error()).as("another caller").isTrue();
+        assertThat(sink.of(Intent.RemoveSession.class)).extracting(Intent.RemoveSession::name).containsExactly("users");
+    }
+
+    /// A session's creator, directly or through others, clears and removes it without a grant, so a caller cleans up
+    /// the sessions it made; a caller that made neither the session nor its makers is still refused.
+    @Test
+    void aCreatorClearsAndRemovesTheSessionsItMadeWithoutAGrant() throws Exception {
+        assertThat(call("foreman", "session_clear", "{\"session\":\"mine\"}").error()).isFalse();
+        assertThat(call("foreman", "session_remove", "{\"session\":\"grandchild\"}").error()).as("through mine").isFalse();
+        assertThat(call("mine", "session_remove", "{\"session\":\"foreman\"}").error()).as("not its maker").isTrue();
+        assertThat(call("users", "session_remove", "{\"session\":\"mine\"}").error()).as("unrelated").isTrue();
+        assertThat(call("foreman", "panel_remove", "{\"panel\":\"" + state.get().panels().getFirst().title() + "\"}").error())
+                .as("not a session: the grant alone").isTrue();
+        assertThat(sink.of(Intent.ClearTranscript.class)).extracting(Intent.ClearTranscript::name).containsExactly("mine");
+        assertThat(sink.of(Intent.RemoveSession.class)).extracting(Intent.RemoveSession::name).containsExactly("grandchild");
+    }
+
+    /// `server_start` and `server_stop` reach the server the caller names, in the direction it names, and the state
+    /// lists each server with whether it runs; an unknown server is answered with the ones there are.
+    @Test
+    void anAgentStartsAndStopsTheServersAndTheStateShowsThem() throws Exception {
+        FakeServer edge = new FakeServer("Edge", false);
+        FakeServer questDb = new FakeServer("QuestDB", true);
+        tools.servers(List.of(edge, questDb));
+        assertThat(call("foreman", "server_start", "{\"server\":\"edge\"}").text()).isEqualTo("Edge up");
+        McpTools.Outcome refused = call("foreman", "server_stop", "{\"server\":\"questdb\"}");
+        assertThat(refused.error()).as("a refusal is a tool error").isTrue();
+        assertThat(edge.asked).containsExactly(true);
+        assertThat(questDb.asked).containsExactly(false);
+        assertThat(call("foreman", "server_start", "{\"server\":\"kafka\"}").text()).contains("servers: [edge, questdb]");
+        JsonNode servers = json.readTree(tools.stateJson()).path("servers");
+        assertThat(servers.findValuesAsString("name")).containsExactly("edge", "questdb");
+        assertThat(servers.get(0).path("running").asBoolean()).isTrue();
+        assertThat(sink.of(Intent.Notify.class)).anyMatch(n -> n.text().startsWith("foreman: server start"));
     }
 
     /// `session_edit` saves the changes asked for, here the name and effort, under the previous name, and keeps the
@@ -166,6 +200,38 @@ class ActionToolsTest {
 
     private McpTools.Outcome call(String caller, String tool, String args) throws Exception {
         return tools.call(caller, tool, json.readTree(args));
+    }
+
+    /// A server that records the directions asked of it; a stop is refused, as for an Edge another instance started.
+    private static final class FakeServer implements ServerSwitch {
+        private final String name;
+        private volatile boolean running;
+        final List<Boolean> asked = new ArrayList<>();
+
+        FakeServer(String name, boolean running) {
+            this.name = name;
+            this.running = running;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public boolean isRunning() {
+            return running;
+        }
+
+        @Override
+        public String want(boolean up) {
+            asked.add(up);
+            if (!up) {
+                return "refused: started by another comando";
+            }
+            running = true;
+            return name + " up";
+        }
     }
 
     private static Approval card(long id, String session) {

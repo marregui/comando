@@ -272,7 +272,7 @@
   },
   {
     "name": "ui_get_state",
-    "description": "Returns comando's panels with their bindings and last SQL run, the connections, the sessions and the open views.",
+    "description": "Returns comando's panels with their bindings and last SQL run, the connections, the sessions, the open views and the local servers (Edge, QuestDB) with whether each runs.",
     "inputSchema": {
       "type": "object",
       "properties": {}

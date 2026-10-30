@@ -246,6 +246,32 @@ class EmbeddedEdgeTest {
         assertThat(ProcessHandle.of(started.pid()).filter(ProcessHandle::isAlive)).isEmpty();
     }
 
+    /// An agent names the direction (record 121): a start while `b`'s Edge runs, or a stop of it from the main instance,
+    /// changes nothing and says why; a stop with none running says so; `b`'s own stop and start go the way asked.
+    @Test
+    void anAgentsStartAndStopGoOnlyTheWayAsked() throws Exception {
+        RecordingSink sinkB = new RecordingSink();
+        EmbeddedEdge b = edge(dir.resolve("b/edge"), dir.resolve("b"), "b", sinkB, zip("hivemq-edge-1"));
+        RecordingSink sinkMain = new RecordingSink();
+        EmbeddedEdge main = edge(dir.resolve("main/edge"), dir.resolve("main"), "", sinkMain, zip("hivemq-edge-1"));
+
+        assertThat(b.want(false)).isEqualTo("the Edge is not running");
+        assertThat(b.want(true)).startsWith("starting the Edge");
+        await().atMost(WAIT).until(() -> !b.busy() && b.running());
+        Entry started = read();
+
+        assertThat(main.want(true)).isEqualTo("the Edge already runs, started by comando · b (" + dir.resolve("b") + ")");
+        assertThat(main.want(false)).startsWith("refused: the Edge was started by comando · b");
+        assertThat(b.want(true)).as("its own, running").isEqualTo("the Edge already runs");
+        assertThat(read()).isEqualTo(started);
+        assertThat(sinkMain.of(Intent.Notify.class)).as("answered, not toggled").isEmpty();
+
+        assertThat(b.want(false)).startsWith("stopping the Edge");
+        await().atMost(WAIT).until(() -> !b.busy());
+        assertThat(ProcessHandle.of(started.pid()).filter(ProcessHandle::isAlive)).isEmpty();
+        assertThat(b.running()).isFalse();
+    }
+
     /// A registry whose pid is dead names no running Edge and is replaced by the next start; one whose pid is alive but
     /// started at another time is another process on a reused pid: it is stale too, and that process is left running.
     @Test
