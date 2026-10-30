@@ -139,6 +139,34 @@ model's weekly window where the plan has one; rest the pointer on it for the res
 Codex's (session, week) when Codex is installed, then the queries and sessions working and the requests waiting for
 approval. Usage takes the warning colour at 75% of a window and the danger colour at 90%.
 
+### 1.6 Themes of your own
+
+The swatch at the tab row's right end lists six themes. To add one, put a JSON file in the `themes` folder of
+comando's data root (`~/.comando/themes/`; **Help ▸ Reveal comando folder** opens the root) and start comando again:
+
+```json
+{
+  "id": "ink_rose",
+  "label": "Ink and rose",
+  "mode": "dark",
+  "ground": {"label": "Ink", "color": "#14101A"},
+  "tint": {"label": "Rose", "highlight": "#FFE3EC", "body": "#F2A7C0", "shade": "#B5627F"}
+}
+```
+
+| Field | Means |
+|---|---|
+| `id` | lower case letters, digits and underscores; it names the theme's command (`theme.ink_rose`) and keeps your choice across restarts |
+| `label` | the name in the swatch's menu and the palette |
+| `mode` | `dark`, the only mode for now |
+| `ground` | the background of every panel; its `label` may be left out |
+| `tint` | the accent: a pale `highlight`, the `body` and a darker `shade`, as on polished metal; its `label` may be left out |
+
+*You should see* the theme after the six, with its swatch. comando reads the files only at start. A file that is not
+valid, repeats an id, or would make text hard to read (the tint's body below 7.5:1 on the ground, for one) is left
+out, and the status bar names the file and the reason. The six built-in themes are files of the same shape inside the
+app.
+
 ## 2. A database
 
 comando can run a QuestDB server for you, so you need nothing else installed.

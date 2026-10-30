@@ -21,6 +21,7 @@ import java.awt.Component;
 import java.awt.Container;
 import java.awt.Frame;
 import java.awt.Window;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
@@ -65,6 +66,43 @@ class ThemeFadeUiTest {
 
             pick(NamedTheme.MIDNIGHT_BLUE);
             assertThat(onEdt(ThemeFadeUiTest::fading)).as("the theme chosen already: no fade").isFalse();
+        } finally {
+            onEdt(() -> {
+                MenuSelectionManager.defaultManager().clearSelectedPath();
+                Theme.choose(Ground.GRAPHITE, Tint.TREASURE);
+                return null;
+            });
+            app.close();
+        }
+    }
+
+    /// A theme file in the data root's `themes` folder is offered after the six built in, by its label, and chosen
+    /// from the swatch it applies its own ground and tint and is kept by its id; a broken file beside it is left out
+    /// with a notice that names it.
+    @Test
+    void aThemeFileInTheDataRootIsOfferedAndChosen() throws Exception {
+        Path themes = Files.createDirectories(home.resolve("data").resolve("themes"));
+        Files.writeString(themes.resolve("ink_rose.json"), """
+                {"id": "ink_rose", "label": "Ink and rose", "mode": "dark", "ground": {"label": "Ink", "color": "#14101A"},
+                 "tint": {"label": "Rose", "highlight": "#FFE3EC", "body": "#F2A7C0", "shade": "#B5627F"}}
+                """);
+        Files.writeString(themes.resolve("broken.json"), "{\"id\": ");
+        App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+                "theme-file", () -> {
+        });
+        try {
+            app.start();
+            StateLoop loop = app.loop();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && frame() != null);
+            Awaitility.await("the notice for the broken file").atMost(WAIT).until(() -> loop.state().notices().stream()
+                    .anyMatch(n -> n.text().startsWith("Theme file left out: broken.json: not JSON")));
+            assertThat(NamedTheme.values()).extracting(t -> t.label).hasSize(7).last().isEqualTo("Ink and rose");
+
+            pick(NamedTheme.withId("ink_rose").orElseThrow());
+            assertThat(onEdt(() -> Theme.groundChosen().name() + "/" + Theme.tint().name())).isEqualTo("INK_ROSE/INK_ROSE");
+            assertThat(onEdt(() -> UIManager.getColor("Panel.background").getRGB())).isEqualTo(0xFF14101A);
+            Awaitility.await("kept by its id").atMost(WAIT).until(() -> Files.readString(home.resolve("data").resolve("settings.json"))
+                    .matches("(?s).*\"theme\\.id\"\\s*:\\s*\"ink_rose\".*"));
         } finally {
             onEdt(() -> {
                 MenuSelectionManager.defaultManager().clearSelectedPath();

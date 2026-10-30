@@ -9,32 +9,58 @@ import java.util.Arrays;
  * down a tooltip's edge, new files in the Files tab, the tab card's title and summary heading and About's accents.
  * Three steps each, as polished metal reads: a pale highlight, the body, a darker shade; large type and the report's
  * bar run from one to the next, small text takes the body alone. Each is light on the transcript's ground, its body
- * above 8:1 and its shade above 4.5:1 there. {@link Theme#tint()} is the one chosen (records 83, 96).
+ * above 8:1 and its shade above 4.5:1 there. {@link Theme#tint()} is the one chosen (records 83, 96). The six named
+ * here are the built-in themes' (record 126), read from their files; a theme file of the user's brings its own.
  */
-public enum Tint {
+public final class Tint {
 
-    TREASURE("Treasure gold", 0xFFEDAA, 0xE7C55A, 0x9E8230),
-    YELLOW("18k yellow gold", 0xF7E9BE, 0xDDC27C, 0xA08442),
-    CHAMPAGNE("Champagne gold", 0xF1E6CA, 0xD2BE90, 0x8F7C55),
-    SILVER("Silver", 0xF4F6F9, 0xC3CAD3, 0x7B8591),
-    TROPICAL_FOREST("Tropical forest", 0xCFF5DC, 0x62CC94, 0x339966),
-    ELECTRIC_BLUE("Electric blue", 0xD6ECFF, 0x63B5FF, 0x3A80E0);
+    public static final Tint TREASURE = builtIn("TREASURE", "graphite_gold");
+    public static final Tint YELLOW = builtIn("YELLOW", "aubergine_gold");
+    public static final Tint CHAMPAGNE = builtIn("CHAMPAGNE", "espresso_champagne");
+    public static final Tint SILVER = builtIn("SILVER", "slate_silver");
+    public static final Tint TROPICAL_FOREST = builtIn("TROPICAL_FOREST", "evergreen_forest");
+    public static final Tint ELECTRIC_BLUE = builtIn("ELECTRIC_BLUE", "midnight_blue");
+    private static final Tint[] BUILT_IN = {TREASURE, YELLOW, CHAMPAGNE, SILVER, TROPICAL_FOREST, ELECTRIC_BLUE};
 
     public final String label;
     public final Color highlight;
     public final Color body;
     public final Color shade;
+    private final String name;
 
-    Tint(String label, int highlight, int body, int shade) {
+    Tint(String name, String label, Color highlight, Color body, Color shade) {
+        this.name = name;
         this.label = label;
-        this.highlight = new Color(highlight);
-        this.body = new Color(body);
-        this.shade = new Color(shade);
+        this.highlight = highlight;
+        this.body = body;
+        this.shade = shade;
     }
 
-    /** The tint named {@code name}, as {@link #name()} gives it; {@link #TREASURE} for a name no tint has. */
+    private static Tint builtIn(String name, String theme) {
+        ThemeSpec s = BuiltInThemes.spec(theme);
+        return new Tint(name, s.tintLabel(), s.highlight(), s.body(), s.shade());
+    }
+
+    /** The tint's name, kept in the preferences: {@code TREASURE}, or a theme file's id in capitals. */
+    public String name() {
+        return name;
+    }
+
+    @Override
+    public String toString() {
+        return name;
+    }
+
+    /** The built-in tints, in their fixed order. */
+    public static Tint[] values() {
+        return BUILT_IN.clone();
+    }
+
+    /** The tint named {@code name}: a built-in one, else one of the themes offered; {@link #TREASURE} for no tint's. */
     public static Tint named(String name) {
-        return Arrays.stream(values()).filter(t -> t.name().equals(name)).findFirst().orElse(TREASURE);
+        return Arrays.stream(BUILT_IN).filter(t -> t.name.equals(name)).findFirst()
+                .or(() -> Arrays.stream(NamedTheme.values()).map(t -> t.tint).filter(t -> t.name.equals(name)).findFirst())
+                .orElse(TREASURE);
     }
 
     /** The ramp at {@code t}, 0 the highlight, 1 the shade: highlight to body in the first 45 %, then to the shade. */

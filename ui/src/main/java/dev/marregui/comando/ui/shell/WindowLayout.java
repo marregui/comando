@@ -166,16 +166,22 @@ final class WindowLayout {
     }
 
     /**
-     * The theme chosen (record 103), from the ground and tint it keeps: a pair that makes no theme maps to the closest
-     * one, and the older key {@code theme.gold} is read as the tint (record 96). Graphite and gold until one is chosen.
+     * The theme chosen, by the id it keeps (record 126), while a theme with that id is offered; else from the ground and
+     * tint it keeps (record 103): a pair that makes no theme maps to the closest one, and the older key
+     * {@code theme.gold} is read as the tint (record 96). Graphite and gold until one is chosen.
      */
     NamedTheme theme() {
-        Optional<Ground> ground = Optional.ofNullable(prefs.get("theme.ground", null)).map(Ground::named);
+        Optional<NamedTheme> kept = Optional.ofNullable(prefs.get("theme.id", null)).flatMap(NamedTheme::withId);
+        if (kept.isPresent()) {
+            return kept.get();
+        }
+        Optional<Ground> ground = Optional.ofNullable(prefs.get("theme.ground", null)).flatMap(Ground::find);
         Tint tint = Tint.named(prefs.get("theme.tint", prefs.get("theme.gold", Tint.TREASURE.name())));
         return NamedTheme.closest(ground, tint);
     }
 
     void theme(NamedTheme theme) {
+        prefs.put("theme.id", theme.id);
         prefs.put("theme.ground", theme.ground.name());
         prefs.put("theme.tint", theme.tint.name());
         prefs.remove("theme.gold");

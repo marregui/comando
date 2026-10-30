@@ -139,8 +139,8 @@ class ContentPaletteTest {
             assertThat(contrast(p.ansi(7), g.color)).as("white on " + g).isGreaterThan(8);
             assertThat(contrast(p.ansi(8), g.color)).as("bright black on " + g).isGreaterThan(3);
         }
-        assertThat(ContentPalette.of(Tint.SILVER, Ground.ONYX).ansi(1)).as("a tint leaves red red")
-                .isEqualTo(ContentPalette.of(Tint.TREASURE, Ground.ONYX).ansi(1));
+        assertThat(ContentPalette.of(Tint.SILVER, Ground.SLATE).ansi(1)).as("a tint leaves red red")
+                .isEqualTo(ContentPalette.of(Tint.TREASURE, Ground.SLATE).ansi(1));
     }
 
     /// Series 0 is the tint's body, the series repeat after their count, and each reads on graphite and stands apart.

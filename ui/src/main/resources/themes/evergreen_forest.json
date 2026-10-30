@@ -1,0 +1,15 @@
+{
+  "id": "evergreen_forest",
+  "label": "Evergreen and tropical forest",
+  "mode": "dark",
+  "ground": {
+    "label": "Evergreen",
+    "color": "#0C1511"
+  },
+  "tint": {
+    "label": "Tropical forest",
+    "highlight": "#CFF5DC",
+    "body": "#62CC94",
+    "shade": "#339966"
+  }
+}

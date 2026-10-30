@@ -29,7 +29,11 @@ public final class ContentPalette {
     private static final double HUELESS = 0.04;
     /** The categories' customary hues: annotation, number, string, regex, type, variable. */
     private static final double[] CUSTOM = {0, 60, 120, 180, 240, 300};
-    private static final Map<Long, ContentPalette> CACHE = new ConcurrentHashMap<>();
+    /** One palette per tint and ground, which compare by identity. */
+    private static final Map<Pair, ContentPalette> CACHE = new ConcurrentHashMap<>();
+
+    private record Pair(Tint tint, Ground ground) {
+    }
 
     // syntax
     public final Color ink;
@@ -140,7 +144,7 @@ public final class ContentPalette {
 
     /** The palette of {@code tint} on {@code ground}, made once per pair. */
     public static ContentPalette of(Tint tint, Ground ground) {
-        return CACHE.computeIfAbsent((long) tint.ordinal() << 32 | ground.ordinal(), k -> new ContentPalette(tint, ground));
+        return CACHE.computeIfAbsent(new Pair(tint, ground), k -> new ContentPalette(tint, ground));
     }
 
     /**

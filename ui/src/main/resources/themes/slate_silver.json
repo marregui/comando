@@ -1,0 +1,15 @@
+{
+  "id": "slate_silver",
+  "label": "Slate and silver",
+  "mode": "dark",
+  "ground": {
+    "label": "Slate",
+    "color": "#1B1D21"
+  },
+  "tint": {
+    "label": "Silver",
+    "highlight": "#F4F6F9",
+    "body": "#C3CAD3",
+    "shade": "#7B8591"
+  }
+}

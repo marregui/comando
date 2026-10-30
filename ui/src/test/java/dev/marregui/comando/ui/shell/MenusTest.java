@@ -76,7 +76,7 @@ class MenusTest {
                 .containsExactly(List.of("terminal.start", "terminal.stop"), List.of("run.plotStop"), List.of("edge.start", "edge.stop"));
         assertThat(Menus.toggles(true, true)).containsExactly("server.start", "server.stop", "edge.start", "edge.stop");
         assertThat(Menus.toggles(false, false)).isEmpty();
-        assertThat(Menus.AREAS).containsEntry("edge.start", "Connection").containsEntry("edge.stop", "Connection");
+        assertThat(Menus.areas()).containsEntry("edge.start", "Connection").containsEntry("edge.stop", "Connection");
     }
 
     /// Every placed id has an icon whose SVG is a resource and a non-blank tooltip of at most 80 characters, the bar's
@@ -92,21 +92,23 @@ class MenusTest {
         }
         assertThat(Menus.bar()).as("the bar's own titles are words, as macOS draws them").allMatch(m -> m.icon() == null);
         assertThat(Menus.TIPS.keySet()).as("no tooltip for an item or button that is gone").isEqualTo(new HashSet<>(placed));
+        // the window asks for the areas once the theme files are read, which paints the themes' swatches
+        Menus.areas();
         for (NamedTheme t : NamedTheme.values()) {
             assertThat(Icons.get(Menus.icon(t.commandId()))).as(t + "'s icon in the palette is its swatch").isInstanceOf(GroundIcon.class);
         }
     }
 
-    /// No id is placed twice, [Menus#AREAS] holds no menu item, every corner command has an area, and sample commands
+    /// No id is placed twice, [Menus#areas] holds no menu item, every corner command has an area, and sample commands
     /// map to their areas.
     @Test
     void aCommandIsInAMenuOrInAnAreaNeverBoth() {
         List<String> placed = ids(Menus.bar());
         assertThat(new HashSet<>(placed)).hasSameSizeAs(placed);
-        assertThat(Menus.AREAS.keySet()).doesNotContainAnyElementsOf(placed);
-        assertThat(Menus.AREAS).as("the corner's commands are in no menu: each has its area")
+        assertThat(Menus.areas().keySet()).doesNotContainAnyElementsOf(placed);
+        assertThat(Menus.areas()).as("the corner's commands are in no menu: each has its area")
                 .containsKeys(Menus.corner(true, true).stream().flatMap(List::stream).toArray(String[]::new));
-        assertThat(Menus.AREAS).containsEntry("run", "Run").containsEntry("session.model.opus", "Session ▸ Model")
+        assertThat(Menus.areas()).containsEntry("run", "Run").containsEntry("session.model.opus", "Session ▸ Model")
                 .containsEntry("panel.9", "Panels").containsEntry("theme.slate_silver", "Theme").containsEntry("view.results.alt", "Window").doesNotContainKey("view.lastPrompt");
     }
 

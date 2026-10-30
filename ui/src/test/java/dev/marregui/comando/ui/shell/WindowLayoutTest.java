@@ -1,6 +1,7 @@
 package dev.marregui.comando.ui.shell;
 
 import dev.marregui.comando.core.model.PanelId;
+import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.panels.SessionsSidebar;
 import org.junit.jupiter.api.Test;
 
@@ -63,5 +64,22 @@ class WindowLayoutTest {
         layout.panelDividers(Map.of(b, 410));
         assertThat(layout.panelDividers()).as("a panel gone takes its divider with it").containsExactlyEntriesOf(Map.of(b, 410));
         assertThat(prefs.values()).as("the window's own divider is another key").doesNotContainKey("divider.lower.panel.a");
+    }
+
+    /// A theme chosen is kept by its id, read back before the ground and tint; an id no theme offered has, as a theme
+    /// file removed since, falls back to the ground and tint kept, and an old ground no theme has to the tint's theme.
+    @Test
+    void aThemeIsKeptByItsIdAndFallsBackToItsGroundAndTint() {
+        WindowLayout layout = new WindowLayout(prefs);
+        layout.theme(NamedTheme.SLATE_SILVER);
+        assertThat(prefs.get("theme.id", null)).isEqualTo("slate_silver");
+        assertThat(layout.theme()).isEqualTo(NamedTheme.SLATE_SILVER);
+        prefs.put("theme.id", "removed_since");
+        prefs.put("theme.ground", "MIDNIGHT");
+        prefs.put("theme.tint", "ELECTRIC_BLUE");
+        assertThat(layout.theme()).as("an id no theme has").isEqualTo(NamedTheme.MIDNIGHT_BLUE);
+        prefs.put("theme.ground", "ONYX");
+        prefs.put("theme.tint", "SILVER");
+        assertThat(layout.theme()).as("a ground no theme has, then the tint").isEqualTo(NamedTheme.SLATE_SILVER);
     }
 }

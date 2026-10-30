@@ -1,40 +1,91 @@
 package dev.marregui.comando.ui.kit.theme;
 
-import java.util.Arrays;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
 /**
- * A curated theme (record 103): a ground and the tint that sits on it, chosen together in Actions ▸ Theme or from the
- * swatch beside New panel. The ground and the tint are not chosen apart.
+ * A curated theme (record 103): a ground and the tint that sits on it, chosen together from the swatch beside New
+ * panel or the palette. The ground and the tint are not chosen apart. Each is a JSON file (record 126): the six built
+ * in, then those read from the data root's {@code themes} folder at start, which {@link #offer} adds after them.
  */
-public enum NamedTheme {
+public final class NamedTheme {
 
-    GRAPHITE_GOLD("Graphite and gold", Ground.GRAPHITE, Tint.TREASURE),
-    ESPRESSO_CHAMPAGNE("Espresso and champagne", Ground.ESPRESSO, Tint.CHAMPAGNE),
-    AUBERGINE_GOLD("Aubergine and yellow gold", Ground.AUBERGINE, Tint.YELLOW),
-    MIDNIGHT_BLUE("Midnight and electric blue", Ground.MIDNIGHT, Tint.ELECTRIC_BLUE),
-    EVERGREEN_FOREST("Evergreen and tropical forest", Ground.EVERGREEN, Tint.TROPICAL_FOREST),
-    SLATE_SILVER("Slate and silver", Ground.SLATE, Tint.SILVER);
+    public static final NamedTheme GRAPHITE_GOLD = builtIn("graphite_gold", Ground.GRAPHITE, Tint.TREASURE);
+    public static final NamedTheme ESPRESSO_CHAMPAGNE = builtIn("espresso_champagne", Ground.ESPRESSO, Tint.CHAMPAGNE);
+    public static final NamedTheme AUBERGINE_GOLD = builtIn("aubergine_gold", Ground.AUBERGINE, Tint.YELLOW);
+    public static final NamedTheme MIDNIGHT_BLUE = builtIn("midnight_blue", Ground.MIDNIGHT, Tint.ELECTRIC_BLUE);
+    public static final NamedTheme EVERGREEN_FOREST = builtIn("evergreen_forest", Ground.EVERGREEN, Tint.TROPICAL_FOREST);
+    public static final NamedTheme SLATE_SILVER = builtIn("slate_silver", Ground.SLATE, Tint.SILVER);
+    private static final List<NamedTheme> BUILT_IN = List.of(GRAPHITE_GOLD, ESPRESSO_CHAMPAGNE, AUBERGINE_GOLD, MIDNIGHT_BLUE,
+            EVERGREEN_FOREST, SLATE_SILVER);
+    /** The themes offered: the built-in ones, then the user's files read at start. */
+    private static volatile List<NamedTheme> offered = BUILT_IN;
 
+    /** The theme's id, as its file gives it: {@code graphite_gold}. */
+    public final String id;
     public final String label;
     public final Ground ground;
     public final Tint tint;
+    /** The user's file it was read from; empty for a built-in theme. */
+    public final Optional<Path> file;
 
-    NamedTheme(String label, Ground ground, Tint tint) {
+    private NamedTheme(String id, String label, Ground ground, Tint tint, Optional<Path> file) {
+        this.id = id;
         this.label = label;
         this.ground = ground;
         this.tint = tint;
+        this.file = file;
+    }
+
+    private static NamedTheme builtIn(String id, Ground ground, Tint tint) {
+        return new NamedTheme(id, BuiltInThemes.spec(id).label(), ground, tint, Optional.empty());
+    }
+
+    /** The theme {@code spec} describes, read from {@code file}, with a ground and a tint of its own. */
+    static NamedTheme fromFile(ThemeSpec spec, Path file) {
+        String name = spec.id().toUpperCase(Locale.ROOT);
+        return new NamedTheme(spec.id(), spec.label(), new Ground(name, spec.groundLabel(), spec.ground()),
+                new Tint(name, spec.tintLabel(), spec.highlight(), spec.body(), spec.shade()), Optional.of(file));
     }
 
     /** The command that chooses this theme: {@code theme.graphite_gold}. */
     public String commandId() {
-        return "theme." + name().toLowerCase(Locale.ROOT);
+        return "theme." + id;
+    }
+
+    @Override
+    public String toString() {
+        return id;
+    }
+
+    /** The themes offered, the built-in ones first, in the swatch's order. */
+    public static NamedTheme[] values() {
+        return offered.toArray(NamedTheme[]::new);
+    }
+
+    /** The six built-in themes, in the swatch's order. */
+    public static List<NamedTheme> builtIn() {
+        return BUILT_IN;
+    }
+
+    /** Offers {@code fromFiles} after the built-in themes, in place of any offered before. At start, before the window. */
+    public static void offer(List<NamedTheme> fromFiles) {
+        List<NamedTheme> all = new ArrayList<>(BUILT_IN);
+        all.addAll(fromFiles);
+        offered = List.copyOf(all);
+    }
+
+    /** The theme offered with id {@code id}, if one is. */
+    public static Optional<NamedTheme> withId(String id) {
+        return offered.stream().filter(t -> t.id.equals(id)).findFirst();
     }
 
     /** The curated theme of {@code ground} and {@code tint}, if they make one. */
     public static Optional<NamedTheme> of(Ground ground, Tint tint) {
-        return Arrays.stream(values()).filter(t -> t.ground == ground && t.tint == tint).findFirst();
+        return offered.stream().filter(t -> t.ground == ground && t.tint == tint).findFirst();
     }
 
     /**
@@ -46,8 +97,8 @@ public enum NamedTheme {
         if (pair.isPresent()) {
             return pair.get();
         }
-        return ground.flatMap(g -> Arrays.stream(values()).filter(t -> t.ground == g).findFirst())
-                .or(() -> Arrays.stream(values()).filter(t -> t.tint == tint).findFirst())
+        return ground.flatMap(g -> offered.stream().filter(t -> t.ground == g).findFirst())
+                .or(() -> offered.stream().filter(t -> t.tint == tint).findFirst())
                 .orElse(GRAPHITE_GOLD);
     }
 

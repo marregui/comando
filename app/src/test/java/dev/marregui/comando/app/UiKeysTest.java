@@ -673,7 +673,7 @@ class UiKeysTest {
                 return editor.getFont();
             });
 
-            JRadioButtonMenuItem midnight = items.get(NamedTheme.MIDNIGHT_BLUE.ordinal());
+            JRadioButtonMenuItem midnight = items.get(NamedTheme.builtIn().indexOf(NamedTheme.MIDNIGHT_BLUE));
             onEdt(() -> {
                 midnight.doClick();
                 return null;

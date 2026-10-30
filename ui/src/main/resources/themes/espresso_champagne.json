@@ -1,0 +1,15 @@
+{
+  "id": "espresso_champagne",
+  "label": "Espresso and champagne",
+  "mode": "dark",
+  "ground": {
+    "label": "Espresso",
+    "color": "#16120E"
+  },
+  "tint": {
+    "label": "Champagne gold",
+    "highlight": "#F1E6CA",
+    "body": "#D2BE90",
+    "shade": "#8F7C55"
+  }
+}

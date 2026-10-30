@@ -1,0 +1,15 @@
+{
+  "id": "graphite_gold",
+  "label": "Graphite and gold",
+  "mode": "dark",
+  "ground": {
+    "label": "Graphite",
+    "color": "#121212"
+  },
+  "tint": {
+    "label": "Treasure gold",
+    "highlight": "#FFEDAA",
+    "body": "#E7C55A",
+    "shade": "#9E8230"
+  }
+}

@@ -49,6 +49,7 @@ import dev.marregui.comando.ui.kit.format.Labels;
 import dev.marregui.comando.ui.kit.resource.ResourceActions;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
+import dev.marregui.comando.ui.kit.theme.ThemeFiles;
 import dev.marregui.comando.ui.kit.vcs.OpenedFiles;
 import dev.marregui.comando.ui.kit.vcs.RepoChanges;
 import dev.marregui.comando.ui.panels.EditorPanel;
@@ -188,9 +189,17 @@ public final class ComandoUi implements UiPort, AutoCloseable {
     private boolean tornDown;
     private final Consumer<String> schemaListener = connection -> render.request();
     private final StateLoop.Listener stateListener = (previous, next) -> render.request();
+    /** The folder of the data root that holds the user's theme files. */
+    static final String THEMES_FOLDER = "themes";
+    /** The theme files left out at start, one line each, told in a notice once the window is built. */
+    private final List<String> themeProblems;
 
     public ComandoUi(Dependencies deps) {
         this.deps = deps;
+        // the user's themes, read once before anything names a theme: the commands, the swatch, the theme kept (record 126)
+        ThemeFiles.Read themes = ThemeFiles.read(deps.home() == null ? null : deps.home().resolve(THEMES_FOLDER));
+        NamedTheme.offer(themes.themes());
+        this.themeProblems = themes.problems();
         this.windowLayout = new WindowLayout(deps.home() == null ? Settings.inMemory() : Settings.open(deps.home().resolve("settings.json"),
                 Preferences.userRoot().node(System.getProperty("comando.prefsNode", "dev/marregui/comando"))));
         this.openedFiles = deps.home() == null ? OpenedFiles.inMemory() : OpenedFiles.load(deps.home().resolve("opened-files"));
@@ -237,6 +246,9 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     private void build() {
         Theme.install();
+        for (String problem : themeProblems) {
+            deps.intents().dispatch(new Intent.Notify(Notice.Level.WARN, "Theme file left out: " + problem, false));
+        }
         WidgetContext ctx = new WidgetContext(deps.intents(), actions);
         widgets.register("table", ViewSpec.Table.class, c -> new TableViewWidget());
         widgets.register("plot", ViewSpec.Plot.class, c -> new PlotWidget());
@@ -412,11 +424,13 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 (s, name) -> new Intent.OpenSession(name, s.focused(), PanelId.random())), deps.intents());
         importDialog = new ImportSessionsDialog(frame, deps.intents(), deps.catalogue());
 
+        // the areas paint the themes' swatches, which the commands and the menus show
+        Map<String, String> areas = Menus.areas();
         new Commands(this, deps, actions, parts, focus, layout, files, quitFlow, windowLayout).register(shortcut, lowerTabKey, help, kit, jobs);
         frame.setJMenuBar(menus.menuBar());
         workspace.corner(menus.cornerButtons());
         actions.bind(frame.getRootPane());
-        actions.areas(Menus.AREAS);
+        actions.areas(areas);
         keyPriority = KeyPriority.install(actions, frame, TerminalWidget::keepsKey);
         KeyboardFocusManager.getCurrentKeyboardFocusManager().addPropertyChangeListener("permanentFocusOwner", focusListener);
         layout.watchKeys();

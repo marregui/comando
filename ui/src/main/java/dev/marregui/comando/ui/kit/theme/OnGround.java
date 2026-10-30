@@ -12,8 +12,11 @@ final class OnGround extends Color {
 
     private final transient Color over;
     private final float amount;
-    /** The ground's ordinal in the high half, the value in the low, or −1 before the first read. */
-    private volatile long cached = -1;
+    /** The ground the value was worked out on and the value, or null before the first read; read and written as one. */
+    private transient volatile Worked worked;
+
+    private record Worked(Ground ground, int rgb) {
+    }
 
     OnGround(Color over, float amount) {
         super(Tint.over(Ground.GRAPHITE.color, over, amount).getRGB());
@@ -24,12 +27,12 @@ final class OnGround extends Color {
     @Override
     public int getRGB() {
         Ground g = Theme.groundChosen();
-        long c = cached;
-        if (c != -1 && (int) (c >>> 32) == g.ordinal()) {
-            return (int) c;
+        Worked w = worked;
+        if (w != null && w.ground() == g) {
+            return w.rgb();
         }
         int rgb = Tint.over(g.color, over, amount).getRGB();
-        cached = (long) g.ordinal() << 32 | (rgb & 0xFFFFFFFFL);
+        worked = new Worked(g, rgb);
         return rgb;
     }
 

@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.kit.theme;
 
 import org.junit.jupiter.api.Test;
 
+import java.awt.Color;
 import java.util.Arrays;
 import java.util.Optional;
 
@@ -47,7 +48,8 @@ class NamedThemeTest {
         assertThat(NamedTheme.closest(Optional.of(Ground.EVERGREEN), Tint.SILVER)).as("the ground chosen wins")
                 .isEqualTo(NamedTheme.EVERGREEN_FOREST);
         assertThat(NamedTheme.closest(Optional.empty(), Tint.CHAMPAGNE)).as("a tint alone").isEqualTo(NamedTheme.ESPRESSO_CHAMPAGNE);
-        assertThat(NamedTheme.closest(Optional.of(Ground.ONYX), Tint.SILVER)).as("a ground no theme has, then the tint")
+        Ground onyx = new Ground("ONYX", "Onyx", new Color(0x0A0A0B));
+        assertThat(NamedTheme.closest(Optional.of(onyx), Tint.SILVER)).as("a ground no theme has, then the tint")
                 .isEqualTo(NamedTheme.SLATE_SILVER);
         assertThat(NamedTheme.closest(Optional.empty(), Tint.TREASURE)).isEqualTo(NamedTheme.GRAPHITE_GOLD);
     }

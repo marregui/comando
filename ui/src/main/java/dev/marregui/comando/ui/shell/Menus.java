@@ -96,14 +96,16 @@ final class Menus {
             Map.entry("help.questDbLog", "QuestDB's log of the day, in this instance's data root"),
             Map.entry("help.dataRoot", "Show comando's data root: panels, sessions, settings, logs"));
 
-    /** Where each command in no menu belongs, named in the palette and the keyboard shortcuts. */
-    static final Map<String, String> AREAS = areas();
-
-    static {
+    /**
+     * Where each command in no menu belongs, named in the palette and the keyboard shortcuts; the themes are those
+     * offered when it is asked, so it is asked once the theme files are read (record 126).
+     */
+    static Map<String, String> areas() {
         // the themes' swatches, painted, named as their commands are
         for (NamedTheme t : NamedTheme.values()) {
             Icons.put(t.commandId(), new GroundIcon(t));
         }
+        return areasOf();
     }
 
     private Menus() {
@@ -118,7 +120,8 @@ final class Menus {
     static String tip(String id) {
         for (NamedTheme t : NamedTheme.values()) {
             if (t.commandId().equals(id)) {
-                return t.ground.label + " with " + t.tint.label.toLowerCase(Locale.ROOT) + "; kept across restarts";
+                return t.file.map(f -> t.label + ", from " + f.getFileName() + "; kept across restarts")
+                        .orElse(t.ground.label + " with " + t.tint.label.toLowerCase(Locale.ROOT) + "; kept across restarts");
             }
         }
         return KeyText.of(TIPS.get(id));
@@ -158,7 +161,7 @@ final class Menus {
         return List.copyOf(ids);
     }
 
-    private static Map<String, String> areas() {
+    private static Map<String, String> areasOf() {
         Map<String, String> a = new HashMap<>();
         put(a, "Panels", "panel.new", "panel.reopen", "panel.openSpec", "panel.save", "panel.rename", "file.close", "panel.next", "panel.previous",
                 "panel.preview", "focus.editor");

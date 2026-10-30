@@ -1,0 +1,15 @@
+{
+  "id": "midnight_blue",
+  "label": "Midnight and electric blue",
+  "mode": "dark",
+  "ground": {
+    "label": "Midnight ink",
+    "color": "#0D1220"
+  },
+  "tint": {
+    "label": "Electric blue",
+    "highlight": "#D6ECFF",
+    "body": "#63B5FF",
+    "shade": "#3A80E0"
+  }
+}

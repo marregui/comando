@@ -1,0 +1,15 @@
+{
+  "id": "aubergine_gold",
+  "label": "Aubergine and yellow gold",
+  "mode": "dark",
+  "ground": {
+    "label": "Aubergine",
+    "color": "#150F19"
+  },
+  "tint": {
+    "label": "18k yellow gold",
+    "highlight": "#F7E9BE",
+    "body": "#DDC27C",
+    "shade": "#A08442"
+  }
+}
