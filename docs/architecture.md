@@ -413,27 +413,40 @@ Where new code goes:
 
 ## 9. Code rules
 
-1. A change to state is an intent; the reducer is the only writer of `AppState`.
-2. A thread is of one of the six kinds of §6 and comes from `Threads`, an owner's `Errands` or `Watchdog`; a new
-   platform thread needs a new kind. Every thread a part starts ends when the part closes. Repeated work goes to a
-   part's strand, at most one ask waiting per key, never to a thread of its own per occurrence.
-3. Every wait has a bound and an action on expiry.
-4. Nothing in `ui` imports an adapter module; no widget imports another widget.
-5. Nothing blocks the EDT: process runs, network, reads of unknown size and keychain calls go to other threads; Swing
-   only on the EDT.
-6. Text from Claude, a database or a file reaches Swing as text, never as HTML (`Plain`, `MarkdownHtml`).
-7. Tests never touch the user's data root, keychain or Java preferences unless a flag says so.
-8. Code and comments name no tool, agent or review finding.
-9. Compiler warnings are errors (`-Xlint:all -Werror`, except `serial`, `processing`, `this-escape`).
-10. Types are imported, never fully qualified, except to tell apart two types with one simple name. Imports: project,
-    `javax`, `java`, each sorted; no wildcards.
-11. Logging is `System.Logger`; messages read `verb phrase [key=value]`; a failure logs its exception, a handled
-    condition its message.
+comando follows the [Java Coding Standard v2.0.0](https://github.com/marregui/java-standard/blob/v2.0.0/STANDARD.md),
+on JDK 25 (`release = 25`). Its rules live there and are cited by ID (`G-<section>.<n>`); this section holds comando's
+own rules, keeps the numbers other documents cite, and is comando's Apply section (§12 of the standard), its parts in
+the table below.
 
-Hot paths: results are stored by column in primitive chunks, grid cells are formatted into one reused buffer, plots are
-reduced to min and max per pixel column, transcript layouts are kept and only the clip is painted, and the stores
-publish with release-acquire ordering. Object pools, ring queues, padding and worker pools are not used: comando's event
-rates are UI rates.
+1. A change to state is an intent; the reducer is the only writer of `AppState`.
+2. Threads follow G-7.10. A thread is of one of the six kinds of §6 and comes from `Threads`, an owner's `Errands` or
+   `Watchdog`; a new platform thread needs a new kind.
+3. Waits follow G-7.6, and every wait has an action on expiry.
+4. Nothing in `ui` imports an adapter module; no widget imports another widget.
+5. The EDT owns latency (G-7.11); Swing only on the EDT.
+6. Text from Claude, a database or a file reaches Swing as text, never as HTML (`Plain`, `MarkdownHtml`).
+7. Tests follow G-11.8: the user's data root, keychain and Java preferences.
+8. G-10.9.
+9. G-10.10; the excluded categories are `serial`, `processing` and `this-escape`.
+10. G-10.11; static imports last.
+11. G-6.5.
+
+| Part | comando |
+|---|---|
+| 1. Version | v2.0.0, JDK 25. No `AGENTS.md` or `CLAUDE.md` in the repository yet to point an agent here (§12) |
+| 2. Hot paths | Results stored by column in primitive chunks, grid cells formatted into one reused buffer, plots reduced to min and max per pixel column, transcript layouts kept and only the clip painted, the stores publishing with release-acquire ordering. G-1 to G-3 and G-10.7 apply there only. The measurement behind each is not recorded yet |
+| 3. Applied and enforced | G-10.10 (`-Xlint:all -Werror`; doclint not yet); G-7.10 (`ThreadBudgetTest`); G-7.11 (`EdtWatchdog`, the `StateLoop` watchdog); G-11.7 (every test documented with `///`, checked outside the build); G-10.5 (test methods named for the behaviour they prove); G-10.11, static imports last |
+| 4. Departures kept on purpose | None |
+| 5. Not applied | Does not fit: G-7.1 to G-7.5 (no object pools, ring queues, padding or worker pools: comando's event rates are UI rates). Not applied yet, not waived (findings are still reported; the plan is to fix defect-class rules first, the rest on changed lines): G-10.2 (`final` on declarations never reassigned); G-10.11 group order (434 of 540 files with imports, no Checkstyle in the build); G-10.10 doclint and a reason beside each excluded category; G-10.12 (thresholds without their measurement); G-10.8 line limit (1,405 main lines over 120). Defect-class rules from the v2.0.0 audit of 2026-10-30: G-1.7 (`ColumnarResult` growth), G-4.3 (an `Error` from one close stops the rest in `App`'s close loop), G-7.12 (`Peers`), G-13.6, G-13.7, G-14.9, G-15.2 and G-15.12 (Edge MQTT reconnect: no jitter, no attempt limit), G-15.4, G-15.6 (unbounded intent and strand queues), G-15.7 (registry removal), G-15.9 (stored and peer formats without a version), G-16.13. Rule-class: G-7.13, G-7.14, G-13.5, G-14.6, G-14.7, G-14.10, G-14.11, G-14.13, G-16.3, G-16.4, G-16.5, G-16.10 |
+| 6. Project packages | `^dev\.marregui\.comando\.` |
+| 7. Preview features | None |
+| 8. Doc comments in main code | `/** */` |
+| 9. Nullability annotations | None (`org.jetbrains:annotations` is declared `compileOnly` and not used) |
+| 10. Licence header | None; G-10.8's header clause is not checked |
+| 11. Logging | `System.Logger` (G-6.5), JUL behind it; no hot-path logger |
+| 12. Test framework | JUnit Jupiter 6.1.3 (`@Test`, `@TempDir`), AssertJ |
+| 13. Entry points, configuration, latency budgets | The `core.port` interfaces; configuration as records, no interface; budgets: the EDT and one intent 200 ms (§6), transcript frame p99 16 ms (§10) |
+| 14. Line limit | 120 characters (the default) |
 
 ## 10. Quality
 
