@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-27 | accepted; the swatch's place replaced by [record 104](0104-the-theme-beside-new-panel.md); its themes moved out of Actions by [record 114](0114-help-menu-and-corner-buttons.md) | Miguel and Claude |
+| 2026-10-27 | accepted; the swatch's place replaced by [record 104](0104-the-theme-beside-new-panel.md); its themes moved out of Actions by [record 114](0114-help-menu-and-corner-buttons.md); amended 2026-10-30 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -36,3 +36,13 @@ transcript and an editor take it, the editor keeping its zoom; no Tint or Ground
 opens in Espresso and champagne); `SpinnerIconTest` (the head in each theme's tint, no bar in the old blue;
 mutation-checked with the old shades put back) and its hourglass check. Sheets: `app/build/snapshots/themes.png` and
 `02f2-themes.png` of `:app:snapshot`, the whole window in each theme.
+
+## Amendments
+
+2026-10-30: a theme chosen is applied in one pass and fades in. Before, the ground and then the tint each set the look
+and feel up again and ran every tint listener, so the window was rebuilt twice and could show the new ground in the old
+tint; and the change was instant, which left the eye adapted to the old ground's hue. Now `Theme.choose` sets both and
+rebuilds once, and `LayoutKeeper.fadeTo` lays a picture of the windows as they were over them and fades it out over
+500 ms (FlatLaf's `FlatAnimatedLafChange`, 160 ms by default); the theme chosen already is applied without a fade, and
+the theme restored at start is not faded. Miguel asked ("a hue or a cloud in the user's eyesight when the transition is
+done"); tested in `ThemeChoiceTest` and `ThemeFadeUiTest`.

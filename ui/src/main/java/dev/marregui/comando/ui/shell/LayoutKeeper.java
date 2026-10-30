@@ -1,5 +1,6 @@
 package dev.marregui.comando.ui.shell;
 
+import com.formdev.flatlaf.extras.FlatAnimatedLafChange;
 import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.state.AppState;
@@ -10,7 +11,6 @@ import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.ui.kit.async.Edt;
 import dev.marregui.comando.ui.kit.theme.NamedTheme;
 import dev.marregui.comando.ui.kit.theme.Theme;
-import dev.marregui.comando.ui.kit.theme.Tint;
 
 import javax.swing.BorderFactory;
 import javax.swing.JPanel;
@@ -148,13 +148,45 @@ final class LayoutKeeper {
     }
 
     /**
-     * Every window in {@code tint} now: what listens to the tint (the transcript, the tab card, rendered Markdown) lays
-     * itself out or recolours in it, and the rest (icons, the Files tab, About) read it as they repaint.
+     * How long a theme chosen fades in over the one before: the eye follows the change of ground rather than meeting
+     * it at once, and the fade ends before the next action.
      */
-    static void paintIn(Tint tint) {
-        Theme.tint(tint);
+    static final int THEME_FADE_MILLIS = 500;
+
+    /**
+     * Every window in {@code theme} now, its ground and tint applied in one pass: what listens to the tint (the
+     * transcript, the tab card, rendered Markdown) lays itself out or recolours in it, and the rest (icons, the Files
+     * tab, About) read it as they repaint.
+     */
+    static void paintIn(NamedTheme theme) {
+        Theme.choose(theme.ground, theme.tint);
         for (Window w : Window.getWindows()) {
             w.repaint();
+        }
+    }
+
+    /**
+     * Every window in {@code theme}, faded in over what they showed for {@link #THEME_FADE_MILLIS}: a picture of each
+     * shown window is taken, the theme applied and {@code recolour} run, the windows laid out again and pictured, and
+     * the old picture fades over the new. All in one event, so no frame shows the new theme before the fade starts.
+     * The theme chosen already is applied without a fade. EDT only.
+     */
+    static void fadeTo(NamedTheme theme, Runnable recolour) {
+        boolean change = Theme.groundChosen() != theme.ground || Theme.tint() != theme.tint;
+        if (change) {
+            FlatAnimatedLafChange.duration = THEME_FADE_MILLIS;
+            FlatAnimatedLafChange.showSnapshot();
+        }
+        paintIn(theme);
+        recolour.run();
+        if (change) {
+            // the new picture is painted at once, so the layout the theme changed must be done first
+            for (Window w : Window.getWindows()) {
+                if (w.isShowing()) {
+                    w.validate();
+                }
+            }
+            FlatAnimatedLafChange.hideSnapshotWithAnimation();
         }
     }
 
@@ -373,8 +405,7 @@ final class LayoutKeeper {
         parts.sidebar().selectTab(windowLayout.sidebarTab());
         parts.sidebar().manualOrder(windowLayout.manualOrder());
         NamedTheme theme = windowLayout.theme();
-        Theme.ground(theme.ground);
-        paintIn(theme.tint);
+        paintIn(theme);
         parts.workspace().linear(windowLayout.linearSite(), windowLayout::linearSite);
         showSidebar(windowLayout.sidebarShown());
         vertical.setDividerLocation(windowLayout.lowerDivider(h));

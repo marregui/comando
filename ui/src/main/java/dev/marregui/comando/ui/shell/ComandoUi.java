@@ -707,14 +707,12 @@ public final class ComandoUi implements UiPort, AutoCloseable {
 
     /**
      * A theme was chosen, from the swatch beside New panel or the palette: kept, and every window takes its ground and
-     * its tint at once (record 103).
+     * its tint in one pass, faded in over the theme before (record 103).
      */
     void themeChosen(NamedTheme theme) {
         windowLayout.theme(theme);
-        Theme.ground(theme.ground);
-        LayoutKeeper.paintIn(theme.tint);
         // the colours set from the state (the Approvals tab's title, the status bar's approvals) are set again
-        render();
+        LayoutKeeper.fadeTo(theme, this::render);
     }
 
     /** The Files tab's folders in their window; saving replaces them. */

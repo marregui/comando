@@ -242,7 +242,27 @@ public final class Theme {
             return;
         }
         ground = chosen;
+        applyChoice();
+    }
+
+    /**
+     * Chooses the ground and the tint together, as a theme does (record 103): the look and feel is set up again once on
+     * both and everything listening ({@link #onTint}) runs once, so no window shows the new ground in the old tint
+     * between two passes. EDT only.
+     */
+    public static void choose(Ground g, Tint t) {
+        if (ground == g && tint == t) {
+            return;
+        }
+        ground = g;
+        tint = t;
+        applyChoice();
+    }
+
+    /** The ground and tint chosen, applied: the look and feel set up again on them, then the tint's listeners. */
+    private static void applyChoice() {
         if (UIManager.getLookAndFeel() instanceof FlatLaf) {
+            // the look and feel's own focus marks take the tint only from its defaults
             setUpLook();
             FlatLaf.updateUI();
         }
@@ -338,14 +358,7 @@ public final class Theme {
             return;
         }
         tint = chosen;
-        if (UIManager.getLookAndFeel() instanceof FlatLaf) {
-            // the look and feel's own focus marks take the tint only from its defaults
-            setUpLook();
-            FlatLaf.updateUI();
-        }
-        for (Runnable r : TINT_LISTENERS) {
-            r.run();
-        }
+        applyChoice();
     }
 
     /** Runs {@code listener} on the EDT each time another tint, or another ground, is chosen; returns what stops it. */

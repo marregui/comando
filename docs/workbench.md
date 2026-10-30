@@ -148,6 +148,7 @@ Any number of document panels may be attached to a session
 - **The theme's swatch**, the theme's ground with a bar of its tint, sits at the top right, left of New panel; its
   tooltip names the theme, and a click opens the six; the palette has them too
   ([record 104](adr/0104-the-theme-beside-new-panel.md), [record 114](adr/0114-help-menu-and-corner-buttons.md)).
+  A theme chosen applies its ground and tint in one pass and fades in over the one before for half a second.
 - **The corner's buttons**, left of the swatch: start or stop the focused panel's shell, stop refreshing plots,
   start or stop the embedded QuestDB, and start or stop the comando Edge ([§3.5](#35-the-comando-edge)); each shows what
   it would do now and is disabled when it cannot run ([record 114](adr/0114-help-menu-and-corner-buttons.md)).

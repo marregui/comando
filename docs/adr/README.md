@@ -123,7 +123,7 @@ row and its record differ, or when a record has no row.
 | [100](0100-a-theme-is-four-tiers-of-tokens.md) | A theme is four tiers of tokens; blue is a link; the tint is "where I am" | 2026-10-27 | Miguel and Claude | accepted |
 | [101](0101-content-colours-derived-from-the-theme.md) | The content's colours are derived from the tint and the ground | 2026-10-27 | Miguel and Claude | accepted |
 | [102](0102-one-type-scale-and-a-grid.md) | One type scale and a 4-point grid | 2026-10-27 | Miguel and Claude | accepted |
-| [103](0103-curated-themes-in-actions.md) | Curated themes in Actions ▸ Theme; surfaces follow the ground | 2026-10-27 | Miguel and Claude | accepted; the swatch's place replaced by [record 104](0104-the-theme-beside-new-panel.md); its themes moved out of Actions by [record 114](0114-help-menu-and-corner-buttons.md) |
+| [103](0103-curated-themes-in-actions.md) | Curated themes in Actions ▸ Theme; surfaces follow the ground | 2026-10-27 | Miguel and Claude | accepted; the swatch's place replaced by [record 104](0104-the-theme-beside-new-panel.md); its themes moved out of Actions by [record 114](0114-help-menu-and-corner-buttons.md); amended 2026-10-30 (see Amendments) |
 | [104](0104-the-theme-beside-new-panel.md) | The theme beside New panel; Clear from the palette | 2026-10-27 | Miguel and Claude | accepted; Actions ▸ Theme removed by [record 114](0114-help-menu-and-corner-buttons.md) |
 | [105](0105-a-session-bar-under-the-lower-panel.md) | A session bar under the lower panel; the window's status bar holds the window's status | 2026-10-28 | Miguel and Claude | accepted |
 | [106](0106-settings-in-the-data-root.md) | comando's settings in the data root, as settings.json | 2026-10-28 | Miguel and Claude | accepted |
