@@ -11,6 +11,7 @@ import dev.marregui.comando.core.state.InstancesState.Instance;
 import dev.marregui.comando.core.state.InstancesState.Member;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.async.Debouncer;
 import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.theme.FocusRing;
 import dev.marregui.comando.ui.kit.theme.SidebarLook;
@@ -34,7 +35,6 @@ import javax.swing.JTextArea;
 import javax.swing.JTree;
 import javax.swing.SwingUtilities;
 import javax.swing.Timer;
-import javax.swing.ToolTipManager;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
 import javax.swing.tree.DefaultMutableTreeNode;
@@ -44,11 +44,13 @@ import javax.swing.tree.TreePath;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
+import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.Toolkit;
 import java.awt.datatransfer.StringSelection;
@@ -56,18 +58,29 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * The sidebar's Instances tab (record 124): the comando Edge and this instance's link to it, the instances on it with
- * their sessions, and the questions asked and answered. The user asks an instance and refuses one from a row's menu;
- * everything shown comes from {@link AppState#instances()}.
+ * The sidebar's Instances tab (record 124): what the other comando instances are doing, from their presence on the
+ * comando Edge alone, and the questions asked and answered. A click on a row shows its card: an instance's role,
+ * version, kit, uptime and whether it started the Edge; a session's state, what its turn is doing and for how long, its
+ * model, context, folder and tasks, and the first line of its last prompt and reply. A double click does nothing. An
+ * instance that left stays, greyed, as last seen, until the user forgets it. The user asks an instance and refuses
+ * one from its menu, and sets this instance's role from its own; everything shown comes from
+ * {@link AppState#instances()}.
  */
 final class InstancesTab {
 
@@ -102,9 +115,29 @@ final class InstancesTab {
 
     private final IntentSink intents;
     private final Supplier<InstancesPort> port;
+    private final Supplier<SessionsSidebar.Cards> cards;
+    /** The row whose card shows, or null. */
+    private Row carded;
+    /**
+     * After a click, as in the Sessions tab: the card follows the pointer onto the other rows, each row's card after a
+     * rest of {@link SessionsSidebar#FOLLOW_MILLIS}, until it closes otherwise.
+     */
+    private boolean following;
+    /** The row the pointer rests on, whose card waits. */
+    private Row resting;
+    private final Debouncer cardWait = new Debouncer(SessionsSidebar.FOLLOW_MILLIS, this::showResting);
     private volatile Edge edge = Edge.NONE;
     private final JPanel root = new JPanel(new BorderLayout());
-    private final JLabel status = new JLabel();
+    /**
+     * Why the tab has no instances to show; clipped rather than widening the sidebar: a label's minimum is its whole
+     * text, and the sidebar's minimum, the widest of its tabs', bounds the window's divider.
+     */
+    private final JLabel status = new JLabel() {
+        @Override
+        public Dimension getMinimumSize() {
+            return new Dimension(0, super.getMinimumSize().height);
+        }
+    };
     private final JButton start = new JButton("Start the Edge");
     private final DefaultMutableTreeNode top = new DefaultMutableTreeNode();
     private final DefaultTreeModel model = new DefaultTreeModel(top);
@@ -116,9 +149,10 @@ final class InstancesTab {
     private AppState state;
     private InstancesState shown;
 
-    InstancesTab(IntentSink intents, Supplier<InstancesPort> port) {
+    InstancesTab(IntentSink intents, Supplier<InstancesPort> port, Supplier<SessionsSidebar.Cards> cards) {
         this.intents = intents;
         this.port = port;
+        this.cards = cards;
         SidebarLook.ground(root);
         JPanel head = new JPanel(new BorderLayout());
         head.setOpaque(false);
@@ -138,7 +172,6 @@ final class InstancesTab {
         tree.setShowsRootHandles(true);
         tree.setCellRenderer(new RowRenderer());
         tree.setToggleClickCount(0);
-        ToolTipManager.sharedInstance().registerComponent(tree);
         SidebarLook.tree(tree);
         tree.addMouseListener(new MouseAdapter() {
             @Override
@@ -153,10 +186,31 @@ final class InstancesTab {
 
             @Override
             public void mouseClicked(MouseEvent e) {
-                Row r = rowAt(e);
-                if (r != null && e.getClickCount() == 2 && SwingUtilities.isLeftMouseButton(e) && !r.self()) {
-                    ask(r.instance());
+                // a click shows the row's card, which then follows the pointer; a double click does nothing more
+                if (e.getClickCount() == 1 && SwingUtilities.isLeftMouseButton(e)) {
+                    Row r = rowAt(e);
+                    if (r != null) {
+                        following = true;
+                        cardWait.stop();
+                        card(r);
+                    }
                 }
+            }
+
+            @Override
+            public void mouseExited(MouseEvent e) {
+                // off the rows the card closes, unless the pointer goes on into it
+                cardWait.stop();
+                resting = null;
+                if (carded != null && cards.get().showing(key(carded))) {
+                    cards.get().left();
+                }
+            }
+        });
+        tree.addMouseMotionListener(new MouseAdapter() {
+            @Override
+            public void mouseMoved(MouseEvent e) {
+                restOn(rowUnder(e.getX(), e.getY()));
             }
         });
 
@@ -235,6 +289,7 @@ final class InstancesTab {
             newest.forEach(consultModel::addElement);
         }
         header();
+        refreshCard();
     }
 
     /** The tree again, keeping the instances the user opened open and the selected one selected. */
@@ -283,13 +338,13 @@ final class InstancesTab {
         return n;
     }
 
+    /** The header says something only while this instance is not connected: why, and the Edge's start. */
     private void header() {
         InstancesState i = shown == null ? InstancesState.NONE : shown;
         Edge e = edge;
         String text;
         if (i.connected()) {
-            int n = i.others().size();
-            text = "Connected as " + i.self().name() + " · " + (n == 0 ? "no other instance" : n == 1 ? "1 other instance" : n + " other instances");
+            text = "";
         } else if (e.busy()) {
             text = "The comando Edge is starting or stopping…";
         } else if (e.running()) {
@@ -299,7 +354,11 @@ final class InstancesTab {
         }
         if (!text.equals(status.getText())) {
             status.setText(text);
-            status.setToolTipText(text);
+            status.setToolTipText(text.isEmpty() ? null : text);
+        }
+        if (status.isVisible() == text.isEmpty()) {
+            status.setVisible(!text.isEmpty());
+            root.revalidate();
         }
         boolean offer = !i.connected() && !e.running() && !e.busy() && e != Edge.NONE;
         if (start.isVisible() != offer) {
@@ -328,11 +387,29 @@ final class InstancesTab {
         menuFor(r).show(tree, e.getX(), e.getY());
     }
 
-    /** A row's menu: ask the instance, refuse its questions, copy its id; this instance's own row only copies. */
+    /**
+     * A row's menu: another instance present, ask it, refuse its questions; one that left, forget it; this instance,
+     * set its role; then copy the id. A session's row has none: the tab shows, and asking is the instance's.
+     */
     JPopupMenu menuFor(Row r) {
         Instance in = r.instance();
         JPopupMenu m = new JPopupMenu();
-        if (!r.self()) {
+        if (r.member() != null) {
+            return m;
+        }
+        if (r.self()) {
+            JMenuItem role = new JMenuItem("Set the role…");
+            role.setToolTipText("What this instance is for, as the others see it: instance.json in its data root");
+            role.addActionListener(a -> setRole(in));
+            m.add(role);
+            m.addSeparator();
+        } else if (!in.present()) {
+            JMenuItem forget = new JMenuItem("Forget " + in.name());
+            forget.setToolTipText("List it no more; it comes back when it is present again");
+            forget.addActionListener(a -> port.get().forget(in.slug()));
+            m.add(forget);
+            m.addSeparator();
+        } else {
             JMenuItem ask = new JMenuItem("Ask " + in.name() + "…");
             ask.addActionListener(a -> ask(in));
             m.add(ask);
@@ -344,9 +421,225 @@ final class InstancesTab {
             m.addSeparator();
         }
         JMenuItem copy = new JMenuItem("Copy the instance id (" + in.slug() + ")");
+        copy.setName("instances-copy-id");
         copy.addActionListener(a -> Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(in.slug()), null));
         m.add(copy);
         return m;
+    }
+
+    /** Asks the user what this instance is for, and sets it. */
+    private void setRole(Instance in) {
+        Object typed = JOptionPane.showInputDialog(root, "What " + in.name() + " is for, as the other instances see it:", "Set the role",
+                JOptionPane.PLAIN_MESSAGE, null, null, in.role());
+        if (typed instanceof String text) {
+            port.get().role(text.strip());
+        }
+    }
+
+    /** The row under {@code (x, y)}, its icon or text, or null; the selection stays. */
+    private Row rowUnder(int x, int y) {
+        TreePath path = tree.getPathForLocation(x, y);
+        return path != null && path.getLastPathComponent() instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof Row r ? r : null;
+    }
+
+    /**
+     * The pointer is over {@code over}, or over no row. Back on the card's row, the card stays; on another row while the
+     * card follows, that row's card shows after the rest; off every row, the card closes unless the pointer goes on into
+     * it.
+     */
+    private void restOn(Row over) {
+        if (carded != null && !cards.get().showing(key(carded))) {
+            // closed otherwise: its ✕, a click on it, the pointer leaving it for elsewhere
+            carded = null;
+            following = false;
+        }
+        if (over == null) {
+            cardWait.stop();
+            resting = null;
+            if (carded != null) {
+                cards.get().left();
+            }
+            return;
+        }
+        if (carded != null && same(carded, over)) {
+            cardWait.stop();
+            resting = null;
+            cards.get().stay();
+            return;
+        }
+        if (following && (resting == null || !same(resting, over))) {
+            resting = over;
+            cardWait.request();
+        }
+    }
+
+    private void showResting() {
+        if (resting != null && following) {
+            card(resting);
+        }
+    }
+
+    private static String key(Row r) {
+        return "instance:" + r.instance().slug() + (r.member() == null ? "" : "/" + r.member().name());
+    }
+
+    private static boolean same(Row a, Row b) {
+        return b != null && a.instance().slug().equals(b.instance().slug()) && a.self() == b.self()
+                && Objects.equals(a.member() == null ? null : a.member().name(), b.member() == null ? null : b.member().name());
+    }
+
+    /** {@code r}'s card, beside the rows at its row's height, as the Sessions tab shows its rows' cards. */
+    private void card(Row r) {
+        Rectangle bounds = boundsOf(r);
+        if (bounds == null) {
+            return;
+        }
+        carded = r;
+        resting = null;
+        Card c = cardOf(r);
+        cards.get().showFacts(key(r), c.title(), c.facts(), c.heading(), c.text(), tree, bounds, beside());
+    }
+
+    private Card cardOf(Row r) {
+        return cardOf(r, shown == null ? "" : shown.self().version(), shown != null && shown.denied().contains(r.instance().slug()),
+                System.currentTimeMillis(), ZoneId.systemDefault());
+    }
+
+    /** {@code r}'s row in the tree as it is now, or null when it is gone. */
+    private Rectangle boundsOf(Row r) {
+        for (int i = 0; i < tree.getRowCount(); i++) {
+            TreePath path = tree.getPathForRow(i);
+            if (path.getLastPathComponent() instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof Row x && same(r, x)) {
+                return tree.getPathBounds(path);
+            }
+        }
+        return null;
+    }
+
+    /** Where a card beside the rows starts: after the widest row shown, reaching {@link SessionsSidebar#OVERLAP} back. */
+    int beside() {
+        int widest = 0;
+        for (int i = 0; i < tree.getRowCount(); i++) {
+            Rectangle b = tree.getRowBounds(i);
+            widest = Math.max(widest, b.x + b.width);
+        }
+        Rectangle seen = tree.getVisibleRect();
+        int right = seen.isEmpty() ? tree.getWidth() : seen.x + seen.width;
+        return Math.max(0, Math.min(widest, right) - SessionsSidebar.OVERLAP);
+    }
+
+    /** The card shown, with what the presences say now; its row gone, it stays as it was until it closes. */
+    private void refreshCard() {
+        if (carded == null || !cards.get().showing(key(carded))) {
+            return;
+        }
+        Row now = null;
+        for (int i = 0; i < tree.getRowCount(); i++) {
+            if (tree.getPathForRow(i).getLastPathComponent() instanceof DefaultMutableTreeNode n && n.getUserObject() instanceof Row x
+                    && same(carded, x)) {
+                now = x;
+            }
+        }
+        if (now != null) {
+            carded = now;
+            Card c = cardOf(now);
+            cards.get().updateFacts(key(now), c.title(), c.facts(), c.heading(), c.text());
+        }
+    }
+
+    /** What a row's card says: its title, its facts, and under a heading the last exchange of a session. */
+    record Card(String title, List<Map.Entry<String, String>> facts, String heading, String text) {
+    }
+
+    static Card cardOf(Row r, String myVersion, boolean denied, long now, ZoneId zone) {
+        Instance in = r.instance();
+        List<Map.Entry<String, String>> f = new ArrayList<>();
+        if (r.member() != null) {
+            Member m = r.member();
+            f.add(Map.entry("State", memberState(m, now)));
+            if (!m.model().isEmpty() || !m.effort().isEmpty()) {
+                f.add(Map.entry("Model", (m.model().isEmpty() ? "default" : m.model()) + (m.effort().isEmpty() ? "" : " · effort " + m.effort())));
+            }
+            if (m.context() >= 0) {
+                f.add(Map.entry("Context", m.context() + "% used"));
+            }
+            if (!m.folder().isEmpty()) {
+                f.add(Map.entry("Folder", m.folder() + (m.branch().isEmpty() ? "" : " · " + m.branch())));
+            }
+            if (!m.tasks().isEmpty()) {
+                f.add(Map.entry("Background", String.join("; ", m.tasks())));
+            }
+            f.add(Map.entry("Instance", in.name()));
+            StringBuilder text = new StringBuilder();
+            if (!m.prompt().isEmpty()) {
+                text.append("Asked: ").append(m.prompt());
+            }
+            if (!m.reply().isEmpty()) {
+                text.append(text.isEmpty() ? "" : "\n\n").append("Said: ").append(m.reply());
+            }
+            return new Card(m.name(), List.copyOf(f), "Last exchange", text.toString());
+        }
+        f.add(Map.entry("State", instanceState(in, r.self(), now, zone)));
+        if (!in.role().isEmpty()) {
+            f.add(Map.entry("Role", in.role()));
+        }
+        f.add(Map.entry("comando", (in.version().isEmpty() ? "?" : in.version())
+                + (!r.self() && !in.version().equals(myVersion) ? " · this one runs " + myVersion : "")));
+        f.add(Map.entry("Kit", in.kit().isEmpty() ? "?" : in.kit()));
+        String up = since(in.started(), Instant.ofEpochMilli(now));
+        if (in.present() && !up.isEmpty()) {
+            f.add(Map.entry("Up", up));
+        }
+        if (in.edge()) {
+            f.add(Map.entry("Edge", "started the comando Edge, and only it stops it"));
+        }
+        f.add(Map.entry("Id", in.slug()));
+        if (denied) {
+            f.add(Map.entry("Questions", "refused here"));
+        }
+        return new Card(in.name() + (r.self() ? " (this one)" : ""), List.copyOf(f), "", "");
+    }
+
+    /** An instance's state: busy and how many of its sessions run a turn, idle, or when it was last seen. */
+    static String instanceState(Instance in, boolean self, long now, ZoneId zone) {
+        if (!in.present()) {
+            return self ? "not connected to the comando Edge"
+                    : in.lastSeen() > 0 ? "left; last seen " + when(in.lastSeen(), now, zone) : "not reachable: this instance is not on the Edge";
+        }
+        long busy = in.sessions().stream().filter(Member::busy).count();
+        int all = in.sessions().size();
+        return (busy > 0 ? "busy: " + busy + " of " + all + " session" + (all == 1 ? "" : "s") + " running a turn"
+                : "idle: no session running a turn" + (all == 0 ? "" : ", " + all + " session" + (all == 1 ? "" : "s")));
+    }
+
+    /** A session's state: what its turn is doing and for how long, or idle, or its process's state. */
+    static String memberState(Member m, long now) {
+        if (m.busy()) {
+            return "busy" + (m.activity().isEmpty() ? "" : ": " + m.activity()) + (m.turnStarted() > 0 ? " · " + span(Duration.ofMillis(now - m.turnStarted())) : "");
+        }
+        return m.status().isEmpty() || m.status().equals("OPEN") ? "idle" : m.status().toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /**
+     * A session's dot, as the Sessions tab colours its icon: Claude's orange while a turn runs, green while it runs idle,
+     * grey while it is stopped, red when it failed.
+     */
+    static Color dot(Member m) {
+        if (m.busy()) {
+            return Theme.CLAUDE;
+        }
+        return switch (m.status()) {
+            case "", "OPEN" -> Theme.OK;
+            case "FAILED" -> Theme.DANGER;
+            default -> Theme.MUTED;
+        };
+    }
+
+    /** {@code at} as the time of day when it is today, else with its date. */
+    static String when(long at, long now, ZoneId zone) {
+        ZonedDateTime t = Instant.ofEpochMilli(at).atZone(zone);
+        LocalDate today = Instant.ofEpochMilli(now).atZone(zone).toLocalDate();
+        return t.format(DateTimeFormatter.ofPattern(t.toLocalDate().equals(today) ? "HH:mm" : "yyyy-MM-dd HH:mm"));
     }
 
     /** Asks {@code in} a question the user types: it lands in that instance's {@code consult-<this>} session. */
@@ -412,8 +705,11 @@ final class InstancesTab {
         return s < 60 ? s + " s" : s < 3_600 ? s / 60 + " min" : s < 86_400 ? s / 3_600 + " h" : s / 86_400 + " d";
     }
 
-    /** One line for an instance: name, what it is for, its version when it differs from this one's. */
-    static String line(Instance in, boolean self, String myVersion) {
+    /**
+     * One line for an instance: name, what it is for, its version when it differs from this one's, and for one that
+     * left, when it was last seen.
+     */
+    static String line(Instance in, boolean self, String myVersion, long now, ZoneId zone) {
         StringBuilder b = new StringBuilder(in.name());
         if (self) {
             b.append(" (this one)");
@@ -424,29 +720,15 @@ final class InstancesTab {
         if (!self && !in.version().equals(myVersion)) {
             b.append(" · comando ").append(in.version().isEmpty() ? "?" : in.version());
         }
+        if (!self && !in.present()) {
+            b.append(in.lastSeen() > 0 ? " · left " + when(in.lastSeen(), now, zone) : " · not reachable");
+        }
         return b.toString();
     }
 
-    static String tip(Instance in, boolean self, String myVersion, boolean denied) {
-        StringBuilder b = new StringBuilder(in.name()).append(" (instance ").append(in.slug()).append(')');
-        b.append("\ncomando ").append(in.version().isEmpty() ? "?" : in.version());
-        if (!self && !in.version().equals(myVersion)) {
-            b.append(" (this one runs ").append(myVersion).append(')');
-        }
-        b.append("\nkit ").append(in.kit().isEmpty() ? "?" : in.kit());
-        String up = since(in.started(), Instant.now());
-        if (!up.isEmpty()) {
-            b.append("\nup ").append(up);
-        }
-        b.append('\n').append(in.busy() ? "busy" : "idle").append(" · ").append(in.sessions().size()).append(" session")
-                .append(in.sessions().size() == 1 ? "" : "s");
-        if (denied) {
-            b.append("\nits questions are refused here");
-        }
-        if (!self) {
-            b.append("\ndouble-click to ask it a question; right-click for more");
-        }
-        return b.toString();
+    /** One line for a session: its name, and what its turn is doing when it runs one. */
+    static String line(Member m) {
+        return m.name() + (m.busy() && !m.activity().isEmpty() ? " · " + m.activity() : "");
     }
 
     /** One line for a question: its direction, the peer, who asked, where it stands, how long, its first words. */
@@ -458,27 +740,35 @@ final class InstancesTab {
                 + " · " + label(c.status()) + " · " + span(Duration.ofMillis(end - c.askedAt())) + " — " + first;
     }
 
-    /** A dot in the colour of busy or idle, beside an icon. */
-    private record Dot(Icon icon, Color color) implements Icon {
+    /**
+     * A dot in the colour of busy, idle or refused beside an icon, none for an instance that left; then the Edge's
+     * antenna when the instance started the comando Edge.
+     */
+    record Dot(Icon icon, Color color, Icon mark) implements Icon {
         @Override
         public void paintIcon(Component c, Graphics g0, int x, int y) {
             if (icon != null) {
                 icon.paintIcon(c, g0, x, y);
             }
-            Graphics2D g = (Graphics2D) g0.create();
-            try {
-                g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-                g.setColor(color);
-                int at = icon == null ? 4 : icon.getIconWidth() + 3;
-                g.fillOval(x + at, y + getIconHeight() / 2 - 3, 6, 6);
-            } finally {
-                g.dispose();
+            int at = icon == null ? 4 : icon.getIconWidth() + 3;
+            if (color != null) {
+                Graphics2D g = (Graphics2D) g0.create();
+                try {
+                    g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+                    g.setColor(color);
+                    g.fillOval(x + at, y + getIconHeight() / 2 - 3, 6, 6);
+                } finally {
+                    g.dispose();
+                }
+            }
+            if (mark != null) {
+                mark.paintIcon(c, g0, x + at + 8, y + (getIconHeight() - mark.getIconHeight()) / 2);
             }
         }
 
         @Override
         public int getIconWidth() {
-            return (icon == null ? 4 : icon.getIconWidth() + 3) + 8;
+            return (icon == null ? 4 : icon.getIconWidth() + 3) + 8 + (mark == null ? 0 : mark.getIconWidth() + 2);
         }
 
         @Override
@@ -497,17 +787,20 @@ final class InstancesTab {
             }
             String mine = shown == null ? "" : shown.self().version();
             boolean denied = shown != null && shown.denied().contains(r.instance().slug());
+            // the card, at a click, says what the row only marks
+            setToolTipText(null);
             if (r.member() != null) {
-                setText(r.member().name());
-                setIcon(new Dot(Icons.get("session"), r.member().busy() ? Theme.CLAUDE : Theme.OK));
-                setToolTipText(r.member().name() + (r.member().busy() ? " · busy" : " · idle"));
+                setText(line(r.member()));
+                setIcon(new Dot(Icons.get("session"), dot(r.member()), null));
             } else {
-                setText(line(r.instance(), r.self(), mine));
-                setIcon(new Dot(Icons.get(r.self() ? "comando-folder" : "instances"), denied ? Theme.DANGER : r.instance().busy() ? Theme.CLAUDE : Theme.OK));
-                setToolTipText(tip(r.instance(), r.self(), mine, denied));
+                Instance in = r.instance();
+                setText(line(in, r.self(), mine, System.currentTimeMillis(), ZoneId.systemDefault()));
+                Color dot = !in.present() ? null : denied ? Theme.DANGER : in.busy() ? Theme.CLAUDE : Theme.OK;
+                setIcon(new Dot(Icons.get("instances"), dot, in.edge() ? Icons.get("edge") : null));
             }
             if (!sel) {
-                setForeground(!r.self() && r.member() == null && !r.instance().version().equals(mine) ? Theme.ATTENTION : SidebarLook.TEXT);
+                setForeground(r.member() == null && !r.self() && !r.instance().present() ? Theme.MUTED
+                        : !r.self() && r.member() == null && !r.instance().version().equals(mine) ? Theme.ATTENTION : SidebarLook.TEXT);
             }
             return this;
         }

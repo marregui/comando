@@ -1108,11 +1108,33 @@ class SessionsSidebarTest {
         return false;
     }
 
-    /// The Instances tab lists this instance and the others from the state, with their sessions; an instance's menu asks
-    /// and refuses through the port, this instance's own row only copies its id; a question asked opens its reply in a
-    /// side view, a question answered opens the session that answered it here; the questions list shows the newest first.
+    /// The Instances tab's header, which says why no instance shows, never widens the sidebar: the sidebar's minimum
+    /// width, the widest of its tabs', bounds the window's divider, and a label's minimum is its whole text.
     @Test
-    void theInstancesTabListsTheInstancesAndActsThroughItsPort() throws Exception {
+    void theInstancesHeaderDoesNotWidenTheSidebarsMinimum() throws Exception {
+        SessionsSidebar[] s = new SessionsSidebar[1];
+        SwingUtilities.invokeAndWait(() -> {
+            s[0] = new SessionsSidebar(intent -> {
+            }, NO_DIALOGS, () -> {
+            });
+            s[0].instances(InstancesPort.NONE, () -> false, () -> false, () -> {
+            });
+            s[0].render(States.twoPanels());
+            s[0].component().setSize(420, 500);
+            layout(s[0].component());
+        });
+        int[] min = new int[1];
+        SwingUtilities.invokeAndWait(() -> min[0] = s[0].component().getMinimumSize().width);
+        assertThat(min[0]).as("the Edge is down: the header shows its longest text").isLessThan(200);
+    }
+
+    /// The Instances tab lists this instance, the others present and one that left, with their sessions; a click on a
+    /// row shows its card (an instance's facts, a session's state and last exchange) and a double click does nothing;
+    /// an instance's menu asks and refuses, one that left is forgotten, this instance's sets its role, a session's has
+    /// none; a question asked opens its reply in a side view, a question answered opens the session that answered it
+    /// here; the questions list shows the newest first.
+    @Test
+    void theInstancesTabShowsWhatEachInstanceDoesAndActsThroughItsPort() throws Exception {
         List<Intent> intents = new CopyOnWriteArrayList<>();
         List<String> acts = new CopyOnWriteArrayList<>();
         InstancesPort port = new InstancesPort() {
@@ -1125,37 +1147,106 @@ class SessionsSidebarTest {
             public void deny(String instance, boolean denied) {
                 acts.add("deny " + instance + " " + denied);
             }
+
+            @Override
+            public void forget(String instance) {
+                acts.add("forget " + instance);
+            }
+
+            @Override
+            public void role(String role) {
+                acts.add("role " + role);
+            }
         };
+        List<String> shownCards = new CopyOnWriteArrayList<>();
+        SessionsSidebar.Cards cards = new SessionsSidebar.Cards() {
+            @Override
+            public void show(String session, JComponent over, Rectangle row) {
+            }
+
+            @Override
+            public void showFacts(String key, String title, List<Map.Entry<String, String>> facts, String heading, String text, JComponent over,
+                                  Rectangle row, int beside) {
+                shownCards.add(key + " " + title);
+            }
+
+            @Override
+            public void left() {
+                shownCards.add("left");
+            }
+        };
+        long now = java.time.Instant.parse("2026-10-30T10:00:00Z").toEpochMilli();
+        java.time.ZoneId utc = java.time.ZoneOffset.UTC;
         InstancesState.Instance me = new InstancesState.Instance("main", "comando", "2.0.0", "", "a710bbf", false, "2026-10-30T07:00:00Z",
-                List.of(new InstancesState.Member("work", true)));
+                List.of(new InstancesState.Member("work", true)), true, true, 0L);
+        InstancesState.Member consult = new InstancesState.Member("consult-main", true, "OPEN", "running Bash", now - 125_000, "opus", "high", 42,
+                "~/work", "main", List.of("gradle check"), "what is X?", "X is a broker.");
         InstancesState.Instance expert = new InstancesState.Instance("comando-expert", "Comando Expert", "1.9.0", "comando specialist",
-                "17be4f5", true, "2026-10-30T07:30:00Z", List.of(new InstancesState.Member("consult-main", true)));
+                "17be4f5", true, "2026-10-30T07:30:00Z", List.of(consult));
+        InstancesState.Instance gone = new InstancesState.Instance("b", "comando · b", "2.0.0", "", "eb16ce5", false, "2026-10-29T07:30:00Z",
+                List.of(), false, false, now - 3_600_000);
         InstancesState.Consult asked = new InstancesState.Consult("1", InstancesState.Direction.ASKED, "comando-expert", "Comando Expert", "",
                 "what is X?", InstancesState.Status.OK, 1_000, 3_000, "X is a broker.");
         InstancesState.Consult answered = new InstancesState.Consult("2", InstancesState.Direction.ANSWERED, "comando-expert", "Comando Expert",
                 "consult-comando-expert", "and Y?", InstancesState.Status.WAITING, 2_000, 0, "");
         AppState s = States.twoPanels().withSessions(List.of(SessionState.closed(SessionSpec.fresh("consult-comando-expert", "/tmp"))))
-                .withInstances(new InstancesState(true, me, List.of(expert), List.of(asked, answered), List.of()));
+                .withInstances(new InstancesState(true, me, List.of(expert, gone), List.of(asked, answered), List.of()));
         InstancesTab[] t = new InstancesTab[1];
         SwingUtilities.invokeAndWait(() -> {
-            t[0] = new InstancesTab(intents::add, () -> port);
+            t[0] = new InstancesTab(intents::add, () -> port, () -> cards);
             t[0].render(s);
         });
         InstancesTab tab = t[0];
 
         JTree tree = find(tab.component(), JTree.class, x -> true);
         Object root = tree.getModel().getRoot();
-        assertThat(tree.getModel().getChildCount(root)).as("this instance, then the other").isEqualTo(2);
+        assertThat(tree.getModel().getChildCount(root)).as("this instance, the other, the one that left").isEqualTo(3);
         Object other = tree.getModel().getChild(root, 1);
         assertThat(tree.getModel().getChildCount(other)).as("its sessions under it").isEqualTo(1);
-        assertThat(InstancesTab.line(me, true, "2.0.0")).isEqualTo("comando (this one)");
-        assertThat(InstancesTab.line(expert, false, "2.0.0")).as("its role, and its version as it differs")
+        assertThat(InstancesTab.line(me, true, "2.0.0", now, utc)).isEqualTo("comando (this one)");
+        assertThat(InstancesTab.line(expert, false, "2.0.0", now, utc)).as("its role, and its version as it differs")
                 .isEqualTo("Comando Expert · comando specialist · comando 1.9.0");
-        assertThat(InstancesTab.tip(expert, false, "2.0.0", false)).contains("kit 17be4f5", "(this one runs 2.0.0)");
+        assertThat(InstancesTab.line(gone, false, "2.0.0", now, utc)).as("when it was last seen").isEqualTo("comando · b · left 09:00");
+        assertThat(InstancesTab.line(consult)).as("what its turn is doing").isEqualTo("consult-main · running Bash");
         assertThat(InstancesTab.line(asked, 5_000)).isEqualTo("→ Comando Expert · you · answered · 2 s — what is X?");
+
+        InstancesTab.Card mine = InstancesTab.cardOf(new InstancesTab.Row(me, null, true), "2.0.0", false, now, utc);
+        assertThat(mine.title()).isEqualTo("comando (this one)");
+        assertThat(mine.facts()).extracting(Map.Entry::getKey).as("the same facts as another's")
+                .containsExactly("State", "comando", "Kit", "Up", "Edge", "Id");
+        assertThat(mine.facts().getFirst().getValue()).isEqualTo("busy: 1 of 1 session running a turn");
+        InstancesTab.Card theirs = InstancesTab.cardOf(new InstancesTab.Row(expert, null, false), "2.0.0", true, now, utc);
+        assertThat(theirs.facts()).contains(Map.entry("Role", "comando specialist"), Map.entry("comando", "1.9.0 · this one runs 2.0.0"),
+                Map.entry("Kit", "17be4f5"), Map.entry("Questions", "refused here"));
+        assertThat(InstancesTab.cardOf(new InstancesTab.Row(gone, null, false), "2.0.0", false, now, utc).facts().getFirst())
+                .isEqualTo(Map.entry("State", "left; last seen 09:00"));
+        InstancesTab.Card session = InstancesTab.cardOf(new InstancesTab.Row(expert, consult, false), "2.0.0", false, now, utc);
+        assertThat(session.facts()).containsExactly(Map.entry("State", "busy: running Bash · 2 min"), Map.entry("Model", "opus · effort high"),
+                Map.entry("Context", "42% used"), Map.entry("Folder", "~/work · main"), Map.entry("Background", "gradle check"),
+                Map.entry("Instance", "Comando Expert"));
+        InstancesState.Member stopped = new InstancesState.Member("old", false, "CLOSED", "", 0L, "", "", -1, "", "", List.of(), "", "");
+        InstancesState.Member failed = new InstancesState.Member("bad", false, "FAILED", "", 0L, "", "", -1, "", "", List.of(), "", "");
+        InstancesState.Member idle = new InstancesState.Member("idle", false, "OPEN", "", 0L, "", "", -1, "", "", List.of(), "", "");
+        assertThat(List.of(InstancesTab.dot(consult), InstancesTab.dot(idle), InstancesTab.dot(stopped), InstancesTab.dot(failed)))
+                .as("busy, idle, stopped, failed: as the Sessions tab colours them")
+                .containsExactly(Theme.CLAUDE, Theme.OK, Theme.MUTED, Theme.DANGER);
+        assertThat(session.text()).isEqualTo("Asked: what is X?\n\nSaid: X is a broker.");
+
+        SwingUtilities.invokeAndWait(() -> {
+            tree.setSize(400, 400);
+            tree.doLayout();
+            Rectangle row = tree.getRowBounds(1);
+            for (int clicks = 1; clicks <= 2; clicks++) {
+                tree.dispatchEvent(new MouseEvent(tree, MouseEvent.MOUSE_CLICKED, 0, 0, row.x + 5, row.y + 2, clicks, false, MouseEvent.BUTTON1));
+            }
+        });
+        assertThat(shownCards).as("a click shows the card; a double click adds nothing").containsExactly("instance:comando-expert Comando Expert");
+        assertThat(acts).as("a double click asks nothing").isEmpty();
 
         List<String> items = new ArrayList<>();
         List<String> own = new ArrayList<>();
+        List<String> left = new ArrayList<>();
+        List<String> sessionItems = new ArrayList<>();
         SwingUtilities.invokeAndWait(() -> {
             JPopupMenu menu = tab.menuFor(new InstancesTab.Row(expert, null, false));
             for (Component c : menu.getComponents()) {
@@ -1165,11 +1256,21 @@ class SessionsSidebarTest {
             for (Component c : tab.menuFor(new InstancesTab.Row(me, null, true)).getComponents()) {
                 own.add(c instanceof JMenuItem m ? m.getText() : "—");
             }
+            JPopupMenu goneMenu = tab.menuFor(new InstancesTab.Row(gone, null, false));
+            for (Component c : goneMenu.getComponents()) {
+                left.add(c instanceof JMenuItem m ? m.getText() : "—");
+            }
+            ((JMenuItem) goneMenu.getComponent(0)).doClick();
+            for (Component c : tab.menuFor(new InstancesTab.Row(expert, consult, false)).getComponents()) {
+                sessionItems.add(c instanceof JMenuItem m ? m.getText() : "—");
+            }
         });
         assertThat(items).containsExactly("Ask Comando Expert…", "Refuse questions from Comando Expert", "—",
                 "Copy the instance id (comando-expert)");
-        assertThat(own).containsExactly("Copy the instance id (main)");
-        assertThat(acts).containsExactly("deny comando-expert true");
+        assertThat(own).containsExactly("Set the role…", "—", "Copy the instance id (main)");
+        assertThat(left).containsExactly("Forget comando · b", "—", "Copy the instance id (b)");
+        assertThat(sessionItems).as("a session's row has no menu").isEmpty();
+        assertThat(acts).containsExactly("deny comando-expert true", "forget b");
 
         @SuppressWarnings("unchecked")
         JList<InstancesState.Consult> list = find(tab.component(), JList.class, x -> true);

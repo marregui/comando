@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BooleanSupplier;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -55,6 +56,12 @@ import java.util.function.Supplier;
  * the question, and replies with Claude's text in the turn that answers it. Only the text a session chose to send and
  * the reply's text travel, never a brain's or a kit's files. A peer the user listed in the data root's
  * {@code agents.json} ({@code {"peers": {"deny": ["<id>"]}}}) is refused.
+ * <p>
+ * A presence says what the instance is doing, so another knows without asking: whether it started the Edge, and for
+ * each session its state, what its turn is doing and for how long, its model, effort, context, folder and branch, its
+ * background tasks, and the first line of its last prompt and of its last reply. Those two lines are the only words of a
+ * conversation it carries; on a broker off this machine they leave it. The instances seen are remembered in the data
+ * root's {@code instances-seen.json}, so one that left stays listed, as last seen, until the user forgets it.
  * <p>
  * The instances, this one's connection and the questions asked and answered reach the window as
  * {@link Intent.InstancesChanged} after each change (record 124), and the user asks and refuses from the Instances tab
@@ -122,11 +129,20 @@ public final class Peers implements AutoCloseable, InstancesPort {
     }
 
     /** Another instance, as its presence says. */
-    record Peer(String slug, String name, String version, String role, String kit, boolean busy, String started, List<Session> sessions) {
+    record Peer(String slug, String name, String version, String role, String kit, boolean busy, String started,
+                List<InstancesState.Member> sessions, boolean edge) {
     }
 
-    record Session(String name, boolean busy) {
+    /** An instance as this one last saw it: its presence, and when it was last seen present (0 while it is). */
+    private record Seen(Peer peer, long lastSeen) {
     }
+
+    /** How much of a prompt's or a reply's first line a presence carries. */
+    static final int LINE_CHARS = 200;
+    /** How far back in a conversation its last prompt and reply are looked for. */
+    private static final int LOOK_BACK = 4_000;
+    /** The data root's file of the instances seen. */
+    static final String SEEN_FILE = "instances-seen.json";
 
     /** A reply to a question, as it travels. */
     record Reply(String status, String text, String instance, String session) {
@@ -154,6 +170,15 @@ public final class Peers implements AutoCloseable, InstancesPort {
     private InstancesState lastShown;
     /** The kit's commit, as the window last read it; part of the presence. */
     private volatile String kit = "";
+    /** What this instance is for; part of the presence, changed from the Instances tab. */
+    private volatile String role;
+    /** Whether this instance started the comando Edge; part of the presence. */
+    private volatile BooleanSupplier edge = () -> false;
+    /** The data root's {@code instances-seen.json} and {@code instance.json}; null until {@link #dataRoot} names them. */
+    private volatile Path seenFile;
+    private volatile Path instanceFile;
+    /** The other instances seen, present or not, by id; guarded by itself. */
+    private final Map<String, Seen> seen = new java.util.LinkedHashMap<>();
     /** The prompt blocks answers are waiting on, so two equal questions in flight wait on a block each. */
     private final Set<Block> claimed = Collections.synchronizedSet(Collections.newSetFromMap(new IdentityHashMap<>()));
     private final ScheduledExecutorService ticks = Threads.timedStrand("peers");
@@ -183,6 +208,37 @@ public final class Peers implements AutoCloseable, InstancesPort {
         this.workDir = workDir;
         this.agentsFile = agentsFile;
         this.answerWithin = answerWithin;
+        this.role = me.role();
+    }
+
+    /**
+     * The data root whose {@code instances-seen.json} remembers the instances seen, read now, and whose
+     * {@code instance.json} holds the role; call it before {@link #start}.
+     */
+    public void dataRoot(Path home) {
+        seenFile = home.resolve(SEEN_FILE);
+        instanceFile = home.resolve(InstanceName.FILE);
+        synchronized (seen) {
+            seen.clear();
+            if (!Files.isRegularFile(seenFile)) {
+                return;
+            }
+            try {
+                for (JsonNode n : json.readTree(Files.readString(seenFile)).path("instances")) {
+                    Peer p = peer(n.path("slug").asString(""), n);
+                    if (!p.slug().isEmpty() && !p.slug().equals(me.slug())) {
+                        seen.put(p.slug(), new Seen(p, n.path("lastSeen").asLong(0L)));
+                    }
+                }
+            } catch (IOException | RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot read " + seenFile + "; the instances seen before are not listed", e);
+            }
+        }
+    }
+
+    /** Whether this instance started the comando Edge, asked at each tick; part of the presence. */
+    public void edge(BooleanSupplier startedHere) {
+        edge = startedHere == null ? () -> false : startedHere;
     }
 
     /** An instance's id in the topics: its name in lowercase letters, digits and dashes; {@code main} when unnamed. */
@@ -262,16 +318,84 @@ public final class Peers implements AutoCloseable, InstancesPort {
         p.put("name", me.name());
         p.put("slug", me.slug());
         p.put("version", me.version());
-        p.put("role", me.role());
+        p.put("role", role);
         p.put("kit", kit);
         p.put("started", started);
         AppState s = state.get();
+        p.put("edge", edge.getAsBoolean());
         p.put("busy", s.sessions().stream().anyMatch(SessionState::isBusy));
         ArrayNode sessions = p.putArray("sessions");
-        for (SessionState x : s.sessions()) {
-            sessions.addObject().put("name", x.name()).put("busy", x.isBusy());
+        for (InstancesState.Member m : members(s)) {
+            ObjectNode o = sessions.addObject().put("name", m.name()).put("busy", m.busy()).put("status", m.status())
+                    .put("activity", m.activity()).put("turnStarted", m.turnStarted()).put("model", m.model()).put("effort", m.effort())
+                    .put("context", m.context()).put("folder", m.folder()).put("branch", m.branch());
+            ArrayNode tasks = o.putArray("tasks");
+            m.tasks().forEach(tasks::add);
+            o.put("prompt", m.prompt()).put("reply", m.reply());
         }
         return p.toString();
+    }
+
+    /** This instance's sessions, each with what it is doing. */
+    private List<InstancesState.Member> members(AppState s) {
+        return s.sessions().stream().map(this::member).toList();
+    }
+
+    private InstancesState.Member member(SessionState x) {
+        boolean usable = x.status().isUsable();
+        String model = usable && !x.info().turnModel().isBlank() ? x.info().turnModel() : usable && !x.info().model().isBlank() ? x.info().model()
+                : x.spec().model();
+        String effort = usable && !x.info().turnEffort().isBlank() ? x.info().turnEffort()
+                : usable && !x.info().reportedEffort().isBlank() ? x.info().reportedEffort() : x.spec().effort();
+        int context = x.contextWindow() > 0 ? (int) Math.min(100, x.contextTokens() * 100 / x.contextWindow()) : -1;
+        String[] ends = ends(x.name());
+        return new InstancesState.Member(x.name(), x.isBusy(), x.status().name(), x.isBusy() ? x.activity() : "",
+                x.isBusy() ? x.turnStartedMillis() : 0L, model, effort, context, home(x.spec().workDir()), x.branch(),
+                x.tasks().stream().map(t -> t.description()).toList(), ends[0], ends[1]);
+    }
+
+    /** The first line of {@code session}'s last prompt and of its last reply, its own (not a subagent's), clipped. */
+    private String[] ends(String session) {
+        Transcript t = transcripts.of(session);
+        String prompt = null;
+        String reply = null;
+        for (int i = t.size() - 1, last = Math.max(0, t.size() - LOOK_BACK); i >= last && (prompt == null || reply == null); i--) {
+            Block b = t.get(i);
+            if (prompt == null && b instanceof Block.UserPrompt u && u.parent().isEmpty()) {
+                prompt = firstLine(u.text());
+            } else if (reply == null && b instanceof Block.AssistantText a && a.parent().isEmpty() && !a.text().isBlank()) {
+                reply = firstLine(a.text());
+            }
+        }
+        return new String[]{prompt == null ? "" : prompt, reply == null ? "" : reply};
+    }
+
+    /** The first line that says something, clipped; a consult's {@code [from instance …]} header is skipped. */
+    static String firstLine(String text) {
+        return text.lines().map(String::strip).filter(l -> !l.isEmpty() && !l.startsWith("[from instance ")).findFirst()
+                .map(l -> McpTools.clip(l, LINE_CHARS)).orElse("");
+    }
+
+    /** {@code path} with the home folder written {@code ~}. */
+    private static String home(String path) {
+        String home = System.getProperty("user.home");
+        return path != null && home != null && !home.isEmpty() && path.startsWith(home) ? "~" + path.substring(home.length()) : path;
+    }
+
+    /** A presence, or a remembered one, read. */
+    private static Peer peer(String slug, JsonNode p) {
+        List<InstancesState.Member> sessions = new ArrayList<>();
+        p.path("sessions").forEach(x -> {
+            List<String> tasks = new ArrayList<>();
+            x.path("tasks").forEach(t -> tasks.add(t.asString("")));
+            sessions.add(new InstancesState.Member(x.path("name").asString(""), x.path("busy").asBoolean(false), x.path("status").asString(""),
+                    x.path("activity").asString(""), x.path("turnStarted").asLong(0L), x.path("model").asString(""),
+                    x.path("effort").asString(""), x.path("context").asInt(-1), x.path("folder").asString(""), x.path("branch").asString(""),
+                    tasks, x.path("prompt").asString(""), x.path("reply").asString("")));
+        });
+        return new Peer(slug, p.path("name").asString(slug), p.path("version").asString(""), p.path("role").asString(""),
+                p.path("kit").asString(""), p.path("busy").asBoolean(false), p.path("started").asString(""), List.copyOf(sessions),
+                p.path("edge").asBoolean(false));
     }
 
     private void presence(PeerBroker.Message m) {
@@ -282,6 +406,9 @@ public final class Peers implements AutoCloseable, InstancesPort {
         if (m.payload() == null || m.payload().length == 0) {
             Peer gone = peers.remove(slug);
             String name = gone == null ? slug : gone.name();
+            if (gone != null) {
+                remember(gone, System.currentTimeMillis());
+            }
             asked.forEach((id, a) -> {
                 if (a.peer().equals(slug)) {
                     a.reply().complete(new Reply(ERROR, name + " left the comando Edge before it replied", name, ""));
@@ -291,11 +418,11 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return;
         }
         try {
-            JsonNode p = json.readTree(m.payload());
-            List<Session> sessions = new ArrayList<>();
-            p.path("sessions").forEach(x -> sessions.add(new Session(x.path("name").asString(""), x.path("busy").asBoolean(false))));
-            peers.put(slug, new Peer(slug, p.path("name").asString(slug), p.path("version").asString(""), p.path("role").asString(""),
-                    p.path("kit").asString(""), p.path("busy").asBoolean(false), p.path("started").asString(""), List.copyOf(sessions)));
+            Peer p = peer(slug, json.readTree(m.payload()));
+            Peer before = peers.put(slug, p);
+            if (!slug.equals(me.slug()) && (before == null || !sameIdentity(before, p))) {
+                remember(p, 0L);
+            }
             show();
         } catch (RuntimeException e) {
             LOG.log(System.Logger.Level.DEBUG, "unreadable presence [instance=" + slug + ", cause=" + e.getMessage() + ']');
@@ -517,7 +644,8 @@ public final class Peers implements AutoCloseable, InstancesPort {
             out.append(p.name()).append(" (instance ").append(p.slug()).append(") · comando ").append(p.version()).append(" · ")
                     .append(p.busy() ? "busy" : "idle").append(" · sessions: ")
                     .append(p.sessions().isEmpty() ? "none" : String.join(", ", p.sessions().stream()
-                            .map(x -> x.name() + (x.busy() ? " (busy)" : "")).toList())).append('\n');
+                            .map(x -> x.name() + (x.busy() ? " (busy" + (x.activity().isEmpty() ? "" : ": " + x.activity()) + ")" : "")
+                                    + (x.prompt().isEmpty() ? "" : " last asked: " + x.prompt())).toList())).append('\n');
         }
         return McpTools.Outcome.ok(out.append("this one is ").append(me.name()).append(" (instance ").append(me.slug())
                 .append("); ask one with instance_ask {\"instance\": \"<instance>\", \"text\": \"…\"}").toString());
@@ -644,6 +772,76 @@ public final class Peers implements AutoCloseable, InstancesPort {
         show();
     }
 
+    /** Forgets {@code instance}, seen before and not present now: it is listed no more, here or after a restart. */
+    @Override
+    public void forget(String instance) {
+        String who = slug(instance);
+        if (peers.containsKey(who)) {
+            sink.dispatch(new Intent.Notify(Notice.Level.INFO, who + " is present; only an instance that left can be forgotten", false));
+            return;
+        }
+        synchronized (seen) {
+            if (seen.remove(who) == null) {
+                return;
+            }
+            writeSeen();
+        }
+        show();
+    }
+
+    /** Sets this instance's role: {@code instance.json}'s {@code role}, its other keys kept, and the next presence. */
+    @Override
+    public void role(String newRole) {
+        String r = newRole == null ? "" : newRole.strip();
+        try {
+            if (instanceFile == null) {
+                throw new IOException("this instance has no data root");
+            }
+            ObjectNode root = Files.isRegularFile(instanceFile) && json.readTree(Files.readString(instanceFile)) instanceof ObjectNode o
+                    ? o : json.createObjectNode();
+            root.put("role", r);
+            AtomicFiles.writeString(instanceFile, json.writerWithDefaultPrettyPrinter().writeValueAsString(root) + "\n");
+            role = r;
+            sink.dispatch(new Intent.Notify(Notice.Level.INFO, r.isEmpty() ? "This instance has no role now" : "This instance is for: " + r, false));
+        } catch (IOException | RuntimeException e) {
+            sink.dispatch(Intent.Notify.logged(LOG, Notice.Level.ERROR, "Cannot change " + instanceFile + ": " + e.getMessage(), e));
+        }
+        tick();
+    }
+
+    /** Whether {@code a} and {@code b} name the same instance alike: what the remembered list keeps of it. */
+    private static boolean sameIdentity(Peer a, Peer b) {
+        return a.name().equals(b.name()) && a.version().equals(b.version()) && a.role().equals(b.role()) && a.kit().equals(b.kit());
+    }
+
+    /** Remembers {@code p}, last seen at {@code at} (0: present now), and writes the file. */
+    private void remember(Peer p, long at) {
+        if (p.slug().equals(me.slug())) {
+            return;
+        }
+        synchronized (seen) {
+            seen.put(p.slug(), new Seen(p, at));
+            writeSeen();
+        }
+    }
+
+    /** {@code instances-seen.json} as {@link #seen} has it: each instance's identity and when it was last seen. */
+    private void writeSeen() {
+        Path file = seenFile;
+        if (file == null) {
+            return;
+        }
+        ObjectNode root = json.createObjectNode();
+        ArrayNode list = root.putArray("instances");
+        seen.values().forEach(x -> list.addObject().put("slug", x.peer().slug()).put("name", x.peer().name()).put("version", x.peer().version())
+                .put("role", x.peer().role()).put("kit", x.peer().kit()).put("started", x.peer().started()).put("lastSeen", x.lastSeen()));
+        try {
+            AtomicFiles.writeString(file, json.writerWithDefaultPrettyPrinter().writeValueAsString(root) + "\n");
+        } catch (IOException | RuntimeException e) {
+            LOG.log(System.Logger.Level.WARNING, "cannot write " + file, e);
+        }
+    }
+
     /** {@code agents.json} with {@code who} in, or out of, {@code peers.deny}; the other keys as they were. */
     synchronized void setDenied(String who, boolean denied) throws IOException {
         if (agentsFile == null) {
@@ -711,17 +909,25 @@ public final class Peers implements AutoCloseable, InstancesPort {
 
     /** The instances and questions as the window shows them now. */
     InstancesState instances() {
-        List<InstancesState.Instance> others = others().stream().map(p -> new InstancesState.Instance(p.slug(), p.name(), p.version(), p.role(),
-                p.kit(), p.busy(), p.started(), p.sessions().stream().map(x -> new InstancesState.Member(x.name(), x.busy())).toList())).toList();
+        boolean connected = !closed && broker.connected();
+        // with the link down, no presence is current: every instance is shown as last seen
+        List<Peer> present = connected ? others() : List.of();
+        Set<String> here = new java.util.HashSet<>(present.stream().map(Peer::slug).toList());
+        List<InstancesState.Instance> others = new ArrayList<>(present.stream().map(p -> new InstancesState.Instance(p.slug(), p.name(),
+                p.version(), p.role(), p.kit(), p.busy(), p.started(), p.sessions(), p.edge(), true, 0L)).toList());
+        synchronized (seen) {
+            seen.values().stream().filter(x -> !here.contains(x.peer().slug())).sorted(Comparator.comparingLong(Seen::lastSeen).reversed())
+                    .forEach(x -> others.add(new InstancesState.Instance(x.peer().slug(), x.peer().name(), x.peer().version(), x.peer().role(),
+                            x.peer().kit(), false, x.peer().started(), List.of(), false, false, x.lastSeen())));
+        }
         AppState s = state.get();
-        InstancesState.Instance self = new InstancesState.Instance(me.slug(), me.name(), me.version(), me.role(), kit,
-                s.sessions().stream().anyMatch(SessionState::isBusy), started,
-                s.sessions().stream().map(x -> new InstancesState.Member(x.name(), x.isBusy())).toList());
+        InstancesState.Instance self = new InstancesState.Instance(me.slug(), me.name(), me.version(), role, kit,
+                s.sessions().stream().anyMatch(SessionState::isBusy), started, members(s), edge.getAsBoolean(), connected, 0L);
         List<InstancesState.Consult> list;
         synchronized (consults) {
             list = List.copyOf(consults);
         }
-        return new InstancesState(!closed && broker.connected(), self, others, list, denied());
+        return new InstancesState(connected, self, others, list, denied());
     }
 
     /** Tells the window, when what it shows of the instances changed since it was last told. */
@@ -766,6 +972,14 @@ public final class Peers implements AutoCloseable, InstancesPort {
         }
         closed = true;
         ticks.shutdownNow();
+        // the instances present now were last seen now
+        long now = System.currentTimeMillis();
+        synchronized (seen) {
+            others().forEach(p -> seen.put(p.slug(), new Seen(p, now)));
+            if (!seen.isEmpty()) {
+                writeSeen();
+            }
+        }
         if (broker.connected()) {
             try {
                 broker.publish(presenceTopic(me.slug()), new byte[0], true, null, null).get(CLEAR_WITHIN.toMillis(), TimeUnit.MILLISECONDS);

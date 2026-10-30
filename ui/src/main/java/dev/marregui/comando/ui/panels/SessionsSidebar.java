@@ -151,6 +151,28 @@ public final class SessionsSidebar {
             showConnection(connection, over, row);
         }
 
+        /**
+         * A card of facts not this window's own, another instance's or one of its sessions' (record 124): {@code title},
+         * the {@code facts} as label and value, then under {@code heading} the {@code text} when there is any; under
+         * {@code row}, a rectangle of {@code over}, or beside the rows from {@code beside}. Known by {@code key}.
+         */
+        default void showFacts(String key, String title, List<Map.Entry<String, String>> facts, String heading, String text, JComponent over,
+                               Rectangle row, int beside) {
+        }
+
+        /** New facts and text for the card {@link #showFacts} shows under {@code key}, while it shows. */
+        default void updateFacts(String key, String title, List<Map.Entry<String, String>> facts, String heading, String text) {
+        }
+
+        /** Whether the card {@link #showFacts} showed under {@code key} still shows. */
+        default boolean showing(String key) {
+            return false;
+        }
+
+        /** The pointer is back on what the card shown hangs under: it stays. */
+        default void stay() {
+        }
+
         void left();
 
         /**
@@ -441,7 +463,7 @@ public final class SessionsSidebar {
             }
         });
         files = new FilesTab(intents, dialogs::openFile, dialogs::editFile, questions);
-        instances = new InstancesTab(intents, () -> instancesPort);
+        instances = new InstancesTab(intents, () -> instancesPort, () -> cards);
         sessionActions = new ResourceActions<>(sessions,
                 ResourceActions.Rows.of(SessionKind.INSTANCE, SessionState::name, SessionState::status, "Stop", () -> state),
                 dialogs.sessions(), name -> intents.dispatch(new Intent.RemoveSession(name)), questions);

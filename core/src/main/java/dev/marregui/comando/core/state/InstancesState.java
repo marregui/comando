@@ -9,7 +9,7 @@ import java.util.Objects;
  *
  * @param connected whether this instance is connected to the comando Edge now
  * @param self      this instance, as its own presence says it
- * @param others    the other instances present, by name
+ * @param others    the other instances, by name: those present, then those seen before and remembered
  * @param consults  the questions this instance asked and answered since it started, oldest first, at most
  *                  {@link #CONSULTS}
  * @param denied    the instances whose questions this one refuses (the data root's {@code agents.json} peers.deny)
@@ -30,14 +30,17 @@ public record InstancesState(boolean connected, Instance self, List<Instance> ot
     }
 
     /**
-     * An instance, as its presence says.
+     * An instance, as its presence says, or as this one last saw it.
      *
-     * @param role    what the instance is for, from its data root's {@code instance.json}; empty when unset
-     * @param kit     its kit's commit, short; empty when the kit is not a git checkout
-     * @param started when it started, ISO-8601
+     * @param role     what the instance is for, from its data root's {@code instance.json}; empty when unset
+     * @param kit      its kit's commit, short; empty when the kit is not a git checkout
+     * @param started  when it started, ISO-8601
+     * @param edge     it started the comando Edge, which it stops
+     * @param present  its presence is on the Edge now; false for an instance this one saw before and remembers
+     * @param lastSeen when this instance last saw it present, epoch milliseconds; 0 while it is present
      */
     public record Instance(String slug, String name, String version, String role, String kit, boolean busy, String started,
-                           List<Member> sessions) {
+                           List<Member> sessions, boolean edge, boolean present, long lastSeen) {
 
         public static final Instance NONE = new Instance("", "", "", "", "", false, "", List.of());
 
@@ -50,10 +53,46 @@ public record InstancesState(boolean connected, Instance self, List<Instance> ot
             started = started == null ? "" : started;
             sessions = sessions == null ? List.of() : List.copyOf(sessions);
         }
+
+        /** A present instance that did not start the Edge. */
+        public Instance(String slug, String name, String version, String role, String kit, boolean busy, String started, List<Member> sessions) {
+            this(slug, name, version, role, kit, busy, started, sessions, false, true, 0L);
+        }
     }
 
-    /** One of an instance's sessions. */
-    public record Member(String name, boolean busy) {
+    /**
+     * One of an instance's sessions, as its presence says: what it is doing, from the instance's own state and the
+     * ends of its conversation, so another instance knows without asking.
+     *
+     * @param status      its process: {@code OPEN}, {@code CLOSED}, {@code FAILED}…
+     * @param activity    what its turn is doing now ("running Bash", "thinking"…); empty between turns
+     * @param turnStarted when its running turn started, epoch milliseconds; 0 between turns
+     * @param context     how full its context is, in percent; -1 when unknown
+     * @param folder      its working folder, the home folder written {@code ~}
+     * @param tasks       its background tasks still running, by description
+     * @param prompt      the first line of its last prompt, clipped
+     * @param reply       the first line of its last reply, clipped
+     */
+    public record Member(String name, boolean busy, String status, String activity, long turnStarted, String model, String effort,
+                         int context, String folder, String branch, List<String> tasks, String prompt, String reply) {
+
+        public Member {
+            name = name == null ? "" : name;
+            status = status == null ? "" : status;
+            activity = activity == null ? "" : activity;
+            model = model == null ? "" : model;
+            effort = effort == null ? "" : effort;
+            folder = folder == null ? "" : folder;
+            branch = branch == null ? "" : branch;
+            tasks = tasks == null ? List.of() : List.copyOf(tasks);
+            prompt = prompt == null ? "" : prompt;
+            reply = reply == null ? "" : reply;
+        }
+
+        /** A session known only by its name and whether it is busy. */
+        public Member(String name, boolean busy) {
+            this(name, busy, "", "", 0L, "", "", -1, "", "", List.of(), "", "");
+        }
     }
 
     /** Who put the question: this instance to a peer, or a peer to this instance. */

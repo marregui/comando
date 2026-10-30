@@ -472,6 +472,40 @@ class WorkspaceTest {
         assertThat(card.agentLinks()).extracting(JLabel::getText).contains("✓ Watch CI · done");
     }
 
+    /// Another instance's card (record 124) is its owner's: the window's renders, which keep its own cards current and
+    /// close those whose panel or session is gone, neither close it nor read it as a panel's; its owner's update shows,
+    /// and the last exchange shows under its heading.
+    @Test
+    void anotherInstancesCardOutlivesTheRendersAndTakesItsOwnersUpdates() throws Exception {
+        AppState s = AppState.initial(List.of(new PanelState(P, "work", "", "")), List.of(), List.of());
+        Workspace[] w = new Workspace[1];
+        JRootPane root = new JRootPane();
+        JList<String> rows = new JList<>(new String[]{"Comando Expert"});
+        SwingUtilities.invokeAndWait(() -> {
+            w[0] = new Workspace(i -> { }, new Texts(), new SchemaRegistry());
+            w[0].render(s);
+            root.getContentPane().setLayout(new BorderLayout());
+            root.getContentPane().add(rows, BorderLayout.WEST);
+            root.getContentPane().add(w[0].component(), BorderLayout.CENTER);
+            layOut(root, 900, 600);
+            w[0].rowCards().showFacts("instance:comando-expert", "Comando Expert", List.of(Map.entry("State", "idle")), "", "", rows,
+                    rows.getCellBounds(0, 0), 200);
+            w[0].render(s.withSessions(List.of(SessionState.closed(SessionSpec.fresh("other", "/w")))));
+            w[0].render(AppState.initial(List.of(new PanelState(P, "work", "", "")), List.of(), List.of()));
+        });
+        TabCard card = w[0].card();
+        SessionsSidebar.Cards cards = w[0].rowCards();
+        assertThat(cards.showing("instance:comando-expert")).as("a render keeps it").isTrue();
+        assertThat(List.of(card.statusText(), card.detailsText())).containsExactly("Comando Expert", "State: idle");
+
+        SwingUtilities.invokeAndWait(() -> cards.updateFacts("instance:comando-expert/work", "work", List.of(Map.entry("State", "busy")), "Last exchange",
+                "Asked: x"));
+        assertThat(card.detailsText()).as("another row's update is not this card's").isEqualTo("State: idle");
+        SwingUtilities.invokeAndWait(() -> cards.updateFacts("instance:comando-expert", "Comando Expert", List.of(Map.entry("State", "busy: 1 of 1")),
+                "Last exchange", "Asked: x"));
+        assertThat(List.of(card.detailsText(), card.topicText(), card.headingLabel().isVisible())).containsExactly("State: busy: 1 of 1", "Asked: x", true);
+    }
+
     /// A session's row shows its panel's card, with each session fact once and no new read, placed beside the rows when
     /// there is room and under the row otherwise; a session without a panel gets its own card read urgently from the
     /// end of its conversation; the card closes on ✕, on leaving, after the grace, and when the session is removed.

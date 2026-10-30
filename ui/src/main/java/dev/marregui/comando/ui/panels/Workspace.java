@@ -161,6 +161,8 @@ public final class Workspace {
     static final String SESSION_KEY = "session:";
     /** The key of a connection's card, which has facts alone (record 92). */
     static final String CONNECTION_KEY = "connection:";
+    /** A card of facts not this window's own (record 124), an instance's or one of its sessions': its owner keeps it current. */
+    static final String OTHER_KEY = "other:";
     private final TabCard card = new TabCard(key -> readTopic(key, true));
     /** The tab the pointer rests on, whose card shows when the hover timer fires; -1 when none. */
     private int hoverIndex = -1;
@@ -564,6 +566,30 @@ public final class Workspace {
             }
 
             @Override
+            public void showFacts(String key, String title, List<Map.Entry<String, String>> facts, String heading, String text,
+                                  JComponent over, Rectangle row, int beside) {
+                card.stay();
+                card.showOther(OTHER_KEY + key, over, row, beside, otherFacts(title, facts), heading, text);
+            }
+
+            @Override
+            public void updateFacts(String key, String title, List<Map.Entry<String, String>> facts, String heading, String text) {
+                if ((OTHER_KEY + key).equals(card.shown())) {
+                    card.updateOther(otherFacts(title, facts), heading, text);
+                }
+            }
+
+            @Override
+            public boolean showing(String key) {
+                return (OTHER_KEY + key).equals(card.shown());
+            }
+
+            @Override
+            public void stay() {
+                card.stay();
+            }
+
+            @Override
             public void left() {
                 if (card.shown() != null) {
                     card.left();
@@ -580,6 +606,10 @@ public final class Workspace {
                 });
             }
         };
+    }
+
+    private static CardFacts otherFacts(String title, List<Map.Entry<String, String>> facts) {
+        return new CardFacts(title, facts.stream().map(f -> new CardFacts.Fact(f.getKey(), f.getValue())).toList());
     }
 
     /** {@code session}'s card under {@code row}, or beside the rows from {@code beside} when it is not negative. */
@@ -715,6 +745,10 @@ public final class Workspace {
 
     /** Whether card {@code key}'s panel is open, or its headless session or its connection still configured. */
     private boolean exists(String key) {
+        if (key.startsWith(OTHER_KEY)) {
+            // its owner, the Instances tab, keeps it current and closes it
+            return true;
+        }
         if (key.startsWith(CONNECTION_KEY)) {
             return shown != null && shown.connection(key.substring(CONNECTION_KEY.length())).isPresent();
         }
@@ -793,6 +827,9 @@ public final class Workspace {
     }
 
     private void updateCard(String key) {
+        if (key.startsWith(OTHER_KEY)) {
+            return;
+        }
         if (key.startsWith(CONNECTION_KEY)) {
             card.update(factsOf(key), "", false, false); // facts alone: nothing is read
             return;

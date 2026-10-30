@@ -494,6 +494,26 @@ public final class TabCard {
     }
 
     /**
+     * As {@link #showFacts}, a card of another instance or one of its sessions (record 124): its facts, then under
+     * {@code heading} the {@code text}, when there is any, which is not read again.
+     */
+    void showOther(String key, JComponent over, Rectangle row, int beside, CardFacts head, String heading, String text) {
+        summarised(!text.isEmpty(), heading);
+        tickets(List.of());
+        agents(List.of(), id -> { });
+        open(key, over, row, beside, head, text, false, false);
+    }
+
+    /** New facts and text for the card of another instance shown now, as {@link #showOther} shows them. */
+    void updateOther(CardFacts head, String heading, String text) {
+        if (shown == null) {
+            return;
+        }
+        summarised(!text.isEmpty(), heading);
+        update(head, text, false, false);
+    }
+
+    /**
      * A card that explains {@code name} in {@code text} under {@code anchor}, a rectangle of {@code over}: its title,
      * "What it is", the text and the close button; no facts, no tickets, nothing to read again.
      */

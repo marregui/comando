@@ -594,7 +594,8 @@ public final class McpTools {
         instances.put("connected", s.instances().connected());
         ArrayNode others = instances.putArray("others");
         s.instances().others().forEach(o -> others.addObject().put("name", o.name()).put("instance", o.slug()).put("role", o.role())
-                .put("version", o.version()).put("busy", o.busy()).put("denied", s.instances().denied().contains(o.slug())));
+                .put("version", o.version()).put("busy", o.busy()).put("denied", s.instances().denied().contains(o.slug()))
+                .put("present", o.present()).put("edge", o.edge()));
         ArrayNode servers = root.putArray("servers");
         for (ServerSwitch x : actions.servers()) {
             servers.addObject().put("name", x.name().toLowerCase(Locale.ROOT)).put("running", x.isRunning()).put("status", x.status());

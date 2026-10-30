@@ -186,6 +186,9 @@ public final class App implements AutoCloseable {
                 peerBroker = own(new MqttPeerBroker(me.clientId(), EmbeddedEdge.Ports.DEFAULT.mqtt(), edge::running));
                 // a consult session is made where a new session is: the home folder
                 peers = own(new Peers(peerBroker, me, loop, loop::state, transcripts, HomeDir.home(), config.home().resolve("agents.json")));
+                // the instances seen are remembered in the data root, and the presence says whether this one started the Edge (record 124)
+                peers.dataRoot(config.home());
+                peers.edge(edge::startedHere);
                 mcpTools.peers(peers);
                 // the sidebar's Instances tab asks and refuses through it (record 124)
                 ui.instances(peers);

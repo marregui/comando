@@ -209,6 +209,12 @@ final class EmbeddedEdge implements ServerToggle, ServerSwitch, AutoCloseable {
         return e != null && !owner.equals(e.owner()) ? startedBy(e) + "; only that comando stops it" : "";
     }
 
+    /** Whether this instance started the Edge that runs, as last read; what its presence says (record 124). */
+    public boolean startedHere() {
+        Entry e = seen;
+        return isRunning() && e != null && owner.equals(e.owner());
+    }
+
     /** The Edge's own log, {@code edge/log/hivemq.log} in this instance's data root. */
     @Override
     public Path log() {

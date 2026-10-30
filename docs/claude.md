@@ -175,7 +175,7 @@ of text and shown to 400 lines.
 | `db_describe` | `table`, `connection` | a table's columns and types |
 | `session_send` | `session`, `text` | prompts another running session with an open panel, headed `[from session <sender>]`, without a card ([record 44](adr/0044-sessions-prompt-each-other-without-asking.md)); returns a cursor for `session_read` |
 | `session_read` | `session`, `after`, `wait_seconds` | another session's transcript as numbered blocks after a cursor, or the last 40; `wait_seconds` (≤ 600) waits until its turns are over |
-| `instances_list` | none | the other comando instances present on the comando Edge: name, id, version, busy, their sessions ([record 123](adr/0123-instances-consult-each-other.md)) |
+| `instances_list` | none | the other comando instances present on the comando Edge: name, id, version, busy, their sessions with what each busy one is doing and its last prompt's first line ([record 123](adr/0123-instances-consult-each-other.md), [124](adr/0124-the-sidebar-shows-the-instances.md)) |
 | `instance_ask` | `instance`, `text`, `wait_seconds` | asks another instance: its session `consult-<this instance>` is prompted in its panel, headed `[from instance <name> · session <s>]`; the reply is Claude's text in the turn that answers it; waits up to `wait_seconds` (default 300, ≤ 600), else returns an id |
 | `instance_reply` | `id`, `wait_seconds` | the reply to an earlier `instance_ask` by its id, read once |
 
@@ -221,7 +221,8 @@ sends for the same gesture:
   asks each instance in turn and passes the others' answers on, as `instance_ask`'s description says.
 - **What an agent sees.** `ui_get_state` adds each session's model, effort and creator, the closed panels, the pending
   approval cards (id, session, kind, tool, summary), the Files tab's folders, the local servers and the other instances
-  on the comando Edge (`instances`: connected, and each one's name, id, role, version, busy and whether it is refused;
+  on the comando Edge (`instances`: connected, and each one's name, id, role, version, busy, whether it is refused,
+  whether it is present or one that left, and whether it started the Edge;
   [record 124](adr/0124-the-sidebar-shows-the-instances.md)).
 
 - **Scope.** Without `panel`, the editor tools write to the focused panel when it is bound to the calling session, else

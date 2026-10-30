@@ -187,7 +187,7 @@ left edge ([record 98](adr/0098-the-sidebars-look.md), [record 100](adr/0100-a-t
 | Sessions | New session…, Import stored conversations…, Sort: running first, then by name (on only after a drag ordered the rows by hand); New panel, Reopen closed panel |
 | Connections | New connection…; Start embedded QuestDB, Stop embedded QuestDB; Start the comando Edge, Stop the comando Edge |
 | Files | Configure ~/.claude folders ([record 73](adr/0073-the-claude-folders-window-explains-and-creates-the-index.md)); Configure kit jobs, with a kit ([§7.6](#76-scheduled-jobs)) |
-| Instances | the window's commands only; an instance's own menu asks it, refuses its questions, copies its id |
+| Instances | the window's commands only; another instance's own menu asks it, refuses its questions, copies its id; one that left, forgets it; this instance's, sets its role; a session's row has none |
 
 No list has a bar of buttons ([record 74](adr/0074-the-sidebars-lists-have-no-bar-of-buttons.md)): a row's menu edits,
 clones and removes it (`ResourceActions`). Removing something in use asks **Stop and remove**, **Disconnect and remove**
@@ -197,12 +197,18 @@ icon per tab under it shows the sidebar at that tab. A name wider than the sideb
 tab: the sessions, the panels without a session, the connections and the Files tree show a horizontal scroll bar while
 a row is wider than the tab, and none while every row fits.
 
-The Instances tab ([record 124](adr/0124-the-sidebar-shows-the-instances.md)) shows the comando Edge's link (connected
-as this instance, connecting, or not running with **Start the Edge**), the instances on it as a tree (this one first,
-then the others, each with a busy dot, its role from its `instance.json`, its version when it differs, its sessions
-under it; the tooltip adds its id, kit and uptime), and the questions asked and answered since start, newest first. A
-double click on an instance asks it a question, as the user; on a question asked, it shows the question and reply in a
-side view; on a question answered, it opens the session here that answered it.
+The Instances tab ([record 124](adr/0124-the-sidebar-shows-the-instances.md)) shows what the other instances are
+doing, from their presence on the comando Edge alone, with no question asked. A tree lists this instance first, then the
+others present, then those that left, greyed with when they were last seen (the data root's `instances-seen.json`
+remembers them across restarts until **Forget**). Each instance row has a dot (green idle, Claude's orange while a
+session runs a turn, red when its questions are refused here, none once it left), its role from its `instance.json`, its
+version when it differs from this one's, and the Edge's antenna when it started the comando Edge; its sessions sit under
+it, each with its dot (orange running a turn, green idle, grey stopped, red failed) and what its turn is doing. A click on a row shows its card: an instance's state, role, version,
+kit, uptime, whether it started the Edge, and id; a session's state, what its turn does and for how long, its model and
+effort, context, folder and branch, background tasks, and the first line of its last prompt and reply. A double click
+does nothing. A header shows only while this instance is not connected, with **Start the Edge** while the Edge is down.
+Below, the questions asked and answered since start, newest first: a double click on a question asked shows it and its
+reply in a side view; on a question answered, it opens the session here that answered it.
 
 **A session row** is one line: the state icon and the name
 ([record 90](adr/0090-a-session-row-is-its-icon-and-name.md)). The icon, which a click starts or stops, is

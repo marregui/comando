@@ -245,10 +245,76 @@ class PeersTest {
         });
 
         b.peers.close();
-        main.window.recorded.await(Intent.InstancesChanged.class, i -> i.instances().others().isEmpty(), WAIT);
+        main.window.recorded.await(Intent.InstancesChanged.class, i -> i.instances().others().stream().noneMatch(InstancesState.Instance::present), WAIT);
         main.link.die();
         main.peers.tick();
         main.window.recorded.await(Intent.InstancesChanged.class, i -> !i.instances().connected(), WAIT);
+    }
+
+    /// A presence says what each session is doing, so another instance knows without asking: its state, what its turn
+    /// does and since when, its model, effort, context, folder and branch, its background tasks, and the first line of
+    /// its last prompt and reply (a consult's header skipped); and whether the instance started the comando Edge.
+    @Test
+    void thePresenceSaysWhatEachSessionIsDoingAndWhoStartedTheEdge() throws Exception {
+        Node main = node("", Peers.ANSWER_WITHIN);
+        Node b = node("b", Peers.ANSWER_WITHIN);
+        b.peers.edge(() -> true);
+        b.window.state.updateAndGet(s -> turns(s, "work", 1));
+        b.window.state.updateAndGet(s -> s.withSession("work", x -> x.withActivity("running Bash", 0L).withContext(42_000, 100_000)));
+        b.window.transcripts.of("work").append(new Block.UserPrompt("[from instance comando]\nwhat is X?\nmore", "work", ""));
+        b.window.transcripts.of("work").append(new Block.AssistantText("m1", 0, "X is a broker.\nDetails.", false, ""));
+        b.window.transcripts.of("work").append(new Block.UserPrompt("a subagent's prompt", "work", "tool-1"));
+        b.peers.tick();
+        InstancesState seen = main.window.recorded.await(Intent.InstancesChanged.class,
+                i -> i.instances().others().stream().anyMatch(o -> o.edge() && o.sessions().stream().anyMatch(InstancesState.Member::busy)), WAIT)
+                .instances();
+        InstancesState.Member work = seen.others().getFirst().sessions().getFirst();
+        assertThat(work.activity()).isEqualTo("running Bash");
+        assertThat(work.status()).isEqualTo("OPEN");
+        assertThat(work.context()).isEqualTo(42);
+        assertThat(work.prompt()).as("the consult header skipped, the subagent's prompt not the session's").isEqualTo("what is X?");
+        assertThat(work.reply()).isEqualTo("X is a broker.");
+        assertThat(call(main, "instances_list", "{}").text()).contains("work (busy: running Bash) last asked: what is X?");
+    }
+
+    /// An instance that leaves stays listed, not present, with when it was last seen; the data root remembers it across
+    /// a restart, until the user forgets it; one present cannot be forgotten. The role set from the tab is written to
+    /// `instance.json`, its other keys kept, and goes out in the next presence.
+    @Test
+    void anInstanceThatLeftIsRememberedUntilForgottenAndTheRoleIsWrittenAndSent() throws Exception {
+        Node main = node("", Peers.ANSWER_WITHIN);
+        Node b = node("b", Peers.ANSWER_WITHIN);
+        main.window.recorded.await(Intent.InstancesChanged.class, i -> i.instances().others().stream().anyMatch(o -> o.slug().equals("b")), WAIT);
+        main.peers.forget("b");
+        assertThat(main.window.recorded.of(Intent.Notify.class)).anyMatch(n -> n.text().contains("only an instance that left can be forgotten"));
+
+        b.peers.close();
+        InstancesState.Instance left = main.window.recorded.await(Intent.InstancesChanged.class,
+                i -> i.instances().others().stream().anyMatch(o -> !o.present()), WAIT).instances().others().getFirst();
+        assertThat(left.slug()).isEqualTo("b");
+        assertThat(left.lastSeen()).isPositive();
+        assertThat(left.sessions()).isEmpty();
+        Path file = main.home.resolve(Peers.SEEN_FILE);
+        assertThat(json.readTree(Files.readString(file)).path("instances").get(0).path("slug").asString()).isEqualTo("b");
+
+        main.peers.close();
+        Node again = node("", Peers.ANSWER_WITHIN);
+        assertThat(again.peers.instances().others()).singleElement().satisfies(o -> {
+            assertThat(o.slug()).isEqualTo("b");
+            assertThat(o.present()).isFalse();
+        });
+        again.peers.forget("b");
+        assertThat(again.peers.instances().others()).isEmpty();
+        assertThat(json.readTree(Files.readString(file)).path("instances").isEmpty()).isTrue();
+
+        Files.writeString(again.home.resolve("instance.json"), "{\"name\": \"x\"}");
+        Node c = node("c", Peers.ANSWER_WITHIN);
+        again.peers.role("comando specialist");
+        JsonNode written = json.readTree(Files.readString(again.home.resolve("instance.json")));
+        assertThat(written.path("name").asString()).isEqualTo("x");
+        assertThat(written.path("role").asString()).isEqualTo("comando specialist");
+        c.window.recorded.await(Intent.InstancesChanged.class,
+                i -> i.instances().others().stream().anyMatch(o -> o.slug().equals("main") && o.role().equals("comando specialist")), WAIT);
     }
 
     /// Every question is in the state on both sides: the asker's, waiting, then answered with the reply's text; the
@@ -328,11 +394,12 @@ class PeersTest {
         Link link = new Link(bus);
         Peers peers = new Peers(link, Peers.Me.of(name, "2.0.0", role), window, window.state::get, window.transcripts, home.toString(),
                 home.resolve("agents.json"), answerWithin);
+        peers.dataRoot(home);
         McpTools tools = new McpTools(window, window.state::get, window.transcripts, null, AuditLog.none(), new FakeClock(), Duration.ofMinutes(1));
         tools.peers(peers);
         peers.start();
         link.connect();
-        Node n = new Node(window, link, peers, tools, home.resolve("agents.json"));
+        Node n = new Node(window, link, peers, tools, home.resolve("agents.json"), home);
         nodes.add(n);
         return n;
     }
@@ -354,7 +421,7 @@ class PeersTest {
         return s.withSessions(sessions);
     }
 
-    private record Node(Window window, Link link, Peers peers, McpTools tools, Path agents) {
+    private record Node(Window window, Link link, Peers peers, McpTools tools, Path agents, Path home) {
     }
 
     /** The window and reducer as far as the tests need them: a session with its panel, a prompt shown and counted. */

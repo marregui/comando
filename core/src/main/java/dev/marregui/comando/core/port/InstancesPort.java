@@ -2,7 +2,7 @@ package dev.marregui.comando.core.port;
 
 /**
  * What the user does from the Instances tab to the other comando instances (record 124). The tab reads them from
- * {@code AppState.instances()}; these two act, off the caller's thread, and the outcome comes back as a notice and in
+ * {@code AppState.instances()}; these act, off the caller's thread, and the outcome comes back as a notice and in
  * that state.
  */
 public interface InstancesPort {
@@ -13,6 +13,12 @@ public interface InstancesPort {
     /** Refuses, or stops refusing, the questions of {@code instance} (its id): the data root's {@code agents.json}. */
     void deny(String instance, boolean denied);
 
+    /** Forgets {@code instance} (its id), an instance seen before and no longer present: the tab lists it no more. */
+    void forget(String instance);
+
+    /** Sets what this instance is for: the data root's {@code instance.json} {@code role}, sent in its presence. */
+    void role(String role);
+
     /** For a window without instances (the replay tests): asks nothing, refuses nothing. */
     InstancesPort NONE = new InstancesPort() {
         @Override
@@ -21,6 +27,14 @@ public interface InstancesPort {
 
         @Override
         public void deny(String instance, boolean denied) {
+        }
+
+        @Override
+        public void forget(String instance) {
+        }
+
+        @Override
+        public void role(String role) {
         }
     };
 }
