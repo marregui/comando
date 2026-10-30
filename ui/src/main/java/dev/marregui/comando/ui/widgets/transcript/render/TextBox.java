@@ -5,6 +5,7 @@ import java.awt.Graphics2D;
 import java.awt.Shape;
 import java.awt.font.LineBreakMeasurer;
 import java.awt.font.LineMetrics;
+import java.awt.font.TextAttribute;
 import java.awt.font.TextHitInfo;
 import java.awt.font.TextLayout;
 import java.awt.geom.AffineTransform;
@@ -18,12 +19,101 @@ import java.util.Map;
 /**
  * Wrapped rich text: lines broken at the width with {@link LineBreakMeasurer} and at every newline.
  * The layout is kept until the width or the style changes, so repainting and scrolling cost no layout.
- * Coordinates are relative to the box's top left.
+ * A source line that wraps is shaped once and its measurer kept across widths: shaping is most of the cost of a
+ * wrap, as the JDK measures each glyph's outline for it. When one font sets the whole source line, every line it
+ * wraps to is as tall as the first one laid out, at any width, so its lines make their layouts when first painted or
+ * hit: a layout of a long text makes only the layouts it shows. Coordinates are relative to the box's top left. Laid
+ * out, painted and hit on one thread at a time, as a line laid out late moves its source line's measurer.
  */
 final class TextBox {
 
-    /** One laid-out line: {@code layout} is null for an empty line. */
-    record Line(TextLayout layout, float top, float baseline, float height, int start, int end, int sourceLine) {
+    /**
+     * One laid-out line: {@link #layout()} is null for an empty line; a wrapped line of a source line in one font makes
+     * its layout on the first call.
+     */
+    static final class Line {
+        private TextLayout layout;
+        private final float top;
+        private final float baseline;
+        private final float height;
+        private final int start;
+        private final int end;
+        private final int sourceLine;
+        /** The box and the source line that make this line's layout on the first call; null once made. */
+        private TextBox owner;
+        private Paragraph paragraph;
+        private final float wrapWidth;
+
+        Line(final TextLayout layout, final float top, final float baseline, final float height, final int start, final int end,
+             final int sourceLine) {
+            this(layout, top, baseline, height, start, end, sourceLine, null, null, 0);
+        }
+
+        private Line(final TextLayout layout, final float top, final float baseline, final float height, final int start,
+                     final int end, final int sourceLine, final TextBox owner, final Paragraph paragraph, final float wrapWidth) {
+            this.layout = layout;
+            this.top = top;
+            this.baseline = baseline;
+            this.height = height;
+            this.start = start;
+            this.end = end;
+            this.sourceLine = sourceLine;
+            this.owner = owner;
+            this.paragraph = paragraph;
+            this.wrapWidth = wrapWidth;
+        }
+
+        TextLayout layout() {
+            if (paragraph != null) {
+                layout = owner.lineLayout(paragraph, start, end, wrapWidth);
+                paragraph = null;
+                owner = null;
+            }
+            return layout;
+        }
+
+        float top() {
+            return top;
+        }
+
+        float baseline() {
+            return baseline;
+        }
+
+        float height() {
+            return height;
+        }
+
+        int start() {
+            return start;
+        }
+
+        int end() {
+            return end;
+        }
+
+        int sourceLine() {
+            return sourceLine;
+        }
+    }
+
+    /**
+     * A source line that wraps, {@code [at, at + length)}, with its measurer. When one font sets all of it, every line
+     * it wraps to at any width has the ascent, descent and leading of {@link #metrics}, the first line laid out.
+     */
+    private static final class Paragraph {
+        private final LineBreakMeasurer measurer;
+        private final int at;
+        private final int length;
+        private final boolean oneFont;
+        private TextLayout metrics;
+
+        Paragraph(final LineBreakMeasurer measurer, final int at, final int length, final boolean oneFont) {
+            this.measurer = measurer;
+            this.at = at;
+            this.length = length;
+            this.oneFont = oneFont;
+        }
     }
 
     private final Rich rich;
@@ -33,9 +123,13 @@ final class TextBox {
     private List<Line> lines = List.of();
     private float height;
     private boolean wrap = true;
-    /** Unwrapped layouts of source lines that fit a line, by line start; valid for {@link #singlesStyle}. */
+    /** Unwrapped layouts of source lines that fit a line, by line start; valid for {@link #shapedStyle}. */
     private Map<Integer, TextLayout> singles = new HashMap<>();
-    private Style singlesStyle;
+    /** The source lines that wrap, by line start; valid for {@link #shapedStyle}. */
+    private Map<Integer, Paragraph> paragraphs = new HashMap<>();
+    private Style shapedStyle;
+    private int paragraphsShaped;
+    private int linesLaidOut;
 
     TextBox(Rich rich) {
         this.rich = rich;
@@ -65,41 +159,32 @@ final class TextBox {
     }
 
     /** Lays out at {@code w} pixels; returns the height. Free when width and style are unchanged. */
-    int layout(int w, Style s) {
+    int layout(final int w, final Style s) {
         if (w == width && s == style) {
             return Math.round(height);
         }
         width = w;
         style = s;
-        List<Line> out = new ArrayList<>();
+        final List<Line> out = new ArrayList<>();
         float y = 0;
-        float emptyHeight = s.height(rich.baseFont());
-        LineMetrics lm = rich.baseFont().getLineMetrics("Xg", Style.FRC);
+        final float emptyHeight = s.height(rich.baseFont());
+        final LineMetrics lm = rich.baseFont().getLineMetrics("Xg", Style.FRC);
         int sourceLine = 0;
         int at = 0;
-        float wrapWidth = Math.max(20f, w);
+        final float wrapWidth = Math.max(20f, w);
         while (at <= text.length()) {
-            int nl = text.indexOf('\n', at);
-            int end = nl < 0 ? text.length() : nl;
+            final int nl = text.indexOf('\n', at);
+            final int end = nl < 0 ? text.length() : nl;
             if (end == at) {
                 out.add(new Line(null, y, y + lm.getAscent(), emptyHeight, at, at, sourceLine));
                 y += emptyHeight;
             } else if (fitsOnOneLine(at, end, wrapWidth, s)) {
-                TextLayout layout = single(at, end, s);
-                float h = layout.getAscent() + layout.getDescent() + layout.getLeading() + s.lineGap;
+                final TextLayout layout = single(at, end, s);
+                final float h = layout.getAscent() + layout.getDescent() + layout.getLeading() + s.lineGap;
                 out.add(new Line(layout, y, y + layout.getAscent() + s.lineGap / 2f, h, at, end, sourceLine));
                 y += h;
             } else {
-                AttributedCharacterIterator it = rich.attributed(at, end).getIterator();
-                LineBreakMeasurer measurer = new LineBreakMeasurer(it, Style.FRC);
-                while (measurer.getPosition() < it.getEndIndex()) {
-                    int from = measurer.getPosition();
-                    TextLayout layout = measurer.nextLayout(wrapWidth);
-                    float h = layout.getAscent() + layout.getDescent() + layout.getLeading() + s.lineGap;
-                    float baseline = y + layout.getAscent() + s.lineGap / 2f;
-                    out.add(new Line(layout, y, baseline, h, at + from, at + measurer.getPosition(), sourceLine));
-                    y += h;
-                }
+                y = wrap(paragraph(at, end, s), wrapWidth, y, sourceLine, s, out);
             }
             if (nl < 0) {
                 break;
@@ -110,6 +195,52 @@ final class TextBox {
         lines = out;
         height = y;
         return Math.round(height);
+    }
+
+    /**
+     * Adds the lines {@code p} wraps to at {@code wrapWidth} to {@code out}, from {@code top}; returns the bottom.
+     * The breaks are the measurer's. A source line in one font lays out its first line at its first wrap, for the
+     * metrics, and every other line on first use; any other source line lays out every line here.
+     */
+    private float wrap(final Paragraph p, final float wrapWidth, final float top, final int sourceLine, final Style s,
+                       final List<Line> out) {
+        final LineBreakMeasurer measurer = p.measurer;
+        measurer.setPosition(0);
+        float y = top;
+        while (measurer.getPosition() < p.length) {
+            final int from = measurer.getPosition();
+            final TextLayout layout;
+            if (p.metrics == null) {
+                layout = measurer.nextLayout(wrapWidth);
+                linesLaidOut++;
+                if (p.oneFont) {
+                    p.metrics = layout;
+                }
+            } else {
+                layout = null;
+                measurer.setPosition(measurer.nextOffset(wrapWidth));
+            }
+            final TextLayout metrics = layout != null ? layout : p.metrics;
+            final float h = metrics.getAscent() + metrics.getDescent() + metrics.getLeading() + s.lineGap;
+            final float baseline = y + metrics.getAscent() + s.lineGap / 2f;
+            final int start = p.at + from;
+            final int end = p.at + measurer.getPosition();
+            out.add(layout != null ? new Line(layout, y, baseline, h, start, end, sourceLine)
+                    : new Line(null, y, baseline, h, start, end, sourceLine, this, p, wrapWidth));
+            y += h;
+        }
+        return y;
+    }
+
+    /**
+     * The layout of {@code [start, end)}, one of the lines {@code p} wraps to at {@code wrapWidth}: the measurer
+     * breaks there again, so the layout is the one its pass over the source line would have made.
+     */
+    private TextLayout lineLayout(final Paragraph p, final int start, final int end, final float wrapWidth) {
+        final LineBreakMeasurer measurer = p.measurer;
+        measurer.setPosition(start - p.at);
+        linesLaidOut++;
+        return measurer.nextLayout(wrapWidth, end - p.at, false);
     }
 
     int height() {
@@ -128,29 +259,67 @@ final class TextBox {
         return estimate <= w && single(at, end, s).getAdvance() <= w;
     }
 
-    private TextLayout single(int at, int end, Style s) {
-        if (singlesStyle != s) {
-            singles = new HashMap<>();
-            singlesStyle = s;
-        }
+    private TextLayout single(final int at, final int end, final Style s) {
+        shapeFor(s);
         return singles.computeIfAbsent(at, k -> new TextLayout(rich.attributed(at, end).getIterator(), Style.FRC));
     }
 
+    /** Source line {@code [at, end)}, which wraps, with its measurer, made on its first wrap with {@code s}. */
+    private Paragraph paragraph(final int at, final int end, final Style s) {
+        shapeFor(s);
+        return paragraphs.computeIfAbsent(at, k -> {
+            final AttributedCharacterIterator it = rich.attributed(at, end).getIterator();
+            final boolean oneFont = it.getRunLimit(TextAttribute.FONT) == it.getEndIndex();
+            paragraphsShaped++;
+            return new Paragraph(new LineBreakMeasurer(it, Style.FRC), at, end - at, oneFont);
+        });
+    }
+
+    /** Drops the shaped source lines when {@code s} is not the style they were shaped with. */
+    private void shapeFor(final Style s) {
+        if (shapedStyle != s) {
+            singles = new HashMap<>();
+            paragraphs = new HashMap<>();
+            shapedStyle = s;
+        }
+    }
+
     /**
-     * Takes the line layouts of {@code previous} for the source lines that end before {@code prefix}, where both texts
-     * are the same: a block that grows at its end lays out only its new lines. Only before this box's first layout.
+     * Takes the line layouts and the measurers of {@code previous} for the source lines that end before {@code prefix},
+     * where both texts are the same: a block that grows at its end lays out only its new lines. Only before this box's
+     * first layout.
      */
-    void adoptLines(TextBox previous, int prefix) {
-        if (previous.singlesStyle == null || !singles.isEmpty()) {
+    void adoptLines(final TextBox previous, final int prefix) {
+        if (previous.shapedStyle == null || !singles.isEmpty() || !paragraphs.isEmpty()) {
             return;
         }
-        singlesStyle = previous.singlesStyle;
+        shapedStyle = previous.shapedStyle;
         previous.singles.forEach((at, layout) -> {
-            int end = previous.text.indexOf('\n', at);
-            if (end >= 0 && end < prefix) {
+            if (previous.endsBefore(at, prefix)) {
                 singles.put(at, layout);
             }
         });
+        previous.paragraphs.forEach((at, p) -> {
+            if (previous.endsBefore(at, prefix)) {
+                paragraphs.put(at, p);
+            }
+        });
+    }
+
+    /** True when the source line starting at {@code at} ends with a newline before {@code prefix}. */
+    private boolean endsBefore(final int at, final int prefix) {
+        final int end = text.indexOf('\n', at);
+        return end >= 0 && end < prefix;
+    }
+
+    /** The source lines that wrap shaped for a measurer, since the box was made; the layout work it did, for tests. */
+    int paragraphsShaped() {
+        return paragraphsShaped;
+    }
+
+    /** The wrapped lines laid out by a measurer since the box was made; the layout work it did, for tests. */
+    int linesLaidOut() {
+        return linesLaidOut;
     }
 
     /** The width the box was laid out at. */
