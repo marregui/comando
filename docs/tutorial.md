@@ -84,7 +84,7 @@ The tabs' right-click menus:
 
 ### 1.2 The panel tabs and their cards
 
-A tab's icon says what its session is doing:
+A tab shows one icon, which says what its session is doing; its title never changes:
 
 | Icon | Means |
 |---|---|
@@ -94,7 +94,7 @@ A tab's icon says what its session is doing:
 | a red mark | it failed |
 | a question mark | it waits for your answer |
 
-The last three put a `●` before the title until you look; the question mark stays until you answer.
+The check and the red mark stay until you look at the tab; the question mark stays until you answer.
 
 Rest the pointer on a tab, or click the ⓘ on a session's row in the **Sessions** tab, for its card: the name in the
 tint; the facts, each once (state and what it does, model and effort, context, folder and branch, conversation, Claude

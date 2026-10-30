@@ -24,6 +24,7 @@ import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.ui.PanelTexts;
 import dev.marregui.comando.ui.kit.format.KeyText;
+import dev.marregui.comando.ui.kit.icon.Icons;
 import dev.marregui.comando.ui.kit.icon.SpinnerIcon;
 import dev.marregui.comando.ui.kit.theme.Tint;
 import dev.marregui.comando.ui.kit.theme.Theme;
@@ -225,9 +226,9 @@ class WorkspaceTest {
     }
 
     /// A background tab shows the spinner icon and wants it turned while its turn runs, its timer waiting until the
-    /// window shows, with its title unchanged; it gets a `●` mark and one attention request when
-    /// the session asks, keeps the mark when the turn ends unseen, clears it once focused, and a failed turn asks for
-    /// attention again until a new turn supersedes it.
+    /// window shows; it gets the question mark and one attention request when the session asks, the check when the
+    /// turn ends unseen, which clears once focused, and a failed turn asks for attention again until a new turn
+    /// supersedes it. The icon alone carries the status: the title never changes.
     @Test
     void aTabFollowsItsSessionAndMarksAnOutcomeUntilLookedAt() throws Exception {
         PanelId other = new PanelId("o");
@@ -260,22 +261,24 @@ class WorkspaceTest {
         SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withApprovals(List.of(
                 new Approval(1L, "s", ApprovalKind.TOOL, "Bash", "{}", "ls", 1L)))));
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.NEEDS_YOU);
-        assertThat(tabs.getTitleAt(0)).isEqualTo("● work");
+        assertThat(tabs.getIconAt(0)).isSameAs(Icons.get("question"));
+        assertThat(tabs.getTitleAt(0)).as("one icon, no mark beside it").isEqualTo("work");
         assertThat(attention).hasValue(1);
         SwingUtilities.invokeAndWait(() -> w[0].render(s[0]));
         assertThat(attention).as("the same need asks once").hasValue(1);
 
-        // answered, the turn ends unseen: done, marked, no spinner, no attention
+        // answered, the turn ends unseen: done, the check, no spinner, no attention
         SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withApprovals(List.of()).withSession(session.withTurns(0, 2L))));
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.DONE);
-        assertThat(tabs.getTitleAt(0)).isEqualTo("● work");
-        assertThat(tabs.getIconAt(0)).isNotInstanceOf(SpinnerIcon.class);
+        assertThat(tabs.getIconAt(0)).isSameAs(Icons.get("check"));
+        assertThat(tabs.getTitleAt(0)).isEqualTo("work");
         assertThat(w[0].spinWanted()).isFalse();
         assertThat(attention).hasValue(1);
 
-        // looking at it clears the mark
+        // looking at it clears the check: the session's own icon is back
         SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withFocused(P)));
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.IDLE);
+        assertThat(tabs.getIconAt(0)).isSameAs(Icons.get("claude"));
         assertThat(tabs.getTitleAt(0)).isEqualTo("work");
 
         // a failed turn while away: an error, with attention; a new turn starting supersedes it
@@ -283,6 +286,8 @@ class WorkspaceTest {
         SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(session.withTurns(1, 3L).withTurns(0, 4L)
                 .withLastTurnError("rate limited"))));
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.ERROR);
+        assertThat(tabs.getIconAt(0)).isSameAs(Icons.get("error"));
+        assertThat(tabs.getTitleAt(0)).isEqualTo("work");
         assertThat(attention).hasValue(2);
         SwingUtilities.invokeAndWait(() -> w[0].render(s[0] = s[0].withSession(session.withTurns(1, 5L))));
         assertThat(w[0].statuses()).containsEntry(P, TabStatus.WORKING);

@@ -72,9 +72,9 @@ import java.util.stream.Collectors;
 /**
  * The open panels as tabs, in state order; the selected tab is the focused panel, and a tab dragged along the row moves
  * its panel. The tabs closed most recently are remembered for ⌘⇧T: a panel of comando's own by its id (the state keeps
- * it, closed), a document by its file. Each tab shows its panel's {@link TabStatus} in its icon, and a "● " before its
- * title while the status asks for a look: a turn or query that finished (or failed) while another tab was in front is
- * marked until the user looks at it; a session waiting for the user is marked until answered; a running one spins.
+ * it, closed), a document by its file. Each tab shows its panel's {@link TabStatus} as its one icon, its title plain: a
+ * turn or query that finished (or failed) while another tab was in front keeps its check (or red mark) until the user
+ * looks at it; a session waiting for the user keeps its question mark until answered; a running one spins.
  * A tab's menu closes it, the others, or those to its right or its left; such a close keeps the tabs waiting for the
  * user and those whose shell runs a program.
  *
@@ -1123,10 +1123,10 @@ public final class Workspace {
                         opener.accept(f);
                     });
                     panels.put(p.id(), view);
-                    tabs.insertTab(title(p, false), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
+                    tabs.insertTab(title(p), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
                 } else if (tabs.indexOfComponent(view) != i) {
                     tabs.remove(view);
-                    tabs.insertTab(title(p, false), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
+                    tabs.insertTab(title(p), Icons.get("file"), view, null, Math.min(i, tabs.getTabCount()));
                 }
                 refreshTab(p, s, view);
                 Path file = texts.file(p.id()).orElse(null);
@@ -1172,7 +1172,7 @@ public final class Workspace {
     private void refreshTab(PanelState p, AppState s, EditorPanel view) {
         TabStatus status = track(p, s);
         int at = tabs.indexOfComponent(view);
-        String title = title(p, status.marked());
+        String title = title(p);
         if (!tabs.getTitleAt(at).equals(title)) {
             tabs.setTitleAt(at, title);
         }
@@ -1231,9 +1231,9 @@ public final class Workspace {
                 + TabStatus.describe(p, s, status, System.currentTimeMillis()));
     }
 
-    /** The tab's title: plain, clipped, with a dot when a query finished unseen. */
-    static String title(PanelState p, boolean marked) {
-        return Plain.text((marked ? "● " : "") + Clip.keepStart(p.title(), TITLE_CHARS));
+    /** The tab's title: plain and clipped; the icon alone carries the status. */
+    static String title(PanelState p) {
+        return Plain.text(Clip.keepStart(p.title(), TITLE_CHARS));
     }
 
     /** The title, the connection, and the session unless the title names it already (a session's own panel). */

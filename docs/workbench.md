@@ -138,9 +138,9 @@ Any number of document panels may be attached to a session
   waits; a red mark when the last turn or query failed, or the session died, out of view; a green check when a turn or
   query finished out of view; a spinner while one runs; an hourglass while background work the session started has not
   ended; otherwise, for a session's panel, the session's state icon ([§1.3](#13-the-sidebar)), and the file icon for a
-  panel without a session. The first three put "● " before the title: the question mark's until the request is
-  answered, the others' until the tab is looked at. A waiting request or a failure bounces the Dock while the window
-  is not active.
+  panel without a session. The icon is the tab's one mark and the title stays plain: the question mark holds until the
+  request is answered, the red mark and the check until the tab is looked at. A waiting request or a failure bounces
+  the Dock while the window is not active.
 - **The lower panel** follows the focused panel: its last SQL run, its session's transcript, its terminal. Approvals
   lists every session's requests. Its tab strip holds the tabs alone; the palette's "Clear the Session tab" empties
   the Session tab once the turn has ended, while the conversation goes on

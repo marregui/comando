@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-15 | accepted; its statuses amended by [record 43](0043-a-session-waiting-on-background-work-shows-it.md) (waiting) | Miguel and Claude |
+| 2026-10-15 | accepted; its statuses amended by [record 43](0043-a-session-waiting-on-background-work-shows-it.md) (waiting); amended 2026-10-30 (see Amendments) | Miguel and Claude |
 
 ## 1. Context
 
@@ -52,3 +52,11 @@ by the next turn, so a failure is observable after the fact. `TabStatus` (ui, pa
 unit-tested on its own; `Workspace` keeps, per panel, whether work was going on at the last render, and marks a panel
 whose work ended while another tab was in front. `SpinnerIcon` joins the kit's icon package. `Notifier.attention` asks
 the desktop; `AppIcon` installs the icon on the window and the Dock; `:app:dmg` passes it to jpackage.
+
+## Amendments
+
+2026-10-30: a tab shows one mark, its icon, and its title stays plain. The "● " that needs you, error and done put
+before the title is gone: the question mark, the red mark and the check already hold exactly as long as the dot did,
+so the dot said nothing the icon did not, and beside the icon it read as a second icon of unclear meaning. The table's
+Title column is plain in every row; what clears each status is unchanged. Miguel asked ("one icon at the time, with a
+clear meaning"); tested in `WorkspaceTest`.

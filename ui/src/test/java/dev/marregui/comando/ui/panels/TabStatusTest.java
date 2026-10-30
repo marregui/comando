@@ -134,13 +134,9 @@ class TabStatusTest {
         assertThat(TabStatus.of(BOUND, other, false)).as("another session's request is not this tab's").isEqualTo(TabStatus.WORKING);
     }
 
-    /// `NEEDS_YOU`, `ERROR` and `DONE` are marked and `WORKING` is not; only `NEEDS_YOU` and `ERROR` ask for attention.
+    /// Only `NEEDS_YOU` and `ERROR` ask for attention.
     @Test
-    void marksAndAttention() {
-        assertThat(TabStatus.NEEDS_YOU.marked()).isTrue();
-        assertThat(TabStatus.ERROR.marked()).isTrue();
-        assertThat(TabStatus.DONE.marked()).isTrue();
-        assertThat(TabStatus.WORKING.marked()).isFalse();
+    void attention() {
         assertThat(TabStatus.NEEDS_YOU.wantsAttention()).isTrue();
         assertThat(TabStatus.ERROR.wantsAttention()).isTrue();
         assertThat(TabStatus.DONE.wantsAttention()).as("a finished turn does not bounce the Dock").isFalse();

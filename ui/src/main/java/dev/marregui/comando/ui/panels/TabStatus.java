@@ -36,11 +36,6 @@ enum TabStatus {
         return this == NEEDS_YOU || this == ERROR;
     }
 
-    /** Whether the title carries the mark. */
-    boolean marked() {
-        return this == NEEDS_YOU || this == ERROR || this == DONE;
-    }
-
     /**
      * The status of {@code p}'s tab in {@code s}; {@code unread} says its last work ended while another tab was in
      * front and the user has not looked since.
