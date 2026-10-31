@@ -169,7 +169,7 @@ class ResourceKindTest {
     void onlyTheModelAcceptsTypedValues() {
         assertThat(SessionKind.INSTANCE.attributes()).filteredOn(a -> a.kind() == Attribute.Kind.CHOICE)
                 .extracting(Attribute::key, Attribute::editable)
-                .containsExactly(Tuple.tuple("startMode", false), Tuple.tuple("model", true), Tuple.tuple("effort", false),
+                .containsExactly(Tuple.tuple("model", true), Tuple.tuple("effort", false),
                         Tuple.tuple("permissionMode", false));
         assertThat(ConnectionKind.INSTANCE.attributes()).filteredOn(a -> a.kind() == Attribute.Kind.CHOICE)
                 .allMatch(a -> !a.editable());
@@ -190,13 +190,14 @@ class ResourceKindTest {
         assertThat(ConnectionKind.INSTANCE.attributes()).noneMatch(Attribute::advanced);
     }
 
-    /// Choosing NEW for a stored conversation warns that it will not continue, while fresh sessions receive no advice.
+    /// Choosing a new conversation over a stored one says the next start begins a new one, while fresh sessions
+    /// receive no advice.
     @Test
     void choosingNewForAStoredConversationSaysItWillNotBeContinued() {
         Map<String, String> s = SessionKind.INSTANCE.toAttributes(SessionSpec.imported("s", "/tmp", "c0ffee"));
         assertThat(SessionKind.INSTANCE.advice(s)).isEmpty();
         s.put("startMode", "NEW");
-        assertThat(SessionKind.INSTANCE.advice(s)).isEqualTo("The stored conversation c0ffee will not be continued");
+        assertThat(SessionKind.INSTANCE.advice(s)).isEqualTo("The next start begins a new conversation; the one before stays on disk");
         assertThat(SessionKind.INSTANCE.advice(SessionKind.INSTANCE.toAttributes(SessionSpec.fresh("n", "/tmp")))).isEmpty();
     }
 

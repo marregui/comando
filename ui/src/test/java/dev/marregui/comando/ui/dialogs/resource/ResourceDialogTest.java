@@ -18,6 +18,7 @@ import dev.marregui.comando.core.state.PanelState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.testkit.RecordingSink;
 import dev.marregui.comando.testkit.States;
+import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.theme.Theme;
 import org.junit.jupiter.api.AfterAll;
@@ -301,16 +302,16 @@ class ResourceDialogTest {
         assertThat(message(d).getText()).isEqualTo("Saved and opened fresh in its own panel");
     }
 
-    /// RESUME without a stored conversation sends nothing and shows the reason in the danger colour.
+    /// A session without a working directory sends nothing and shows the reason in the danger colour.
     @Test
     void assignOnAnInvalidFormSaysWhyAndDoesNothing() {
         RecordingSink sink = new RecordingSink();
         ResourceDialog<SessionSpec> d = sessions(sink);
         d.prepare(States.twoPanels(), "work");
-        combo(d, "startMode").setSelectedItem("RESUME");
+        text(d, "workDir").setText("");
         click(d, "Open its panel");
         assertThat(sink.intents()).isEmpty();
-        assertThat(message(d).getText()).isEqualTo("Conversation RESUME needs a stored conversation; choose NEW for an empty one");
+        assertThat(message(d).getText()).isEqualTo("workDir is empty");
         assertThat(message(d).getForeground()).isEqualTo(Theme.DANGER);
     }
 
@@ -383,8 +384,8 @@ class ResourceDialogTest {
 
     // ---- choices and advice
 
-    /// Only the model combo is editable; the conversation shows first for every session, and choosing NEW on an
-    /// imported one warns that the stored conversation will not be continued, RESUME clearing it.
+    /// Only the model combo is editable; the conversation shows for every session, and choosing a new one on an
+    /// imported one says the next start begins a new conversation, choosing its own again clearing that.
     @Test
     void onlyTheModelTakesTypedValuesAndNewOnAStoredConversationWarns() {
         AppState s = AppState.initial(List.of(new PanelState(States.P1, "one", "", "")), List.of(),
@@ -394,14 +395,14 @@ class ResourceDialogTest {
         assertThat(combo(d, "model").isEditable()).isTrue();
         assertThat(combo(d, "effort").isEditable()).isFalse();
         assertThat(combo(d, "permissionMode").isEditable()).isFalse();
-        assertThat(combo(d, "startMode").isEditable()).isFalse();
-        assertThat(isShownIn(combo(d, "startMode"), d.content())).isTrue();
+        assertThat(picker(d).isEditable()).isFalse();
+        assertThat(isShownIn(picker(d), d.content())).isTrue();
 
         d.prepare(s, "imp");
-        assertThat(isShownIn(combo(d, "startMode"), d.content())).isTrue();
-        combo(d, "startMode").setSelectedItem("NEW");
-        assertThat(message(d).getText()).isEqualTo("The stored conversation c0ffee will not be continued");
-        combo(d, "startMode").setSelectedItem("RESUME");
+        assertThat(isShownIn(picker(d), d.content())).isTrue();
+        picker(d).setSelectedIndex(0);
+        assertThat(message(d).getText()).isEqualTo("The next start begins a new conversation; the one before stays on disk");
+        picker(d).setSelectedIndex(1);
         assertThat(message(d).getText()).isBlank();
     }
 
@@ -426,7 +427,7 @@ class ResourceDialogTest {
             assertThat(one(d.content(), JLabel.class, l -> "context".equals(l.getName())).getText()).startsWith("Runs on folder ")
                     .contains("instance ");
             List<String> order = SessionKind.INSTANCE.attributes().stream().map(Attribute::key).toList();
-            assertThat(order.subList(0, 3)).as("the name first, then the conversation").containsExactly("name", "startMode", "claudeSessionId");
+            assertThat(order.subList(0, 2)).as("the name first, then the conversation").containsExactly("name", "claudeSessionId");
             assertThat(shown(combo(d, "effort"))).isEqualTo("medium · the kit's default");
             assertThat(shown(combo(d, "permissionMode"))).isEqualTo("bypassPermissions · the kit's default: runs every tool unasked");
             assertThat(combo(d, "model").getClientProperty("JTextField.placeholderText")).as("an open choice shows it while empty")
@@ -474,15 +475,91 @@ class ResourceDialogTest {
         Attribute about = SessionKind.INSTANCE.attributes().getFirst();
 
         d.explain(name, about);
-        combo(d, "startMode").setSelectedItem("RESUME");
+        String dir = text(d, "workDir").getText();
+        text(d, "workDir").setText("");
         click(d, "Save");
         assertThat(sink.of(Intent.SaveSession.class)).as("refused: nothing saved").isEmpty();
         assertThat(d.explainer().shown()).as("a refused form stays open").isEqualTo("name");
 
-        combo(d, "startMode").setSelectedItem("NEW");
+        text(d, "workDir").setText(dir);
         click(d, "Save");
         assertThat(sink.of(Intent.SaveSession.class)).hasSize(1);
         assertThat(d.explainer().shown()).as("saved: the dialog closes, its card with it").isNull();
+    }
+
+    /// The conversation is picked, never typed (record 125, 2026-10-31): a new session offers a new conversation first,
+    /// then the ones stored on disk by title, folder and age, without those another session holds; how it is reached
+    /// shows only beside a stored one. Picking one copies it, as an import does, and runs the session in its folder,
+    /// More open to show it; Continue it resumes it instead.
+    @Test
+    void aStoredConversationIsPickedByWhatItIsAndCopiedOrContinued() {
+        RecordingSink sink = new RecordingSink();
+        ResourceDialog<SessionSpec> d = sessions(sink);
+        AppState s = States.twoPanels().withSessions(List.of(SessionState.closed(SessionSpec.imported("held", "/tmp", "held-1"))));
+        d.prepareNew(s);
+        long hour = System.currentTimeMillis() - 3_600_000L;
+        d.offer(List.of(new StoredConversation("c0ffee-1", "/work/edge", "main", "Edge release notes", "", hour, 10),
+                new StoredConversation("held-1", "/tmp", "", "Held elsewhere", "", hour, 10),
+                new StoredConversation("beef-2", "/work/jfrq", "", "", "why is the GC busy", hour, 10)));
+        assertThat(rows(d)).containsExactly(ConversationField.NEW_ONE,
+                ConversationField.label(new StoredConversation("c0ffee-1", "/work/edge", "main", "Edge release notes", "", hour, 10), System.currentTimeMillis()),
+                ConversationField.label(new StoredConversation("beef-2", "/work/jfrq", "", "", "why is the GC busy", hour, 10), System.currentTimeMillis()));
+        assertThat(rows(d).get(1)).startsWith("Edge release notes · /work/edge · ");
+        assertThat(rows(d).get(2)).as("no title: its last prompt").startsWith("why is the GC busy · ");
+        assertThat(isShownIn(combo(d, "startMode"), d.content())).as("nothing to continue or copy").isFalse();
+
+        text(d, "name").setText("notes");
+        picker(d).setSelectedIndex(1);
+        assertThat(combo(d, "startMode").getSelectedItem()).isEqualTo(ConversationField.COPY);
+        assertThat(text(d, "workDir").getText()).as("its folder").isEqualTo("/work/edge");
+        assertThat(isShownIn(text(d, "workDir"), d.content())).as("More open to show it").isTrue();
+        click(d, "Save");
+        SessionSpec copied = sink.of(Intent.SaveSession.class).getLast().spec();
+        assertThat(copied.claudeSessionId()).isEqualTo("c0ffee-1");
+        assertThat(copied.startMode()).isEqualTo(StartMode.FORK);
+        assertThat(copied.workDir()).isEqualTo("/work/edge");
+
+        d.prepareNew(s);
+        d.offer(List.of(new StoredConversation("c0ffee-1", "/work/edge", "main", "Edge release notes", "", hour, 10)));
+        text(d, "name").setText("notes 2");
+        picker(d).setSelectedIndex(1);
+        combo(d, "startMode").setSelectedItem(ConversationField.CONTINUE);
+        click(d, "Save");
+        assertThat(sink.of(Intent.SaveSession.class).getLast().spec().startMode()).isEqualTo(StartMode.RESUME);
+    }
+
+    /// A saved session lists its own conversation, by its title once the stored ones are read, selected with how its
+    /// next start reaches it; a new conversation keeps its id, as NEW did, for the next start to replace.
+    @Test
+    void aSavedSessionShowsItsOwnConversationAndANewOneKeepsItsId() {
+        RecordingSink sink = new RecordingSink();
+        ResourceDialog<SessionSpec> d = sessions(sink);
+        AppState s = States.twoPanels().withSessions(List.of(SessionState.closed(SessionSpec.imported("imp", "/tmp", "c0ffee"))));
+        d.prepare(s, "imp");
+        assertThat(String.valueOf(picker(d).getSelectedItem())).isEqualTo("Its own · stored conversation c0ffee");
+        assertThat(combo(d, "startMode").getSelectedItem()).as("an import copies at its first start").isEqualTo(ConversationField.COPY);
+        d.offer(List.of(new StoredConversation("c0ffee", "/tmp", "", "Edge release notes", "", System.currentTimeMillis(), 10)));
+        assertThat(String.valueOf(picker(d).getSelectedItem())).startsWith("Its own · Edge release notes · ");
+
+        picker(d).setSelectedIndex(0);
+        assertThat(isShownIn(combo(d, "startMode"), d.content())).isFalse();
+        click(d, "Save");
+        SessionSpec saved = sink.of(Intent.SaveSession.class).getLast().spec();
+        assertThat(saved.startMode()).isEqualTo(StartMode.NEW);
+        assertThat(saved.claudeSessionId()).isEqualTo("c0ffee");
+    }
+
+    private static JComboBox<?> picker(ResourceDialog<?> d) {
+        return one(d.content(), JComboBox.class, c -> "claudeSessionId".equals(c.getName()));
+    }
+
+    private static List<String> rows(ResourceDialog<?> d) {
+        JComboBox<?> c = picker(d);
+        List<String> rows = new ArrayList<>();
+        for (int i = 0; i < c.getItemCount(); i++) {
+            rows.add(String.valueOf(c.getItemAt(i)));
+        }
+        return rows;
     }
 
     /// What a combo shows for its selected value, as its renderer draws it.

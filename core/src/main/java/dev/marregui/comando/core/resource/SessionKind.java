@@ -76,14 +76,12 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
                 Attribute.of("name", "Name", Attribute.Kind.TEXT, true, "what this session is for: it names its panel and its ongoing conversation")
                         .about("A session is one ongoing line of work: you stop it, resume it, checkpoint it. Its name is how you find it again, "
                                 + "in its panel, the sidebar and Claude Code. Name it by purpose: edge-release, reviews."),
-                Attribute.choice("startMode", "Conversation", List.of("NEW", "RESUME", "FORK"),
-                                "NEW starts empty; RESUME continues the stored one; FORK copies it")
-                        .about("Which conversation the next start opens. NEW: an empty one. RESUME: the stored one, where it left off. "
-                                + "FORK: a copy of it, so the original stays as it was."),
-                Attribute.of("claudeSessionId", "Stored conversation", Attribute.Kind.TEXT, false,
-                                "set after the first start, or by Sessions ▸ Import…")
-                        .about("The Claude Code conversation the session continues. comando sets it at the first start; Sessions ▸ Import… "
-                                + "sets it from a stored one."),
+                // one row for the conversation: picked by title, folder and age, never typed as an id (record 125)
+                Attribute.of("claudeSessionId", "Conversation", Attribute.Kind.CONVERSATION, false,
+                                "a new one, or one stored on disk to continue or copy")
+                        .about("What the session talks in. A new conversation starts empty. A stored one, which Claude Code keeps on disk, "
+                                + "is continued where it left off, or copied so the original stays as it was; the session then runs in "
+                                + "its folder. After a session's first start, its own conversation is the one listed first."),
                 Attribute.openChoice("model", "Model", orDefault(SessionSpec.MODELS), follows)
                         .about("The Claude model the session uses. The default follows the kit's settings.json, so a later change there "
                                 + "reaches the session; a model picked here holds for this session.")
@@ -291,7 +289,7 @@ public final class SessionKind implements ResourceKind<SessionSpec> {
     public String advice(Map<String, String> values) {
         String id = values.getOrDefault("claudeSessionId", "").strip();
         if (!id.isEmpty() && values.getOrDefault("startMode", "").strip().equalsIgnoreCase(StartMode.NEW.name())) {
-            return "The stored conversation " + id + " will not be continued";
+            return "The next start begins a new conversation; the one before stays on disk";
         }
         return "";
     }

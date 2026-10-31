@@ -2,7 +2,7 @@
 
 | Date | Status | Decided by |
 |---|---|---|
-| 2026-10-30 | accepted; §2 built, §3 proposed for the packaging work | Miguel and Claude |
+| 2026-10-30 | accepted; §2 built (§2.1 amended 2026-10-31), §3 proposed for the packaging work | Miguel and Claude |
 
 ## 1. Context
 
@@ -25,6 +25,26 @@ instance: every one of its seven sessions runs in the kit's folder, `~/.claude`,
 | working directory | a new session starts in the kit's folder, as the user's sessions do (it was the focused session's folder, else the last used, else home); the field is under More, its hint "this folder's CLAUDE.md and git branch; the kit's by default". More opens by itself when the folder is not the kit's, there are extra folders, or the checkpoint prompt is not `/reflect` |
 | budget | not asked: `--max-budget-usd` binds only on API billing, and the user's plan is a subscription. A stored budget is kept by an edit (the form keeps the values it does not show) and still reaches the CLI |
 | wording | hints say what a field does, not its flag; "Next start" is "Conversation", "Extra directories" "Extra folders", "Checkpoint command" "Checkpoint prompt" |
+
+### 2.1 Amendment, 2026-10-31: the conversation is picked, never typed
+
+Miguel, opening New session: "the stored conversation is a text area, it does not make my life simple, there is no
+guidance there, just 'Stored conversation' ... I do not register what that could possibly mean or the relation with
+the fork resume etc". The form asked for a Claude Code conversation id in a free text field, which nobody knows, beside a
+NEW/RESUME/FORK choice whose link to it was not shown; any text was taken, and only a warning at the bottom said
+anything.
+
+| Question | Rule |
+|---|---|
+| one row | **Conversation** is one row (`Attribute.Kind.CONVERSATION`, `ConversationField`) editing both `claudeSessionId` and `startMode`; the free text field is gone. Hint: "a new one, or one stored on disk to continue or copy" |
+| the picker | **A new conversation** first; a saved session's own next, "Its own · title · folder · age"; then the conversations Claude Code stored on disk, newest first, each "title · folder · age" (the last prompt when it has no title), the list Sessions ▸ Import… reads (`SessionCatalogue`, read off the EDT each time the dialog opens). The id shows only in a row's tooltip. A conversation another session holds is not offered: two sessions never write one conversation; Clone copies one |
+| how | beside a stored or own conversation, **Continue it** (RESUME) or **A copy of it** (FORK); hidden for a new one. A saved session's own defaults to Continue it, a clone's to A copy of it |
+| a stored one picked | defaults to A copy of it and runs the session in its folder, where Claude Code keeps it, as an import does (`SessionSpec.imported`); More opens to show the folder |
+| a new one over its own | keeps the own id with NEW, as before: the next start replaces it. The line at the bottom reads "The next start begins a new conversation; the one before stays on disk" |
+
+Tested in `ResourceDialogTest` (the rows by title, held ones left out, a pick copied in its folder, Continue it
+resumes, a saved session's own and a new one keeping its id) and `SessionCardUiTest` (⌘⇧K in the real window: a
+transcript under the projects folder offered by its title, picked, saved as a fork in its folder).
 
 ## 3. Proposed: where an installed comando keeps its kit and brain
 

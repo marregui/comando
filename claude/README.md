@@ -26,7 +26,7 @@ One package, `dev.marregui.comando.claude`.
 | `MetricsLog` | what the sessions spend and how their work ends, one JSON line per turn, sub-agent or plan-usage read, in `metrics/metrics-<UTC date>.jsonl` of the data root ([record 110](../docs/adr/0110-metrics-for-calibration.md)); `MetricsLog.NONE` keeps nothing |
 | `BaseEffort` | the effort a model's turns start at, from the root's `settings.json` (`modelSettings.<model>.effortLevel`, else `effortLevel`); the stream does not report it |
 | `SubagentFiles` | finds and reads a subagent's stored conversation (`<session-id>/subagents/agent-<id>.jsonl`), reading only what the file gained since the last read |
-| `SessionCatalogue` | Claude Code's stored conversations for the import dialog, from a bounded read of each file's head (64 KiB) and tail (256 KiB) |
+| `SessionCatalogue` | Claude Code's stored conversations for the import dialog and the session dialog's conversation picker, from a bounded read of each file's head (64 KiB) and tail (256 KiB) |
 | `PlanUsageReader` | the plan's usage limits from `claude --safe-mode -p /usage`, a local command that sends no prompt |
 | `CodexUsageReader` | the Codex plan's usage limits from `codex app-server` (`account/rateLimits/read` over JSON-RPC on stdio), which sends no prompt; without Codex installed or signed in, the read says why |
 | `ClaudeTopics` | the tabs' topics: one or two sentences from Haiku (`claude --safe-mode -p --model haiku`, no tools, no saved session), one read at a time, at most one ask waiting per tab |
@@ -82,7 +82,7 @@ flowchart LR
 | `ClaudePort` | `start`, `stop`, `send(name, text, origin, preface)`, `interrupt`, `clearTranscript`, `clearConversation(name, carried)`, `loadHistory`, `forget`, `showSubagent` | the reducer's effects, through `EffectRouter` |
 | `TopicPort` (`ClaudeTopics`) | `read(key, source, urgent, done)` | `ui`, set by `app` through `ComandoUi.topics` |
 | `ClaudeAdapter.watchPlanUsage(every)` | reads both plans' usage now and every period | `app` at start (every 5 min) |
-| `SessionCatalogue.scan(limit)` | the stored conversations, newest first | `app`, which maps each entry to `ui`'s `StoredConversation` for the import dialog |
+| `SessionCatalogue.scan(limit)` | the stored conversations, newest first | `app`, which maps each entry to `ui`'s `StoredConversation` for the import dialog and the session dialog |
 | `ClaudeVersion.check(executable, launch)` | a warning, or empty | `app` at start |
 | `KitJson.resolve`, `KitJson.read` | the root and its kit | `app`'s `AppConfig` |
 | `KitJobsCli` | the kit's jobs: read, save, run | `app`'s `RootSetup` |

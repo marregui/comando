@@ -4,20 +4,27 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.StateLoop;
 import dev.marregui.comando.core.model.ConnectionSpec;
 import dev.marregui.comando.core.model.SessionSpec;
+import dev.marregui.comando.core.model.StartMode;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.SessionState;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
+import dev.marregui.comando.ui.kit.desktop.Platform;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
 
 import javax.imageio.ImageIO;
+import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
+import javax.swing.JDialog;
+import javax.swing.JFrame;
 import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JTextArea;
+import javax.swing.JTextField;
 import javax.swing.JToggleButton;
 import javax.swing.SwingUtilities;
 import java.awt.Component;
@@ -25,6 +32,9 @@ import java.awt.Container;
 import java.awt.Frame;
 import java.awt.Point;
 import java.awt.Rectangle;
+import java.awt.Window;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseEvent;
 import java.awt.image.BufferedImage;
 import java.nio.file.Files;
@@ -41,8 +51,13 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// `./gradlew :app:uiTest`; the cards are painted to `build/snapshots/session-card.png` and `connection-card.png`.
 /// - a session's name shows the card its panel's tab shows, which follows the pointer onto other names until it closes
 /// - a connection's name shows a card of its facts alone, without a summary
+/// - New session (⌘⇧K on a panel without one) offers the conversations stored on disk by title; one picked is copied in
+///   its folder
 @EnabledIfSystemProperty(named = "comando.uiTests", matches = "true")
 class SessionCardUiTest {
+
+    private static final Duration WAIT = Duration.ofSeconds(10);
+    private static final String ID = "0b5e7a1c-2d3e-4f50-8a9b-0c1d2e3f4a5b";
 
     @TempDir
     Path home;
@@ -212,6 +227,84 @@ class SessionCardUiTest {
         } finally {
             app.close();
         }
+    }
+
+    /// A conversation stored under the projects folder is offered by its title, folder and age; picked, it is copied
+    /// in its folder, and Save adds the session with that conversation, FORK and the folder.
+    @Test
+    void newSessionOffersTheStoredConversationsByTitleAndCopiesThePickedOne() throws Exception {
+        Path folder = Files.createDirectories(home.resolve("edge"));
+        Path project = Files.createDirectories(home.resolve("projects").resolve("-edge"));
+        Files.writeString(project.resolve(ID + ".jsonl"), """
+                {"type":"user","cwd":"%s","gitBranch":"main","message":{"role":"user","content":"draft the release notes"}}
+                {"type":"ai-title","aiTitle":"Edge release notes"}
+                """.formatted(folder.toString().replace("\\", "\\\\")));
+        App app = new App(new AppConfig(home.resolve("data"), home.resolve("no-claude").toString(), home.resolve("projects"), false),
+                "session-dialog", () -> {
+        });
+        try {
+            app.start();
+            StateLoop loop = app.loop();
+            Awaitility.await("the window").atMost(Duration.ofSeconds(20)).until(() -> loop.state().focused() != null && comandoFrame() != null);
+            onEdt(() -> {
+                Component target = comandoFrame().getMostRecentFocusOwner() != null ? comandoFrame().getMostRecentFocusOwner() : comandoFrame().getRootPane();
+                long now = System.currentTimeMillis();
+                int mods = Platform.menuShortcutMask() | InputEvent.SHIFT_DOWN_MASK;
+                target.dispatchEvent(new KeyEvent(target, KeyEvent.KEY_PRESSED, now, mods, KeyEvent.VK_K, KeyEvent.CHAR_UNDEFINED));
+                target.dispatchEvent(new KeyEvent(target, KeyEvent.KEY_RELEASED, now, mods, KeyEvent.VK_K, KeyEvent.CHAR_UNDEFINED));
+                return null;
+            });
+            Awaitility.await("New session").atMost(WAIT).until(() -> onEdt(SessionCardUiTest::newSessionDialog) != null);
+            JDialog d = onEdt(SessionCardUiTest::newSessionDialog);
+            JComboBox<?> picker = onEdt(() -> inDialog(d, JComboBox.class, c -> "claudeSessionId".equals(c.getName())));
+            Awaitility.await("the stored conversation offered").atMost(WAIT).until(() -> onEdt(picker::getItemCount) == 2);
+            assertThat(onEdt(() -> String.valueOf(picker.getItemAt(0)))).isEqualTo("A new conversation");
+            assertThat(onEdt(() -> String.valueOf(picker.getItemAt(1)))).startsWith("Edge release notes · ");
+
+            onEdt(() -> {
+                inDialog(d, JTextField.class, t -> "name".equals(t.getName())).setText("notes");
+                picker.setSelectedIndex(1);
+                return null;
+            });
+            assertThat(onEdt(() -> inDialog(d, JComboBox.class, c -> "startMode".equals(c.getName())).getSelectedItem())).isEqualTo("A copy of it");
+            assertThat(onEdt(() -> inDialog(d, JTextField.class, t -> "workDir".equals(t.getName())).getText())).isEqualTo(folder.toString());
+            onEdt(() -> {
+                inDialog(d, JButton.class, b -> "Save".equals(b.getText())).doClick(0);
+                return null;
+            });
+            Awaitility.await("the session added").atMost(WAIT).until(() -> loop.state().session("notes").isPresent());
+            SessionSpec spec = loop.state().session("notes").map(SessionState::spec).orElseThrow();
+            assertThat(spec.claudeSessionId()).isEqualTo(ID);
+            assertThat(spec.startMode()).isEqualTo(StartMode.FORK);
+            assertThat(spec.workDir()).isEqualTo(folder.toString());
+        } finally {
+            app.close();
+        }
+    }
+
+    /** The New session dialog showing, or null. EDT only. */
+    private static JDialog newSessionDialog() {
+        for (Window w : comandoFrame().getOwnedWindows()) {
+            if (w.isShowing() && w instanceof JDialog d && "New session".equals(d.getTitle())) {
+                return d;
+            }
+        }
+        return null;
+    }
+
+    private static JFrame comandoFrame() {
+        for (Frame f : Frame.getFrames()) {
+            if (f instanceof JFrame j && f.isDisplayable() && f.getTitle().startsWith("comando")) {
+                return j;
+            }
+        }
+        return null;
+    }
+
+    private static <T extends Component> T inDialog(JDialog d, Class<T> type, Predicate<T> which) {
+        List<T> out = new ArrayList<>();
+        collect(d, type, which, out);
+        return out.isEmpty() ? null : out.getFirst();
     }
 
     /** Clicks the sidebar's tab header named {@code tab}, as a user would; false while the window has none. */

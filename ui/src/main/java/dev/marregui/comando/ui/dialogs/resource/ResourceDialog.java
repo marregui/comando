@@ -7,7 +7,9 @@ import dev.marregui.comando.core.resource.Attribute;
 import dev.marregui.comando.core.resource.ResourceKind;
 import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.ui.dialogs.sessions.StoredConversation;
 import dev.marregui.comando.ui.kit.async.Edt;
+import dev.marregui.comando.ui.kit.async.UiErrands;
 import dev.marregui.comando.ui.kit.desktop.FileChoosers;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 import dev.marregui.comando.ui.kit.format.KeyText;
@@ -59,12 +61,16 @@ import java.io.File;
 import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -99,6 +105,8 @@ public final class ResourceDialog<S> {
             Function<String, Intent> close,
             BiFunction<AppState, String, Intent> assign) {
     }
+
+    private static final System.Logger LOG = System.getLogger(ResourceDialog.class.getName());
 
     /** The ⓘ after a label whose attribute says more; the sidebar's rows use the same mark. */
     private static final Icon INFO = Icons.get("info", 12);
@@ -139,6 +147,8 @@ public final class ResourceDialog<S> {
     private Notice shown;
     /** The resource asked to open: when it is open and no notice says otherwise, the message says so. */
     private String opening = "";
+    /** The conversations Claude Code stored on disk, read when the dialog opens; none for a kind without them. */
+    private Supplier<List<StoredConversation>> conversations = List::of;
 
     public ResourceDialog(Window owner, Config<S> config, IntentSink intents) {
         this.config = config;
@@ -293,6 +303,7 @@ public final class ResourceDialog<S> {
             dialog.pack();
         }
         prepare.run();
+        readConversations();
         dialog.setTitle(title());
         if (!dialog.isVisible()) {
             // placed at each opening: the main window may have moved, or restored its bounds, since the last
@@ -372,6 +383,7 @@ public final class ResourceDialog<S> {
     public void render(AppState s) {
         state = s;
         names = config.specs().apply(s).stream().map(config.kind()::nameOf).toList();
+        conversationField().ifPresent(c -> c.held(heldElsewhere(s)));
         refreshUntouchedFields();
         updateOpenClose();
         showOutcome(s);
@@ -699,6 +711,58 @@ public final class ResourceDialog<S> {
         openClose.setToolTipText(open ? null : "Save if changed, then " + (session ? "start the session" : "connect"));
     }
 
+    /** The stored conversations the session form offers, read from {@code catalogue} each time the dialog opens. */
+    public void conversations(Supplier<List<StoredConversation>> catalogue) {
+        conversations = catalogue;
+    }
+
+    /** Offers {@code stored} at once; for tests, which fill the form without opening the dialog. */
+    void offer(List<StoredConversation> stored) {
+        conversationField().ifPresent(c -> c.stored(stored));
+    }
+
+    private void readConversations() {
+        if (conversationField().isEmpty()) {
+            return;
+        }
+        Supplier<List<StoredConversation>> catalogue = conversations;
+        UiErrands.start("read-conversations", () -> {
+            try {
+                List<StoredConversation> read = catalogue.get();
+                Edt.later(() -> offer(read));
+            } catch (RuntimeException e) {
+                LOG.log(System.Logger.Level.WARNING, "cannot read the stored conversations", e);
+            }
+        });
+    }
+
+    private Optional<ConversationField> conversationField() {
+        return fields.values().stream().filter(ConversationField.class::isInstance).map(ConversationField.class::cast).findFirst();
+    }
+
+    /** The conversation ids the other sessions hold: the form's own is not among them. */
+    private Set<String> heldElsewhere(AppState s) {
+        Set<String> ids = new HashSet<>();
+        for (S spec : config.specs().apply(s)) {
+            if (!config.kind().nameOf(spec).equals(editing)) {
+                String id = config.kind().toAttributes(spec).getOrDefault("claudeSessionId", "");
+                if (!id.isEmpty()) {
+                    ids.add(id);
+                }
+            }
+        }
+        return ids;
+    }
+
+    /** A stored conversation picked: the session runs in its folder, where Claude Code keeps it, and More shows that. */
+    private void runIn(String cwd) {
+        if (cwd.isBlank() || !(fields.get("workDir") instanceof JTextField dir) || dir.getText().equals(cwd)) {
+            return;
+        }
+        dir.setText(cwd);
+        setAdvancedOpen(true);
+    }
+
     private void setAdvancedOpen(boolean open) {
         if (advanced.getComponentCount() == 0) {
             return;
@@ -761,6 +825,10 @@ public final class ResourceDialog<S> {
             for (Attribute a : config.kind().attributes()) {
                 JComponent f = fields.get(a.key());
                 String v = values.getOrDefault(a.key(), "");
+                if (f instanceof ConversationField c) {
+                    c.fill(values, !editing.isEmpty());
+                    continue;
+                }
                 switch (f) {
                     case JCheckBox c -> c.setSelected(Boolean.parseBoolean(v));
                     case JComboBox<?> c -> {
@@ -797,6 +865,10 @@ public final class ResourceDialog<S> {
         Map<String, String> m = new LinkedHashMap<>(filled);
         for (Attribute a : config.kind().attributes()) {
             JComponent f = fields.get(a.key());
+            if (f instanceof ConversationField c) {
+                c.into(m);
+                continue;
+            }
             m.put(a.key(), switch (f) {
                 case JCheckBox c -> Boolean.toString(c.isSelected());
                 case JComboBox<?> c -> String.valueOf(c.getSelectedItem() == null ? "" : c.getSelectedItem());
@@ -809,6 +881,16 @@ public final class ResourceDialog<S> {
     }
 
     private JComponent field(Attribute a) {
+        if (a.kind() == Attribute.Kind.CONVERSATION) {
+            ConversationField c = new ConversationField();
+            c.onChange(this::formChanged);
+            c.onPicked(this::runIn);
+            c.getAccessibleContext().setAccessibleName(a.label());
+            c.picker().getAccessibleContext().setAccessibleName(a.label());
+            c.picker().setToolTipText(Tooltips.wrapped(a.hint()));
+            c.setName("conversation");
+            return c;
+        }
         JComponent f = switch (a.kind()) {
             case SECRET -> new JPasswordField(24);
             case BOOLEAN -> new JCheckBox();

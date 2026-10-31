@@ -17,7 +17,11 @@ import java.util.Objects;
 public record Attribute(String key, String label, Kind kind, List<String> choices, boolean required, String hint,
                         boolean editable, boolean advanced, String about, String whenEmpty) {
 
-    public enum Kind { TEXT, SECRET, INTEGER, DECIMAL, BOOLEAN, CHOICE, DIRECTORY, DIRECTORIES }
+    /**
+     * {@code CONVERSATION}: a session's conversation, picked from those Claude Code stored, with how the next start
+     * reaches it; the form edits it as {@code claudeSessionId} and {@code startMode}.
+     */
+    public enum Kind { TEXT, SECRET, INTEGER, DECIMAL, BOOLEAN, CHOICE, DIRECTORY, DIRECTORIES, CONVERSATION }
 
     public Attribute {
         Objects.requireNonNull(key, "key");

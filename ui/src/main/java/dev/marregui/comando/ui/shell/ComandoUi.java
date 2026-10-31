@@ -422,6 +422,7 @@ public final class ComandoUi implements UiPort, AutoCloseable {
                 Intent.StartSession::new,
                 Intent.StopSession::new,
                 (s, name) -> new Intent.OpenSession(name, s.focused(), PanelId.random())), deps.intents());
+        sessionsDialog.conversations(deps.catalogue());
         importDialog = new ImportSessionsDialog(frame, deps.intents(), deps.catalogue());
 
         // the areas paint the themes' swatches, which the commands and the menus show
