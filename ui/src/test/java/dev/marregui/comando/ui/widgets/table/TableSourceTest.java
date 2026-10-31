@@ -12,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /// [TableSource] reads a table view's cells; [GridTable] selects and exports them in the shown order.
 /// - numeric columns are detected from the values, with `null` as a null cell
+/// - a number is a decimal: suffixes, hex, `NaN`, `Infinity` and spaces make a column text
 /// - selection and export follow the sort order
 /// - CSV quotes a field only when it holds a comma or a quote
 class TableSourceTest {
@@ -25,6 +26,23 @@ class TableSourceTest {
         assertThat(s.isNumeric(1)).isFalse();
         assertThat(s.isNull(1, 0)).isTrue();
         assertThat(s.numeric(2, 0)).isEqualTo(2.5);
+    }
+
+    /// `-3`, `2.5e-3` and `42` are numbers; `1d`, `2f`, `0x1p3`, `NaN`, `Infinity` and `" 7 "`, all of which
+    /// [Double#parseDouble] accepts, are not, so a column holding one of them is text.
+    @Test
+    void onlyDecimalNumbersMakeANumericColumn() {
+        for (final String number : List.of("-3", "2.5e-3", "42", "+.5", "7.")) {
+            assertThat(numeric(number)).as(number).isTrue();
+        }
+        for (final String text : List.of("1d", "2f", "0x1p3", "NaN", "Infinity", " 7 ", "-", ".", "1e", "1e+", "")) {
+            assertThat(numeric(text)).as("'%s'", text).isFalse();
+        }
+    }
+
+    /** Whether a one-column table holding {@code value} and a number is numeric. */
+    private static boolean numeric(final String value) {
+        return TableSource.of(new ViewSpec.Table(List.of("v"), List.of(List.of(value), List.of("1")))).isNumeric(0);
     }
 
     /// After sorting by a column, the selected view rows map to their source rows and the export writes the rows in the

@@ -35,6 +35,11 @@ final class PlotCanvas extends JComponent {
     private static final int RIGHT = 20;
     private static final int TOP = 26;
     private static final int BOTTOM = 42;
+    /**
+     * Pixel offsets beyond this are drawn here: far outside any screen, and with the plot's origin added still far
+     * inside the int range.
+     */
+    private static final int FAR_PIXELS = 1 << 30;
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneOffset.UTC);
     private static final DateTimeFormatter TIME_MILLIS = DateTimeFormatter.ofPattern("HH:mm:ss.SSS").withZone(ZoneOffset.UTC);
     private static final DateTimeFormatter DATE_TIME = DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneOffset.UTC);
@@ -275,12 +280,20 @@ final class PlotCanvas extends JComponent {
         return viewX0 + (px - a.x) * (viewX1 - viewX0) / a.width;
     }
 
-    private int px(double x, Rectangle a) {
-        return a.x + (int) Math.round((x - viewX0) / (viewX1 - viewX0) * a.width);
+    int px(final double x, final Rectangle a) { // package-visible for tests
+        return a.x + pixels((x - viewX0) / (viewX1 - viewX0), a.width);
     }
 
-    private int py(double y, Rectangle a) {
-        return a.y + a.height - (int) Math.round((y - viewY0) / (viewY1 - viewY0) * a.height);
+    int py(final double y, final Rectangle a) { // package-visible for tests
+        return a.y + a.height - pixels((y - viewY0) / (viewY1 - viewY0), a.height);
+    }
+
+    /**
+     * {@code ratio} of {@code span} pixels, clamped to {@link #FAR_PIXELS} before it narrows to an int: a point many
+     * views away (the next point past a flat or very narrow view) keeps its side instead of wrapping to the other.
+     */
+    private static int pixels(final double ratio, final int span) {
+        return Math.clamp(Math.round(ratio * span), -FAR_PIXELS, FAR_PIXELS);
     }
 
     @Override

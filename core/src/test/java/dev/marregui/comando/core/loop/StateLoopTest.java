@@ -13,6 +13,10 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.logging.Handler;
+import java.util.logging.Level;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -20,7 +24,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 ///
 /// - effects precede listeners for each changed state
 /// - queued work completes before close returns
-/// - handler failures do not halt later intents
+/// - handler and observer failures do not halt later intents
+/// - an `Error` stops the loop loudly, and later intents are refused with one error line
 /// - stalls identify their slowest part
 class StateLoopTest {
 
@@ -62,6 +67,76 @@ class StateLoopTest {
             loop.dispatch(new Intent.RunText(States.P1, "SELECT 1", Target.AUTO));
             loop.dispatch(new Intent.RunText(States.P2, "SELECT 2", Target.AUTO));
             assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
+        }
+    }
+
+    /// An observer that throws on the first intent is logged and skipped: both intents still reach the listener.
+    @Test
+    void aFailingObserverDoesNotStopTheLoop() throws Exception {
+        final CountDownLatch done = new CountDownLatch(2);
+        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), e -> {
+        })) {
+            loop.addObserver(intent -> {
+                if (intent instanceof Intent.FocusPanel f && f.panel().equals(States.P2)) {
+                    throw new IllegalStateException("replay log full");
+                }
+            });
+            loop.addListener((prev, next) -> done.countDown());
+            loop.start();
+            loop.dispatch(new Intent.FocusPanel(States.P2));
+            loop.dispatch(new Intent.FocusPanel(States.P1));
+            assertThat(done.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(loop.failure()).isNull();
+            assertThat(loop.state().focused()).isEqualTo(States.P1);
+        }
+    }
+
+    /// A `StackOverflowError` from an observer stops the loop: the error is kept and logged, the state stays as it was,
+    /// and the two intents dispatched after it are refused with one error line between them, not queued in silence.
+    @Test
+    void anErrorStopsTheLoopAndLaterIntentsAreRefusedWithOneErrorLine() throws Exception {
+        final List<LogRecord> errors = new CopyOnWriteArrayList<>();
+        final CountDownLatch stopped = new CountDownLatch(1);
+        final Handler capture = new Handler() {
+            @Override
+            public void publish(LogRecord entry) {
+                if (entry.getLevel().intValue() >= Level.SEVERE.intValue()) {
+                    errors.add(entry);
+                    if (entry.getThrown() instanceof StackOverflowError) {
+                        stopped.countDown();
+                    }
+                }
+            }
+
+            @Override
+            public void flush() {
+            }
+
+            @Override
+            public void close() {
+            }
+        };
+        final Logger log = Logger.getLogger(StateLoop.class.getName());
+        log.addHandler(capture);
+        try (StateLoop loop = new StateLoop(States.twoPanels(), new Reducer(new FakeClock()), e -> {
+        })) {
+            final AppState before = loop.state();
+            loop.addObserver(intent -> {
+                throw new StackOverflowError("simulated");
+            });
+            loop.start();
+            loop.dispatch(new Intent.FocusPanel(States.P2));
+            assertThat(stopped.await(5, TimeUnit.SECONDS)).isTrue();
+            assertThat(loop.failure()).isInstanceOf(StackOverflowError.class);
+
+            loop.dispatch(new Intent.FocusPanel(States.P2));
+            loop.dispatch(new Intent.FocusPanel(States.P1));
+            assertThat(loop.state()).isSameAs(before);
+            assertThat(errors).extracting(LogRecord::getMessage)
+                    .filteredOn(m -> m.startsWith("the reducer has stopped; intents are dropped"))
+                    .hasSize(1);
+        } finally {
+            log.removeHandler(capture);
         }
     }
 

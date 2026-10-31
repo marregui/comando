@@ -431,7 +431,7 @@ only, formatting cells into one reused buffer.
 | ⌘⇧J | the same, re-running the query each period (default 5 s) while it is not running; another run in the panel or a failed query or connection stops it with a notice; closing its tab stops it quietly; the corner's Stop refreshing plots stops them all, the plots staying as they are |
 | ⌘⇧R | keeps the result in a tab of its own (at most 100 000 rows) |
 | ⌘⇧I | attaches the result to the editor ([§2.4](#24-where-things-land)) |
-| ⌘⇧S | exports the grid as CSV in the order shown, written off the EDT |
+| ⌘⇧S | exports the grid as CSV in the order shown, written off the EDT: SQL NULL as an empty field, empty text as `""` |
 
 A one-column `EXPLAIN` result shows as a tree by indentation, with a toggle back to rows.
 

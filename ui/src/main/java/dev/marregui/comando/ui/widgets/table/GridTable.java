@@ -365,7 +365,10 @@ public final class GridTable implements Searchable, Copyable, Exportable {
                 if (c > 0) {
                     out.append('\t');
                 }
-                s.format(r, c, out);
+                // SQL NULL is an empty cell, so it differs from the text 'null'
+                if (!s.isNull(r, c)) {
+                    s.format(r, c, out);
+                }
             }
             out.append('\n');
         }
@@ -406,10 +409,11 @@ public final class GridTable implements Searchable, Copyable, Exportable {
                     if (c > 0) {
                         w.write(',');
                     }
+                    // SQL NULL is an empty field and empty text is "", as PostgreSQL's CSV tells them apart
                     if (!s.isNull(r, c)) {
                         sb.setLength(0);
                         s.format(r, c, sb);
-                        w.write(csv(sb));
+                        w.write(sb.isEmpty() ? "\"\"" : csv(sb));
                     }
                 }
                 w.write('\n');

@@ -277,6 +277,29 @@ class PeersTest {
         assertThat(call(main, "instances_list", "{}").text()).contains("work (busy: running Bash) last asked: what is X?");
     }
 
+    /// A session's folder goes out with the home folder written `~`: `/Users/ann/repo` as `~/repo`, while
+    /// `/Users/anna/repo`, beside home rather than under it, goes out as it is. The home is set for the test and put
+    /// back after.
+    @Test
+    void thePresenceWritesAFolderUnderHomeAsTildeAndLeavesOneBesideItAsItIs() throws Exception {
+        final String userHome = System.getProperty("user.home");
+        System.setProperty("user.home", "/Users/ann");
+        try {
+            final Node main = node("", Peers.ANSWER_WITHIN);
+            final Node b = node("b", Peers.ANSWER_WITHIN);
+            b.window.state.updateAndGet(s -> withSession(withSession(s, SessionSpec.fresh("beside", "/Users/anna/repo")),
+                    SessionSpec.fresh("under", "/Users/ann/repo")));
+            b.peers.tick();
+            final InstancesState seen = main.window.recorded.await(Intent.InstancesChanged.class,
+                    i -> i.instances().others().stream().anyMatch(o -> o.sessions().size() == 3), WAIT).instances();
+            final Map<String, String> folders = new LinkedHashMap<>();
+            seen.others().getFirst().sessions().forEach(m -> folders.put(m.name(), m.folder()));
+            assertThat(folders).containsEntry("beside", "/Users/anna/repo").containsEntry("under", "~/repo");
+        } finally {
+            System.setProperty("user.home", userHome);
+        }
+    }
+
     /// An instance that leaves stays listed, not present, with when it was last seen; the data root remembers it across
     /// a restart, until the user forgets it; one present cannot be forgotten. The role set from the tab is written to
     /// `instance.json`, its other keys kept, and goes out in the next presence.

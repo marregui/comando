@@ -7,6 +7,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * It is a platform thread so that it runs while what it watches is held: the reducer, the EDT, or the virtual threads'
  * scheduler. A look must not block; it reads timestamps and, at most, a stack. The thread starts with the first look
  * and ends a period after the last one leaves.
+ *
+ * <p>A look that throws a {@link RuntimeException} is kept and runs again next period; one that throws an
+ * {@link Error} is dropped with its stack logged, and the others go on being run.</p>
  */
 public final class Watchdog {
 
@@ -39,24 +42,38 @@ public final class Watchdog {
     }
 
     private void run() {
-        while (true) {
-            try {
-                Thread.sleep(PERIOD_MILLIS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return;
-            }
-            synchronized (this) {
-                if (looks.isEmpty()) {
-                    thread = null;
+        try {
+            while (true) {
+                try {
+                    Thread.sleep(PERIOD_MILLIS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
                     return;
                 }
+                synchronized (this) {
+                    if (looks.isEmpty()) {
+                        thread = null;
+                        return;
+                    }
+                }
+                for (Runnable look : looks) {
+                    try {
+                        look.run();
+                    } catch (RuntimeException e) {
+                        LOG.log(System.Logger.Level.ERROR, "a watchdog look failed", e);
+                    } catch (final Error e) {
+                        // the look's own state is unknown after an error: it is not run again
+                        looks.remove(look);
+                        LOG.log(System.Logger.Level.ERROR, "a watchdog look failed and is no longer run [looks="
+                                + looks.size() + ']', e);
+                    }
+                }
             }
-            for (Runnable look : looks) {
-                try {
-                    look.run();
-                } catch (RuntimeException e) {
-                    LOG.log(System.Logger.Level.ERROR, "a watchdog look failed", e);
+        } finally {
+            // an end other than the empty list above (an error outside a look) lets the next watch start a new thread
+            synchronized (this) {
+                if (thread == Thread.currentThread()) {
+                    thread = null;
                 }
             }
         }

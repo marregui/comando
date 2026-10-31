@@ -6,6 +6,7 @@ import dev.marregui.comando.core.model.Approval;
 import dev.marregui.comando.core.model.ApprovalDecision;
 import dev.marregui.comando.core.port.ApprovalPort;
 import dev.marregui.comando.core.port.McpGateway;
+import dev.marregui.comando.core.loop.ExecutorStop;
 import tools.jackson.core.JacksonException;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -257,7 +258,7 @@ public final class McpServer implements McpGateway, ApprovalPort, AutoCloseable 
         closed = true;
         tools.denyAll("comando is shutting down.");
         http.stop(1);
-        executor.shutdownNow();
+        ExecutorStop.now("mcp-server", executor);
         sessionByToken.clear();
         tokenBySession.clear();
     }

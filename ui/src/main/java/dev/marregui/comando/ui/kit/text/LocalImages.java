@@ -8,6 +8,7 @@ import com.github.weisj.jsvg.parser.resources.ResourcePolicy;
 import com.github.weisj.jsvg.view.FloatSize;
 import com.github.weisj.jsvg.view.ViewBox;
 import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.core.loop.ExecutorStop;
 
 import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
@@ -107,7 +108,7 @@ public final class LocalImages {
     }
 
     void close() {
-        reader.shutdownNow();
+        ExecutorStop.now("local-images", reader);
     }
 
     /**

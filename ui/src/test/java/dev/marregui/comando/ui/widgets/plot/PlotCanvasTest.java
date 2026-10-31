@@ -3,6 +3,8 @@ package dev.marregui.comando.ui.widgets.plot;
 import dev.marregui.comando.core.view.ViewSpec;
 import org.junit.jupiter.api.Test;
 
+import javax.swing.SwingUtilities;
+import java.awt.Rectangle;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -11,6 +13,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - preparing sorts each series by x and bounds only the finite points
 /// - a single point gets room around it
 /// - time ticks fall on clock steps, and sub-second ranges get distinct labels
+/// - a point far outside the view keeps its side of the plot
 class PlotCanvasTest {
 
     private static final double T0 = 1_791_800_000_000d; // 2026-10-12, a whole hour in UTC
@@ -51,5 +54,25 @@ class PlotCanvasTest {
         double[] t = PlotCanvas.timeTicks(T0, T0 + 800, 8);
         assertThat(t[1] - t[0]).isEqualTo(100d);
         assertThat(PlotCanvas.time(t[0], 800)).isNotEqualTo(PlotCanvas.time(t[1], 800)).endsWith(".000");
+    }
+
+    /// A view zoomed to a flat stretch has its y range padded to ±1e-9, so the next point past its edge, one step up
+    /// (to 7) or down (to 3), lies billions of pixels away: its pixel y stays above the plot's top or below its bottom,
+    /// where an unclamped narrowing to int wraps it to the other side.
+    @Test
+    void aPointFarOutsideAFlatViewKeepsItsSide() throws Exception {
+        SwingUtilities.invokeAndWait(() -> {
+            final double[] x = {0, 1, 2, 3, 4, 5, 6, 7, 8};
+            final PlotCanvas canvas = new PlotCanvas();
+            canvas.setData(PlotCanvas.prepare(new ViewSpec.Plot("x", "y", false, List.of(
+                    new ViewSpec.Series("up", x, new double[]{5, 5, 5, 5, 5, 5, 5, 5, 7}),
+                    new ViewSpec.Series("down", x.clone(), new double[]{5, 5, 5, 5, 5, 5, 5, 5, 3})))));
+            canvas.zoomTo(2, 7.5);
+            final Rectangle area = new Rectangle(70, 26, 710, 432);
+            assertThat(canvas.py(5, area)).as("the flat stretch is inside the plot")
+                    .isBetween(area.y, area.y + area.height);
+            assertThat(canvas.py(7, area)).as("a step up is above the top").isLessThan(area.y);
+            assertThat(canvas.py(3, area)).as("a step down is below the bottom").isGreaterThan(area.y + area.height);
+        });
     }
 }

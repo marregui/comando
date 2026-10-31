@@ -12,6 +12,7 @@ import dev.marregui.comando.core.result.ResultRegistry;
 import dev.marregui.comando.core.schema.Schema;
 import dev.marregui.comando.core.schema.SchemaRegistry;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.view.Placement;
 import dev.marregui.comando.core.view.ViewSpec;
 
@@ -350,7 +351,7 @@ public final class DbAdapter implements DatabasePort, QueryPort, AutoCloseable {
             lane.finishClose(deadline);
         }
         lanes.clear();
-        timer.shutdownNow();
+        ExecutorStop.now("db", timer);
         testers.close();
         cancellers.shutdown();
     }

@@ -159,6 +159,7 @@ Tests that drive components with Swing timers run on the EDT through the `OnEdt`
 | Command | Runs |
 |---|---|
 | `./gradlew :ui:test` | the tests above, headless |
+| `./gradlew :ui:gridGate`, `:ui:plotGate` | grid and plot frame times (`GridGate`, `PlotGate`); print p99 and `HOT` above 4 ms, never fail |
 | `./gradlew :ui:transcriptGate` | transcript frame times on `testkit`'s `SyntheticSession` (`TranscriptGate`); fails when p99 exceeds 16 ms |
 
 `TranscriptShot` paints the synthetic session at a scroll offset to a PNG. The real window is tested from `app`

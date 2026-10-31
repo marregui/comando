@@ -13,6 +13,7 @@ import dev.marregui.comando.core.model.RepoStatus;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.ToolPort;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.view.ViewSpec;
 
 import java.io.IOException;
@@ -87,6 +88,8 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     static final long KILL_AFTER_MILLIS = 2_000;
     /** How long a run waits for its output after the process exited. */
     static final long DRAIN_MILLIS = 2_000;
+    /** How long a quit waits for the repository writes asked for: one git run's own bound. */
+    static final Duration REPO_WRITES_DRAIN = Duration.ofMillis(Git.TIMEOUT_MILLIS);
 
     public ToolsAdapter(IntentSink sink, ConsoleRegistry consoles, Supplier<ToolSettings> settings) {
         this(sink, consoles, settings, Trash.NONE);
@@ -839,15 +842,16 @@ public final class ToolsAdapter implements ToolPort, AutoCloseable {
     }
 
     /**
-     * Called at exit: stops the poll, the change reads, the repository writes and every git run, sends SIGTERM to every
-     * run's process tree and SIGKILL {@link #KILL_AFTER_MILLIS} later, then closes the errands.
+     * Called at exit: stops the poll and the change reads, lets the repository writes asked for finish (at most
+     * {@link #REPO_WRITES_DRAIN}), stops every git run, sends SIGTERM to every run's process tree and SIGKILL
+     * {@link #KILL_AFTER_MILLIS} later, then closes the errands.
      */
     @Override
     public void close() {
         closed = true;
-        folderPoll.shutdownNow();
-        changeReads.shutdownNow();
-        repoWrites.shutdownNow();
+        ExecutorStop.now("tools", folderPoll, changeReads);
+        // a git killed while it writes the index leaves index.lock behind, and the user's next git command fails
+        ExecutorStop.drain("tools", REPO_WRITES_DRAIN, repoWrites);
         git.close();
         Map<Process, List<ProcessHandle>> trees = new HashMap<>();
         for (Process p : List.copyOf(running.values())) {

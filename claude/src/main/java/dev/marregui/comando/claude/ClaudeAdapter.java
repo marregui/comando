@@ -9,6 +9,7 @@ import dev.marregui.comando.core.port.ClaudePort;
 import dev.marregui.comando.core.port.IntentSink;
 import dev.marregui.comando.core.port.McpGateway;
 import dev.marregui.comando.core.state.Notice;
+import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
@@ -873,14 +874,8 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             return;
         }
         closed = true;
-        planUsage.shutdownNow();
-        subagents.shutdownNow();
-        try {
-            // a read that outlasts the wait sends nothing: it checks closed first
-            subagents.awaitTermination(2, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        // a read that outlasts the wait sends nothing: it checks closed first
+        ExecutorStop.now("claude", planUsage, subagents);
         // SIGTERM to every process, collected on each strand; the strands then stop, so no exit handler runs and
         // this method cleans up after the processes itself: SIGKILL after the grace period, config files with
         // their bearer tokens deleted, tokens revoked
@@ -916,6 +911,6 @@ public final class ClaudeAdapter implements ClaudePort, AutoCloseable {
             deleteConfig(run);
             mcp.unregister(e.getKey(), run.ticket);
         }
-        timer.shutdownNow();
+        ExecutorStop.now("claude", timer);
     }
 }

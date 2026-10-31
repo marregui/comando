@@ -28,6 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - Rolling back takes every kind of change to `HEAD` and keeps what it replaced in the Trash; without a Trash nothing
 ///   is lost.
 /// - Removing sends files to the Trash and takes a new file out of the index.
+/// - A repository write asked for before close finishes before close returns.
 class ToolsAdapterReposTest {
 
     private static final Duration WAIT = Duration.ofSeconds(20);
@@ -211,5 +212,29 @@ class ToolsAdapterReposTest {
                     .contains(new RepoStatus.FileChange("src/main/A.java", "", RepoStatus.Kind.DELETED))
                     .extracting(RepoStatus.FileChange::path).doesNotContain("added.txt");
         }
+    }
+
+    /// An unstage that takes half a second, asked for just before quitting: the close lets it finish instead of killing
+    /// git mid-write, which would leave the repository's `index.lock` behind.
+    @Test
+    void aRepositoryWriteAskedForBeforeCloseFinishes(@TempDir Path dir) throws Exception {
+        final Path written = dir.resolve("written");
+        final Path fake = dir.resolve("slow-git.sh");
+        // a git whose restore takes a while and then says it is done; every other command answers nothing
+        Files.writeString(fake, """
+                #!/bin/sh
+                case "$*" in
+                  *restore*) sleep 0.5; echo done > '%s' ;;
+                esac
+                exit 0
+                """.formatted(written));
+        assertThat(fake.toFile().setExecutable(true)).isTrue();
+        final ToolsAdapter tools = new ToolsAdapter(sink, new ConsoleRegistry(), () -> new ToolSettings(Optional.empty(), System.getProperty("java.home")),
+                ToolsAdapter.Trash.NONE, new Git(fake.toString()));
+        tools.unstage(dir.toString(), List.of("a.txt"));
+
+        tools.close();
+
+        assertThat(written).as("the unstage ran to its end before close returned").exists();
     }
 }

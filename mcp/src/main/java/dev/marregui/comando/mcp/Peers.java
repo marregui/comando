@@ -4,6 +4,7 @@ import dev.marregui.comando.core.intent.Intent;
 import dev.marregui.comando.core.loop.Errands;
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.core.model.HomeDir;
 import dev.marregui.comando.core.model.InstanceName;
 import dev.marregui.comando.core.model.PanelId;
 import dev.marregui.comando.core.model.SessionSpec;
@@ -13,6 +14,7 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.InstancesState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.transcript.Block;
 import dev.marregui.comando.core.transcript.Transcript;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
@@ -350,7 +352,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
         int context = x.contextWindow() > 0 ? (int) Math.min(100, x.contextTokens() * 100 / x.contextWindow()) : -1;
         String[] ends = ends(x.name());
         return new InstancesState.Member(x.name(), x.isBusy(), x.status().name(), x.isBusy() ? x.activity() : "",
-                x.isBusy() ? x.turnStartedMillis() : 0L, model, effort, context, home(x.spec().workDir()), x.branch(),
+                x.isBusy() ? x.turnStartedMillis() : 0L, model, effort, context, HomeDir.shorten(x.spec().workDir()), x.branch(),
                 x.tasks().stream().map(t -> t.description()).toList(), ends[0], ends[1]);
     }
 
@@ -374,12 +376,6 @@ public final class Peers implements AutoCloseable, InstancesPort {
     static String firstLine(String text) {
         return text.lines().map(String::strip).filter(l -> !l.isEmpty() && !l.startsWith("[from instance ")).findFirst()
                 .map(l -> McpTools.clip(l, LINE_CHARS)).orElse("");
-    }
-
-    /** {@code path} with the home folder written {@code ~}. */
-    private static String home(String path) {
-        String home = System.getProperty("user.home");
-        return path != null && home != null && !home.isEmpty() && path.startsWith(home) ? "~" + path.substring(home.length()) : path;
     }
 
     /** A presence, or a remembered one, read. */
@@ -971,7 +967,7 @@ public final class Peers implements AutoCloseable, InstancesPort {
             return;
         }
         closed = true;
-        ticks.shutdownNow();
+        ExecutorStop.now("peers", ticks);
         // the instances present now were last seen now
         long now = System.currentTimeMillis();
         synchronized (seen) {

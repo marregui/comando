@@ -3,6 +3,8 @@ package dev.marregui.comando.db;
 import dev.marregui.comando.core.result.ColumnKind;
 import dev.marregui.comando.core.result.ResultView;
 
+import java.lang.invoke.MethodHandles;
+import java.lang.invoke.VarHandle;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
@@ -18,13 +20,19 @@ import java.util.Arrays;
  *
  * <p>One writer (the connection's lane thread) appends; readers (the EDT, plots) read rows below
  * {@link #rowCount()}. The writer fills a row's cells, then publishes the new count through a volatile
- * write; chunk tables grow before that write, so a reader that read the count sees them.</p>
+ * write, so a reader that read the count sees every cell and chunk below it. A column's chunk table is replaced
+ * when it grows, and a reader can meet a table grown for a row past the count it read: the writer stores a grown
+ * table with a release store and readers load it with an acquire load, so the reader sees the table's copied
+ * chunks.</p>
  */
 public final class ColumnarResult implements ResultView {
 
     static final int CHUNK_BITS = 14;
     static final int CHUNK = 1 << CHUNK_BITS;
     private static final int MASK = CHUNK - 1;
+    private static final VarHandle LONG_TABLE = MethodHandles.arrayElementVarHandle(long[][][].class);
+    private static final VarHandle DOUBLE_TABLE = MethodHandles.arrayElementVarHandle(double[][][].class);
+    private static final VarHandle TEXT_TABLE = MethodHandles.arrayElementVarHandle(String[][][].class);
 
     private final long requestId;
     private final String[] names;
@@ -146,7 +154,8 @@ public final class ColumnarResult implements ResultView {
     private long[] longChunk(int c, int chunk) {
         long[][] table = longs[c];
         if (chunk == table.length) {
-            longs[c] = table = Arrays.copyOf(table, table.length * 2);
+            table = Arrays.copyOf(table, table.length * 2);
+            LONG_TABLE.setRelease(longs, c, table);
         }
         long[] a = table[chunk];
         if (a == null) {
@@ -158,7 +167,8 @@ public final class ColumnarResult implements ResultView {
     private double[] doubleChunk(int c, int chunk) {
         double[][] table = doubles[c];
         if (chunk == table.length) {
-            doubles[c] = table = Arrays.copyOf(table, table.length * 2);
+            table = Arrays.copyOf(table, table.length * 2);
+            DOUBLE_TABLE.setRelease(doubles, c, table);
         }
         double[] a = table[chunk];
         if (a == null) {
@@ -170,7 +180,8 @@ public final class ColumnarResult implements ResultView {
     private String[] textChunk(int c, int chunk) {
         String[][] table = texts[c];
         if (chunk == table.length) {
-            texts[c] = table = Arrays.copyOf(table, table.length * 2);
+            table = Arrays.copyOf(table, table.length * 2);
+            TEXT_TABLE.setRelease(texts, c, table);
         }
         String[] a = table[chunk];
         if (a == null) {
@@ -182,7 +193,8 @@ public final class ColumnarResult implements ResultView {
     private long[] nullChunk(int c, int chunk) {
         long[][] table = nulls[c];
         if (chunk == table.length) {
-            nulls[c] = table = Arrays.copyOf(table, table.length * 2);
+            table = Arrays.copyOf(table, table.length * 2);
+            LONG_TABLE.setRelease(nulls, c, table);
         }
         long[] a = table[chunk];
         if (a == null) {
@@ -227,13 +239,13 @@ public final class ColumnarResult implements ResultView {
     public boolean isNull(int row, int column) {
         checkRow(row);
         int at = row & MASK;
-        return (nulls[column][row >>> CHUNK_BITS][at >>> 6] & (1L << (at & 63))) != 0;
+        return (longTable(nulls, column)[row >>> CHUNK_BITS][at >>> 6] & (1L << (at & 63))) != 0;
     }
 
     @Override
     public long getLong(int row, int column) {
         checkRow(row);
-        return longs[column][row >>> CHUNK_BITS][row & MASK];
+        return longTable(longs, column)[row >>> CHUNK_BITS][row & MASK];
     }
 
     @Override
@@ -242,7 +254,7 @@ public final class ColumnarResult implements ResultView {
         if (kinds[column] != ColumnKind.DOUBLE) {
             return getLong(row, column);
         }
-        return doubles[column][row >>> CHUNK_BITS][row & MASK];
+        return ((double[][]) DOUBLE_TABLE.getAcquire(doubles, column))[row >>> CHUNK_BITS][row & MASK];
     }
 
     @Override
@@ -258,7 +270,12 @@ public final class ColumnarResult implements ResultView {
             format(row, column, sb);
             return sb.toString();
         }
-        return texts[column][row >>> CHUNK_BITS][row & MASK];
+        return ((String[][]) TEXT_TABLE.getAcquire(texts, column))[row >>> CHUNK_BITS][row & MASK];
+    }
+
+    /** A column's chunk table as a reader loads it: after the count, with an acquire load. */
+    private static long[][] longTable(final long[][][] tables, final int column) {
+        return (long[][]) LONG_TABLE.getAcquire(tables, column);
     }
 
     private void checkRow(int row) {

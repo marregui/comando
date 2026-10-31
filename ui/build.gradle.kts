@@ -34,3 +34,21 @@ tasks.register<JavaExec>("transcriptGate") {
     mainClass.set("dev.marregui.comando.ui.widgets.transcript.render.TranscriptGate")
     jvmArgs("-Djava.awt.headless=true")
 }
+
+// The grid's frame-time gate: ./gradlew :ui:gridGate; it measures and prints HOT when p99 exceeds 4 ms.
+tasks.register<JavaExec>("gridGate") {
+    group = "verification"
+    description = "Measures grid frame times over 100 000 rows; prints HOT when p99 exceeds 4 ms."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.marregui.comando.ui.widgets.table.GridGate")
+    jvmArgs("-Djava.awt.headless=true")
+}
+
+// The plot's frame-time gate: ./gradlew :ui:plotGate; it measures and prints HOT when p99 exceeds 4 ms.
+tasks.register<JavaExec>("plotGate") {
+    group = "verification"
+    description = "Measures plot frame times over 4 series of 200 000 points; prints HOT when p99 exceeds 4 ms."
+    classpath = sourceSets["test"].runtimeClasspath
+    mainClass.set("dev.marregui.comando.ui.widgets.plot.PlotGate")
+    jvmArgs("-Djava.awt.headless=true")
+}

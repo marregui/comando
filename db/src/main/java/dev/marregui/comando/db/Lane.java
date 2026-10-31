@@ -52,6 +52,15 @@ final class Lane implements AutoCloseable {
     private static final System.Logger LOG = System.getLogger(Lane.class.getName());
     /** The bound on a table description, as long as Claude waits for one. */
     private static final int DESCRIBE_SECONDS = 60;
+    /** The statement timeout of {@link #query}: Claude's runs and the schema loads, as long as Claude waits for one. */
+    static final int QUERY_SECONDS = 60;
+    /**
+     * Added to a query's statement timeout to bound its socket reads: the driver's cancel may take its own
+     * {@code cancelSignalTimeout} (2 s, {@link #driverProperties}) and the server then has to say the statement ended,
+     * so a server that answers ends the query by its statement timeout and keeps the connection; only one that stopped
+     * answering meets this bound, which breaks the connection.
+     */
+    static final int QUERY_MARGIN_SECONDS = 5;
     /** How long a close waits for the lane thread to end its task and close the connection. */
     static final long CLOSE_WAIT_NANOS = TimeUnit.SECONDS.toNanos(3);
 
@@ -67,6 +76,7 @@ final class Lane implements AutoCloseable {
     private final ExecutorService cancellers;
     private final ExecutorService thread;
     private final Consumer<Lane> onRetired;
+    private final int querySeconds;
     private final Set<Long> cancelled = ConcurrentHashMap.newKeySet();
     private volatile Running running;
     private volatile boolean closed;
@@ -80,6 +90,12 @@ final class Lane implements AutoCloseable {
 
     Lane(String name, IntentSink sink, ResultRegistry results, DbSettings settings, ScheduledExecutorService timer,
          ExecutorService cancellers, Consumer<Lane> onRetired) {
+        this(name, sink, results, settings, timer, cancellers, onRetired, QUERY_SECONDS);
+    }
+
+    /** With another statement timeout for {@link #query}; for tests. */
+    Lane(String name, IntentSink sink, ResultRegistry results, DbSettings settings, ScheduledExecutorService timer,
+         ExecutorService cancellers, Consumer<Lane> onRetired, int querySeconds) {
         this.name = name;
         this.sink = sink;
         this.results = results;
@@ -87,6 +103,7 @@ final class Lane implements AutoCloseable {
         this.timer = timer;
         this.cancellers = cancellers;
         this.onRetired = onRetired;
+        this.querySeconds = querySeconds;
         this.thread = Threads.strand("db-" + name);
     }
 
@@ -121,21 +138,35 @@ final class Lane implements AutoCloseable {
             }
             try {
                 ensureOpen(spec);
-                try (Statement st = connection.createStatement()) {
-                    st.setQueryTimeout(60);
-                    st.setMaxRows(maxRows + 1);
-                    if (!st.execute(sql)) {
-                        out.complete(new QueryPort.Rows(List.of(), List.of(), st.getLargeUpdateCount(), false));
-                        return;
-                    }
-                    try (ResultSet rs = st.getResultSet()) {
-                        out.complete(textRows(rs, maxRows));
-                    }
+            } catch (final SQLException e) {
+                out.completeExceptionally(new IllegalStateException(message(e), e));
+                return;
+            } catch (final RuntimeException e) {
+                out.completeExceptionally(e);
+                return;
+            }
+            // the statement timeout's cancel reaches a server that answers; a network timeout bounds one that
+            // stopped answering, so it cannot hold the lane, and the next run opens the connection again if the
+            // timeout broke it
+            final boolean bounded = networkTimeout((querySeconds + QUERY_MARGIN_SECONDS) * 1000);
+            try (Statement st = connection.createStatement()) {
+                st.setQueryTimeout(querySeconds);
+                st.setMaxRows(maxRows + 1);
+                if (!st.execute(sql)) {
+                    out.complete(new QueryPort.Rows(List.of(), List.of(), st.getLargeUpdateCount(), false));
+                    return;
+                }
+                try (ResultSet rs = st.getResultSet()) {
+                    out.complete(textRows(rs, maxRows));
                 }
             } catch (SQLException e) {
                 out.completeExceptionally(new IllegalStateException(message(e), e));
             } catch (RuntimeException e) {
                 out.completeExceptionally(e);
+            } finally {
+                if (bounded) {
+                    networkTimeout(0);
+                }
             }
         }, () -> out.completeExceptionally(closing()));
         if (accepted && closed) {
@@ -160,31 +191,35 @@ final class Lane implements AutoCloseable {
                 out.completeExceptionally(new IllegalStateException(message(e), e));
                 return;
             }
-            SQLException first;
-            try (Statement st = connection.createStatement()) {
-                st.setQueryTimeout(DESCRIBE_SECONDS);
-                try (ResultSet rs = st.executeQuery("SHOW COLUMNS FROM " + quote(table))) {
-                    out.complete(textRows(rs, 10_000));
-                    return;
+            // the statement timeout's cancel reaches a server that answers, and the driver's metadata takes none: a
+            // network timeout bounds both steps, so a server that stopped answering cannot hold the lane, and the next
+            // run opens the connection again if the timeout broke it
+            final boolean bounded = networkTimeout((DESCRIBE_SECONDS + QUERY_MARGIN_SECONDS) * 1000);
+            try {
+                SQLException first;
+                try (Statement st = connection.createStatement()) {
+                    st.setQueryTimeout(DESCRIBE_SECONDS);
+                    try (ResultSet rs = st.executeQuery("SHOW COLUMNS FROM " + quote(table))) {
+                        out.complete(textRows(rs, 10_000));
+                        return;
+                    }
+                } catch (SQLException e) {
+                    first = e;
                 }
-            } catch (SQLException e) {
-                first = e;
-            }
-            // the driver's metadata takes no statement timeout: a network timeout bounds it, so a stalled server cannot
-            // hold the lane, and the next run opens the connection again if the timeout broke it
-            boolean bounded = networkTimeout(DESCRIBE_SECONDS * 1000);
-            try (ResultSet rs = connection.getMetaData().getColumns(null, null, table, null)) {
-                List<List<String>> rows = new ArrayList<>();
-                while (rs.next()) {
-                    rows.add(List.of(rs.getString("COLUMN_NAME"), rs.getString("TYPE_NAME"), rs.getString("IS_NULLABLE")));
+                try (ResultSet rs = connection.getMetaData().getColumns(null, null, table, null)) {
+                    List<List<String>> rows = new ArrayList<>();
+                    while (rs.next()) {
+                        rows.add(List.of(
+                                rs.getString("COLUMN_NAME"), rs.getString("TYPE_NAME"), rs.getString("IS_NULLABLE")));
+                    }
+                    if (rows.isEmpty()) {
+                        out.completeExceptionally(new IllegalStateException(message(first)));
+                    } else {
+                        out.complete(new QueryPort.Rows(List.of("column", "type", "nullable"), rows, -1L, false));
+                    }
+                } catch (SQLException e) {
+                    out.completeExceptionally(new IllegalStateException(message(first), first));
                 }
-                if (rows.isEmpty()) {
-                    out.completeExceptionally(new IllegalStateException(message(first)));
-                } else {
-                    out.complete(new QueryPort.Rows(List.of("column", "type", "nullable"), rows, -1L, false));
-                }
-            } catch (SQLException e) {
-                out.completeExceptionally(new IllegalStateException(message(first), first));
             } finally {
                 if (bounded) {
                     networkTimeout(0);

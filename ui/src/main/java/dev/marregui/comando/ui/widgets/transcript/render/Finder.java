@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
@@ -80,7 +79,7 @@ final class Finder {
             currentMatch = -1;
             concealRevealed(Set.of());
             if (!text.isEmpty()) {
-                revealContaining(host.items(), text.toLowerCase(Locale.ROOT));
+                revealContaining(host.items(), lowerCase(text));
             }
             host.relayout();
         }
@@ -214,16 +213,31 @@ final class Finder {
             currentMatch = -1;
             return;
         }
-        String needle = findText.toLowerCase(Locale.ROOT);
+        // folded char by char, so an offset in the folded text is the same offset in the box's text
+        final String needle = lowerCase(findText);
         for (int i = 0; i < placed.size(); i++) {
             TextBox box = placed.get(i).box();
-            String hay = box.text().toLowerCase(Locale.ROOT);
+            final String hay = lowerCase(box.text());
             for (int at = hay.indexOf(needle); at >= 0; at = hay.indexOf(needle, at + needle.length())) {
                 matches.add(new int[]{i, at});
                 matchesByBox.computeIfAbsent(box, k -> new ArrayList<>()).add(new int[]{at, at + needle.length()});
             }
         }
         currentMatch = keep < matches.size() ? keep : -1;
+    }
+
+    /**
+     * {@code text} case-folded char by char, as {@link String#equalsIgnoreCase} compares: upper case, then lower, so
+     * {@code ς} and {@code Σ} fold alike. Unlike {@link String#toLowerCase}, which lengthens {@code İ} (U+0130) to two
+     * chars, it keeps the length and every offset. The folds and the matches use it alike, so a fold opens only for a
+     * text the find then matches.
+     */
+    private static String lowerCase(final String text) {
+        final char[] a = text.toCharArray();
+        for (int i = 0; i < a.length; i++) {
+            a[i] = Character.toLowerCase(Character.toUpperCase(a[i]));
+        }
+        return new String(a);
     }
 
     private void revealContaining(List<Item> list, String needle) {
@@ -242,7 +256,7 @@ final class Finder {
 
     /** True when the item or any block nested in it, at any depth, contains {@code needle}. */
     private static boolean subtreeContains(Item item, String needle) {
-        if (item.text().toLowerCase(Locale.ROOT).contains(needle)) {
+        if (lowerCase(item.text()).contains(needle)) {
             return true;
         }
         for (Item c : item.children()) {

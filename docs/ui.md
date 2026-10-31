@@ -292,6 +292,8 @@ displayable component left behind by the code under measurement would hang it. M
 `RSyntaxTextArea`, built only to read a `Theme` from, kept its caret timer running, and CI waited 30 min for the step.
 So a daemon watch reports the non-daemon threads and exits 2 when the JVM is still alive 10 s after the measurement.
 
+Two measurements of the same shape, which print and never fail (exit 0; exit 3 when the component has no size): `./gradlew :ui:gridGate` paints a `GridTable` of 100 000 rows × 12 columns (numbers, text, nulls) at 1600 × 900 while scrolling, and `./gradlew :ui:plotGate` paints a `PlotCanvas` of 4 series × 200 000 points through 200 crosshair moves and 50 zoom steps. Each prints p50, p90, p99 and max, `HOT` when p99 exceeds 4 ms (the line at which the standard's hot-path rules apply, [architecture §9](architecture.md#9-code-rules)) and `OVER BUDGET` above 16 ms. Measured 2026-10-31 on an M2 Max, three runs each: grid p99 1.41–1.54 ms; plot p99 28.3–32.3 ms, because a crosshair move repaints and re-reduces every series (p50 27 ms), while a zoom step costs p50 14 ms.
+
 | Measure (2026-10-18, Apple silicon, 12 cores, JDK 25, headless, 1 798 frames) | Value |
 |---|---|
 | frame p99 | 3.39 ms |

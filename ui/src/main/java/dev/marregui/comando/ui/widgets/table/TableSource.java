@@ -128,15 +128,46 @@ public interface TableSource {
         };
     }
 
-    private static boolean isNumber(String s) {
-        if (s.isEmpty()) {
+    /**
+     * Whether {@code s} is a decimal number: an optional sign, digits with an optional fraction, an optional exponent.
+     * {@link Double#parseDouble} alone would also take {@code 1d}, {@code 2f}, hex, {@code NaN}, {@code Infinity} and
+     * surrounding spaces, and class a column of codes as numbers.
+     */
+    private static boolean isNumber(final String s) {
+        final int n = s.length();
+        int i = skipSign(s, 0);
+        final int whole = i;
+        i = skipDigits(s, i);
+        int digits = i - whole;
+        if (i < n && s.charAt(i) == '.') {
+            i++;
+            final int fraction = i;
+            i = skipDigits(s, i);
+            digits += i - fraction;
+        }
+        if (digits == 0) {
             return false;
         }
-        try {
-            Double.parseDouble(s);
-            return true;
-        } catch (NumberFormatException e) {
-            return false;
+        if (i < n && (s.charAt(i) == 'e' || s.charAt(i) == 'E')) {
+            final int exponent = skipSign(s, i + 1);
+            i = skipDigits(s, exponent);
+            if (i == exponent) {
+                return false;
+            }
         }
+        return i == n;
+    }
+
+    private static int skipSign(final String s, final int at) {
+        return at < s.length() && (s.charAt(at) == '+' || s.charAt(at) == '-') ? at + 1 : at;
+    }
+
+    /** Past the ASCII digits from {@code at}: {@link Character#isDigit} would take digits the parse rejects. */
+    private static int skipDigits(final String s, final int at) {
+        int i = at;
+        while (i < s.length() && s.charAt(i) >= '0' && s.charAt(i) <= '9') {
+            i++;
+        }
+        return i;
     }
 }

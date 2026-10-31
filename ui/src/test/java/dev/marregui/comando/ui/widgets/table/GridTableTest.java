@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -18,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 /// - a find without a match counts zero and moves nothing
 /// - CSV quotes a field holding a carriage return or a newline
 /// - find is bounded by cells and matches without regard to case; a copy is capped, selected or not
+/// - CSV and copy tell SQL NULL from empty text and from the text `null`
 class GridTableTest {
 
     /// A find looks at the rows whose cells fit the bound: all of a narrow result, fewer of a wide one, at least one.
@@ -135,5 +137,63 @@ class GridTableTest {
         Path file = dir.resolve("t.csv");
         grid.prepare().writeTo(file);
         assertThat(Files.readString(file)).isEqualTo("id,v\na,\"x\ry\"\n");
+    }
+
+    /// Rows `(NULL)`, `('')` and `('null')`: the CSV writes an empty field, `""` and `null`, and the copy an empty
+    /// cell, an empty cell and `null`, so a NULL is never read back as the text `null`.
+    @Test
+    void csvAndCopyTellNullFromEmptyAndFromTheTextNull(@TempDir final Path dir) throws Exception {
+        final GridTable grid = new GridTable();
+        grid.setSource(new Texts(new String[]{null, "", "null"}), "t.csv");
+        final Path file = dir.resolve("t.csv");
+        grid.prepare().writeTo(file);
+        assertThat(Files.readString(file)).isEqualTo("v\n\n\"\"\nnull\n");
+        final AtomicReference<String> copied = new AtomicReference<>();
+        SwingUtilities.invokeAndWait(() -> copied.set(grid.copyText()));
+        assertThat(copied.get()).isEqualTo("v\n\n\nnull\n");
+    }
+
+    /** One text column {@code v} whose Java nulls are SQL NULLs, as a live result has them. */
+    private record Texts(String[] values) implements TableSource {
+
+        @Override
+        public int rowCount() {
+            return values.length;
+        }
+
+        @Override
+        public int columnCount() {
+            return 1;
+        }
+
+        @Override
+        public String columnName(final int column) {
+            return "v";
+        }
+
+        @Override
+        public String typeName(final int column) {
+            return "text";
+        }
+
+        @Override
+        public boolean isNumeric(final int column) {
+            return false;
+        }
+
+        @Override
+        public boolean isNull(final int row, final int column) {
+            return values[row] == null;
+        }
+
+        @Override
+        public void format(final int row, final int column, final StringBuilder sink) {
+            sink.append(values[row]);
+        }
+
+        @Override
+        public double numeric(final int row, final int column) {
+            return Double.NaN;
+        }
     }
 }

@@ -11,6 +11,7 @@ import dev.marregui.comando.core.state.Notice;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -24,6 +25,10 @@ import java.util.function.Consumer;
  * longest (the observers, the reducer, an effect, the listeners). The shared {@link Watchdog} looks at the loop every
  * {@link #PERIOD_MILLIS}; an intent still applying at {@link #HANG_MILLIS} is a hang, told then with the loop's stack,
  * so a part that blocks is seen while it blocks, not only if it ever ends.</p>
+ *
+ * <p>A {@link RuntimeException} from any part ends that part only; the loop goes on with the next. An {@link Error}
+ * leaves the state it was building unknown, so it stops the loop for good: it is logged with its stack, and every
+ * later {@link #dispatch} is refused with an error line, once, rather than queued for a thread that is gone.</p>
  */
 public final class StateLoop implements IntentSink, AutoCloseable {
 
@@ -87,6 +92,9 @@ public final class StateLoop implements IntentSink, AutoCloseable {
     private final Consumer<Stall> stalls;
     private volatile AppState state;
     private volatile boolean halted;
+    /** The {@link Error} that stopped the loop's thread; null while it runs. */
+    private volatile Error failure;
+    private final AtomicBoolean failureTold = new AtomicBoolean();
     private volatile Busy busy;
     // confined to the thread applying an intent
     private long partStart;
@@ -120,6 +128,14 @@ public final class StateLoop implements IntentSink, AutoCloseable {
 
     @Override
     public void dispatch(Intent intent) {
+        final Error failed = failure;
+        if (failed != null) {
+            if (failureTold.compareAndSet(false, true)) {
+                LOG.log(System.Logger.Level.ERROR, "the reducer has stopped; intents are dropped from now on [intent="
+                        + intent.getClass().getSimpleName() + ", cause=" + failed + ']');
+            }
+            return;
+        }
         if (!halted) {
             queue.add(intent);
         }
@@ -127,6 +143,11 @@ public final class StateLoop implements IntentSink, AutoCloseable {
 
     public AppState state() {
         return state;
+    }
+
+    /** The {@link Error} that stopped the loop, or null while it runs. */
+    Error failure() {
+        return failure;
     }
 
     public void addListener(Listener listener) {
@@ -159,7 +180,19 @@ public final class StateLoop implements IntentSink, AutoCloseable {
             if (intent == STOP) {
                 return;
             }
-            apply(intent);
+            try {
+                apply(intent);
+            } catch (final RuntimeException e) {
+                LOG.log(System.Logger.Level.ERROR, "cannot apply an intent [intent=" + intent.getClass().getSimpleName()
+                        + ']', e);
+            } catch (final Error e) {
+                // the state the intent was building is unknown: no later intent may build on it
+                failure = e;
+                queue.clear();
+                LOG.log(System.Logger.Level.ERROR, "the reducer stopped on an error; comando no longer updates [intent="
+                        + intent.getClass().getSimpleName() + ']', e);
+                return;
+            }
         }
     }
 
@@ -168,7 +201,12 @@ public final class StateLoop implements IntentSink, AutoCloseable {
         try {
             enter(start, "observe");
             for (IntentObserver o : observers) {
-                o.observe(intent);
+                try {
+                    o.observe(intent);
+                } catch (final RuntimeException e) {
+                    LOG.log(System.Logger.Level.ERROR, "cannot tell an observer [observer=" + o.getClass().getName()
+                            + ", intent=" + intent.getClass().getSimpleName() + ']', e);
+                }
             }
             AppState previous = state;
             Transition t;

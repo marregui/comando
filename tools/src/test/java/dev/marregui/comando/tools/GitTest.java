@@ -14,12 +14,13 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /// [Git] runs git for the Files tab and the Changes view: status, the two texts of a change, and the repositories of a
 /// folder.
 /// - Status lists every kind of change, the branch and the ignored folders; a missing git is a status that says so.
 /// - A change's texts are `HEAD`'s version and the working tree's; binary files and submodules are not compared.
-/// - A repository without commits, or a path missing from `HEAD`, has nothing before.
+/// - A repository without commits, or a path missing from `HEAD`, has nothing before, whatever the user's locale.
 /// - Line ends compare as git commits them, and a link as its target.
 /// - A folder's repositories are the one above it or those directly inside it.
 /// - [Git#parse] reads every record kind and keeps at most [RepoStatus#MAX_CHANGES] changes, saying so.
@@ -131,6 +132,36 @@ class GitTest {
         try (Git git = new Git()) {
             assertThat(git.status(root).status().changes()).containsExactly(new RepoStatus.FileChange("a.txt", "", RepoStatus.Kind.ADDED));
             ChangeTexts t = git.texts(root, new RepoStatus.FileChange("a.txt", "", RepoStatus.Kind.MODIFIED));
+            assertThat(t.before()).isEmpty();
+            assertThat(t.after()).isEqualTo("a\n");
+        }
+    }
+
+    /// With git started from a German locale (`LANG=de_DE.UTF-8`, `LANGUAGE=de`, as comando launched from such a
+    /// shell passes on), a file not in `HEAD` still has nothing before and no note, since git's messages are read in
+    /// English. Skipped where git has no German messages, as the case cannot arise there.
+    @Test
+    void aPathMissingFromHeadReadsAsNothingBeforeWhateverTheUsersLocale(@TempDir Path dir) throws Exception {
+        final Path root = dir.resolve("repo");
+        Files.createDirectories(root);
+        git(root, "init", "-q");
+        Files.writeString(root.resolve("a.txt"), "a\n");
+        git(root, "add", "a.txt");
+        // stands in for the environment comando inherits: the user's locale, LC_ALL left as whoever runs it sets it
+        final Path german = dir.resolve("german-git.sh");
+        Files.writeString(german, "#!/bin/sh\nLANG=de_DE.UTF-8 LANGUAGE=de exec git \"$@\"\n");
+        assertThat(german.toFile().setExecutable(true)).isTrue();
+        final ProcessBuilder probe = new ProcessBuilder(german.toString(), "-C", root.toString(), "cat-file", "-p", "HEAD:a.txt")
+                .redirectErrorStream(true);
+        probe.environment().remove("LC_ALL");
+        final Process p = probe.start();
+        final String said = new String(p.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        assertThat(p.waitFor(30, TimeUnit.SECONDS)).isTrue();
+        assumeTrue(!said.isBlank() && !said.startsWith("fatal:"), () -> "git has no German messages here: " + said);
+
+        try (Git git = new Git(german.toString())) {
+            final ChangeTexts t = git.texts(root.toRealPath(), new RepoStatus.FileChange("a.txt", "", RepoStatus.Kind.MODIFIED));
+            assertThat(t.note()).as("git said in German: %s", said).isEmpty();
             assertThat(t.before()).isEmpty();
             assertThat(t.after()).isEqualTo("a\n");
         }

@@ -323,6 +323,8 @@ final class Git implements AutoCloseable {
             Processes.Result r = Processes.run(cmd, env -> {
                 env.put("GIT_OPTIONAL_LOCKS", "0");
                 env.put("GIT_TERMINAL_PROMPT", "0");
+                // git's messages in English whatever the user's locale: notInHead reads them
+                env.put("LC_ALL", "C");
             }, null, null, Duration.ofMillis(timeoutMillis), MAX_OUTPUT, 4_096, p -> {
                 started[0] = p;
                 live.add(p);

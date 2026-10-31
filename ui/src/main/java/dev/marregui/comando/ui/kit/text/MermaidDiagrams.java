@@ -2,6 +2,7 @@ package dev.marregui.comando.ui.kit.text;
 
 import dev.marregui.comando.core.loop.Threads;
 import dev.marregui.comando.core.model.AtomicFiles;
+import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.view.Clip;
 import dev.marregui.comando.ui.kit.desktop.Platform;
 
@@ -242,6 +243,8 @@ public final class MermaidDiagrams {
             if (p != null) {
                 stop(p);
             }
+            // after mmdc is stopped, so the drawer's wait for it ends at once
+            ExecutorStop.now("mermaid", drawer);
         }
     }
 

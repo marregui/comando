@@ -28,6 +28,7 @@ import dev.marregui.comando.core.state.AppState;
 import dev.marregui.comando.core.state.ConnectionState;
 import dev.marregui.comando.core.state.Notice;
 import dev.marregui.comando.core.state.SessionState;
+import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.core.transcript.TranscriptRegistry;
 import dev.marregui.comando.db.DbAdapter;
 import dev.marregui.comando.db.DbSettings;
@@ -111,7 +112,7 @@ public final class App implements AutoCloseable {
             // the New session dialog names the kit's defaults beside Model, Effort and Permission mode (record 125)
             SessionKind.INSTANCE.defaults(sessionDefaults(root.dir()));
             own(() -> KitRoot.use(before));
-            own(kitCheck::shutdownNow);
+            own(() -> ExecutorStop.now("app", kitCheck));
             KitGit git = own(new KitGit());
             setup = new RootSetup(root, git);
             Store store = own(new Store(config.home(), config.keychain() ? Secrets.forPlatform() : Secrets.NONE));

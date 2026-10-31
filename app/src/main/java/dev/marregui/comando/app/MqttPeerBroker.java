@@ -10,6 +10,7 @@ import com.hivemq.client.mqtt.mqtt5.Mqtt5AsyncClient;
 import com.hivemq.client.mqtt.mqtt5.message.publish.Mqtt5Publish;
 import com.hivemq.client.mqtt.mqtt5.message.subscribe.Mqtt5Subscribe;
 import dev.marregui.comando.core.loop.Threads;
+import dev.marregui.comando.core.loop.ExecutorStop;
 import dev.marregui.comando.mcp.PeerBroker;
 import io.reactivex.schedulers.Schedulers;
 
@@ -253,7 +254,7 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
             c = client;
             client = null;
         }
-        follow.shutdownNow();
+        ExecutorStop.now("peer-broker", follow);
         if (c != null) {
             try {
                 c.disconnect().get(CLOSE_WAIT.toMillis(), TimeUnit.MILLISECONDS);
@@ -263,6 +264,6 @@ final class MqttPeerBroker implements PeerBroker, AutoCloseable {
                 Thread.currentThread().interrupt();
             }
         }
-        messages.shutdownNow();
+        ExecutorStop.now("peer-broker", messages);
     }
 }
